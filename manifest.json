@@ -5,7 +5,8 @@
     "optional": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "Doom (forked from Marinara)",
+    "author": "Doom",
     "version": "4.0.0",
-    "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite"
+    "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite",
+    "description": "An immersive RPG extension with character tracking, Lore Library, TTS highlighting, portrait bar, scene headers, chat bubbles, and multiple themes."
 }
