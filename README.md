@@ -53,12 +53,6 @@ A full-featured lorebook manager that replaces SillyTavern's native World Info i
 ### Quest Tracking
 Track a main quest and multiple optional side quests. Quests appear in scene headers and are included in the AI's generation context. All quests are editable inline with lock support.
 
-### Plot Progression
-Quick-action buttons in the chat input area to drive the story forward:
-- **Random Plot** — generates unexpected plot twists from a huge pool of possible events
-- **Natural Plot** — continues the story naturally toward the main objective
-- **Encounter** — triggers a combat encounter
-
 ### Dialogue Coloring
 Automatically colors each character's dialogue with unique colors. The AI generates `<font color>` tags that display in chat while being automatically stripped for TTS playback. Works seamlessly with chat bubbles.
 
@@ -102,7 +96,7 @@ The settings panel (accessed via the **D** icon) is organized into sections:
 - **External API** — use a different LLM endpoint for generation (keeps your main API budget for chat)
 
 ### Prompt Editing
-Customize the generation prompts for HTML formatting, dialogue coloring, plot progression, and avatar generation through the built-in prompts editor.
+Customize the generation prompts for HTML formatting, dialogue coloring, and avatar generation through the built-in prompts editor.
 
 ---
 
