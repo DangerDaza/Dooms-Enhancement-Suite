@@ -1,0 +1,1154 @@
+
+<!-- Settings Modal -->
+<div id="rpg-settings-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-settings-title">
+    <div class="rpg-settings-popup-content">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-settings-title">
+                <i class="fa-solid fa-dice-d20" aria-hidden="true"></i>
+                <span>Settings</span>
+                <span class="rpg-version-badge">v3.0</span>
+            </h3>
+            <div class="rpg-header-actions">
+                <button id="rpg-close-settings" class="rpg-popup-close" type="button"
+                    aria-label="Close settings">&times;</button>
+            </div>
+        </header>
+        <div class="rpg-settings-popup-body">
+
+            <!-- ═══════ GENERATION ═══════ -->
+            <div class="rpg-accordion-section rpg-accordion-open" data-accordion="generation">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-gears rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Generation</span>
+                    <span class="rpg-accordion-badge" id="rpg-gen-mode-badge">together</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Mode</span>
+                        <select id="rpg-generation-mode" class="rpg-accordion-select">
+                            <option value="together">Together</option>
+                            <option value="separate">Separate</option>
+                            <option value="external">External API</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Auto-update after messages</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-auto-update" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Chat History Depth</span>
+                            <span class="rpg-setting-hint">Messages included in context</span>
+                        </div>
+                        <select id="rpg-update-depth" class="rpg-accordion-select">
+                            <option value="2">2</option>
+                            <option value="4">4</option>
+                            <option value="6">6</option>
+                            <option value="8">8</option>
+                            <option value="10">10</option>
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Narrator Mode</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-narrator" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Skip Injections</span>
+                            <span class="rpg-setting-hint">Guided generation compatibility</span>
+                        </div>
+                        <select id="rpg-skip-guided-mode" class="rpg-accordion-select">
+                            <option value="none">None</option>
+                            <option value="impersonation">Impersonation</option>
+                            <option value="guided">All Guided</option>
+                        </select>
+                    </div>
+
+                    <!-- External API sub-section -->
+                    <div id="rpg-external-api-settings" class="rpg-api-settings" style="display:none;">
+                        <div class="rpg-subsection-label">External API</div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Base URL</span>
+                            <input type="text" id="rpg-external-base-url" class="rpg-accordion-input" placeholder="https://api.openai.com/v1" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">API Key</span>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <input type="password" id="rpg-external-api-key" class="rpg-accordion-input" placeholder="sk-..." style="flex:1;" />
+                                <button id="rpg-toggle-api-key-visibility" class="rpg-accordion-mini-btn" type="button" title="Show/Hide">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Model</span>
+                            <input type="text" id="rpg-external-model" class="rpg-accordion-input" placeholder="gpt-4o-mini" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Max Tokens</span>
+                            <input type="number" id="rpg-external-max-tokens" class="rpg-accordion-input" value="8192" style="width:80px;" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Temperature</span>
+                            <input type="number" id="rpg-external-temperature" class="rpg-accordion-input" value="0.7" step="0.1" style="width:80px;" />
+                        </div>
+                        <button id="rpg-test-external-api" class="rpg-accordion-action-btn" type="button" style="margin-top:8px;">
+                            <i class="fa-solid fa-plug"></i> Test Connection
+                        </button>
+                        <div id="rpg-external-api-test-result" style="margin-top:6px; padding:6px; border-radius:4px; display:none; font-size:0.82em;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ DISPLAY & FEATURES ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="display">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-eye rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Display & Features</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Visible Sections</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Info Box</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-info-box" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Present Characters</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-thoughts" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Quests</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-quests" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Thoughts in Chat</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-thoughts-in-chat" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Lock Icons</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-lock-icons" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Portrait Bar</span>
+                            <span class="rpg-setting-hint">Customize in Portrait Bar section below</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-portrait-bar" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Chat Bubble Mode</span>
+                            <span class="rpg-setting-hint">Split messages into per-character chat bubbles</span>
+                        </div>
+                        <select id="rpg-chat-bubble-mode" class="rpg-select-mini">
+                            <option value="off">Off</option>
+                            <option value="discord">Discord Style</option>
+                            <option value="cards">Card Style</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Loading Intro</span>
+                            <span class="rpg-setting-hint">Cinematic credits on startup</span>
+                        </div>
+                        <select id="rpg-loading-intro-mode" class="rpg-select-mini">
+                            <option value="off">Off</option>
+                            <option value="film-credits">Film Credits</option>
+                            <option value="typewriter">Typewriter</option>
+                        </select>
+                    </div>
+                    <div class="rpg-subsection-label">Features</div>
+                    <div class="rpg-feature-pills">
+                        <label class="rpg-feature-pill">
+                            <input type="checkbox" id="rpg-toggle-html-prompt" class="rpg-pill-checkbox" />
+                            <span class="rpg-pill-indicator"></span>
+                            <span>Immersive HTML</span>
+                        </label>
+                        <label class="rpg-feature-pill">
+                            <input type="checkbox" id="rpg-toggle-dialogue-coloring" class="rpg-pill-checkbox" />
+                            <span class="rpg-pill-indicator"></span>
+                            <span>Colored Dialogues</span>
+                        </label>
+                        <label class="rpg-feature-pill">
+                            <input type="checkbox" id="rpg-toggle-dynamic-weather" class="rpg-pill-checkbox" />
+                            <span class="rpg-pill-indicator"></span>
+                            <span>Dynamic Weather</span>
+                        </label>
+                        <label class="rpg-feature-pill">
+                            <input type="checkbox" id="rpg-toggle-auto-avatars" class="rpg-pill-checkbox" />
+                            <span class="rpg-pill-indicator"></span>
+                            <span>Auto Avatars</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ THEME ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="theme">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-palette rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Theme</span>
+                    <span class="rpg-accordion-badge" id="rpg-theme-badge">default</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Theme</span>
+                        <select id="rpg-theme-select" class="rpg-accordion-select">
+                            <option value="default">Default</option>
+                            <option value="sci-fi">Sci-Fi</option>
+                            <option value="fantasy">Fantasy</option>
+                            <option value="cyberpunk">Cyberpunk</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Animations</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-animations" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div id="rpg-custom-colors" class="rpg-custom-colors-section" style="display: none;">
+                        <div class="rpg-subsection-label">Custom Colors</div>
+                        <div class="rpg-color-palette">
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-custom-bg" class="rpg-color-swatch" value="#1a1a2e" />
+                                <span>BG</span>
+                                <input type="range" id="rpg-custom-bg-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-custom-bg-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-custom-accent" class="rpg-color-swatch" value="#16213e" />
+                                <span>Accent</span>
+                                <input type="range" id="rpg-custom-accent-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-custom-accent-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-custom-text" class="rpg-color-swatch" value="#eaeaea" />
+                                <span>Text</span>
+                                <input type="range" id="rpg-custom-text-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-custom-text-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-custom-highlight" class="rpg-color-swatch" value="#e94560" />
+                                <span>Highlight</span>
+                                <input type="range" id="rpg-custom-highlight-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-custom-highlight-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-stat-bar-color-low" class="rpg-color-swatch" value="#cc3333" />
+                                <span>Bar Low</span>
+                                <input type="range" id="rpg-stat-bar-color-low-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-stat-bar-color-low-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                            <div class="rpg-color-chip">
+                                <input type="color" id="rpg-stat-bar-color-high" class="rpg-color-swatch" value="#33cc66" />
+                                <span>Bar High</span>
+                                <input type="range" id="rpg-stat-bar-color-high-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <span id="rpg-stat-bar-color-high-opacity-value" class="rpg-opacity-value">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ PORTRAIT BAR ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="portrait-bar">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-users rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Portrait Bar</span>
+                    <span class="rpg-accordion-badge" id="rpg-pb-badge">on</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Layout</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Position</span>
+                            <span class="rpg-setting-hint">Where the portrait bar appears</span>
+                        </div>
+                        <select id="rpg-portrait-position" class="rpg-accordion-select">
+                            <option value="above">Above Input</option>
+                            <option value="below">Below Input</option>
+                            <option value="top">Top of Screen</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Alignment</span>
+                            <span class="rpg-setting-hint">How portraits are positioned in the bar</span>
+                        </div>
+                        <select id="rpg-portrait-alignment" class="rpg-accordion-select">
+                            <option value="left">Inline (Left)</option>
+                            <option value="center">Centered</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show Header</span>
+                            <span class="rpg-setting-hint">"Present Characters" title row</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-pb-show-header" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show Absent Characters</span>
+                            <span class="rpg-setting-hint">Greyed-out characters not in scene</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-pb-show-absent" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show Scroll Arrows</span>
+                            <span class="rpg-setting-hint">Left/right arrows on hover</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-pb-show-arrows" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="rpg-subsection-label">Card Size</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Card Width</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-card-width" class="rpg-range-slider" min="60" max="200" value="110" />
+                            <span id="rpg-pb-card-width-value" class="rpg-slider-value">110px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Card Height</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-card-height" class="rpg-range-slider" min="60" max="260" value="150" />
+                            <span id="rpg-pb-card-height-value" class="rpg-slider-value">150px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Card Spacing</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-card-gap" class="rpg-range-slider" min="0" max="24" value="8" />
+                            <span id="rpg-pb-card-gap-value" class="rpg-slider-value">8px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Card Roundness</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-card-radius" class="rpg-range-slider" min="0" max="30" value="8" />
+                            <span id="rpg-pb-card-radius-value" class="rpg-slider-value">8px</span>
+                        </div>
+                    </div>
+                    <button id="rpg-pb-reset-card-size" class="rpg-accordion-action-btn" type="button">
+                        <i class="fa-solid fa-rotate-left"></i> Restore Card Defaults
+                    </button>
+
+                    <div class="rpg-subsection-label">Colors</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Bar Background</span>
+                        <input type="color" id="rpg-pb-bar-bg-color" class="rpg-color-swatch" value="#000000" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Bar Background Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-bar-bg-opacity" class="rpg-range-slider" min="0" max="100" value="20" />
+                            <span id="rpg-pb-bar-bg-opacity-value" class="rpg-slider-value">20%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Header Accent Color</span>
+                        <input type="color" id="rpg-pb-header-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Card Border Color</span>
+                        <input type="color" id="rpg-pb-card-border-color" class="rpg-color-swatch" value="#ffffff" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Card Border Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-card-border-opacity" class="rpg-range-slider" min="0" max="100" value="6" />
+                            <span id="rpg-pb-card-border-opacity-value" class="rpg-slider-value">6%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Hover Glow Color</span>
+                        <input type="color" id="rpg-pb-hover-glow-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Hover Glow Intensity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-hover-glow-intensity" class="rpg-range-slider" min="0" max="30" value="12" />
+                            <span id="rpg-pb-hover-glow-intensity-value" class="rpg-slider-value">12px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Speaker Pulse Color</span>
+                        <input type="color" id="rpg-pb-speaking-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Name Overlay Opacity</span>
+                            <span class="rpg-setting-hint">Darkness of name gradient</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-name-opacity" class="rpg-range-slider" min="0" max="100" value="85" />
+                            <span id="rpg-pb-name-opacity-value" class="rpg-slider-value">85%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Absent Character Opacity</span>
+                            <span class="rpg-setting-hint">How faded absent characters look</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-pb-absent-opacity" class="rpg-range-slider" min="10" max="100" value="45" />
+                            <span id="rpg-pb-absent-opacity-value" class="rpg-slider-value">45%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ TTS HIGHLIGHT ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="tts-highlight">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-volume-high rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">TTS Highlight</span>
+                    <span class="rpg-accordion-badge" id="rpg-tts-badge">off</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Mode</span>
+                            <span class="rpg-setting-hint">Highlight sentences as they are read aloud by TTS</span>
+                        </div>
+                        <select id="rpg-tts-highlight-mode" class="rpg-accordion-select">
+                            <option value="off">Off</option>
+                            <option value="highlight">Gradient Glow</option>
+                        </select>
+                    </div>
+
+                    <div id="rpg-tts-customization" class="rpg-tts-customization-section">
+                        <div class="rpg-subsection-label">Gradient Colors</div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Left Color</span>
+                            <input type="color" id="rpg-tts-color-left" class="rpg-color-swatch" value="#e94560" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Right Color</span>
+                            <input type="color" id="rpg-tts-color-right" class="rpg-color-swatch" value="#9333ea" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Gradient Opacity</span>
+                                <span class="rpg-setting-hint">Background intensity of the active pill</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-tts-gradient-opacity" class="rpg-range-slider" min="5" max="80" value="30" />
+                                <span id="rpg-tts-gradient-opacity-value" class="rpg-slider-value">30%</span>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Glow Intensity</span>
+                                <span class="rpg-setting-hint">Box shadow blur (0 = no glow)</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-tts-glow-intensity" class="rpg-range-slider" min="0" max="40" value="16" />
+                                <span id="rpg-tts-glow-intensity-value" class="rpg-slider-value">16px</span>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Override Text Color</span>
+                                <span class="rpg-setting-hint">Off = keep original dialogue colors</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-tts-override-text-color" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="rpg-setting-row" id="rpg-tts-text-color-row" style="display: none;">
+                            <span class="rpg-setting-label">Text Color</span>
+                            <input type="color" id="rpg-tts-active-text-color" class="rpg-color-swatch" value="#ffffff" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Border Radius</span>
+                                <span class="rpg-setting-hint">Roundness of the pill</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-tts-border-radius" class="rpg-range-slider" min="0" max="20" value="4" />
+                                <span id="rpg-tts-border-radius-value" class="rpg-slider-value">4px</span>
+                            </div>
+                        </div>
+
+                        <div class="rpg-subsection-label">Text Dimming</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Read Text Opacity</span>
+                                <span class="rpg-setting-hint">Already-spoken sentences</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-tts-read-opacity" class="rpg-range-slider" min="10" max="100" value="35" />
+                                <span id="rpg-tts-read-opacity-value" class="rpg-slider-value">35%</span>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Unread Text Opacity</span>
+                                <span class="rpg-setting-hint">Not-yet-spoken sentences</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-tts-unread-opacity" class="rpg-range-slider" min="10" max="100" value="55" />
+                                <span id="rpg-tts-unread-opacity-value" class="rpg-slider-value">55%</span>
+                            </div>
+                        </div>
+
+                        <div class="rpg-subsection-label">Behavior</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Transition Speed</span>
+                                <span class="rpg-setting-hint">Animation smoothness</span>
+                            </div>
+                            <select id="rpg-tts-transition-speed" class="rpg-accordion-select">
+                                <option value="0">Instant</option>
+                                <option value="150">Fast</option>
+                                <option value="300">Normal</option>
+                                <option value="500">Smooth</option>
+                                <option value="800">Slow</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ SCENE TRACKER ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="scene-tracker">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-clapperboard rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Scene Tracker</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Visible Fields</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Time</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-time" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Date</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-date" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Location</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-location" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Present Characters</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-characters" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Quest</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-quest" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Recent Events</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-st-show-events" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="rpg-subsection-label">Layout</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Layout Mode</span>
+                            <span class="rpg-setting-hint">How fields are arranged in the bar</span>
+                        </div>
+                        <select id="rpg-st-layout" class="rpg-accordion-select">
+                            <option value="grid">Grid (2 columns)</option>
+                            <option value="stacked">Stacked (1 column)</option>
+                            <option value="compact">Compact (inline)</option>
+                        </select>
+                    </div>
+
+                    <div class="rpg-subsection-label">Sizing</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Font Size</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-font-size" class="rpg-range-slider" min="60" max="120" value="82" />
+                            <span id="rpg-st-font-size-value" class="rpg-slider-value">82%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Border Radius</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-border-radius" class="rpg-range-slider" min="0" max="20" value="8" />
+                            <span id="rpg-st-border-radius-value" class="rpg-slider-value">8px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Padding</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-padding" class="rpg-range-slider" min="4" max="24" value="10" />
+                            <span id="rpg-st-padding-value" class="rpg-slider-value">10px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Accent Border Width</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-border-width" class="rpg-range-slider" min="0" max="8" value="3" />
+                            <span id="rpg-st-border-width-value" class="rpg-slider-value">3px</span>
+                        </div>
+                    </div>
+
+                    <div class="rpg-subsection-label">Colors</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Background Color</span>
+                        <input type="color" id="rpg-st-bg-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Background Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-bg-opacity" class="rpg-range-slider" min="0" max="40" value="8" />
+                            <span id="rpg-st-bg-opacity-value" class="rpg-slider-value">8%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Border Color</span>
+                        <input type="color" id="rpg-st-border-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Border Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-border-opacity" class="rpg-range-slider" min="0" max="50" value="15" />
+                            <span id="rpg-st-border-opacity-value" class="rpg-slider-value">15%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Accent / Icon Color</span>
+                        <input type="color" id="rpg-st-accent-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Label Color</span>
+                        <input type="color" id="rpg-st-label-color" class="rpg-color-swatch" value="#888888" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Text Color</span>
+                        <input type="color" id="rpg-st-text-color" class="rpg-color-swatch" value="#d0d0d0" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Character Badge Color</span>
+                        <input type="color" id="rpg-st-badge-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Character Badge Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-badge-opacity" class="rpg-range-slider" min="0" max="40" value="12" />
+                            <span id="rpg-st-badge-opacity-value" class="rpg-slider-value">12%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Quest Icon Color</span>
+                        <input type="color" id="rpg-st-quest-color" class="rpg-color-swatch" value="#f0c040" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Events Text Color</span>
+                        <input type="color" id="rpg-st-events-color" class="rpg-color-swatch" value="#999999" />
+                    </div>
+                    <button id="rpg-st-reset" class="rpg-accordion-action-btn" type="button">
+                        <i class="fa-solid fa-rotate-left"></i> Restore Scene Tracker Defaults
+                    </button>
+                </div>
+            </div>
+
+            <!-- ═══════ HISTORY PERSISTENCE ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="history">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-clock-rotate-left rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">History Persistence</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <p class="rpg-note-text">Inject tracker data into historical messages so the AI remembers past states.</p>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Enable</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-history-persistence" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Message Count</span>
+                        <select id="rpg-history-message-count" class="rpg-accordion-select">
+                            <option value="3">3</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="0">All</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Injection Position</span>
+                        <select id="rpg-history-injection-position" class="rpg-accordion-select">
+                            <option value="assistant_message_end">End of assistant msg</option>
+                            <option value="user_message_end">End of user msg</option>
+                            <option value="extra_assistant_message">Extra assistant msg</option>
+                            <option value="extra_user_message">Extra user msg</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Send All on Refresh</span>
+                            <span class="rpg-setting-hint">Send all enabled stats (not just history-flagged)</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-send-all-on-refresh" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════ LOREBOOK MANAGER ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="lorebook">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-book-atlas rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Lore Library</span>
+                    <span class="rpg-accordion-badge" id="rpg-lb-badge">on</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Enable</span>
+                            <span class="rpg-setting-hint">Organize lorebooks into libraries</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-lorebook" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <button id="rpg-open-lorebook" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-book-atlas"></i> Open Lore Library
+                        </button>
+                    </div>
+                    <p class="rpg-note-text" style="margin-top:4px;">Manage lorebooks with lore libraries, bulk actions, and full entry editing.</p>
+                </div>
+            </div>
+
+            <!-- ═══════ ADVANCED ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="advanced">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-wrench rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Advanced</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <button id="rpg-open-prompts-editor" class="rpg-accordion-action-btn" type="button">
+                        <i class="fa-solid fa-file-lines"></i> Customize Prompts
+                    </button>
+                    <p class="rpg-note-text" style="margin-top:4px;">Edit all AI prompts used for generation.</p>
+
+                    <div style="margin-top:12px;">
+                        <button id="rpg-clear-cache" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
+                            <i class="fa-solid fa-trash"></i> Clear Extension Cache
+                        </button>
+                        <p class="rpg-note-text" style="margin-top:4px;">Clears committed and displayed tracker data for your currently active chat.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Dice Roll Modal -->
+<div id="rpg-dice-popup" class="rpg-dice-popup" role="dialog" aria-modal="true" aria-labelledby="rpg-dice-title">
+    <div class="rpg-dice-popup-content">
+        <header class="rpg-dice-popup-header">
+            <h3 id="rpg-dice-title">
+                <i class="fa-solid fa-dice-d20" aria-hidden="true"></i>
+                <span>Roll Dice</span>
+            </h3>
+            <button id="rpg-dice-popup-close" class="rpg-btn-icon" type="button" aria-label="Close dialog">
+                <i class="fa-solid fa-times" aria-hidden="true"></i>
+            </button>
+        </header>
+
+        <div class="rpg-dice-popup-body">
+            <div class="rpg-dice-selector-container">
+                <div class="rpg-dice-selector">
+                    <div class="rpg-dice-input-group">
+                        <label for="rpg-dice-count">Number of Dice:</label>
+                        <input type="number" id="rpg-dice-count" name="dice-count" min="1" max="20" value="1"
+                            class="rpg-input" />
+                    </div>
+                    <div class="rpg-dice-input-group">
+                        <label for="rpg-dice-sides">Dice Type:</label>
+                        <select id="rpg-dice-sides" name="dice-sides" class="rpg-select">
+                            <option value="4">d4</option>
+                            <option value="6">d6</option>
+                            <option value="8">d8</option>
+                            <option value="10">d10</option>
+                            <option value="12">d12</option>
+                            <option value="20" selected>d20</option>
+                            <option value="100">d100</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="rpg-dice-roll-btn" class="rpg-btn-primary" type="button">
+                    <i class="fa-solid fa-dice" aria-hidden="true"></i>
+                    <span>Roll Dice</span>
+                </button>
+            </div>
+
+            <div id="rpg-dice-animation" class="rpg-dice-animation" hidden aria-live="polite" aria-busy="true">
+                <div class="rpg-dice-rolling">
+                    <i class="fa-solid fa-dice-d20 fa-spin" aria-hidden="true"></i>
+                </div>
+                <div class="rpg-dice-rolling-text">Rolling...</div>
+            </div>
+
+            <div id="rpg-dice-result" class="rpg-dice-result" hidden aria-live="polite">
+                <div class="rpg-dice-result-label">Result:</div>
+                <output id="rpg-dice-result-value" class="rpg-dice-result-value"
+                    for="rpg-dice-count rpg-dice-sides">0</output>
+                <div id="rpg-dice-result-details" class="rpg-dice-result-details" role="status"></div>
+                <button id="rpg-dice-save-btn" class="rpg-btn-primary rpg-dice-save-btn" type="button">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    <span>Save Roll</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tracker Editor Modal -->
+<div id="rpg-tracker-editor-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-editor-title" style="display: none;">
+    <div class="rpg-settings-popup-content">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-editor-title">
+                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                <span data-i18n-key="template.trackerEditorModal.title">Edit Trackers</span>
+            </h3>
+            <button id="rpg-close-tracker-editor" class="rpg-popup-close" type="button"
+                aria-label="Close tracker editor">&times;</button>
+        </header>
+
+        <!-- Preset Management Section -->
+        <div class="rpg-preset-management">
+            <div class="rpg-preset-row">
+                <label for="rpg-preset-select">Preset:</label>
+                <select id="rpg-preset-select" class="rpg-select">
+                    <!-- Options populated by JavaScript -->
+                </select>
+                <button id="rpg-preset-new" class="rpg-btn-icon" type="button" title="Create New Preset">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="rpg-preset-default" class="rpg-btn-icon" type="button" title="Set as Default Preset">
+                    <i class="fa-solid fa-star"></i>
+                </button>
+                <button id="rpg-preset-delete" class="rpg-btn-icon" type="button" title="Delete Current Preset">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+            <div class="rpg-preset-association-row">
+                <label class="checkbox_label">
+                    <input type="checkbox" id="rpg-preset-associate">
+                    <span>Use this preset for: <strong id="rpg-preset-entity-name">Character</strong></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="rpg-editor-tabs">
+            <!-- NOTE: User Stats tab removed — system archived -->
+            <button class="rpg-editor-tab active" data-tab="infoBox">
+                <i class="fa-solid fa-info-circle"></i> <span
+                    data-i18n-key="template.trackerEditorModal.tabs.infoBox">Info Box</span>
+            </button>
+            <button class="rpg-editor-tab" data-tab="presentCharacters">
+                <i class="fa-solid fa-users"></i> <span
+                    data-i18n-key="template.trackerEditorModal.tabs.presentCharacters">Present Characters</span>
+            </button>
+            <button class="rpg-editor-tab" data-tab="historyPersistence">
+                <i class="fa-solid fa-clock-rotate-left"></i> <span
+                    data-i18n-key="template.trackerEditorModal.tabs.historyPersistence">History Persistence</span>
+            </button>
+        </div>
+
+        <div class="rpg-settings-popup-body">
+            <!-- Tab contents will be rendered by JavaScript -->
+            <div id="rpg-editor-tab-infoBox" class="rpg-editor-tab-content"></div>
+            <div id="rpg-editor-tab-presentCharacters" class="rpg-editor-tab-content" style="display: none;"></div>
+            <div id="rpg-editor-tab-historyPersistence" class="rpg-editor-tab-content" style="display: none;"></div>
+        </div>
+
+        <footer class="rpg-settings-popup-footer">
+            <div class="rpg-editor-footer-buttons">
+                <div class="rpg-editor-footer-row">
+                    <button id="rpg-editor-reset" class="rpg-btn-secondary" type="button">
+                        <i class="fa-solid fa-rotate-left"></i> <span
+                            data-i18n-key="template.trackerEditorModal.buttons.reset">Reset</span>
+                    </button>
+                    <button id="rpg-editor-export" class="rpg-btn-secondary" type="button">
+                        <i class="fa-solid fa-file-export"></i> <span
+                            data-i18n-key="template.trackerEditorModal.buttons.export">Export</span>
+                    </button>
+                    <button id="rpg-editor-import" class="rpg-btn-secondary" type="button">
+                        <i class="fa-solid fa-file-import"></i> <span
+                            data-i18n-key="template.trackerEditorModal.buttons.import">Import</span>
+                    </button>
+                </div>
+                <div class="rpg-editor-footer-row">
+                    <button id="rpg-editor-save" class="rpg-btn-primary" type="button">
+                        <i class="fa-solid fa-save"></i> <span data-i18n-key="template.trackerEditorModal.buttons.save">Save & Apply</span>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+</div>
+<!-- Prompts Editor Modal -->
+<div id="rpg-prompts-editor-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-prompts-editor-title" style="display: none;">
+    <div class="rpg-settings-popup-content">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-prompts-editor-title">
+                <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                <span>Customize Prompts</span>
+            </h3>
+            <button id="rpg-close-prompts-editor" class="rpg-popup-close" type="button"
+                aria-label="Close prompts editor">&times;</button>
+        </header>
+
+        <div class="rpg-settings-popup-body">
+            <small class="notes" style="display: block; margin-bottom: 16px;">
+                Customize the AI prompts used throughout the extension. Leave fields empty to use defaults.
+            </small>
+
+            <!-- HTML Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-html" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-code"></i> HTML Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Injected when "Enable Immersive HTML" is enabled. Affects all generation modes.
+                </small>
+                <textarea id="rpg-prompt-html" class="rpg-prompt-textarea" rows="4"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="html" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Dialogue Coloring Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-dialogue-coloring" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-palette"></i> Dialogue Coloring Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Injected when "Enable Dialogue Coloring" is enabled. Affects all generation modes.
+                </small>
+                <textarea id="rpg-prompt-dialogue-coloring" class="rpg-prompt-textarea" rows="4"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogue-coloring" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Narrator Mode Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-narrator" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-book-open"></i> Narrator Mode Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Injected when "Narrator Mode" is enabled. Instructs AI to infer characters from context.
+                </small>
+                <textarea id="rpg-prompt-narrator" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="narrator" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Context Instructions Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-context-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-comment-dots"></i> Context Instructions Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Injected in Separate/External mode after the context summary. Tells the AI how to use the context.
+                </small>
+                <textarea id="rpg-prompt-context-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="contextInstructions" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Avatar Generation Instruction -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-avatar" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-user-circle"></i> Avatar Generation Instruction
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instructions for LLM when generating avatar image prompts. Used by Auto-generate Missing Avatars feature.
+                </small>
+                <textarea id="rpg-prompt-avatar" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="avatar" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Tracker Instructions -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-tracker-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-list-check"></i> Tracker Instructions
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instruction portion only (format specification is hardcoded). {userName} will be replaced with the user's name.
+                </small>
+                <textarea id="rpg-prompt-tracker-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Tracker Continuation Instruction -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-tracker-continuation" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-arrow-right"></i> Tracker Continuation Instruction
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instructions added after tracker format specifications, telling the AI how to continue the narrative.
+                </small>
+                <textarea id="rpg-prompt-tracker-continuation" class="rpg-prompt-textarea" rows="4"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerContinuation" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Combat Narrative Style Instruction -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-combat-narrative" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-fire"></i> Combat Narrative Style Instruction
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Writing style instructions for combat encounters. Includes prose quality guidelines and anti-repetition rules. {userName} will be replaced with the user's name.
+                </small>
+                <textarea id="rpg-prompt-combat-narrative" class="rpg-prompt-textarea" rows="6"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="combatNarrative" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+        </div>
+
+        <footer class="rpg-settings-popup-footer">
+            <div class="rpg-footer-right">
+                <button id="rpg-prompts-cancel" class="rpg-btn-secondary" type="button">Cancel</button>
+                <button id="rpg-prompts-save" class="rpg-btn-primary" type="button">
+                    <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Lorebook Manager Modal -->
+<div id="rpg-lorebook-modal" class="rpg-lb-modal" role="dialog" aria-modal="true">
+    <div class="rpg-lb-modal-content">
+        <header class="rpg-lb-modal-header">
+            <h3>
+                <i class="fa-solid fa-book-atlas" aria-hidden="true"></i>
+                <span>Lore Library</span>
+            </h3>
+            <div class="rpg-lb-header-toggle" data-action="toggle-all-books" title="Toggle all lorebooks on/off">
+                <div class="rpg-lb-toggle" data-type="master"></div>
+                <span>All</span>
+            </div>
+            <button class="rpg-lb-close" type="button" aria-label="Close lorebook manager">&times;</button>
+        </header>
+        <div class="rpg-lb-modal-body">
+            <!-- Populated dynamically by renderLorebook() -->
+        </div>
+    </div>
+</div>
+

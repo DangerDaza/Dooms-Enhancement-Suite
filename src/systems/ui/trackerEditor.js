@@ -1,0 +1,1105 @@
+/**
+ * Tracker Editor Module
+ * Provides UI for customizing tracker configurations
+ */
+import { i18n } from '../../core/i18n.js';
+import { extensionSettings } from '../../core/state.js';
+import {
+    saveSettings,
+    getPresets,
+    getPreset,
+    getActivePresetId,
+    getDefaultPresetId,
+    setDefaultPreset,
+    isDefaultPreset,
+    createPreset,
+    saveToPreset,
+    loadPreset,
+    renamePreset,
+    deletePreset,
+    associatePresetWithCurrentEntity,
+    removePresetAssociationForCurrentEntity,
+    getPresetForCurrentEntity,
+    hasPresetAssociation,
+    isAssociatedWithCurrentPreset,
+    getCurrentEntityKey,
+    getCurrentEntityName,
+    exportPresets,
+    importPresets
+} from '../../core/persistence.js';
+import { renderInfoBox } from '../rendering/infoBox.js';
+import { renderThoughts } from '../rendering/thoughts.js';
+let $editorModal = null;
+let activeTab = 'infoBox';
+let tempConfig = null; // Temporary config for cancel functionality
+let tempAssociation = null; // Temporary association state: { presetId: string|null, entityKey: string|null }
+let originalAssociation = null; // Original association when editor opened
+/**
+ * Initialize the tracker editor modal
+ */
+export function initTrackerEditor() {
+    // Modal will be in template.html, just set up event listeners
+    $editorModal = $('#rpg-tracker-editor-popup');
+    if (!$editorModal.length) {
+        console.error('[Dooms Tracker] Tracker editor modal not found in template');
+        return;
+    }
+    // Tab switching
+    $(document).on('click', '.rpg-editor-tab', function() {
+        $('.rpg-editor-tab').removeClass('active');
+        $(this).addClass('active');
+        activeTab = $(this).data('tab');
+        $('.rpg-editor-tab-content').hide();
+        $(`#rpg-editor-tab-${activeTab}`).show();
+    });
+    // Save button
+    $(document).on('click', '#rpg-editor-save', function() {
+        applyTrackerConfig();
+        closeTrackerEditor();
+    });
+    // Cancel button
+    $(document).on('click', '#rpg-editor-cancel', function() {
+        closeTrackerEditor();
+    });
+    // Close X button
+    $(document).on('click', '#rpg-close-tracker-editor', function() {
+        closeTrackerEditor();
+    });
+    // Reset button
+    $(document).on('click', '#rpg-editor-reset', function() {
+        resetToDefaults();
+        renderEditorUI();
+    });
+    // Close on background click
+    $(document).on('click', '#rpg-tracker-editor-popup', function(e) {
+        if (e.target.id === 'rpg-tracker-editor-popup') {
+            closeTrackerEditor();
+        }
+    });
+    // Open button
+    $(document).on('click', '#rpg-open-tracker-editor', function() {
+        openTrackerEditor();
+    });
+    // Export button
+    $(document).on('click', '#rpg-editor-export', function() {
+        exportTrackerPreset();
+    });
+    // Import button
+    $(document).on('click', '#rpg-editor-import', function() {
+        importTrackerPreset();
+    });
+    // Preset select change
+    $(document).on('change', '#rpg-preset-select', function() {
+        const presetId = $(this).val();
+        if (presetId && presetId !== getActivePresetId()) {
+            // Check if the current character had an association (either original or pending)
+            const entityKey = getCurrentEntityKey();
+            const wasAssociated = tempAssociation
+                ? tempAssociation.presetId !== null
+                : hasPresetAssociation();
+            // Save current changes to the old preset before switching
+            const currentPresetId = getActivePresetId();
+            if (currentPresetId) {
+                saveToPreset(currentPresetId);
+            }
+            // Load the new preset
+            if (loadPreset(presetId)) {
+                tempConfig = JSON.parse(JSON.stringify(extensionSettings.trackerConfig));
+                renderEditorUI();
+                // If the character was associated with a preset, update temp association to new preset
+                if (wasAssociated && entityKey) {
+                    tempAssociation = { presetId: presetId, entityKey: entityKey };
+                    const preset = getPreset(presetId);
+                    toastr.info(`"${preset?.name || 'Unknown'}" will be associated with ${getCurrentEntityName()} when saved.`);
+                } else {
+                    toastr.success(`Switched to preset "${getPreset(presetId)?.name || 'Unknown'}".`);
+                }
+                updatePresetUI();
+            }
+        }
+    });
+    // New preset button
+    $(document).on('click', '#rpg-preset-new', function() {
+        const name = prompt('Enter a name for the new preset:');
+        if (name && name.trim()) {
+            const newId = createPreset(name.trim());
+            updatePresetUI();
+            $('#rpg-preset-select').val(newId);
+            toastr.success(`Created preset "${name.trim()}".`);
+        }
+    });
+    // Set as default preset button
+    $(document).on('click', '#rpg-preset-default', function() {
+        const currentPresetId = getActivePresetId();
+        if (currentPresetId) {
+            setDefaultPreset(currentPresetId);
+            updatePresetUI();
+            const preset = getPreset(currentPresetId);
+            toastr.success(`"${preset?.name || 'Unknown'}" is now the default preset.`);
+        }
+    });
+    // Delete preset button
+    $(document).on('click', '#rpg-preset-delete', function() {
+        const currentPresetId = getActivePresetId();
+        const presets = getPresets();
+        if (Object.keys(presets).length <= 1) {
+            toastr.warning('Cannot delete the last preset.');
+            return;
+        }
+        const preset = getPreset(currentPresetId);
+        if (confirm(`Are you sure you want to delete the preset "${preset?.name || 'Unknown'}"?`)) {
+            if (deletePreset(currentPresetId)) {
+                tempConfig = JSON.parse(JSON.stringify(extensionSettings.trackerConfig));
+                renderEditorUI();
+                updatePresetUI();
+                toastr.success('Preset deleted.');
+            }
+        }
+    });
+    // Associate preset checkbox
+    $(document).on('change', '#rpg-preset-associate', function() {
+        const activePresetId = getActivePresetId();
+        const preset = getPreset(activePresetId);
+        const entityName = getCurrentEntityName();
+        const entityKey = getCurrentEntityKey();
+        if ($(this).is(':checked')) {
+            // Store pending association (don't save yet)
+            tempAssociation = { presetId: activePresetId, entityKey: entityKey };
+            toastr.info(`"${preset?.name || 'Unknown'}" will be associated with ${entityName} when saved.`);
+        } else {
+            // Store pending removal (don't save yet)
+            tempAssociation = { presetId: null, entityKey: entityKey };
+            const defaultPresetId = getDefaultPresetId();
+            const defaultPreset = getPreset(defaultPresetId);
+            if (defaultPreset && defaultPresetId !== activePresetId) {
+                toastr.info(`Association will be removed when saved. Default preset "${defaultPreset.name}" will apply on next character switch.`);
+            } else {
+                toastr.info(`Association will be removed for ${entityName} when saved.`);
+            }
+        }
+    });
+}
+/**
+ * Updates the preset management UI (dropdown, association checkbox, entity name)
+ */
+function updatePresetUI() {
+    const presets = getPresets();
+    const activePresetId = getActivePresetId();
+    const defaultPresetId = getDefaultPresetId();
+    const $select = $('#rpg-preset-select');
+    // Populate the dropdown
+    $select.empty();
+    for (const [id, preset] of Object.entries(presets)) {
+        const isDefault = id === defaultPresetId;
+        const starPrefix = isDefault ? '★ ' : '';
+        $select.append(`<option value="${id}">${starPrefix}${preset.name}</option>`);
+    }
+    $select.val(activePresetId);
+    // Update the default button appearance
+    const $defaultBtn = $('#rpg-preset-default');
+    if (isDefaultPreset(activePresetId)) {
+        $defaultBtn.addClass('rpg-btn-active').attr('title', 'This is the default preset');
+    } else {
+        $defaultBtn.removeClass('rpg-btn-active').attr('title', 'Set as Default Preset');
+    }
+    // Update the entity name display
+    const entityName = getCurrentEntityName();
+    $('#rpg-preset-entity-name').text(entityName);
+    // Update the association checkbox
+    // Use temp state if available, otherwise check actual association with CURRENT preset
+    let isAssociated;
+    if (tempAssociation !== null) {
+        // Use pending state: checked if pending preset matches active preset
+        isAssociated = tempAssociation.presetId === activePresetId;
+    } else {
+        // No pending changes, check actual state
+        isAssociated = isAssociatedWithCurrentPreset();
+    }
+    $('#rpg-preset-associate').prop('checked', isAssociated);
+}
+/**
+ * Open the tracker editor modal
+ */
+function openTrackerEditor() {
+    // Create temporary copy for cancel functionality
+    tempConfig = JSON.parse(JSON.stringify(extensionSettings.trackerConfig));
+    // Store original association state for cancel functionality
+    const entityKey = getCurrentEntityKey();
+    const currentAssociatedPreset = getPresetForCurrentEntity();
+    originalAssociation = { presetId: currentAssociatedPreset, entityKey: entityKey };
+    tempAssociation = null; // Reset pending changes
+    // Set theme to match current extension theme
+    const theme = extensionSettings.theme || 'modern';
+    $editorModal.attr('data-theme', theme);
+    // Update preset UI
+    updatePresetUI();
+    renderEditorUI();
+    $editorModal.addClass('is-open').css('display', '');
+}
+/**
+ * Close the tracker editor modal
+ */
+function closeTrackerEditor() {
+    // Restore from temp if canceling
+    if (tempConfig) {
+        extensionSettings.trackerConfig = tempConfig;
+        tempConfig = null;
+    }
+    // Discard pending association changes (cancel = no save)
+    tempAssociation = null;
+    originalAssociation = null;
+    $editorModal.removeClass('is-open').addClass('is-closing');
+    setTimeout(() => {
+        $editorModal.removeClass('is-closing').hide();
+    }, 200);
+}
+/**
+ * Apply the tracker configuration and refresh all trackers
+ */
+function applyTrackerConfig() {
+    tempConfig = null; // Clear temp config
+    // Apply pending association changes
+    if (tempAssociation) {
+        if (tempAssociation.presetId !== null) {
+            // Associate with the pending preset
+            associatePresetWithCurrentEntity();
+            const preset = getPreset(tempAssociation.presetId);
+            toastr.success(`"${preset?.name || 'Unknown'}" is now associated with ${getCurrentEntityName()}.`);
+        } else {
+            // Remove association
+            removePresetAssociationForCurrentEntity();
+        }
+        tempAssociation = null;
+    }
+    originalAssociation = null;
+    // Save to the current preset
+    const currentPresetId = getActivePresetId();
+    if (currentPresetId) {
+        saveToPreset(currentPresetId);
+    } else {
+        saveSettings();
+    }
+    // Re-render all trackers with new config
+    renderInfoBox();
+    renderThoughts();
+}
+/**
+ * Reset configuration to defaults
+ */
+function resetToDefaults() {
+    extensionSettings.trackerConfig = {
+        // NOTE: userStats config removed — system archived
+        quests: {
+            persistInHistory: false
+        },
+        infoBox: {
+            widgets: {
+                date: { enabled: true, format: 'Weekday, Month, Year', persistInHistory: true },
+                weather: { enabled: true, persistInHistory: true },
+                temperature: { enabled: true, unit: 'C', persistInHistory: false },
+                time: { enabled: true, persistInHistory: true },
+                location: { enabled: true, persistInHistory: true },
+                recentEvents: { enabled: true, persistInHistory: false }
+            }
+        },
+        presentCharacters: {
+            showEmoji: true,
+            showName: true,
+            relationships: {
+                enabled: true,
+                relationshipEmojis: {
+                    'Lover': '❤️',
+                    'Friend': '⭐',
+                    'Ally': '🤝',
+                    'Enemy': '⚔️',
+                    'Neutral': '⚖️'
+                }
+            },
+            relationshipFields: ['Lover', 'Friend', 'Ally', 'Enemy', 'Neutral'],
+            relationshipEmojis: {
+                'Lover': '❤️',
+                'Friend': '⭐',
+                'Ally': '🤝',
+                'Enemy': '⚔️',
+                'Neutral': '⚖️'
+            },
+            customFields: [
+                { id: 'appearance', name: 'Appearance', enabled: true, description: 'Visible physical appearance (clothing, hair, notable features)', persistInHistory: false },
+                { id: 'demeanor', name: 'Demeanor', enabled: true, description: 'Observable demeanor or emotional state', persistInHistory: false }
+            ],
+            thoughts: {
+                enabled: true,
+                name: 'Thoughts',
+                description: 'Internal Monologue (in first person from character\'s POV, up to three sentences long)',
+                persistInHistory: false
+            },
+            characterStats: {
+                enabled: false,
+                customStats: [
+                    { id: 'health', name: 'Health', enabled: true, colorLow: '#ff4444', colorHigh: '#44ff44' },
+                    { id: 'energy', name: 'Energy', enabled: true, colorLow: '#ffaa00', colorHigh: '#44ffff' }
+                ]
+            }
+        }
+    };
+    // Reset history persistence settings
+    extensionSettings.historyPersistence = {
+        enabled: false,
+        messageCount: 5,
+        injectionPosition: 'assistant_message_end',
+        contextPreamble: '',
+        sendAllEnabledOnRefresh: false
+    };
+}
+/**
+ * Export current tracker configuration to a JSON file
+ */
+function exportTrackerPreset() {
+    try {
+        // Get the current tracker configuration
+        const config = extensionSettings.trackerConfig;
+        const historyPersistence = extensionSettings.historyPersistence;
+        // Create a preset object with metadata
+        const preset = {
+            name: 'Custom Tracker Preset',
+            version: '1.1', // Bumped version for historyPersistence support
+            exportDate: new Date().toISOString(),
+            trackerConfig: JSON.parse(JSON.stringify(config)), // Deep copy
+            historyPersistence: historyPersistence ? JSON.parse(JSON.stringify(historyPersistence)) : null // Include history persistence settings
+        };
+        // Convert to JSON
+        const jsonString = JSON.stringify(preset, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        link.download = `rpg-tracker-preset-${timestamp}.json`;
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toastr.success(i18n.getTranslation('template.trackerEditorModal.messages.exportSuccess') || 'Tracker preset exported successfully!');
+    } catch (error) {
+        console.error('[Dooms Tracker] Error exporting tracker preset:', error);
+        toastr.error(i18n.getTranslation('template.trackerEditorModal.messages.exportError') || 'Failed to export tracker preset. Check console for details.');
+    }
+}
+/**
+ * Migrates old tracker preset format to current format
+ * @param {Object} config - The tracker config to migrate
+ * @returns {Object} - Migrated tracker config
+ */
+function migrateTrackerPreset(config) {
+    // Create a deep copy to avoid modifying the original
+    const migrated = JSON.parse(JSON.stringify(config));
+    // Migrate relationships structure (v3.0.0 -> v3.1.0)
+    if (migrated.presentCharacters) {
+        // Old format: relationshipEmojis directly on presentCharacters
+        // New format: relationships.relationshipEmojis
+        if (migrated.presentCharacters.relationshipEmojis &&
+            !migrated.presentCharacters.relationships) {
+            migrated.presentCharacters.relationships = {
+                enabled: migrated.presentCharacters.enableRelationships || true,
+                relationshipEmojis: migrated.presentCharacters.relationshipEmojis
+            };
+            // Keep legacy fields for backward compatibility
+            migrated.presentCharacters.relationshipFields = Object.keys(migrated.presentCharacters.relationshipEmojis);
+        }
+        // Ensure relationships object exists
+        if (!migrated.presentCharacters.relationships) {
+            migrated.presentCharacters.relationships = {
+                enabled: false,
+                relationshipEmojis: {}
+            };
+        }
+        // Ensure relationshipEmojis exists within relationships
+        if (!migrated.presentCharacters.relationships.relationshipEmojis) {
+            migrated.presentCharacters.relationships.relationshipEmojis = {};
+        }
+        // Add persistInHistory to customFields if missing (v3.4.0)
+        if (migrated.presentCharacters.customFields) {
+            migrated.presentCharacters.customFields = migrated.presentCharacters.customFields.map(field => ({
+                ...field,
+                persistInHistory: field.persistInHistory ?? false
+            }));
+        }
+        // Add persistInHistory to thoughts if missing (v3.4.0)
+        if (migrated.presentCharacters.thoughts && migrated.presentCharacters.thoughts.persistInHistory === undefined) {
+            migrated.presentCharacters.thoughts.persistInHistory = false;
+        }
+    }
+    // NOTE: userStats migration preserved for backward compat with old preset files
+    // The userStats section is no longer actively used but may exist in imported presets
+    // Ensure quests config exists at top level
+    if (!migrated.quests) {
+        migrated.quests = { persistInHistory: false };
+    }
+    // Add persistInHistory to infoBox widgets if missing (v3.4.0)
+    if (migrated.infoBox && migrated.infoBox.widgets) {
+        for (const [widgetId, widget] of Object.entries(migrated.infoBox.widgets)) {
+            if (widget.persistInHistory === undefined) {
+                // Default to false for backwards compatibility - user must explicitly enable
+                widget.persistInHistory = false;
+            }
+        }
+    }
+    return migrated;
+}
+/**
+ * Import tracker configuration from a JSON file
+ */
+function importTrackerPreset() {
+    // Create file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            // Validate the imported data
+            if (!data.trackerConfig) {
+                throw new Error('Invalid preset file: missing trackerConfig');
+            }
+            // Validate required sections
+            if (!data.trackerConfig.infoBox || !data.trackerConfig.presentCharacters) {
+                throw new Error('Invalid preset file: missing required configuration sections');
+            }
+            // Migrate old preset format to current format
+            const migratedConfig = migrateTrackerPreset(data.trackerConfig);
+            // Extract historyPersistence if present in the import file
+            const historyPersistence = data.historyPersistence || null;
+            // Show import mode selection dialog
+            showImportModeDialog(migratedConfig, data.name || file.name.replace('.json', ''), historyPersistence);
+        } catch (error) {
+            console.error('[Dooms Tracker] Error importing tracker preset:', error);
+            toastr.error(i18n.getTranslation('template.trackerEditorModal.messages.importError') ||
+                `Failed to import tracker preset: ${error.message}`);
+        }
+    };
+    // Trigger file selection
+    input.click();
+}
+/**
+ * Show dialog to choose import mode
+ * @param {Object} migratedConfig - The migrated tracker config
+ * @param {string} suggestedName - Suggested name for new preset
+ * @param {Object|null} historyPersistence - The history persistence settings from import (if any)
+ */
+function showImportModeDialog(migratedConfig, suggestedName, historyPersistence = null) {
+    // Create dialog overlay
+    const dialogHtml = `
+        <div id="rpg-import-mode-dialog" class="rpg-import-dialog-overlay">
+            <div class="rpg-import-dialog">
+                <h4><i class="fa-solid fa-file-import"></i> Import Configuration</h4>
+                <p>How would you like to import this configuration?</p>
+                <div class="rpg-import-dialog-buttons">
+                    <button id="rpg-import-to-current" class="rpg-btn-secondary">
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                        Apply to Current Preset
+                    </button>
+                    <button id="rpg-import-as-new" class="rpg-btn-primary">
+                        <i class="fa-solid fa-plus"></i>
+                        Create New Preset
+                    </button>
+                </div>
+                <button id="rpg-import-cancel" class="rpg-btn-cancel">Cancel</button>
+            </div>
+        </div>
+    `;
+    $('body').append(dialogHtml);
+    const $dialog = $('#rpg-import-mode-dialog');
+    // Import to current preset
+    $('#rpg-import-to-current').on('click', () => {
+        $dialog.remove();
+        // Apply the migrated configuration to current
+        extensionSettings.trackerConfig = migratedConfig;
+        // Apply historyPersistence settings if present in import
+        if (historyPersistence) {
+            extensionSettings.historyPersistence = historyPersistence;
+        }
+        // Save to the active preset (saveToPreset uses current trackerConfig)
+        const activePresetId = getActivePresetId();
+        if (activePresetId) {
+            saveToPreset(activePresetId);
+        }
+        // Re-render the editor UI
+        renderEditorUI();
+        toastr.success('Configuration applied to current preset.');
+    });
+    // Import as new preset
+    $('#rpg-import-as-new').on('click', () => {
+        $dialog.remove();
+        // Prompt for preset name
+        const presetName = prompt('Enter a name for the new preset:', suggestedName);
+        if (!presetName) return;
+        // Set the migrated config as current first
+        extensionSettings.trackerConfig = migratedConfig;
+        // Apply historyPersistence settings if present in import
+        if (historyPersistence) {
+            extensionSettings.historyPersistence = historyPersistence;
+        }
+        // Create new preset (createPreset uses current trackerConfig)
+        const newPresetId = createPreset(presetName);
+        if (newPresetId) {
+            // Load the new preset
+            loadPreset(newPresetId);
+            renderEditorUI();
+            updatePresetUI();
+            toastr.success(`Created new preset: ${presetName}.`);
+        }
+    });
+    // Cancel
+    $('#rpg-import-cancel').on('click', () => {
+        $dialog.remove();
+    });
+    // Close on overlay click
+    $dialog.on('click', (e) => {
+        if (e.target === $dialog[0]) {
+            $dialog.remove();
+        }
+    });
+}
+/**
+ * Render the editor UI based on current config
+ */
+function renderEditorUI() {
+    // NOTE: renderUserStatsTab() removed — user stats system archived
+    renderInfoBoxTab();
+    renderPresentCharactersTab();
+    renderHistoryPersistenceTab();
+}
+// NOTE: renderUserStatsTab() and setupUserStatsListeners() archived to src/archived/archived-features-userstats.js
+/**
+ * Render Info Box configuration tab
+ */
+function renderInfoBoxTab() {
+    const config = extensionSettings.trackerConfig.infoBox;
+    let html = '<div class="rpg-editor-section">';
+    html += `<h4><i class="fa-solid fa-info-circle"></i> ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.widgetsTitle')}</h4>`;
+    // Date widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-date" ${config.widgets.date.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-date">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.dateWidget')}</label>`;
+    html += '<select id="rpg-date-format" class="rpg-select-mini">';
+    html += `<option value="Weekday, Month, Year" ${config.widgets.date.format === 'Weekday, Month, Year' ? 'selected' : ''}>Weekday, Month, Year</option>`;
+    html += `<option value="Day (Numerical), Month, Year" ${config.widgets.date.format === 'Day (Numerical), Month, Year' ? 'selected' : ''}>Day (Numerical), Month, Year</option>`;
+    html += '</select>';
+    html += '</div>';
+    // Time widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-time" ${config.widgets.time.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-time">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.timeWidget')}</label>`;
+    html += '</div>';
+    // Location widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-location" ${config.widgets.location.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-location">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.locationWidget')}</label>`;
+    html += '</div>';
+    // Recent Events widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-events" ${config.widgets.recentEvents.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-events">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.recentEventsWidget')}</label>`;
+    html += '</div>';
+    html += '</div>';
+    $('#rpg-editor-tab-infoBox').html(html);
+    setupInfoBoxListeners();
+}
+/**
+ * Set up event listeners for Info Box tab
+ */
+function setupInfoBoxListeners() {
+    const widgets = extensionSettings.trackerConfig.infoBox.widgets;
+    $('#rpg-widget-date').off('change').on('change', function() {
+        widgets.date.enabled = $(this).is(':checked');
+    });
+    $('#rpg-date-format').off('change').on('change', function() {
+        widgets.date.format = $(this).val();
+    });
+    $('#rpg-widget-time').off('change').on('change', function() {
+        widgets.time.enabled = $(this).is(':checked');
+    });
+    $('#rpg-widget-location').off('change').on('change', function() {
+        widgets.location.enabled = $(this).is(':checked');
+    });
+    $('#rpg-widget-events').off('change').on('change', function() {
+        widgets.recentEvents.enabled = $(this).is(':checked');
+    });
+}
+/**
+ * Render Present Characters configuration tab
+ */
+function renderPresentCharactersTab() {
+    const config = extensionSettings.trackerConfig.presentCharacters;
+    let html = '<div class="rpg-editor-section">';
+    // Relationship Fields Section
+    html += `<h4><i class="fa-solid fa-heart"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusTitle')}</h4>`;
+    // Toggle for enabling/disabling relationships
+    const relationshipsEnabled = config.relationships?.enabled !== false; // Default to true if not set
+    html += '<div class="rpg-editor-toggle-row">';
+    html += `<input type="checkbox" id="rpg-relationships-enabled" ${relationshipsEnabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-relationships-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableRelationshipStatus')}</label>`;
+    html += '</div>';
+    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusHint')}</p>`;
+    html += '<div class="rpg-relationship-mapping-list" id="rpg-relationship-mapping-list">';
+    // Show existing relationships as field → emoji pairs
+    const relationshipEmojis = config.relationships?.relationshipEmojis || config.relationshipEmojis || {
+        'Lover': '❤️',
+        'Friend': '⭐',
+        'Ally': '🤝',
+        'Enemy': '⚔️',
+        'Neutral': '⚖️'
+    };
+    for (const [relationship, emoji] of Object.entries(relationshipEmojis)) {
+        html += `
+            <div class="rpg-relationship-item">
+                <input type="text" value="${relationship}" class="rpg-relationship-name" placeholder="Relationship type">
+                <span class="rpg-arrow">→</span>
+                <input type="text" value="${emoji}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
+                <button class="rpg-remove-relationship" data-relationship="${relationship}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+    }
+    html += '</div>';
+    html += `<button class="rpg-btn-secondary" id="rpg-add-relationship"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.newRelationshipButton')}</button>`;
+    // Custom Fields Section
+    html += `<h4><i class="fa-solid fa-list"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorTitle')}</h4>`;
+    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorHint')}</p>`;
+    html += '<div class="rpg-editor-fields-list" id="rpg-editor-fields-list">';
+    config.customFields.forEach((field, index) => {
+        html += `
+            <div class="rpg-editor-field-item" data-index="${index}">
+                <div class="rpg-field-controls">
+                    <button class="rpg-field-move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move up"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button class="rpg-field-move-down" data-index="${index}" ${index === config.customFields.length - 1 ? 'disabled' : ''} title="Move down"><i class="fa-solid fa-arrow-down"></i></button>
+                </div>
+                <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-field-toggle" data-index="${index}">
+                <input type="text" value="${field.name}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${field.description || ''}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <button class="rpg-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    html += `<button class="rpg-btn-secondary" id="rpg-add-field"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCustomFieldButton')}</button>`;
+    // Thoughts Section
+    html += `<h4><i class="fa-solid fa-comment-dots"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsConfigTitle')}</h4>`;
+    html += '<div class="rpg-editor-toggle-row">';
+    html += `<input type="checkbox" id="rpg-thoughts-enabled" ${config.thoughts?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-thoughts-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableCharacterThoughts')}</label>`;
+    html += '</div>';
+    html += '<div class="rpg-thoughts-config">';
+    html += '<div class="rpg-editor-input-group">';
+    html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsLabelLabel')}</label>`;
+    html += `<input type="text" id="rpg-thoughts-name" value="${config.thoughts?.name || 'Thoughts'}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
+    html += '</div>';
+    html += '<div class="rpg-editor-input-group">';
+    html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.aiInstructionLabel')}</label>`;
+    html += `<input type="text" id="rpg-thoughts-description" value="${config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)'}" placeholder="Description of what to generate">`;
+    html += '</div>';
+    html += '</div>';
+    // Character Stats
+    html += `<h4><i class="fa-solid fa-chart-bar"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsTitle')}</h4>`;
+    html += '<div class="rpg-editor-toggle-row">';
+    html += `<input type="checkbox" id="rpg-char-stats-enabled" ${config.characterStats?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-char-stats-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.trackCharacterStats')}</label>`;
+    html += '</div>';
+    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsHint')}</p>`;
+    html += '<div class="rpg-editor-fields-list" id="rpg-char-stats-list">';
+    const charStats = config.characterStats?.customStats || [];
+    charStats.forEach((stat, index) => {
+        html += `
+            <div class="rpg-editor-field-item" data-index="${index}">
+                <input type="checkbox" ${stat.enabled ? 'checked' : ''} class="rpg-char-stat-toggle" data-index="${index}">
+                <input type="text" value="${stat.name}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
+                <button class="rpg-field-remove rpg-char-stat-remove" data-index="${index}" title="Remove stat"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    html += `<button class="rpg-btn-secondary" id="rpg-add-char-stat"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCharacterStatButton')}</button>`;
+    html += '</div>';
+    $('#rpg-editor-tab-presentCharacters').html(html);
+    setupPresentCharactersListeners();
+}
+/**
+ * Set up event listeners for Present Characters tab
+ */
+function setupPresentCharactersListeners() {
+    // Relationships enabled toggle
+    $('#rpg-relationships-enabled').off('change').on('change', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+        }
+        extensionSettings.trackerConfig.presentCharacters.relationships.enabled = $(this).is(':checked');
+    });
+    // Add new relationship
+    $('#rpg-add-relationship').off('click').on('click', function() {
+        // Ensure relationships object exists
+        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+        }
+        if (!extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis) {
+            extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis = {};
+        }
+        // Generate a unique relationship name
+        let baseName = 'New Relationship';
+        let relationshipName = baseName;
+        let counter = 1;
+        const existingRelationships = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+        while (existingRelationships[relationshipName]) {
+            counter++;
+            relationshipName = `${baseName} ${counter}`;
+        }
+        // Add to new structure
+        extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationshipName] = '😊';
+        // Also update legacy fields for backward compatibility
+        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+        }
+        extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationshipName] = '😊';
+        // Sync relationshipFields
+        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+        extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+        renderPresentCharactersTab();
+    });
+    // Remove relationship
+    $('.rpg-remove-relationship').off('click').on('click', function() {
+        const relationship = $(this).data('relationship');
+        // Remove from new structure
+        if (extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis) {
+            delete extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationship];
+        }
+        // Remove from legacy structure
+        if (extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+            delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationship];
+        }
+        // Sync relationshipFields
+        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis || {};
+        extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+        renderPresentCharactersTab();
+    });
+    // Update relationship name
+    $('.rpg-relationship-name').off('blur').on('blur', function() {
+        const newName = $(this).val();
+        const $item = $(this).closest('.rpg-relationship-item');
+        const emoji = $item.find('.rpg-relationship-emoji').val();
+        // Ensure structures exist
+        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+        }
+        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+        }
+        // Find the old name by matching the emoji in new structure
+        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+        const oldName = Object.keys(emojis).find(
+            key => emojis[key] === emoji && key !== newName
+        );
+        if (oldName && oldName !== newName) {
+            // Update new structure
+            delete emojis[oldName];
+            emojis[newName] = emoji;
+            // Update legacy structure
+            delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[oldName];
+            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[newName] = emoji;
+            // Sync relationshipFields
+            extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+        }
+    });
+    // Update relationship emoji
+    $('.rpg-relationship-emoji').off('blur').on('blur', function() {
+        const name = $(this).closest('.rpg-relationship-item').find('.rpg-relationship-name').val();
+        // Ensure structures exist
+        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+        }
+        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+        }
+        // Update both structures
+        extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[name] = $(this).val();
+        extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[name] = $(this).val();
+    });
+    // Thoughts configuration
+    $('#rpg-thoughts-enabled').off('change').on('change', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+        }
+        extensionSettings.trackerConfig.presentCharacters.thoughts.enabled = $(this).is(':checked');
+    });
+    $('#rpg-thoughts-name').off('blur').on('blur', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+        }
+        extensionSettings.trackerConfig.presentCharacters.thoughts.name = $(this).val();
+    });
+    $('#rpg-thoughts-description').off('blur').on('blur', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+        }
+        extensionSettings.trackerConfig.presentCharacters.thoughts.description = $(this).val();
+    });
+    // Add field
+    $('#rpg-add-field').off('click').on('click', function() {
+        extensionSettings.trackerConfig.presentCharacters.customFields.push({
+            id: 'custom_' + Date.now(),
+            name: 'New Field',
+            enabled: true,
+            description: 'Description for AI'
+        });
+        renderPresentCharactersTab();
+    });
+    // Remove field
+    $('.rpg-field-remove').off('click').on('click', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.customFields.splice(index, 1);
+        renderPresentCharactersTab();
+    });
+    // Move field up
+    $('.rpg-field-move-up').off('click').on('click', function() {
+        const index = $(this).data('index');
+        if (index > 0) {
+            const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
+            [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
+            renderPresentCharactersTab();
+        }
+    });
+    // Move field down
+    $('.rpg-field-move-down').off('click').on('click', function() {
+        const index = $(this).data('index');
+        const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
+        if (index < fields.length - 1) {
+            [fields[index], fields[index + 1]] = [fields[index + 1], fields[index]];
+            renderPresentCharactersTab();
+        }
+    });
+    // Toggle field
+    $('.rpg-field-toggle').off('change').on('change', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.customFields[index].enabled = $(this).is(':checked');
+    });
+    // Rename field
+    $('.rpg-field-label').off('blur').on('blur', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.customFields[index].name = $(this).val();
+    });
+    // Update description
+    $('.rpg-field-placeholder').off('blur').on('blur', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.customFields[index].description = $(this).val();
+    });
+    // Character stats toggle
+    $('#rpg-char-stats-enabled').off('change').on('change', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
+            extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
+        }
+        extensionSettings.trackerConfig.presentCharacters.characterStats.enabled = $(this).is(':checked');
+    });
+    // Add character stat
+    $('#rpg-add-char-stat').off('click').on('click', function() {
+        if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
+            extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
+        }
+        if (!extensionSettings.trackerConfig.presentCharacters.characterStats.customStats) {
+            extensionSettings.trackerConfig.presentCharacters.characterStats.customStats = [];
+        }
+        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.push({
+            id: `stat-${Date.now()}`,
+            name: 'New Stat',
+            enabled: true
+        });
+        renderPresentCharactersTab();
+    });
+    // Remove character stat
+    $('.rpg-char-stat-remove').off('click').on('click', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.splice(index, 1);
+        renderPresentCharactersTab();
+    });
+    // Toggle character stat
+    $('.rpg-char-stat-toggle').off('change').on('change', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].enabled = $(this).is(':checked');
+    });
+    // Rename character stat
+    $('.rpg-char-stat-label').off('blur').on('blur', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].name = $(this).val();
+    });
+}
+/**
+ * Render History Persistence configuration tab
+ * Allows users to select which tracker data should be injected into historical messages
+ */
+function renderHistoryPersistenceTab() {
+    const historyPersistence = extensionSettings.historyPersistence || {
+        enabled: false,
+        messageCount: 5,
+        injectionPosition: 'assistant_message_end',
+        contextPreamble: '',
+        sendAllEnabledOnRefresh: false
+    };
+    const questsConfig = extensionSettings.trackerConfig.quests || { persistInHistory: false };
+    const infoBoxConfig = extensionSettings.trackerConfig.infoBox;
+    const presentCharsConfig = extensionSettings.trackerConfig.presentCharacters;
+    const generationMode = extensionSettings.generationMode || 'together';
+    let html = '<div class="rpg-editor-section">';
+    // Main toggle and settings
+    html += `<h4><i class="fa-solid fa-clock-rotate-left"></i> History Persistence Settings</h4>`;
+    html += `<p class="rpg-editor-hint">Inject selected tracker data into historical messages to help the AI maintain continuity for time-sensitive events, weather changes, and location tracking.</p>`;
+    // Enable toggle
+    html += '<div class="rpg-editor-toggle-row">';
+    html += `<input type="checkbox" id="rpg-history-persistence-enabled" ${historyPersistence.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-history-persistence-enabled">Enable History Persistence</label>`;
+    html += '</div>';
+    // External API Only toggle - only show for separate/external modes
+    if (generationMode === 'separate' || generationMode === 'external') {
+        html += '<div class="rpg-editor-toggle-row" style="margin-top: 8px;">';
+        html += `<input type="checkbox" id="rpg-history-send-all-enabled" ${historyPersistence.sendAllEnabledOnRefresh ? 'checked' : ''}>`;
+        html += `<label for="rpg-history-send-all-enabled">Send All Enabled Stats on Refresh</label>`;
+        html += '</div>';
+        html += `<p class="rpg-editor-hint" style="margin-top: 4px; margin-left: 24px;">When enabled, Refresh RPG Info will include all enabled stats from the preset in history context, ignoring the individual selections below.</p>`;
+    }
+    // Message count
+    html += '<div class="rpg-editor-input-row" style="margin-top: 12px;">';
+    html += `<label for="rpg-history-message-count">Number of messages to include (0 = all available):</label>`;
+    html += `<input type="number" id="rpg-history-message-count" min="0" max="50" value="${historyPersistence.messageCount}" class="rpg-input" style="width: 80px; margin-left: 8px;">`;
+    html += '</div>';
+    // Injection position
+    html += '<div class="rpg-editor-input-row" style="margin-top: 12px;">';
+    html += `<label for="rpg-history-injection-position">Injection Position:</label>`;
+    html += `<select id="rpg-history-injection-position" class="rpg-select" style="margin-left: 8px;">`;
+    html += `<option value="user_message_end" ${historyPersistence.injectionPosition === 'user_message_end' ? 'selected' : ''}>End of the User's Message</option>`;
+    html += `<option value="assistant_message_end" ${historyPersistence.injectionPosition === 'assistant_message_end' ? 'selected' : ''}>End of the Assistant's Message</option>`;
+    html += `</select>`;
+    html += '</div>';
+    // Custom preamble
+    html += '<div class="rpg-editor-input-row" style="margin-top: 12px;">';
+    html += `<label for="rpg-history-context-preamble">Custom Context Preamble:</label>`;
+    html += `<input type="text" id="rpg-history-context-preamble" value="${historyPersistence.contextPreamble || ''}" class="rpg-text-input" placeholder="Context for that moment:" style="width: 100%; margin-top: 4px;">`;
+    html += '</div>';
+    // Quests section
+    html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-scroll"></i> Quests</h4>`;
+    html += '<div class="rpg-history-persist-list">';
+    html += `
+        <div class="rpg-editor-toggle-row">
+            <input type="checkbox" id="rpg-history-quests" ${questsConfig.persistInHistory ? 'checked' : ''}>
+            <label for="rpg-history-quests">Quests</label>
+        </div>
+    `;
+    html += '</div>';
+    // Info Box section - which widgets to persist
+    html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-info-circle"></i> Info Box</h4>`;
+    html += `<p class="rpg-editor-hint">Select which info box fields should be included in historical messages. These are recommended for time tracking.</p>`;
+    html += '<div class="rpg-history-persist-list">';
+    const widgetLabels = {
+        date: 'Date',
+        weather: 'Weather',
+        temperature: 'Temperature',
+        time: 'Time',
+        location: 'Location',
+        recentEvents: 'Recent Events'
+    };
+    for (const [widgetId, widget] of Object.entries(infoBoxConfig.widgets)) {
+        if (widget.enabled) {
+            html += `
+                <div class="rpg-editor-toggle-row">
+                    <input type="checkbox" id="rpg-history-widget-${widgetId}" class="rpg-history-widget-toggle" data-widget="${widgetId}" ${widget.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-widget-${widgetId}">${widgetLabels[widgetId] || widgetId}</label>
+                </div>
+            `;
+        }
+    }
+    html += '</div>';
+    // Present Characters section
+    html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-users"></i> Present Characters</h4>`;
+    html += `<p class="rpg-editor-hint">Select which character fields should be included in historical messages.</p>`;
+    html += '<div class="rpg-history-persist-list">';
+    // Custom fields (appearance, demeanor, etc.)
+    presentCharsConfig.customFields.forEach((field, index) => {
+        if (field.enabled) {
+            html += `
+                <div class="rpg-editor-toggle-row">
+                    <input type="checkbox" id="rpg-history-charfield-${field.id}" class="rpg-history-charfield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-charfield-${field.id}">${field.name}</label>
+                </div>
+            `;
+        }
+    });
+    // Thoughts
+    if (presentCharsConfig.thoughts?.enabled) {
+        html += `
+            <div class="rpg-editor-toggle-row">
+                <input type="checkbox" id="rpg-history-thoughts" ${presentCharsConfig.thoughts.persistInHistory ? 'checked' : ''}>
+                <label for="rpg-history-thoughts">${presentCharsConfig.thoughts.name || 'Thoughts'}</label>
+            </div>
+        `;
+    }
+    html += '</div>';
+    html += '</div>';
+    $('#rpg-editor-tab-historyPersistence').html(html);
+    setupHistoryPersistenceListeners();
+}
+/**
+ * Set up event listeners for History Persistence tab
+ */
+function setupHistoryPersistenceListeners() {
+    // Ensure historyPersistence object exists
+    if (!extensionSettings.historyPersistence) {
+        extensionSettings.historyPersistence = {
+            enabled: false,
+            messageCount: 5,
+            injectionPosition: 'assistant_message_end',
+            contextPreamble: '',
+            externalApiOnly: false
+        };
+    }
+    // Main toggle
+    $('#rpg-history-persistence-enabled').off('change').on('change', function() {
+        extensionSettings.historyPersistence.enabled = $(this).is(':checked');
+    });
+    // Send All Enabled on Refresh toggle
+    $('#rpg-history-send-all-enabled').off('change').on('change', function() {
+        extensionSettings.historyPersistence.sendAllEnabledOnRefresh = $(this).is(':checked');
+    });
+    // Message count
+    $('#rpg-history-message-count').off('change').on('change', function() {
+        extensionSettings.historyPersistence.messageCount = parseInt($(this).val()) || 0;
+    });
+    // Injection position
+    $('#rpg-history-injection-position').off('change').on('change', function() {
+        extensionSettings.historyPersistence.injectionPosition = $(this).val();
+    });
+    // Context preamble
+    $('#rpg-history-context-preamble').off('blur').on('blur', function() {
+        extensionSettings.historyPersistence.contextPreamble = $(this).val();
+    });
+    // Quests
+    $('#rpg-history-quests').off('change').on('change', function() {
+        if (!extensionSettings.trackerConfig.quests) {
+            extensionSettings.trackerConfig.quests = { persistInHistory: false };
+        }
+        extensionSettings.trackerConfig.quests.persistInHistory = $(this).is(':checked');
+    });
+    // Info Box widget toggles
+    $('.rpg-history-widget-toggle').off('change').on('change', function() {
+        const widgetId = $(this).data('widget');
+        extensionSettings.trackerConfig.infoBox.widgets[widgetId].persistInHistory = $(this).is(':checked');
+    });
+    // Present Characters field toggles
+    $('.rpg-history-charfield-toggle').off('change').on('change', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.presentCharacters.customFields[index].persistInHistory = $(this).is(':checked');
+    });
+    // Thoughts
+    $('#rpg-history-thoughts').off('change').on('change', function() {
+        extensionSettings.trackerConfig.presentCharacters.thoughts.persistInHistory = $(this).is(':checked');
+    });
+}

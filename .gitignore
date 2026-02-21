@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Node modules (if any)
+node_modules/
+
+# Environment variables
+.env
+
+# Claude
+CLAUDE.md
+
+# Filesystem temp files (Linux/FUSE artifacts)
+.fuse_hidden*
+**/.fuse_hidden*
+
+# Development mockups (not needed by users)
+mockups/
+
+# Archived/deprecated code
+src/archived/
+src/archived-features.js

@@ -1,0 +1,11 @@
+{
+    "display_name": "Doom's Enhancement Suite",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Doom (forked from Marinara)",
+    "version": "4.0.0",
+    "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite"
+}
