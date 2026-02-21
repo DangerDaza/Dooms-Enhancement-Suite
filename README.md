@@ -1,32 +1,125 @@
 # Doom's Enhancement Suite for SillyTavern
 
-An immersive RPG extension for SillyTavern that tracks character stats, scene information, and character thoughts in a beautiful, customizable UI panel. Features a full Lore Library manager, TTS sentence highlighting, portrait bar, scene headers, and more.
+A comprehensive RPG enhancement extension that transforms SillyTavern into an immersive storytelling platform. Track characters, manage scenes, highlight TTS playback, organize lorebooks, and customize everything with a deep theming system.
 
 ## Installation
 
 1. Open SillyTavern
-2. Go to the Extensions tab (cubes icon at the top)
-3. Go to Install extension
-4. Copy-paste this link: `https://github.com/DangerDaza/Dooms-Enhancement-Suite`
-5. Press Install
+2. Go to the **Extensions** tab (puzzle piece icon at the top)
+3. Click **Install Extension**
+4. Paste this URL:
+   ```
+   https://github.com/DangerDaza/Dooms-Enhancement-Suite
+   ```
+5. Click Install, then reload the page
+
+Once installed, enable the extension in **Extensions > Doom's Enhancement Suite** and open the settings panel (the **D** icon) to configure everything.
+
+---
 
 ## Features
 
-- **Info Box Dashboard**: Configurable widgets for date, weather, temperature, time, location, and recent events
-- **Present Characters Panel**: Track multiple characters with custom fields, relationship badges, and internal thoughts
-- **Lore Library**: Full lorebook manager with library folders, bulk actions, toggle-all, inline entry editing, and global WI settings
-- **TTS Sentence Highlight**: Real-time sentence highlighting synced with text-to-speech playback
-- **Portrait Bar**: Character portrait display
-- **Scene Headers**: Visual scene header rendering
-- **Chat Bubbles**: Styled chat bubble rendering
-- **Plot Progression**: Progress the plot with randomized events or natural progression
-- **Multiple Themes**: Cyberpunk, Fantasy, Minimal, Dark, Light, and Custom themes
-- **Live Editing**: Edit all tracker fields directly in the panels with auto-save
-- **Per-Swipe Data Storage**: Each swipe preserves its own tracker data
-- **Mobile Support**: Responsive design for mobile devices
+### Info Box Dashboard
+A visual dashboard that displays your current scene at a glance. Shows date, time, location, weather, and recent events in a card-based layout. All fields are editable inline — click any field to modify it. Lock individual fields to prevent the AI from changing them. Choose between Grid, Stacked, or Compact layouts with full color and sizing customization.
+
+### Present Characters Panel
+Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (auto-generated, custom uploaded, or emoji fallback). All fields are editable with lock support.
+
+### Portrait Bar
+A horizontal card shelf displaying character portraits between the chat and input area. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Right-click any portrait to upload a custom image.
+
+### Scene Headers
+Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them.
+
+### Chat Bubbles
+Splits multi-character AI messages into individual styled chat bubbles per speaker. Two styles available:
+- **Discord Style** — full-width message blocks with character names
+- **Card Style** — rounded card bubbles
+
+Works automatically by detecting speaker changes through dialogue coloring.
+
+### TTS Sentence Highlight
+Real-time sentence highlighting that follows along with SillyTavern's text-to-speech playback. The active sentence gets a gradient glow pill effect while read text fades and unread text stays dimmed. Uses browser speech boundary events for precision, with an intelligent timer fallback for voices that don't support boundary tracking. Fully customizable gradient colors, glow intensity, text opacity, and transition speed.
+
+### Lore Library (Lorebook Manager)
+A full-featured lorebook manager that replaces SillyTavern's native World Info interface. Organize your world info books into named library folders with custom icons and colors. Features include:
+- Per-library and master toggle-all buttons
+- Inline entry editing
+- Search and filter across books
+- Bulk visibility controls
+- Drag-to-reorder libraries
+- Token count estimates
+
+### Quest Tracking
+Track a main quest and multiple optional side quests. Quests appear in scene headers and are included in the AI's generation context. All quests are editable inline with lock support.
+
+### Plot Progression
+Quick-action buttons in the chat input area to drive the story forward:
+- **Random Plot** — generates unexpected plot twists from a huge pool of possible events
+- **Natural Plot** — continues the story naturally toward the main objective
+- **Encounter** — triggers a combat encounter
+
+### Dialogue Coloring
+Automatically colors each character's dialogue with unique colors. The AI generates `<font color>` tags that display in chat while being automatically stripped for TTS playback. Works seamlessly with chat bubbles.
+
+### Dynamic Weather Effects
+Animated visual weather effects on screen based on the current weather in your scene. Rain particles, snowflakes, wind gusts, storm effects, fog, and more — all time-of-day aware (fog is thicker at night, etc.).
+
+### Auto-Avatar Generation
+Automatically generates character portraits for NPCs using AI + Stable Diffusion (via SillyTavern's `/sd` command). Generates a description prompt, runs image generation, and stores the result for the portrait bar.
+
+### Thought Bubbles
+Displays character internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
+
+### Chapter Checkpoints
+Mark any message as a "chapter start" to filter your AI's context window. Messages before the checkpoint are hidden from the AI, keeping context focused on the current chapter while preserving full chat history.
+
+### Loading Intro
+A cinematic intro animation when the extension loads — choose between Film Credits (scrolling credits) or Typewriter (text effect) modes, or disable it entirely.
+
+### Per-Swipe Data
+Each message swipe preserves its own tracker data independently. Swipe back and forth and each version keeps its own scene state, character data, and quest progress.
+
+---
+
+## Customization
+
+### Themes
+Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create your own with full color picker controls for background, accent, text, highlight, stat bars, and per-element opacity.
+
+### Settings Panel
+The settings panel (accessed via the **D** icon) is organized into sections:
+1. **Generation** — AI generation mode, auto-update, context depth, external API support
+2. **Display & Features** — Toggle every feature on/off individually
+3. **Theme** — Colors, animations, stat bar gradients
+4. **Portrait Bar** — Layout, card sizing, colors, effects
+5. **TTS Highlight** — Gradient colors, glow, text dimming, transitions
+6. **Scene Tracker** — Field visibility, layout mode, sizing, colors
+
+### Generation Modes
+- **Together** — generates all tracker data in a single AI request (faster)
+- **Separate** — generates each tracker type with its own request (more accurate)
+- **External API** — use a different LLM endpoint for generation (keeps your main API budget for chat)
+
+### Prompt Editing
+Customize the generation prompts for HTML formatting, dialogue coloring, plot progression, and avatar generation through the built-in prompts editor.
+
+---
+
+## Multilingual Support
+
+Available in English, Traditional Chinese, and Russian.
+
+---
+
+## Mobile Support
+
+Fully responsive design with touch-friendly controls. All panels adapt to small screens with a dedicated mobile toggle.
+
+---
 
 ## License
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is free software under the [GNU Affero General Public License v3.0](LICENSE).
 
-Forked from marinara_spaghetti's RPG Companion.
+Originally forked from marinara_spaghetti's RPG Companion extension.
