@@ -1008,7 +1008,7 @@ async function initUI() {
         const fabHtml = `
             <div id="dooms-settings-fab" class="dooms-settings-fab" title="Doom's Tracker Settings">
                 <button id="dooms-fab-settings" class="dooms-fab-btn" title="Settings">
-                    <i class="fa-solid fa-dice-d20"></i>
+                    <span class="doom-icon"></span>
                 </button>
             </div>
         `;

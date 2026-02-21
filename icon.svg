@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="currentColor">
+  <!-- Doom-style bold angular "D" -->
+  <path d="
+    M 15 8 L 55 8
+    Q 72 8 82 18
+    Q 95 32 95 50
+    Q 95 68 82 82
+    Q 72 92 55 92
+    L 15 92
+    Z
+    M 32 24 L 32 76 L 52 76
+    Q 62 76 70 68
+    Q 78 60 78 50
+    Q 78 40 70 32
+    Q 62 24 52 24
+    Z
+  " fill-rule="evenodd"/>
+
+  <!-- Aggressive slash/crack through the D -->
+  <path d="
+    M 60 4 L 68 4 L 38 96 L 30 96 Z
+  " opacity="0.9"/>
+</svg>
