@@ -75,6 +75,8 @@ Each message swipe preserves its own tracker data independently. Swipe back and 
 Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create your own with full color picker controls for background, accent, text, highlight, stat bars, and per-element opacity.
 
 ### Settings Panel
+<img width="1380" height="377" alt="image" src="https://github.com/user-attachments/assets/e27027e6-a4bb-42a4-8da4-e206a49a6427" />
+
 The settings panel (accessed via the **D** icon) is organized into sections:
 2. **Display & Features** — Toggle every feature on/off individually
 3. **Theme** — Colors, animations, stat bar gradients
