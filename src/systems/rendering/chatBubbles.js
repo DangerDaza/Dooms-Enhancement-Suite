@@ -28,6 +28,40 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
+/** Strip <font color> tags from HTML, keeping their inner content */
+function stripFontColors(html) {
+    return html.replace(/<\/?font[^>]*>/gi, '');
+}
+
+/**
+ * Look up a character's assigned color from extensionSettings.characterColors.
+ * Tries exact match first, then case-insensitive, then partial/substring match.
+ */
+function getAssignedColor(speakerName) {
+    if (!speakerName || !extensionSettings.characterColors) return null;
+    const colors = extensionSettings.characterColors;
+
+    // 1. Exact match
+    if (colors[speakerName]) return colors[speakerName];
+
+    // 2. Case-insensitive match
+    const lowerSpeaker = speakerName.toLowerCase();
+    for (const [name, color] of Object.entries(colors)) {
+        if (name.toLowerCase() === lowerSpeaker) return color;
+    }
+
+    // 3. Speaker name is contained in a stored name (e.g. "Sakura" matches "Sakura (Haruno)")
+    //    or stored name is contained in speaker name
+    for (const [name, color] of Object.entries(colors)) {
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes(lowerSpeaker) || lowerSpeaker.includes(lowerName)) {
+            return color;
+        }
+    }
+
+    return null;
+}
+
 /** Build a map from lowercase hex colour → character name */
 function buildColorToSpeakerMap() {
     const map = new Map();
@@ -300,33 +334,34 @@ function renderDiscordBubbles(segments) {
         const isContinuation = speaker === lastSpeaker;
         lastSpeaker = speaker;
 
-        const color = seg.color || '';
+        // Prefer the AI's font tag color (what the AI intended for this dialogue),
+        // fall back to the extension's assigned color for the detected speaker
+        const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
+        const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const nameStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
+        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
 
         const typeClass = isNarrator ? 'dooms-bubble-narrator' :
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        const avatarContent = isContinuation ? '' : `
-            <div class="dooms-bubble-avatar ${isNarrator ? 'dooms-bubble-av-narrator' : ''}">
-                ${getAvatarHtml(isNarrator ? null : seg.speaker, 'dooms-bubble')}
+        const avatarContent = (isContinuation || isNarrator) ? '' : `
+            <div class="dooms-bubble-avatar">
+                ${getAvatarHtml(seg.speaker, 'dooms-bubble')}
             </div>`;
 
         const headerContent = isContinuation ? '' : `
             <div class="dooms-bubble-header">
-                <span class="dooms-bubble-author"${nameStyle}>${escapeHtml(displayName)}</span>
+                <span class="dooms-bubble-author">${escapeHtml(displayName)}</span>
             </div>`;
 
-        const textHtml = (!isNarrator && color)
-            ? `<span style="color: ${escapeHtml(color)}">${seg.html}</span>`
-            : seg.html;
+        const textHtml = stripFontColors(seg.html);
 
         return `<div class="dooms-bubble ${typeClass} ${contClass}"${borderStyle}>
             ${avatarContent}
             <div class="dooms-bubble-content">
                 ${headerContent}
-                <div class="dooms-bubble-text">${textHtml}</div>
+                <div class="dooms-bubble-text"${textStyle}>${textHtml}</div>
             </div>
         </div>`;
     }).join('');
@@ -360,9 +395,12 @@ function renderCardBubbles(segments) {
     const html = segments.map(seg => {
         const isNarrator = seg.type === 'narrator';
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const color = seg.color || '';
+        // Prefer the AI's font tag color (what the AI intended for this dialogue),
+        // fall back to the extension's assigned color for the detected speaker
+        const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
+        const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const nameStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
+        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
         const ringStyle = color ? ` style="background: linear-gradient(135deg, ${escapeHtml(color)}, ${escapeHtml(color)}88)"` : '';
 
         const typeClass = isNarrator ? 'dooms-card-narrator' :
@@ -370,21 +408,24 @@ function renderCardBubbles(segments) {
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
 
-        return `<div class="dooms-card ${typeClass}"${borderStyle}>
+        const avatarCol = isNarrator ? '' : `
             <div class="dooms-card-avatar-col">
-                <div class="dooms-card-avatar-ring ${isNarrator ? 'dooms-card-ring-narrator' : ''}"${ringStyle}>
+                <div class="dooms-card-avatar-ring"${ringStyle}>
                     <div class="dooms-card-avatar">
-                        ${getAvatarHtml(isNarrator ? null : seg.speaker, 'dooms-card')}
+                        ${getAvatarHtml(seg.speaker, 'dooms-card')}
                     </div>
                 </div>
                 <span class="dooms-card-avatar-name">${escapeHtml(displayName)}</span>
-            </div>
+            </div>`;
+
+        return `<div class="dooms-card ${typeClass}"${borderStyle}>
+            ${avatarCol}
             <div class="dooms-card-body">
                 <div class="dooms-card-header">
-                    <span class="dooms-card-author"${nameStyle}>${escapeHtml(displayName)}</span>
+                    <span class="dooms-card-author">${escapeHtml(displayName)}</span>
                     <span class="dooms-card-role ${roleClass}">${roleLabel}</span>
                 </div>
-                <div class="dooms-card-text">${(!isNarrator && color) ? `<span style="color: ${escapeHtml(color)}">${seg.html}</span>` : seg.html}</div>
+                <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
             </div>
         </div>`;
     }).join('');
