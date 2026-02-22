@@ -430,6 +430,23 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     debugLog('[RPG Thoughts] ==================== PARSING COMPLETE ====================');
     debugLog('[RPG Thoughts] Total characters parsed:', presentCharacters.length);
     debugLog('[RPG Thoughts] Characters array:', presentCharacters);
+
+    // Filter out off-scene characters — the AI sometimes includes characters
+    // who aren't actually present, with thoughts like "Not in scene" or "Off-scene"
+    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
+    const beforeFilter = presentCharacters.length;
+    presentCharacters = presentCharacters.filter(char => {
+        const thoughts = char.ThoughtsContent || '';
+        if (thoughts && offScenePatterns.test(thoughts)) {
+            debugLog(`[RPG Thoughts] Filtering out off-scene character: ${char.name} (thoughts: "${thoughts}")`);
+            return false;
+        }
+        return true;
+    });
+    if (presentCharacters.length < beforeFilter) {
+        debugLog(`[RPG Thoughts] Filtered ${beforeFilter - presentCharacters.length} off-scene characters`);
+    }
+
     // Build HTML
     let html = '';
     debugLog('[RPG Thoughts] ==================== BUILDING HTML ====================');
@@ -1262,8 +1279,9 @@ function parseThoughtsArray() {
             : lastGeneratedData.characterThoughts;
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
+            const offScene = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
             thoughtsArray = charactersArray
-                .filter(char => char.thoughts && char.thoughts.content)
+                .filter(char => char.thoughts && char.thoughts.content && !offScene.test(char.thoughts.content))
                 .map(char => ({
                     name: (char.name || ''),
                     emoji: char.emoji || '👤',

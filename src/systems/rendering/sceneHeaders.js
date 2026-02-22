@@ -200,16 +200,22 @@ function extractSceneData(infoBoxData, characterThoughtsData, questsData) {
         }
     }
     // --- Parse Present Characters ---
+    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
     if (characterThoughtsData) {
         try {
             const parsed = typeof characterThoughtsData === 'string'
                 ? JSON.parse(characterThoughtsData)
                 : characterThoughtsData;
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
-            result.presentCharacters = characters.map(char => ({
-                name: char.name || 'Unknown',
-                emoji: char.emoji || '👤'
-            }));
+            result.presentCharacters = characters
+                .filter(char => {
+                    const thoughts = char.thoughts?.content || char.thoughts || '';
+                    return !thoughts || !offScenePatterns.test(thoughts);
+                })
+                .map(char => ({
+                    name: char.name || 'Unknown',
+                    emoji: char.emoji || '👤'
+                }));
         } catch (e) {
             // Try text format - look for "- CharacterName" lines
             if (typeof characterThoughtsData === 'string') {

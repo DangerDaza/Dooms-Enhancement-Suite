@@ -657,15 +657,24 @@ export function getCharacterList() {
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     let presentChars = [];
 
+    // Pattern to detect off-scene characters from their thoughts
+    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
+
     if (data) {
         try {
             const parsed = typeof data === 'string' ? JSON.parse(data) : data;
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
-            presentChars = characters.map(c => ({
-                name: c.name || 'Unknown',
-                emoji: c.emoji || '👤',
-                present: true
-            }));
+            presentChars = characters
+                .filter(c => {
+                    // Filter out characters whose thoughts indicate they're off-scene
+                    const thoughts = c.thoughts?.content || c.thoughts || '';
+                    return !thoughts || !offScenePatterns.test(thoughts);
+                })
+                .map(c => ({
+                    name: c.name || 'Unknown',
+                    emoji: c.emoji || '👤',
+                    present: true
+                }));
         } catch (e) {
             if (typeof data === 'string') {
                 const lines = data.split('\n');
