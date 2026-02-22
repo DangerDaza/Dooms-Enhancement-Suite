@@ -58,14 +58,11 @@ Track a main quest and multiple optional side quests. Quests appear in scene hea
 ### Dialogue Coloring
 Automatically colors each character's dialogue with unique colors. The AI generates `<font color>` tags that display in chat while being automatically stripped for TTS playback. Works seamlessly with chat bubbles.
 
-### Dynamic Weather Effects
-Animated visual weather effects on screen based on the current weather in your scene. Rain particles, snowflakes, wind gusts, storm effects, fog, and more — all time-of-day aware (fog is thicker at night, etc.).
-
 ### Auto-Avatar Generation
 Automatically generates character portraits for NPCs using AI + Stable Diffusion (via SillyTavern's `/sd` command). Generates a description prompt, runs image generation, and stores the result for the portrait bar.
 
 ### Thought Bubbles
-Displays character internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
+Displays the character's internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
 
 ### Per-Swipe Data
 Each message swipe preserves its own tracker data independently. Swipe back and forth and each version keeps its own scene state, character data, and quest progress.
