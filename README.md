@@ -67,12 +67,6 @@ Automatically generates character portraits for NPCs using AI + Stable Diffusion
 ### Thought Bubbles
 Displays character internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
 
-### Chapter Checkpoints
-Mark any message as a "chapter start" to filter your AI's context window. Messages before the checkpoint are hidden from the AI, keeping context focused on the current chapter while preserving full chat history.
-
-### Loading Intro
-A cinematic intro animation when the extension loads — choose between Film Credits (scrolling credits) or Typewriter (text effect) modes, or disable it entirely.
-
 ### Per-Swipe Data
 Each message swipe preserves its own tracker data independently. Swipe back and forth and each version keeps its own scene state, character data, and quest progress.
 
@@ -85,17 +79,12 @@ Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create you
 
 ### Settings Panel
 The settings panel (accessed via the **D** icon) is organized into sections:
-1. **Generation** — AI generation mode, auto-update, context depth, external API support
 2. **Display & Features** — Toggle every feature on/off individually
 3. **Theme** — Colors, animations, stat bar gradients
 4. **Portrait Bar** — Layout, card sizing, colors, effects
 5. **TTS Highlight** — Gradient colors, glow, text dimming, transitions
 6. **Scene Tracker** — Field visibility, layout mode, sizing, colors
 
-### Generation Modes
-- **Together** — generates all tracker data in a single AI request (faster)
-- **Separate** — generates each tracker type with its own request (more accurate)
-- **External API** — use a different LLM endpoint for generation (keeps your main API budget for chat)
 
 ### Prompt Editing
 Customize the generation prompts for HTML formatting, dialogue coloring, and avatar generation through the built-in prompts editor.
