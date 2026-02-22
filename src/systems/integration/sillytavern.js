@@ -230,14 +230,26 @@ export function onCharacterChanged() {
     // with data from the last message, which may be null/empty. The loaded committedTrackerData
     // already contains the committed state from when we last left this chat.
     // commitTrackerData() will be called naturally when new messages arrive.
-    // Re-render with the loaded data
+    // Re-render sidebar panels immediately (they don't depend on #chat DOM)
     renderInfoBox();
     renderThoughts();
     renderQuests();
-    updateChatSceneHeaders();
     updatePortraitBar();
-    // Update chat thought overlays
-    updateChatThoughts();
+    // Delay DOM-dependent renders — SillyTavern renders chat messages asynchronously
+    // after CHAT_CHANGED fires, so #chat .mes elements may not exist yet.
+    // Poll until messages appear in the DOM (up to 3 seconds).
+    let attempts = 0;
+    const maxAttempts = 15;
+    const tryRenderChat = () => {
+        attempts++;
+        if ($('#chat .mes').length > 0) {
+            updateChatSceneHeaders();
+            updateChatThoughts();
+        } else if (attempts < maxAttempts) {
+            setTimeout(tryRenderChat, 200);
+        }
+    };
+    setTimeout(tryRenderChat, 200);
 }
 /**
  * Event handler for when a message is swiped.
@@ -291,6 +303,7 @@ export function onMessageSwiped(messageIndex) {
     renderInfoBox();
     renderThoughts();
     renderQuests();
+    resetSceneHeaderCache();
     updateChatSceneHeaders();
     updatePortraitBar();
     // Update chat thought overlays

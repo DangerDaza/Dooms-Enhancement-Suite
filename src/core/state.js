@@ -224,6 +224,43 @@ export let extensionSettings = {
         showScrollArrows: true,      // Show left/right scroll arrows on hover
     },
     chatBubbleMode: 'off', // Chat bubble display mode: 'off', 'discord', or 'cards'
+    infoPanelMode: 'off', // Info panel rendering in chat: 'off', 'banner', 'hud', 'ticker'
+    chatBubbleSettings: {
+        // Colors
+        narratorTextColor: '#999999',     // Narrator text color
+        unknownSpeakerColor: '#aaaaaa',   // Unknown/undetected speaker text color
+        accentColor: '#e94560',           // Accent / border highlight color
+        backgroundTint: '#1a1a2e',        // Bubble background tint color
+        backgroundOpacity: 5,             // Bubble background tint opacity (0-100)
+        // Sizing
+        fontSize: 92,                     // Font size percentage (60-120)
+        avatarSize: 40,                   // Avatar size in px (24-64)
+        borderRadius: 6,                  // Bubble border radius in px (0-20)
+        spacing: 12,                      // Gap between speaker groups in px (0-24)
+        // Toggles
+        showAvatars: true,                // Show character portrait avatars
+        showAuthorNames: true,            // Show character name headers
+        showNarratorLabel: true,          // Show "Narrator" label for narration blocks
+    },
+    infoPanelSettings: {
+        bgColor: '#e94560',
+        bgOpacity: 8,
+        borderColor: '#e94560',
+        borderOpacity: 15,
+        accentColor: '#e94560',
+        labelColor: '#888888',
+        textColor: '#d0d0d0',
+        fontSize: 82,
+        borderRadius: 8,
+        showTime: true,
+        showDate: true,
+        showLocation: true,
+        showCharacters: true,
+        showQuest: true,
+        showRecentEvents: true,
+        hudWidth: 220,                    // HUD panel width in px
+        hudOpacity: 85,                   // HUD background opacity (0-100)
+    },
     ttsHighlightMode: 'off', // TTS sentence highlight: 'off' or 'highlight' (Gradient Glow Pill)
     ttsHighlightSettings: {
         gradientColorLeft: '#e94560',    // Left color of gradient pill

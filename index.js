@@ -89,8 +89,10 @@ import {
     applyChatBubbles,
     applyAllChatBubbles,
     revertAllChatBubbles,
-    onChatBubbleModeChanged
+    onChatBubbleModeChanged,
+    applyChatBubbleSettings
 } from './src/systems/rendering/chatBubbles.js';
+// infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
 import {
     initTtsHighlight,
     destroyTtsHighlight,
@@ -106,7 +108,7 @@ import { ensureHtmlCleaningRegex, detectConflictingRegexScripts, ensureTrackerCl
 import { ensureJsonCleaningRegex, removeJsonCleaningRegex } from './src/systems/features/jsonCleaning.js';
 import { DEFAULT_HTML_PROMPT } from './src/systems/generation/promptBuilder.js';
 // Scene headers (inline chat rendering)
-import { updateChatSceneHeaders, applySceneTrackerSettings } from './src/systems/rendering/sceneHeaders.js';
+import { updateChatSceneHeaders, applySceneTrackerSettings, resetSceneHeaderCache } from './src/systems/rendering/sceneHeaders.js';
 // Integration modules
 import {
     commitTrackerData,
@@ -146,6 +148,7 @@ async function addExtensionSettings() {
             // Disabling extension - remove UI elements
             clearExtensionPrompts();
             updateChatThoughts(); // Remove thought bubbles
+            updateChatSceneHeaders(); // Remove scene headers (handles enabled check internally)
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
@@ -165,6 +168,40 @@ async function addExtensionSettings() {
         });
     }
 }
+/**
+ * Populates all Chat Bubbles & Info Panel settings controls from saved state.
+ */
+function loadChatBubbleSettingsUI() {
+    const cbs = extensionSettings.chatBubbleSettings || {};
+
+    // Mode selectors
+    $('#rpg-cb-bubble-mode').val(extensionSettings.chatBubbleMode || 'off');
+    $('#rpg-cb-badge').text((extensionSettings.chatBubbleMode || 'off') === 'off' ? 'off' : extensionSettings.chatBubbleMode);
+
+    // Toggles
+    $('#rpg-cb-show-avatars').prop('checked', cbs.showAvatars !== false);
+    $('#rpg-cb-show-author-names').prop('checked', cbs.showAuthorNames !== false);
+    $('#rpg-cb-show-narrator-label').prop('checked', cbs.showNarratorLabel !== false);
+
+    // Bubble colors
+    $('#rpg-cb-narrator-color').val(cbs.narratorTextColor || '#999999');
+    $('#rpg-cb-unknown-color').val(cbs.unknownSpeakerColor || '#aaaaaa');
+    $('#rpg-cb-accent-color').val(cbs.accentColor || '#e94560');
+    $('#rpg-cb-bg-tint').val(cbs.backgroundTint || '#1a1a2e');
+
+    // Bubble sliders
+    $('#rpg-cb-bg-opacity').val(cbs.backgroundOpacity ?? 5);
+    $('#rpg-cb-bg-opacity-value').text((cbs.backgroundOpacity ?? 5) + '%');
+    $('#rpg-cb-font-size').val(cbs.fontSize ?? 92);
+    $('#rpg-cb-font-size-value').text((cbs.fontSize ?? 92) + '%');
+    $('#rpg-cb-avatar-size').val(cbs.avatarSize ?? 40);
+    $('#rpg-cb-avatar-size-value').text((cbs.avatarSize ?? 40) + 'px');
+    $('#rpg-cb-border-radius').val(cbs.borderRadius ?? 6);
+    $('#rpg-cb-border-radius-value').text((cbs.borderRadius ?? 6) + 'px');
+    $('#rpg-cb-spacing').val(cbs.spacing ?? 12);
+    $('#rpg-cb-spacing-value').text((cbs.spacing ?? 12) + 'px');
+}
+
 /**
  * Initializes the UI for the extension.
  */
@@ -358,12 +395,6 @@ async function initUI() {
         $('#rpg-pb-absent-opacity-value').text(v + '%');
         _savePb();
     });
-    $('#rpg-chat-bubble-mode').on('change', function() {
-        const oldMode = extensionSettings.chatBubbleMode;
-        extensionSettings.chatBubbleMode = $(this).val();
-        saveSettings();
-        onChatBubbleModeChanged(oldMode, extensionSettings.chatBubbleMode);
-    });
     $('#rpg-loading-intro-mode').on('change', function() {
         extensionSettings.loadingIntroMode = $(this).val();
         saveSettings();
@@ -441,7 +472,13 @@ async function initUI() {
     $('#rpg-st-show-events').on('change', function() { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
 
     // Layout
-    $('#rpg-st-layout').on('change', function() { _stSettings().layout = $(this).val(); _saveSt(); });
+    $('#rpg-st-layout').on('change', function() {
+        _stSettings().layout = $(this).val();
+        _saveSt();
+        // Layout change requires full DOM rebuild (different HTML structures)
+        resetSceneHeaderCache();
+        updateChatSceneHeaders();
+    });
 
     // Sizing sliders
     $('#rpg-st-font-size').on('input', function() {
@@ -537,6 +574,95 @@ async function initUI() {
         $('#rpg-st-quest-color').val('#f0c040');
         $('#rpg-st-events-color').val('#999999');
         _saveSt();
+        updateChatSceneHeaders();
+    });
+
+    // ── Chat Bubbles & Info Panel customization ──
+    const _cbSettings = () => {
+        if (!extensionSettings.chatBubbleSettings) extensionSettings.chatBubbleSettings = {};
+        return extensionSettings.chatBubbleSettings;
+    };
+    const _saveCb = () => { saveSettings(); applyChatBubbleSettings(); };
+    const _saveCbRerender = () => { _saveCb(); revertAllChatBubbles(); applyAllChatBubbles(); };
+
+    // Bubble mode selector
+    $('#rpg-cb-bubble-mode').on('change', function() {
+        const oldMode = extensionSettings.chatBubbleMode;
+        extensionSettings.chatBubbleMode = $(this).val();
+        saveSettings();
+        onChatBubbleModeChanged(oldMode, extensionSettings.chatBubbleMode);
+        $('#rpg-cb-badge').text(extensionSettings.chatBubbleMode === 'off' ? 'off' : extensionSettings.chatBubbleMode);
+    });
+
+    // Bubble appearance toggles
+    $('#rpg-cb-show-avatars').on('change', function() { _cbSettings().showAvatars = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-show-author-names').on('change', function() { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-show-narrator-label').on('change', function() { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
+
+    // Bubble color pickers
+    $('#rpg-cb-narrator-color').on('input', function() { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-unknown-color').on('input', function() { _cbSettings().unknownSpeakerColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-accent-color').on('input', function() { _cbSettings().accentColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-bg-tint').on('input', function() { _cbSettings().backgroundTint = $(this).val(); _saveCb(); });
+
+    // Bubble opacity/sizing sliders
+    $('#rpg-cb-bg-opacity').on('input', function() {
+        const v = parseInt($(this).val());
+        _cbSettings().backgroundOpacity = v;
+        $('#rpg-cb-bg-opacity-value').text(v + '%');
+        _saveCb();
+    });
+    $('#rpg-cb-font-size').on('input', function() {
+        const v = parseInt($(this).val());
+        _cbSettings().fontSize = v;
+        $('#rpg-cb-font-size-value').text(v + '%');
+        _saveCb();
+    });
+    $('#rpg-cb-avatar-size').on('input', function() {
+        const v = parseInt($(this).val());
+        _cbSettings().avatarSize = v;
+        $('#rpg-cb-avatar-size-value').text(v + 'px');
+        _saveCb();
+    });
+    $('#rpg-cb-border-radius').on('input', function() {
+        const v = parseInt($(this).val());
+        _cbSettings().borderRadius = v;
+        $('#rpg-cb-border-radius-value').text(v + 'px');
+        _saveCb();
+    });
+    $('#rpg-cb-spacing').on('input', function() {
+        const v = parseInt($(this).val());
+        _cbSettings().spacing = v;
+        $('#rpg-cb-spacing-value').text(v + 'px');
+        _saveCb();
+    });
+
+    // Reset defaults button (Chat Bubbles only)
+    $('#rpg-cb-reset').on('click', function() {
+        extensionSettings.chatBubbleSettings = {
+            narratorTextColor: '#999999',
+            unknownSpeakerColor: '#aaaaaa',
+            accentColor: '#e94560',
+            backgroundTint: '#1a1a2e',
+            backgroundOpacity: 5,
+            fontSize: 92,
+            avatarSize: 40,
+            borderRadius: 6,
+            spacing: 12,
+            showAvatars: true,
+            showAuthorNames: true,
+            showNarratorLabel: true,
+        };
+        // Update all inputs to defaults
+        loadChatBubbleSettingsUI();
+        _saveCb();
+        revertAllChatBubbles();
+        applyAllChatBubbles();
+    });
+
+    // Ticker click delegation — expand/collapse
+    $('#chat').on('click', '.dooms-info-ticker', function() {
+        $(this).closest('.dooms-info-ticker-wrapper').toggleClass('expanded');
     });
 
     $('#rpg-toggle-thoughts-in-chat').on('change', function() {
@@ -888,7 +1014,6 @@ async function initUI() {
     $('#rpg-pb-absent-opacity').val(pb.absentOpacity ?? 45);
     $('#rpg-pb-absent-opacity-value').text((pb.absentOpacity ?? 45) + '%');
     applyPortraitBarSettings();
-    $('#rpg-chat-bubble-mode').val(extensionSettings.chatBubbleMode || 'off');
     $('#rpg-tts-highlight-mode').val(extensionSettings.ttsHighlightMode || 'off');
     $('#rpg-loading-intro-mode').val(extensionSettings.loadingIntroMode || 'off');
     $('#rpg-toggle-thoughts-in-chat').prop('checked', extensionSettings.showThoughtsInChat);
@@ -992,6 +1117,9 @@ async function initUI() {
     $('#rpg-tts-unread-opacity-value').text((tts.unreadOpacity ?? 55) + '%');
     $('#rpg-tts-transition-speed').val(tts.transitionSpeed ?? 300);
     applyTtsHighlightSettings();
+    // Chat Bubbles & Info Panel
+    loadChatBubbleSettingsUI();
+    applyChatBubbleSettings();
     updateSectionVisibility();
     applyTheme();
     toggleCustomColors();
@@ -1002,6 +1130,7 @@ async function initUI() {
     try { renderThoughts(); console.log('[Dooms Tracker] renderThoughts() OK'); } catch(e) { console.error('[Dooms Tracker] renderThoughts() FAILED:', e); }
     try { renderQuests(); console.log('[Dooms Tracker] renderQuests() OK'); } catch(e) { console.error('[Dooms Tracker] renderQuests() FAILED:', e); }
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
+    // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
     // Add settings button inside the portrait bar (bottom-left corner)
     if ($('#dooms-settings-fab').length === 0) {
@@ -1093,6 +1222,15 @@ jQuery(async () => {
         // Load chat-specific data for current chat
         try {
             loadChatData();
+            // Re-render sidebar panels immediately (don't depend on #chat DOM)
+            try { renderInfoBox(); } catch(e) { console.error('[Dooms Tracker] Post-load renderInfoBox() FAILED:', e); }
+            try { renderThoughts(); } catch(e) { console.error('[Dooms Tracker] Post-load renderThoughts() FAILED:', e); }
+            try { renderQuests(); } catch(e) { console.error('[Dooms Tracker] Post-load renderQuests() FAILED:', e); }
+            try { updatePortraitBar(); } catch(e) { console.error('[Dooms Tracker] Post-load updatePortraitBar() FAILED:', e); }
+            console.log('[Dooms Tracker] Post-loadChatData sidebar re-render complete');
+            // Note: DOM-dependent renders (scene headers, info panel, thoughts in chat)
+            // will be handled by the CHAT_CHANGED event handler when SillyTavern finishes
+            // loading and rendering the chat messages.
         } catch (error) {
             console.error('[Dooms Tracker] Chat data load failed, using defaults:', error);
         }
@@ -1219,12 +1357,16 @@ jQuery(async () => {
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
-                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
-                const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
-                if (messageElement) {
-                    // Small delay so dialogue coloring / other handlers finish first
-                    setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 50);
+                // Apply chat bubbles if active
+                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
+                    const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                    if (messageElement) {
+                        // Small delay so dialogue coloring / other handlers finish first
+                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 50);
+                    }
                 }
+                // Update scene tracker (new data may be available after message render)
+                setTimeout(() => updateChatSceneHeaders(), 100);
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
@@ -1236,9 +1378,12 @@ jQuery(async () => {
             });
             eventSource.on(event_types.CHAT_CHANGED, () => {
                 if (!extensionSettings.enabled) return;
-                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
-                // Delay to let SillyTavern finish rendering all messages
-                setTimeout(() => applyAllChatBubbles(), 150);
+                // Apply chat bubbles if active
+                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
+                    // Delay to let SillyTavern finish rendering all messages
+                    setTimeout(() => applyAllChatBubbles(), 150);
+                }
+                // Scene tracker re-render is handled by onCharacterChanged via CHAT_CHANGED
             });
             // TTS Highlight: clear all highlights when switching chats
             eventSource.on(event_types.CHAT_CHANGED, () => {

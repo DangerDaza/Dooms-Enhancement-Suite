@@ -9,6 +9,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { resolvePortrait, getCharacterList } from '../ui/portraitBar.js';
+import { hexToRgb } from './sceneHeaders.js';
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -326,6 +327,10 @@ function getAvatarHtml(speakerName, prefix) {
 function renderDiscordBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    const showAvatars = cbs.showAvatars !== false;
+    const showAuthorNames = cbs.showAuthorNames !== false;
+    const showNarratorLabel = cbs.showNarratorLabel !== false;
 
     const html = segments.map(seg => {
         const isNarrator = seg.type === 'narrator';
@@ -345,19 +350,25 @@ function renderDiscordBubbles(segments) {
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        const avatarContent = (isContinuation || isNarrator) ? '' : `
+        // Respect showAvatars toggle (never show for narrator or continuations)
+        const avatarContent = (!showAvatars || isContinuation || isNarrator) ? '' : `
             <div class="dooms-bubble-avatar">
                 ${getAvatarHtml(seg.speaker, 'dooms-bubble')}
             </div>`;
 
-        const headerContent = isContinuation ? '' : `
+        // Respect showAuthorNames + showNarratorLabel toggles
+        const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
+        const headerContent = showHeader ? `
             <div class="dooms-bubble-header">
                 <span class="dooms-bubble-author">${escapeHtml(displayName)}</span>
-            </div>`;
+            </div>` : '';
 
         const textHtml = stripFontColors(seg.html);
 
-        return `<div class="dooms-bubble ${typeClass} ${contClass}"${borderStyle}>
+        // Add hide-avatar class if avatars are hidden (adjusts narrator indent)
+        const hideAvatarClass = !showAvatars ? ' dooms-bubble-no-avatar' : '';
+
+        return `<div class="dooms-bubble ${typeClass} ${contClass}${hideAvatarClass}"${borderStyle}>
             ${avatarContent}
             <div class="dooms-bubble-content">
                 ${headerContent}
@@ -391,6 +402,10 @@ function renderDiscordUserBubble(html) {
 
 function renderCardBubbles(segments) {
     if (!segments.length) return '';
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    const showAvatars = cbs.showAvatars !== false;
+    const showAuthorNames = cbs.showAuthorNames !== false;
+    const showNarratorLabel = cbs.showNarratorLabel !== false;
 
     const html = segments.map(seg => {
         const isNarrator = seg.type === 'narrator';
@@ -408,7 +423,8 @@ function renderCardBubbles(segments) {
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
 
-        const avatarCol = isNarrator ? '' : `
+        // Respect showAvatars toggle (never show for narrator)
+        const avatarCol = (!showAvatars || isNarrator) ? '' : `
             <div class="dooms-card-avatar-col">
                 <div class="dooms-card-avatar-ring"${ringStyle}>
                     <div class="dooms-card-avatar">
@@ -418,13 +434,18 @@ function renderCardBubbles(segments) {
                 <span class="dooms-card-avatar-name">${escapeHtml(displayName)}</span>
             </div>`;
 
-        return `<div class="dooms-card ${typeClass}"${borderStyle}>
-            ${avatarCol}
-            <div class="dooms-card-body">
+        // Respect showAuthorNames + showNarratorLabel toggles
+        const showHeader = showAuthorNames && (!isNarrator || showNarratorLabel);
+        const headerHtml = showHeader ? `
                 <div class="dooms-card-header">
                     <span class="dooms-card-author">${escapeHtml(displayName)}</span>
                     <span class="dooms-card-role ${roleClass}">${roleLabel}</span>
-                </div>
+                </div>` : '';
+
+        return `<div class="dooms-card ${typeClass}"${borderStyle}>
+            ${avatarCol}
+            <div class="dooms-card-body">
+                ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
             </div>
         </div>`;
@@ -560,4 +581,30 @@ export function onChatBubbleModeChanged(oldMode, newMode) {
         revertAllChatBubbles();
         applyAllChatBubbles();
     }
+}
+
+/**
+ * Apply chat bubble CSS custom properties to :root for live theming.
+ * Called when chatBubbleSettings change so the CSS vars update in real-time.
+ */
+export function applyChatBubbleSettings() {
+    const s = extensionSettings.chatBubbleSettings || {};
+    const root = document.documentElement;
+
+    // Colors
+    root.style.setProperty('--cb-narrator-color', s.narratorTextColor || '#999999');
+    root.style.setProperty('--cb-unknown-color', s.unknownSpeakerColor || '#aaaaaa');
+    root.style.setProperty('--cb-accent', s.accentColor || '#e94560');
+
+    // Background tint — decompose into RGB for rgba()
+    const tintRgb = hexToRgb(s.backgroundTint || '#1a1a2e');
+    root.style.setProperty('--cb-bg-tint-rgb', tintRgb);
+    root.style.setProperty('--cb-bg-opacity', String((s.backgroundOpacity ?? 5) / 100));
+
+    // Sizing
+    root.style.setProperty('--cb-font-size', `${(s.fontSize ?? 92) / 100}em`);
+    root.style.setProperty('--cb-avatar-size', `${s.avatarSize ?? 40}px`);
+    root.style.setProperty('--cb-avatar-height', `${Math.round((s.avatarSize ?? 40) * 1.28)}px`);
+    root.style.setProperty('--cb-border-radius', `${s.borderRadius ?? 6}px`);
+    root.style.setProperty('--cb-spacing', `${s.spacing ?? 12}px`);
 }

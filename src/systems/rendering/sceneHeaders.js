@@ -2,6 +2,14 @@
  * Scene Headers Rendering Module
  * Injects compact scene info blocks after assistant messages in the chat.
  * These blocks sit OUTSIDE .mes_text so TTS won't read them.
+ *
+ * Layout modes:
+ *   - "grid"     — 2-column grid (default)
+ *   - "stacked"  — single column
+ *   - "compact"  — inline
+ *   - "banner"   — horizontal strip after last assistant message
+ *   - "hud"      — frosted-glass panel floating at top of chat
+ *   - "ticker"   — collapsible bar pinned to top of chat
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 
@@ -13,7 +21,7 @@ let _lastSceneDataJSON = null;
  * @param {string} hex
  * @returns {string}
  */
-function hexToRgb(hex) {
+export function hexToRgb(hex) {
     const h = hex.replace('#', '');
     const r = parseInt(h.substring(0, 2), 16);
     const g = parseInt(h.substring(2, 4), 16);
@@ -54,11 +62,15 @@ function buildStyleVars() {
     vars.push(`--st-padding: ${st.padding ?? 10}px`);
     vars.push(`--st-border-width: ${st.borderWidth ?? 3}px`);
 
+    // HUD-specific
+    vars.push(`--st-hud-width: 220px`);
+    vars.push(`--st-hud-opacity: 0.85`);
+
     return vars.join('; ');
 }
 
 /**
- * Applies scene tracker CSS custom properties to all existing .dooms-scene-header elements.
+ * Applies scene tracker CSS custom properties to all existing scene header elements.
  * Called from index.js when settings change (for live preview without full re-render).
  */
 export function applySceneTrackerSettings() {
@@ -66,11 +78,17 @@ export function applySceneTrackerSettings() {
     const st = extensionSettings.sceneTracker || {};
     const layout = st.layout || 'grid';
 
+    // Update classic layouts
     $('.dooms-scene-header').each(function () {
         this.setAttribute('style', style);
         // Update layout class
         this.classList.remove('dooms-scene-layout-grid', 'dooms-scene-layout-stacked', 'dooms-scene-layout-compact');
         this.classList.add(`dooms-scene-layout-${layout}`);
+    });
+
+    // Update banner/hud/ticker layouts
+    $('.dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').each(function () {
+        this.setAttribute('style', style);
     });
 }
 
@@ -81,13 +99,44 @@ export function resetSceneHeaderCache() {
     _lastSceneDataJSON = null;
 }
 
+// ─────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────
+
+function getCharacterColor(name) {
+    return extensionSettings.characterColors?.[name] || null;
+}
+
+/**
+ * Removes all scene header / info panel elements from the DOM.
+ */
+function removeAllSceneElements() {
+    $('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').remove();
+}
+
+/**
+ * Find the last non-user message in #chat.
+ */
+function findLastAssistantMessage() {
+    const $messages = $('#chat .mes');
+    for (let i = $messages.length - 1; i >= 0; i--) {
+        const $msg = $messages.eq(i);
+        if ($msg.attr('is_user') !== 'true') return $msg;
+    }
+    return null;
+}
+
+// ─────────────────────────────────────────────
+//  Main entry point
+// ─────────────────────────────────────────────
+
 /**
  * Main entry point. Removes old scene headers, finds the last assistant message,
  * extracts scene data, and injects a scene header block after it.
  */
 export function updateChatSceneHeaders() {
     if (!extensionSettings.enabled) {
-        $('.dooms-scene-header').remove();
+        removeAllSceneElements();
         _lastSceneDataJSON = null;
         return;
     }
@@ -99,36 +148,50 @@ export function updateChatSceneHeaders() {
     );
     // If there's no meaningful data, remove existing header and return
     if (!sceneData.time && !sceneData.date && !sceneData.location && sceneData.presentCharacters.length === 0 && !sceneData.activeQuest) {
-        $('.dooms-scene-header').remove();
+        removeAllSceneElements();
         _lastSceneDataJSON = null;
         return;
     }
     // Skip rebuild if data + settings are identical to last render
     const st = extensionSettings.sceneTracker || {};
     const cacheKey = JSON.stringify({ sceneData, st });
-    if (cacheKey === _lastSceneDataJSON && $('.dooms-scene-header').length) {
-        return;
+    if (cacheKey === _lastSceneDataJSON) {
+        // Check if the element is still in the DOM
+        if ($('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').length) {
+            return;
+        }
     }
     _lastSceneDataJSON = cacheKey;
     // Remove existing scene headers before inserting new one
-    $('.dooms-scene-header').remove();
-    // Find the most recent non-user message
-    const $messages = $('#chat .mes');
-    let $targetMessage = null;
-    for (let i = $messages.length - 1; i >= 0; i--) {
-        const $message = $messages.eq(i);
-        if ($message.attr('is_user') !== 'true') {
-            $targetMessage = $message;
-            break;
+    removeAllSceneElements();
+
+    const layout = st.layout || 'grid';
+
+    // Dispatch to the appropriate renderer
+    if (layout === 'banner') {
+        const html = createBannerHTML(sceneData);
+        if (html) {
+            const $target = findLastAssistantMessage();
+            if ($target) $target.after(html);
         }
+    } else if (layout === 'hud') {
+        const html = createHudHTML(sceneData);
+        if (html) $('#chat').prepend(html);
+    } else if (layout === 'ticker') {
+        const html = createTickerHTML(sceneData);
+        if (html) $('#chat').prepend(html);
+    } else {
+        // Classic layouts: grid, stacked, compact
+        const $target = findLastAssistantMessage();
+        if (!$target) return;
+        const headerHTML = createSceneHeaderHTML(sceneData);
+        $target.after(headerHTML);
     }
-    if (!$targetMessage) {
-        return;
-    }
-    // Build and inject the scene header
-    const headerHTML = createSceneHeaderHTML(sceneData);
-    $targetMessage.after(headerHTML);
 }
+
+// ─────────────────────────────────────────────
+//  Data extraction
+// ─────────────────────────────────────────────
 
 /**
  * Extracts scene data from the three data sources into a flat object.
@@ -137,7 +200,7 @@ export function updateChatSceneHeaders() {
  * @param {object|null} questsData - Quests data from extensionSettings
  * @returns {{ time: string, date: string, location: string, presentCharacters: Array<{name: string, emoji: string}>, activeQuest: string, recentEvents: string }}
  */
-function extractSceneData(infoBoxData, characterThoughtsData, questsData) {
+export function extractSceneData(infoBoxData, characterThoughtsData, questsData) {
     const result = {
         time: '',
         date: '',
@@ -241,9 +304,12 @@ function extractSceneData(infoBoxData, characterThoughtsData, questsData) {
     return result;
 }
 
+// ─────────────────────────────────────────────
+//  Classic Layout Renderer (grid / stacked / compact)
+// ─────────────────────────────────────────────
+
 /**
- * Builds the scene header HTML string.
- * Reads sceneTracker settings for field visibility, layout class, and inline CSS vars.
+ * Builds the classic scene header HTML string.
  * @param {{ time: string, date: string, location: string, presentCharacters: Array<{name: string, emoji: string}>, activeQuest: string, recentEvents: string }} data
  * @returns {string} HTML string
  */
@@ -323,6 +389,279 @@ function createSceneHeaderHTML(data) {
 
     return `<div class="dooms-scene-header dooms-scene-layout-${escapeHtml(layout)}" style="${styleVars}">${rows.join('')}</div>`;
 }
+
+// ─────────────────────────────────────────────
+//  Banner Renderer (Inline strip after last message)
+// ─────────────────────────────────────────────
+
+function createBannerHTML(data) {
+    const st = extensionSettings.sceneTracker || {};
+    const styleVars = buildStyleVars();
+    const items = [];
+
+    if (data.time && st.showTime !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-clock"></i>
+            <span class="dooms-ip-label">Time:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.time)}</span>
+        </div>`);
+    }
+    if (data.date && st.showDate !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-calendar"></i>
+            <span class="dooms-ip-label">Date:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.date)}</span>
+        </div>`);
+    }
+    if (data.location && st.showLocation !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-location-dot"></i>
+            <span class="dooms-ip-label">Location:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.location)}</span>
+        </div>`);
+    }
+
+    const itemsWithDividers = items.length > 1
+        ? items.join('<div class="dooms-ip-divider"></div>')
+        : items.join('');
+
+    // Characters
+    let charsHtml = '';
+    if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
+        const badges = data.presentCharacters.map(c => {
+            const color = getCharacterColor(c.name);
+            const dotStyle = color ? ` style="background: ${escapeHtml(color)}"` : '';
+            return `<span class="dooms-ip-char"><span class="dooms-ip-char-dot"${dotStyle}></span> ${escapeHtml(c.name)}</span>`;
+        }).join('');
+        charsHtml = `<div class="dooms-ip-item">
+            <i class="fa-solid fa-users"></i>
+            <span class="dooms-ip-label">Present:</span>
+            <div class="dooms-ip-chars">${badges}</div>
+        </div>`;
+    }
+
+    // Quest
+    let questHtml = '';
+    if (data.activeQuest && st.showQuest !== false) {
+        questHtml = `<div class="dooms-ip-quest">
+            <i class="fa-solid fa-scroll"></i>
+            <span class="dooms-ip-label">Quest:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.activeQuest)}</span>
+        </div>`;
+    }
+
+    // Recent events
+    let eventsHtml = '';
+    if (data.recentEvents && st.showRecentEvents !== false) {
+        eventsHtml = `<div class="dooms-ip-quest dooms-ip-events">
+            <i class="fa-solid fa-bolt"></i>
+            <span class="dooms-ip-label">Recent:</span>
+            <span class="dooms-ip-value dooms-ip-events-text">${escapeHtml(data.recentEvents)}</span>
+        </div>`;
+    }
+
+    if (!itemsWithDividers && !charsHtml && !questHtml && !eventsHtml) return '';
+
+    return `<div class="dooms-info-banner" style="${styleVars}">
+        ${itemsWithDividers}
+        ${charsHtml ? (items.length ? '<div class="dooms-ip-divider"></div>' : '') + charsHtml : ''}
+        ${questHtml}
+        ${eventsHtml}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+//  HUD Renderer (Floating panel at top of chat)
+// ─────────────────────────────────────────────
+
+function createHudHTML(data) {
+    const st = extensionSettings.sceneTracker || {};
+    const styleVars = buildStyleVars();
+    const rows = [];
+
+    if (data.time && st.showTime !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-clock"></i>
+            <span class="dooms-ip-hud-label">Time</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.time)}</span>
+        </div>`);
+    }
+    if (data.date && st.showDate !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-calendar"></i>
+            <span class="dooms-ip-hud-label">Date</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.date)}</span>
+        </div>`);
+    }
+    if (data.location && st.showLocation !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-location-dot"></i>
+            <span class="dooms-ip-hud-label">Location</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.location)}</span>
+        </div>`);
+    }
+
+    // Characters
+    if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
+        const chars = data.presentCharacters.map(c => {
+            const color = getCharacterColor(c.name);
+            const dotStyle = color ? ` style="background: ${escapeHtml(color)}"` : '';
+            return `<span class="dooms-ip-hud-char"><span class="dooms-ip-hud-char-dot"${dotStyle}></span> ${escapeHtml(c.name)}</span>`;
+        }).join('');
+        rows.push(`<div class="dooms-ip-hud-divider"></div>`);
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-users"></i>
+            <span class="dooms-ip-hud-label">Present</span>
+            <div class="dooms-ip-hud-chars">${chars}</div>
+        </div>`);
+    }
+
+    // Quest
+    if (data.activeQuest && st.showQuest !== false) {
+        rows.push(`<div class="dooms-ip-hud-divider"></div>`);
+        rows.push(`<div class="dooms-ip-hud-row dooms-ip-hud-quest">
+            <i class="fa-solid fa-scroll"></i>
+            <span class="dooms-ip-hud-label">Quest</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.activeQuest)}</span>
+        </div>`);
+    }
+
+    // Recent Events
+    if (data.recentEvents && st.showRecentEvents !== false) {
+        rows.push(`<div class="dooms-ip-hud-divider"></div>`);
+        rows.push(`<div class="dooms-ip-hud-row" style="flex-direction: column; gap: 4px;">
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-bolt"></i>
+                <span class="dooms-ip-hud-label">Recent</span>
+            </div>
+            <div class="dooms-ip-hud-events">
+                ${data.recentEvents.split(';').map(e => e.trim()).filter(e => e).map(e =>
+                    `<div class="dooms-ip-hud-event"><span class="dooms-ip-hud-event-bullet">&bull;</span> ${escapeHtml(e)}</div>`
+                ).join('')}
+            </div>
+        </div>`);
+    }
+
+    if (!rows.length) return '';
+
+    return `<div class="dooms-info-hud" style="${styleVars}">
+        <div class="dooms-ip-hud-title">
+            <i class="fa-solid fa-compass"></i>
+            Scene Info
+        </div>
+        ${rows.join('')}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+//  Ticker Renderer (Collapsible bar at top of chat)
+// ─────────────────────────────────────────────
+
+function createTickerHTML(data) {
+    const st = extensionSettings.sceneTracker || {};
+    const styleVars = buildStyleVars();
+
+    // Collapsed bar items
+    const tickerItems = [];
+    if (data.time && st.showTime !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-clock"></i> ${escapeHtml(data.time.split('→')[0].trim())}
+        </span>`);
+    }
+    if (data.location && st.showLocation !== false) {
+        const loc = data.location.length > 30 ? data.location.substring(0, 28) + '...' : data.location;
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-location-dot"></i> ${escapeHtml(loc)}
+        </span>`);
+    }
+    if (data.activeQuest && st.showQuest !== false) {
+        const quest = data.activeQuest.length > 30 ? data.activeQuest.substring(0, 28) + '...' : data.activeQuest;
+        tickerItems.push(`<span class="dooms-ip-ticker-item dooms-ip-ticker-quest">
+            <i class="fa-solid fa-scroll"></i> ${escapeHtml(quest)}
+        </span>`);
+    }
+
+    // Character color dots
+    let charDots = '';
+    if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
+        charDots = data.presentCharacters.map(c => {
+            const color = getCharacterColor(c.name);
+            const style = color ? ` style="background: ${escapeHtml(color)}"` : '';
+            return `<span class="dooms-ip-ticker-char-dot"${style} title="${escapeHtml(c.name)}"></span>`;
+        }).join('');
+    }
+
+    // Expanded panel rows
+    const panelRows = [];
+    if (data.time && st.showTime !== false) {
+        panelRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-clock"></i>
+            <span class="dooms-ip-panel-label">Time</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.time)}</span>
+        </div>`);
+    }
+    if (data.date && st.showDate !== false) {
+        panelRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-calendar"></i>
+            <span class="dooms-ip-panel-label">Date</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.date)}</span>
+        </div>`);
+    }
+    if (data.location && st.showLocation !== false) {
+        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full">
+            <i class="fa-solid fa-location-dot"></i>
+            <span class="dooms-ip-panel-label">Location</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.location)}</span>
+        </div>`);
+    }
+    if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
+        const chars = data.presentCharacters.map(c => {
+            const color = getCharacterColor(c.name);
+            const dotStyle = color ? ` style="background: ${escapeHtml(color)}"` : '';
+            return `<span class="dooms-ip-panel-char"><span class="dooms-ip-panel-char-dot"${dotStyle}></span> ${escapeHtml(c.name)}</span>`;
+        }).join('');
+        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full">
+            <i class="fa-solid fa-users"></i>
+            <span class="dooms-ip-panel-label">Present</span>
+            <div class="dooms-ip-panel-chars">${chars}</div>
+        </div>`);
+    }
+    if (data.activeQuest && st.showQuest !== false) {
+        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full dooms-ip-panel-quest">
+            <i class="fa-solid fa-scroll"></i>
+            <span class="dooms-ip-panel-label">Quest</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.activeQuest)}</span>
+        </div>`);
+    }
+    if (data.recentEvents && st.showRecentEvents !== false) {
+        const events = data.recentEvents.split(';').map(e => e.trim()).filter(e => e).map(e =>
+            `<div class="dooms-ip-panel-event"><span class="dooms-ip-panel-event-bullet">&bull;</span> ${escapeHtml(e)}</div>`
+        ).join('');
+        panelRows.push(`<div class="dooms-ip-panel-events dooms-ip-panel-full">${events}</div>`);
+    }
+
+    if (!tickerItems.length && !charDots && !panelRows.length) return '';
+
+    return `<div class="dooms-info-ticker-wrapper" style="${styleVars}">
+        <div class="dooms-info-ticker">
+            <span class="dooms-ip-ticker-icon"><i class="fa-solid fa-compass"></i></span>
+            <div class="dooms-ip-ticker-items">
+                ${tickerItems.join('<span class="dooms-ip-ticker-sep">|</span>')}
+            </div>
+            ${charDots ? `<div class="dooms-ip-ticker-chars">${charDots}</div>` : ''}
+            <span class="dooms-ip-ticker-expand"><i class="fa-solid fa-chevron-down"></i></span>
+        </div>
+        <div class="dooms-info-ticker-panel">
+            <div class="dooms-ip-panel-grid">
+                ${panelRows.join('')}
+            </div>
+        </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+//  Utility
+// ─────────────────────────────────────────────
 
 /**
  * Simple HTML escape to prevent XSS from AI-generated content.

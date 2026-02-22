@@ -166,17 +166,6 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Chat Bubble Mode</span>
-                            <span class="rpg-setting-hint">Split messages into per-character chat bubbles</span>
-                        </div>
-                        <select id="rpg-chat-bubble-mode" class="rpg-select-mini">
-                            <option value="off">Off</option>
-                            <option value="discord">Discord Style</option>
-                            <option value="cards">Card Style</option>
-                        </select>
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Loading Intro</span>
                             <span class="rpg-setting-hint">Cinematic credits on startup</span>
                         </div>
@@ -634,6 +623,9 @@
                             <option value="grid">Grid (2 columns)</option>
                             <option value="stacked">Stacked (1 column)</option>
                             <option value="compact">Compact (inline)</option>
+                            <option value="banner">Banner (Inline Strip)</option>
+                            <option value="hud">HUD (Floating Panel)</option>
+                            <option value="ticker">Ticker (Collapsible Bar)</option>
                         </select>
                     </div>
 
@@ -737,6 +729,122 @@
                     </div>
                     <button id="rpg-st-reset" class="rpg-accordion-action-btn" type="button">
                         <i class="fa-solid fa-rotate-left"></i> Restore Scene Tracker Defaults
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- ═══════ CHAT BUBBLES ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="chat-bubbles">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-comments rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Chat Bubbles</span>
+                    <span class="rpg-accordion-badge" id="rpg-cb-badge">off</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Mode</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Bubble Style</span>
+                            <span class="rpg-setting-hint">Split messages into per-character bubbles</span>
+                        </div>
+                        <select id="rpg-cb-bubble-mode" class="rpg-accordion-select">
+                            <option value="off">Off</option>
+                            <option value="discord">Discord Style</option>
+                            <option value="cards">Card Style</option>
+                        </select>
+                    </div>
+                    <div class="rpg-subsection-label">Bubble Appearance</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Show Avatars</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-cb-show-avatars" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Show Author Names</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-cb-show-author-names" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Show Narrator Label</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-cb-show-narrator-label" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="rpg-subsection-label">Bubble Colors</div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Narrator Text</span>
+                        <input type="color" id="rpg-cb-narrator-color" class="rpg-color-swatch" value="#999999" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Unknown Speaker</span>
+                        <input type="color" id="rpg-cb-unknown-color" class="rpg-color-swatch" value="#aaaaaa" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Accent / Border</span>
+                        <input type="color" id="rpg-cb-accent-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Background Tint</span>
+                        <input type="color" id="rpg-cb-bg-tint" class="rpg-color-swatch" value="#1a1a2e" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Background Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-cb-bg-opacity" class="rpg-range-slider" min="0" max="30" value="5" />
+                            <span id="rpg-cb-bg-opacity-value" class="rpg-slider-value">5%</span>
+                        </div>
+                    </div>
+
+                    <div class="rpg-subsection-label">Bubble Sizing</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Font Size</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-cb-font-size" class="rpg-range-slider" min="60" max="120" value="92" />
+                            <span id="rpg-cb-font-size-value" class="rpg-slider-value">92%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Avatar Size</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-cb-avatar-size" class="rpg-range-slider" min="24" max="64" value="40" />
+                            <span id="rpg-cb-avatar-size-value" class="rpg-slider-value">40px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Border Radius</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-cb-border-radius" class="rpg-range-slider" min="0" max="20" value="6" />
+                            <span id="rpg-cb-border-radius-value" class="rpg-slider-value">6px</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Speaker Spacing</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-cb-spacing" class="rpg-range-slider" min="0" max="24" value="12" />
+                            <span id="rpg-cb-spacing-value" class="rpg-slider-value">12px</span>
+                        </div>
+                    </div>
+
+                    <button id="rpg-cb-reset" class="rpg-accordion-action-btn" type="button">
+                        <i class="fa-solid fa-rotate-left"></i> Restore Chat Bubbles Defaults
                     </button>
                 </div>
             </div>
