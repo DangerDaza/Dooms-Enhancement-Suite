@@ -12833,6 +12833,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-bubble {
     display: flex;
+    align-items: flex-start;
     gap: 12px;
     padding: 8px 16px;
     width: 100%;
@@ -12862,15 +12863,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-bubble.dooms-bubble-continuation .dooms-bubble-avatar {
     visibility: hidden;
     height: 0;
-    width: 40px;
+    width: 50px;
     overflow: hidden;
 }
 
 /* ── Avatar ── */
 .dooms-bubble-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+    width: 50px;
+    height: 64px;
+    border-radius: 6px;
     flex-shrink: 0;
     overflow: hidden;
     background: rgba(255,255,255,0.05);
@@ -12882,7 +12883,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 50%;
+    border-radius: 6px;
 }
 .dooms-bubble-avatar-letter {
     font-size: 1.2em;
@@ -12892,8 +12893,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     height: 100%;
 }
-.dooms-bubble-av-narrator {
-    background: rgba(255,255,255,0.03);
+/* Narrator has no avatar — indent content to align with character text */
+.dooms-bubble-narrator .dooms-bubble-content {
+    padding-left: 62px; /* avatar width (50) + gap (12) */
 }
 .dooms-bubble-av-user {
     background: linear-gradient(135deg, var(--rpg-highlight, #e94560), #c73450);
