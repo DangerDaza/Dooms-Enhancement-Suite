@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 4, // Version number for settings migrations (v4 = FAB widgets enabled by default)
+    settingsVersion: 6, // Version number for settings migrations (v6 = current, safe defaults for fresh installs)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -15,8 +15,8 @@ export let extensionSettings = {
     showInfoBox: true,
     showCharacterThoughts: true,
     showQuests: true, // Show quests section
-    showThoughtsInChat: true, // Show thoughts overlay in chat
-    showPortraitBar: true, // Show collapsible portrait bar above chat input
+    showThoughtsInChat: false, // Show thoughts overlay in chat
+    showPortraitBar: false, // Show collapsible portrait bar above chat input
     narratorMode: false, // Use character card as narrator instead of fixed character references
     customNarratorPrompt: '', // Custom narrator mode prompt text (empty = use default)
     customContextInstructionsPrompt: '', // Custom context instructions prompt text (empty = use default)
@@ -27,7 +27,7 @@ export let extensionSettings = {
     customDialogueColoringPrompt: '', // Custom dialogue coloring prompt text (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic
     // and their custom prompt fields have been archived to src/archived-features.js
-    enableDynamicWeather: true, // Enable dynamic weather effects based on Info Box weather field (v2: enabled by default)
+    enableDynamicWeather: false, // Enable dynamic weather effects based on Info Box weather field
     weatherBackground: true, // Show weather effects in background (behind chat)
     weatherForeground: false, // Show weather effects in foreground (on top of chat)
     dismissedHolidayPromo: false, // User dismissed the holiday promotion banner
@@ -39,8 +39,8 @@ export let extensionSettings = {
     showNarratorMode: true, // Show Narrator Mode toggle in main panel
     showAutoAvatars: true, // Show Auto-generate Avatars toggle in main panel
     skipInjectionsForGuided: 'none', // skip injections for instruct injections and quiet prompts (GuidedGenerations compatibility)
-    enableRandomizedPlot: true, // Show randomized plot progression button above chat input
-    enableNaturalPlot: true, // Show natural plot progression button above chat input
+    enableRandomizedPlot: false, // Show randomized plot progression button above chat input
+    enableNaturalPlot: false, // Show natural plot progression button above chat input
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature
@@ -276,12 +276,12 @@ export let extensionSettings = {
     },
     // Combat encounter settings
     encounterSettings: {
-        enabled: true, // Show Start Encounter button above chat input
+        enabled: false, // Show Start Encounter button above chat input
         historyDepth: 8, // Number of recent messages to include in combat initialization
         autoSaveLogs: false // Save detailed combat logs to file
     },
     // Auto avatar generation settings
-    autoGenerateAvatars: true, // Master toggle for auto-generating avatars
+    autoGenerateAvatars: false, // Master toggle for auto-generating avatars
     avatarLLMCustomInstruction: '', // Custom instruction for LLM prompt generation
     // External API settings for 'external' generation mode
     externalApiSettings: {
