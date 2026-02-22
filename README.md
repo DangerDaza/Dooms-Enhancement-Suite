@@ -1,6 +1,8 @@
 # Doom's Enhancement Suite for SillyTavern
 
-A comprehensive RPG enhancement extension that transforms SillyTavern into an immersive storytelling platform. Track characters, manage scenes, highlight TTS playback, organize lorebooks, and customize everything with a deep theming system.
+A comprehensive enhancement extension for SillyTavern. Track characters, highlight TTS playback, organize lorebooks, and customize everything with an extensive settings panel.
+This extension was entirely vibe-coded using Claude Code. It started as a fork of SpicyMarinara's RPG Companion and has since been heavily modified and expanded. Their extension is fantastic — check it out if you haven't.
+This is a work in progress. I've never built anything like this before, so constructive criticism is welcome.
 
 ## Installation
 
