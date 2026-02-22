@@ -12925,6 +12925,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     line-height: 1.55;
     color: var(--SmartThemeBodyColor, #ccc);
 }
+/* Override SillyTavern's .mes_text q color so dialogue <q> tags
+   inherit the per-character color set on .dooms-bubble-text */
+.dooms-bubble-text q,
+.dooms-card-text q {
+    color: inherit;
+}
 
 /* ── Narrator ── */
 .dooms-bubble-narrator {
