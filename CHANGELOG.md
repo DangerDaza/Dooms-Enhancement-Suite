@@ -19,3 +19,4 @@
 - Avatar shape changed from circle to rounded rectangle (6px border-radius) for better portrait display.
 - Removed duplicate **Chat Bubble Mode** dropdown from the Display & Features section — the Chat Bubbles accordion is now the sole control.
 - Scene Tracker color settings consolidated under the Scene Tracker accordion (previously split across multiple sections).
+- **Safe defaults for fresh installs** — the following features now default to off so new users can opt in without affecting their existing SillyTavern setup: Thoughts in Chat, Portrait Bar, Dynamic Weather, Auto-generate Avatars, Plot Progression buttons, and Start Encounter button.
