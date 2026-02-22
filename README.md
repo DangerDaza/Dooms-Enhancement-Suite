@@ -1,6 +1,8 @@
 # Doom's Enhancement Suite for SillyTavern
 
-A comprehensive RPG enhancement extension that transforms SillyTavern into an immersive storytelling platform. Track characters, manage scenes, highlight TTS playback, organize lorebooks, and customize everything with a deep theming system.
+A comprehensive enhancement extension for SillyTavern. Track characters, highlight TTS playback, organize lorebooks, and customize everything with an extensive settings panel.
+This extension was entirely vibe-coded using Claude Code. It started as a fork of SpicyMarinara's RPG Companion and has since been heavily modified and expanded. Their extension is fantastic — check it out if you haven't.
+This is a work in progress. I've never built anything like this before, so constructive criticism is welcome.
 
 ## Installation
 
@@ -56,20 +58,11 @@ Track a main quest and multiple optional side quests. Quests appear in scene hea
 ### Dialogue Coloring
 Automatically colors each character's dialogue with unique colors. The AI generates `<font color>` tags that display in chat while being automatically stripped for TTS playback. Works seamlessly with chat bubbles.
 
-### Dynamic Weather Effects
-Animated visual weather effects on screen based on the current weather in your scene. Rain particles, snowflakes, wind gusts, storm effects, fog, and more — all time-of-day aware (fog is thicker at night, etc.).
-
 ### Auto-Avatar Generation
 Automatically generates character portraits for NPCs using AI + Stable Diffusion (via SillyTavern's `/sd` command). Generates a description prompt, runs image generation, and stores the result for the portrait bar.
 
 ### Thought Bubbles
-Displays character internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
-
-### Chapter Checkpoints
-Mark any message as a "chapter start" to filter your AI's context window. Messages before the checkpoint are hidden from the AI, keeping context focused on the current chapter while preserving full chat history.
-
-### Loading Intro
-A cinematic intro animation when the extension loads — choose between Film Credits (scrolling credits) or Typewriter (text effect) modes, or disable it entirely.
+Displays the character's internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
 
 ### Per-Swipe Data
 Each message swipe preserves its own tracker data independently. Swipe back and forth and each version keeps its own scene state, character data, and quest progress.
@@ -82,18 +75,15 @@ Each message swipe preserves its own tracker data independently. Swipe back and 
 Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create your own with full color picker controls for background, accent, text, highlight, stat bars, and per-element opacity.
 
 ### Settings Panel
+<img width="1380" height="377" alt="image" src="https://github.com/user-attachments/assets/e27027e6-a4bb-42a4-8da4-e206a49a6427" />
+
 The settings panel (accessed via the **D** icon) is organized into sections:
-1. **Generation** — AI generation mode, auto-update, context depth, external API support
 2. **Display & Features** — Toggle every feature on/off individually
 3. **Theme** — Colors, animations, stat bar gradients
 4. **Portrait Bar** — Layout, card sizing, colors, effects
 5. **TTS Highlight** — Gradient colors, glow, text dimming, transitions
 6. **Scene Tracker** — Field visibility, layout mode, sizing, colors
 
-### Generation Modes
-- **Together** — generates all tracker data in a single AI request (faster)
-- **Separate** — generates each tracker type with its own request (more accurate)
-- **External API** — use a different LLM endpoint for generation (keeps your main API budget for chat)
 
 ### Prompt Editing
 Customize the generation prompts for HTML formatting, dialogue coloring, and avatar generation through the built-in prompts editor.
