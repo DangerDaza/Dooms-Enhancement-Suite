@@ -29,6 +29,8 @@ Tracks every character in the scene with their portrait, relationship to the pla
 
 ### Portrait Bar
 A horizontal card shelf displaying character portraits between the chat and input area. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Right-click any portrait to upload a custom image.
+<img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
+
 
 ### Scene Headers
 Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them.
@@ -37,11 +39,16 @@ Compact scene info blocks injected after assistant messages in chat. Displays ti
 Splits multi-character AI messages into individual styled chat bubbles per speaker. Two styles available:
 - **Discord Style** — full-width message blocks with character names
 - **Card Style** — rounded card bubbles
+<img width="1241" height="1081" alt="image" src="https://github.com/user-attachments/assets/43e1d5d2-3216-4d01-841e-dbff6805afc8" />
+
 
 Works automatically by detecting speaker changes through dialogue coloring.
 
 ### TTS Sentence Highlight
 Real-time sentence highlighting that follows along with SillyTavern's text-to-speech playback. The active sentence gets a gradient glow pill effect while read text fades and unread text stays dimmed. Uses browser speech boundary events for precision, with an intelligent timer fallback for voices that don't support boundary tracking. Fully customizable gradient colors, glow intensity, text opacity, and transition speed.
+
+<img width="1207" height="630" alt="image" src="https://github.com/user-attachments/assets/bdda5416-31a5-4c6e-a883-0e3dc8d32cbe" />
+
 
 ### Lore Library (Lorebook Manager)
 A full-featured lorebook manager that replaces SillyTavern's native World Info interface. Organize your world info books into named library folders with custom icons and colors. Features include:
@@ -51,6 +58,7 @@ A full-featured lorebook manager that replaces SillyTavern's native World Info i
 - Bulk visibility controls
 - Drag-to-reorder libraries
 - Token count estimates
+<img width="1557" height="2380" alt="image" src="https://github.com/user-attachments/assets/cad2d576-480e-446e-8d3f-bc1abd1e96b4" />
 
 ### Quest Tracking
 Track a main quest and multiple optional side quests. Quests appear in scene headers and are included in the AI's generation context. All quests are editable inline with lock support.
@@ -76,6 +84,9 @@ Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create you
 
 ### Settings Panel
 <img width="1380" height="377" alt="image" src="https://github.com/user-attachments/assets/e27027e6-a4bb-42a4-8da4-e206a49a6427" />
+
+
+<img width="1182" height="1474" alt="image" src="https://github.com/user-attachments/assets/5042424e-10a0-4644-af0b-ab0fc93b9fee" />
 
 The settings panel (accessed via the **D** icon) is organized into sections:
 2. **Display & Features** — Toggle every feature on/off individually
