@@ -68,6 +68,9 @@ Automatically colors each character's dialogue with unique colors. The AI genera
 ### Thought Bubbles
 Displays the character's internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
 
+<img width="1215" height="723" alt="image" src="https://github.com/user-attachments/assets/d849e93c-3f86-4aba-91fe-fbaa87fe6529" />
+
+
 ### Per-Swipe Data
 Each message swipe preserves its own tracker data independently. Swipe back and forth and each version keeps its own scene state, character data, and quest progress.
 
