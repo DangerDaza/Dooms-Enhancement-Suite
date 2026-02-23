@@ -22,7 +22,7 @@ Once installed, enable the extension in **Extensions > Doom's Enhancement Suite*
 ## Features
 
 ### Present Characters Panel
-Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (auto-generated, custom uploaded, or emoji fallback). All fields are editable with lock support.
+Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (custom uploaded, or emoji fallback). All fields are editable with lock support.
 
 ### Portrait Bar
 A horizontal card shelf displaying character portraits between the chat and input area. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Right-click any portrait to upload a custom image.
