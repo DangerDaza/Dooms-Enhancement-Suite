@@ -278,6 +278,32 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
 }
 
 /**
+ * Find the character name that appears closest to the END of a text string.
+ * This ensures that when narration mentions multiple characters, we pick the
+ * one mentioned right before the dialogue — not just whichever name happens
+ * to iterate first in the Map.
+ * @returns {string|null} The original character name or null
+ */
+function findClosestName(text, nameLookup) {
+    if (!text) return null;
+    const lower = text.toLowerCase();
+    let bestPos = -1;
+    let bestName = null;
+
+    for (const [key, original] of nameLookup) {
+        const re = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        let match;
+        while ((match = re.exec(lower)) !== null) {
+            if (match.index > bestPos) {
+                bestPos = match.index;
+                bestName = original;
+            }
+        }
+    }
+    return bestName;
+}
+
+/**
  * Detect which character is speaking based on font colour and surrounding text.
  */
 function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLookup, resolvedColors, previousSegments) {
@@ -294,33 +320,35 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         if (resolvedColors.has(normalised)) return resolvedColors.get(normalised);
     }
 
-    // Strategy 3: Search for a known character name in the preceding narration text
-    const searchText = (precedingText || '').toLowerCase();
-    if (searchText) {
-        for (const [lower, original] of nameLookup) {
-            // Word boundary check
-            const re = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-            if (re.test(searchText)) return original;
-        }
+    // Strategy 3: Search for the character name closest to the END of the
+    // preceding narration text (the name mentioned right before dialogue
+    // is most likely the speaker, even if other characters are mentioned earlier)
+    const searchText = (precedingText || '');
+    if (searchText.trim()) {
+        const found = findClosestName(searchText, nameLookup);
+        if (found) return found;
     }
 
-    // Strategy 4: Search the entire block's text for a nearby name
-    const fullText = (blockElement.textContent || '').toLowerCase();
-    for (const [lower, original] of nameLookup) {
-        const re = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-        if (re.test(fullText)) return original;
-    }
+    // Strategy 4: Search the block's narration text (excluding dialogue
+    // inside <font> tags) for the closest name to the end.
+    // We strip font-tagged content first so that character names mentioned
+    // INSIDE dialogue don't get falsely attributed as the speaker.
+    const blockClone = blockElement.cloneNode(true);
+    blockClone.querySelectorAll('font[color]').forEach(el => el.remove());
+    const narrationOnlyText = (blockClone.textContent || '');
+    const found = findClosestName(narrationOnlyText, nameLookup);
+    if (found) return found;
 
     // Strategy 5: Search backwards through previous segments in this message
     // for the nearest character name mention (handles cross-block references
-    // where the character is named in earlier narration but not in this block)
+    // where the character is named in earlier narration but not in this block).
+    // We go segment by segment from most recent, and within each segment
+    // pick the name closest to the end.
     if (previousSegments && previousSegments.length > 0) {
         for (let i = previousSegments.length - 1; i >= 0; i--) {
-            const segText = stripHtml(previousSegments[i].html).toLowerCase();
-            for (const [lower, original] of nameLookup) {
-                const re = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-                if (re.test(segText)) return original;
-            }
+            const segText = stripHtml(previousSegments[i].html);
+            const segFound = findClosestName(segText, nameLookup);
+            if (segFound) return segFound;
         }
     }
 
