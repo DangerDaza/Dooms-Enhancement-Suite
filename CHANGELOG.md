@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.6] - 2026-02-23
+
+### Fixed
+- **Loading intro causes chat bubbles, thoughts, and scene headers to not render** — when the loading intro was enabled, SillyTavern emitted `CHAT_CHANGED` during the animation (while the extension's event listeners weren't registered yet), causing the initial chat render to be completely missed. Fixed by registering all event listeners before waiting for the intro to finish, and adding a fallback `onCharacterChanged()` call to recover if the event was already missed. The intro continues to cover the loading process exactly as intended.
+
 ## [1.5.5] - 2026-02-23
 
 ### Fixed

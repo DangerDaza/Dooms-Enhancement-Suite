@@ -1361,13 +1361,6 @@ jQuery(async () => {
             console.error('[Dooms Tracker] JSON cleaning regex setup failed:', error);
             // Non-critical - continue without it
         }
-        // Wait for the intro animation to finish (if it's still playing)
-        // At this point all initialization is done — we just wait for the visual to complete
-        try {
-            await introPromise;
-        } catch (error) {
-            console.error('[Dooms Tracker] Loading intro failed:', error);
-        }
         // Detect conflicting regex scripts from old manual formatters
         try {
             const conflicts = detectConflictingRegexScripts(st_extension_settings);
@@ -1392,6 +1385,8 @@ jQuery(async () => {
             // Non-critical - continue without it
         }
         // Register all event listeners
+        // IMPORTANT: This must happen BEFORE await introPromise so we don't miss
+        // the CHAT_CHANGED event that ST fires while the loading intro is playing.
         try {
             registerAllEvents({
                 [event_types.MESSAGE_SENT]: onMessageSent,
@@ -1561,7 +1556,21 @@ jQuery(async () => {
             console.error('[Dooms Tracker] Event registration failed:', error);
             throw error; // This is critical - can't continue without events
         }
+        // If CHAT_CHANGED already fired while we were initializing (e.g. while the
+        // loading intro was playing), our handlers weren't registered in time and the
+        // initial render never happened. Trigger it now as a safety net.
+        if (chat && chat.length > 0) {
+            onCharacterChanged();
+        }
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
+        // Wait for the intro animation to finish (if it's still playing).
+        // Everything is fully initialized at this point — we're just waiting for
+        // the visual overlay to fade out before revealing the loaded UI.
+        try {
+            await introPromise;
+        } catch (error) {
+            console.error('[Dooms Tracker] Loading intro failed:', error);
+        }
     } catch (error) {
         console.error('[Dooms Tracker] ❌ Critical initialization failure:', error);
         console.error('[Dooms Tracker] Error details:', error.message, error.stack);
