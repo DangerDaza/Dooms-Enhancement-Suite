@@ -45,6 +45,7 @@ let _timerFullText = '';
 // Original DOM content for restoration
 let _originalMesTextHTML = '';
 let _chunkCounter = 0;
+let _bubbleModeActive = false;   // True when TTS is highlighting inside bubble-wrapped content
 
 // ─────────────────────────────────────────────
 //  Public API
@@ -714,12 +715,22 @@ function _ensureSetupForCurrentMessage() {
     const mesText = mesEl.querySelector('.mes_text');
     if (!mesText) return;
 
+    // Check if bubble mode is active — bubbles wrap the content in .dooms-bubbles
+    // When bubbles are active, we save the BUBBLE HTML so cleanup restores bubbles,
+    // not the raw pre-bubble HTML (which would break the bubble display)
+    const bubblesContainer = mesText.querySelector('.dooms-bubbles');
+    _bubbleModeActive = !!bubblesContainer;
+
+    if (_bubbleModeActive) {
+        console.log('[Dooms TTS Highlight] Bubble mode detected — highlighting within bubble text');
+    }
+
     // Split all sentences into spans
     _splitSentences(mesText);
 
     mesEl.classList.add('dooms-tts-active');
 
-    console.log(`[Dooms TTS Highlight] Setup for message ${mesEl.getAttribute('mesid')} (${_sentenceSpans.length} sentences)`);
+    console.log(`[Dooms TTS Highlight] Setup for message ${mesEl.getAttribute('mesid')} (${_sentenceSpans.length} sentences, bubbles: ${_bubbleModeActive})`);
 }
 
 function _findCurrentTtsMessage() {
@@ -818,7 +829,16 @@ function _cleanup() {
 
     if (_activeMessage) {
         _activeMessage.classList.remove('dooms-tts-active');
+        // Remove bubble-TTS speaking classes if we added them
+        _activeMessage.classList.remove('dooms-bubble-tts-speaking');
+        _activeMessage.classList.remove('tts-speaking');
     }
+
+    // Also clean up any stray bubble-tts-speaking classes on other messages
+    document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
+        el.classList.remove('dooms-bubble-tts-speaking');
+        el.classList.remove('tts-speaking');
+    });
 
     _sentenceSpans = [];
     _activeSentenceIndex = -1;
@@ -826,4 +846,5 @@ function _cleanup() {
     _boundaryFired = false;
     _originalMesTextHTML = '';
     _chunkCounter = 0;
+    _bubbleModeActive = false;
 }

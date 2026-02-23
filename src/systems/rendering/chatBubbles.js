@@ -639,11 +639,21 @@ export function initBubbleTtsHandlers() {
 
         // Determine voice: use the bubble's speaker, or fall back to the message's character
         let voice = bubble.getAttribute('data-speaker') || '';
-        if (!voice) {
-            const mesEl = $(bubble).closest('.mes')[0];
-            if (mesEl) {
-                voice = mesEl.getAttribute('ch_name') || '';
-            }
+        const mesEl = $(bubble).closest('.mes')[0];
+        if (!voice && mesEl) {
+            voice = mesEl.getAttribute('ch_name') || '';
+        }
+
+        // Add .tts-speaking class to the parent .mes so the TTS highlight system
+        // can find the correct message via _findCurrentTtsMessage()
+        if (mesEl) {
+            // Remove from any other message first
+            document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
+                el.classList.remove('dooms-bubble-tts-speaking');
+                el.classList.remove('tts-speaking');
+            });
+            mesEl.classList.add('tts-speaking');
+            mesEl.classList.add('dooms-bubble-tts-speaking');
         }
 
         // Build the /speak command
