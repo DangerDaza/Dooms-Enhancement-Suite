@@ -1119,7 +1119,8 @@ async function initUI() {
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
-    // Add settings button inside the portrait bar (bottom-left corner)
+    // Add settings button as a fixed-position element on <body> so it's
+    // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
         const fabHtml = `
             <div id="dooms-settings-fab" class="dooms-settings-fab" title="Doom's Tracker Settings">
@@ -1128,12 +1129,7 @@ async function initUI() {
                 </button>
             </div>
         `;
-        const $bar = $('#dooms-portrait-bar');
-        if ($bar.length) {
-            $bar.append(fabHtml);
-        } else {
-            $('body').append(fabHtml);
-        }
+        $('body').append(fabHtml);
         $('#dooms-fab-settings').on('click', function() {
             const modal = getSettingsModal();
             if (modal) {

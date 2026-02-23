@@ -12731,10 +12731,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    ======================================== */
 
 .dooms-settings-fab {
-    position: absolute;
-    bottom: 6px;
-    left: 6px;
-    z-index: 5;
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 10001;
 }
 
 .dooms-fab-btn {
