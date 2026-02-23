@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Open Settings button in extension dropdown** — the SillyTavern Extensions tab drawer now has an "Open Settings" button for quick access to the full settings modal, in addition to the existing FAB button.
 - **Hover TTS button on chat bubbles** — a megaphone icon appears when hovering over any bubble segment (narrator, character dialogue, etc.) in Discord-style bubble chat. Clicking it reads from that point through the end of the message via SillyTavern's TTS.
 - **TTS sentence highlighting works with bubble TTS** — the highlight system now correctly finds and highlights sentences when TTS is triggered from a bubble, including proper cleanup that restores bubble HTML.
 - **Connection Profile setting** — allows the tracker to use a separate API connection profile for generation, so it doesn't interfere with your main chat model. Configurable in the Generation settings section.
