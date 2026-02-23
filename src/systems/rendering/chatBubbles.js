@@ -656,10 +656,19 @@ export function initBubbleTtsHandlers() {
             mesEl.classList.add('dooms-bubble-tts-speaking');
         }
 
-        // Build the /speak command
-        const voiceArg = voice ? `voice="${voice}" ` : '';
+        // Build the /speak command — try with speaker voice first, fall back to default
         try {
-            await executeSlashCommandsOnChatInput(`/speak ${voiceArg}${text}`, { quiet: true });
+            if (voice) {
+                try {
+                    await executeSlashCommandsOnChatInput(`/speak voice="${voice}" ${text}`, { quiet: true });
+                } catch (voiceErr) {
+                    // Voice not found for this speaker — retry without voice arg (uses default)
+                    console.warn(`[Dooms Tracker] Voice "${voice}" not found, falling back to default`);
+                    await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
+                }
+            } else {
+                await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
+            }
         } catch (err) {
             console.error('[Dooms Tracker] TTS speak failed:', err);
             toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
