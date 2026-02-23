@@ -451,19 +451,7 @@ function renderCardBubbles(segments) {
 function renderCardUserBubble(html) {
     return `<div class="dooms-bubbles dooms-bubbles-cards">
         <div class="dooms-card dooms-card-user">
-            <div class="dooms-card-avatar-col">
-                <div class="dooms-card-avatar-ring dooms-card-ring-user">
-                    <div class="dooms-card-avatar">
-                        <div class="dooms-card-avatar-letter">\u{1F464}</div>
-                    </div>
-                </div>
-                <span class="dooms-card-avatar-name">You</span>
-            </div>
             <div class="dooms-card-body">
-                <div class="dooms-card-header">
-                    <span class="dooms-card-author dooms-card-author-user">You</span>
-                    <span class="dooms-card-role dooms-card-role-user">Action</span>
-                </div>
                 <div class="dooms-card-text">${html}</div>
             </div>
         </div>
