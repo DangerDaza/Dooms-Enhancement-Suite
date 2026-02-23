@@ -29,6 +29,8 @@ Tracks every character in the scene with their portrait, relationship to the pla
 
 ### Portrait Bar
 A horizontal card shelf displaying character portraits between the chat and input area. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Right-click any portrait to upload a custom image.
+<img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
+
 
 ### Scene Headers
 Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them.
