@@ -637,12 +637,7 @@ export function initBubbleTtsHandlers() {
         const text = getTextFromBubbleForward(bubble);
         if (!text) return;
 
-        // Determine voice: use the bubble's speaker, or fall back to the message's character
-        let voice = bubble.getAttribute('data-speaker') || '';
         const mesEl = $(bubble).closest('.mes')[0];
-        if (!voice && mesEl) {
-            voice = mesEl.getAttribute('ch_name') || '';
-        }
 
         // Add .tts-speaking class to the parent .mes so the TTS highlight system
         // can find the correct message via _findCurrentTtsMessage()
@@ -656,19 +651,11 @@ export function initBubbleTtsHandlers() {
             mesEl.classList.add('dooms-bubble-tts-speaking');
         }
 
-        // Build the /speak command — try with speaker voice first, fall back to default
+        // Use /speak without voice arg — SillyTavern's TTS will look up the voice
+        // internally from its own voice map. Passing voice= causes errors when the
+        // speaker name doesn't have a mapped voice in the TTS extension settings.
         try {
-            if (voice) {
-                try {
-                    await executeSlashCommandsOnChatInput(`/speak voice="${voice}" ${text}`, { quiet: true });
-                } catch (voiceErr) {
-                    // Voice not found for this speaker — retry without voice arg (uses default)
-                    console.warn(`[Dooms Tracker] Voice "${voice}" not found, falling back to default`);
-                    await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
-                }
-            } else {
-                await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
-            }
+            await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
         } catch (err) {
             console.error('[Dooms Tracker] TTS speak failed:', err);
             toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
