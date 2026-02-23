@@ -121,18 +121,8 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
             }
-            // Update display data with newly parsed response
-            if (parsedData.quests) {
-                lastGeneratedData.quests = parsedData.quests;
-                parseQuests(parsedData.quests);
-            }
-            if (parsedData.infoBox) {
-                lastGeneratedData.infoBox = parsedData.infoBox;
-            }
-            if (parsedData.characterThoughts) {
-                lastGeneratedData.characterThoughts = parsedData.characterThoughts;
-            }
             // Store RPG data for this specific swipe in the message's extra field
+            // (always store so data isn't lost, regardless of update mode)
             if (!lastMessage.extra) {
                 lastMessage.extra = {};
             }
@@ -146,6 +136,7 @@ export async function onMessageReceived(data) {
                 characterThoughts: parsedData.characterThoughts
             };
             // Remove the tracker code blocks from the visible message
+            // (always clean regardless of update mode so tracker blocks don't show in chat)
             let cleanedMessage = responseText;
             // Note: JSON code blocks are hidden from display by regex script (but preserved in message data)
             // Remove old text format code blocks (legacy support)
@@ -164,24 +155,39 @@ export async function onMessageReceived(data) {
             if (lastMessage.swipes && lastMessage.swipes[currentSwipeId] !== undefined) {
                 lastMessage.swipes[currentSwipeId] = cleanedMessage.trim();
             }
-            // Render only the sections that had new data parsed
-            if (parsedData.infoBox) renderInfoBox();
-            if (parsedData.characterThoughts) renderThoughts();
-            if (parsedData.quests) renderQuests();
-            // Scene headers & portrait bar depend on any of the above
-            const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
-            if (hadAnyData) {
-                updateChatSceneHeaders();
-                updatePortraitBar();
-            }
             // Then update the DOM to reflect the cleaned message
             // Using updateMessageBlock to perform macro substitutions + regex formatting
             const messageId = chat.length - 1;
             updateMessageBlock(messageId, lastMessage, { rerenderMessage: true });
-            // Insert inline thought dropdowns into the chat message
-            // (must be after updateMessageBlock so the .mes_text content is finalized)
-            if (parsedData.characterThoughts) {
-                setTimeout(() => updateChatThoughts(), 100);
+            // Only update tracker display when autoUpdateMode is 'auto'
+            // In 'manual' or 'off' mode, data is stored but the tracker UI is not refreshed
+            if (extensionSettings.autoUpdateMode === 'auto') {
+                // Update display data with newly parsed response
+                if (parsedData.quests) {
+                    lastGeneratedData.quests = parsedData.quests;
+                    parseQuests(parsedData.quests);
+                }
+                if (parsedData.infoBox) {
+                    lastGeneratedData.infoBox = parsedData.infoBox;
+                }
+                if (parsedData.characterThoughts) {
+                    lastGeneratedData.characterThoughts = parsedData.characterThoughts;
+                }
+                // Render only the sections that had new data parsed
+                if (parsedData.infoBox) renderInfoBox();
+                if (parsedData.characterThoughts) renderThoughts();
+                if (parsedData.quests) renderQuests();
+                // Scene headers & portrait bar depend on any of the above
+                const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
+                if (hadAnyData) {
+                    updateChatSceneHeaders();
+                    updatePortraitBar();
+                }
+                // Insert inline thought dropdowns into the chat message
+                // (must be after updateMessageBlock so the .mes_text content is finalized)
+                if (parsedData.characterThoughts) {
+                    setTimeout(() => updateChatThoughts(), 100);
+                }
             }
             // Save to chat metadata
             saveChatData();
