@@ -213,7 +213,8 @@ export async function switchToProfile(profileName) {
 export function isConnectionProfileAvailable(profileName) {
     try {
         const context = getContext();
-        const profiles = context.extension_settings?.connectionManager?.profiles;
+        const stExtSettings = context.extension_settings || context.extensionSettings;
+        const profiles = stExtSettings?.connectionManager?.profiles;
         if (!Array.isArray(profiles)) return false;
         return profiles.some(p => p.name === profileName);
     } catch {
@@ -227,7 +228,8 @@ export function isConnectionProfileAvailable(profileName) {
 export function getAvailableConnectionProfiles() {
     try {
         const context = getContext();
-        const profiles = context.extension_settings?.connectionManager?.profiles;
+        const stExtSettings = context.extension_settings || context.extensionSettings;
+        const profiles = stExtSettings?.connectionManager?.profiles;
         if (!Array.isArray(profiles)) return [];
         return profiles.map(p => p.name).sort((a, b) => a.localeCompare(b));
     } catch {
