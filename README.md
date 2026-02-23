@@ -100,12 +100,6 @@ Customize the generation prompts for HTML formatting, dialogue coloring, and ava
 
 ---
 
-## Multilingual Support
-
-Available in English, Traditional Chinese, and Russian.
-
----
-
 ## Mobile Support
 
 Fully responsive design with touch-friendly controls. All panels adapt to small screens with a dedicated mobile toggle.
