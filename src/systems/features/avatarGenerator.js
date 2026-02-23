@@ -11,6 +11,7 @@
 import { characters, this_chid } from '../../../../../../../script.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
+import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
@@ -271,6 +272,11 @@ async function generateSingleAvatar(characterName, prompt = null) {
         prompt = buildFallbackPrompt(characterName);
     }
     try {
+        // Check if the /sd slash command is available (Stable Diffusion extension loaded)
+        if (!SlashCommandParser.commands['sd']) {
+            console.warn(`[RPG Avatar] /sd command not available — Stable Diffusion extension not loaded. Skipping avatar generation for ${characterName}.`);
+            return null;
+        }
         // Execute /sd command with quiet=true to suppress chat output
         const result = await executeSlashCommandsOnChatInput(
             `/sd quiet=true ${prompt}`,
