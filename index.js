@@ -204,6 +204,28 @@ function populateConnectionProfileDropdown() {
     }
 }
 /**
+ * Shows/hides UI elements based on the current generation mode.
+ * Together: hides manual update button, auto-update toggle, external API settings
+ * Separate: shows manual update + auto-update, hides external API settings
+ * External: shows manual update + auto-update + external API settings
+ */
+function updateGenerationModeUI() {
+    const mode = extensionSettings.generationMode || 'together';
+    if (mode === 'together') {
+        $('#rpg-manual-update').hide();
+        $('#rpg-auto-update-container').hide();
+        $('#rpg-external-api-settings').slideUp(200);
+    } else if (mode === 'separate') {
+        $('#rpg-manual-update').show();
+        $('#rpg-auto-update-container').show();
+        $('#rpg-external-api-settings').slideUp(200);
+    } else if (mode === 'external') {
+        $('#rpg-manual-update').show();
+        $('#rpg-auto-update-container').show();
+        $('#rpg-external-api-settings').slideDown(200);
+    }
+}
+/**
  * Populates all Chat Bubbles & Info Panel settings controls from saved state.
  */
 function loadChatBubbleSettingsUI() {
@@ -279,6 +301,11 @@ async function initUI() {
         $section.toggleClass('rpg-accordion-open');
     });
     // ── Generation settings ──
+    $('#rpg-generation-mode').on('change', function() {
+        extensionSettings.generationMode = String($(this).val());
+        saveSettings();
+        updateGenerationModeUI();
+    });
     $('#rpg-toggle-auto-update').on('change', function() {
         extensionSettings.autoUpdate = $(this).prop('checked');
         saveSettings();
@@ -287,6 +314,19 @@ async function initUI() {
         const value = $(this).val();
         extensionSettings.updateDepth = parseInt(String(value));
         saveSettings();
+    });
+    $('#rpg-manual-update').on('click', async function() {
+        const $btn = $(this);
+        const originalHtml = $btn.html();
+        $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Generating...').prop('disabled', true);
+        try {
+            await updateRPGData(renderInfoBox, renderThoughts);
+            updateChatSceneHeaders();
+            updatePortraitBar();
+            updateChatThoughts();
+        } finally {
+            $btn.html(originalHtml).prop('disabled', false);
+        }
     });
     // ── Display settings ──
     $('#rpg-toggle-info-box').on('change', function() {
@@ -999,11 +1039,13 @@ async function initUI() {
     });
     // ── Initialize UI state ──
     // Generation
+    $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);
     populateConnectionProfileDropdown();
+    updateGenerationModeUI();
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);

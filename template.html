@@ -25,12 +25,26 @@
                 </div>
                 <div class="rpg-accordion-body">
                     <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Generation Mode</span>
+                            <span class="rpg-setting-hint">How tracker data is generated</span>
+                        </div>
+                        <select id="rpg-generation-mode" class="rpg-accordion-select">
+                            <option value="together">Together</option>
+                            <option value="separate">Separate</option>
+                            <option value="external">External API</option>
+                        </select>
+                    </div>
+                    <div id="rpg-auto-update-container" class="rpg-setting-row">
                         <span class="rpg-setting-label">Auto-update after messages</span>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-auto-update" />
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <button id="rpg-manual-update" class="rpg-accordion-action-btn" type="button" style="display:none; margin-bottom:8px;">
+                        <i class="fa-solid fa-arrows-rotate"></i> Refresh Tracker Data
+                    </button>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Chat History Depth</span>

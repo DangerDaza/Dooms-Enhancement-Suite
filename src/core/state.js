@@ -10,7 +10,7 @@ export let extensionSettings = {
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
-    generationMode: 'together', // Always 'together' — separate/external modes removed
+    generationMode: 'together', // 'together', 'separate', or 'external'
     connectionProfile: '', // Connection Manager profile name for tracker generation (empty = use current)
     // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
     showInfoBox: true,
