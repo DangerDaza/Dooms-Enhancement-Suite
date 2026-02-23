@@ -17,6 +17,26 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 let _lastSceneDataJSON = null;
 
 /**
+ * Theme color palettes — exact values from the CSS popup theme blocks
+ * (`#rpg-settings-popup[data-theme="..."] .rpg-settings-popup-content`).
+ * Used when sceneTracker.themeControlled is true so the scene tracker
+ * matches the visual style of the settings popup for the active theme.
+ *
+ * Fields: bg, accent, text, highlight, border
+ */
+const THEME_COLORS = {
+    'sci-fi':        { bg: '#0a0e27', accent: '#1a1f3a', text: '#00ffff', highlight: '#ff00ff', border: '#00ffff' },
+    'fantasy':       { bg: '#2b1810', accent: '#3d2516', text: '#f4e4c1', highlight: '#d4af37', border: '#8b6914' },
+    'cyberpunk':     { bg: '#0d0221', accent: '#1a0b2e', text: '#00ff9f', highlight: '#ff00ff', border: '#ff00ff' },
+    'midnight-rose': { bg: '#1a1025', accent: '#2a1838', text: '#e8d5e8', highlight: '#e8729a', border: '#9b4dca' },
+    'emerald-grove': { bg: '#0d1f12', accent: '#1a3320', text: '#d4e8c8', highlight: '#c8a240', border: '#4a8c3f' },
+    'arctic':        { bg: '#0c1929', accent: '#132640', text: '#dce8f4', highlight: '#64b5f6', border: '#4a8db7' },
+    'volcanic':      { bg: '#1a1210', accent: '#2b1e18', text: '#f0dcc8', highlight: '#e8651a', border: '#b84a0f' },
+    'dracula':       { bg: '#282a36', accent: '#343746', text: '#f8f8f2', highlight: '#ff5555', border: '#6272a4' },
+    'ocean-depths':  { bg: '#0a1628', accent: '#0f2038', text: '#b8d8e8', highlight: '#00e5c8', border: '#1a6b8a' },
+};
+
+/**
  * Helper: converts a hex color (#rrggbb) to an "r, g, b" string for use in rgba().
  * @param {string} hex
  * @returns {string}
@@ -31,33 +51,85 @@ export function hexToRgb(hex) {
 
 /**
  * Builds the inline CSS custom-property style string from the scene tracker settings.
+ * When sceneTracker.themeControlled is true, derives colors from the active theme palette
+ * instead of the individual color pickers.
  * @returns {string} e.g. "--st-accent-rgb: 233, 69, 96; --st-bg-opacity: 0.08; ..."
  */
 function buildStyleVars() {
     const st = extensionSettings.sceneTracker || {};
     const vars = [];
 
+    // Determine effective colors — either from theme palette or manual pickers
+    let bgColor, borderColor, accentColor, badgeColor, labelColor, textColor, questIconColor, questTextColor, eventsTextColor;
+    let bgOpacity, borderOpacity, badgeOpacity;
+
+    if (st.themeControlled) {
+        // Pull colors from the theme palette
+        const themeName = extensionSettings.theme || 'default';
+        const palette = THEME_COLORS[themeName] || null;
+        if (palette) {
+            bgColor         = palette.bg;
+            borderColor     = palette.border;
+            accentColor     = palette.highlight; // icons & left-border accent: theme highlight (e.g. gold for fantasy)
+            badgeColor      = palette.highlight;
+            labelColor      = palette.text;      // "Time:", "Location:" labels: theme text color (e.g. cream for fantasy) — distinct from gold icons
+            textColor       = palette.text;      // value text: same as labels for clean reading
+            questIconColor  = palette.highlight;
+            questTextColor  = palette.text;
+            eventsTextColor = palette.text;
+        } else {
+            // 'default' or 'custom' — fall back to manual values
+            bgColor        = st.bgColor        || '#e94560';
+            borderColor    = st.borderColor    || '#e94560';
+            accentColor    = st.accentColor    || '#e94560';
+            badgeColor     = st.charBadgeBg    || '#e94560';
+            labelColor     = st.labelColor     || '#888888';
+            textColor      = st.textColor      || '#d0d0d0';
+            questIconColor = st.questIconColor || '#f0c040';
+            questTextColor = st.questTextColor || st.questIconColor || '#f0c040';
+            eventsTextColor = st.eventsTextColor || '#999999';
+        }
+        // Use slightly more visible opacities when theme-controlled
+        bgOpacity     = 12;
+        borderOpacity = 20;
+        badgeOpacity  = 15;
+    } else {
+        // Manual color picker values
+        bgColor        = st.bgColor        || '#e94560';
+        borderColor    = st.borderColor    || '#e94560';
+        accentColor    = st.accentColor    || '#e94560';
+        badgeColor     = st.charBadgeBg    || '#e94560';
+        labelColor     = st.labelColor     || '#888888';
+        textColor      = st.textColor      || '#d0d0d0';
+        questIconColor = st.questIconColor || '#f0c040';
+        questTextColor = st.questTextColor || st.questIconColor || '#f0c040';
+        eventsTextColor = st.eventsTextColor || '#999999';
+        bgOpacity     = st.bgOpacity     ?? 8;
+        borderOpacity = st.borderOpacity ?? 15;
+        badgeOpacity  = st.charBadgeOpacity ?? 12;
+    }
+
     // Color RGB decompositions (for rgba usage)
-    vars.push(`--st-bg-rgb: ${hexToRgb(st.bgColor || '#e94560')}`);
-    vars.push(`--st-border-rgb: ${hexToRgb(st.borderColor || '#e94560')}`);
-    vars.push(`--st-accent-rgb: ${hexToRgb(st.accentColor || '#e94560')}`);
-    vars.push(`--st-badge-rgb: ${hexToRgb(st.charBadgeBg || '#e94560')}`);
+    vars.push(`--st-bg-rgb: ${hexToRgb(bgColor)}`);
+    vars.push(`--st-border-rgb: ${hexToRgb(borderColor)}`);
+    vars.push(`--st-accent-rgb: ${hexToRgb(accentColor)}`);
+    vars.push(`--st-badge-rgb: ${hexToRgb(badgeColor)}`);
 
     // Opacity values (0–1 range)
-    vars.push(`--st-bg-opacity: ${(st.bgOpacity ?? 8) / 100}`);
-    vars.push(`--st-border-opacity: ${(st.borderOpacity ?? 15) / 100}`);
-    vars.push(`--st-badge-opacity: ${(st.charBadgeOpacity ?? 12) / 100}`);
+    vars.push(`--st-bg-opacity: ${bgOpacity / 100}`);
+    vars.push(`--st-border-opacity: ${borderOpacity / 100}`);
+    vars.push(`--st-badge-opacity: ${badgeOpacity / 100}`);
 
     // Direct color values
-    vars.push(`--st-accent: ${st.accentColor || '#e94560'}`);
-    vars.push(`--st-border-color: ${st.borderColor || '#e94560'}`);
-    vars.push(`--st-label-color: ${st.labelColor || '#888888'}`);
-    vars.push(`--st-text-color: ${st.textColor || '#d0d0d0'}`);
-    vars.push(`--st-quest-icon: ${st.questIconColor || '#f0c040'}`);
-    vars.push(`--st-quest-text: ${st.questTextColor || st.questIconColor || '#f0c040'}`);
-    vars.push(`--st-events-text: ${st.eventsTextColor || '#999999'}`);
+    vars.push(`--st-accent: ${accentColor}`);
+    vars.push(`--st-border-color: ${borderColor}`);
+    vars.push(`--st-label-color: ${labelColor}`);
+    vars.push(`--st-text-color: ${textColor}`);
+    vars.push(`--st-quest-icon: ${questIconColor}`);
+    vars.push(`--st-quest-text: ${questTextColor}`);
+    vars.push(`--st-events-text: ${eventsTextColor}`);
 
-    // Sizing
+    // Sizing (always from manual settings)
     vars.push(`--st-font-size: ${st.fontSize ?? 82}`);
     vars.push(`--st-border-radius: ${st.borderRadius ?? 8}px`);
     vars.push(`--st-padding: ${st.padding ?? 10}px`);
