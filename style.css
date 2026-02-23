@@ -12731,10 +12731,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    ======================================== */
 
 .dooms-settings-fab {
-    position: absolute;
-    bottom: 6px;
-    left: 6px;
-    z-index: 5;
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 10001;
 }
 
 .dooms-fab-btn {
@@ -12947,8 +12947,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* ── User ── */
 .dooms-bubble-user {
-    background: rgba(233, 69, 96, 0.04);
-    border-left-color: var(--rpg-highlight, #e94560);
+    background: transparent;
+    border-left-color: transparent;
 }
 
 /* ── Unknown speaker ── */
@@ -13102,9 +13102,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* ── User card ── */
 .dooms-card-user {
-    background: rgba(233, 69, 96, 0.06);
-    border-left-color: var(--rpg-highlight, #e94560);
-    border-color: rgba(233, 69, 96, 0.12);
+    background: transparent;
+    border-left-color: transparent;
+    border-color: transparent;
 }
 
 /* ── Unknown card ── */
