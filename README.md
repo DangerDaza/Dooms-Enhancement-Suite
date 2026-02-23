@@ -58,6 +58,7 @@ A full-featured lorebook manager that replaces SillyTavern's native World Info i
 - Bulk visibility controls
 - Drag-to-reorder libraries
 - Token count estimates
+<img width="1557" height="2380" alt="image" src="https://github.com/user-attachments/assets/cad2d576-480e-446e-8d3f-bc1abd1e96b4" />
 
 ### Quest Tracking
 Track a main quest and multiple optional side quests. Quests appear in scene headers and are included in the AI's generation context. All quests are editable inline with lock support.
