@@ -229,8 +229,24 @@ function _isHiddenElement(el) {
 }
 
 /**
+ * Check if a node is inside a .dooms-bubble-text element.
+ * In bubble mode, only text inside these elements is actual message content —
+ * headers (character names), avatars, and buttons should be excluded.
+ */
+function _isInsideBubbleText(node) {
+    let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    while (current) {
+        if (current.classList && current.classList.contains('dooms-bubble-text')) return true;
+        if (current.classList && current.classList.contains('dooms-bubbles')) return false;
+        current = current.parentElement;
+    }
+    return false;
+}
+
+/**
  * Get only the visible text content of an element, skipping hidden children.
  * This matches what TTS actually reads (message.mes without hidden DOM injections).
+ * In bubble mode, only collects text from .dooms-bubble-text elements.
  */
 function _getVisibleText(el) {
     if (!el) return '';
@@ -239,6 +255,8 @@ function _getVisibleText(el) {
         acceptNode: function(node) {
             if (node.textContent.length === 0) return NodeFilter.FILTER_REJECT;
             if (_isHiddenElement(node.parentElement)) return NodeFilter.FILTER_REJECT;
+            // In bubble mode, only include text inside .dooms-bubble-text elements
+            if (_bubbleModeActive && !_isInsideBubbleText(node)) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         }
     });
@@ -257,12 +275,15 @@ function _splitSentences(mesTextEl) {
 
     // Collect all VISIBLE text nodes — skip nodes inside hidden elements
     // This prevents hidden injected content (character tags, extension metadata, etc.)
-    // from being included in sentence splitting and position calculations
+    // from being included in sentence splitting and position calculations.
+    // In bubble mode, only collect text from .dooms-bubble-text elements (skip headers,
+    // avatar letters, button text etc. that aren't part of the actual message content).
     const textNodes = [];
     const walker = document.createTreeWalker(mesTextEl, NodeFilter.SHOW_TEXT, {
         acceptNode: function(node) {
             if (node.textContent.length === 0) return NodeFilter.FILTER_REJECT;
             if (_isHiddenElement(node.parentElement)) return NodeFilter.FILTER_REJECT;
+            if (_bubbleModeActive && !_isInsideBubbleText(node)) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         }
     });
@@ -773,6 +794,13 @@ function _pollTtsState() {
             // If no boundary events will fire (audio TTS), start timer fallback
             if (_sentenceSpans.length > 0 && _activeSentenceIndex < 0) {
                 _setActiveSentence(0);
+                // Start timer-based sentence progression for audio TTS
+                // (speechSynthesis monkey-patch won't fire for API-based providers)
+                const mesTextEl = _activeMessage ? _activeMessage.querySelector('.mes_text') : null;
+                if (mesTextEl && !_timerRunning && !_boundaryFired) {
+                    const fullVisibleText = _getVisibleText(mesTextEl);
+                    _startTimerFallback(1, fullVisibleText);
+                }
             }
         }
     } else if (!isSpeaking && _wasSpeaking) {
