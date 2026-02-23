@@ -28,6 +28,7 @@ import { removeLocks } from './lockManager.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
+import { generateAvatarsForCharacters } from '../features/avatarGenerator.js';
 // Store the original preset name to restore after tracker generation
 let originalPresetName = null;
 /**
@@ -250,6 +251,9 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     if (!extensionSettings.enabled) {
         return;
     }
+    if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
+        return;
+    }
     const isExternalMode = extensionSettings.generationMode === 'external';
     let originalProfileName = null;
     let profileSwitched = false;
@@ -285,7 +289,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             // External mode: Use external OpenAI-compatible API directly
             response = await generateWithExternalAPI(prompt);
         } else {
-            // Use SillyTavern's generateRaw (with extended thinking fallback)
+            // Separate mode: Use SillyTavern's generateRaw (with extended thinking fallback)
             response = await safeGenerateRaw({
                 prompt: prompt,
                 quietToLoud: false
@@ -354,6 +358,20 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             updateChatThoughts();
             // Save to chat metadata
             saveChatData();
+            // Generate avatars if auto-generate is enabled (runs within this workflow)
+            // This uses the Doom's Character Tracker Trackers preset and keeps the button spinning
+            if (extensionSettings.autoGenerateAvatars) {
+                const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
+                if (charactersNeedingAvatars.length > 0) {
+                    // Generate avatars - this awaits completion
+                    await generateAvatarsForCharacters(charactersNeedingAvatars, (names) => {
+                        // Callback when generation starts - re-render to show loading spinners
+                        renderThoughts();
+                    });
+                    // Re-render once all avatars are generated
+                    renderThoughts();
+                }
+            }
         }
     } catch (error) {
         console.error('[Dooms Tracker] Error updating RPG data:', error);
@@ -388,4 +406,40 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         console.debug('[Dooms Tracker] Emitting DOOMS_TRACKER_UPDATE_COMPLETE event');
         eventSource.emit(DOOMS_TRACKER_UPDATE_COMPLETE);
     }
+}
+/**
+ * Parses character names from Present Characters thoughts data
+ * @param {string} characterThoughtsData - Raw character thoughts data
+ * @returns {Array<string>} Array of character names found
+ */
+function parseCharactersFromThoughts(characterThoughtsData) {
+    if (!characterThoughtsData) return [];
+    // Try parsing as JSON first (current format)
+    try {
+        const parsed = typeof characterThoughtsData === 'string'
+            ? JSON.parse(characterThoughtsData)
+            : characterThoughtsData;
+        // Handle both {characters: [...]} and direct array formats
+        const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        if (charactersArray.length > 0) {
+            // Extract names from JSON character objects
+            return charactersArray
+                .map(char => char.name)
+                .filter(name => name && name.toLowerCase() !== 'unavailable');
+        }
+    } catch (e) {
+        // Not JSON, fall back to text parsing
+    }
+    // Fallback: Parse text format (legacy)
+    const lines = characterThoughtsData.split('\n');
+    const characters = [];
+    for (const line of lines) {
+        if (line.trim().startsWith('- ')) {
+            const name = line.trim().substring(2).trim();
+            if (name && name.toLowerCase() !== 'unavailable') {
+                characters.push(name);
+            }
+        }
+    }
+    return characters;
 }

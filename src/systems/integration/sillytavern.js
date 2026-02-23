@@ -63,59 +63,6 @@ export function commitTrackerData() {
     }
 }
 /**
- * Refreshes the tracker display from data already stored in the last AI message.
- * No API call is made — this simply reads the parsed tracker data that was
- * saved when the message was originally received and re-renders the UI.
- * Used by the Regenerate Tracker button so users don't incur extra API costs.
- */
-export function refreshTrackerFromStoredData() {
-    const context = getContext();
-    const chatData = context.chat;
-    if (!chatData || chatData.length === 0) return;
-
-    // Find the last assistant message
-    let lastAssistant = null;
-    for (let i = chatData.length - 1; i >= 0; i--) {
-        if (!chatData[i].is_user) {
-            lastAssistant = chatData[i];
-            break;
-        }
-    }
-    if (!lastAssistant) return;
-
-    // Read stored tracker data for the current swipe
-    const swipeId = lastAssistant.swipe_id || 0;
-    const swipeData = lastAssistant.extra?.dooms_tracker_swipes?.[swipeId];
-    if (!swipeData) return;
-
-    // Update display data
-    if (swipeData.quests) {
-        lastGeneratedData.quests = swipeData.quests;
-        parseQuests(swipeData.quests);
-    }
-    if (swipeData.infoBox) {
-        lastGeneratedData.infoBox = swipeData.infoBox;
-    }
-    if (swipeData.characterThoughts) {
-        lastGeneratedData.characterThoughts = swipeData.characterThoughts;
-    }
-
-    // Render everything
-    if (swipeData.infoBox) renderInfoBox();
-    if (swipeData.characterThoughts) renderThoughts();
-    if (swipeData.quests) renderQuests();
-
-    const hadAnyData = swipeData.infoBox || swipeData.characterThoughts || swipeData.quests;
-    if (hadAnyData) {
-        updateChatSceneHeaders();
-        updatePortraitBar();
-    }
-    if (swipeData.characterThoughts) {
-        setTimeout(() => updateChatThoughts(), 100);
-    }
-}
-
-/**
  * Event handler for when the user sends a message.
  * Sets the flag to indicate this is NOT a swipe.
  * In together mode, commits displayed data (only for real messages, not streaming placeholders).
@@ -137,7 +84,7 @@ export function onMessageSent() {
     // The RPG data comes embedded in the main response
     // FAB spinning is handled by apiClient.js for separate/external modes when updateRPGData() is called
     // For separate mode with auto-update disabled, commit displayed tracker
-    if (extensionSettings.generationMode === 'separate' && extensionSettings.autoUpdateMode !== 'auto') {
+    if (extensionSettings.generationMode === 'separate' && !extensionSettings.autoUpdate) {
         if (lastGeneratedData.quests || lastGeneratedData.infoBox || lastGeneratedData.characterThoughts) {
             committedTrackerData.quests = lastGeneratedData.quests;
             committedTrackerData.infoBox = lastGeneratedData.infoBox;
@@ -174,8 +121,18 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
             }
+            // Update display data with newly parsed response
+            if (parsedData.quests) {
+                lastGeneratedData.quests = parsedData.quests;
+                parseQuests(parsedData.quests);
+            }
+            if (parsedData.infoBox) {
+                lastGeneratedData.infoBox = parsedData.infoBox;
+            }
+            if (parsedData.characterThoughts) {
+                lastGeneratedData.characterThoughts = parsedData.characterThoughts;
+            }
             // Store RPG data for this specific swipe in the message's extra field
-            // (always store so data isn't lost, regardless of update mode)
             if (!lastMessage.extra) {
                 lastMessage.extra = {};
             }
@@ -189,7 +146,6 @@ export async function onMessageReceived(data) {
                 characterThoughts: parsedData.characterThoughts
             };
             // Remove the tracker code blocks from the visible message
-            // (always clean regardless of update mode so tracker blocks don't show in chat)
             let cleanedMessage = responseText;
             // Note: JSON code blocks are hidden from display by regex script (but preserved in message data)
             // Remove old text format code blocks (legacy support)
@@ -208,39 +164,24 @@ export async function onMessageReceived(data) {
             if (lastMessage.swipes && lastMessage.swipes[currentSwipeId] !== undefined) {
                 lastMessage.swipes[currentSwipeId] = cleanedMessage.trim();
             }
+            // Render only the sections that had new data parsed
+            if (parsedData.infoBox) renderInfoBox();
+            if (parsedData.characterThoughts) renderThoughts();
+            if (parsedData.quests) renderQuests();
+            // Scene headers & portrait bar depend on any of the above
+            const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
+            if (hadAnyData) {
+                updateChatSceneHeaders();
+                updatePortraitBar();
+            }
             // Then update the DOM to reflect the cleaned message
             // Using updateMessageBlock to perform macro substitutions + regex formatting
             const messageId = chat.length - 1;
             updateMessageBlock(messageId, lastMessage, { rerenderMessage: true });
-            // Only update tracker display when autoUpdateMode is 'auto'
-            // In 'manual' or 'off' mode, data is stored but the tracker UI is not refreshed
-            if (extensionSettings.autoUpdateMode === 'auto') {
-                // Update display data with newly parsed response
-                if (parsedData.quests) {
-                    lastGeneratedData.quests = parsedData.quests;
-                    parseQuests(parsedData.quests);
-                }
-                if (parsedData.infoBox) {
-                    lastGeneratedData.infoBox = parsedData.infoBox;
-                }
-                if (parsedData.characterThoughts) {
-                    lastGeneratedData.characterThoughts = parsedData.characterThoughts;
-                }
-                // Render only the sections that had new data parsed
-                if (parsedData.infoBox) renderInfoBox();
-                if (parsedData.characterThoughts) renderThoughts();
-                if (parsedData.quests) renderQuests();
-                // Scene headers & portrait bar depend on any of the above
-                const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
-                if (hadAnyData) {
-                    updateChatSceneHeaders();
-                    updatePortraitBar();
-                }
-                // Insert inline thought dropdowns into the chat message
-                // (must be after updateMessageBlock so the .mes_text content is finalized)
-                if (parsedData.characterThoughts) {
-                    setTimeout(() => updateChatThoughts(), 100);
-                }
+            // Insert inline thought dropdowns into the chat message
+            // (must be after updateMessageBlock so the .mes_text content is finalized)
+            if (parsedData.characterThoughts) {
+                setTimeout(() => updateChatThoughts(), 100);
             }
             // Save to chat metadata
             saveChatData();
@@ -250,7 +191,7 @@ export async function onMessageReceived(data) {
         // The main roleplay message doesn't contain tracker data in these modes
         // Trigger auto-update if enabled (for both separate and external modes)
         // Only trigger if this is a newly generated message, not loading chat history
-        if (extensionSettings.autoUpdateMode === 'auto' && isAwaitingNewMessage) {
+        if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
             setTimeout(async () => {
                 await updateRPGData(renderInfoBox, renderThoughts);
                 updateChatSceneHeaders();

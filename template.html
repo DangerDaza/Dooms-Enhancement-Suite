@@ -25,20 +25,11 @@
                 </div>
                 <div class="rpg-accordion-body">
                     <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Tracker Update Mode</span>
-                            <span class="rpg-setting-hint">When to regenerate tracker data</span>
-                        </div>
-                        <select id="rpg-auto-update-mode" class="rpg-accordion-select">
-                            <option value="auto">Auto (every message)</option>
-                            <option value="manual">Manual Only</option>
-                            <option value="off">Off</option>
-                        </select>
-                    </div>
-                    <div class="rpg-setting-row" id="rpg-regenerate-row">
-                        <button id="rpg-regenerate-tracker" class="rpg-manual-update-btn" style="width: 100%;">
-                            <i class="fa-solid fa-sync"></i> Regenerate Tracker
-                        </button>
+                        <span class="rpg-setting-label">Auto-update after messages</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-auto-update" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">

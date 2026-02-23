@@ -120,8 +120,7 @@ import {
     updatePersonaAvatar,
     clearExtensionPrompts,
     onGenerationEnded,
-    initHistoryInjection,
-    refreshTrackerFromStoredData
+    initHistoryInjection
 } from './src/systems/integration/sillytavern.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
@@ -280,15 +279,9 @@ async function initUI() {
         $section.toggleClass('rpg-accordion-open');
     });
     // ── Generation settings ──
-    $('#rpg-auto-update-mode').on('change', function() {
-        extensionSettings.autoUpdateMode = $(this).val();
+    $('#rpg-toggle-auto-update').on('change', function() {
+        extensionSettings.autoUpdate = $(this).prop('checked');
         saveSettings();
-        // Show/hide regenerate button based on mode
-        $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
-    });
-    $('#rpg-regenerate-tracker').on('click', function() {
-        refreshTrackerFromStoredData();
-        toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
     });
     $('#rpg-update-depth').on('change', function() {
         const value = $(this).val();
@@ -1006,8 +999,7 @@ async function initUI() {
     });
     // ── Initialize UI state ──
     // Generation
-    $('#rpg-auto-update-mode').val(extensionSettings.autoUpdateMode || 'auto');
-    $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
+    $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);
@@ -1186,25 +1178,6 @@ async function initUI() {
             } else {
                 $('#rpg-settings-popup').show();
             }
-        });
-    }
-    // Wire up regenerate button in the extension dropdown panel (settings.html)
-    $('#dooms-regen-ext-btn').off('click').on('click', function() {
-        refreshTrackerFromStoredData();
-        toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
-    });
-    // Add regenerate button to the Extensions wand menu (magic wand popup)
-    if ($('#dooms-regen-wand').length === 0) {
-        const wandBtnHtml = `
-            <div id="dooms-regen-wand" class="list-group-item flex-container flexGap5" title="Refresh Tracker — re-reads tracker data from the last AI message and updates the display">
-                <div class="fa-solid fa-sync extensionsMenuExtensionButton"></div>
-                Regenerate Tracker
-            </div>
-        `;
-        $('#extensionsMenu').append(wandBtnHtml);
-        $(document).on('click', '#dooms-regen-wand', function() {
-            refreshTrackerFromStoredData();
-            toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
         });
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
