@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3] - 2026-02-23
+
+### Fixed
+- **Newer themes not applying on reload** — the 6 themes added after v1.5 (Midnight Rose, Emerald Grove, Arctic, Volcanic, Dracula, Ocean Depths) were missing the `#rpg-settings-popup` and `#rpg-tracker-editor-popup` CSS blocks that set the popup background and color variables. The original 3 themes (Sci-Fi, Fantasy, Cyberpunk) were unaffected. All 6 newer themes now correctly style both popup modals.
+- **Theme not applied to popup on initial load** — `applyTheme()` was only stamping `data-theme` on the panel, thought panel, and mobile toggle. The settings popup only received `data-theme` when first opened (`SettingsModal.open()`). Now `applyTheme()` also stamps both popup elements, so the correct theme is in place from the moment the extension loads.
+- **Extension drawer showing stale version `v4.0.0`** — `settings.html` had a hardcoded version number that was never updated. Now shows the correct version.
+
 ## [1.5.2] - 2026-02-23
 
 ### Fixed

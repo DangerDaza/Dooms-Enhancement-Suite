@@ -5827,69 +5827,68 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     color: #00ff9f;
 }
 
-/* Tracker Editor Modal — missing themes */
+#rpg-settings-popup[data-theme="midnight-rose"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="midnight-rose"] .rpg-settings-popup-content {
     --rpg-bg: #1a1025;
     --rpg-accent: #2a1838;
     --rpg-text: #e8d5e8;
     --rpg-highlight: #e8729a;
     --rpg-border: #9b4dca;
-    --rpg-shadow: rgba(155, 77, 202, 0.4);
     background: rgba(26, 16, 37, 0.95);
     color: #e8d5e8;
 }
 
+#rpg-settings-popup[data-theme="emerald-grove"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="emerald-grove"] .rpg-settings-popup-content {
     --rpg-bg: #0d1f12;
     --rpg-accent: #1a3320;
     --rpg-text: #d4e8c8;
     --rpg-highlight: #c8a240;
     --rpg-border: #4a8c3f;
-    --rpg-shadow: rgba(74, 140, 63, 0.4);
     background: rgba(13, 31, 18, 0.95);
     color: #d4e8c8;
 }
 
+#rpg-settings-popup[data-theme="arctic"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="arctic"] .rpg-settings-popup-content {
     --rpg-bg: #0c1929;
     --rpg-accent: #132640;
     --rpg-text: #dce8f4;
     --rpg-highlight: #64b5f6;
     --rpg-border: #4a8db7;
-    --rpg-shadow: rgba(100, 181, 246, 0.3);
     background: rgba(12, 25, 41, 0.95);
     color: #dce8f4;
 }
 
+#rpg-settings-popup[data-theme="volcanic"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="volcanic"] .rpg-settings-popup-content {
     --rpg-bg: #1a1210;
     --rpg-accent: #2b1e18;
     --rpg-text: #f0dcc8;
     --rpg-highlight: #e8651a;
     --rpg-border: #b84a0f;
-    --rpg-shadow: rgba(232, 101, 26, 0.4);
     background: rgba(26, 18, 16, 0.95);
     color: #f0dcc8;
 }
 
+#rpg-settings-popup[data-theme="dracula"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="dracula"] .rpg-settings-popup-content {
     --rpg-bg: #282a36;
     --rpg-accent: #343746;
     --rpg-text: #f8f8f2;
     --rpg-highlight: #ff5555;
     --rpg-border: #6272a4;
-    --rpg-shadow: rgba(98, 114, 164, 0.4);
     background: rgba(40, 42, 54, 0.95);
     color: #f8f8f2;
 }
 
+#rpg-settings-popup[data-theme="ocean-depths"] .rpg-settings-popup-content,
 #rpg-tracker-editor-popup[data-theme="ocean-depths"] .rpg-settings-popup-content {
     --rpg-bg: #0a1628;
     --rpg-accent: #0f2038;
     --rpg-text: #b8d8e8;
     --rpg-highlight: #00e5c8;
     --rpg-border: #1a6b8a;
-    --rpg-shadow: rgba(0, 229, 200, 0.3);
     background: rgba(10, 22, 40, 0.95);
     color: #b8d8e8;
 }
