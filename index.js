@@ -150,15 +150,11 @@ async function addExtensionSettings() {
             clearExtensionPrompts();
             updateChatThoughts(); // Remove thought bubbles
             updateChatSceneHeaders(); // Remove scene headers (handles enabled check internally)
-            $('#dooms-regen-sendform').hide();
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
             loadChatData(); // Load chat data for current chat
             updateChatThoughts(); // Create thought bubbles if data exists
-            if (extensionSettings.autoUpdateMode !== 'off') {
-                $('#dooms-regen-sendform').show();
-            }
         }
     });
     // Set up language selector
@@ -286,10 +282,8 @@ async function initUI() {
     $('#rpg-auto-update-mode').on('change', function() {
         extensionSettings.autoUpdateMode = $(this).val();
         saveSettings();
-        // Show/hide regenerate buttons based on mode
-        const isOff = extensionSettings.autoUpdateMode === 'off';
-        $('#rpg-regenerate-row').toggle(!isOff);
-        $('#dooms-regen-sendform').toggle(!isOff);
+        // Show/hide regenerate button based on mode
+        $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
     });
     $('#rpg-regenerate-tracker').on('click', async function() {
         const $btn = $(this);
@@ -1201,31 +1195,20 @@ async function initUI() {
             }
         });
     }
-    // Add regenerate button to SillyTavern's chat input bar (left side, next to hamburger)
-    if ($('#dooms-regen-sendform').length === 0) {
-        const regenBtnHtml = `
-            <div id="dooms-regen-sendform" class="dooms-regen-sendform interactable" title="Regenerate Tracker — makes a standalone API call to refresh tracker data on demand">
-                <i class="fa-solid fa-sync"></i>
-            </div>
-        `;
-        $('#leftSendForm').append(regenBtnHtml);
-        $('#dooms-regen-sendform').on('click', async function() {
-            if ($(this).hasClass('dooms-regen-spinning')) return;
-            $(this).addClass('dooms-regen-spinning').prop('disabled', true);
-            try {
-                await updateRPGData(renderInfoBox, renderThoughts);
-                updateChatSceneHeaders();
-                updatePortraitBar();
-                updateChatThoughts();
-            } finally {
-                $(this).removeClass('dooms-regen-spinning').prop('disabled', false);
-            }
-        });
-        // Hide button when tracker update mode is 'off' or extension is disabled
-        if (extensionSettings.autoUpdateMode === 'off' || !extensionSettings.enabled) {
-            $('#dooms-regen-sendform').hide();
+    // Wire up regenerate button in the extension dropdown panel
+    $('#dooms-regen-ext-btn').off('click').on('click', async function() {
+        const $btn = $(this);
+        if ($btn.prop('disabled')) return;
+        $btn.prop('disabled', true).find('i').removeClass('fa-sync').addClass('fa-spinner fa-spin');
+        try {
+            await updateRPGData(renderInfoBox, renderThoughts);
+            updateChatSceneHeaders();
+            updatePortraitBar();
+            updateChatThoughts();
+        } finally {
+            $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-sync');
         }
-    }
+    });
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
     try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch(e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }

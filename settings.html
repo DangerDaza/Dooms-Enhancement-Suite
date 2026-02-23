@@ -21,9 +21,12 @@
 
             <small class="notes">Toggle to enable/disable the extension.</small>
 
-            <div style="margin-top: 10px;">
-                <button id="dooms-open-settings-btn" class="menu_button" title="Open Doom's Enhancement Suite Settings">
+            <div style="margin-top: 10px; display: flex; gap: 6px;">
+                <button id="dooms-open-settings-btn" class="menu_button" title="Open Doom's Enhancement Suite Settings" style="flex: 1;">
                     <i class="fa-solid fa-gear"></i> Open Settings
+                </button>
+                <button id="dooms-regen-ext-btn" class="menu_button" title="Regenerate Tracker — makes a standalone API call to refresh tracker data on demand" style="flex-shrink: 0; min-width: 40px;">
+                    <i class="fa-solid fa-sync"></i>
                 </button>
             </div>
 
