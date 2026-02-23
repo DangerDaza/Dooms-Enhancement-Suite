@@ -225,12 +225,15 @@ export function initPortraitBar() {
         // Show or hide "Clear Dialogue Color" based on whether one is set
         $menu.find('[data-action="clear-color"]').toggle(!!extensionSettings.characterColors?.[characterName]);
 
-        // Position near the cursor
-        $menu.css({
-            top: e.clientY + 'px',
-            left: e.clientX + 'px',
-            display: 'block'
-        });
+        // Position near the cursor, clamped to viewport
+        $menu.css({ display: 'block', top: 0, left: 0 });
+        const menuW = $menu.outerWidth();
+        const menuH = $menu.outerHeight();
+        const viewW = window.innerWidth;
+        const viewH = window.innerHeight;
+        const top = Math.max(0, Math.min(e.clientY, viewH - menuH));
+        const left = Math.max(0, Math.min(e.clientX, viewW - menuW));
+        $menu.css({ top: top + 'px', left: left + 'px' });
 
         // Register a one-time click handler to dismiss the menu when clicking elsewhere
         // Using setTimeout(0) so this click event doesn't immediately trigger dismissal
