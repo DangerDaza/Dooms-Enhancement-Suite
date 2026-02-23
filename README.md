@@ -30,7 +30,7 @@ A horizontal card shelf displaying character portraits between the chat and inpu
 
 
 ### Scene Tracker
-Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them.
+Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them. (all options other than Banner have not been tested)
 <img width="1426" height="357" alt="image" src="https://github.com/user-attachments/assets/7d4ab31e-2fd0-4f70-ab0f-6a85665b166e" />
 
 
