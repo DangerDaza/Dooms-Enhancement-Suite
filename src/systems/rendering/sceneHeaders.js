@@ -54,6 +54,7 @@ function buildStyleVars() {
     vars.push(`--st-label-color: ${st.labelColor || '#888888'}`);
     vars.push(`--st-text-color: ${st.textColor || '#d0d0d0'}`);
     vars.push(`--st-quest-icon: ${st.questIconColor || '#f0c040'}`);
+    vars.push(`--st-quest-text: ${st.questTextColor || st.questIconColor || '#f0c040'}`);
     vars.push(`--st-events-text: ${st.eventsTextColor || '#999999'}`);
 
     // Sizing
