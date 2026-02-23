@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.1] - 2026-02-23
+
+### Fixed
+- **Scene tracker background hardcoded blue** — the gradient end color was `rgba(22, 33, 62, 0.4)` regardless of the background color picker. Now uses the user's chosen background color throughout the full gradient.
+- **Quest text and events text ignoring color pickers** — quest value text and recent events italic text were hardcoded `#f0c040` / `#999` in the banner, HUD, ticker, and panel layout CSS. They now correctly respond to the color pickers.
+- **Themes not applying to settings popup** — the 7 themes added in a recent session (Midnight Rose, Emerald Grove, Arctic, Volcanic, Dracula, Ocean Depths) had no CSS rules for the settings modal or tracker editor popup, so the popup always rendered with default dark styling. All themes now fully style both popups.
+
+### Added
+- **Quest Text Color** — new separate color picker for the quest value text, independent from the Quest Icon Color picker. Allows e.g. gold icon with white text.
+
 ## [1.5] - 2026-02-23
 
 ### Added
