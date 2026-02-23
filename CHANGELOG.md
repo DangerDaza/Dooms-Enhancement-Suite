@@ -1,13 +1,5 @@
 # Changelog
 
-## [1.5.7] - 2026-02-23
-
-### Fixed
-- **TTS sentence highlight timer drift** — when `boundary` events from the Web Speech API aren't available, the timer-based fallback was drifting ahead of the actual voice over long messages. Three targeted fixes applied:
-  1. **Pause/resume at chunk boundaries** — SillyTavern splits long messages into ~200-char chunks. The timer now pauses when a chunk's `end` event fires and resumes when the next chunk's `start` fires, eliminating the 50–300ms inter-chunk gap that was being counted as speech time (×10 chunks = up to 3 seconds of phantom drift).
-  2. **Chunk position resync** — when each new chunk starts, the first significant word in the chunk is used to detect backward drift (timer ran ahead of the engine). If drift is detected, the timer snaps back to the correct sentence.
-  3. **WPM calibration** — actual chunk duration (from `start` to `end` events) is measured and used to calibrate the ms-per-word estimate via exponential moving average, adapting to the actual voice speed rather than relying solely on the 310ms/word baseline.
-
 ## [1.5.6] - 2026-02-23
 
 ### Fixed
