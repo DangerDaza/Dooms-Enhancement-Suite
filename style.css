@@ -12905,6 +12905,39 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-bubble-content {
     flex: 1;
     min-width: 0;
+    position: relative;
+}
+
+/* ── TTS Read-from-here button ── */
+.dooms-bubble-tts {
+    display: none;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.6em;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+    z-index: 2;
+    padding: 0;
+}
+.dooms-bubble:hover .dooms-bubble-tts {
+    display: flex;
+}
+.dooms-bubble-tts:hover {
+    background: rgba(233, 69, 96, 0.25);
+    color: var(--rpg-highlight, #e94560);
+    transform: scale(1.15);
+}
+.dooms-bubble-tts:active {
+    transform: scale(0.95);
 }
 .dooms-bubble-header {
     display: flex;

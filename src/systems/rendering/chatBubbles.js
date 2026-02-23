@@ -10,6 +10,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { resolvePortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
+import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -332,7 +333,7 @@ function renderDiscordBubbles(segments) {
     const showAuthorNames = cbs.showAuthorNames !== false;
     const showNarratorLabel = cbs.showNarratorLabel !== false;
 
-    const html = segments.map(seg => {
+    const html = segments.map((seg, index) => {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
@@ -368,11 +369,15 @@ function renderDiscordBubbles(segments) {
         // Add hide-avatar class if avatars are hidden (adjusts narrator indent)
         const hideAvatarClass = !showAvatars ? ' dooms-bubble-no-avatar' : '';
 
-        return `<div class="dooms-bubble ${typeClass} ${contClass}${hideAvatarClass}"${borderStyle}>
+        // TTS button (visible on hover)
+        const ttsButton = `<button class="dooms-bubble-tts" title="Read from here"><i class="fa-solid fa-bullhorn"></i></button>`;
+
+        return `<div class="dooms-bubble ${typeClass} ${contClass}${hideAvatarClass}" data-segment-index="${index}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
             ${avatarContent}
             <div class="dooms-bubble-content">
                 ${headerContent}
                 <div class="dooms-bubble-text"${textStyle}>${textHtml}</div>
+                ${ttsButton}
             </div>
         </div>`;
     }).join('');
@@ -589,4 +594,65 @@ export function applyChatBubbleSettings() {
     root.style.setProperty('--cb-avatar-height', `${Math.round((s.avatarSize ?? 40) * 1.28)}px`);
     root.style.setProperty('--cb-border-radius', `${s.borderRadius ?? 6}px`);
     root.style.setProperty('--cb-spacing', `${s.spacing ?? 12}px`);
+}
+
+// ─────────────────────────────────────────────
+//  Bubble TTS — read-from-here button
+// ─────────────────────────────────────────────
+
+/**
+ * Collects text from the given bubble element through the end of the message.
+ * @param {HTMLElement} bubbleEl - The .dooms-bubble element to start from
+ * @returns {string} Combined text content
+ */
+function getTextFromBubbleForward(bubbleEl) {
+    const container = bubbleEl.closest('.dooms-bubbles');
+    if (!container) return '';
+    const allBubbles = container.querySelectorAll('.dooms-bubble');
+    const startIdx = Array.from(allBubbles).indexOf(bubbleEl);
+    if (startIdx === -1) return '';
+
+    let text = '';
+    for (let i = startIdx; i < allBubbles.length; i++) {
+        const textDiv = allBubbles[i].querySelector('.dooms-bubble-text');
+        if (textDiv) {
+            text += textDiv.textContent.trim() + '\n';
+        }
+    }
+    return text.trim();
+}
+
+/**
+ * Initializes the delegated click handler for bubble TTS buttons.
+ * Should be called once during extension initialization.
+ */
+export function initBubbleTtsHandlers() {
+    $(document).on('click', '.dooms-bubble-tts', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const bubble = $(this).closest('.dooms-bubble')[0];
+        if (!bubble) return;
+
+        const text = getTextFromBubbleForward(bubble);
+        if (!text) return;
+
+        // Determine voice: use the bubble's speaker, or fall back to the message's character
+        let voice = bubble.getAttribute('data-speaker') || '';
+        if (!voice) {
+            const mesEl = $(bubble).closest('.mes')[0];
+            if (mesEl) {
+                voice = mesEl.getAttribute('ch_name') || '';
+            }
+        }
+
+        // Build the /speak command
+        const voiceArg = voice ? `voice="${voice}" ` : '';
+        try {
+            await executeSlashCommandsOnChatInput(`/speak ${voiceArg}${text}`, { quiet: true });
+        } catch (err) {
+            console.error('[Dooms Tracker] TTS speak failed:', err);
+            toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
+        }
+    });
 }

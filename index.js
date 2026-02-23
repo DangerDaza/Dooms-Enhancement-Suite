@@ -90,7 +90,8 @@ import {
     applyAllChatBubbles,
     revertAllChatBubbles,
     onChatBubbleModeChanged,
-    applyChatBubbleSettings
+    applyChatBubbleSettings,
+    initBubbleTtsHandlers
 } from './src/systems/rendering/chatBubbles.js';
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
 import {
@@ -1172,6 +1173,7 @@ async function initUI() {
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
+    try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch(e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
     try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch(e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
     try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch(e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
     try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch(e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
