@@ -172,7 +172,14 @@ export function updateChatSceneHeaders() {
         const html = createBannerHTML(sceneData);
         if (html) {
             const $target = findLastAssistantMessage();
-            if ($target) $target.after(html);
+            if ($target) {
+                $target.after(html);
+                // Scroll the banner into view so it isn't hidden below the viewport
+                const $banner = $('.dooms-info-banner').last();
+                if ($banner.length) {
+                    $banner[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
         }
     } else if (layout === 'hud') {
         const html = createHudHTML(sceneData);

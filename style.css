@@ -13181,7 +13181,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    ======================================== */
 
 .dooms-info-banner {
-    margin: 16px 0;
+    margin: 16px 0 40px 0;
     padding: 10px 16px 10px 20px;
     background: linear-gradient(135deg,
         rgba(var(--st-bg-rgb, 233, 69, 96), var(--st-bg-opacity, 0.08)) 0%,
