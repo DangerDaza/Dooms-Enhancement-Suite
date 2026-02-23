@@ -32,8 +32,10 @@ A horizontal card shelf displaying character portraits between the chat and inpu
 <img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
 
 
-### Scene Headers
+### Scene Tracker
 Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, present characters, active quest, and recent events right where you need them. Placed outside the message text so TTS won't read them.
+<img width="1426" height="357" alt="image" src="https://github.com/user-attachments/assets/7d4ab31e-2fd0-4f70-ab0f-6a85665b166e" />
+
 
 ### Chat Bubbles
 Splits multi-character AI messages into individual styled chat bubbles per speaker. Two styles available:
