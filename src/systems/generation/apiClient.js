@@ -268,7 +268,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         // Switch connection profile if configured (separate mode only, not external)
         if (!isExternalMode && extensionSettings.connectionProfile) {
             if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
-                originalProfileName = await getCurrentProfileName();
+                originalProfileName = await getCurrentProfileName() || '<None>';
                 if (originalProfileName !== extensionSettings.connectionProfile) {
                     console.log(`[Dooms Tracker] Switching to connection profile: ${extensionSettings.connectionProfile}`);
                     const switched = await switchToProfile(extensionSettings.connectionProfile);
@@ -380,10 +380,16 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         }
     } finally {
         // Restore connection profile if we switched
-        if (profileSwitched && originalProfileName) {
+        if (profileSwitched) {
             try {
                 console.log(`[Dooms Tracker] Restoring connection profile: ${originalProfileName}`);
-                await switchToProfile(originalProfileName);
+                const restored = await switchToProfile(originalProfileName);
+                if (!restored) {
+                    toastr.warning(
+                        `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
+                        "Doom's Tracker"
+                    );
+                }
             } catch (restoreError) {
                 console.error('[Dooms Tracker] Failed to restore connection profile:', restoreError);
                 toastr.warning(
