@@ -580,6 +580,7 @@ async function initUI() {
     $('#rpg-st-text-color').on('input', function() { _stSettings().textColor = $(this).val(); _saveSt(); });
     $('#rpg-st-badge-color').on('input', function() { _stSettings().charBadgeBg = $(this).val(); _saveSt(); });
     $('#rpg-st-quest-color').on('input', function() { _stSettings().questIconColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-quest-text-color').on('input', function() { _stSettings().questTextColor = $(this).val(); _saveSt(); });
     $('#rpg-st-events-color').on('input', function() { _stSettings().eventsTextColor = $(this).val(); _saveSt(); });
 
     // Opacity sliders
@@ -638,6 +639,7 @@ async function initUI() {
         $('#rpg-st-badge-color').val('#e94560');
         $('#rpg-st-badge-opacity').val(12); $('#rpg-st-badge-opacity-value').text('12%');
         $('#rpg-st-quest-color').val('#f0c040');
+        $('#rpg-st-quest-text-color').val('#f0c040');
         $('#rpg-st-events-color').val('#999999');
         _saveSt();
         updateChatSceneHeaders();
@@ -1117,6 +1119,7 @@ async function initUI() {
     $('#rpg-st-badge-opacity').val(st.charBadgeOpacity ?? 12);
     $('#rpg-st-badge-opacity-value').text((st.charBadgeOpacity ?? 12) + '%');
     $('#rpg-st-quest-color').val(st.questIconColor || '#f0c040');
+    $('#rpg-st-quest-text-color').val(st.questTextColor || st.questIconColor || '#f0c040');
     $('#rpg-st-events-color').val(st.eventsTextColor || '#999999');
     applySceneTrackerSettings();
     // Feature pills

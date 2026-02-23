@@ -12928,7 +12928,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-scene-header {
     background: linear-gradient(135deg,
         rgba(var(--st-bg-rgb, 233, 69, 96), var(--st-bg-opacity, 0.08)) 0%,
-        rgba(22, 33, 62, 0.4) 100%);
+        rgba(var(--st-bg-rgb, 233, 69, 96), calc(var(--st-bg-opacity, 0.08) * 3)) 100%);
     border: 1px solid rgba(var(--st-border-rgb, 233, 69, 96), var(--st-border-opacity, 0.15));
     border-left: var(--st-border-width, 3px) solid var(--st-border-color, #e94560);
     border-radius: var(--st-border-radius, 8px);
@@ -14016,7 +14016,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     padding: 10px 16px 10px 20px;
     background: linear-gradient(135deg,
         rgba(var(--st-bg-rgb, 233, 69, 96), var(--st-bg-opacity, 0.08)) 0%,
-        rgba(22, 33, 62, 0.4) 100%);
+        rgba(var(--st-bg-rgb, 233, 69, 96), calc(var(--st-bg-opacity, 0.08) * 3)) 100%);
     border: 1px solid rgba(var(--st-border-rgb, 233, 69, 96), var(--st-border-opacity, 0.15));
     border-left: 3px solid var(--st-accent, #e94560);
     border-radius: var(--st-border-radius, 8px);
@@ -14092,13 +14092,13 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     padding-top: 6px;
     border-top: 1px solid rgba(var(--st-border-rgb, 233, 69, 96), 0.1);
 }
-.dooms-ip-quest i { color: #f0c040; }
-.dooms-ip-quest .dooms-ip-value { color: #f0c040; }
+.dooms-ip-quest i { color: var(--st-quest-icon, #f0c040); }
+.dooms-ip-quest .dooms-ip-value { color: var(--st-quest-text, #f0c040); }
 
 /* Events row */
 .dooms-ip-events i { color: var(--st-accent, #e94560); }
 .dooms-ip-events-text {
-    color: #999;
+    color: var(--st-events-text, #999);
     font-style: italic;
 }
 
@@ -14187,8 +14187,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* HUD quest */
-.dooms-ip-hud-quest .dooms-ip-hud-value { color: #f0c040; }
-.dooms-ip-hud-quest i { color: #f0c040; }
+.dooms-ip-hud-quest .dooms-ip-hud-value { color: var(--st-quest-text, #f0c040); }
+.dooms-ip-hud-quest i { color: var(--st-quest-icon, #f0c040); }
 
 /* HUD divider */
 .dooms-ip-hud-divider {
@@ -14205,7 +14205,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: flex;
     align-items: flex-start;
     gap: 5px;
-    color: #999;
+    color: var(--st-events-text, #999);
     font-size: 0.95em;
     line-height: 1.3;
     margin-bottom: 3px;
@@ -14277,10 +14277,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-size: 0.8em;
 }
 .dooms-ip-ticker-quest {
-    color: #f0c040;
+    color: var(--st-quest-text, #f0c040);
 }
 .dooms-ip-ticker-quest i {
-    color: #f0c040;
+    color: var(--st-quest-icon, #f0c040);
 }
 .dooms-ip-ticker-sep {
     color: rgba(var(--st-border-rgb, 233, 69, 96), 0.25);
@@ -14377,8 +14377,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* Panel quest */
-.dooms-ip-panel-quest .dooms-ip-panel-value { color: #f0c040; }
-.dooms-ip-panel-quest i { color: #f0c040; }
+.dooms-ip-panel-quest .dooms-ip-panel-value { color: var(--st-quest-text, #f0c040); }
+.dooms-ip-panel-quest i { color: var(--st-quest-icon, #f0c040); }
 
 /* Panel events */
 .dooms-ip-panel-events {
@@ -14388,7 +14388,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: flex;
     align-items: flex-start;
     gap: 5px;
-    color: #999;
+    color: var(--st-events-text, #999);
     font-size: 0.9em;
     line-height: 1.3;
     margin-bottom: 2px;

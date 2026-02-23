@@ -72,6 +72,7 @@ export let extensionSettings = {
         charBadgeBg: '#e94560',
         charBadgeOpacity: 12,
         questIconColor: '#f0c040',
+        questTextColor: '#f0c040',
         eventsTextColor: '#999999',
         // Sizing
         fontSize: 82,
