@@ -2826,6 +2826,66 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background-color: var(--rpg-highlight) !important;
 }
 
+.rpg-panel[data-theme="midnight-rose"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="midnight-rose"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="midnight-rose"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="midnight-rose"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="emerald-grove"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="emerald-grove"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="emerald-grove"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="emerald-grove"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="arctic"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="arctic"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="arctic"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="arctic"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="volcanic"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="volcanic"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="volcanic"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="volcanic"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="dracula"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="dracula"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="dracula"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="dracula"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="ocean-depths"] .checkbox_label input[type="checkbox"],
+.rpg-settings-popup[data-theme="ocean-depths"] .checkbox_label input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="ocean-depths"] .checkbox_label input[type="checkbox"]:checked,
+.rpg-settings-popup[data-theme="ocean-depths"] .checkbox_label input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
 .rpg-panel[data-theme="custom"] .checkbox_label input[type="checkbox"],
 .rpg-settings-popup[data-theme="custom"] .checkbox_label input[type="checkbox"] {
     accent-color: var(--rpg-highlight) !important;
@@ -2856,6 +2916,42 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Radio buttons - cyberpunk theme */
 .rpg-panel[data-theme="cyberpunk"] .checkbox_label input[type="radio"],
 .rpg-settings-popup[data-theme="cyberpunk"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - midnight-rose theme */
+.rpg-panel[data-theme="midnight-rose"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="midnight-rose"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - emerald-grove theme */
+.rpg-panel[data-theme="emerald-grove"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="emerald-grove"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - arctic theme */
+.rpg-panel[data-theme="arctic"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="arctic"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - volcanic theme */
+.rpg-panel[data-theme="volcanic"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="volcanic"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - dracula theme */
+.rpg-panel[data-theme="dracula"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="dracula"] .checkbox_label input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+/* Radio buttons - ocean-depths theme */
+.rpg-panel[data-theme="ocean-depths"] .checkbox_label input[type="radio"],
+.rpg-settings-popup[data-theme="ocean-depths"] .checkbox_label input[type="radio"] {
     accent-color: var(--rpg-highlight) !important;
 }
 
@@ -2917,6 +3013,84 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background-color: var(--rpg-highlight) !important;
 }
 
+/* All radio buttons - midnight-rose theme */
+.rpg-settings-popup[data-theme="midnight-rose"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="midnight-rose"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="midnight-rose"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="midnight-rose"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+/* All radio buttons - emerald-grove theme */
+.rpg-settings-popup[data-theme="emerald-grove"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="emerald-grove"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="emerald-grove"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="emerald-grove"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+/* All radio buttons - arctic theme */
+.rpg-settings-popup[data-theme="arctic"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="arctic"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="arctic"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="arctic"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+/* All radio buttons - volcanic theme */
+.rpg-settings-popup[data-theme="volcanic"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="volcanic"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="volcanic"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="volcanic"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+/* All radio buttons - dracula theme */
+.rpg-settings-popup[data-theme="dracula"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="dracula"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="dracula"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="dracula"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+/* All radio buttons - ocean-depths theme */
+.rpg-settings-popup[data-theme="ocean-depths"] input[type="radio"],
+#rpg-tracker-editor-popup[data-theme="ocean-depths"] input[type="radio"] {
+    accent-color: var(--rpg-highlight) !important;
+    color-scheme: dark;
+    background-color: transparent !important;
+}
+
+.rpg-settings-popup[data-theme="ocean-depths"] input[type="radio"]:checked,
+#rpg-tracker-editor-popup[data-theme="ocean-depths"] input[type="radio"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
 /* All radio buttons - custom theme */
 .rpg-settings-popup[data-theme="custom"] input[type="radio"],
 #rpg-tracker-editor-popup[data-theme="custom"] input[type="radio"] {
@@ -2963,6 +3137,54 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background-color: var(--rpg-highlight) !important;
 }
 
+#rpg-tracker-editor-popup[data-theme="midnight-rose"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="midnight-rose"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="emerald-grove"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="emerald-grove"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="arctic"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="arctic"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="volcanic"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="volcanic"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="dracula"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="dracula"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="ocean-depths"] input[type="checkbox"] {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+#rpg-tracker-editor-popup[data-theme="ocean-depths"] input[type="checkbox"]:checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
 #rpg-tracker-editor-popup[data-theme="custom"] input[type="checkbox"] {
     accent-color: var(--rpg-highlight) !important;
 }
@@ -3001,6 +3223,54 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 .rpg-panel[data-theme="cyberpunk"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="midnight-rose"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="midnight-rose"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="emerald-grove"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="emerald-grove"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="arctic"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="arctic"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="volcanic"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="volcanic"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="dracula"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="dracula"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
+    background-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="ocean-depths"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]) {
+    accent-color: var(--rpg-highlight) !important;
+}
+
+.rpg-panel[data-theme="ocean-depths"] input[type="checkbox"]:not(.checkbox_label input[type="checkbox"]):checked {
     background-color: var(--rpg-highlight) !important;
 }
 
@@ -3416,6 +3686,264 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     );
 }
 
+/* Midnight Rose — Deep navy/plum with soft rose accents */
+.rpg-panel[data-theme="midnight-rose"] {
+    --rpg-bg: #1a1025;
+    --rpg-accent: #2a1838;
+    --rpg-text: #e8d5e8;
+    --rpg-highlight: #e8729a;
+    --rpg-border: #9b4dca;
+    --rpg-shadow: rgba(155, 77, 202, 0.4);
+}
+
+#rpg-thought-panel[data-theme="midnight-rose"],
+#rpg-thought-icon[data-theme="midnight-rose"],
+.rpg-mobile-toggle[data-theme="midnight-rose"] {
+    --rpg-bg: #1a1025;
+    --rpg-accent: #2a1838;
+    --rpg-text: #e8d5e8;
+    --rpg-highlight: #e8729a;
+    --rpg-border: #9b4dca;
+    --rpg-shadow: rgba(155, 77, 202, 0.4);
+}
+
+.rpg-panel[data-theme="midnight-rose"] .rpg-content-box {
+    background: linear-gradient(135deg, #2a1838 0%, #1a1025 100%);
+    box-shadow: 0 0 30px rgba(155, 77, 202, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.5);
+    border: 2px solid #9b4dca;
+}
+
+.rpg-panel[data-theme="midnight-rose"] .rpg-panel-header h3,
+.rpg-panel[data-theme="midnight-rose"] .rpg-stats-title,
+.rpg-panel[data-theme="midnight-rose"] .rpg-info-header,
+.rpg-panel[data-theme="midnight-rose"] .rpg-thoughts-header {
+    text-shadow: 0 0 15px rgba(232, 114, 154, 0.6), 0 0 30px rgba(155, 77, 202, 0.3);
+}
+
+.rpg-panel[data-theme="midnight-rose"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #9b4dca, #e8729a, #9b4dca, transparent);
+}
+
+.rpg-panel[data-theme="midnight-rose"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(26, 16, 37, 0.92) 0%, rgba(42, 24, 56, 0.88) 50%, rgba(26, 16, 37, 0.92) 100%);
+}
+
+/* Emerald Grove — Rich forest greens with warm gold */
+.rpg-panel[data-theme="emerald-grove"] {
+    --rpg-bg: #0d1f12;
+    --rpg-accent: #1a3320;
+    --rpg-text: #d4e8c8;
+    --rpg-highlight: #c8a240;
+    --rpg-border: #4a8c3f;
+    --rpg-shadow: rgba(74, 140, 63, 0.4);
+}
+
+#rpg-thought-panel[data-theme="emerald-grove"],
+#rpg-thought-icon[data-theme="emerald-grove"],
+.rpg-mobile-toggle[data-theme="emerald-grove"] {
+    --rpg-bg: #0d1f12;
+    --rpg-accent: #1a3320;
+    --rpg-text: #d4e8c8;
+    --rpg-highlight: #c8a240;
+    --rpg-border: #4a8c3f;
+    --rpg-shadow: rgba(74, 140, 63, 0.4);
+}
+
+.rpg-panel[data-theme="emerald-grove"] .rpg-content-box {
+    background: linear-gradient(135deg, #1a3320 0%, #0d1f12 100%);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), inset 0 0 25px rgba(74, 140, 63, 0.15);
+    border: 2px solid #4a8c3f;
+    border-style: ridge;
+}
+
+.rpg-panel[data-theme="emerald-grove"] .rpg-panel-header h3,
+.rpg-panel[data-theme="emerald-grove"] .rpg-stats-title,
+.rpg-panel[data-theme="emerald-grove"] .rpg-info-header,
+.rpg-panel[data-theme="emerald-grove"] .rpg-thoughts-header {
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.7), 0 0 10px rgba(200, 162, 64, 0.3);
+}
+
+.rpg-panel[data-theme="emerald-grove"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #4a8c3f, #c8a240, #4a8c3f, transparent);
+}
+
+.rpg-panel[data-theme="emerald-grove"] .rpg-divider::after {
+    content: '🌿';
+    font-size: clamp(0.8rem, 1.2vw, 1.2rem);
+}
+
+.rpg-panel[data-theme="emerald-grove"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(13, 31, 18, 0.92) 0%, rgba(26, 51, 32, 0.88) 50%, rgba(13, 31, 18, 0.92) 100%);
+}
+
+/* Arctic — Cool ice blues/whites with crisp silver */
+.rpg-panel[data-theme="arctic"] {
+    --rpg-bg: #0c1929;
+    --rpg-accent: #132640;
+    --rpg-text: #dce8f4;
+    --rpg-highlight: #64b5f6;
+    --rpg-border: #4a8db7;
+    --rpg-shadow: rgba(100, 181, 246, 0.3);
+}
+
+#rpg-thought-panel[data-theme="arctic"],
+#rpg-thought-icon[data-theme="arctic"],
+.rpg-mobile-toggle[data-theme="arctic"] {
+    --rpg-bg: #0c1929;
+    --rpg-accent: #132640;
+    --rpg-text: #dce8f4;
+    --rpg-highlight: #64b5f6;
+    --rpg-border: #4a8db7;
+    --rpg-shadow: rgba(100, 181, 246, 0.3);
+}
+
+.rpg-panel[data-theme="arctic"] .rpg-content-box {
+    background: linear-gradient(135deg, #132640 0%, #0c1929 100%);
+    box-shadow: 0 0 25px rgba(100, 181, 246, 0.2), inset 0 0 20px rgba(0, 0, 0, 0.4);
+    border: 2px solid #4a8db7;
+}
+
+.rpg-panel[data-theme="arctic"] .rpg-panel-header h3,
+.rpg-panel[data-theme="arctic"] .rpg-stats-title,
+.rpg-panel[data-theme="arctic"] .rpg-info-header,
+.rpg-panel[data-theme="arctic"] .rpg-thoughts-header {
+    text-shadow: 0 0 15px rgba(100, 181, 246, 0.5);
+}
+
+.rpg-panel[data-theme="arctic"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #4a8db7, #64b5f6, #4a8db7, transparent);
+}
+
+.rpg-panel[data-theme="arctic"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(12, 25, 41, 0.92) 0%, rgba(19, 38, 64, 0.88) 50%, rgba(12, 25, 41, 0.92) 100%);
+}
+
+/* Volcanic — Dark charcoal with fiery orange/amber */
+.rpg-panel[data-theme="volcanic"] {
+    --rpg-bg: #1a1210;
+    --rpg-accent: #2b1e18;
+    --rpg-text: #f0dcc8;
+    --rpg-highlight: #e8651a;
+    --rpg-border: #b84a0f;
+    --rpg-shadow: rgba(232, 101, 26, 0.4);
+}
+
+#rpg-thought-panel[data-theme="volcanic"],
+#rpg-thought-icon[data-theme="volcanic"],
+.rpg-mobile-toggle[data-theme="volcanic"] {
+    --rpg-bg: #1a1210;
+    --rpg-accent: #2b1e18;
+    --rpg-text: #f0dcc8;
+    --rpg-highlight: #e8651a;
+    --rpg-border: #b84a0f;
+    --rpg-shadow: rgba(232, 101, 26, 0.4);
+}
+
+.rpg-panel[data-theme="volcanic"] .rpg-content-box {
+    background: linear-gradient(135deg, #2b1e18 0%, #1a1210 100%);
+    box-shadow: 0 0 30px rgba(232, 101, 26, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.6);
+    border: 2px solid #b84a0f;
+}
+
+.rpg-panel[data-theme="volcanic"] .rpg-panel-header h3,
+.rpg-panel[data-theme="volcanic"] .rpg-stats-title,
+.rpg-panel[data-theme="volcanic"] .rpg-info-header,
+.rpg-panel[data-theme="volcanic"] .rpg-thoughts-header {
+    text-shadow: 0 0 15px rgba(232, 101, 26, 0.6), 0 0 30px rgba(184, 74, 15, 0.3);
+}
+
+.rpg-panel[data-theme="volcanic"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #b84a0f, #e8651a, #b84a0f, transparent);
+}
+
+.rpg-panel[data-theme="volcanic"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(26, 18, 16, 0.92) 0%, rgba(43, 30, 24, 0.88) 50%, rgba(26, 18, 16, 0.92) 100%);
+}
+
+/* Dracula — Classic dark purple/grey with crimson accents */
+.rpg-panel[data-theme="dracula"] {
+    --rpg-bg: #282a36;
+    --rpg-accent: #343746;
+    --rpg-text: #f8f8f2;
+    --rpg-highlight: #ff5555;
+    --rpg-border: #6272a4;
+    --rpg-shadow: rgba(98, 114, 164, 0.4);
+}
+
+#rpg-thought-panel[data-theme="dracula"],
+#rpg-thought-icon[data-theme="dracula"],
+.rpg-mobile-toggle[data-theme="dracula"] {
+    --rpg-bg: #282a36;
+    --rpg-accent: #343746;
+    --rpg-text: #f8f8f2;
+    --rpg-highlight: #ff5555;
+    --rpg-border: #6272a4;
+    --rpg-shadow: rgba(98, 114, 164, 0.4);
+}
+
+.rpg-panel[data-theme="dracula"] .rpg-content-box {
+    background: linear-gradient(135deg, #343746 0%, #282a36 100%);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.3);
+    border: 2px solid #6272a4;
+}
+
+.rpg-panel[data-theme="dracula"] .rpg-panel-header h3,
+.rpg-panel[data-theme="dracula"] .rpg-stats-title,
+.rpg-panel[data-theme="dracula"] .rpg-info-header,
+.rpg-panel[data-theme="dracula"] .rpg-thoughts-header {
+    text-shadow: 0 0 10px rgba(255, 85, 85, 0.4);
+}
+
+.rpg-panel[data-theme="dracula"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #6272a4, #ff5555, #6272a4, transparent);
+}
+
+.rpg-panel[data-theme="dracula"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(40, 42, 54, 0.92) 0%, rgba(52, 55, 70, 0.88) 50%, rgba(40, 42, 54, 0.92) 100%);
+}
+
+/* Ocean Depths — Deep sea blues with bioluminescent teal */
+.rpg-panel[data-theme="ocean-depths"] {
+    --rpg-bg: #0a1628;
+    --rpg-accent: #0f2038;
+    --rpg-text: #b8d8e8;
+    --rpg-highlight: #00e5c8;
+    --rpg-border: #1a6b8a;
+    --rpg-shadow: rgba(0, 229, 200, 0.3);
+}
+
+#rpg-thought-panel[data-theme="ocean-depths"],
+#rpg-thought-icon[data-theme="ocean-depths"],
+.rpg-mobile-toggle[data-theme="ocean-depths"] {
+    --rpg-bg: #0a1628;
+    --rpg-accent: #0f2038;
+    --rpg-text: #b8d8e8;
+    --rpg-highlight: #00e5c8;
+    --rpg-border: #1a6b8a;
+    --rpg-shadow: rgba(0, 229, 200, 0.3);
+}
+
+.rpg-panel[data-theme="ocean-depths"] .rpg-content-box {
+    background: linear-gradient(135deg, #0f2038 0%, #0a1628 100%);
+    box-shadow: 0 0 30px rgba(0, 229, 200, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.5);
+    border: 2px solid #1a6b8a;
+}
+
+.rpg-panel[data-theme="ocean-depths"] .rpg-panel-header h3,
+.rpg-panel[data-theme="ocean-depths"] .rpg-stats-title,
+.rpg-panel[data-theme="ocean-depths"] .rpg-info-header,
+.rpg-panel[data-theme="ocean-depths"] .rpg-thoughts-header {
+    text-shadow: 0 0 15px rgba(0, 229, 200, 0.5), 0 0 30px rgba(26, 107, 138, 0.3);
+}
+
+.rpg-panel[data-theme="ocean-depths"] .rpg-divider {
+    background: linear-gradient(to right, transparent, #1a6b8a, #00e5c8, #1a6b8a, transparent);
+}
+
+.rpg-panel[data-theme="ocean-depths"] .rpg-thoughts-content::before {
+    background: linear-gradient(135deg, rgba(10, 22, 40, 0.92) 0%, rgba(15, 32, 56, 0.88) 50%, rgba(10, 22, 40, 0.92) 100%);
+}
+
 /* ============================================
    THEME SUPPORT FOR ALL PANEL ELEMENTS
    ============================================ */
@@ -3423,13 +3951,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply theme colors to tabs navigation */
 .rpg-panel[data-theme="sci-fi"] .rpg-tabs-nav,
 .rpg-panel[data-theme="fantasy"] .rpg-tabs-nav,
-.rpg-panel[data-theme="cyberpunk"] .rpg-tabs-nav {
+.rpg-panel[data-theme="cyberpunk"] .rpg-tabs-nav,
+.rpg-panel[data-theme="midnight-rose"] .rpg-tabs-nav,
+.rpg-panel[data-theme="emerald-grove"] .rpg-tabs-nav,
+.rpg-panel[data-theme="arctic"] .rpg-tabs-nav,
+.rpg-panel[data-theme="volcanic"] .rpg-tabs-nav,
+.rpg-panel[data-theme="dracula"] .rpg-tabs-nav,
+.rpg-panel[data-theme="ocean-depths"] .rpg-tabs-nav {
     border-bottom-color: var(--rpg-border);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-tab-btn,
 .rpg-panel[data-theme="fantasy"] .rpg-tab-btn,
-.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn {
+.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-tab-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-tab-btn,
+.rpg-panel[data-theme="arctic"] .rpg-tab-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-tab-btn,
+.rpg-panel[data-theme="dracula"] .rpg-tab-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-tab-btn {
     background: var(--rpg-accent);
     border-color: var(--rpg-border);
     color: var(--rpg-text);
@@ -3437,14 +3977,26 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 .rpg-panel[data-theme="sci-fi"] .rpg-tab-btn:hover,
 .rpg-panel[data-theme="fantasy"] .rpg-tab-btn:hover,
-.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn:hover {
+.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="midnight-rose"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="emerald-grove"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="arctic"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="volcanic"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="dracula"] .rpg-tab-btn:hover,
+.rpg-panel[data-theme="ocean-depths"] .rpg-tab-btn:hover {
     background: var(--rpg-highlight);
     border-color: var(--rpg-highlight);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-tab-btn.active,
 .rpg-panel[data-theme="fantasy"] .rpg-tab-btn.active,
-.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn.active {
+.rpg-panel[data-theme="cyberpunk"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="midnight-rose"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="emerald-grove"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="arctic"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="volcanic"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="dracula"] .rpg-tab-btn.active,
+.rpg-panel[data-theme="ocean-depths"] .rpg-tab-btn.active {
     background: var(--rpg-highlight);
     border-color: var(--rpg-highlight);
     color: var(--rpg-bg);
@@ -3453,27 +4005,51 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply theme colors to inventory subtabs */
 .rpg-panel[data-theme="sci-fi"] .rpg-inventory-subtabs,
 .rpg-panel[data-theme="fantasy"] .rpg-inventory-subtabs,
-.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtabs {
+.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-subtabs,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-subtabs {
     border-bottom-color: var(--rpg-border);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-inventory-subtab,
 .rpg-panel[data-theme="fantasy"] .rpg-inventory-subtab,
-.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab {
+.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-subtab,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-subtab {
     border-color: var(--rpg-border);
     color: var(--rpg-text);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-inventory-subtab:hover,
 .rpg-panel[data-theme="fantasy"] .rpg-inventory-subtab:hover,
-.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab:hover {
+.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-subtab:hover,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-subtab:hover {
     border-color: var(--rpg-highlight);
     color: var(--rpg-highlight);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-inventory-subtab.active,
 .rpg-panel[data-theme="fantasy"] .rpg-inventory-subtab.active,
-.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab.active {
+.rpg-panel[data-theme="cyberpunk"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-subtab.active,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-subtab.active {
     border-color: var(--rpg-highlight);
     color: var(--rpg-highlight);
 }
@@ -3481,27 +4057,51 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply theme colors to quests subtabs */
 .rpg-panel[data-theme="sci-fi"] .rpg-quests-subtabs,
 .rpg-panel[data-theme="fantasy"] .rpg-quests-subtabs,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtabs {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="arctic"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="volcanic"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="dracula"] .rpg-quests-subtabs,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quests-subtabs {
     border-bottom-color: var(--rpg-border);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-quests-subtab,
 .rpg-panel[data-theme="fantasy"] .rpg-quests-subtab,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quests-subtab,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quests-subtab,
+.rpg-panel[data-theme="arctic"] .rpg-quests-subtab,
+.rpg-panel[data-theme="volcanic"] .rpg-quests-subtab,
+.rpg-panel[data-theme="dracula"] .rpg-quests-subtab,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quests-subtab {
     border-color: var(--rpg-border);
     color: var(--rpg-text);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-quests-subtab:hover,
 .rpg-panel[data-theme="fantasy"] .rpg-quests-subtab:hover,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab:hover {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="arctic"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="volcanic"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="dracula"] .rpg-quests-subtab:hover,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quests-subtab:hover {
     border-color: var(--rpg-highlight);
     color: var(--rpg-highlight);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-quests-subtab.active,
 .rpg-panel[data-theme="fantasy"] .rpg-quests-subtab.active,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab.active {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="arctic"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="volcanic"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="dracula"] .rpg-quests-subtab.active,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quests-subtab.active {
     border-color: var(--rpg-highlight);
     color: var(--rpg-highlight);
 }
@@ -3509,19 +4109,37 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply theme colors to storage locations */
 .rpg-panel[data-theme="sci-fi"] .rpg-storage-location,
 .rpg-panel[data-theme="fantasy"] .rpg-storage-location,
-.rpg-panel[data-theme="cyberpunk"] .rpg-storage-location {
+.rpg-panel[data-theme="cyberpunk"] .rpg-storage-location,
+.rpg-panel[data-theme="midnight-rose"] .rpg-storage-location,
+.rpg-panel[data-theme="emerald-grove"] .rpg-storage-location,
+.rpg-panel[data-theme="arctic"] .rpg-storage-location,
+.rpg-panel[data-theme="volcanic"] .rpg-storage-location,
+.rpg-panel[data-theme="dracula"] .rpg-storage-location,
+.rpg-panel[data-theme="ocean-depths"] .rpg-storage-location {
     border-color: var(--rpg-border);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-storage-header,
 .rpg-panel[data-theme="fantasy"] .rpg-storage-header,
-.rpg-panel[data-theme="cyberpunk"] .rpg-storage-header {
+.rpg-panel[data-theme="cyberpunk"] .rpg-storage-header,
+.rpg-panel[data-theme="midnight-rose"] .rpg-storage-header,
+.rpg-panel[data-theme="emerald-grove"] .rpg-storage-header,
+.rpg-panel[data-theme="arctic"] .rpg-storage-header,
+.rpg-panel[data-theme="volcanic"] .rpg-storage-header,
+.rpg-panel[data-theme="dracula"] .rpg-storage-header,
+.rpg-panel[data-theme="ocean-depths"] .rpg-storage-header {
     background: var(--rpg-highlight);
 }
 
 .rpg-panel[data-theme="sci-fi"] .rpg-storage-content,
 .rpg-panel[data-theme="fantasy"] .rpg-storage-content,
-.rpg-panel[data-theme="cyberpunk"] .rpg-storage-content {
+.rpg-panel[data-theme="cyberpunk"] .rpg-storage-content,
+.rpg-panel[data-theme="midnight-rose"] .rpg-storage-content,
+.rpg-panel[data-theme="emerald-grove"] .rpg-storage-content,
+.rpg-panel[data-theme="arctic"] .rpg-storage-content,
+.rpg-panel[data-theme="volcanic"] .rpg-storage-content,
+.rpg-panel[data-theme="dracula"] .rpg-storage-content,
+.rpg-panel[data-theme="ocean-depths"] .rpg-storage-content {
     background: var(--rpg-accent);
 }
 
@@ -3543,7 +4161,43 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="cyberpunk"] .rpg-inventory-remove-btn,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-remove,
-.rpg-panel[data-theme="cyberpunk"] .rpg-add-quest-btn {
+.rpg-panel[data-theme="cyberpunk"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-edit,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-remove,
+.rpg-panel[data-theme="midnight-rose"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-edit,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-remove,
+.rpg-panel[data-theme="emerald-grove"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="arctic"] .rpg-quest-edit,
+.rpg-panel[data-theme="arctic"] .rpg-quest-remove,
+.rpg-panel[data-theme="arctic"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-edit,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-remove,
+.rpg-panel[data-theme="volcanic"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="dracula"] .rpg-quest-edit,
+.rpg-panel[data-theme="dracula"] .rpg-quest-remove,
+.rpg-panel[data-theme="dracula"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-edit-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-remove-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-edit,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-remove,
+.rpg-panel[data-theme="ocean-depths"] .rpg-add-quest-btn {
     background: var(--rpg-accent);
     border-color: var(--rpg-border);
     color: var(--rpg-text);
@@ -3554,7 +4208,19 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="fantasy"] .rpg-inventory-add-btn,
 .rpg-panel[data-theme="fantasy"] .rpg-add-quest-btn,
 .rpg-panel[data-theme="cyberpunk"] .rpg-inventory-add-btn,
-.rpg-panel[data-theme="cyberpunk"] .rpg-add-quest-btn {
+.rpg-panel[data-theme="cyberpunk"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="midnight-rose"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="emerald-grove"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="arctic"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="volcanic"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="dracula"] .rpg-add-quest-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-add-btn,
+.rpg-panel[data-theme="ocean-depths"] .rpg-add-quest-btn {
     background: transparent;
     border-color: var(--rpg-highlight);
     color: var(--rpg-highlight);
@@ -3569,7 +4235,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="fantasy"] .rpg-main-quest-display,
 .rpg-panel[data-theme="cyberpunk"] .rpg-inventory-text,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-item,
-.rpg-panel[data-theme="cyberpunk"] .rpg-main-quest-display {
+.rpg-panel[data-theme="cyberpunk"] .rpg-main-quest-display,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-text,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-item,
+.rpg-panel[data-theme="midnight-rose"] .rpg-main-quest-display,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-text,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-item,
+.rpg-panel[data-theme="emerald-grove"] .rpg-main-quest-display,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-text,
+.rpg-panel[data-theme="arctic"] .rpg-quest-item,
+.rpg-panel[data-theme="arctic"] .rpg-main-quest-display,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-text,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-item,
+.rpg-panel[data-theme="volcanic"] .rpg-main-quest-display,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-text,
+.rpg-panel[data-theme="dracula"] .rpg-quest-item,
+.rpg-panel[data-theme="dracula"] .rpg-main-quest-display,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-text,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-item,
+.rpg-panel[data-theme="ocean-depths"] .rpg-main-quest-display {
     background: var(--rpg-accent);
     border-color: var(--rpg-border);
     color: var(--rpg-text);
@@ -3577,7 +4261,13 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 .rpg-panel[data-theme="sci-fi"] .rpg-quest-item:hover,
 .rpg-panel[data-theme="fantasy"] .rpg-quest-item:hover,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quest-item:hover {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="arctic"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="dracula"] .rpg-quest-item:hover,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-item:hover {
     border-color: var(--rpg-highlight);
 }
 
@@ -3593,7 +4283,31 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="cyberpunk"] .rpg-inventory-hint,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-hint,
 .rpg-panel[data-theme="cyberpunk"] .rpg-inventory-empty,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quest-empty {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quest-empty,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-hint,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-hint,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inventory-empty,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-empty,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-hint,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-hint,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inventory-empty,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-empty,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-hint,
+.rpg-panel[data-theme="arctic"] .rpg-quest-hint,
+.rpg-panel[data-theme="arctic"] .rpg-inventory-empty,
+.rpg-panel[data-theme="arctic"] .rpg-quest-empty,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-hint,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-hint,
+.rpg-panel[data-theme="volcanic"] .rpg-inventory-empty,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-empty,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-hint,
+.rpg-panel[data-theme="dracula"] .rpg-quest-hint,
+.rpg-panel[data-theme="dracula"] .rpg-inventory-empty,
+.rpg-panel[data-theme="dracula"] .rpg-quest-empty,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-hint,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-hint,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inventory-empty,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-empty {
     border-color: var(--rpg-highlight);
     color: var(--rpg-text);
 }
@@ -3607,7 +4321,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="fantasy"] .rpg-quest-edit-form textarea,
 .rpg-panel[data-theme="cyberpunk"] .rpg-inline-input,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form input,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form textarea {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inline-input,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inline-input,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="arctic"] .rpg-inline-input,
+.rpg-panel[data-theme="arctic"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="arctic"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="volcanic"] .rpg-inline-input,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="dracula"] .rpg-inline-input,
+.rpg-panel[data-theme="dracula"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="dracula"] .rpg-quest-edit-form textarea,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inline-input,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-edit-form input,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-edit-form textarea {
     background: var(--rpg-bg);
     border-color: var(--rpg-border);
     color: var(--rpg-text);
@@ -3621,7 +4353,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel[data-theme="fantasy"] .rpg-quest-edit-form textarea:focus,
 .rpg-panel[data-theme="cyberpunk"] .rpg-inline-input:focus,
 .rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form input:focus,
-.rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form textarea:focus {
+.rpg-panel[data-theme="cyberpunk"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="midnight-rose"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="midnight-rose"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="emerald-grove"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="emerald-grove"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="arctic"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="arctic"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="arctic"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="volcanic"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="volcanic"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="dracula"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="dracula"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="dracula"] .rpg-quest-edit-form textarea:focus,
+.rpg-panel[data-theme="ocean-depths"] .rpg-inline-input:focus,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-edit-form input:focus,
+.rpg-panel[data-theme="ocean-depths"] .rpg-quest-edit-form textarea:focus {
     border-color: var(--rpg-highlight);
 }
 
@@ -8898,6 +9648,36 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-color: var(--rpg-border);
 }
 
+.rpg-encounter-modal[data-theme="midnight-rose"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
+.rpg-encounter-modal[data-theme="emerald-grove"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
+.rpg-encounter-modal[data-theme="arctic"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
+.rpg-encounter-modal[data-theme="volcanic"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
+.rpg-encounter-modal[data-theme="dracula"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
+.rpg-encounter-modal[data-theme="ocean-depths"] .rpg-encounter-container {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-border);
+}
+
 .rpg-encounter-modal[data-theme="custom"] .rpg-encounter-container {
     background: var(--rpg-bg);
     border-color: var(--rpg-border);
@@ -9470,7 +10250,13 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
 /* Combat Over Screen Theme Support */
 .rpg-encounter-modal[data-theme="sci-fi"] .rpg-encounter-over,
 .rpg-encounter-modal[data-theme="fantasy"] .rpg-encounter-over,
-.rpg-encounter-modal[data-theme="cyberpunk"] .rpg-encounter-over {
+.rpg-encounter-modal[data-theme="cyberpunk"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="midnight-rose"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="emerald-grove"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="arctic"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="volcanic"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="dracula"] .rpg-encounter-over,
+.rpg-encounter-modal[data-theme="ocean-depths"] .rpg-encounter-over {
     color: var(--rpg-text);
 }
 
@@ -9492,7 +10278,13 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
 /* Input fields theme support */
 .rpg-encounter-modal[data-theme="sci-fi"] #rpg-encounter-custom-input,
 .rpg-encounter-modal[data-theme="fantasy"] #rpg-encounter-custom-input,
-.rpg-encounter-modal[data-theme="cyberpunk"] #rpg-encounter-custom-input {
+.rpg-encounter-modal[data-theme="cyberpunk"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="midnight-rose"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="emerald-grove"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="arctic"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="volcanic"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="dracula"] #rpg-encounter-custom-input,
+.rpg-encounter-modal[data-theme="ocean-depths"] #rpg-encounter-custom-input {
     background: var(--rpg-bg);
     border-color: var(--rpg-border);
     color: var(--rpg-text);
@@ -9500,7 +10292,13 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
 
 .rpg-encounter-modal[data-theme="sci-fi"] #rpg-encounter-custom-input:focus,
 .rpg-encounter-modal[data-theme="fantasy"] #rpg-encounter-custom-input:focus,
-.rpg-encounter-modal[data-theme="cyberpunk"] #rpg-encounter-custom-input:focus {
+.rpg-encounter-modal[data-theme="cyberpunk"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="midnight-rose"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="emerald-grove"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="arctic"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="volcanic"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="dracula"] #rpg-encounter-custom-input:focus,
+.rpg-encounter-modal[data-theme="ocean-depths"] #rpg-encounter-custom-input:focus {
     border-color: var(--rpg-highlight);
     box-shadow: 0 0 15px var(--rpg-shadow);
 }
