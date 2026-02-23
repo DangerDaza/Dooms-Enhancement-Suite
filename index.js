@@ -168,6 +168,15 @@ async function addExtensionSettings() {
             i18n.applyTranslations(document.getElementById('extensions_settings2'));
         });
     }
+    // Set up "Open Settings" button in the extension dropdown
+    $('#dooms-open-settings-btn').on('click', function() {
+        const modal = getSettingsModal();
+        if (modal) {
+            modal.open();
+        } else {
+            $('#rpg-settings-popup').show();
+        }
+    });
 }
 /**
  * Populates the Connection Profile dropdown from the Connection Manager extension.
