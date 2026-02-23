@@ -44,8 +44,10 @@ export async function playLoadingIntro() {
     // The spinner sits inside a Popup <dialog> in the browser's top layer,
     // which renders above everything regardless of z-index. Hide all open
     // dialogs so our overlay is actually visible.
-    const openDialogs = document.querySelectorAll('dialog[open]');
-    openDialogs.forEach(d => d.style.visibility = 'hidden');
+    // We only hide them — we do NOT restore them afterwards, because ST manages
+    // its own dialog lifecycle. Restoring already-closed dialogs breaks ST's
+    // loading flow. ST will show/close its own dialogs as needed once the intro ends.
+    document.querySelectorAll('dialog[open]').forEach(d => d.style.visibility = 'hidden');
 
     // Also hide the preloader's backdrop blur so our background is clean
     preloader.style.visibility = 'hidden';
@@ -72,9 +74,13 @@ export async function playLoadingIntro() {
     await sleep(400);
     overlay.remove();
 
-    // Restore SillyTavern's loading UI so it can finish normally
-    preloader.style.visibility = '';
-    openDialogs.forEach(d => d.style.visibility = '');
+    // Restore preloader only if it still exists in the DOM (ST may have removed it already)
+    // Do NOT restore dialogs — ST manages those itself; restoring them re-shows
+    // already-dismissed loading spinners and breaks ST's post-load state.
+    const stillHere = document.getElementById('preloader');
+    if (stillHere) stillHere.style.visibility = '';
+    // Un-hide any dialogs that are still open (ones ST hasn't closed yet)
+    document.querySelectorAll('dialog[open]').forEach(d => d.style.visibility = '');
 }
 
 // ─────────────────────────────────────────────
