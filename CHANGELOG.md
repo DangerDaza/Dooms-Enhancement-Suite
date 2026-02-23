@@ -1,8 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [1.5] - 2026-02-23
 
 ### Added
+- **Separate & External generation modes** — users can now choose how tracker data is generated: Together (embedded in the AI's roleplay response), Separate (dedicated API call via SillyTavern's generateRaw), or External API (user-configured OpenAI-compatible endpoint). Configurable in Settings → Generation.
+- **Manual Refresh Tracker Data button** — in Separate and External modes, a button in the Generation settings triggers an on-demand tracker update without waiting for a new message.
 - **Open Settings button in extension dropdown** — the SillyTavern Extensions tab drawer now has an "Open Settings" button for quick access to the full settings modal, in addition to the existing FAB button.
 - **Hover TTS button on chat bubbles** — a megaphone icon appears when hovering over any bubble segment (narrator, character dialogue, etc.) in Discord-style bubble chat. Clicking it reads from that point through the end of the message via SillyTavern's TTS.
 - **TTS sentence highlighting works with bubble TTS** — the highlight system now correctly finds and highlights sentences when TTS is triggered from a bubble, including proper cleanup that restores bubble HTML.
@@ -11,6 +13,7 @@
 
 ### Fixed
 - **Chat bubbles not appearing on swipes** — bubble formatting now correctly reapplies when swiping between message variants or generating new swipes. Previously, stale data attributes caused the renderer to skip reapplication, and a timing issue meant bubbles were applied before colored-dialogues finished adding font color tags.
+- **"Unknown command /sd" error in Separate mode** — avatar generator now checks if the Stable Diffusion extension is loaded before attempting the `/sd` slash command. No more error toasts when SD isn't configured.
 - **Connection profile not restoring after tracker generation** — when using a separate API connection profile for tracker generation, the profile now reliably switches back to the original after generation completes. Also shows a warning toast if restoration fails.
 - **Wrong / "Unknown" speaker in chat bubbles** — speaker detection now registers first-name shortcuts for multi-word character names (e.g. "Sylvaine" matches "Sylvaine Moonwhisper") and searches backwards through earlier segments when the character name appears in a different block than the dialogue. Also remembers resolved color→speaker mappings within the same message so repeated dialogue by the same character is correctly attributed. Fixed an additional bug where character names mentioned *inside* dialogue (e.g. referencing another character) could be falsely detected as the speaker, and where Map iteration order caused the first-matched name to win instead of the name closest to the dialogue.
 - **Settings FAB button hidden when portrait bar is not visible** — the "D" settings button is now always accessible, even when the portrait bar is turned off.
