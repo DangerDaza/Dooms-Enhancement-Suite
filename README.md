@@ -37,6 +37,8 @@ Compact scene info blocks injected after assistant messages in chat. Displays ti
 Splits multi-character AI messages into individual styled chat bubbles per speaker. Two styles available:
 - **Discord Style** — full-width message blocks with character names
 - **Card Style** — rounded card bubbles
+<img width="1241" height="1081" alt="image" src="https://github.com/user-attachments/assets/43e1d5d2-3216-4d01-841e-dbff6805afc8" />
+
 
 Works automatically by detecting speaker changes through dialogue coloring.
 
@@ -76,6 +78,9 @@ Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create you
 
 ### Settings Panel
 <img width="1380" height="377" alt="image" src="https://github.com/user-attachments/assets/e27027e6-a4bb-42a4-8da4-e206a49a6427" />
+
+
+<img width="1182" height="1474" alt="image" src="https://github.com/user-attachments/assets/5042424e-10a0-4644-af0b-ab0fc93b9fee" />
 
 The settings panel (accessed via the **D** icon) is organized into sections:
 2. **Display & Features** — Toggle every feature on/off individually
