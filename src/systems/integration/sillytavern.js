@@ -3,7 +3,7 @@
  * Handles all event listeners and integration with SillyTavern's event system
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, user_avatar, setExtensionPrompt, extension_prompt_types, saveChatDebounced, updateMessageBlock } from '../../../../../../../script.js';
+import { chat, user_avatar, setExtensionPrompt, extension_prompt_types, saveChatDebounced } from '../../../../../../../script.js';
 // Core modules
 import {
     extensionSettings,
@@ -145,25 +145,11 @@ export async function onMessageReceived(data) {
                 infoBox: parsedData.infoBox,
                 characterThoughts: parsedData.characterThoughts
             };
-            // Remove the tracker code blocks from the visible message
-            let cleanedMessage = responseText;
-            // Note: JSON code blocks are hidden from display by regex script (but preserved in message data)
-            // Remove old text format code blocks (legacy support)
-            cleanedMessage = cleanedMessage.replace(/```[^`]*?Stats\s*\n\s*---[^`]*?```\s*/gi, '');
-            cleanedMessage = cleanedMessage.replace(/```[^`]*?Info Box\s*\n\s*---[^`]*?```\s*/gi, '');
-            cleanedMessage = cleanedMessage.replace(/```[^`]*?Present Characters\s*\n\s*---[^`]*?```\s*/gi, '');
-            // Remove any stray "---" dividers that might appear after the code blocks
-            cleanedMessage = cleanedMessage.replace(/^\s*---\s*$/gm, '');
-            // Clean up multiple consecutive newlines
-            cleanedMessage = cleanedMessage.replace(/\n{3,}/g, '\n\n');
-            // Note: <trackers> XML tags are automatically hidden by SillyTavern
-            // Note: <Song - Artist/> tags are also automatically hidden by SillyTavern
-            // Update the message in chat history
-            lastMessage.mes = cleanedMessage.trim();
-            // Update the swipe text as well
-            if (lastMessage.swipes && lastMessage.swipes[currentSwipeId] !== undefined) {
-                lastMessage.swipes[currentSwipeId] = cleanedMessage.trim();
-            }
+            // Note: JSON code blocks are hidden from the display by our registered regex script
+            // (ensureJsonCleaningRegex). Legacy text format blocks (```Stats---```) are also
+            // handled by the same script. We intentionally do NOT modify lastMessage.mes here —
+            // doing so would cause SillyTavern's Expression Classifier to fire an extra classify
+            // call on the raw JSON-laden text before the regex script has a chance to clean it.
             // Render only the sections that had new data parsed
             if (parsedData.infoBox) renderInfoBox();
             if (parsedData.characterThoughts) renderThoughts();
@@ -174,12 +160,8 @@ export async function onMessageReceived(data) {
                 updateChatSceneHeaders();
                 updatePortraitBar();
             }
-            // Then update the DOM to reflect the cleaned message
-            // Using updateMessageBlock to perform macro substitutions + regex formatting
-            const messageId = chat.length - 1;
-            updateMessageBlock(messageId, lastMessage, { rerenderMessage: true });
             // Insert inline thought dropdowns into the chat message
-            // (must be after updateMessageBlock so the .mes_text content is finalized)
+            // (CHARACTER_MESSAGE_RENDERED fires after addOneMessage, so thoughts go in then)
             if (parsedData.characterThoughts) {
                 setTimeout(() => updateChatThoughts(), 100);
             }

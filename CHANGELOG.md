@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.2] - 2026-02-23
+
+### Fixed
+- **Expression Classifier firing on raw tracker JSON** — in Together mode, the extension was modifying `lastMessage.mes` (stripping tracker JSON) during the `MESSAGE_RECEIVED` event, before SillyTavern rendered the message to the DOM. This caused SillyTavern's Expression Classifier to fire an extra classify call per message on the raw JSON text. The `updateMessageBlock()` call in the same handler was also a no-op since the DOM element doesn't exist yet at that point. Both have been removed — the registered regex script already handles hiding JSON at render time.
+
 ## [1.5.1] - 2026-02-23
 
 ### Fixed
