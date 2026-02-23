@@ -47,6 +47,9 @@ Works automatically by detecting speaker changes through dialogue coloring.
 ### TTS Sentence Highlight
 Real-time sentence highlighting that follows along with SillyTavern's text-to-speech playback. The active sentence gets a gradient glow pill effect while read text fades and unread text stays dimmed. Uses browser speech boundary events for precision, with an intelligent timer fallback for voices that don't support boundary tracking. Fully customizable gradient colors, glow intensity, text opacity, and transition speed.
 
+<img width="1207" height="630" alt="image" src="https://github.com/user-attachments/assets/bdda5416-31a5-4c6e-a883-0e3dc8d32cbe" />
+
+
 ### Lore Library (Lorebook Manager)
 A full-featured lorebook manager that replaces SillyTavern's native World Info interface. Organize your world info books into named library folders with custom icons and colors. Features include:
 - Per-library and master toggle-all buttons
