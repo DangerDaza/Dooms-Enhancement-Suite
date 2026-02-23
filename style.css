@@ -2779,7 +2779,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     border: 1px solid var(--rpg-border);
 }
 
-.checkbox_label {
+.rpg-settings-popup-content .checkbox_label,
+#rpg-tracker-editor-popup .checkbox_label {
     display: flex;
     align-items: center;
     gap: 0.5em;
@@ -2788,7 +2789,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     transition: all 0.3s ease;
 }
 
-.checkbox_label input[type="checkbox"] {
+.rpg-settings-popup-content .checkbox_label input[type="checkbox"],
+#rpg-tracker-editor-popup .checkbox_label input[type="checkbox"] {
     accent-color: #666 !important;
 }
 
@@ -3282,7 +3284,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background-color: var(--rpg-highlight) !important;
 }
 
-.checkbox_label:hover {
+.rpg-settings-popup-content .checkbox_label:hover,
+#rpg-tracker-editor-popup .checkbox_label:hover {
     color: var(--rpg-highlight);
 }
 
