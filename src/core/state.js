@@ -10,7 +10,7 @@ export let extensionSettings = {
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
-    generationMode: 'together', // 'separate' or 'together' - whether to generate with main response or separately
+    generationMode: 'together', // Always 'together' — separate/external modes removed
     // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
     showInfoBox: true,
     showCharacterThoughts: true,

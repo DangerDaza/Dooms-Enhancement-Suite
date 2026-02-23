@@ -253,15 +253,6 @@ async function initUI() {
         extensionSettings.updateDepth = parseInt(String(value));
         saveSettings();
     });
-    $('#rpg-generation-mode').on('change', async function() {
-        const mode = String($(this).val());
-        extensionSettings.generationMode = mode;
-        saveSettings();
-        // Update badge text
-        $('#rpg-gen-mode-badge').text(mode);
-        // Show/hide external API settings
-        $('#rpg-external-api-settings').toggle(mode === 'external');
-    });
     // ── Display settings ──
     $('#rpg-toggle-info-box').on('change', function() {
         extensionSettings.showInfoBox = $(this).prop('checked');
@@ -970,12 +961,8 @@ async function initUI() {
     // Generation
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
-    $('#rpg-generation-mode').val(extensionSettings.generationMode);
-    $('#rpg-gen-mode-badge').text(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);
-    // Show external API settings if mode is external
-    $('#rpg-external-api-settings').toggle(extensionSettings.generationMode === 'external');
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
