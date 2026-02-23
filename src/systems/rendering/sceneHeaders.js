@@ -70,13 +70,13 @@ function buildStyleVars() {
         if (palette) {
             bgColor         = palette.bg;
             borderColor     = palette.border;
-            accentColor     = palette.highlight; // icons & left-border accent use the theme highlight
+            accentColor     = palette.highlight; // icons & left-border accent: theme highlight (e.g. gold for fantasy)
             badgeColor      = palette.highlight;
-            labelColor      = palette.border;    // "Time:", "Location:" labels use the border color — distinct from both icons and body text
-            textColor       = palette.text;      // body text (values) use the theme's main text color
+            labelColor      = palette.text;      // "Time:", "Location:" labels: theme text color (e.g. cream for fantasy) — distinct from gold icons
+            textColor       = palette.text;      // value text: same as labels for clean reading
             questIconColor  = palette.highlight;
             questTextColor  = palette.text;
-            eventsTextColor = palette.border;    // events text uses border color — slightly muted vs body text
+            eventsTextColor = palette.text;
         } else {
             // 'default' or 'custom' — fall back to manual values
             bgColor        = st.bgColor        || '#e94560';
