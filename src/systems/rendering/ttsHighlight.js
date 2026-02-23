@@ -42,14 +42,10 @@ let _boundaryFired = false;
 let _timerSpeechRate = 1;
 let _timerFullText = '';
 
-// Chunk pause/resume state (Fix 1: prevents inter-chunk gap drift)
-let _timerPaused = false;      // True while waiting between chunks
-let _timerRemainingMs = 0;     // ms remaining on current sentence when paused
-
-// WPM calibration state (Fix 3: adapts estimate to actual voice speed)
-let _lastChunkStartTime = 0;   // performance.now() when current chunk's 'start' fired
-let _lastChunkWordCount = 0;   // word count of current chunk
-let _calibratedMsPerWord = 310; // rolling estimate, initialized to baseline
+// WPM calibration state (adapts estimate to actual voice speed per message)
+let _lastChunkStartTime = 0;   // performance.now() when most recent chunk was handed to speak()
+let _lastChunkWordCount = 0;   // word count of that chunk
+let _calibratedMsPerWord = 310; // rolling ms/word estimate, initialized to baseline
 
 // Original DOM content for restoration
 let _originalMesTextHTML = '';
@@ -506,42 +502,27 @@ function _onUtteranceIntercepted(utterance) {
         }
     });
 
-    // Fix 1: Pause the timer when a chunk ends so inter-chunk gaps don't cause
-    // the highlight to run ahead of the voice. The timer persists across chunks
-    // (we do NOT call _stopTimerFallback here) — we simply freeze it mid-sentence
-    // and resume when the next chunk's 'start' fires.
-    utterance.addEventListener('end', () => {
-        if (!_isActive || !_timerRunning || _boundaryFired) return;
-        // Fix 3: Calibrate WPM estimate from this chunk's actual duration
-        if (_lastChunkStartTime > 0 && _lastChunkWordCount > 2) {
-            const actualMs = performance.now() - _lastChunkStartTime;
-            if (actualMs > 200) {
-                const actualMsPerWord = actualMs / _lastChunkWordCount;
-                // Exponential moving average — smooth out outliers
-                _calibratedMsPerWord = _calibratedMsPerWord * 0.6 + actualMsPerWord * 0.4;
-                console.log(`[Dooms TTS Highlight] Calibrated: ${actualMsPerWord.toFixed(0)}ms/word → avg ${_calibratedMsPerWord.toFixed(0)}ms/word`);
-            }
-        }
-        _lastChunkStartTime = 0;
-        // Pause timer — freeze the countdown until the next chunk begins
-        if (_timerHandle) { clearTimeout(_timerHandle); _timerHandle = null; }
-        _timerPaused = true;
-        console.log(`[Dooms TTS Highlight] Timer paused at chunk end — ${_timerRemainingMs}ms saved for current sentence`);
-    });
+    // NOTE: We do NOT stop the timer on chunk 'end' — the speechUtteranceChunker
+    // fires 'end' for every ~200-char sub-chunk, not at the end of the full message.
+    // The timer must persist across all chunks. It will be stopped by:
+    //   - _cleanup() when TTS fully stops (detected by _pollTtsState)
+    //   - boundary events taking over (if available)
 
-    // Fix 1: Resume the timer when the next chunk actually starts speaking.
-    // Also record timing data for WPM calibration.
-    utterance.addEventListener('start', () => {
-        if (!_isActive || !_timerRunning || _boundaryFired) return;
-        _lastChunkStartTime = performance.now();
-        _lastChunkWordCount = (utterance.text.match(/\S+/g) || []).length;
-        if (_timerPaused) {
-            _timerPaused = false;
-            const resumeMs = Math.max(50, _timerRemainingMs);
-            _timerHandle = setTimeout(_advanceTimerSentence, resumeMs);
-            console.log(`[Dooms TTS Highlight] Timer resumed — ${resumeMs}ms remaining for current sentence`);
+    // Fix 3: Calibrate WPM from actual chunk duration.
+    // We record when this chunk's utterance was handed to speak() as a proxy
+    // for its start time (the real 'start' event fires async and can't be
+    // reliably listened to after-the-fact on subsequent chunks).
+    if (_lastChunkStartTime > 0 && _lastChunkWordCount > 2) {
+        const actualMs = performance.now() - _lastChunkStartTime;
+        if (actualMs > 200 && actualMs < 15000) {
+            const actualMsPerWord = actualMs / _lastChunkWordCount;
+            _calibratedMsPerWord = _calibratedMsPerWord * 0.6 + actualMsPerWord * 0.4;
+            console.log(`[Dooms TTS Highlight] Calibrated: ${actualMsPerWord.toFixed(0)}ms/word → avg ${_calibratedMsPerWord.toFixed(0)}ms/word`);
         }
-    });
+    }
+    // Record this chunk's start time and word count for the next chunk's calibration
+    _lastChunkStartTime = performance.now();
+    _lastChunkWordCount = (rawChunkText.match(/\S+/g) || []).length;
 
     // ── Strategy 2: Timer-based continuous sentence progression ──
     // Start the timer only ONCE on the first chunk. It will keep running
@@ -714,7 +695,6 @@ function _startTimerFallback(speechRate, fullVisibleText) {
     _timerSpeechRate = speechRate;
     _timerFullText = fullVisibleText;
     _timerRunning = true;
-    _timerPaused = false;
 
     const startIdx = Math.max(0, _activeSentenceIndex);
     console.log(`[Dooms TTS Highlight] Timer started — continuous from sentence ${startIdx}/${_sentenceSpans.length}`);
@@ -724,7 +704,6 @@ function _startTimerFallback(speechRate, fullVisibleText) {
     const sentText = _timerFullText.substring(sent.start, sent.end);
     const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate, _calibratedMsPerWord);
 
-    _timerRemainingMs = durationMs;
     _timerHandle = setTimeout(_advanceTimerSentence, durationMs);
 }
 
@@ -734,8 +713,6 @@ function _stopTimerFallback() {
         _timerHandle = null;
     }
     _timerRunning = false;
-    _timerPaused = false;
-    _timerRemainingMs = 0;
     _timerFullText = '';
 }
 
@@ -772,8 +749,6 @@ function _resyncTimerToChunk(chunkText, fullVisibleText) {
                 fullVisibleText.substring(sent.start, sent.end),
                 _timerSpeechRate, _calibratedMsPerWord
             );
-            _timerRemainingMs = dur;
-            _timerPaused = false;
             _timerHandle = setTimeout(_advanceTimerSentence, dur);
             return;
         }
@@ -792,10 +767,6 @@ function _advanceTimerSentence() {
         return;
     }
 
-    // Safety: if a chunk-end pause fired just before this timeout ran, don't advance.
-    // The timer will be rescheduled when the next chunk's 'start' fires.
-    if (_timerPaused) return;
-
     // Move to the next sentence
     const nextIdx = _activeSentenceIndex + 1;
     if (nextIdx >= _sentenceSpans.length) {
@@ -811,7 +782,6 @@ function _advanceTimerSentence() {
     const sentText = _timerFullText.substring(sent.start, sent.end);
     const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate, _calibratedMsPerWord);
 
-    _timerRemainingMs = durationMs;
     _timerHandle = setTimeout(_advanceTimerSentence, durationMs);
 }
 
