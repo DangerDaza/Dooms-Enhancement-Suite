@@ -40,7 +40,7 @@ import {
     generateSeparateUpdatePrompt
 } from './src/systems/generation/promptBuilder.js';
 import { parseResponse, parseQuests } from './src/systems/generation/parser.js';
-import { updateRPGData, testExternalAPIConnection } from './src/systems/generation/apiClient.js';
+import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfiles } from './src/systems/generation/apiClient.js';
 import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
 import { getSafeThumbnailUrl } from './src/utils/avatars.js';
@@ -166,6 +166,31 @@ async function addExtensionSettings() {
             // We need to re-apply translations to the settings panel specifically
             i18n.applyTranslations(document.getElementById('extensions_settings2'));
         });
+    }
+}
+/**
+ * Populates the Connection Profile dropdown from the Connection Manager extension.
+ */
+function populateConnectionProfileDropdown() {
+    const $select = $('#rpg-connection-profile');
+    if (!$select.length) return;
+
+    const currentValue = extensionSettings.connectionProfile || '';
+    $select.empty();
+    $select.append('<option value="">Use Current</option>');
+
+    const profiles = getAvailableConnectionProfiles();
+    for (const name of profiles) {
+        $select.append($('<option>').val(name).text(name));
+    }
+
+    // Restore saved value; if saved profile no longer exists, reset
+    if (currentValue && profiles.includes(currentValue)) {
+        $select.val(currentValue);
+    } else if (currentValue && !profiles.includes(currentValue)) {
+        extensionSettings.connectionProfile = '';
+        saveSettings();
+        $select.val('');
     }
 }
 /**
@@ -686,6 +711,11 @@ async function initUI() {
         extensionSettings.skipInjectionsForGuided = String($(this).val());
         saveSettings();
     });
+    // Connection Profile dropdown
+    $('#rpg-connection-profile').on('change', function() {
+        extensionSettings.connectionProfile = String($(this).val());
+        saveSettings();
+    });
     // ── History Persistence settings ──
     $('#rpg-toggle-history-persistence').on('change', function() {
         if (!extensionSettings.historyPersistence) {
@@ -963,6 +993,7 @@ async function initUI() {
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);
+    populateConnectionProfileDropdown();
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
@@ -1282,6 +1313,10 @@ jQuery(async () => {
                 [event_types.USER_MESSAGE_RENDERED]: updatePersonaAvatar,
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar
             });
+            // Re-populate connection profile dropdown when profiles are created/deleted/updated
+            eventSource.on(event_types.CONNECTION_PROFILE_CREATED, () => populateConnectionProfileDropdown());
+            eventSource.on(event_types.CONNECTION_PROFILE_DELETED, () => populateConnectionProfileDropdown());
+            eventSource.on(event_types.CONNECTION_PROFILE_UPDATED, () => populateConnectionProfileDropdown());
             // TTS compatibility: remove any stale display_text that prior versions
             // may have saved to chat messages.  SillyTavern uses display_text for
             // RENDERING as well as TTS, so setting it to a font-stripped copy was

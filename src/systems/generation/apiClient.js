@@ -4,6 +4,7 @@
  */
 import { chat, eventSource } from '../../../../../../../script.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
+import { getContext } from '../../../../../../extensions.js';
 import { safeGenerateRaw, extractTextFromResponse } from '../../utils/responseExtractor.js';
 // Custom event name for when Doom's Character Tracker finishes updating tracker data
 // Other extensions can listen for this event to know when Doom's Character Tracker is done
@@ -169,6 +170,71 @@ export async function switchToPreset(presetName) {
     }
 }
 /**
+ * Gets the current connection profile name using the /profile command.
+ * @returns {Promise<string|null>} Current profile name, '<None>' if no profile, or null on error
+ */
+export async function getCurrentProfileName() {
+    try {
+        const result = await executeSlashCommandsOnChatInput('/profile', { quiet: true });
+        if (result && typeof result === 'object' && result.pipe) {
+            return String(result.pipe).trim() || null;
+        }
+        if (typeof result === 'string') {
+            return result.trim() || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('[Dooms Tracker] Error getting current profile:', error);
+        return null;
+    }
+}
+/**
+ * Switches to a specific connection profile by name using the /profile slash command.
+ * @param {string} profileName - Name of the profile to switch to, or '<None>' to deselect
+ * @returns {Promise<boolean>} True if switching succeeded
+ */
+export async function switchToProfile(profileName) {
+    try {
+        await executeSlashCommandsOnChatInput(
+            `/profile ${profileName} --await=true --timeout=3000`,
+            { quiet: true }
+        );
+        return true;
+    } catch (error) {
+        console.error('[Dooms Tracker] Error switching profile:', error);
+        return false;
+    }
+}
+/**
+ * Checks if a connection profile with the given name exists in the Connection Manager.
+ * @param {string} profileName - Name of the profile to check
+ * @returns {boolean} True if the profile exists
+ */
+export function isConnectionProfileAvailable(profileName) {
+    try {
+        const context = getContext();
+        const profiles = context.extension_settings?.connectionManager?.profiles;
+        if (!Array.isArray(profiles)) return false;
+        return profiles.some(p => p.name === profileName);
+    } catch {
+        return false;
+    }
+}
+/**
+ * Gets all available connection profile names from the Connection Manager.
+ * @returns {string[]} Array of profile names, empty if Connection Manager is not available
+ */
+export function getAvailableConnectionProfiles() {
+    try {
+        const context = getContext();
+        const profiles = context.extension_settings?.connectionManager?.profiles;
+        if (!Array.isArray(profiles)) return [];
+        return profiles.map(p => p.name).sort((a, b) => a.localeCompare(b));
+    } catch {
+        return [];
+    }
+}
+/**
  * Updates RPG tracker data using separate API call (separate mode only).
  * Makes a dedicated API call to generate tracker data, then stores it
  * in the last assistant message's swipe data.
@@ -187,6 +253,8 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         return;
     }
     const isExternalMode = extensionSettings.generationMode === 'external';
+    let originalProfileName = null;
+    let profileSwitched = false;
     try {
         setIsGenerating(true);
         // Update button to show "Updating..." state
@@ -195,6 +263,23 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         const updatingText = i18n.getTranslation('template.mainPanel.updating') || 'Updating...';
         $updateBtn.html(`<i class="fa-solid fa-spinner fa-spin"></i> ${updatingText}`).prop('disabled', true);
         $stripRefreshBtn.html('<i class="fa-solid fa-spinner fa-spin"></i>').prop('disabled', true);
+        // Switch connection profile if configured (separate mode only, not external)
+        if (!isExternalMode && extensionSettings.connectionProfile) {
+            if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
+                originalProfileName = await getCurrentProfileName();
+                if (originalProfileName !== extensionSettings.connectionProfile) {
+                    console.log(`[Dooms Tracker] Switching to connection profile: ${extensionSettings.connectionProfile}`);
+                    const switched = await switchToProfile(extensionSettings.connectionProfile);
+                    if (switched) {
+                        profileSwitched = true;
+                    } else {
+                        console.warn('[Dooms Tracker] Failed to switch connection profile, continuing with current');
+                    }
+                }
+            } else {
+                console.warn(`[Dooms Tracker] Connection profile "${extensionSettings.connectionProfile}" not found, using current connection`);
+            }
+        }
         const prompt = await generateSeparateUpdatePrompt();
         // Generate response based on mode
         let response;
@@ -292,6 +377,19 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             toastr.error(error.message, "Doom's Character Tracker External API Error");
         }
     } finally {
+        // Restore connection profile if we switched
+        if (profileSwitched && originalProfileName) {
+            try {
+                console.log(`[Dooms Tracker] Restoring connection profile: ${originalProfileName}`);
+                await switchToProfile(originalProfileName);
+            } catch (restoreError) {
+                console.error('[Dooms Tracker] Failed to restore connection profile:', restoreError);
+                toastr.warning(
+                    `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
+                    "Doom's Tracker"
+                );
+            }
+        }
         setIsGenerating(false);
         // Restore button to original state
         const $updateBtn = $('#rpg-manual-update');
