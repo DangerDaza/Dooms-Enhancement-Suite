@@ -13182,11 +13182,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-info-banner {
     margin: 16px 0;
-    padding: 10px 16px;
+    padding: 10px 16px 10px 20px;
     background: linear-gradient(135deg,
         rgba(var(--st-bg-rgb, 233, 69, 96), var(--st-bg-opacity, 0.08)) 0%,
         rgba(22, 33, 62, 0.4) 100%);
     border: 1px solid rgba(var(--st-border-rgb, 233, 69, 96), var(--st-border-opacity, 0.15));
+    border-left: 3px solid var(--st-accent, #e94560);
     border-radius: var(--st-border-radius, 8px);
     display: flex;
     flex-wrap: wrap;
@@ -13194,15 +13195,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 6px 20px;
     font-size: calc(var(--st-font-size, 82) * 0.01 * 1em);
     position: relative;
-    overflow: hidden;
-}
-.dooms-info-banner::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--st-accent, #e94560);
-    border-radius: 3px 0 0 3px;
+    overflow: visible;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .dooms-ip-item {
@@ -13211,6 +13206,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 5px;
     color: var(--st-text-color, #d0d0d0);
     white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
 }
 .dooms-ip-item i {
     color: var(--st-accent, #e94560);
