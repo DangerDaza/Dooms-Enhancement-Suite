@@ -79,8 +79,6 @@ export let extensionSettings = {
         borderRadius: 8,
         padding: 10,
         borderWidth: 3,
-        // Theme integration
-        themeControlled: false, // When true, theme colors drive all scene tracker colors
     },
     panelPosition: 'right', // 'left', 'right', or 'top'
     theme: 'default', // Theme: default, sci-fi, fantasy, cyberpunk, custom

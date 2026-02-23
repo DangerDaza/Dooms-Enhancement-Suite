@@ -7,7 +7,7 @@
             <h3 id="rpg-settings-title">
                 <span class="doom-icon" aria-hidden="true"></span>
                 <span>Settings</span>
-                <span class="rpg-version-badge">v1.5.4</span>
+                <span class="rpg-version-badge">v1.5.3</span>
             </h3>
             <div class="rpg-header-actions">
                 <button id="rpg-close-settings" class="rpg-popup-close" type="button"
@@ -690,88 +690,69 @@
                     </div>
 
                     <div class="rpg-subsection-label">Colors</div>
-
-                    <!-- Theme integration toggle -->
                     <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Theme Controls Scene Tracker</span>
-                        <label class="rpg-toggle">
-                            <input type="checkbox" id="rpg-st-theme-controlled" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
+                        <span class="rpg-setting-label">Background Color</span>
+                        <input type="color" id="rpg-st-bg-color" class="rpg-color-swatch" value="#e94560" />
                     </div>
-
-                    <!-- Message shown when theme-controlled is ON -->
-                    <div id="rpg-st-theme-msg" style="display:none; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--rpg-text, #aaa); font-size: 0.82em; font-style: italic; text-align: center;">
-                        🎨 Controlled by theme — untoggle to edit colors
-                    </div>
-
-                    <!-- Color pickers group (hidden when theme-controlled is ON) -->
-                    <div id="rpg-st-colors-group">
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Background Color</span>
-                            <input type="color" id="rpg-st-bg-color" class="rpg-color-swatch" value="#e94560" />
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Background Opacity</span>
                         </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Background Opacity</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-bg-opacity" class="rpg-range-slider" min="0" max="40" value="8" />
-                                <span id="rpg-st-bg-opacity-value" class="rpg-slider-value">8%</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Border Color</span>
-                            <input type="color" id="rpg-st-border-color" class="rpg-color-swatch" value="#e94560" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Border Opacity</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-border-opacity" class="rpg-range-slider" min="0" max="50" value="15" />
-                                <span id="rpg-st-border-opacity-value" class="rpg-slider-value">15%</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Accent / Icon Color</span>
-                            <input type="color" id="rpg-st-accent-color" class="rpg-color-swatch" value="#e94560" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Field Label Color <small style="opacity:0.6">(Time:, Location:…)</small></span>
-                            <input type="color" id="rpg-st-label-color" class="rpg-color-swatch" value="#888888" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Text Color</span>
-                            <input type="color" id="rpg-st-text-color" class="rpg-color-swatch" value="#d0d0d0" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Character Badge Color</span>
-                            <input type="color" id="rpg-st-badge-color" class="rpg-color-swatch" value="#e94560" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Character Badge Opacity</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-badge-opacity" class="rpg-range-slider" min="0" max="40" value="12" />
-                                <span id="rpg-st-badge-opacity-value" class="rpg-slider-value">12%</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Quest Icon Color</span>
-                            <input type="color" id="rpg-st-quest-color" class="rpg-color-swatch" value="#f0c040" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Quest Text Color</span>
-                            <input type="color" id="rpg-st-quest-text-color" class="rpg-color-swatch" value="#f0c040" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Events Text Color</span>
-                            <input type="color" id="rpg-st-events-color" class="rpg-color-swatch" value="#999999" />
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-bg-opacity" class="rpg-range-slider" min="0" max="40" value="8" />
+                            <span id="rpg-st-bg-opacity-value" class="rpg-slider-value">8%</span>
                         </div>
                     </div>
-
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Border Color</span>
+                        <input type="color" id="rpg-st-border-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Border Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-border-opacity" class="rpg-range-slider" min="0" max="50" value="15" />
+                            <span id="rpg-st-border-opacity-value" class="rpg-slider-value">15%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Accent / Icon Color</span>
+                        <input type="color" id="rpg-st-accent-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Field Label Color <small style="opacity:0.6">(Time:, Location:…)</small></span>
+                        <input type="color" id="rpg-st-label-color" class="rpg-color-swatch" value="#888888" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Text Color</span>
+                        <input type="color" id="rpg-st-text-color" class="rpg-color-swatch" value="#d0d0d0" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Character Badge Color</span>
+                        <input type="color" id="rpg-st-badge-color" class="rpg-color-swatch" value="#e94560" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Character Badge Opacity</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-st-badge-opacity" class="rpg-range-slider" min="0" max="40" value="12" />
+                            <span id="rpg-st-badge-opacity-value" class="rpg-slider-value">12%</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Quest Icon Color</span>
+                        <input type="color" id="rpg-st-quest-color" class="rpg-color-swatch" value="#f0c040" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Quest Text Color</span>
+                        <input type="color" id="rpg-st-quest-text-color" class="rpg-color-swatch" value="#f0c040" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Events Text Color</span>
+                        <input type="color" id="rpg-st-events-color" class="rpg-color-swatch" value="#999999" />
+                    </div>
                     <button id="rpg-st-reset" class="rpg-accordion-action-btn" type="button">
                         <i class="fa-solid fa-rotate-left"></i> Restore Scene Tracker Defaults
                     </button>

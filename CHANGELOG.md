@@ -1,10 +1,5 @@
 # Changelog
 
-## [1.5.4] - 2026-02-23
-
-### Added
-- **"Theme Controls Scene Tracker" toggle** — a new toggle in the Scene Tracker → Colors section lets the active theme's color palette drive all scene tracker colors (background, border, accent, text, labels, badges, quest, and events). When enabled, the color pickers are hidden and replaced with a "Controlled by theme — untoggle to edit" notice. Switching themes while the toggle is on instantly recolors the scene tracker to match. Resetting scene tracker defaults also turns this off.
-
 ## [1.5.3] - 2026-02-23
 
 ### Fixed

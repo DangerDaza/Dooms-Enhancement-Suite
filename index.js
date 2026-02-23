@@ -603,23 +603,6 @@ async function initUI() {
         _saveSt();
     });
 
-    // ── Theme Controls Scene Tracker toggle ──
-    // Helper: update the visibility of the colors group vs the "controlled by theme" message
-    const _updateStThemeControlledUI = (controlled) => {
-        if (controlled) {
-            $('#rpg-st-colors-group').hide();
-            $('#rpg-st-theme-msg').show();
-        } else {
-            $('#rpg-st-colors-group').show();
-            $('#rpg-st-theme-msg').hide();
-        }
-    };
-    $('#rpg-st-theme-controlled').on('change', function() {
-        _stSettings().themeControlled = $(this).prop('checked');
-        _updateStThemeControlledUI(_stSettings().themeControlled);
-        _saveSt();
-    });
-
     // Reset defaults
     $('#rpg-st-reset').on('click', function() {
         const defaults = {
@@ -632,7 +615,6 @@ async function initUI() {
             charBadgeBg: '#e94560', charBadgeOpacity: 12,
             questIconColor: '#f0c040', eventsTextColor: '#999999',
             fontSize: 82, borderRadius: 8, padding: 10, borderWidth: 3,
-            themeControlled: false,
         };
         extensionSettings.sceneTracker = { ...defaults };
         // Update all inputs
@@ -659,8 +641,6 @@ async function initUI() {
         $('#rpg-st-quest-color').val('#f0c040');
         $('#rpg-st-quest-text-color').val('#f0c040');
         $('#rpg-st-events-color').val('#999999');
-        $('#rpg-st-theme-controlled').prop('checked', false);
-        _updateStThemeControlledUI(false);
         _saveSt();
         updateChatSceneHeaders();
     });
@@ -862,11 +842,6 @@ async function initUI() {
         updateChatThoughts();
         // Update badge
         $('#rpg-theme-badge').text(theme);
-        // If "Theme Controls Scene Tracker" is on, re-apply scene tracker colors for the new theme
-        if (extensionSettings.sceneTracker?.themeControlled) {
-            applySceneTrackerSettings();
-            updateChatSceneHeaders();
-        }
     });
     // ── Animations toggle ──
     $('#rpg-toggle-animations').on('change', function() {
@@ -1146,16 +1121,6 @@ async function initUI() {
     $('#rpg-st-quest-color').val(st.questIconColor || '#f0c040');
     $('#rpg-st-quest-text-color').val(st.questTextColor || st.questIconColor || '#f0c040');
     $('#rpg-st-events-color').val(st.eventsTextColor || '#999999');
-    // Theme-controlled toggle + colors group visibility
-    const _stThemeControlled = st.themeControlled === true;
-    $('#rpg-st-theme-controlled').prop('checked', _stThemeControlled);
-    if (_stThemeControlled) {
-        $('#rpg-st-colors-group').hide();
-        $('#rpg-st-theme-msg').show();
-    } else {
-        $('#rpg-st-colors-group').show();
-        $('#rpg-st-theme-msg').hide();
-    }
     applySceneTrackerSettings();
     // Feature pills
     $('#rpg-toggle-html-prompt').prop('checked', extensionSettings.enableHtmlPrompt);
