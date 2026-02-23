@@ -75,16 +75,30 @@ function buildColorToSpeakerMap() {
     return map;
 }
 
-/** Build a set of known character names (lowercase → original) */
+/** Build a set of known character names (lowercase → original).
+ *  Also registers first-name shortcuts for multi-word names so that
+ *  narration like "Sylvaine turned" matches "Sylvaine Moonwhisper". */
 function buildNameLookup() {
     const map = new Map();
+
+    function addName(name) {
+        const lower = name.toLowerCase();
+        if (!map.has(lower)) map.set(lower, name);
+        // Add first name for multi-word names (≥ 3 chars to avoid "Mr", "Le", etc.)
+        const parts = name.split(/\s+/);
+        if (parts.length > 1 && parts[0].length >= 3) {
+            const firstName = parts[0].toLowerCase();
+            if (!map.has(firstName)) map.set(firstName, name);
+        }
+    }
+
     const chars = getCharacterList();
     for (const c of chars) {
-        map.set(c.name.toLowerCase(), c.name);
+        addName(c.name);
     }
     if (extensionSettings.knownCharacters) {
         for (const name of Object.keys(extensionSettings.knownCharacters)) {
-            if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), name);
+            addName(name);
         }
     }
     return map;
@@ -119,7 +133,7 @@ function parseMessageIntoBubbles(mesText) {
     const blocks = getTopLevelBlocks(clone);
 
     for (const block of blocks) {
-        const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors);
+        const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
         allSegments.push(...segs);
     }
 
@@ -176,7 +190,7 @@ function getTopLevelBlocks(container) {
  * Uses a recursive walk so that <font color> tags nested inside <em>, <strong>,
  * <q>, <span>, etc. (from markdown rendering) are still found and extracted.
  */
-function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors) {
+function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, previousSegments) {
     const segments = [];
     const fontElements = block.querySelectorAll('font[color]');
 
@@ -234,7 +248,9 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors) {
             // Extract dialogue segment
             const fontColor = part.node.getAttribute('color');
             const dialogueHtml = part.node.innerHTML;
-            const speaker = detectSpeaker(fontColor, narrationText, block, colorMap, nameLookup, resolvedColors);
+            // Combine previous message segments + segments from this block for cross-block search
+            const allPrior = previousSegments ? [...previousSegments, ...segments] : segments;
+            const speaker = detectSpeaker(fontColor, narrationText, block, colorMap, nameLookup, resolvedColors, allPrior);
 
             // Remember this colour→speaker mapping for later blocks in the same message
             if (speaker && fontColor) {
@@ -264,7 +280,7 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors) {
 /**
  * Detect which character is speaking based on font colour and surrounding text.
  */
-function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLookup, resolvedColors) {
+function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLookup, resolvedColors, previousSegments) {
     // Strategy 1: Direct colour-to-name match from extension settings (most reliable)
     if (fontColor) {
         const normalised = fontColor.toLowerCase();
@@ -295,7 +311,20 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         if (re.test(fullText)) return original;
     }
 
-    // Strategy 5: Only one character is in the scene — it must be them
+    // Strategy 5: Search backwards through previous segments in this message
+    // for the nearest character name mention (handles cross-block references
+    // where the character is named in earlier narration but not in this block)
+    if (previousSegments && previousSegments.length > 0) {
+        for (let i = previousSegments.length - 1; i >= 0; i--) {
+            const segText = stripHtml(previousSegments[i].html).toLowerCase();
+            for (const [lower, original] of nameLookup) {
+                const re = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+                if (re.test(segText)) return original;
+            }
+        }
+    }
+
+    // Strategy 6: Only one character is in the scene — it must be them
     // (falls through to null if multiple characters or none)
     if (nameLookup.size === 1) {
         const [, name] = nameLookup.entries().next().value;
