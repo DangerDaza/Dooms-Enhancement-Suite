@@ -260,10 +260,12 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
         const $extRegenBtn = $('#dooms-regen-ext-btn');
+        const $wandBtn = $('#dooms-regen-wand');
         const updatingText = i18n.getTranslation('template.mainPanel.updating') || 'Updating...';
         $updateBtn.html(`<i class="fa-solid fa-spinner fa-spin"></i> ${updatingText}`).prop('disabled', true);
         $stripRefreshBtn.html('<i class="fa-solid fa-spinner fa-spin"></i>').prop('disabled', true);
         $extRegenBtn.prop('disabled', true).find('i').removeClass('fa-sync').addClass('fa-spinner fa-spin');
+        $wandBtn.addClass('dooms-regen-busy').find('.extensionsMenuExtensionButton').removeClass('fa-sync').addClass('fa-spinner fa-spin');
         // Switch connection profile if configured (separate mode only, not external)
         if (!isExternalMode && extensionSettings.connectionProfile) {
             if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
@@ -396,10 +398,12 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
         const $extRegenBtn = $('#dooms-regen-ext-btn');
+        const $wandBtn = $('#dooms-regen-wand');
         const refreshText = i18n.getTranslation('template.mainPanel.refreshRpgInfo') || 'Refresh RPG Info';
         $updateBtn.html(`<i class="fa-solid fa-sync"></i> ${refreshText}`).prop('disabled', false);
         $stripRefreshBtn.html('<i class="fa-solid fa-sync"></i>').prop('disabled', false);
         $extRegenBtn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-sync');
+        $wandBtn.removeClass('dooms-regen-busy').find('.extensionsMenuExtensionButton').removeClass('fa-spinner fa-spin').addClass('fa-sync');
         // Reset the flag after tracker generation completes
         // This ensures the flag persists through both main generation AND tracker generation
         setLastActionWasSwipe(false);

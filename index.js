@@ -1195,7 +1195,7 @@ async function initUI() {
             }
         });
     }
-    // Wire up regenerate button in the extension dropdown panel
+    // Wire up regenerate button in the extension dropdown panel (settings.html)
     $('#dooms-regen-ext-btn').off('click').on('click', async function() {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
@@ -1209,6 +1209,32 @@ async function initUI() {
             $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-sync');
         }
     });
+    // Add regenerate button to the Extensions wand menu (magic wand popup)
+    if ($('#dooms-regen-wand').length === 0) {
+        const wandBtnHtml = `
+            <div id="dooms-regen-wand" class="list-group-item flex-container flexGap5" title="Regenerate Tracker — makes a standalone API call to refresh tracker data on demand">
+                <div class="fa-solid fa-sync extensionsMenuExtensionButton"></div>
+                Regenerate Tracker
+            </div>
+        `;
+        $('#extensionsMenu').append(wandBtnHtml);
+        $(document).on('click', '#dooms-regen-wand', async function() {
+            const $btn = $(this);
+            const $icon = $btn.find('.extensionsMenuExtensionButton');
+            if ($btn.hasClass('dooms-regen-busy')) return;
+            $btn.addClass('dooms-regen-busy');
+            $icon.removeClass('fa-sync').addClass('fa-spinner fa-spin');
+            try {
+                await updateRPGData(renderInfoBox, renderThoughts);
+                updateChatSceneHeaders();
+                updatePortraitBar();
+                updateChatThoughts();
+            } finally {
+                $icon.removeClass('fa-spinner fa-spin').addClass('fa-sync');
+                $btn.removeClass('dooms-regen-busy');
+            }
+        });
+    }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
     try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch(e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
