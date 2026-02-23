@@ -17,21 +17,23 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 let _lastSceneDataJSON = null;
 
 /**
- * Theme color palettes — mirrors the CSS `[data-theme="..."]` values.
- * Each entry maps: bg, accent, text, highlight (accent color), border.
- * Used when sceneTracker.themeControlled is true to derive scene tracker colors
- * from the active theme instead of the manual color pickers.
+ * Theme color palettes — exact values from the CSS popup theme blocks
+ * (`#rpg-settings-popup[data-theme="..."] .rpg-settings-popup-content`).
+ * Used when sceneTracker.themeControlled is true so the scene tracker
+ * matches the visual style of the settings popup for the active theme.
+ *
+ * Fields: bg, accent, text, highlight, border
  */
 const THEME_COLORS = {
-    'sci-fi':       { bg: '#0a0e27', accent: '#1a1f3a', text: '#00fff9', highlight: '#ff006e', border: '#8b00ff' },
-    'fantasy':      { bg: '#2b1810', accent: '#3d2414', text: '#f4e8d0', highlight: '#d4af37', border: '#8b6914' },
-    'cyberpunk':    { bg: '#0d0221', accent: '#1a0b2e', text: '#00ff9f', highlight: '#ff00ff', border: '#ff00ff' },
-    'midnight-rose':{ bg: '#1a1025', accent: '#2a1838', text: '#e8d5e8', highlight: '#e8729a', border: '#9b4dca' },
-    'emerald-grove':{ bg: '#0d1f12', accent: '#1a3320', text: '#d4e8c8', highlight: '#c8a240', border: '#4a8c3f' },
-    'arctic':       { bg: '#0c1929', accent: '#132640', text: '#dce8f4', highlight: '#64b5f6', border: '#4a8db7' },
-    'volcanic':     { bg: '#1a1210', accent: '#2b1e18', text: '#f0dcc8', highlight: '#e8651a', border: '#b84a0f' },
-    'dracula':      { bg: '#282a36', accent: '#343746', text: '#f8f8f2', highlight: '#ff5555', border: '#6272a4' },
-    'ocean-depths': { bg: '#0a1628', accent: '#0f2038', text: '#b8d8e8', highlight: '#00e5c8', border: '#1a6b8a' },
+    'sci-fi':        { bg: '#0a0e27', accent: '#1a1f3a', text: '#00ffff', highlight: '#ff00ff', border: '#00ffff' },
+    'fantasy':       { bg: '#2b1810', accent: '#3d2516', text: '#f4e4c1', highlight: '#d4af37', border: '#8b6914' },
+    'cyberpunk':     { bg: '#0d0221', accent: '#1a0b2e', text: '#00ff9f', highlight: '#ff00ff', border: '#ff00ff' },
+    'midnight-rose': { bg: '#1a1025', accent: '#2a1838', text: '#e8d5e8', highlight: '#e8729a', border: '#9b4dca' },
+    'emerald-grove': { bg: '#0d1f12', accent: '#1a3320', text: '#d4e8c8', highlight: '#c8a240', border: '#4a8c3f' },
+    'arctic':        { bg: '#0c1929', accent: '#132640', text: '#dce8f4', highlight: '#64b5f6', border: '#4a8db7' },
+    'volcanic':      { bg: '#1a1210', accent: '#2b1e18', text: '#f0dcc8', highlight: '#e8651a', border: '#b84a0f' },
+    'dracula':       { bg: '#282a36', accent: '#343746', text: '#f8f8f2', highlight: '#ff5555', border: '#6272a4' },
+    'ocean-depths':  { bg: '#0a1628', accent: '#0f2038', text: '#b8d8e8', highlight: '#00e5c8', border: '#1a6b8a' },
 };
 
 /**
@@ -66,14 +68,14 @@ function buildStyleVars() {
         const themeName = extensionSettings.theme || 'default';
         const palette = THEME_COLORS[themeName] || null;
         if (palette) {
-            bgColor        = palette.bg;
-            borderColor    = palette.border;
-            accentColor    = palette.highlight;
-            badgeColor     = palette.highlight;
-            labelColor     = palette.accent;   // accent (slightly lighter than bg) works well for labels
-            textColor      = palette.text;
-            questIconColor = palette.highlight;
-            questTextColor = palette.highlight;
+            bgColor         = palette.bg;
+            borderColor     = palette.border;
+            accentColor     = palette.highlight;
+            badgeColor      = palette.highlight;
+            labelColor      = palette.border;    // border color makes a good muted label (visible but not dominant)
+            textColor       = palette.text;
+            questIconColor  = palette.highlight;
+            questTextColor  = palette.text;      // quest text matches body text
             eventsTextColor = palette.text;
         } else {
             // 'default' or 'custom' — fall back to manual values
