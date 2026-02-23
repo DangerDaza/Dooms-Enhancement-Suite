@@ -86,6 +86,18 @@ export function applyTheme() {
             $thoughtPanel.attr('data-theme', theme);
         }
     }
+    // Also stamp the settings and tracker editor popups so theme CSS takes effect
+    // immediately on load, not only when the user opens the popup for the first time.
+    const $settingsPopup = $('#rpg-settings-popup');
+    if ($settingsPopup.length) {
+        if (theme === 'default') { $settingsPopup.removeAttr('data-theme'); }
+        else { $settingsPopup.attr('data-theme', theme); }
+    }
+    const $trackerEditorPopup = $('#rpg-tracker-editor-popup');
+    if ($trackerEditorPopup.length) {
+        if (theme === 'default') { $trackerEditorPopup.removeAttr('data-theme'); }
+        else { $trackerEditorPopup.attr('data-theme', theme); }
+    }
 }
 /**
  * Applies custom colors when custom theme is selected.
