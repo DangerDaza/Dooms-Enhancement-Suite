@@ -383,13 +383,7 @@ function renderDiscordBubbles(segments) {
 function renderDiscordUserBubble(html) {
     return `<div class="dooms-bubbles dooms-bubbles-discord">
         <div class="dooms-bubble dooms-bubble-user dooms-bubble-new-speaker">
-            <div class="dooms-bubble-avatar dooms-bubble-av-user">
-                <div class="dooms-bubble-avatar-letter">\u{1F464}</div>
-            </div>
             <div class="dooms-bubble-content">
-                <div class="dooms-bubble-header">
-                    <span class="dooms-bubble-author dooms-bubble-author-user">You</span>
-                </div>
                 <div class="dooms-bubble-text">${html}</div>
             </div>
         </div>
