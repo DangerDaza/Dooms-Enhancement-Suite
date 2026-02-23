@@ -1444,6 +1444,29 @@ jQuery(async () => {
                 // contents, destroying any previously appended thought elements)
                 setTimeout(() => updateChatThoughts(), 100);
             });
+            // MESSAGE_SWIPED fires when the user navigates between swipe variants.
+            // SillyTavern replaces .mes_text with the new swipe content, destroying
+            // any bubble DOM we previously rendered.  CHARACTER_MESSAGE_RENDERED does
+            // NOT fire for existing swipes, so we must re-apply bubbles here.
+            // We wait 800ms because colored-dialogues recolors on swipe with a 600ms
+            // debounce, and we need the <font color> tags in place before parsing.
+            eventSource.on(event_types.MESSAGE_SWIPED, (messageIndex) => {
+                if (!extensionSettings.enabled) return;
+                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
+
+                const messageElement = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);
+                if (messageElement) {
+                    const mesText = messageElement.querySelector('.mes_text');
+                    if (mesText) {
+                        // Clear stale bubble data — the swipe has new content
+                        mesText.removeAttribute('data-dooms-original-html');
+                        mesText.removeAttribute('data-dooms-bubbles-applied');
+                        mesText.removeAttribute('data-dooms-bubbles-style');
+                    }
+                    // Delay to let colored-dialogues finish recoloring (600ms debounce + processing)
+                    setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
+                }
+            });
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
             throw error; // This is critical - can't continue without events
