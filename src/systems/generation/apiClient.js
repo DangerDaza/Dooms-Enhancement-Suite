@@ -259,9 +259,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         // Update button to show "Updating..." state
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
+        const $sendFormBtn = $('#dooms-regen-sendform');
         const updatingText = i18n.getTranslation('template.mainPanel.updating') || 'Updating...';
         $updateBtn.html(`<i class="fa-solid fa-spinner fa-spin"></i> ${updatingText}`).prop('disabled', true);
         $stripRefreshBtn.html('<i class="fa-solid fa-spinner fa-spin"></i>').prop('disabled', true);
+        $sendFormBtn.addClass('dooms-regen-spinning').prop('disabled', true);
         // Switch connection profile if configured (separate mode only, not external)
         if (!isExternalMode && extensionSettings.connectionProfile) {
             if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
@@ -393,9 +395,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         // Restore button to original state
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
+        const $sendFormBtn = $('#dooms-regen-sendform');
         const refreshText = i18n.getTranslation('template.mainPanel.refreshRpgInfo') || 'Refresh RPG Info';
         $updateBtn.html(`<i class="fa-solid fa-sync"></i> ${refreshText}`).prop('disabled', false);
         $stripRefreshBtn.html('<i class="fa-solid fa-sync"></i>').prop('disabled', false);
+        $sendFormBtn.removeClass('dooms-regen-spinning').prop('disabled', false);
         // Reset the flag after tracker generation completes
         // This ensures the flag persists through both main generation AND tracker generation
         setLastActionWasSwipe(false);
