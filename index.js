@@ -279,9 +279,17 @@ async function initUI() {
         $section.toggleClass('rpg-accordion-open');
     });
     // ── Generation settings ──
-    $('#rpg-toggle-auto-update').on('change', function() {
-        extensionSettings.autoUpdate = $(this).prop('checked');
+    $('#rpg-auto-update-mode').on('change', function() {
+        extensionSettings.autoUpdateMode = $(this).val();
         saveSettings();
+        // Show/hide regenerate button based on mode
+        $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
+    });
+    $('#rpg-regenerate-tracker').on('click', async function() {
+        await updateRPGData(renderInfoBox, renderThoughts);
+        updateChatSceneHeaders();
+        updatePortraitBar();
+        updateChatThoughts();
     });
     $('#rpg-update-depth').on('change', function() {
         const value = $(this).val();
@@ -999,7 +1007,8 @@ async function initUI() {
     });
     // ── Initialize UI state ──
     // Generation
-    $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
+    $('#rpg-auto-update-mode').val(extensionSettings.autoUpdateMode || 'auto');
+    $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);

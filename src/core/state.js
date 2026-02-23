@@ -6,9 +6,10 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 6, // Version number for settings migrations (v6 = current, safe defaults for fresh installs)
+    settingsVersion: 7, // Version number for settings migrations (v7 = current, autoUpdateMode migration)
     enabled: true,
-    autoUpdate: false,
+    autoUpdate: false, // DEPRECATED — kept for migration. Use autoUpdateMode instead.
+    autoUpdateMode: 'auto', // 'auto' | 'manual' | 'off'
     updateDepth: 4, // How many messages to include in the context
     generationMode: 'together', // Always 'together' — separate/external modes removed
     connectionProfile: '', // Connection Manager profile name for tracker generation (empty = use current)

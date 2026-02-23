@@ -127,6 +127,14 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 6;
                 settingsChanged = true;
             }
+            // Migration to version 7: Convert autoUpdate boolean to autoUpdateMode string
+            if (currentVersion < 7) {
+                if (extensionSettings.autoUpdateMode === undefined) {
+                    extensionSettings.autoUpdateMode = extensionSettings.autoUpdate ? 'auto' : 'manual';
+                }
+                extensionSettings.settingsVersion = 7;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {

@@ -84,7 +84,7 @@ export function onMessageSent() {
     // The RPG data comes embedded in the main response
     // FAB spinning is handled by apiClient.js for separate/external modes when updateRPGData() is called
     // For separate mode with auto-update disabled, commit displayed tracker
-    if (extensionSettings.generationMode === 'separate' && !extensionSettings.autoUpdate) {
+    if (extensionSettings.generationMode === 'separate' && extensionSettings.autoUpdateMode !== 'auto') {
         if (lastGeneratedData.quests || lastGeneratedData.infoBox || lastGeneratedData.characterThoughts) {
             committedTrackerData.quests = lastGeneratedData.quests;
             committedTrackerData.infoBox = lastGeneratedData.infoBox;
@@ -191,7 +191,7 @@ export async function onMessageReceived(data) {
         // The main roleplay message doesn't contain tracker data in these modes
         // Trigger auto-update if enabled (for both separate and external modes)
         // Only trigger if this is a newly generated message, not loading chat history
-        if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
+        if (extensionSettings.autoUpdateMode === 'auto' && isAwaitingNewMessage) {
             setTimeout(async () => {
                 await updateRPGData(renderInfoBox, renderThoughts);
                 updateChatSceneHeaders();
