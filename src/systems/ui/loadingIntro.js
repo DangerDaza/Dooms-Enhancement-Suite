@@ -23,10 +23,12 @@ const CREDIT_TEXT = 'by Doom';
  * Should be called very early during extension init (before initUI).
  * Returns a promise that resolves when the intro finishes or is skipped.
  *
- * Key challenge: SillyTavern's spinner lives inside a native <dialog> element
- * which occupies the browser's "top layer" — no z-index can beat it.
- * Solution: We hide all open <dialog> elements while the intro plays,
- * and append our overlay directly to <body> as a fixed fullscreen layer.
+ * Note: SillyTavern's spinner lives inside a native <dialog> in the browser's
+ * top layer, which cannot be beaten by z-index. Rather than hiding ST's dialogs
+ * (which breaks ST's own loading flow), we simply let the intro overlay sit below
+ * the spinner and use a high z-index to cover the rest of the page. The spinner
+ * may briefly show through on some browsers, but this is far preferable to
+ * blocking ST's init sequence.
  */
 export async function playLoadingIntro() {
     const mode = extensionSettings.loadingIntroMode || 'off';
@@ -40,19 +42,9 @@ export async function playLoadingIntro() {
     const preloader = document.getElementById('preloader');
     if (!preloader) return;
 
-    // ── Hide SillyTavern's spinner ──
-    // The spinner sits inside a Popup <dialog> in the browser's top layer,
-    // which renders above everything regardless of z-index. Hide all open
-    // dialogs so our overlay is actually visible.
-    // We only hide them — we do NOT restore them afterwards, because ST manages
-    // its own dialog lifecycle. Restoring already-closed dialogs breaks ST's
-    // loading flow. ST will show/close its own dialogs as needed once the intro ends.
-    document.querySelectorAll('dialog[open]').forEach(d => d.style.visibility = 'hidden');
-
-    // Also hide the preloader's backdrop blur so our background is clean
-    preloader.style.visibility = 'hidden';
-
     // ── Build our fullscreen overlay on <body> ──
+    // We do NOT touch any <dialog> elements — hiding them disrupts ST's own
+    // loading event flow and prevents features from initialising.
     const overlay = document.createElement('div');
     overlay.id = 'dooms-loading-intro';
     overlay.className = `dooms-intro-${mode}`;
@@ -73,14 +65,6 @@ export async function playLoadingIntro() {
     overlay.style.opacity = '0';
     await sleep(400);
     overlay.remove();
-
-    // Restore preloader only if it still exists in the DOM (ST may have removed it already)
-    // Do NOT restore dialogs — ST manages those itself; restoring them re-shows
-    // already-dismissed loading spinners and breaks ST's post-load state.
-    const stillHere = document.getElementById('preloader');
-    if (stillHere) stillHere.style.visibility = '';
-    // Un-hide any dialogs that are still open (ones ST hasn't closed yet)
-    document.querySelectorAll('dialog[open]').forEach(d => d.style.visibility = '');
 }
 
 // ─────────────────────────────────────────────

@@ -529,6 +529,20 @@ async function initUI() {
     };
     const _saveSt = () => { saveSettings(); applySceneTrackerSettings(); updateChatSceneHeaders(); };
 
+    /**
+     * Shows/hides the color pickers and theme-controlled notice in the
+     * Scene Tracker → Colors section based on the themeControlled toggle state.
+     */
+    function _updateStThemeControlledUI(controlled) {
+        if (controlled) {
+            $('#rpg-st-colors-group').hide();
+            $('#rpg-st-theme-msg').show();
+        } else {
+            $('#rpg-st-colors-group').show();
+            $('#rpg-st-theme-msg').hide();
+        }
+    }
+
     // Visibility toggles
     $('#rpg-st-show-time').on('change', function() { _stSettings().showTime = $(this).prop('checked'); _saveSt(); });
     $('#rpg-st-show-date').on('change', function() { _stSettings().showDate = $(this).prop('checked'); _saveSt(); });
@@ -615,8 +629,11 @@ async function initUI() {
             charBadgeBg: '#e94560', charBadgeOpacity: 12,
             questIconColor: '#f0c040', eventsTextColor: '#999999',
             fontSize: 82, borderRadius: 8, padding: 10, borderWidth: 3,
+            themeControlled: false,
         };
         extensionSettings.sceneTracker = { ...defaults };
+        $('#rpg-st-theme-controlled').prop('checked', false);
+        _updateStThemeControlledUI(false);
         // Update all inputs
         $('#rpg-st-show-time').prop('checked', true);
         $('#rpg-st-show-date').prop('checked', true);
@@ -842,12 +859,26 @@ async function initUI() {
         updateChatThoughts();
         // Update badge
         $('#rpg-theme-badge').text(theme);
+        // Re-render scene tracker if theme-controlled colors are active
+        if (extensionSettings.sceneTracker?.themeControlled) {
+            applySceneTrackerSettings();
+            updateChatSceneHeaders();
+        }
     });
     // ── Animations toggle ──
     $('#rpg-toggle-animations').on('change', function() {
         extensionSettings.enableAnimations = $(this).prop('checked');
         saveSettings();
         toggleAnimations();
+    });
+    // ── Theme Controls Scene Tracker toggle ──
+    $('#rpg-st-theme-controlled').on('change', function() {
+        const controlled = $(this).prop('checked');
+        extensionSettings.sceneTracker.themeControlled = controlled;
+        saveSettings();
+        _updateStThemeControlledUI(controlled);
+        applySceneTrackerSettings();
+        updateChatSceneHeaders();
     });
     // ── Stat bar colors ──
     $('#rpg-stat-bar-color-low').on('change', function() {
@@ -1131,6 +1162,10 @@ async function initUI() {
     $('#rpg-theme-select').val(extensionSettings.theme);
     $('#rpg-theme-badge').text(extensionSettings.theme || 'default');
     $('#rpg-toggle-animations').prop('checked', extensionSettings.enableAnimations ?? true);
+    // Theme Controls Scene Tracker
+    const _tcst = extensionSettings.sceneTracker?.themeControlled ?? false;
+    $('#rpg-st-theme-controlled').prop('checked', _tcst);
+    _updateStThemeControlledUI(_tcst);
     // Custom colors
     $('#rpg-custom-bg').val(extensionSettings.customColors.bg);
     $('#rpg-custom-bg-opacity').val(extensionSettings.customColors.bgOpacity ?? 100);

@@ -79,6 +79,8 @@ export let extensionSettings = {
         borderRadius: 8,
         padding: 10,
         borderWidth: 3,
+        // Theme integration
+        themeControlled: false,
     },
     panelPosition: 'right', // 'left', 'right', or 'top'
     theme: 'default', // Theme: default, sci-fi, fantasy, cyberpunk, custom

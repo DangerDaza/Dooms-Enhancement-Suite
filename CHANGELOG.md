@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.5] - 2026-02-23
+
+### Fixed
+- **Loading intro blocking extension features** — the loading intro was hiding all open `<dialog>` elements so the overlay would be visible over ST's spinner. Because ST's spinner lives in the browser's native top layer (which cannot be overridden by z-index), this was the wrong approach: hiding the dialogs disrupted ST's own loading event flow, which prevented chat bubbles, scene tracker, and thoughts from initializing. The dialog-hiding logic has been removed entirely. The overlay now simply layers over the page content without touching ST's dialogs; the ST spinner may briefly appear through the overlay on some browsers, but all features load correctly.
+- **"Theme Controls Scene Tracker" toggle not persisting after refresh** — the toggle had no event handler in `index.js` to save the state, no init code to restore it from settings, and `themeControlled` was missing from the `sceneTracker` defaults in `state.js`. All three are now in place: the default is `false`, the toggle is read and applied on settings open, and changes are saved and immediately reflected in the scene tracker.
+
 ## [1.5.3] - 2026-02-23
 
 ### Fixed
