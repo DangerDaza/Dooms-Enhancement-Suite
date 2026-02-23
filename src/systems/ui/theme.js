@@ -36,12 +36,14 @@ export function getStatBarColors() {
  * Applies the selected theme to the panel.
  */
 export function applyTheme() {
-    if (!$panelContainer) return;
+    // Find the panel element — use cached ref if available, otherwise query DOM
+    const $panel = $panelContainer || $('.rpg-panel');
+    if (!$panel || !$panel.length) return;
     const theme = extensionSettings.theme;
     // Remove all theme attributes first
-    $panelContainer.removeAttr('data-theme');
+    $panel.removeAttr('data-theme');
     // Clear any inline CSS variable overrides
-    $panelContainer.css({
+    $panel.css({
         '--rpg-bg': '',
         '--rpg-accent': '',
         '--rpg-text': '',
@@ -55,7 +57,7 @@ export function applyTheme() {
     } else if (theme !== 'default') {
         // For non-default themes, set the data-theme attribute
         // which will trigger the CSS theme rules
-        $panelContainer.attr('data-theme', theme);
+        $panel.attr('data-theme', theme);
     }
     // For 'default', we do nothing - it will use the CSS variables from .rpg-panel class
     // which fall back to SillyTavern's theme variables
@@ -89,7 +91,8 @@ export function applyTheme() {
  * Applies custom colors when custom theme is selected.
  */
 export function applyCustomTheme() {
-    if (!$panelContainer) return;
+    const $panel = $panelContainer || $('.rpg-panel');
+    if (!$panel || !$panel.length) return;
     const colors = extensionSettings.customColors;
     // Convert hex colors with opacity to rgba
     const bgColor = hexToRgba(colors.bg, colors.bgOpacity ?? 100);
@@ -99,7 +102,7 @@ export function applyCustomTheme() {
     // Create shadow with 50% opacity of highlight color
     const shadowColor = hexToRgba(colors.highlight, (colors.highlightOpacity ?? 100) * 0.5);
     // Apply custom CSS variables as inline styles to main panel
-    $panelContainer.css({
+    $panel.css({
         '--rpg-bg': bgColor,
         '--rpg-accent': accentColor,
         '--rpg-text': textColor,
@@ -140,11 +143,12 @@ export function toggleCustomColors() {
  * Toggles animations on/off by adding/removing a class to the panel.
  */
 export function toggleAnimations() {
-    if (!$panelContainer) return;
+    const $panel = $panelContainer || $('.rpg-panel');
+    if (!$panel || !$panel.length) return;
     if (extensionSettings.enableAnimations) {
-        $panelContainer.addClass('rpg-animations-enabled');
+        $panel.addClass('rpg-animations-enabled');
     } else {
-        $panelContainer.removeClass('rpg-animations-enabled');
+        $panel.removeClass('rpg-animations-enabled');
     }
 }
 /**
