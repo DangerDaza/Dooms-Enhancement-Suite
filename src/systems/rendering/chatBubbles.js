@@ -102,6 +102,10 @@ function buildNameLookup() {
 function parseMessageIntoBubbles(mesText) {
     const colorMap = buildColorToSpeakerMap();
     const nameLookup = buildNameLookup();
+    // Track colours resolved during this message so repeated dialogue by the
+    // same character is correctly attributed even when narration in between
+    // doesn't mention the character's name.
+    const resolvedColors = new Map();
 
     // Clone so we can safely manipulate
     const clone = mesText.cloneNode(true);
@@ -115,7 +119,7 @@ function parseMessageIntoBubbles(mesText) {
     const blocks = getTopLevelBlocks(clone);
 
     for (const block of blocks) {
-        const segs = parseBlockIntoSegments(block, colorMap, nameLookup);
+        const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors);
         allSegments.push(...segs);
     }
 
@@ -172,7 +176,7 @@ function getTopLevelBlocks(container) {
  * Uses a recursive walk so that <font color> tags nested inside <em>, <strong>,
  * <q>, <span>, etc. (from markdown rendering) are still found and extracted.
  */
-function parseBlockIntoSegments(block, colorMap, nameLookup) {
+function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors) {
     const segments = [];
     const fontElements = block.querySelectorAll('font[color]');
 
@@ -230,7 +234,12 @@ function parseBlockIntoSegments(block, colorMap, nameLookup) {
             // Extract dialogue segment
             const fontColor = part.node.getAttribute('color');
             const dialogueHtml = part.node.innerHTML;
-            const speaker = detectSpeaker(fontColor, narrationText, block, colorMap, nameLookup);
+            const speaker = detectSpeaker(fontColor, narrationText, block, colorMap, nameLookup, resolvedColors);
+
+            // Remember this colour→speaker mapping for later blocks in the same message
+            if (speaker && fontColor) {
+                resolvedColors.set(fontColor.toLowerCase(), speaker);
+            }
 
             segments.push({
                 type: 'dialogue',
@@ -255,14 +264,21 @@ function parseBlockIntoSegments(block, colorMap, nameLookup) {
 /**
  * Detect which character is speaking based on font colour and surrounding text.
  */
-function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLookup) {
-    // Strategy 1: Direct colour-to-name match (most reliable)
+function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLookup, resolvedColors) {
+    // Strategy 1: Direct colour-to-name match from extension settings (most reliable)
     if (fontColor) {
         const normalised = fontColor.toLowerCase();
         if (colorMap.has(normalised)) return colorMap.get(normalised);
     }
 
-    // Strategy 2: Search for a known character name in the preceding narration text
+    // Strategy 2: Colour was already resolved earlier in this message
+    // (same character speaking again, narration in between doesn't repeat their name)
+    if (fontColor && resolvedColors) {
+        const normalised = fontColor.toLowerCase();
+        if (resolvedColors.has(normalised)) return resolvedColors.get(normalised);
+    }
+
+    // Strategy 3: Search for a known character name in the preceding narration text
     const searchText = (precedingText || '').toLowerCase();
     if (searchText) {
         for (const [lower, original] of nameLookup) {
@@ -272,11 +288,18 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         }
     }
 
-    // Strategy 3: Search the entire block's text for a nearby name
+    // Strategy 4: Search the entire block's text for a nearby name
     const fullText = (blockElement.textContent || '').toLowerCase();
     for (const [lower, original] of nameLookup) {
         const re = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
         if (re.test(fullText)) return original;
+    }
+
+    // Strategy 5: Only one character is in the scene — it must be them
+    // (falls through to null if multiple characters or none)
+    if (nameLookup.size === 1) {
+        const [, name] = nameLookup.entries().next().value;
+        return name;
     }
 
     return null; // Unknown speaker
