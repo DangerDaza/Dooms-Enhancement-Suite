@@ -251,9 +251,6 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     if (!extensionSettings.enabled) {
         return;
     }
-    if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
-        return;
-    }
     const isExternalMode = extensionSettings.generationMode === 'external';
     let originalProfileName = null;
     let profileSwitched = false;
@@ -289,7 +286,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             // External mode: Use external OpenAI-compatible API directly
             response = await generateWithExternalAPI(prompt);
         } else {
-            // Separate mode: Use SillyTavern's generateRaw (with extended thinking fallback)
+            // Use SillyTavern's generateRaw (with extended thinking fallback)
             response = await safeGenerateRaw({
                 prompt: prompt,
                 quietToLoud: false

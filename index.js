@@ -286,10 +286,16 @@ async function initUI() {
         $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
     });
     $('#rpg-regenerate-tracker').on('click', async function() {
-        await updateRPGData(renderInfoBox, renderThoughts);
-        updateChatSceneHeaders();
-        updatePortraitBar();
-        updateChatThoughts();
+        const $btn = $(this);
+        $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Regenerating...').prop('disabled', true);
+        try {
+            await updateRPGData(renderInfoBox, renderThoughts);
+            updateChatSceneHeaders();
+            updatePortraitBar();
+            updateChatThoughts();
+        } finally {
+            $btn.html('<i class="fa-solid fa-sync"></i> Regenerate Tracker').prop('disabled', false);
+        }
     });
     $('#rpg-update-depth').on('change', function() {
         const value = $(this).val();
