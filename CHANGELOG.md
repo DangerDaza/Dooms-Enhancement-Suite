@@ -10,6 +10,8 @@
 - **Banner, HUD, and Ticker** layout modes for the Scene Tracker — selectable from the existing Layout Mode dropdown alongside Grid, Stacked, and Compact.
 
 ### Fixed
+- **Chat bubbles not appearing on swipes** — bubble formatting now correctly reapplies when swiping between message variants or generating new swipes. Previously, stale data attributes caused the renderer to skip reapplication, and a timing issue meant bubbles were applied before colored-dialogues finished adding font color tags.
+- **Connection profile not restoring after tracker generation** — when using a separate API connection profile for tracker generation, the profile now reliably switches back to the original after generation completes. Also shows a warning toast if restoration fails.
 - **Wrong / "Unknown" speaker in chat bubbles** — speaker detection now registers first-name shortcuts for multi-word character names (e.g. "Sylvaine" matches "Sylvaine Moonwhisper") and searches backwards through earlier segments when the character name appears in a different block than the dialogue. Also remembers resolved color→speaker mappings within the same message so repeated dialogue by the same character is correctly attributed. Fixed an additional bug where character names mentioned *inside* dialogue (e.g. referencing another character) could be falsely detected as the speaker, and where Map iteration order caused the first-matched name to win instead of the name closest to the dialogue.
 - **Settings FAB button hidden when portrait bar is not visible** — the "D" settings button is now always accessible, even when the portrait bar is turned off.
 - **Context menu going off-screen on portrait panel** — right-click menu now clamps to the viewport so it never clips outside the window.
