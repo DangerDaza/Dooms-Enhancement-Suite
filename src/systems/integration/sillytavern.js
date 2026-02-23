@@ -63,6 +63,59 @@ export function commitTrackerData() {
     }
 }
 /**
+ * Refreshes the tracker display from data already stored in the last AI message.
+ * No API call is made — this simply reads the parsed tracker data that was
+ * saved when the message was originally received and re-renders the UI.
+ * Used by the Regenerate Tracker button so users don't incur extra API costs.
+ */
+export function refreshTrackerFromStoredData() {
+    const context = getContext();
+    const chatData = context.chat;
+    if (!chatData || chatData.length === 0) return;
+
+    // Find the last assistant message
+    let lastAssistant = null;
+    for (let i = chatData.length - 1; i >= 0; i--) {
+        if (!chatData[i].is_user) {
+            lastAssistant = chatData[i];
+            break;
+        }
+    }
+    if (!lastAssistant) return;
+
+    // Read stored tracker data for the current swipe
+    const swipeId = lastAssistant.swipe_id || 0;
+    const swipeData = lastAssistant.extra?.dooms_tracker_swipes?.[swipeId];
+    if (!swipeData) return;
+
+    // Update display data
+    if (swipeData.quests) {
+        lastGeneratedData.quests = swipeData.quests;
+        parseQuests(swipeData.quests);
+    }
+    if (swipeData.infoBox) {
+        lastGeneratedData.infoBox = swipeData.infoBox;
+    }
+    if (swipeData.characterThoughts) {
+        lastGeneratedData.characterThoughts = swipeData.characterThoughts;
+    }
+
+    // Render everything
+    if (swipeData.infoBox) renderInfoBox();
+    if (swipeData.characterThoughts) renderThoughts();
+    if (swipeData.quests) renderQuests();
+
+    const hadAnyData = swipeData.infoBox || swipeData.characterThoughts || swipeData.quests;
+    if (hadAnyData) {
+        updateChatSceneHeaders();
+        updatePortraitBar();
+    }
+    if (swipeData.characterThoughts) {
+        setTimeout(() => updateChatThoughts(), 100);
+    }
+}
+
+/**
  * Event handler for when the user sends a message.
  * Sets the flag to indicate this is NOT a swipe.
  * In together mode, commits displayed data (only for real messages, not streaming placeholders).

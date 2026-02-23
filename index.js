@@ -120,7 +120,8 @@ import {
     updatePersonaAvatar,
     clearExtensionPrompts,
     onGenerationEnded,
-    initHistoryInjection
+    initHistoryInjection,
+    refreshTrackerFromStoredData
 } from './src/systems/integration/sillytavern.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
@@ -285,17 +286,9 @@ async function initUI() {
         // Show/hide regenerate button based on mode
         $('#rpg-regenerate-row').toggle(extensionSettings.autoUpdateMode !== 'off');
     });
-    $('#rpg-regenerate-tracker').on('click', async function() {
-        const $btn = $(this);
-        $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Regenerating...').prop('disabled', true);
-        try {
-            await updateRPGData(renderInfoBox, renderThoughts);
-            updateChatSceneHeaders();
-            updatePortraitBar();
-            updateChatThoughts();
-        } finally {
-            $btn.html('<i class="fa-solid fa-sync"></i> Regenerate Tracker').prop('disabled', false);
-        }
+    $('#rpg-regenerate-tracker').on('click', function() {
+        refreshTrackerFromStoredData();
+        toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
     });
     $('#rpg-update-depth').on('change', function() {
         const value = $(this).val();
@@ -1196,43 +1189,22 @@ async function initUI() {
         });
     }
     // Wire up regenerate button in the extension dropdown panel (settings.html)
-    $('#dooms-regen-ext-btn').off('click').on('click', async function() {
-        const $btn = $(this);
-        if ($btn.prop('disabled')) return;
-        $btn.prop('disabled', true).find('i').removeClass('fa-sync').addClass('fa-spinner fa-spin');
-        try {
-            await updateRPGData(renderInfoBox, renderThoughts);
-            updateChatSceneHeaders();
-            updatePortraitBar();
-            updateChatThoughts();
-        } finally {
-            $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-sync');
-        }
+    $('#dooms-regen-ext-btn').off('click').on('click', function() {
+        refreshTrackerFromStoredData();
+        toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
     });
     // Add regenerate button to the Extensions wand menu (magic wand popup)
     if ($('#dooms-regen-wand').length === 0) {
         const wandBtnHtml = `
-            <div id="dooms-regen-wand" class="list-group-item flex-container flexGap5" title="Regenerate Tracker — makes a standalone API call to refresh tracker data on demand">
+            <div id="dooms-regen-wand" class="list-group-item flex-container flexGap5" title="Refresh Tracker — re-reads tracker data from the last AI message and updates the display">
                 <div class="fa-solid fa-sync extensionsMenuExtensionButton"></div>
                 Regenerate Tracker
             </div>
         `;
         $('#extensionsMenu').append(wandBtnHtml);
-        $(document).on('click', '#dooms-regen-wand', async function() {
-            const $btn = $(this);
-            const $icon = $btn.find('.extensionsMenuExtensionButton');
-            if ($btn.hasClass('dooms-regen-busy')) return;
-            $btn.addClass('dooms-regen-busy');
-            $icon.removeClass('fa-sync').addClass('fa-spinner fa-spin');
-            try {
-                await updateRPGData(renderInfoBox, renderThoughts);
-                updateChatSceneHeaders();
-                updatePortraitBar();
-                updateChatThoughts();
-            } finally {
-                $icon.removeClass('fa-spinner fa-spin').addClass('fa-sync');
-                $btn.removeClass('dooms-regen-busy');
-            }
+        $(document).on('click', '#dooms-regen-wand', function() {
+            refreshTrackerFromStoredData();
+            toastr.success('Tracker refreshed from last message', "Doom's Tracker", { timeOut: 2000 });
         });
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
