@@ -3,9 +3,17 @@
 ## [Unreleased]
 
 ### Added
+- **Hover TTS button on chat bubbles** — a megaphone icon appears when hovering over any bubble segment (narrator, character dialogue, etc.) in Discord-style bubble chat. Clicking it reads from that point through the end of the message via SillyTavern's TTS.
+- **TTS sentence highlighting works with bubble TTS** — the highlight system now correctly finds and highlights sentences when TTS is triggered from a bubble, including proper cleanup that restores bubble HTML.
+- **Connection Profile setting** — allows the tracker to use a separate API connection profile for generation, so it doesn't interfere with your main chat model. Configurable in the Generation settings section.
 - **Banner, HUD, and Ticker** layout modes for the Scene Tracker — selectable from the existing Layout Mode dropdown alongside Grid, Stacked, and Compact.
 
 ### Fixed
+- **Settings FAB button hidden when portrait bar is not visible** — the "D" settings button is now always accessible, even when the portrait bar is turned off.
+- **Context menu going off-screen on portrait panel** — right-click menu now clamps to the viewport so it never clips outside the window.
+- **Red/pink box around user messages in bubble chat** — removed background and border styling from user messages in both Discord and Card bubble modes; also removed the avatar and header from user bubbles for a cleaner look.
+- **Connection Profile dropdown not populating** — fixed property name mismatch (`extension_settings` vs `extensionSettings`) when reading SillyTavern's connection profiles.
+- **Bubble TTS voice-not-found error** — no longer passes a `voice=` argument to `/speak`, avoiding toastr errors when a character doesn't have a mapped TTS voice. SillyTavern's TTS handles voice lookup internally.
 - Chat bubble dialogue text now displays the correct per-character color. SillyTavern's global `--SmartThemeQuoteColor` was overriding inline colors on `<q>` tags inside bubble text.
 - Bubble renderers now prefer the AI's original `<font color>` for dialogue, falling back to the extension's assigned color only when no font tag is present.
 - Residual `<font>` tags are stripped from rendered bubble text for cleaner output.
