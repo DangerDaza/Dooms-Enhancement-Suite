@@ -1390,8 +1390,18 @@ jQuery(async () => {
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
                     const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
                     if (messageElement) {
-                        // Small delay so dialogue coloring / other handlers finish first
-                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 50);
+                        const mesText = messageElement.querySelector('.mes_text');
+                        if (mesText) {
+                            // Clear stale bubble data — content was just (re)rendered.
+                            // Without this, applyChatBubbles sees the old style attribute
+                            // and early-returns, skipping bubble re-application.
+                            mesText.removeAttribute('data-dooms-original-html');
+                            mesText.removeAttribute('data-dooms-bubbles-applied');
+                            mesText.removeAttribute('data-dooms-bubbles-style');
+                        }
+                        // Wait for colored-dialogues to finish adding <font color> tags
+                        // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED)
+                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
                     }
                 }
                 // Update scene tracker (new data may be available after message render)
@@ -1435,8 +1445,8 @@ jQuery(async () => {
                             mesText.removeAttribute('data-dooms-bubbles-applied');
                             mesText.removeAttribute('data-dooms-bubbles-style');
                         }
-                        // Small delay to let formatting settle
-                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 50);
+                        // Wait for colored-dialogues to finish recoloring
+                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
                     }
                 }
 
@@ -1455,17 +1465,17 @@ jQuery(async () => {
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
 
                 const messageElement = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);
-                if (messageElement) {
-                    const mesText = messageElement.querySelector('.mes_text');
-                    if (mesText) {
-                        // Clear stale bubble data — the swipe has new content
-                        mesText.removeAttribute('data-dooms-original-html');
-                        mesText.removeAttribute('data-dooms-bubbles-applied');
-                        mesText.removeAttribute('data-dooms-bubbles-style');
-                    }
-                    // Delay to let colored-dialogues finish recoloring (600ms debounce + processing)
-                    setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
+                if (!messageElement) return;
+
+                const mesText = messageElement.querySelector('.mes_text');
+                if (mesText) {
+                    // Clear stale bubble data — the swipe has new content
+                    mesText.removeAttribute('data-dooms-original-html');
+                    mesText.removeAttribute('data-dooms-bubbles-applied');
+                    mesText.removeAttribute('data-dooms-bubbles-style');
                 }
+                // Delay to let colored-dialogues finish recoloring (600ms debounce + processing)
+                setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
             });
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);

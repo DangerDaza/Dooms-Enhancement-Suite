@@ -3,7 +3,7 @@
  * Handles all event listeners and integration with SillyTavern's event system
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, user_avatar, setExtensionPrompt, extension_prompt_types, saveChatDebounced } from '../../../../../../../script.js';
+import { chat, user_avatar, setExtensionPrompt, extension_prompt_types, saveChatDebounced, updateMessageBlock } from '../../../../../../../script.js';
 // Core modules
 import {
     extensionSettings,
