@@ -68,9 +68,6 @@ Track a main quest and multiple optional side quests. Quests appear in scene hea
 ### Dialogue Coloring
 Automatically colors each character's dialogue with unique colors. The AI generates `<font color>` tags that display in chat while being automatically stripped for TTS playback. Works seamlessly with chat bubbles.
 
-### Auto-Avatar Generation
-Automatically generates character portraits for NPCs using AI + Stable Diffusion (via SillyTavern's `/sd` command). Generates a description prompt, runs image generation, and stores the result for the portrait bar.
-
 ### Thought Bubbles
 Displays the character's internal thoughts as floating bubbles directly within chat messages. See what characters are thinking alongside their dialogue.
 
