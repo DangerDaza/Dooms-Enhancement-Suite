@@ -54,6 +54,12 @@ export function loadSettings() {
             console.log('[Dooms Tracker] Migrating settings from rpg-companion-sillytavern');
             extension_settings[extensionName] = extension_settings[oldExtensionName];
         }
+        // Migrate settings from old dooms-character-tracker key if present
+        const oldTrackerName = 'third-party/dooms-character-tracker';
+        if (!extension_settings[extensionName] && extension_settings[oldTrackerName]) {
+            console.log('[Dooms Tracker] Migrating settings from dooms-character-tracker');
+            extension_settings[extensionName] = extension_settings[oldTrackerName];
+        }
         if (extension_settings[extensionName]) {
             const savedSettings = extension_settings[extensionName];
             // Validate loaded settings
