@@ -92,6 +92,12 @@ export function applyPortraitBarSettings() {
 /** Cache of portrait file-based URL existence checks */
 const portraitFileCache = new Map(); // characterName → url | null
 
+// Pre-populate cache with characters confirmed to have no portrait file (persisted across reloads)
+try {
+    const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+    _noPortrait.forEach(name => portraitFileCache.set(name, null));
+} catch (e) { /* ignore */ }
+
 /** Whether the bar is currently expanded */
 let isExpanded = true;
 
@@ -496,8 +502,15 @@ async function probePortraitFileUrl(name, basePath) {
         } catch (e) { /* continue */ }
     }
 
-    // No file found
+    // No file found — cache null and persist so we skip probing on next reload
     portraitFileCache.set(name, null);
+    try {
+        const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+        if (!_noPortrait.includes(name)) {
+            _noPortrait.push(name);
+            localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait));
+        }
+    } catch (e) { /* ignore */ }
 
     // If no npcAvatar either, show emoji fallback
     if (!(extensionSettings.npcAvatars && extensionSettings.npcAvatars[name])) {
@@ -557,6 +570,11 @@ function triggerPortraitUpload(characterName) {
 
             // Clear file cache so resolvePortrait picks up the new npcAvatar
             portraitFileCache.delete(characterName);
+            // Remove from no-portrait localStorage cache so future file probing can resume
+            try {
+                const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+                localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait.filter(n => n !== characterName)));
+            } catch (e) { /* ignore */ }
 
             // Re-render the portrait bar
             updatePortraitBar();
@@ -580,6 +598,11 @@ function removePortrait(characterName) {
         delete extensionSettings.npcAvatars[characterName];
         saveSettings();
         portraitFileCache.delete(characterName);
+        // Remove from no-portrait localStorage cache so file probing can resume for this character
+        try {
+            const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+            localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait.filter(n => n !== characterName)));
+        } catch (e) { /* ignore */ }
         updatePortraitBar();
         console.log(`[Dooms Tracker] Portrait removed for ${characterName}`);
     }

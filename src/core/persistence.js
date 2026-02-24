@@ -15,8 +15,8 @@ import {
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
+import { extensionName } from './config.js';
 // NOTE: FEATURE_FLAGS, migrateInventory, validateStoredInventory, cleanItemString imports removed — userStats system archived
-const extensionName = 'third-party/dooms-character-tracker';
 /**
  * Validates extension settings structure
  * @param {Object} settings - Settings object to validate
