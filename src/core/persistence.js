@@ -73,6 +73,16 @@ export function loadSettings() {
                 if (oldData.knownCharacters && Object.keys(oldData.knownCharacters).length > Object.keys(newData.knownCharacters || {}).length) {
                     console.log('[Dooms Tracker] Merging knownCharacters from dooms-character-tracker');
                     const merged = Object.assign({}, oldData.knownCharacters, newData.knownCharacters);
+                    // Deduplicate: remove short-name entries superseded by full-name entries
+                    // e.g. remove "Sakura" when "Sakura Ashenveil" is also present
+                    const mergedKeys = Object.keys(merged);
+                    for (const shortKey of mergedKeys) {
+                        const hasFullName = mergedKeys.some(k => k !== shortKey && k.toLowerCase().startsWith(shortKey.toLowerCase() + ' '));
+                        if (hasFullName) {
+                            delete merged[shortKey];
+                            console.log(`[Dooms Tracker] Removed short-name duplicate: "${shortKey}"`);
+                        }
+                    }
                     newData.knownCharacters = merged;
                 }
                 if (oldData.characterColors && Object.keys(oldData.characterColors).length > 0 &&

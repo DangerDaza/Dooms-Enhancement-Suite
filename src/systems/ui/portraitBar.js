@@ -457,12 +457,23 @@ export function repositionPortraitBar() {
 export function resolvePortrait(name) {
     if (!name) return null;
 
-    // 1. Check npcAvatars (base64 data URIs — shared with thoughts panel)
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[name]) {
-        return extensionSettings.npcAvatars[name];
+    const avatars = extensionSettings.npcAvatars;
+    if (avatars) {
+        // 1. Exact match
+        if (avatars[name]) return avatars[name];
+
+        // 2. Partial match — handle short names that have since been expanded to full names
+        //    e.g. "Sakura" → "Sakura Ashenveil", "Satori" → "Satori Thornblood"
+        //    Only matches when the lookup name is a complete first word of the stored key
+        const lowerName = name.toLowerCase();
+        for (const key of Object.keys(avatars)) {
+            if (key.toLowerCase().startsWith(lowerName + ' ')) {
+                return avatars[key];
+            }
+        }
     }
 
-    // 2. Check file-based portraits/ folder
+    // 3. Check file-based portraits/ folder
     return getPortraitFileUrl(name);
 }
 
