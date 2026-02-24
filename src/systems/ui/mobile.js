@@ -1023,7 +1023,9 @@ export function updateFabWidgets() {
     };
     // Clock/Time (bottom position with animated clock face)
     if (widgetSettings.clock?.enabled && infoData?.time) {
-        const timeStr = infoData.time.end || infoData.time.value || infoData.time.start || '';
+        const timeStr = typeof infoData.time === 'string'
+            ? infoData.time
+            : (infoData.time.end || infoData.time.value || infoData.time.start || '');
         if (timeStr) {
             const { hourAngle, minuteAngle } = parseTimeForClock(timeStr);
             widgets.push({
@@ -1040,21 +1042,21 @@ export function updateFabWidgets() {
         }
     }
     // Date (small)
-    if (widgetSettings.date?.enabled && infoData?.date?.value) {
-        const dateVal = infoData.date.value;
-        const expandAttr = needsExpand(dateVal, 12) ? ' data-full-text="true"' : '';
+    const mDateVal = infoData?.date ? (typeof infoData.date === 'string' ? infoData.date : infoData.date.value) : null;
+    if (widgetSettings.date?.enabled && mDateVal) {
+        const expandAttr = needsExpand(mDateVal, 12) ? ' data-full-text="true"' : '';
         widgets.push({
             type: 'small',
-            html: `<div class="rpg-fab-widget rpg-fab-widget-date"${expandAttr} title="${dateVal}">${createExpandableText(dateVal, 12, '📅')}</div>`
+            html: `<div class="rpg-fab-widget rpg-fab-widget-date"${expandAttr} title="${mDateVal}">${createExpandableText(mDateVal, 12, '📅')}</div>`
         });
     }
     // Location (small)
-    if (widgetSettings.location?.enabled && infoData?.location?.value) {
-        const loc = infoData.location.value;
-        const expandAttr = needsExpand(loc, 14) ? ' data-full-text="true"' : '';
+    const mLocVal = infoData?.location ? (typeof infoData.location === 'string' ? infoData.location : infoData.location.value) : null;
+    if (widgetSettings.location?.enabled && mLocVal) {
+        const expandAttr = needsExpand(mLocVal, 14) ? ' data-full-text="true"' : '';
         widgets.push({
             type: 'small',
-            html: `<div class="rpg-fab-widget rpg-fab-widget-location"${expandAttr} title="${loc}">${createExpandableText(loc, 14, '📍')}</div>`
+            html: `<div class="rpg-fab-widget rpg-fab-widget-location"${expandAttr} title="${mLocVal}">${createExpandableText(mLocVal, 14, '📍')}</div>`
         });
     }
     // Auto-assign positions intelligently

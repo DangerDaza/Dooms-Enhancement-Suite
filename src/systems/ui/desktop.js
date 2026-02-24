@@ -49,7 +49,9 @@ export function updateStripWidgets() {
     // Clock Widget with animated face
     const $clockWidget = $container.find('.rpg-strip-widget-clock');
     if (widgetSettings.clock?.enabled && infoData?.time) {
-        const timeStr = infoData.time.end || infoData.time.value || infoData.time.start || '';
+        const timeStr = typeof infoData.time === 'string'
+            ? infoData.time
+            : (infoData.time.end || infoData.time.value || infoData.time.start || '');
         if (timeStr) {
             // Update clock hands
             const { hourAngle, minuteAngle } = parseTimeForClock(timeStr);
@@ -66,8 +68,8 @@ export function updateStripWidgets() {
     }
     // Date Widget
     const $dateWidget = $container.find('.rpg-strip-widget-date');
-    if (widgetSettings.date?.enabled && infoData?.date?.value) {
-        const dateVal = infoData.date.value;
+    const dateVal = infoData?.date ? (typeof infoData.date === 'string' ? infoData.date : infoData.date.value) : null;
+    if (widgetSettings.date?.enabled && dateVal) {
         // Truncate long dates for display
         const displayDate = dateVal.length > 20 ? dateVal.substring(0, 18) + '…' : dateVal;
         $dateWidget.find('.rpg-strip-widget-value').text(displayDate);
@@ -78,12 +80,12 @@ export function updateStripWidgets() {
     }
     // Location Widget
     const $locationWidget = $container.find('.rpg-strip-widget-location');
-    if (widgetSettings.location?.enabled && infoData?.location?.value) {
-        const loc = infoData.location.value;
+    const locVal = infoData?.location ? (typeof infoData.location === 'string' ? infoData.location : infoData.location.value) : null;
+    if (widgetSettings.location?.enabled && locVal) {
         // Truncate long locations for display
-        const displayLoc = loc.length > 15 ? loc.substring(0, 13) + '…' : loc;
+        const displayLoc = locVal.length > 15 ? locVal.substring(0, 13) + '…' : locVal;
         $locationWidget.find('.rpg-strip-widget-value').text(displayLoc);
-        $locationWidget.attr('title', loc);
+        $locationWidget.attr('title', locVal);
         $locationWidget.addClass('rpg-strip-widget-visible');
     } else {
         $locationWidget.removeClass('rpg-strip-widget-visible');

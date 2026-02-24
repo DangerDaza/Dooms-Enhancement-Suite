@@ -66,6 +66,8 @@ function getCurrentTime() {
     try {
         const parsed = typeof infoBoxData === 'string' ? repairJSON(infoBoxData) : infoBoxData;
         if (parsed && parsed.time) {
+            // Handle flat string or nested object
+            if (typeof parsed.time === 'string') return parsed.time;
             // Use the end time if available (current time), otherwise start time
             return parsed.time.end || parsed.time.start || null;
         }

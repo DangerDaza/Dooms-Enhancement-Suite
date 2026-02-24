@@ -134,14 +134,26 @@ export function renderInfoBox() {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         const jsonData = repairJSON(infoBoxData);
         if (jsonData) {
-            // Extract from v3 JSON structure
-            data.timeStart = jsonData.time?.start || '';
-            data.timeEnd = jsonData.time?.end || '';
-            data.location = jsonData.location?.value || '';
+            // Extract from v3 JSON structure — handle both nested objects and flat strings
+            if (typeof jsonData.time === 'string') {
+                // Flat string: "2:40 PM" or "2:00 PM → 3:00 PM"
+                const timeParts = jsonData.time.split('→').map(t => t.trim());
+                data.timeStart = timeParts[0] || '';
+                data.timeEnd = timeParts[1] || '';
+            } else {
+                data.timeStart = jsonData.time?.start || '';
+                data.timeEnd = jsonData.time?.end || '';
+            }
+            if (typeof jsonData.location === 'string') {
+                data.location = jsonData.location;
+            } else {
+                data.location = jsonData.location?.value || '';
+            }
             // Parse date string to extract weekday, month, year
-            if (jsonData.date?.value) {
-                data.date = jsonData.date.value;
-                // Expected format: "Tuesday, October 17th, 2023"
+            const dateValue = typeof jsonData.date === 'string' ? jsonData.date : jsonData.date?.value;
+            if (dateValue) {
+                data.date = dateValue;
+                // Expected format: "Tuesday, October 17th, 2023" or "Sunday, Late Autumn, Week 2"
                 const dateParts = data.date.split(',').map(p => p.trim());
                 data.weekday = dateParts[0] || '';
                 data.month = dateParts[1] || '';
@@ -421,6 +433,17 @@ export function updateInfoBoxField(field, value) {
         // Handle v3 JSON format
         const jsonData = repairJSON(lastGeneratedData.infoBox);
         if (jsonData) {
+            // Normalize flat string fields to nested objects before updating
+            if (typeof jsonData.time === 'string') {
+                const timeParts = jsonData.time.split('→').map(t => t.trim());
+                jsonData.time = { start: timeParts[0] || '', end: timeParts[1] || '' };
+            }
+            if (typeof jsonData.date === 'string') {
+                jsonData.date = { value: jsonData.date };
+            }
+            if (typeof jsonData.location === 'string') {
+                jsonData.location = { value: jsonData.location };
+            }
             // Update the appropriate field based on v3 structure
             if (field === 'weatherEmoji') {
                 if (!jsonData.weather) jsonData.weather = {};

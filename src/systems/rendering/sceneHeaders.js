@@ -293,9 +293,11 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
     if (infoBoxData) {
         try {
             const info = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
-            // Time
+            // Time — handle nested object {start, end} or {value} or flat string
             if (info.time) {
-                if (info.time.start && info.time.end) {
+                if (typeof info.time === 'string') {
+                    result.time = info.time;
+                } else if (info.time.start && info.time.end) {
                     result.time = `${info.time.start} → ${info.time.end}`;
                 } else if (info.time.start) {
                     result.time = info.time.start;
@@ -303,18 +305,28 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
                     result.time = info.time.value;
                 }
             }
-            // Date
+            // Date — handle nested object {value} or flat string
             if (info.date) {
-                result.date = info.date.value || '';
+                if (typeof info.date === 'string') {
+                    result.date = info.date;
+                } else {
+                    result.date = info.date.value || '';
+                }
             }
-            // Location
+            // Location — handle nested object {value} or flat string
             if (info.location) {
-                result.location = info.location.value || '';
+                if (typeof info.location === 'string') {
+                    result.location = info.location;
+                } else {
+                    result.location = info.location.value || '';
+                }
             }
             // Recent Events (limit to 2 major events for the scene header)
             if (info.recentEvents) {
                 if (Array.isArray(info.recentEvents)) {
-                    result.recentEvents = info.recentEvents.slice(0, 2).join('; ');
+                    // Array of strings or objects — extract string values
+                    const events = info.recentEvents.map(e => typeof e === 'string' ? e : (e.value || e.text || e.description || JSON.stringify(e)));
+                    result.recentEvents = events.slice(0, 2).join('; ');
                 } else if (typeof info.recentEvents === 'string') {
                     result.recentEvents = info.recentEvents;
                 } else if (info.recentEvents.value) {
