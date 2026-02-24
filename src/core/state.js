@@ -17,7 +17,7 @@ export let extensionSettings = {
     showCharacterThoughts: true,
     showQuests: true, // Show quests section
     showThoughtsInChat: false, // Show thoughts overlay in chat
-    showPortraitBar: false, // Show collapsible portrait bar above chat input
+    showPortraitBar: true, // Show collapsible portrait bar above chat input
     narratorMode: false, // Use character card as narrator instead of fixed character references
     customNarratorPrompt: '', // Custom narrator mode prompt text (empty = use default)
     customContextInstructionsPrompt: '', // Custom context instructions prompt text (empty = use default)
