@@ -56,9 +56,31 @@ export function loadSettings() {
         }
         // Migrate settings from old dooms-character-tracker key if present
         const oldTrackerName = 'third-party/dooms-character-tracker';
-        if (!extension_settings[extensionName] && extension_settings[oldTrackerName]) {
-            console.log('[Dooms Tracker] Migrating settings from dooms-character-tracker');
-            extension_settings[extensionName] = extension_settings[oldTrackerName];
+        if (extension_settings[oldTrackerName]) {
+            if (!extension_settings[extensionName]) {
+                // Full migration — new key doesn't exist yet
+                console.log('[Dooms Tracker] Migrating settings from dooms-character-tracker');
+                extension_settings[extensionName] = extension_settings[oldTrackerName];
+            } else {
+                // Partial migration — merge critical user data that may be missing from new key
+                const oldData = extension_settings[oldTrackerName];
+                const newData = extension_settings[extensionName];
+                if (oldData.npcAvatars && Object.keys(oldData.npcAvatars).length > 0 &&
+                    (!newData.npcAvatars || Object.keys(newData.npcAvatars).length === 0)) {
+                    console.log('[Dooms Tracker] Merging npcAvatars from dooms-character-tracker');
+                    newData.npcAvatars = oldData.npcAvatars;
+                }
+                if (oldData.knownCharacters && Object.keys(oldData.knownCharacters).length > Object.keys(newData.knownCharacters || {}).length) {
+                    console.log('[Dooms Tracker] Merging knownCharacters from dooms-character-tracker');
+                    const merged = Object.assign({}, oldData.knownCharacters, newData.knownCharacters);
+                    newData.knownCharacters = merged;
+                }
+                if (oldData.characterColors && Object.keys(oldData.characterColors).length > 0 &&
+                    (!newData.characterColors || Object.keys(newData.characterColors).length === 0)) {
+                    console.log('[Dooms Tracker] Merging characterColors from dooms-character-tracker');
+                    newData.characterColors = oldData.characterColors;
+                }
+            }
         }
         if (extension_settings[extensionName]) {
             const savedSettings = extension_settings[extensionName];
