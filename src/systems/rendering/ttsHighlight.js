@@ -42,6 +42,11 @@ let _boundaryFired = false;
 let _timerSpeechRate = 1;
 let _timerFullText = '';
 
+// WPM calibration state (adapts estimate to actual voice speed per message)
+let _lastChunkStartTime = 0;   // performance.now() when most recent chunk was handed to speak()
+let _lastChunkWordCount = 0;   // word count of that chunk
+let _calibratedMsPerWord = 310; // rolling ms/word estimate, initialized to baseline
+
 // Original DOM content for restoration
 let _originalMesTextHTML = '';
 let _chunkCounter = 0;
@@ -503,6 +508,22 @@ function _onUtteranceIntercepted(utterance) {
     //   - _cleanup() when TTS fully stops (detected by _pollTtsState)
     //   - boundary events taking over (if available)
 
+    // Fix 3: Calibrate WPM from actual chunk duration.
+    // We record when this chunk's utterance was handed to speak() as a proxy
+    // for its start time (the real 'start' event fires async and can't be
+    // reliably listened to after-the-fact on subsequent chunks).
+    if (_lastChunkStartTime > 0 && _lastChunkWordCount > 2) {
+        const actualMs = performance.now() - _lastChunkStartTime;
+        if (actualMs > 200 && actualMs < 15000) {
+            const actualMsPerWord = actualMs / _lastChunkWordCount;
+            _calibratedMsPerWord = _calibratedMsPerWord * 0.6 + actualMsPerWord * 0.4;
+            console.log(`[Dooms TTS Highlight] Calibrated: ${actualMsPerWord.toFixed(0)}ms/word → avg ${_calibratedMsPerWord.toFixed(0)}ms/word`);
+        }
+    }
+    // Record this chunk's start time and word count for the next chunk's calibration
+    _lastChunkStartTime = performance.now();
+    _lastChunkWordCount = (rawChunkText.match(/\S+/g) || []).length;
+
     // ── Strategy 2: Timer-based continuous sentence progression ──
     // Start the timer only ONCE on the first chunk. It will keep running
     // across all subsequent chunks until TTS stops.
@@ -512,6 +533,10 @@ function _onUtteranceIntercepted(utterance) {
             _setActiveSentence(0);
         }
         _startTimerFallback(utterance.rate || 1, fullVisibleText);
+    } else if (_timerRunning && !_boundaryFired && _chunkCounter > 1) {
+        // Fix 2: Resync — if the timer drifted ahead while processing earlier chunks,
+        // snap back to where the speech engine actually is now.
+        _resyncTimerToChunk(rawChunkText, fullVisibleText);
     }
 }
 
@@ -622,7 +647,7 @@ function _setActiveSentence(index) {
  *   Adjusted down slightly because TTS engines speak faster than humans
  *   with less inter-word pause.
  */
-function _estimateSentenceDurationMs(sentenceText, speechRate) {
+function _estimateSentenceDurationMs(sentenceText, speechRate, calibratedMsPerWord) {
     const rate = speechRate || 1;
     const words = sentenceText.match(/\S+/g) || [];
     if (words.length === 0) return 150 / rate;
@@ -631,7 +656,8 @@ function _estimateSentenceDurationMs(sentenceText, speechRate) {
     // Short words (~3 chars) are spoken faster, long words (~8+) slower
     const avgWordLen = words.reduce((sum, w) => sum + w.length, 0) / words.length;
     const wordLenFactor = 0.85 + (avgWordLen / 25); // ~1.0 for typical text
-    const baseMs = 310 * wordLenFactor;
+    // Use calibrated WPM if available (from actual chunk timing), else 310ms baseline
+    const baseMs = (calibratedMsPerWord || 310) * wordLenFactor;
 
     let totalMs = words.length * baseMs;
 
@@ -676,7 +702,7 @@ function _startTimerFallback(speechRate, fullVisibleText) {
     // Estimate duration of the current sentence, then schedule advancement
     const sent = _sentenceSpans[startIdx];
     const sentText = _timerFullText.substring(sent.start, sent.end);
-    const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate);
+    const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate, _calibratedMsPerWord);
 
     _timerHandle = setTimeout(_advanceTimerSentence, durationMs);
 }
@@ -688,6 +714,46 @@ function _stopTimerFallback() {
     }
     _timerRunning = false;
     _timerFullText = '';
+}
+
+/**
+ * Fix 2: Resync the timer to match where the speech engine actually is.
+ *
+ * When chunk N+1 arrives we know which text the engine is ABOUT to speak.
+ * If the timer drifted AHEAD (highlight is on sentence M but the engine is
+ * only starting sentence M-3), we snap back to the correct sentence.
+ *
+ * Strategy: take the first "significant" word (≥4 chars) from the chunk,
+ * search backward through sentences already passed, snap if found.
+ * Only corrects run-ahead drift — never skips forward.
+ */
+function _resyncTimerToChunk(chunkText, fullVisibleText) {
+    if (!chunkText || _sentenceSpans.length === 0 || _activeSentenceIndex <= 0) return;
+
+    // Find first significant word (≥4 alphanum chars) — short words appear in too many sentences
+    const words = chunkText.trim().match(/\S+/g) || [];
+    const anchorWord = words.find(w => w.replace(/[^\w]/g, '').length >= 4);
+    if (!anchorWord) return;
+    const clean = anchorWord.replace(/[.,!?;:'"—–\-()[\]{}]/g, '').toLowerCase();
+    if (clean.length < 4) return;
+
+    // Search ONLY backward (sentences before current active index)
+    for (let i = 0; i < _activeSentenceIndex; i++) {
+        const sent = _sentenceSpans[i];
+        const sentText = fullVisibleText.substring(sent.start, sent.end).toLowerCase();
+        if (sentText.includes(clean)) {
+            console.log(`[Dooms TTS Highlight] Resync: timer was at sentence ${_activeSentenceIndex}, snapping back to ${i} (anchor: "${clean}")`);
+            if (_timerHandle) { clearTimeout(_timerHandle); _timerHandle = null; }
+            _setActiveSentence(i);
+            const dur = _estimateSentenceDurationMs(
+                fullVisibleText.substring(sent.start, sent.end),
+                _timerSpeechRate, _calibratedMsPerWord
+            );
+            _timerHandle = setTimeout(_advanceTimerSentence, dur);
+            return;
+        }
+    }
+    // Anchor word found at or after active index — no drift detected, timer is fine
 }
 
 /**
@@ -714,7 +780,7 @@ function _advanceTimerSentence() {
     // Estimate how long this sentence takes to speak, then schedule the next advance
     const sent = _sentenceSpans[nextIdx];
     const sentText = _timerFullText.substring(sent.start, sent.end);
-    const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate);
+    const durationMs = _estimateSentenceDurationMs(sentText, _timerSpeechRate, _calibratedMsPerWord);
 
     _timerHandle = setTimeout(_advanceTimerSentence, durationMs);
 }
@@ -875,4 +941,8 @@ function _cleanup() {
     _originalMesTextHTML = '';
     _chunkCounter = 0;
     _bubbleModeActive = false;
+    // Reset per-message calibration state
+    _calibratedMsPerWord = 310;
+    _lastChunkStartTime = 0;
+    _lastChunkWordCount = 0;
 }

@@ -15,8 +15,8 @@ import {
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
+import { extensionName } from './config.js';
 // NOTE: FEATURE_FLAGS, migrateInventory, validateStoredInventory, cleanItemString imports removed — userStats system archived
-const extensionName = 'third-party/dooms-character-tracker';
 /**
  * Validates extension settings structure
  * @param {Object} settings - Settings object to validate
@@ -53,6 +53,44 @@ export function loadSettings() {
         if (!extension_settings[extensionName] && extension_settings[oldExtensionName]) {
             console.log('[Dooms Tracker] Migrating settings from rpg-companion-sillytavern');
             extension_settings[extensionName] = extension_settings[oldExtensionName];
+        }
+        // Migrate settings from old dooms-character-tracker key if present
+        const oldTrackerName = 'third-party/dooms-character-tracker';
+        if (extension_settings[oldTrackerName]) {
+            if (!extension_settings[extensionName]) {
+                // Full migration — new key doesn't exist yet
+                console.log('[Dooms Tracker] Migrating settings from dooms-character-tracker');
+                extension_settings[extensionName] = extension_settings[oldTrackerName];
+            } else {
+                // Partial migration — merge critical user data that may be missing from new key
+                const oldData = extension_settings[oldTrackerName];
+                const newData = extension_settings[extensionName];
+                if (oldData.npcAvatars && Object.keys(oldData.npcAvatars).length > 0 &&
+                    (!newData.npcAvatars || Object.keys(newData.npcAvatars).length === 0)) {
+                    console.log('[Dooms Tracker] Merging npcAvatars from dooms-character-tracker');
+                    newData.npcAvatars = oldData.npcAvatars;
+                }
+                if (oldData.knownCharacters && Object.keys(oldData.knownCharacters).length > Object.keys(newData.knownCharacters || {}).length) {
+                    console.log('[Dooms Tracker] Merging knownCharacters from dooms-character-tracker');
+                    const merged = Object.assign({}, oldData.knownCharacters, newData.knownCharacters);
+                    // Deduplicate: remove short-name entries superseded by full-name entries
+                    // e.g. remove "Sakura" when "Sakura Ashenveil" is also present
+                    const mergedKeys = Object.keys(merged);
+                    for (const shortKey of mergedKeys) {
+                        const hasFullName = mergedKeys.some(k => k !== shortKey && k.toLowerCase().startsWith(shortKey.toLowerCase() + ' '));
+                        if (hasFullName) {
+                            delete merged[shortKey];
+                            console.log(`[Dooms Tracker] Removed short-name duplicate: "${shortKey}"`);
+                        }
+                    }
+                    newData.knownCharacters = merged;
+                }
+                if (oldData.characterColors && Object.keys(oldData.characterColors).length > 0 &&
+                    (!newData.characterColors || Object.keys(newData.characterColors).length === 0)) {
+                    console.log('[Dooms Tracker] Merging characterColors from dooms-character-tracker');
+                    newData.characterColors = oldData.characterColors;
+                }
+            }
         }
         if (extension_settings[extensionName]) {
             const savedSettings = extension_settings[extensionName];

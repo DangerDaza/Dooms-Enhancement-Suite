@@ -1,5 +1,9 @@
 //- No-op in case this is running outside of SillyTavern
 const { extension_settings } = typeof self.SillyTavern !== 'undefined' ? self.SillyTavern.getContext() : { extension_settings: {} };
+// Derive extension folder path dynamically from current script URL to avoid hardcoding the folder name
+const _i18nScriptUrl = import.meta.url;
+const _i18nMatch = _i18nScriptUrl.match(/extensions\/(third-party\/[^/]+)\//);
+const _i18nExtensionFolderPath = _i18nMatch ? `scripts/extensions/${_i18nMatch[1]}` : 'scripts/extensions/third-party/Dooms-Enhancement-Suite';
 class Internationalization {
     constructor() {
         this.currentLanguage = 'en';
@@ -28,7 +32,7 @@ class Internationalization {
         }
     }
     async loadTranslations(lang) {
-        const fetchUrl = `/scripts/extensions/third-party/dooms-character-tracker/src/i18n/${lang}.json`;
+        const fetchUrl = `/${_i18nExtensionFolderPath}/src/i18n/${lang}.json`;
         try {
             const response = await fetch(fetchUrl);
             if (!response.ok) {

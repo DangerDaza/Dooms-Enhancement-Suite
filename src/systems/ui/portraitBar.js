@@ -92,6 +92,12 @@ export function applyPortraitBarSettings() {
 /** Cache of portrait file-based URL existence checks */
 const portraitFileCache = new Map(); // characterName → url | null
 
+// Pre-populate cache with characters confirmed to have no portrait file (persisted across reloads)
+try {
+    const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+    _noPortrait.forEach(name => portraitFileCache.set(name, null));
+} catch (e) { /* ignore */ }
+
 /** Whether the bar is currently expanded */
 let isExpanded = true;
 
@@ -451,12 +457,23 @@ export function repositionPortraitBar() {
 export function resolvePortrait(name) {
     if (!name) return null;
 
-    // 1. Check npcAvatars (base64 data URIs — shared with thoughts panel)
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[name]) {
-        return extensionSettings.npcAvatars[name];
+    const avatars = extensionSettings.npcAvatars;
+    if (avatars) {
+        // 1. Exact match
+        if (avatars[name]) return avatars[name];
+
+        // 2. Partial match — handle short names that have since been expanded to full names
+        //    e.g. "Sakura" → "Sakura Ashenveil", "Satori" → "Satori Thornblood"
+        //    Only matches when the lookup name is a complete first word of the stored key
+        const lowerName = name.toLowerCase();
+        for (const key of Object.keys(avatars)) {
+            if (key.toLowerCase().startsWith(lowerName + ' ')) {
+                return avatars[key];
+            }
+        }
     }
 
-    // 2. Check file-based portraits/ folder
+    // 3. Check file-based portraits/ folder
     return getPortraitFileUrl(name);
 }
 
@@ -496,8 +513,15 @@ async function probePortraitFileUrl(name, basePath) {
         } catch (e) { /* continue */ }
     }
 
-    // No file found
+    // No file found — cache null and persist so we skip probing on next reload
     portraitFileCache.set(name, null);
+    try {
+        const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+        if (!_noPortrait.includes(name)) {
+            _noPortrait.push(name);
+            localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait));
+        }
+    } catch (e) { /* ignore */ }
 
     // If no npcAvatar either, show emoji fallback
     if (!(extensionSettings.npcAvatars && extensionSettings.npcAvatars[name])) {
@@ -557,6 +581,11 @@ function triggerPortraitUpload(characterName) {
 
             // Clear file cache so resolvePortrait picks up the new npcAvatar
             portraitFileCache.delete(characterName);
+            // Remove from no-portrait localStorage cache so future file probing can resume
+            try {
+                const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+                localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait.filter(n => n !== characterName)));
+            } catch (e) { /* ignore */ }
 
             // Re-render the portrait bar
             updatePortraitBar();
@@ -580,6 +609,11 @@ function removePortrait(characterName) {
         delete extensionSettings.npcAvatars[characterName];
         saveSettings();
         portraitFileCache.delete(characterName);
+        // Remove from no-portrait localStorage cache so file probing can resume for this character
+        try {
+            const _noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+            localStorage.setItem('dooms-portrait-no-file', JSON.stringify(_noPortrait.filter(n => n !== characterName)));
+        } catch (e) { /* ignore */ }
         updatePortraitBar();
         console.log(`[Dooms Tracker] Portrait removed for ${characterName}`);
     }
@@ -661,7 +695,7 @@ export function getCharacterList() {
     let presentChars = [];
 
     // Pattern to detect off-scene characters from their thoughts
-    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
+    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present\s+in|present\s+at)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+physically\s+present)\b|\b(absent\s+from\s+(the\s+)?(scene|room|area|location))\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
 
     if (data) {
         try {
