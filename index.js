@@ -124,7 +124,7 @@ import {
     initDoomCounterListener
 } from './src/systems/integration/sillytavern.js';
 // Doom Counter
-import { triggerDoomCounter, updateDoomCounterUI, updateDoomDebugHud, hideDoomDebugHud } from './src/systems/generation/doomCounter.js';
+import { triggerDoomCounter, updateDoomCounterUI, updateDoomDebugHud, hideDoomDebugHud, resetCounters } from './src/systems/generation/doomCounter.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -777,6 +777,13 @@ async function initUI() {
 
     $('#rpg-dc-trigger-now').on('click', function () {
         triggerDoomCounter().catch(err => console.error('[Doom Counter] Manual trigger failed:', err));
+    });
+
+    $('#rpg-dc-reset').on('click', function () {
+        resetCounters();
+        saveChatData();
+        updateDoomCounterUI();
+        toastr.info('Doom Counter reset.', '', { timeOut: 2000 });
     });
 
     // ── Chat Bubbles & Info Panel customization ──

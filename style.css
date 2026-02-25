@@ -6175,6 +6175,18 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     color: #ff6b6b;
 }
 
+.rpg-dc-reset-btn {
+    flex-shrink: 0;
+    width: auto;
+    color: #666;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+.rpg-dc-reset-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #aaa;
+}
+
 /* Feature pill toggles */
 .rpg-feature-pills {
     display: flex;
