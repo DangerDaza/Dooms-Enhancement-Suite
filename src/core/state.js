@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 6, // Version number for settings migrations (v6 = current, safe defaults for fresh installs)
+    settingsVersion: 9, // Version number for settings migrations (v9 = ensure core widgets time/date/location/recentEvents always enabled)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -59,6 +59,11 @@ export let extensionSettings = {
         showCharacters: true,
         showQuest: true,
         showRecentEvents: true,
+        showMoonPhase: false,
+        showTension: false,
+        showTimeSinceRest: false,
+        showConditions: false,
+        showTerrain: false,
         // Layout
         layout: 'grid', // 'grid' (2-col) | 'compact' (inline flow) | 'stacked' (1-col)
         // Colors
@@ -136,7 +141,12 @@ export let extensionSettings = {
                 temperature: { enabled: true, unit: 'C', persistInHistory: false }, // 'C' or 'F'
                 time: { enabled: true, persistInHistory: true }, // Time enabled by default for history
                 location: { enabled: true, persistInHistory: true }, // Location enabled by default for history
-                recentEvents: { enabled: true, persistInHistory: false }
+                recentEvents: { enabled: true, persistInHistory: false },
+                moonPhase: { enabled: false, persistInHistory: false },
+                tension: { enabled: false, persistInHistory: false },
+                timeSinceRest: { enabled: false, persistInHistory: false },
+                conditions: { enabled: false, persistInHistory: false },
+                terrain: { enabled: false, persistInHistory: false }
             }
         },
         presentCharacters: {

@@ -185,6 +185,8 @@ function getCharacterColor(name) {
  */
 function removeAllSceneElements() {
     $('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').remove();
+    $('#dooms-ticker-rotate-style').remove();
+    $('#chat').removeClass('dooms-ticker-active dooms-ticker-bottom-active');
 }
 
 /**
@@ -214,19 +216,26 @@ export function updateChatSceneHeaders() {
         return;
     }
     // Extract scene data from current state, respecting display toggle settings
+    const infoBoxData = extensionSettings.showInfoBox ? (lastGeneratedData.infoBox || committedTrackerData.infoBox) : null;
     const sceneData = extractSceneData(
-        extensionSettings.showInfoBox ? (lastGeneratedData.infoBox || committedTrackerData.infoBox) : null,
+        infoBoxData,
         extensionSettings.showCharacterThoughts ? (lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts) : null,
         extensionSettings.showQuests ? extensionSettings.quests : null
     );
+    const st = extensionSettings.sceneTracker || {};
+    const layout = st.layout || 'grid';
     // If there's no meaningful data, remove existing header and return
-    if (!sceneData.time && !sceneData.date && !sceneData.location && sceneData.presentCharacters.length === 0 && !sceneData.activeQuest) {
+    const hasAnyData = sceneData.time || sceneData.date || sceneData.location ||
+        sceneData.recentEvents || sceneData.activeQuest ||
+        sceneData.moonPhase || sceneData.tension || sceneData.timeSinceRest ||
+        sceneData.conditions || sceneData.terrain ||
+        sceneData.presentCharacters.length > 0;
+    if (!hasAnyData) {
         removeAllSceneElements();
         _lastSceneDataJSON = null;
         return;
     }
     // Skip rebuild if data + settings are identical to last render
-    const st = extensionSettings.sceneTracker || {};
     const cacheKey = JSON.stringify({ sceneData, st });
     if (cacheKey === _lastSceneDataJSON) {
         // Check if the element is still in the DOM
@@ -237,8 +246,6 @@ export function updateChatSceneHeaders() {
     _lastSceneDataJSON = cacheKey;
     // Remove existing scene headers before inserting new one
     removeAllSceneElements();
-
-    const layout = st.layout || 'grid';
 
     // Dispatch to the appropriate renderer
     if (layout === 'banner') {
@@ -258,8 +265,30 @@ export function updateChatSceneHeaders() {
         const html = createHudHTML(sceneData);
         if (html) $('#chat').prepend(html);
     } else if (layout === 'ticker') {
+        // Ticker is position:fixed so append to <body> (outside #chat) so ST's
+        // chat re-renders never destroy it. Add a class to #chat to push its
+        // top padding down so the first message isn't hidden behind the ticker bar.
         const html = createTickerHTML(sceneData);
-        if (html) $('#chat').prepend(html);
+        if (html) {
+            $('body').append(html);
+            $('#chat').addClass('dooms-ticker-active');
+        }
+    } else if (layout === 'ticker-bottom') {
+        // Insert the ticker as a flex child of #sheld, directly before #form_sheld.
+        // This means it sits naturally in the layout flow — no position:fixed, no JS
+        // measurement of the input bar height, and no snapping on initial render.
+        const html = createTickerHTML(sceneData);
+        if (html) {
+            const $el = $(html);
+            $el.addClass('ticker-bottom');
+            const $formSheld = $('#form_sheld');
+            if ($formSheld.length) {
+                $formSheld.before($el);
+            } else {
+                $('body').append($el);
+            }
+            $('#chat').addClass('dooms-ticker-bottom-active');
+        }
     } else {
         // Classic layouts: grid, stacked, compact
         const $target = findLastAssistantMessage();
@@ -285,6 +314,11 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
         time: '',
         date: '',
         location: '',
+        moonPhase: '',
+        tension: '',
+        timeSinceRest: '',
+        conditions: '',
+        terrain: '',
         presentCharacters: [],
         activeQuest: '',
         recentEvents: ''
@@ -320,6 +354,22 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
                 } else {
                     result.location = info.location.value || '';
                 }
+            }
+            // New optional fields — all flat strings
+            if (info.moonPhase) {
+                result.moonPhase = typeof info.moonPhase === 'string' ? info.moonPhase : (info.moonPhase.value || '');
+            }
+            if (info.tension) {
+                result.tension = typeof info.tension === 'string' ? info.tension : (info.tension.value || '');
+            }
+            if (info.timeSinceRest) {
+                result.timeSinceRest = typeof info.timeSinceRest === 'string' ? info.timeSinceRest : (info.timeSinceRest.value || '');
+            }
+            if (info.conditions) {
+                result.conditions = typeof info.conditions === 'string' ? info.conditions : (info.conditions.value || '');
+            }
+            if (info.terrain) {
+                result.terrain = typeof info.terrain === 'string' ? info.terrain : (info.terrain.value || '');
             }
             // Recent Events (limit to 2 major events for the scene header)
             if (info.recentEvents) {
@@ -439,6 +489,56 @@ function createSceneHeaderHTML(data) {
             </div>
         `);
     }
+    // Moon Phase
+    if (data.moonPhase && st.showMoonPhase !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-moon"></i>
+                <span class="dooms-scene-label">Moon Phase:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.moonPhase)}</span>
+            </div>
+        `);
+    }
+    // Tension
+    if (data.tension && st.showTension !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-fire"></i>
+                <span class="dooms-scene-label">Tension:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.tension)}</span>
+            </div>
+        `);
+    }
+    // Time Since Rest
+    if (data.timeSinceRest && st.showTimeSinceRest !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-hourglass-half"></i>
+                <span class="dooms-scene-label">Rest:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.timeSinceRest)}</span>
+            </div>
+        `);
+    }
+    // Active Conditions
+    if (data.conditions && st.showConditions !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-heart-crack"></i>
+                <span class="dooms-scene-label">Conditions:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.conditions)}</span>
+            </div>
+        `);
+    }
+    // Terrain
+    if (data.terrain && st.showTerrain !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-tree"></i>
+                <span class="dooms-scene-label">Terrain:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.terrain)}</span>
+            </div>
+        `);
+    }
     // Present Characters
     if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
         const badges = data.presentCharacters.map(c =>
@@ -466,7 +566,7 @@ function createSceneHeaderHTML(data) {
     if (data.recentEvents && st.showRecentEvents !== false) {
         rows.push(`
             <div class="dooms-scene-events">
-                <i class="fa-solid fa-bolt"></i>
+                <i class="fa-solid fa-newspaper"></i>
                 <span class="dooms-scene-label">Recent:</span>
                 <span class="dooms-scene-value dooms-scene-events-text">${escapeHtml(data.recentEvents)}</span>
             </div>
@@ -512,6 +612,41 @@ function createBannerHTML(data) {
             <span class="dooms-ip-value">${escapeHtml(data.location)}</span>
         </div>`);
     }
+    if (data.moonPhase && st.showMoonPhase !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-moon"></i>
+            <span class="dooms-ip-label">Moon Phase:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.moonPhase)}</span>
+        </div>`);
+    }
+    if (data.tension && st.showTension !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-fire"></i>
+            <span class="dooms-ip-label">Tension:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.tension)}</span>
+        </div>`);
+    }
+    if (data.timeSinceRest && st.showTimeSinceRest !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-hourglass-half"></i>
+            <span class="dooms-ip-label">Rest:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.timeSinceRest)}</span>
+        </div>`);
+    }
+    if (data.conditions && st.showConditions !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-heart-crack"></i>
+            <span class="dooms-ip-label">Conditions:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.conditions)}</span>
+        </div>`);
+    }
+    if (data.terrain && st.showTerrain !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-tree"></i>
+            <span class="dooms-ip-label">Terrain:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.terrain)}</span>
+        </div>`);
+    }
 
     const itemsWithDividers = items.length > 1
         ? items.join('<div class="dooms-ip-divider"></div>')
@@ -546,7 +681,7 @@ function createBannerHTML(data) {
     let eventsHtml = '';
     if (data.recentEvents && st.showRecentEvents !== false) {
         eventsHtml = `<div class="dooms-ip-quest dooms-ip-events">
-            <i class="fa-solid fa-bolt"></i>
+            <i class="fa-solid fa-newspaper"></i>
             <span class="dooms-ip-label">Recent:</span>
             <span class="dooms-ip-value dooms-ip-events-text">${escapeHtml(data.recentEvents)}</span>
         </div>`;
@@ -592,6 +727,41 @@ function createHudHTML(data) {
             <span class="dooms-ip-hud-value">${escapeHtml(data.location)}</span>
         </div>`);
     }
+    if (data.moonPhase && st.showMoonPhase !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-moon"></i>
+            <span class="dooms-ip-hud-label">Moon Phase</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.moonPhase)}</span>
+        </div>`);
+    }
+    if (data.tension && st.showTension !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-fire"></i>
+            <span class="dooms-ip-hud-label">Tension</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.tension)}</span>
+        </div>`);
+    }
+    if (data.timeSinceRest && st.showTimeSinceRest !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-hourglass-half"></i>
+            <span class="dooms-ip-hud-label">Rest</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.timeSinceRest)}</span>
+        </div>`);
+    }
+    if (data.conditions && st.showConditions !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-heart-crack"></i>
+            <span class="dooms-ip-hud-label">Conditions</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.conditions)}</span>
+        </div>`);
+    }
+    if (data.terrain && st.showTerrain !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-tree"></i>
+            <span class="dooms-ip-hud-label">Terrain</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.terrain)}</span>
+        </div>`);
+    }
 
     // Characters
     if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
@@ -623,7 +793,7 @@ function createHudHTML(data) {
         rows.push(`<div class="dooms-ip-hud-divider"></div>`);
         rows.push(`<div class="dooms-ip-hud-row" style="flex-direction: column; gap: 4px;">
             <div style="display: flex; align-items: center; gap: 5px;">
-                <i class="fa-solid fa-bolt"></i>
+                <i class="fa-solid fa-newspaper"></i>
                 <span class="dooms-ip-hud-label">Recent</span>
             </div>
             <div class="dooms-ip-hud-events">
@@ -653,23 +823,61 @@ function createTickerHTML(data) {
     const st = extensionSettings.sceneTracker || {};
     const styleVars = buildStyleVars();
 
-    // Collapsed bar items
+    // Collapsed bar items — each one rotates in one at a time (full bar width available,
+    // no need for aggressive truncation; 60-char soft cap keeps it readable)
+    const MAX_LEN = 60;
+    const trunc = (s) => s.length > MAX_LEN ? s.substring(0, MAX_LEN - 1) + '…' : s;
     const tickerItems = [];
     if (data.time && st.showTime !== false) {
         tickerItems.push(`<span class="dooms-ip-ticker-item">
             <i class="fa-solid fa-clock"></i> ${escapeHtml(data.time.split('→')[0].trim())}
         </span>`);
     }
-    if (data.location && st.showLocation !== false) {
-        const loc = data.location.length > 30 ? data.location.substring(0, 28) + '...' : data.location;
+    if (data.date && st.showDate !== false) {
         tickerItems.push(`<span class="dooms-ip-ticker-item">
-            <i class="fa-solid fa-location-dot"></i> ${escapeHtml(loc)}
+            <i class="fa-solid fa-calendar"></i> ${escapeHtml(trunc(data.date))}
+        </span>`);
+    }
+    if (data.location && st.showLocation !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-location-dot"></i> ${escapeHtml(trunc(data.location))}
+        </span>`);
+    }
+    if (data.moonPhase && st.showMoonPhase !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-moon"></i> ${escapeHtml(data.moonPhase)}
+        </span>`);
+    }
+    if (data.tension && st.showTension !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-fire"></i> ${escapeHtml(data.tension)}
+        </span>`);
+    }
+    if (data.timeSinceRest && st.showTimeSinceRest !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-hourglass-half"></i> ${escapeHtml(data.timeSinceRest)}
+        </span>`);
+    }
+    if (data.conditions && st.showConditions !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-heart-crack"></i> ${escapeHtml(trunc(data.conditions))}
+        </span>`);
+    }
+    if (data.terrain && st.showTerrain !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-tree"></i> ${escapeHtml(trunc(data.terrain))}
         </span>`);
     }
     if (data.activeQuest && st.showQuest !== false) {
-        const quest = data.activeQuest.length > 30 ? data.activeQuest.substring(0, 28) + '...' : data.activeQuest;
         tickerItems.push(`<span class="dooms-ip-ticker-item dooms-ip-ticker-quest">
-            <i class="fa-solid fa-scroll"></i> ${escapeHtml(quest)}
+            <i class="fa-solid fa-scroll"></i> ${escapeHtml(trunc(data.activeQuest))}
+        </span>`);
+    }
+    if (data.recentEvents && st.showRecentEvents !== false) {
+        // Show only the first event in the rotating ticker (truncated); full list in expanded panel
+        const firstEvent = data.recentEvents.split(';')[0].trim();
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-newspaper"></i> ${escapeHtml(trunc(firstEvent))}
         </span>`);
     }
 
@@ -683,62 +891,173 @@ function createTickerHTML(data) {
         }).join('');
     }
 
-    // Expanded panel rows
-    const panelRows = [];
+    // Expanded panel — two columns for compact fields, full-width for wide fields.
+    // Collect compact rows first, then split evenly into left/right columns so both
+    // are always filled regardless of which optional fields are enabled.
+    const compactRows = [];
     if (data.time && st.showTime !== false) {
-        panelRows.push(`<div class="dooms-ip-panel-row">
+        compactRows.push(`<div class="dooms-ip-panel-row">
             <i class="fa-solid fa-clock"></i>
             <span class="dooms-ip-panel-label">Time</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.time)}</span>
         </div>`);
     }
     if (data.date && st.showDate !== false) {
-        panelRows.push(`<div class="dooms-ip-panel-row">
+        compactRows.push(`<div class="dooms-ip-panel-row">
             <i class="fa-solid fa-calendar"></i>
             <span class="dooms-ip-panel-label">Date</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.date)}</span>
         </div>`);
     }
     if (data.location && st.showLocation !== false) {
-        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full">
+        compactRows.push(`<div class="dooms-ip-panel-row">
             <i class="fa-solid fa-location-dot"></i>
             <span class="dooms-ip-panel-label">Location</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.location)}</span>
         </div>`);
     }
+    if (data.moonPhase && st.showMoonPhase !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-moon"></i>
+            <span class="dooms-ip-panel-label">Moon Phase</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.moonPhase)}</span>
+        </div>`);
+    }
+    if (data.tension && st.showTension !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-fire"></i>
+            <span class="dooms-ip-panel-label">Tension</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.tension)}</span>
+        </div>`);
+    }
+    if (data.timeSinceRest && st.showTimeSinceRest !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-hourglass-half"></i>
+            <span class="dooms-ip-panel-label">Rest</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.timeSinceRest)}</span>
+        </div>`);
+    }
+    if (data.terrain && st.showTerrain !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-tree"></i>
+            <span class="dooms-ip-panel-label">Terrain</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.terrain)}</span>
+        </div>`);
+    }
+    if (data.conditions && st.showConditions !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-heart-crack"></i>
+            <span class="dooms-ip-panel-label">Conditions</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.conditions)}</span>
+        </div>`);
+    }
+
+    // Present and Quest also fit as compact two-column rows
     if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
-        const chars = data.presentCharacters.map(c => {
+        const charNames = data.presentCharacters.map(c => {
             const color = getCharacterColor(c.name);
-            const dotStyle = color ? ` style="background: ${escapeHtml(color)}"` : '';
-            return `<span class="dooms-ip-panel-char"><span class="dooms-ip-panel-char-dot"${dotStyle}></span> ${escapeHtml(c.name)}</span>`;
-        }).join('');
-        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full">
+            const dotStyle = color ? ` style="background:${escapeHtml(color)}"` : '';
+            return `<span class="dooms-ip-panel-char"><span class="dooms-ip-panel-char-dot"${dotStyle}></span>${escapeHtml(c.name)}</span>`;
+        }).join(' ');
+        compactRows.push(`<div class="dooms-ip-panel-row">
             <i class="fa-solid fa-users"></i>
             <span class="dooms-ip-panel-label">Present</span>
-            <div class="dooms-ip-panel-chars">${chars}</div>
+            <span class="dooms-ip-panel-value">${charNames}</span>
         </div>`);
     }
     if (data.activeQuest && st.showQuest !== false) {
-        panelRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-full dooms-ip-panel-quest">
+        compactRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-quest">
             <i class="fa-solid fa-scroll"></i>
             <span class="dooms-ip-panel-label">Quest</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.activeQuest)}</span>
         </div>`);
     }
+
+    // Recent Events goes into the compact grid as the last item (right column).
+    // Keeping it compact means it sits on the right side as requested.
+    // We show only the first event truncated; full bullets visible on hover/scroll.
     if (data.recentEvents && st.showRecentEvents !== false) {
-        const events = data.recentEvents.split(';').map(e => e.trim()).filter(e => e).map(e =>
+        const firstEvent = data.recentEvents.split(';')[0].trim();
+        const allEvents = data.recentEvents.split(';').map(e => e.trim()).filter(e => e).map(e =>
             `<div class="dooms-ip-panel-event"><span class="dooms-ip-panel-event-bullet">&bull;</span> ${escapeHtml(e)}</div>`
         ).join('');
-        panelRows.push(`<div class="dooms-ip-panel-events dooms-ip-panel-full">${events}</div>`);
+        compactRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-events-row">
+            <i class="fa-solid fa-newspaper"></i>
+            <span class="dooms-ip-panel-label">Recent</span>
+            <div class="dooms-ip-panel-events dooms-ip-panel-events-compact">${allEvents}</div>
+        </div>`);
+    }
+
+    // If odd number of compact rows, add an invisible pad so the grid stays balanced
+    if (compactRows.length % 2 !== 0) {
+        compactRows.push(`<div class="dooms-ip-panel-row dooms-ip-panel-empty"></div>`);
+    }
+
+    // Build the final panel HTML.
+    // All rows go into a single CSS grid (2 cols) — auto-placed left→right,
+    // so col1 and col2 share the same grid row height automatically.
+    const panelRows = [];
+    if (compactRows.length > 0) {
+        panelRows.push(`<div class="dooms-ip-panel-cols">${compactRows.join('')}</div>`);
     }
 
     if (!tickerItems.length && !charDots && !panelRows.length) return '';
 
-    return `<div class="dooms-info-ticker-wrapper" style="${styleVars}">
+    // Rotating broadcast display: items cycle one at a time, each visible for HOLD_SECS.
+    // We generate a concrete @keyframes block in JS so percentage stops are plain numbers
+    // (CSS custom properties inside keyframe selectors are not supported by browsers).
+    const HOLD_SECS = 5;
+    const n = tickerItems.length;
+    let rotatingItems;
+    let tickerStyleBlock = '';
+
+    if (n === 1) {
+        // Single item — show statically (centering comes from the CSS class)
+        rotatingItems = tickerItems[0].replace(
+            /^(\s*<span\b)/,
+            '$1 style="opacity:1"'
+        );
+    } else {
+        const totalSecs = n * HOLD_SECS;
+        // Percentage of the full cycle that one slot occupies = 100/n
+        // Keyframe stops (as % of full cycle):
+        //   0%        → invisible
+        //   fadeIn%   → 8% into this slot → fully visible
+        //   holdEnd%  → 85% into this slot → start fade
+        //   slotEnd%  → end of slot → invisible
+        //   100%      → still invisible (loop)
+        const slotPct   = 100 / n;
+        const pFadeIn   = (slotPct * 0.08).toFixed(3);
+        const pHoldEnd  = (slotPct * 0.85).toFixed(3);
+        const pSlotEnd  = (slotPct * 1.00).toFixed(3);
+
+        // Build a concrete @keyframes rule (no CSS vars in stops = universally supported)
+        const keyframeName = 'dooms-ticker-rotate-n' + n;
+        tickerStyleBlock = `<style id="dooms-ticker-rotate-style">
+@keyframes ${keyframeName} {
+    0%           { opacity: 0; transform: translateY(3px);  }
+    ${pFadeIn}%  { opacity: 1; transform: translateY(0);    }
+    ${pHoldEnd}% { opacity: 1; transform: translateY(0);    }
+    ${pSlotEnd}% { opacity: 0; transform: translateY(-3px); }
+    100%         { opacity: 0; transform: translateY(-3px); }
+}
+</style>`;
+
+        rotatingItems = tickerItems.map((item, i) => {
+            const style = [
+                `animation-name:${keyframeName}`,
+                `animation-delay:${i * HOLD_SECS}s`,
+                `animation-duration:${totalSecs}s`
+            ].join('; ');
+            return item.replace(/^(\s*<span\b)/, `$1 style="${style}"`);
+        }).join('');
+    }
+
+    return `${tickerStyleBlock}<div class="dooms-info-ticker-wrapper" style="${styleVars}">
         <div class="dooms-info-ticker">
             <span class="dooms-ip-ticker-icon"><i class="fa-solid fa-compass"></i></span>
             <div class="dooms-ip-ticker-items">
-                ${tickerItems.join('<span class="dooms-ip-ticker-sep">|</span>')}
+                ${rotatingItems}
             </div>
             ${charDots ? `<div class="dooms-ip-ticker-chars">${charDots}</div>` : ''}
             <span class="dooms-ip-ticker-expand"><i class="fa-solid fa-chevron-down"></i></span>

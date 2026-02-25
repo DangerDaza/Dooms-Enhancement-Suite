@@ -165,6 +165,76 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 6;
                 settingsChanged = true;
             }
+            // Migration to version 7: Add new optional infoBox widgets (moonPhase, tension, timeSinceRest, conditions, terrain)
+            // These were added after many users already had saved settings, so old saves won't have them.
+            if (currentVersion < 7) {
+                const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+                if (widgets) {
+                    if (!widgets.moonPhase)     widgets.moonPhase     = { enabled: false, persistInHistory: false };
+                    if (!widgets.tension)       widgets.tension       = { enabled: false, persistInHistory: false };
+                    if (!widgets.timeSinceRest) widgets.timeSinceRest = { enabled: false, persistInHistory: false };
+                    if (!widgets.conditions)    widgets.conditions    = { enabled: false, persistInHistory: false };
+                    if (!widgets.terrain)       widgets.terrain       = { enabled: false, persistInHistory: false };
+                }
+                // Also migrate all saved presets so they get the new widgets too
+                const presets = extensionSettings.presetManager?.presets;
+                if (presets) {
+                    for (const presetId of Object.keys(presets)) {
+                        const presetWidgets = presets[presetId]?.trackerConfig?.infoBox?.widgets;
+                        if (presetWidgets) {
+                            if (!presetWidgets.moonPhase)     presetWidgets.moonPhase     = { enabled: false, persistInHistory: false };
+                            if (!presetWidgets.tension)       presetWidgets.tension       = { enabled: false, persistInHistory: false };
+                            if (!presetWidgets.timeSinceRest) presetWidgets.timeSinceRest = { enabled: false, persistInHistory: false };
+                            if (!presetWidgets.conditions)    presetWidgets.conditions    = { enabled: false, persistInHistory: false };
+                            if (!presetWidgets.terrain)       presetWidgets.terrain       = { enabled: false, persistInHistory: false };
+                        }
+                    }
+                }
+                extensionSettings.settingsVersion = 7;
+                settingsChanged = true;
+            }
+            // Migration to version 8: Sync sceneTracker show-flags → infoBox widget enabled flags.
+            // Before this version the two settings were independent; users who turned on the
+            // Scene Tracker show-toggle (thinking it would make the AI generate the field) had
+            // sceneTracker.showX = true but widgets[x].enabled = false, so the AI never produced
+            // the field. This migration copies the user's intent from showX into widgets[x].enabled.
+            if (currentVersion < 8) {
+                const st = extensionSettings.sceneTracker || {};
+                const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+                if (widgets) {
+                    const syncPairs = [
+                        ['showMoonPhase',    'moonPhase'],
+                        ['showTension',      'tension'],
+                        ['showTimeSinceRest','timeSinceRest'],
+                        ['showConditions',   'conditions'],
+                        ['showTerrain',      'terrain'],
+                    ];
+                    for (const [showKey, widgetKey] of syncPairs) {
+                        if (st[showKey] === true) {
+                            if (!widgets[widgetKey]) widgets[widgetKey] = { persistInHistory: false };
+                            widgets[widgetKey].enabled = true;
+                        }
+                    }
+                }
+                extensionSettings.settingsVersion = 8;
+                settingsChanged = true;
+            }
+            // Migration to version 9: Ensure core infoBox widgets (time, date, location, recentEvents)
+            // are always enabled. These are fundamental fields that should never be disabled — but
+            // users who had settings saved from an earlier buggy state could have them as enabled:false,
+            // causing the AI to skip them entirely and the ticker panel to show only optional fields.
+            if (currentVersion < 9) {
+                const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+                if (widgets) {
+                    const coreWidgets = ['time', 'date', 'location', 'recentEvents'];
+                    for (const key of coreWidgets) {
+                        if (!widgets[key]) widgets[key] = { persistInHistory: true };
+                        widgets[key].enabled = true;
+                    }
+                }
+                extensionSettings.settingsVersion = 9;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {
@@ -655,6 +725,16 @@ export function loadPreset(presetId) {
     const preset = extensionSettings.presetManager.presets[presetId];
     if (preset && preset.trackerConfig) {
         extensionSettings.trackerConfig = JSON.parse(JSON.stringify(preset.trackerConfig));
+        // Migrate old presets: ensure all new optional infoBox widgets exist.
+        // Presets saved before these fields were added won't have them — fill in defaults.
+        const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+        if (widgets) {
+            if (!widgets.moonPhase)     widgets.moonPhase     = { enabled: false, persistInHistory: false };
+            if (!widgets.tension)       widgets.tension       = { enabled: false, persistInHistory: false };
+            if (!widgets.timeSinceRest) widgets.timeSinceRest = { enabled: false, persistInHistory: false };
+            if (!widgets.conditions)    widgets.conditions    = { enabled: false, persistInHistory: false };
+            if (!widgets.terrain)       widgets.terrain       = { enabled: false, persistInHistory: false };
+        }
         // Load historyPersistence if present, otherwise use defaults
         if (preset.historyPersistence) {
             extensionSettings.historyPersistence = JSON.parse(JSON.stringify(preset.historyPersistence));

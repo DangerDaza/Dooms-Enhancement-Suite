@@ -299,7 +299,12 @@ function resetToDefaults() {
                 temperature: { enabled: true, unit: 'C', persistInHistory: false },
                 time: { enabled: true, persistInHistory: true },
                 location: { enabled: true, persistInHistory: true },
-                recentEvents: { enabled: true, persistInHistory: false }
+                recentEvents: { enabled: true, persistInHistory: false },
+                moonPhase: { enabled: false, persistInHistory: false },
+                tension: { enabled: false, persistInHistory: false },
+                timeSinceRest: { enabled: false, persistInHistory: false },
+                conditions: { enabled: false, persistInHistory: false },
+                terrain: { enabled: false, persistInHistory: false }
             }
         },
         presentCharacters: {
@@ -607,6 +612,28 @@ function renderInfoBoxTab() {
     html += `<input type="checkbox" id="rpg-widget-events" ${config.widgets.recentEvents.enabled ? 'checked' : ''}>`;
     html += `<label for="rpg-widget-events">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.recentEventsWidget')}</label>`;
     html += '</div>';
+    // --- New optional fields ---
+    html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-moonphase" ${config.widgets.moonPhase?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-moonphase">🌙 Moon Phase <small style="opacity:0.6">(Full Moon, Waning Crescent…)</small></label>`;
+    html += '</div>';
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-tension" ${config.widgets.tension?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-tension">⚡ Tension / Mood <small style="opacity:0.6">(Calm, Tense, Hostile…)</small></label>`;
+    html += '</div>';
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-timesincerest" ${config.widgets.timeSinceRest?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-timesincerest">⏳ Time Since Rest <small style="opacity:0.6">(e.g. 6 hours, 2 days)</small></label>`;
+    html += '</div>';
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-conditions" ${config.widgets.conditions?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-conditions">💔 Active Conditions <small style="opacity:0.6">(Transformed, Poisoned…)</small></label>`;
+    html += '</div>';
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-terrain" ${config.widgets.terrain?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-terrain">🌿 Terrain <small style="opacity:0.6">(Dense Forest, City Streets…)</small></label>`;
+    html += '</div>';
     html += '</div>';
     $('#rpg-editor-tab-infoBox').html(html);
     setupInfoBoxListeners();
@@ -630,6 +657,46 @@ function setupInfoBoxListeners() {
     });
     $('#rpg-widget-events').off('change').on('change', function() {
         widgets.recentEvents.enabled = $(this).is(':checked');
+    });
+    // Optional fields: also sync the Scene Tracker show-flag so both settings agree.
+    // The Scene Tracker toggle in the main panel and the widget checkbox here are the same concept.
+    const _syncSceneTracker = (showKey, checked) => {
+        if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
+        extensionSettings.sceneTracker[showKey] = checked;
+        // Mirror the UI checkbox in the Scene Tracker panel (if the panel is open)
+        const uiMap = {
+            showMoonPhase: '#rpg-st-show-moonphase',
+            showTension: '#rpg-st-show-tension',
+            showTimeSinceRest: '#rpg-st-show-timesincerest',
+            showConditions: '#rpg-st-show-conditions',
+            showTerrain: '#rpg-st-show-terrain',
+        };
+        if (uiMap[showKey]) $(uiMap[showKey]).prop('checked', checked);
+    };
+    $('#rpg-widget-moonphase').off('change').on('change', function() {
+        if (!widgets.moonPhase) widgets.moonPhase = {};
+        widgets.moonPhase.enabled = $(this).is(':checked');
+        _syncSceneTracker('showMoonPhase', $(this).is(':checked'));
+    });
+    $('#rpg-widget-tension').off('change').on('change', function() {
+        if (!widgets.tension) widgets.tension = {};
+        widgets.tension.enabled = $(this).is(':checked');
+        _syncSceneTracker('showTension', $(this).is(':checked'));
+    });
+    $('#rpg-widget-timesincerest').off('change').on('change', function() {
+        if (!widgets.timeSinceRest) widgets.timeSinceRest = {};
+        widgets.timeSinceRest.enabled = $(this).is(':checked');
+        _syncSceneTracker('showTimeSinceRest', $(this).is(':checked'));
+    });
+    $('#rpg-widget-conditions').off('change').on('change', function() {
+        if (!widgets.conditions) widgets.conditions = {};
+        widgets.conditions.enabled = $(this).is(':checked');
+        _syncSceneTracker('showConditions', $(this).is(':checked'));
+    });
+    $('#rpg-widget-terrain').off('change').on('change', function() {
+        if (!widgets.terrain) widgets.terrain = {};
+        widgets.terrain.enabled = $(this).is(':checked');
+        _syncSceneTracker('showTerrain', $(this).is(':checked'));
     });
 }
 /**

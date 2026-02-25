@@ -23,7 +23,7 @@ import { i18n } from '../../core/i18n.js';
 import { parseResponse, parseQuests } from '../generation/parser.js';
 import { updateRPGData } from '../generation/apiClient.js';
 import { removeLocks } from '../generation/lockManager.js';
-import { onGenerationStarted, initHistoryInjectionListeners } from '../generation/injector.js';
+import { onGenerationStarted, initHistoryInjectionListeners, clearBoostForAppearedFields } from '../generation/injector.js';
 // Rendering
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
@@ -150,6 +150,8 @@ export async function onMessageReceived(data) {
             // handled by the same script. We intentionally do NOT modify lastMessage.mes here —
             // doing so would cause SillyTavern's Expression Classifier to fire an extra classify
             // call on the raw JSON-laden text before the regex script has a chance to clean it.
+            // Clear boost counters for any fields that now appear in the AI output
+            if (parsedData.infoBox) clearBoostForAppearedFields();
             // Render only the sections that had new data parsed
             if (parsedData.infoBox) renderInfoBox();
             if (parsedData.characterThoughts) renderThoughts();
@@ -216,16 +218,30 @@ export function onCharacterChanged() {
     renderInfoBox();
     renderThoughts();
     renderQuests();
+    // Scene header layouts that render into <body> or #chat directly (not into a specific
+    // message element) can also render immediately — ticker, ticker-bottom, and hud don't
+    // need any .mes elements to exist. This lets the scene tracker appear at the same
+    // time as the portrait bar instead of 200–3000ms later.
+    const immediateLayout = (extensionSettings.sceneTracker || {}).layout || 'grid';
+    const isBodyLayout = immediateLayout === 'ticker' || immediateLayout === 'ticker-bottom' || immediateLayout === 'hud';
+    if (isBodyLayout) {
+        updateChatSceneHeaders();
+    }
     updatePortraitBar();
     // Delay DOM-dependent renders — SillyTavern renders chat messages asynchronously
     // after CHAT_CHANGED fires, so #chat .mes elements may not exist yet.
-    // Poll until messages appear in the DOM (up to 3 seconds).
+    // For body-level layouts we already rendered above; still poll to catch the case
+    // where chat messages appear later and need thoughts overlays injected.
     let attempts = 0;
     const maxAttempts = 15;
     const tryRenderChat = () => {
         attempts++;
         if ($('#chat .mes').length > 0) {
-            updateChatSceneHeaders();
+            // For classic layouts (grid/stacked/compact/banner) that inject after a
+            // specific .mes element, render now that the DOM is ready.
+            if (!isBodyLayout) {
+                updateChatSceneHeaders();
+            }
             updateChatThoughts();
         } else if (attempts < maxAttempts) {
             setTimeout(tryRenderChat, 200);

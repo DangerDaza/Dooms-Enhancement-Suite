@@ -54,6 +54,14 @@ export function buildQuestsJSONInstruction() {
 export function buildInfoBoxJSONInstruction() {
     const infoBoxConfig = extensionSettings.trackerConfig?.infoBox;
     const widgets = infoBoxConfig?.widgets || {};
+    // Core fields are always included — they are fundamental tracker fields that should
+    // never be gated behind an enabled flag. If they somehow got disabled (e.g. from an
+    // old save), force them on here so the prompt always asks the AI for them.
+    const CORE_FIELDS = ['date', 'time', 'location', 'recentEvents'];
+    for (const key of CORE_FIELDS) {
+        if (!widgets[key]) widgets[key] = { enabled: true, persistInHistory: true };
+        else if (!widgets[key].enabled) widgets[key].enabled = true;
+    }
     let instruction = '{\n';
     let hasFields = false;
     if (widgets.date?.enabled) {
@@ -71,6 +79,26 @@ export function buildInfoBoxJSONInstruction() {
     }
     if (widgets.recentEvents?.enabled) {
         instruction += (hasFields ? ',\n' : '') + '  "recentEvents": ["1-2 brief major events only"]';
+        hasFields = true;
+    }
+    if (widgets.moonPhase?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "moonPhase": "Current moon phase (New Moon / Waxing Crescent / First Quarter / Waxing Gibbous / Full Moon / Waning Gibbous / Last Quarter / Waning Crescent)"';
+        hasFields = true;
+    }
+    if (widgets.tension?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "tension": "Overall scene tension (Calm / Uneasy / Tense / Hostile / Volatile / Intimate)"';
+        hasFields = true;
+    }
+    if (widgets.timeSinceRest?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "timeSinceRest": "Time since the player character last slept or rested (e.g. \\"6 hours\\", \\"2 days\\")"';
+        hasFields = true;
+    }
+    if (widgets.conditions?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "conditions": "Comma-separated active physical or magical conditions on the player (e.g. \\"Transformed, Poisoned\\" or \\"None\\")"';
+        hasFields = true;
+    }
+    if (widgets.terrain?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"';
         hasFields = true;
     }
     instruction += '\n}';

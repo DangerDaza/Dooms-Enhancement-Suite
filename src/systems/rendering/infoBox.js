@@ -330,6 +330,44 @@ export function renderInfoBox() {
             </div>
         `;
     }
+    // Row 2b: New optional widgets — Moon Phase, Tension, Time Since Rest, Conditions, Terrain
+    // Parse new fields from JSON infoBox data
+    let extraFieldsData = {};
+    if (infoBoxData) {
+        try {
+            const parsed = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+            if (parsed) {
+                extraFieldsData.moonPhase = typeof parsed.moonPhase === 'string' ? parsed.moonPhase : (parsed.moonPhase?.value || '');
+                extraFieldsData.tension = typeof parsed.tension === 'string' ? parsed.tension : (parsed.tension?.value || '');
+                extraFieldsData.timeSinceRest = typeof parsed.timeSinceRest === 'string' ? parsed.timeSinceRest : (parsed.timeSinceRest?.value || '');
+                extraFieldsData.conditions = typeof parsed.conditions === 'string' ? parsed.conditions : (parsed.conditions?.value || '');
+                extraFieldsData.terrain = typeof parsed.terrain === 'string' ? parsed.terrain : (parsed.terrain?.value || '');
+            }
+        } catch (e) { /* ignore */ }
+    }
+    const extraWidgets = [
+        { key: 'moonPhase',     icon: '🌙', label: 'Moon Phase',      placeholder: 'Unknown' },
+        { key: 'tension',       icon: '⚡', label: 'Tension',         placeholder: 'Calm' },
+        { key: 'timeSinceRest', icon: '⏳', label: 'Time Since Rest', placeholder: 'Unknown' },
+        { key: 'conditions',    icon: '💔', label: 'Conditions',      placeholder: 'None' },
+        { key: 'terrain',       icon: '🌿', label: 'Terrain',         placeholder: 'Unknown' },
+    ];
+    for (const w of extraWidgets) {
+        if (config?.widgets?.[w.key]?.enabled) {
+            const display = extraFieldsData[w.key] || w.placeholder;
+            const lockIconHtml = getLockIconHtml('infoBox', w.key);
+            html += `
+                <div class="rpg-dashboard rpg-dashboard-row-extra">
+                    <div class="rpg-dashboard-widget rpg-extra-widget">
+                        ${lockIconHtml}
+                        <div class="rpg-extra-icon">${w.icon}</div>
+                        <div class="rpg-extra-label">${w.label}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${display}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
     // Row 3: Recent Events widget (notebook style) - show if enabled
     if (config?.widgets?.recentEvents?.enabled) {
         // Parse Recent Events from infoBox (supports both JSON and text formats)
@@ -481,6 +519,16 @@ export function updateInfoBoxField(field, value) {
                     dateParts[2] = value;
                 }
                 jsonData.date.value = dateParts.filter(p => p).join(', ');
+            } else if (field === 'moonPhase') {
+                jsonData.moonPhase = value;
+            } else if (field === 'tension') {
+                jsonData.tension = value;
+            } else if (field === 'timeSinceRest') {
+                jsonData.timeSinceRest = value;
+            } else if (field === 'conditions') {
+                jsonData.conditions = value;
+            } else if (field === 'terrain') {
+                jsonData.terrain = value;
             }
             // Save back as JSON
             lastGeneratedData.infoBox = JSON.stringify(jsonData, null, 2);

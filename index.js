@@ -550,6 +550,45 @@ async function initUI() {
     $('#rpg-st-show-characters').on('change', function() { _stSettings().showCharacters = $(this).prop('checked'); _saveSt(); });
     $('#rpg-st-show-quest').on('change', function() { _stSettings().showQuest = $(this).prop('checked'); _saveSt(); });
     $('#rpg-st-show-events').on('change', function() { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
+    // Optional fields: Scene Tracker toggle and infoBox widget enabled flag are the same concept.
+    // Syncing both ensures the AI generates the field AND the tracker bar displays it.
+    const _syncOptionalField = (widgetKey, checked) => {
+        const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+        if (widgets) {
+            if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
+            widgets[widgetKey].enabled = checked;
+        }
+    };
+    $('#rpg-st-show-moonphase').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showMoonPhase = v;
+        _syncOptionalField('moonPhase', v);
+        _saveSt();
+    });
+    $('#rpg-st-show-tension').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showTension = v;
+        _syncOptionalField('tension', v);
+        _saveSt();
+    });
+    $('#rpg-st-show-timesincerest').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showTimeSinceRest = v;
+        _syncOptionalField('timeSinceRest', v);
+        _saveSt();
+    });
+    $('#rpg-st-show-conditions').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showConditions = v;
+        _syncOptionalField('conditions', v);
+        _saveSt();
+    });
+    $('#rpg-st-show-terrain').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showTerrain = v;
+        _syncOptionalField('terrain', v);
+        _saveSt();
+    });
 
     // Layout
     $('#rpg-st-layout').on('change', function() {
@@ -641,6 +680,11 @@ async function initUI() {
         $('#rpg-st-show-characters').prop('checked', true);
         $('#rpg-st-show-quest').prop('checked', true);
         $('#rpg-st-show-events').prop('checked', true);
+        $('#rpg-st-show-moonphase').prop('checked', false);
+        $('#rpg-st-show-tension').prop('checked', false);
+        $('#rpg-st-show-timesincerest').prop('checked', false);
+        $('#rpg-st-show-conditions').prop('checked', false);
+        $('#rpg-st-show-terrain').prop('checked', false);
         $('#rpg-st-layout').val('grid');
         $('#rpg-st-font-size').val(82); $('#rpg-st-font-size-value').text('82%');
         $('#rpg-st-border-radius').val(8); $('#rpg-st-border-radius-value').text('8px');
@@ -746,7 +790,8 @@ async function initUI() {
     });
 
     // Ticker click delegation — expand/collapse
-    $('#chat').on('click', '.dooms-info-ticker', function() {
+    // Uses $(document) delegation since the ticker is appended to <body> (position:fixed)
+    $(document).on('click', '.dooms-info-ticker', function() {
         $(this).closest('.dooms-info-ticker-wrapper').toggleClass('expanded');
     });
 
@@ -1128,6 +1173,11 @@ async function initUI() {
     $('#rpg-st-show-characters').prop('checked', st.showCharacters !== false);
     $('#rpg-st-show-quest').prop('checked', st.showQuest !== false);
     $('#rpg-st-show-events').prop('checked', st.showRecentEvents !== false);
+    $('#rpg-st-show-moonphase').prop('checked', st.showMoonPhase === true);
+    $('#rpg-st-show-tension').prop('checked', st.showTension === true);
+    $('#rpg-st-show-timesincerest').prop('checked', st.showTimeSinceRest === true);
+    $('#rpg-st-show-conditions').prop('checked', st.showConditions === true);
+    $('#rpg-st-show-terrain').prop('checked', st.showTerrain === true);
     $('#rpg-st-layout').val(st.layout || 'grid');
     $('#rpg-st-font-size').val(st.fontSize ?? 82);
     $('#rpg-st-font-size-value').text((st.fontSize ?? 82) + '%');

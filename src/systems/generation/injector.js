@@ -33,6 +33,116 @@ let lastCommittedChatLength = -1;
 let pendingContextMap = new Map();
 // Flag to track if injection already happened in BEFORE_COMBINE
 let historyInjectionDone = false;
+
+// ─── New-field boost system ───────────────────────────────────────────────────
+// When a widget is newly enabled (not yet in AI output), inject a short high-
+// priority note via IN_PROMPT (system prompt level) for up to BOOST_MAX_GENS
+// generations so the model picks it up immediately.  Resets each page load.
+const BOOST_MAX_GENS = 2;
+// Map of fieldName → remaining boost generations
+const _fieldBoostCounters = {};
+
+/**
+ * Returns the list of enabled infoBox widget names whose values are absent from
+ * the last committed infoBox JSON. These are "new" fields the AI hasn't seen yet.
+ */
+function detectNewFields() {
+    const widgets = extensionSettings.trackerConfig?.infoBox?.widgets || {};
+    const enabledOptional = ['moonPhase', 'tension', 'timeSinceRest', 'conditions', 'terrain'];
+    const newFields = [];
+
+    let committed = null;
+    try {
+        committed = committedTrackerData.infoBox
+            ? (typeof committedTrackerData.infoBox === 'string'
+                ? JSON.parse(committedTrackerData.infoBox)
+                : committedTrackerData.infoBox)
+            : null;
+    } catch { committed = null; }
+
+    for (const field of enabledOptional) {
+        if (!widgets[field]?.enabled) continue;
+        // If the committed data has no value for this field, it's new
+        const inCommitted = committed && committed[field] !== undefined && committed[field] !== null && committed[field] !== '';
+        if (!inCommitted) {
+            newFields.push(field);
+        }
+    }
+    return newFields;
+}
+
+/** Human-readable label + hint for each optional field used in boost prompt */
+const FIELD_BOOST_HINTS = {
+    moonPhase:     'moonPhase (e.g. "Full Moon", "Waxing Crescent")',
+    tension:       'tension (e.g. "Calm", "Tense", "Intimate")',
+    timeSinceRest: 'timeSinceRest (e.g. "6 hours", "2 days")',
+    conditions:    'conditions (e.g. "Poisoned", "None")',
+    terrain:       'terrain (e.g. "Dense Forest", "City Streets")',
+};
+
+/**
+ * Builds and injects (or clears) the new-field boost prompt.
+ * Called each generation from onGenerationStarted().
+ */
+function injectNewFieldBoost(shouldSuppress) {
+    const SLOT = 'dooms-tracker-new-fields';
+
+    if (shouldSuppress || extensionSettings.generationMode !== 'together') {
+        setExtensionPrompt(SLOT, '', extension_prompt_types.IN_PROMPT, 0, false);
+        return;
+    }
+
+    // Find fields that need boosting
+    const newFields = detectNewFields();
+
+    // Initialise or decrement counters
+    for (const field of newFields) {
+        if (_fieldBoostCounters[field] === undefined) {
+            _fieldBoostCounters[field] = BOOST_MAX_GENS;
+        }
+    }
+    // Determine which fields still have remaining boosts
+    const boostedFields = newFields.filter(f => (_fieldBoostCounters[f] || 0) > 0);
+
+    if (boostedFields.length === 0) {
+        setExtensionPrompt(SLOT, '', extension_prompt_types.IN_PROMPT, 0, false);
+        return;
+    }
+
+    // Build a short, high-priority note
+    const fieldList = boostedFields.map(f => FIELD_BOOST_HINTS[f]).join(', ');
+    const boostPrompt = `\n[TRACKER NOTE: The following fields have just been enabled and MUST be included in the infoBox JSON this turn: ${fieldList}. Do not omit them.]\n`;
+
+    setExtensionPrompt(SLOT, boostPrompt, extension_prompt_types.IN_PROMPT, 0, false);
+
+    // Decrement counters
+    for (const field of boostedFields) {
+        _fieldBoostCounters[field] = (_fieldBoostCounters[field] || 1) - 1;
+    }
+}
+
+/**
+ * Called after a successful generation to reset boost counters for any field
+ * that now appears in the AI's output (it worked — stop boosting).
+ */
+export function clearBoostForAppearedFields() {
+    let committed = null;
+    try {
+        committed = lastGeneratedData.infoBox
+            ? (typeof lastGeneratedData.infoBox === 'string'
+                ? JSON.parse(lastGeneratedData.infoBox)
+                : lastGeneratedData.infoBox)
+            : null;
+    } catch { committed = null; }
+    if (!committed) return;
+
+    for (const field of Object.keys(_fieldBoostCounters)) {
+        if (committed[field] !== undefined && committed[field] !== null && committed[field] !== '') {
+            delete _fieldBoostCounters[field]; // Field appeared — stop boosting
+        }
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 /**
  * Builds a map of historical context data from ST chat messages with dooms_tracker_swipes data.
  * Returns a map keyed by message index with formatted context strings.
@@ -483,6 +593,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
+        setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         return;
     }
     const context = getContext();
@@ -505,6 +616,11 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
     }
+
+    // Inject new-field boost prompt (IN_PROMPT = system level, highest priority).
+    // Fires each generation; self-clears once fields appear in AI output.
+    injectNewFieldBoost(shouldSuppress);
+
     const currentChatLength = chat ? chat.length : 0;
     // For TOGETHER mode: Commit when user sends message (before first generation)
     if (extensionSettings.generationMode === 'together') {
