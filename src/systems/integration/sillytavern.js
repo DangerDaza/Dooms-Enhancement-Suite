@@ -24,6 +24,8 @@ import { parseResponse, parseQuests } from '../generation/parser.js';
 import { updateRPGData } from '../generation/apiClient.js';
 import { removeLocks } from '../generation/lockManager.js';
 import { onGenerationStarted, initHistoryInjectionListeners, clearBoostForAppearedFields } from '../generation/injector.js';
+// Doom Counter
+import { onResponseReceived as doomCounterOnResponse, triggerDoomCounter, updateDoomCounterUI, isTriggerInProgress } from '../generation/doomCounter.js';
 // Rendering
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
@@ -169,6 +171,24 @@ export async function onMessageReceived(data) {
             }
             // Save to chat metadata
             saveChatData();
+
+            // Doom Counter: evaluate tension after parsing (only for fresh generations, not history loads)
+            if (extensionSettings.doomCounter?.enabled && isAwaitingNewMessage) {
+                const dcResult = doomCounterOnResponse();
+                updateDoomCounterUI();
+                if (dcResult.triggered && !isTriggerInProgress()) {
+                    // Auto-launch the twist modal — no intermediate toast button
+                    toastr.warning('☠️ The Doom Counter has triggered!', '', { timeOut: 2000 });
+                    // Small delay so the user sees the notification before the modal opens
+                    setTimeout(() => triggerDoomCounter().catch(err => console.error('[Doom Counter] Auto-trigger failed:', err)), 600);
+                } else if (dcResult.countdownActive) {
+                    toastr.info(
+                        `Countdown: ${dcResult.countdownCount} remaining (tension: ${dcResult.tensionValue}/10)`,
+                        '⏳ Doom Counter',
+                        { timeOut: 3000 }
+                    );
+                }
+            }
         }
     } else if (extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') {
         // In separate/external mode, no additional rendering needed for the main message
@@ -181,6 +201,21 @@ export async function onMessageReceived(data) {
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateChatThoughts();
+                // Doom Counter: evaluate tension after separate mode update
+                if (extensionSettings.doomCounter?.enabled) {
+                    const dcResult = doomCounterOnResponse();
+                    updateDoomCounterUI();
+                    if (dcResult.triggered && !isTriggerInProgress()) {
+                        toastr.warning('☠️ The Doom Counter has triggered!', '', { timeOut: 2000 });
+                        setTimeout(() => triggerDoomCounter().catch(err => console.error('[Doom Counter] Auto-trigger failed:', err)), 600);
+                    } else if (dcResult.countdownActive) {
+                        toastr.info(
+                            `Countdown: ${dcResult.countdownCount} remaining (tension: ${dcResult.tensionValue}/10)`,
+                            '⏳ Doom Counter',
+                            { timeOut: 3000 }
+                        );
+                    }
+                }
             }, 500);
         }
     }
@@ -218,6 +253,9 @@ export function onCharacterChanged() {
     renderInfoBox();
     renderThoughts();
     renderQuests();
+
+    // Update Doom Counter UI with this chat's state
+    updateDoomCounterUI();
     // Scene header layouts that render into <body> or #chat directly (not into a specific
     // message element) can also render immediately — ticker, ticker-bottom, and hud don't
     // need any .mes elements to exist. This lets the scene tracker appear at the same
@@ -341,6 +379,7 @@ export function clearExtensionPrompts() {
     setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
     setExtensionPrompt('dooms-tracker-spotify', '', extension_prompt_types.IN_CHAT, 0, false);
     setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
+    setExtensionPrompt('dooms-doom-counter-twist', '', extension_prompt_types.IN_PROMPT, 0, false);
     // Note: dooms-tracker-plot is not cleared here since it's passed via quiet_prompt option
 }
 /**
@@ -356,4 +395,14 @@ export async function onGenerationEnded() {
  */
 export function initHistoryInjection() {
     initHistoryInjectionListeners();
+}
+
+/**
+ * Initialize Doom Counter event listener.
+ * Kept as a legacy hook for the DOM event (in case other code dispatches it).
+ */
+export function initDoomCounterListener() {
+    document.addEventListener('doom-counter-trigger', () => {
+        triggerDoomCounter().catch(err => console.error('[Doom Counter] Event trigger failed:', err));
+    });
 }

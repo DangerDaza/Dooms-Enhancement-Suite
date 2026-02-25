@@ -12,6 +12,7 @@
  *   - "ticker"   — collapsible bar pinned to top of chat
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
+import { getDoomCounterState } from '../../core/persistence.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
 let _lastSceneDataJSON = null;
@@ -236,7 +237,9 @@ export function updateChatSceneHeaders() {
         return;
     }
     // Skip rebuild if data + settings are identical to last render
-    const cacheKey = JSON.stringify({ sceneData, st });
+    // Include doom counter state in cache key so badge updates when streak/countdown changes
+    const dcState = (extensionSettings.doomCounter?.enabled && extensionSettings.doomCounter?.debugDisplay) ? getDoomCounterState() : null;
+    const cacheKey = JSON.stringify({ sceneData, st, dcState });
     if (cacheKey === _lastSceneDataJSON) {
         // Check if the element is still in the DOM
         if ($('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').length) {
@@ -265,12 +268,18 @@ export function updateChatSceneHeaders() {
         const html = createHudHTML(sceneData);
         if (html) $('#chat').prepend(html);
     } else if (layout === 'ticker') {
-        // Ticker is position:fixed so append to <body> (outside #chat) so ST's
-        // chat re-renders never destroy it. Add a class to #chat to push its
-        // top padding down so the first message isn't hidden behind the ticker bar.
+        // Insert the ticker as a flex child of #sheld, directly before #chat.
+        // This keeps it in the same stacking context as other extensions (e.g.
+        // PathWeaver) so z-index conflicts don't occur. The ticker flows
+        // naturally in the layout — no position:fixed, no padding hacks.
         const html = createTickerHTML(sceneData);
         if (html) {
-            $('body').append(html);
+            const $chat = $('#chat');
+            if ($chat.length) {
+                $chat.before(html);
+            } else {
+                $('body').append(html);
+            }
             $('#chat').addClass('dooms-ticker-active');
         }
     } else if (layout === 'ticker-bottom') {
@@ -319,6 +328,7 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
         timeSinceRest: '',
         conditions: '',
         terrain: '',
+        doomTension: null,
         presentCharacters: [],
         activeQuest: '',
         recentEvents: ''
@@ -370,6 +380,14 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
             }
             if (info.terrain) {
                 result.terrain = typeof info.terrain === 'string' ? info.terrain : (info.terrain.value || '');
+            }
+            // Doom Tension (numeric 1-10)
+            if (info.doomTension !== undefined && info.doomTension !== null) {
+                const raw = typeof info.doomTension === 'object' ? info.doomTension.value : info.doomTension;
+                const num = Number(raw);
+                if (!isNaN(num) && num >= 1 && num <= 10) {
+                    result.doomTension = Math.round(num);
+                }
             }
             // Recent Events (limit to 2 major events for the scene header)
             if (info.recentEvents) {
@@ -579,7 +597,9 @@ function createSceneHeaderHTML(data) {
     const layout = st.layout || 'grid';
     const styleVars = buildStyleVars();
 
-    return `<div class="dooms-scene-header dooms-scene-layout-${escapeHtml(layout)}" style="${styleVars}">${rows.join('')}</div>`;
+    const doomBadge = buildDoomCounterBadge(data.doomTension);
+
+    return `<div class="dooms-scene-header dooms-scene-layout-${escapeHtml(layout)}" style="${styleVars}">${doomBadge}${rows.join('')}</div>`;
 }
 
 // ─────────────────────────────────────────────
@@ -689,7 +709,10 @@ function createBannerHTML(data) {
 
     if (!itemsWithDividers && !charsHtml && !questHtml && !eventsHtml) return '';
 
+    const doomBadge = buildDoomCounterBadge(data.doomTension);
+
     return `<div class="dooms-info-banner" style="${styleVars}">
+        ${doomBadge}
         ${itemsWithDividers}
         ${charsHtml ? (items.length ? '<div class="dooms-ip-divider"></div>' : '') + charsHtml : ''}
         ${questHtml}
@@ -806,10 +829,13 @@ function createHudHTML(data) {
 
     if (!rows.length) return '';
 
+    const doomBadge = buildDoomCounterBadge(data.doomTension);
+
     return `<div class="dooms-info-hud" style="${styleVars}">
         <div class="dooms-ip-hud-title">
             <i class="fa-solid fa-compass"></i>
             Scene Info
+            ${doomBadge}
         </div>
         ${rows.join('')}
     </div>`;
@@ -1053,9 +1079,12 @@ function createTickerHTML(data) {
         }).join('');
     }
 
+    const doomBadge = buildDoomCounterBadge(data.doomTension);
+
     return `${tickerStyleBlock}<div class="dooms-info-ticker-wrapper" style="${styleVars}">
         <div class="dooms-info-ticker">
             <span class="dooms-ip-ticker-icon"><i class="fa-solid fa-compass"></i></span>
+            ${doomBadge}
             <div class="dooms-ip-ticker-items">
                 ${rotatingItems}
             </div>
@@ -1067,6 +1096,55 @@ function createTickerHTML(data) {
                 ${panelRows.join('')}
             </div>
         </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+//  Doom Counter Debug Badge
+// ─────────────────────────────────────────────
+
+/**
+ * Builds a compact Doom Counter debug badge for the scene header.
+ * Shows: skull icon, tension value, streak, countdown (when active).
+ * Only renders when doomCounter.enabled AND doomCounter.debugDisplay are true.
+ *
+ * @param {number|null} doomTension - The current doomTension value from sceneData
+ * @returns {string} HTML string (empty if debug display is off)
+ */
+function buildDoomCounterBadge(doomTension) {
+    const dc = extensionSettings.doomCounter;
+    if (!dc?.enabled || !dc?.debugDisplay) return '';
+
+    const state = getDoomCounterState();
+    const ceiling = dc.lowTensionCeiling || 4;
+    const threshold = dc.lowTensionThreshold || 5;
+    const tensionStr = doomTension !== null ? `${doomTension}` : '?';
+    const isLow = doomTension !== null && doomTension <= ceiling;
+
+    // Color the tension number: red if low, green if high
+    const tensionColor = doomTension === null ? '#888' : (isLow ? '#e94560' : '#4ade80');
+
+    let badgeContent = '';
+
+    // Tension value
+    badgeContent += `<span class="dooms-dc-debug-tension" style="color:${tensionColor}">${tensionStr}</span>`;
+
+    // Streak counter (show as fraction: 3/5)
+    badgeContent += `<span class="dooms-dc-debug-streak">${state.lowStreakCount}/${threshold}</span>`;
+
+    // Countdown (only if active)
+    if (state.countdownActive) {
+        badgeContent += `<span class="dooms-dc-debug-countdown">${state.countdownCount}</span>`;
+    }
+
+    // Pending twist indicator
+    if (state.pendingTwist) {
+        badgeContent += `<span class="dooms-dc-debug-pending" title="Twist pending injection">⚡</span>`;
+    }
+
+    return `<div class="dooms-dc-debug-badge" title="Doom Counter: Tension ${tensionStr}/10 | Streak ${state.lowStreakCount}/${threshold}${state.countdownActive ? ' | Countdown ' + state.countdownCount : ''}">
+        <i class="fa-solid fa-skull"></i>
+        ${badgeContent}
     </div>`;
 }
 

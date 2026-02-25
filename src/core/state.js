@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 9, // Version number for settings migrations (v9 = ensure core widgets time/date/location/recentEvents always enabled)
+    settingsVersion: 10, // Version number for settings migrations (v10 = add Doom Counter defaults)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -332,6 +332,19 @@ export let extensionSettings = {
         lastActiveTab: 'all',   // last selected campaign tab
         lastFilter: 'all',      // 'all', 'active', 'inactive'
         lastSearch: ''           // last search query
+    },
+    // Doom Counter — tension-driven plot twist system
+    // Uses its own 1-10 numeric tension scale (independent of the infoBox tension widget)
+    doomCounter: {
+        enabled: false,                        // Master toggle
+        debugDisplay: false,                   // Show debug badge in scene tracker
+        lowTensionThreshold: 5,                // Consecutive low-tension responses before countdown activates
+        countdownLength: 3,                    // Starting countdown value when phase 2 activates
+        twistChoiceCount: 3,                   // Number of twist options generated (2-6)
+        lowTensionCeiling: 4,                  // Tension values 1-N count as "low" (default: 1-4)
+        // Countdown speed by tension level (lower tension = faster countdown):
+        // tension 1 → decrement by 3, tension 2 → by 2, tension 3-4 → by 1
+        // tension 5-10 → resets streak entirely
     },
     // Preset management for tracker configurations
     presetManager: {

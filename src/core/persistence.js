@@ -236,6 +236,28 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
+            // Migration to version 10: Add Doom Counter defaults
+            if (currentVersion < 10) {
+                if (!extensionSettings.doomCounter) {
+                    extensionSettings.doomCounter = {
+                        enabled: false,
+                        lowTensionThreshold: 5,
+                        countdownLength: 3,
+                        twistChoiceCount: 3,
+                        lowTensionCeiling: 4,
+                    };
+                }
+                // Clean up old lowTensionValues if it exists (was string-based, now numeric)
+                if (extensionSettings.doomCounter.lowTensionValues) {
+                    delete extensionSettings.doomCounter.lowTensionValues;
+                    if (extensionSettings.doomCounter.lowTensionCeiling === undefined) {
+                        extensionSettings.doomCounter.lowTensionCeiling = 4;
+                    }
+                }
+                extensionSettings.settingsVersion = 10;
+                settingsChanged = true;
+            }
+
             // Save migrated settings
             if (settingsChanged) {
                 saveSettings();
@@ -283,6 +305,7 @@ export function saveChatData() {
         quests: extensionSettings.quests,
         lastGeneratedData: lastGeneratedData,
         committedTrackerData: committedTrackerData,
+        doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
         timestamp: Date.now()
     };
     // Use debounced save — the standard SillyTavern pattern.
@@ -393,6 +416,11 @@ export function loadChatData() {
     if (savedData.lastGeneratedData) {
         setLastGeneratedData({ ...savedData.lastGeneratedData });
     }
+    // Restore Doom Counter state (per-chat counter data)
+    // This is exported so doomCounter.js can access it on chat load
+    if (savedData.doomCounterState) {
+        chat_metadata.dooms_tracker.doomCounterState = savedData.doomCounterState;
+    }
     // Sync with the most recent assistant message's per-message swipe data.
     // This is the most reliable source since it's saved as part of the chat messages
     // themselves and won't be lost if the debounced chat_metadata save didn't flush.
@@ -445,6 +473,38 @@ export function loadChatData() {
     }
     // NOTE: inventory validation removed — userStats system archived
 }
+/**
+ * Gets the current Doom Counter state from chat metadata.
+ * @returns {Object} The doom counter state, or defaults if not present
+ */
+export function getDoomCounterState() {
+    const defaults = {
+        lowStreakCount: 0,
+        countdownActive: false,
+        countdownCount: extensionSettings.doomCounter?.countdownLength || 3,
+        pendingTwist: null,
+        triggered: false,
+        totalTwistsTriggered: 0
+    };
+    if (!chat_metadata?.dooms_tracker?.doomCounterState) {
+        return { ...defaults };
+    }
+    return { ...defaults, ...chat_metadata.dooms_tracker.doomCounterState };
+}
+
+/**
+ * Saves the Doom Counter state to chat metadata.
+ * @param {Object} state - The doom counter state to save
+ */
+export function setDoomCounterState(state) {
+    if (!chat_metadata) return;
+    if (!chat_metadata.dooms_tracker) {
+        chat_metadata.dooms_tracker = {};
+    }
+    chat_metadata.dooms_tracker.doomCounterState = state;
+    saveChatDebounced();
+}
+
 // NOTE: validateInventoryStructure() removed — inventory system archived to src/archived/
 /**
  * Migrates old settings format to new trackerConfig format

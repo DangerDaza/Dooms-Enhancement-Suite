@@ -13,6 +13,7 @@ import {
 } from '../../core/state.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
+import { getPendingTwist, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
 import {
     generateTrackerExample,
     generateTrackerInstructions,
@@ -620,6 +621,29 @@ export async function onGenerationStarted(type, data, dryRun) {
     // Inject new-field boost prompt (IN_PROMPT = system level, highest priority).
     // Fires each generation; self-clears once fields appear in AI output.
     injectNewFieldBoost(shouldSuppress);
+
+    // ─── Doom Counter injections ──────────────────────────────────────────────
+    // 1. Inject pending twist (chosen by user) into the prompt at IN_PROMPT level.
+    //    IMPORTANT: The twist injection intentionally bypasses shouldSuppress.
+    //    The user explicitly chose a twist via the modal — suppressing it would
+    //    silently discard their choice. Tracker instructions are suppressed during
+    //    guided generations, but the twist is a one-shot user action, not a tracker.
+    if (extensionSettings.doomCounter?.enabled) {
+        const pendingTwist = getPendingTwist();
+        if (pendingTwist) {
+            const twistPrompt = `\n[PLOT TWIST: A dramatic development occurs in this scene. Weave this naturally into your response — don't announce it directly, let it unfold organically: "${pendingTwist}"]\n`;
+            setExtensionPrompt(DOOM_TWIST_SLOT, twistPrompt, extension_prompt_types.IN_PROMPT, 0, false);
+            // Clear the pending twist after injecting — it's a one-shot
+            clearPendingTwist();
+            console.log('[Doom Counter] Twist injected into prompt.');
+        } else {
+            setExtensionPrompt(DOOM_TWIST_SLOT, '', extension_prompt_types.IN_PROMPT, 0, false);
+        }
+    } else {
+        // Clear twist slot if disabled
+        setExtensionPrompt(DOOM_TWIST_SLOT, '', extension_prompt_types.IN_PROMPT, 0, false);
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     const currentChatLength = chat ? chat.length : 0;
     // For TOGETHER mode: Commit when user sends message (before first generation)

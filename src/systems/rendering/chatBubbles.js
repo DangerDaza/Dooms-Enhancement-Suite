@@ -741,4 +741,34 @@ export function initBubbleTtsHandlers() {
             toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
         }
     });
+
+    // ── Inline thought TTS button ──
+    // Reads only the thought text for the clicked character — stops after that thought.
+    $(document).on('click', '.dooms-thought-tts', async function (e) {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent the <summary> click from toggling the <details>
+
+        const $thought = $(this).closest('.dooms-inline-thought');
+        if (!$thought.length) return;
+
+        const text = $thought.find('.dooms-inline-thought-content').text().trim();
+        if (!text) return;
+
+        const mesEl = $(this).closest('.mes')[0];
+        if (mesEl) {
+            document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
+                el.classList.remove('dooms-bubble-tts-speaking');
+                el.classList.remove('tts-speaking');
+            });
+            mesEl.classList.add('tts-speaking');
+            mesEl.classList.add('dooms-bubble-tts-speaking');
+        }
+
+        try {
+            await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
+        } catch (err) {
+            console.error('[Dooms Tracker] Thought TTS failed:', err);
+            toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
+        }
+    });
 }

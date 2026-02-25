@@ -815,6 +815,122 @@
                 </div>
             </div>
 
+            <!-- ═══════ DOOM COUNTER ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="doom-counter">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-skull rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Doom Counter</span>
+                    <span class="rpg-accordion-badge" id="rpg-dc-badge">off</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Enable Doom Counter</span>
+                            <span class="rpg-setting-hint">Monitors tension and forces plot twists when the story stays too calm</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-doom-counter" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="rpg-dc-api-warning">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        When the Doom Counter triggers, it will send a separate API request to generate twist options. This uses your active API / model and will consume tokens.
+                    </div>
+
+                    <div id="rpg-dc-options">
+                        <div class="rpg-subsection-label">Detection</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Low Tension Ceiling</span>
+                                <span class="rpg-setting-hint">Tension values 1 to N count as "low" (out of 10)</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-dc-ceiling" class="rpg-range-slider" min="2" max="6" value="4" />
+                                <span id="rpg-dc-ceiling-value" class="rpg-slider-value">1-4</span>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Low Tension Threshold</span>
+                                <span class="rpg-setting-hint">Consecutive low-tension responses before countdown starts</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-dc-threshold" class="rpg-range-slider" min="3" max="10" value="5" />
+                                <span id="rpg-dc-threshold-value" class="rpg-slider-value">5</span>
+                            </div>
+                        </div>
+
+                        <div class="rpg-subsection-label">Countdown</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Countdown Length</span>
+                                <span class="rpg-setting-hint">Starting countdown value (lower tension = faster tick)</span>
+                            </div>
+                            <div class="rpg-slider-group">
+                                <input type="range" id="rpg-dc-countdown" class="rpg-range-slider" min="1" max="8" value="3" />
+                                <span id="rpg-dc-countdown-value" class="rpg-slider-value">3</span>
+                            </div>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Twist Choices</span>
+                                <span class="rpg-setting-hint">Number of twist options generated</span>
+                            </div>
+                            <select id="rpg-dc-choices" class="rpg-accordion-select">
+                                <option value="2">2 choices</option>
+                                <option value="3" selected>3 choices</option>
+                                <option value="4">4 choices</option>
+                                <option value="5">5 choices</option>
+                                <option value="6">6 choices</option>
+                            </select>
+                        </div>
+
+                        <div class="rpg-subsection-label">Speed Rules</div>
+                        <div class="rpg-setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                            <span class="rpg-setting-hint" style="font-size: 0.78em; opacity: 0.7;">
+                                Tension 1 → countdown ticks by 3<br>
+                                Tension 2 → countdown ticks by 2<br>
+                                Tension 3-4 → countdown ticks by 1<br>
+                                Tension 5+ → resets streak (story is tense enough)
+                            </span>
+                        </div>
+
+                        <div class="rpg-subsection-label">Status</div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Status</span>
+                            <span id="rpg-dc-status" class="rpg-setting-hint">Disabled</span>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <span class="rpg-setting-label">Low Tension Streak</span>
+                            <span class="rpg-setting-hint"><span id="rpg-dc-streak">0</span> / <span id="rpg-dc-streak-max">5</span></span>
+                        </div>
+                        <div class="rpg-setting-row" id="rpg-dc-countdown-display" style="display:none;">
+                            <span class="rpg-setting-label">Countdown</span>
+                            <span class="rpg-setting-hint" id="rpg-dc-countdown-current">3</span>
+                        </div>
+
+                        <div class="rpg-subsection-label">Debug</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Show in Scene Tracker</span>
+                                <span class="rpg-setting-hint">Display tension, streak, and countdown badge in the scene header</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-dc-debug-display" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <button id="rpg-dc-trigger-now" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-bolt"></i> Trigger Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══════ CHAT BUBBLES ═══════ -->
             <div class="rpg-accordion-section" data-accordion="chat-bubbles">
                 <div class="rpg-accordion-header">

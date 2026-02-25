@@ -120,8 +120,11 @@ import {
     updatePersonaAvatar,
     clearExtensionPrompts,
     onGenerationEnded,
-    initHistoryInjection
+    initHistoryInjection,
+    initDoomCounterListener
 } from './src/systems/integration/sillytavern.js';
+// Doom Counter
+import { triggerDoomCounter, updateDoomCounterUI, updateDoomDebugHud, hideDoomDebugHud } from './src/systems/generation/doomCounter.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -706,6 +709,76 @@ async function initUI() {
         updateChatSceneHeaders();
     });
 
+    // ── Doom Counter customization ──
+    const _dcSettings = () => {
+        if (!extensionSettings.doomCounter) extensionSettings.doomCounter = {};
+        return extensionSettings.doomCounter;
+    };
+
+    $('#rpg-toggle-doom-counter').on('change', function () {
+        _dcSettings().enabled = $(this).prop('checked');
+        saveSettings();
+        $('#rpg-dc-badge').text($(this).prop('checked') ? 'on' : 'off');
+        $('#rpg-dc-options').toggle($(this).prop('checked'));
+        updateDoomCounterUI();
+    });
+
+    $('#rpg-dc-ceiling').on('input', function () {
+        const v = parseInt($(this).val());
+        _dcSettings().lowTensionCeiling = v;
+        $('#rpg-dc-ceiling-value').text(`1-${v}`);
+        saveSettings();
+    });
+
+    $('#rpg-dc-threshold').on('input', function () {
+        const v = parseInt($(this).val());
+        _dcSettings().lowTensionThreshold = v;
+        $('#rpg-dc-threshold-value').text(v);
+        $('#rpg-dc-streak-max').text(v);
+        saveSettings();
+    });
+
+    $('#rpg-dc-countdown').on('input', function () {
+        const v = parseInt($(this).val());
+        _dcSettings().countdownLength = v;
+        $('#rpg-dc-countdown-value').text(v);
+        saveSettings();
+    });
+
+    $('#rpg-dc-choices').on('change', function () {
+        _dcSettings().twistChoiceCount = parseInt($(this).val());
+        saveSettings();
+    });
+
+    $('#rpg-dc-debug-display').on('change', function () {
+        const isDebug = $(this).prop('checked');
+        _dcSettings().debugDisplay = isDebug;
+        saveSettings();
+        updateChatSceneHeaders();
+        // Expand threshold slider range to 0 in debug mode for quick testing
+        const $slider = $('#rpg-dc-threshold');
+        if (isDebug) {
+            $slider.attr('min', 0);
+            updateDoomDebugHud();
+        } else {
+            $slider.attr('min', 3);
+            // Clamp value back up if it was set below 3
+            const cur = parseInt($slider.val());
+            if (cur < 3) {
+                $slider.val(3);
+                _dcSettings().lowTensionThreshold = 3;
+                $('#rpg-dc-threshold-value').text(3);
+                $('#rpg-dc-streak-max').text(3);
+                saveSettings();
+            }
+            hideDoomDebugHud();
+        }
+    });
+
+    $('#rpg-dc-trigger-now').on('click', function () {
+        triggerDoomCounter().catch(err => console.error('[Doom Counter] Manual trigger failed:', err));
+    });
+
     // ── Chat Bubbles & Info Panel customization ──
     const _cbSettings = () => {
         if (!extensionSettings.chatBubbleSettings) extensionSettings.chatBubbleSettings = {};
@@ -1275,6 +1348,24 @@ async function initUI() {
     $('#rpg-tts-unread-opacity-value').text((tts.unreadOpacity ?? 55) + '%');
     $('#rpg-tts-transition-speed').val(tts.transitionSpeed ?? 300);
     applyTtsHighlightSettings();
+    // Doom Counter
+    const dc = extensionSettings.doomCounter || {};
+    $('#rpg-toggle-doom-counter').prop('checked', dc.enabled || false);
+    $('#rpg-dc-badge').text(dc.enabled ? 'on' : 'off');
+    $('#rpg-dc-options').toggle(dc.enabled || false);
+    $('#rpg-dc-ceiling').val(dc.lowTensionCeiling || 4);
+    $('#rpg-dc-ceiling-value').text(`1-${dc.lowTensionCeiling || 4}`);
+    $('#rpg-dc-threshold').attr('min', dc.debugDisplay ? 0 : 3).val(dc.lowTensionThreshold || 5);
+    $('#rpg-dc-threshold-value').text(dc.lowTensionThreshold || 5);
+    $('#rpg-dc-streak-max').text(dc.lowTensionThreshold || 5);
+    $('#rpg-dc-countdown').val(dc.countdownLength || 3);
+    $('#rpg-dc-countdown-value').text(dc.countdownLength || 3);
+    $('#rpg-dc-choices').val(dc.twistChoiceCount || 3);
+    $('#rpg-dc-debug-display').prop('checked', dc.debugDisplay || false);
+    updateDoomCounterUI();
+    // Initialize Doom Counter toast button listener
+    initDoomCounterListener();
+
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();

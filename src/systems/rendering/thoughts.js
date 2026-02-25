@@ -1378,6 +1378,7 @@ function createThoughtDropdown(thoughtData) {
             <summary class="dooms-inline-thought-summary">
                 <span class="dooms-thought-icon">💭</span>
                 <span class="dooms-thought-name">${thoughtData.emoji} ${thoughtData.name}'s thoughts</span>
+                <button class="dooms-thought-tts" title="Read thoughts aloud"><i class="fa-solid fa-bullhorn"></i></button>
             </summary>
             <div class="dooms-inline-thought-content">
                 ${thoughtData.thought}

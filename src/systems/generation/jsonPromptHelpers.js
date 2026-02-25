@@ -101,6 +101,11 @@ export function buildInfoBoxJSONInstruction() {
         instruction += (hasFields ? ',\n' : '') + '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"';
         hasFields = true;
     }
+    // Doom Counter: inject numeric tension scale (1-10) for automated tension tracking
+    if (extensionSettings.doomCounter?.enabled) {
+        instruction += (hasFields ? ',\n' : '') + '  "doomTension": <number 1-10 rating the current scene tension. 1=completely calm/peaceful/boring, 5=moderate tension/anticipation, 10=extreme danger/conflict/crisis>';
+        hasFields = true;
+    }
     instruction += '\n}';
     return instruction;
 }
