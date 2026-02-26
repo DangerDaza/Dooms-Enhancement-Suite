@@ -16411,18 +16411,22 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
         transform: none;
         width: 100vw;
         max-width: 100vw;
-        max-height: 100vh;
+        /* dvh accounts for browser chrome (address bar, nav bar) on mobile */
+        max-height: 100dvh;
+        max-height: 100vh; /* fallback */
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         animation: dooms-dc-slide-up 0.35s ease;
     }
     .dooms-dc-modal {
-        padding: 20px 16px;
         border-radius: 0;
         border: none;
-        min-height: 100vh;
+        min-height: 100dvh;
+        min-height: 100vh; /* fallback */
         display: flex;
         flex-direction: column;
+        /* Push content below notch / status bar and above home indicator */
+        padding: max(20px, env(safe-area-inset-top, 20px)) 16px max(20px, env(safe-area-inset-bottom, 20px));
     }
     .dooms-dc-cards {
         grid-template-columns: 1fr;
@@ -16437,6 +16441,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     }
     .dooms-dc-subtitle {
         margin-bottom: 16px;
+    }
+    /* Also anchor the debug HUD to the safe area at the bottom */
+    #dooms-dc-debug-hud {
+        bottom: max(16px, env(safe-area-inset-bottom, 16px));
+        right: max(12px, env(safe-area-inset-right, 12px));
     }
     @keyframes dooms-dc-slide-up {
         from { opacity: 0; transform: translateY(30px); }
