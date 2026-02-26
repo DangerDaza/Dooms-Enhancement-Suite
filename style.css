@@ -16417,16 +16417,23 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         animation: dooms-dc-slide-up 0.35s ease;
+        /* Generous top padding at the container level — works even without
+           viewport-fit=cover, which env(safe-area-inset-top) requires */
+        padding-top: 52px;
     }
     .dooms-dc-modal {
         border-radius: 0;
         border: none;
-        min-height: 100dvh;
-        min-height: 100vh; /* fallback */
+        /* Fill full dialog height so flex children can center inside */
+        min-height: calc(100dvh - 52px);
+        min-height: calc(100vh - 52px); /* fallback */
         display: flex;
         flex-direction: column;
-        /* Push content below notch / status bar and above home indicator */
-        padding: max(20px, env(safe-area-inset-top, 20px)) 16px max(20px, env(safe-area-inset-bottom, 20px));
+        padding: 20px 16px max(20px, env(safe-area-inset-bottom, 20px));
+    }
+    /* Loading state fills remaining height so the spinner centers */
+    .dooms-dc-loading {
+        flex: 1;
     }
     .dooms-dc-cards {
         grid-template-columns: 1fr;
