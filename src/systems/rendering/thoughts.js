@@ -17,6 +17,12 @@ import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 /**
+ * Tracks which character cards are currently flipped (showing the back face).
+ * Preserved across re-renders so flipping isn't lost when renderThoughts() rebuilds the DOM.
+ */
+const flippedCards = new Set();
+
+/**
  * Helper to generate lock icon HTML if setting is enabled
  * @param {string} tracker - Tracker name
  * @param {string} path - Item path
@@ -188,7 +194,16 @@ export function initThoughtsEventDelegation() {
     $thoughtsContainer.on('click', '.rpg-character-avatar', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        $(this).closest('.rpg-card-flipper').toggleClass('flipped');
+        const $flipper = $(this).closest('.rpg-card-flipper');
+        $flipper.toggleClass('flipped');
+        const charName = $flipper.data('character-name');
+        if (charName) {
+            if ($flipper.hasClass('flipped')) {
+                flippedCards.add(charName);
+            } else {
+                flippedCards.delete(charName);
+            }
+        }
     });
     // Avatar upload — small camera icon button in the corner of the avatar
     $thoughtsContainer.on('click', '.rpg-avatar-upload-btn', function(e) {
@@ -228,6 +243,14 @@ export function initThoughtsEventDelegation() {
             return;
         }
         $(this).toggleClass('flipped');
+        const charName = $(this).data('character-name');
+        if (charName) {
+            if ($(this).hasClass('flipped')) {
+                flippedCards.add(charName);
+            } else {
+                flippedCards.delete(charName);
+            }
+        }
     });
 }
 /**
@@ -708,6 +731,12 @@ export function renderThoughts({ preserveScroll = false } = {}) {
         html += '</div>';
     }
     $thoughtsContainer.html(html);
+    // Restore flipped card states after re-render
+    if (flippedCards.size > 0) {
+        flippedCards.forEach(charName => {
+            $thoughtsContainer.find(`.rpg-card-flipper[data-character-name="${charName}"]`).addClass('flipped');
+        });
+    }
     debugLog('[RPG Thoughts] ✓ HTML rendered to container');
     debugLog('[RPG Thoughts] =======================================================');
     // NOTE: Event handlers are registered ONCE via initThoughtsEventDelegation()
