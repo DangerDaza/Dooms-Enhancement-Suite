@@ -184,11 +184,17 @@ export function initThoughtsEventDelegation() {
         const characterName = $(this).data('character');
         removeCharacter(characterName);
     });
-    // Avatar upload click
-    $thoughtsContainer.on('click', '.rpg-avatar-upload', function(e) {
+    // Avatar click — flip the card (avatar is now a flip trigger, not upload)
+    $thoughtsContainer.on('click', '.rpg-character-avatar', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        const characterName = $(this).data('character');
+        $(this).closest('.rpg-card-flipper').toggleClass('flipped');
+    });
+    // Avatar upload — small camera icon button in the corner of the avatar
+    $thoughtsContainer.on('click', '.rpg-avatar-upload-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const characterName = $(this).closest('.rpg-character-avatar').data('character');
         const fileInput = $('<input type="file" accept="image/*" style="display: none;">');
         fileInput.on('change', function() {
             const file = this.files[0];
@@ -201,7 +207,7 @@ export function initThoughtsEventDelegation() {
                 }
                 extensionSettings.npcAvatars[characterName] = imageUrl;
                 saveSettings();
-                const $avatar = $thoughtsContainer.find(`.rpg-avatar-upload[data-character="${characterName}"] img`);
+                const $avatar = $thoughtsContainer.find(`.rpg-character-avatar[data-character="${characterName}"] img`);
                 $avatar.attr('src', imageUrl);
                 if (extensionSettings.debugMode) console.log(`[Dooms Tracker] Avatar uploaded for ${characterName}`);
             };
@@ -215,13 +221,10 @@ export function initThoughtsEventDelegation() {
         e.stopPropagation();
         addNewCharacter();
     });
-    // Card flip — left click on the card (not on interactive children) toggles front/back.
-    // All interactive children (.rpg-editable, .rpg-avatar-upload, .rpg-character-remove,
-    // .rpg-section-lock-icon, button) already call e.stopPropagation() so this handler
-    // only fires when clicking the card background or non-interactive areas.
+    // Card flip — left click on card background (not interactive children) toggles front/back
     $thoughtsContainer.on('click', '.rpg-card-flipper', function(e) {
-        // Extra guard: don't flip if click originated from an interactive child
-        if ($(e.target).closest('.rpg-editable, .rpg-avatar-upload, .rpg-character-remove, .rpg-section-lock-icon, .rpg-add-character-btn, button').length) {
+        // Don't flip if click originated from an interactive child
+        if ($(e.target).closest('.rpg-editable, .rpg-character-avatar, .rpg-avatar-upload-btn, .rpg-character-remove, .rpg-section-lock-icon, .rpg-add-character-btn, button').length) {
             return;
         }
         $(this).toggleClass('flipped');
@@ -546,8 +549,9 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     <div class="rpg-card-inner">
                     <div class="rpg-card-front rpg-character-card">
                         <div class="rpg-character-header-row">
-                            <div class="rpg-character-avatar rpg-avatar-upload" data-character="${char.name}" title="Click to upload avatar">
+                            <div class="rpg-character-avatar" data-character="${char.name}" title="Click to flip card">
                                 <img src="${characterPortrait}" alt="${char.name}" onerror="this.style.opacity='0.5';this.onerror=null;" />
+                                <button class="rpg-avatar-upload-btn" title="Upload avatar">📷</button>
                                 ${hasRelationshipEnabled ? `<div class="rpg-relationship-badge rpg-editable" contenteditable="true" data-character="${char.name}" data-field="${relationshipFieldName}" title="Click to edit (use emoji: ⚔️ ⚖️ ⭐ ❤️)">${relationshipBadge}</div>` : ''}
                             </div>
                             <div class="rpg-character-header">

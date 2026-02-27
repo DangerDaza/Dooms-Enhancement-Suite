@@ -2206,47 +2206,62 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     display: block; /* Prevent inline spacing issues */
 }
 
-/* Uploadable avatar - make it clickable */
-.rpg-avatar-upload {
+/* Avatar - clickable to flip card */
+.rpg-character-avatar {
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    transition: transform 0.2s ease, opacity 0.2s ease;
     position: relative;
 }
 
-.rpg-avatar-upload::after {
-    content: '📷';
+.rpg-character-avatar:hover {
+    transform: scale(1.05);
+}
+
+.rpg-character-avatar:hover img {
+    opacity: 0.85;
+    border-color: var(--rpg-text);
+}
+
+.rpg-character-avatar:active {
+    transform: scale(0.98);
+}
+
+/* Small camera button for avatar upload (bottom-left corner) */
+.rpg-avatar-upload-btn {
     position: absolute;
     bottom: -2px;
-    right: -2px;
-    font-size: clamp(10px, 1.5vh, 14px);
+    left: -2px;
+    font-size: clamp(9px, 1.3vh, 12px);
     background: var(--rpg-bg);
     border: 1px solid var(--rpg-highlight);
     border-radius: 50%;
-    width: clamp(18px, 2.5vh, 22px);
-    height: clamp(18px, 2.5vh, 22px);
+    width: clamp(20px, 2.8vh, 24px);
+    height: clamp(20px, 2.8vh, 24px);
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.15s ease;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    z-index: 5;
+    color: var(--rpg-text);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.rpg-avatar-upload:hover::after {
-    opacity: 1;
-}
-
-.rpg-avatar-upload:hover {
-    transform: scale(1.05);
-}
-
-.rpg-avatar-upload:hover img {
+.rpg-character-avatar:hover .rpg-avatar-upload-btn {
     opacity: 0.8;
-    border-color: var(--rpg-text);
 }
 
-.rpg-avatar-upload:active {
-    transform: scale(0.98);
+.rpg-avatar-upload-btn:hover {
+    opacity: 1 !important;
+    transform: scale(1.15);
+    background: var(--rpg-highlight);
+}
+
+.rpg-avatar-upload-btn:active {
+    transform: scale(0.95);
 }
 
 /* Relationship badge in top-right corner */
