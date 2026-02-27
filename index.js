@@ -1472,6 +1472,26 @@ jQuery(async () => {
             console.error('[Dooms Tracker] UI error stack:', error.stack);
             throw error; // This is critical - can't continue without UI
         }
+        // Mobile keyboard resize fix — when the on-screen keyboard opens/closes
+        // the viewport height changes and every `transition: all` rule tries to
+        // smoothly animate viewport-relative properties (height, min-height, etc.)
+        // causing a slow "rubber-band" effect.  We temporarily kill ALL transitions
+        // during the resize so the layout snaps back instantly.
+        try {
+            if (window.visualViewport) {
+                let vkTimer;
+                window.visualViewport.addEventListener('resize', () => {
+                    document.body.classList.add('dooms-vk-resizing');
+                    clearTimeout(vkTimer);
+                    vkTimer = setTimeout(() => {
+                        document.body.classList.remove('dooms-vk-resizing');
+                    }, 120);
+                });
+            }
+        } catch (error) {
+            console.error('[Dooms Tracker] Visual viewport listener failed:', error);
+            // Non-critical — transitions will just be slow on keyboard close
+        }
         // Load chat-specific data for current chat
         try {
             loadChatData();

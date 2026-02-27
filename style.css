@@ -1,4 +1,15 @@
 
+/* ── Mobile keyboard resize fix ──
+   When the virtual keyboard opens/closes on mobile, the viewport height changes.
+   Every `transition: all` rule tries to smoothly animate viewport-relative
+   properties, causing a slow rubber-band effect.  This class is toggled
+   momentarily (≈120 ms) by a visualViewport resize listener in index.js
+   so the layout snaps back instantly instead of easing. */
+body.dooms-vk-resizing,
+body.dooms-vk-resizing * {
+    transition: none !important;
+}
+
 /* Doom icon - inline SVG mask icon */
 .doom-icon {
     display: inline-block;
