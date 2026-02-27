@@ -16411,22 +16411,25 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
         transform: none;
         width: 100vw;
         max-width: 100vw;
-        /* dvh accounts for browser chrome (address bar, nav bar) on mobile */
-        max-height: 100dvh;
-        max-height: 100vh; /* fallback */
+        /* Explicit height forces the dialog to fill the viewport instead of
+           collapsing to content size.  dvh accounts for mobile browser chrome. */
+        height: 100vh;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         animation: dooms-dc-slide-up 0.35s ease;
-        /* Generous top padding at the container level — works even without
-           viewport-fit=cover, which env(safe-area-inset-top) requires */
+        /* Generous top padding clears status bar / notch without needing
+           viewport-fit=cover (which ST doesn't set) */
         padding-top: 52px;
+        box-sizing: border-box;
     }
     .dooms-dc-modal {
         border-radius: 0;
         border: none;
-        /* Fill full dialog height so flex children can center inside */
-        min-height: calc(100dvh - 52px);
-        min-height: calc(100vh - 52px); /* fallback */
+        /* flex: 1 makes the modal fill all remaining space inside the dialog */
+        flex: 1;
         display: flex;
         flex-direction: column;
         padding: 20px 16px max(20px, env(safe-area-inset-bottom, 20px));
