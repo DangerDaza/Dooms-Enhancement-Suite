@@ -116,7 +116,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     z-index: 10001;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     font-size: clamp(1rem, 1.5vw, 1.5rem);
     box-shadow: 0 0 10px var(--rpg-shadow);
     pointer-events: auto;
@@ -300,7 +300,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 .rpg-panel.rpg-animations-enabled .rpg-stat-bar {
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-panel.rpg-animations-enabled .rpg-info-content,
@@ -323,7 +323,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 .rpg-panel.rpg-animations-enabled .rpg-mood-value {
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-panel.rpg-animations-enabled .rpg-dice-animation {
@@ -478,7 +478,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     border-radius: 0.5em;
     cursor: pointer;
     color: var(--rpg-text);
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-btn-icon:hover {
@@ -524,7 +524,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-weight: bold;
     color: var(--rpg-text);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     flex-shrink: 0;
 }
 
@@ -553,7 +553,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     padding: 0;
     line-height: 1;
     margin-left: auto;
@@ -821,7 +821,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     border: 1px solid var(--rpg-highlight-color);
     min-width: 1.5em;
     cursor: text;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-level-value:hover {
@@ -1227,7 +1227,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: clamp(9px, 1.1vw, 12px);
     font-weight: bold;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1932,7 +1932,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: rgba(0, 0, 0, 0.3);
     border-left: 3px solid var(--rpg-highlight);
     border-radius: 0.25em;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-character-status-card:hover {
@@ -1970,7 +1970,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: rgba(0, 0, 0, 0.2);
     border-left: 2px solid var(--rpg-highlight);
     border-radius: 0.25em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-info-line:hover {
@@ -2147,7 +2147,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: rgba(0, 0, 0, 0.3);
     border-radius: clamp(4px, 0.5vh, 6px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     width: 100%; /* Ensure cards take full width */
     max-height: clamp(250px, 25vh, 350px);
     box-sizing: border-box; /* Include padding and border in width calculation */
@@ -2208,7 +2208,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Uploadable avatar - make it clickable */
 .rpg-avatar-upload {
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     position: relative;
 }
 
@@ -2348,7 +2348,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     justify-content: center;
     border-radius: 50%;
     opacity: 0.5;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     flex-shrink: 0;
 }
 
@@ -2374,7 +2374,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-weight: 500;
     cursor: pointer;
     border-radius: 3px;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     display: flex;
     align-items: center;
     gap: 0.25rem;
@@ -2504,7 +2504,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-editable-stat,
 .rpg-editable-stat-name {
     cursor: text;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     border-radius: 2px;
     padding: 0.062em 0.125em;
 }
@@ -2543,7 +2543,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     display: flex;
     align-items: center;
     gap: clamp(2px, 0.4vh, 4px);
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-edit-button:hover {
@@ -2682,7 +2682,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     display: flex;
     align-items: center;
     gap: 0.625em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-settings summary:hover {
@@ -2736,7 +2736,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: var(--rpg-bg);
     color: var(--rpg-text);
     font-size: clamp(1rem, 1.3vw, 1.3rem);
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-select:focus,
@@ -2803,7 +2803,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     gap: 0.5em;
     margin: 0.625em 0;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-settings-popup-content .checkbox_label input[type="checkbox"],
@@ -3320,7 +3320,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     gap: 0.625em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     box-shadow: 0 4px 15px var(--rpg-shadow);
 }
 
@@ -3350,7 +3350,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     gap: 0.5em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-btn-clear-cache:hover {
@@ -3379,7 +3379,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     gap: 0.5em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-btn-reset-fab:hover {
@@ -3408,7 +3408,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     gap: 0.5em;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .rpg-btn-customize-prompts:hover {
@@ -3509,7 +3509,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     border: none;
     font-size: 14px;
 }
@@ -4607,7 +4607,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     color: var(--rpg-text);
     font-size: var(--modal-font-base);
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-dice-input-group input:focus,
@@ -4630,7 +4630,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: var(--modal-font-base);
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
@@ -4714,7 +4714,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: var(--modal-font-base);
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
     display: flex;
     align-items: center;
@@ -4861,7 +4861,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: clamp(0.875rem, 1.1vw, 1.1rem);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4897,7 +4897,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: clamp(0.875rem, 1.1vw, 1.1rem);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5015,7 +5015,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: 0.9em;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5505,7 +5505,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     cursor: pointer;
     font-size: 0.95em;
     font-weight: 600;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 
 .rpg-btn-primary {
@@ -5668,7 +5668,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     border-radius: 0.25rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-popup-close:active {
@@ -6102,7 +6102,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: #888;
     top: 2px;
     left: 2px;
-    transition: all 0.2s;
+    transition: left 0.2s, background 0.2s;
 }
 
 .rpg-toggle-switch input:checked + .rpg-toggle-slider {
@@ -6172,7 +6172,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
 }
 
 .rpg-accordion-action-btn:hover {
@@ -6217,7 +6217,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     font-size: 0.8em;
     color: var(--rpg-text, #bbb);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
 }
 
 .rpg-feature-pill:hover {
@@ -6247,7 +6247,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     position: absolute;
     top: 2px;
     left: 2px;
-    transition: all 0.2s;
+    transition: left 0.2s, background 0.2s;
 }
 
 .rpg-pill-checkbox:checked + .rpg-pill-indicator {
@@ -6429,7 +6429,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     align-items: center;
     justify-content: center;
     z-index: 10001;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-thought-close:hover {
@@ -6971,7 +6971,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
         background: var(--SmartThemeBlurTintColor);
         border: 2px solid var(--SmartThemeBorderColor);
         z-index: 10000 !important;
-        transition: all 0.2s ease;
+        transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         pointer-events: auto !important;
         cursor: pointer !important;
     }
@@ -7049,7 +7049,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
         border: none;
         border-bottom: 3px solid transparent;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         padding: 0 8px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -8005,7 +8005,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeBodyColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-weight: 500;
     font-size: clamp(0.75rem, 1vw, 0.9rem);
 }
@@ -8179,7 +8179,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     background: var(--SmartThemeBlurTintColor);
     color: var(--SmartThemeBodyColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -8219,7 +8219,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
 /* Inline Editing Styles */
 .rpg-inventory-text.rpg-editable {
     cursor: text;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     min-height: 2rem;
 }
 
@@ -8282,7 +8282,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     background: var(--SmartThemeBlurTintColor);
     color: var(--SmartThemeBodyColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -8359,7 +8359,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeBodyColor);
     font-size: 0.95rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-item-row:hover {
@@ -8382,7 +8382,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeFastUISliderColColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.85rem;
 }
 
@@ -8411,7 +8411,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeBodyColor);
     font-size: 0.9rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     min-height: 80px;
 }
 
@@ -8439,7 +8439,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeFastUISliderColColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -8483,7 +8483,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     cursor: pointer;
     white-space: nowrap;
     min-width: fit-content;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.9rem;
     display: flex;
     align-items: center;
@@ -8562,7 +8562,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border: none;
     border-bottom: 3px solid transparent;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-tab-btn:hover {
@@ -8691,7 +8691,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     color: var(--SmartThemeBodyColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-weight: 500;
     font-size: clamp(0.75rem, 1vw, 0.9rem);
     min-width: fit-content;
@@ -8774,7 +8774,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     background: var(--SmartThemeBlurTintColor);
     border: 1px solid var(--SmartThemeBorderColor);
     border-radius: 0.25rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-quest-item:hover {
@@ -8804,7 +8804,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     background: var(--SmartThemeBlurTintColor);
     color: var(--SmartThemeBodyColor);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -8900,7 +8900,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border-radius: 0.25rem;
     cursor: pointer;
     font-size: 0.85rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-quest-save {
@@ -9312,7 +9312,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     cursor: pointer;
     padding: 8px 16px;
     border-radius: 6px;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -9379,7 +9379,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     cursor: pointer;
     border: none;
     border-radius: 6px;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
     font-family: var(--rpg-font-body, 'Open Sans', sans-serif);
     font-weight: 600;
     display: inline-flex;
@@ -9702,7 +9702,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     font-size: clamp(12px, 1vw, 15px);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     text-align: left;
 }
 
@@ -9773,7 +9773,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     font-size: clamp(12px, 1vw, 15px);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     white-space: nowrap;
 }
 
@@ -10526,7 +10526,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     border: 2px solid var(--SmartThemeBorderColor, #4a7ba7);
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-target-option:hover {
@@ -10587,7 +10587,7 @@ body:has(.rpg-panel.rpg-mobile-open) .rpg-fab-widget-container {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-target-cancel:hover {
@@ -12227,7 +12227,7 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-import-dialog .rpg-btn-secondary {
@@ -12749,7 +12749,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-fab-widget:hover {
     backdrop-filter: blur(8px);
     width: calc(100% - 8px);
     min-width: 0;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .rpg-strip-widget.rpg-strip-widget-visible {
@@ -12950,7 +12950,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-fab-widget:hover {
     cursor: pointer;
     font-size: 14px;
     width: calc(100% - 8px);
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -13410,7 +13410,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     position: relative;
     cursor: pointer;
     border: 1px solid rgba(var(--dooms-pb-border-r, 255), var(--dooms-pb-border-g, 255), var(--dooms-pb-border-b, 255), var(--dooms-pb-border-opacity, 0.06));
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     background: rgba(255,255,255,0.03);
 }
 
@@ -13506,7 +13506,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     justify-content: center;
     font-size: 0.7em;
     z-index: 2;
-    transition: all 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
     opacity: 0;
 }
 .dooms-portrait-bar:hover .dooms-pb-arrow { opacity: 1; }
@@ -14755,7 +14755,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* Base sentence span — inline so text wraps naturally */
 .dooms-tts-sentence {
-    transition: all var(--dooms-tts-transition, 0.3s) ease;
+    transition: background var(--dooms-tts-transition, 0.3s) ease, color var(--dooms-tts-transition, 0.3s) ease, opacity var(--dooms-tts-transition, 0.3s) ease, box-shadow var(--dooms-tts-transition, 0.3s) ease;
 }
 
 /* Already-read sentences — dimmed (uses opacity to preserve dialogue colors) */
@@ -14780,7 +14780,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
         0 0 4px rgba(var(--dooms-tts-right-r, 147), var(--dooms-tts-right-g, 51), var(--dooms-tts-right-b, 234), 0.15);
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
-    transition: all var(--dooms-tts-transition, 0.3s) ease;
+    transition: background var(--dooms-tts-transition, 0.3s) ease, color var(--dooms-tts-transition, 0.3s) ease, opacity var(--dooms-tts-transition, 0.3s) ease, box-shadow var(--dooms-tts-transition, 0.3s) ease;
 }
 
 /* Unread sentences — slightly dimmed (uses opacity to preserve dialogue colors) */
@@ -15084,7 +15084,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #888;
     font-size: 0.78em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 .rpg-lb-btn:hover { color: var(--rpg-highlight, #e94560); border-color: var(--rpg-highlight, #e94560); }
 
@@ -15177,7 +15177,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.74em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 .rpg-lb-fpill:hover { color: var(--rpg-text, #e0e0e0); border-color: #4a7ba7; }
 .rpg-lb-fpill.active { background: var(--rpg-highlight, #e94560); color: #fff; border-color: var(--rpg-highlight, #e94560); }
@@ -15203,7 +15203,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.7em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     white-space: nowrap;
 }
 .rpg-lb-toolbar-btn:hover { color: var(--rpg-highlight, #e94560); border-color: var(--rpg-highlight, #e94560); }
@@ -15254,7 +15254,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     flex-shrink: 0;
     font-size: 0.6em;
     color: transparent;
@@ -15347,7 +15347,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #888;
     font-size: 0.74em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 .rpg-lb-bulk-btn:hover { color: var(--rpg-highlight, #e94560); border-color: var(--rpg-highlight, #e94560); }
 .rpg-lb-bulk-btn.primary { background: var(--rpg-highlight, #e94560); color: #fff; border-color: var(--rpg-highlight, #e94560); }
@@ -15790,7 +15790,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     font-size: 0.6em;
     color: transparent;
     flex-shrink: 0;
@@ -15825,7 +15825,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.78em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     width: 100%;
     justify-content: center;
 }
@@ -15870,7 +15870,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.8em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 .rpg-lb-btn-new-book:hover { border-color: var(--rpg-highlight, #e94560); color: var(--rpg-highlight, #e94560); background: rgba(233,69,96,0.04); }
 .rpg-lb-btn-import {
@@ -15884,7 +15884,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.8em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     margin-left: 8px;
 }
 .rpg-lb-btn-import:hover { border-color: #4a7ba7; color: #4a7ba7; background: rgba(74,123,167,0.04); }
@@ -15903,7 +15903,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: #666;
     font-size: 0.78em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s, opacity 0.2s;
     width: calc(100% - 50px);
 }
 .rpg-lb-btn-add-entry:hover { border-color: var(--rpg-highlight, #e94560); color: var(--rpg-highlight, #e94560); background: rgba(233,69,96,0.04); }
@@ -16088,7 +16088,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: var(--rpg-text-muted, #aaa);
     font-size: 15px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
 }
 .rpg-lb-icon-option:hover {
     background: rgba(233,69,96,0.1);
@@ -16259,7 +16259,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-radius: 12px;
     padding: 20px;
     cursor: pointer;
-    transition: all 0.25s ease;
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
     text-align: center;
     outline: none;
 }
@@ -16656,3 +16656,122 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 #dooms-dc-debug-hud[data-status="countdown"] .dooms-dc-hud-status-text { color: #f0c040; }
 #dooms-dc-debug-hud[data-status="triggered"] .dooms-dc-hud-status-text { color: #e94560; font-style: normal; font-weight: 600; }
 #dooms-dc-debug-hud[data-status="pending"]   .dooms-dc-hud-status-text { color: #f0c040; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MOBILE PERFORMANCE — disable expensive GPU effects on small screens
+   backdrop-filter forces compositing on every element behind it; on mobile GPUs
+   this is devastating.  The elements already have near-opaque backgrounds so
+   removing the blur is visually negligible.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    /* ── Kill backdrop-filter on mobile ── */
+    .rpg-dice-popup::before,
+    .rpg-settings-popup::before,
+    .rpg-panel-header,
+    .rpg-thoughts-popout-container,
+    .rpg-thoughts-popout-header,
+    .rpg-panel-overlay,
+    .rpg-panel-main,
+    .rpg-panel-tabs,
+    .rpg-encounter-modal-overlay,
+    .rpg-encounter-modal[data-atmosphere="foggy"] .rpg-encounter-overlay,
+    .rpg-st-tooltip,
+    .rpg-st-widget-grid,
+    .dooms-pb-ctx-menu,
+    .dooms-pb-name-tooltip,
+    .rpg-st-hud,
+    .rpg-st-inline-row,
+    .dooms-intro-overlay,
+    .dooms-dc-overlay,
+    #dooms-dc-debug-hud {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* ── Disable weather particle animations on mobile ──
+       These run constantly (snow, rain, mist, stars, fireflies, etc.)
+       and each particle triggers its own compositor layer + repaint. */
+    .rpg-snowflakes-container,
+    .rpg-weather-particles,
+    .rpg-weather-foreground {
+        display: none !important;
+    }
+
+    /* ── Disable heavy filter: blur() on mobile ── */
+    .rpg-clear-orb,
+    .rpg-night-moon-glow,
+    .rpg-clear-ambient-glow {
+        filter: none !important;
+    }
+
+    /* ── Reduce extreme box-shadow blur radii on mobile ──
+       Shadows with 40-80px blur cause full-layer repaints. Scale them
+       down to something the mobile GPU can handle. */
+    .rpg-panel[data-theme="sci-fi"] .rpg-content-box,
+    .rpg-panel[data-theme="cyberpunk"] .rpg-content-box {
+        box-shadow: 0 0 12px rgba(139, 0, 255, 0.3) !important;
+    }
+    .rpg-panel[data-theme="fantasy"] .rpg-content-box {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    /* Modal shadows — reduce to simpler single shadow */
+    .rpg-dice-popup-content,
+    .rpg-settings-popup-content,
+    .rpg-encounter-container,
+    .dooms-dc-modal {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    /* Portrait bar — disable the glow burst animation on mobile */
+    .dooms-pb-glow-burst {
+        display: none !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION — respect OS accessibility setting (also helps performance)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+    /* Pause all infinite animations */
+    .rpg-snowflake,
+    .rpg-raindrop,
+    .rpg-mist-layer,
+    .rpg-clear-ambient-glow,
+    .rpg-clear-dust-mote,
+    .rpg-clear-orb,
+    .rpg-clear-sun,
+    .rpg-clear-sun-glow,
+    .rpg-sunrise-overlay,
+    .rpg-sunset-overlay,
+    .rpg-sunrise-horizon-glow,
+    .rpg-sunset-horizon-glow,
+    .rpg-sunrise-fading-star,
+    .rpg-sunset-emerging-star,
+    .rpg-clear-lens-flare,
+    .rpg-clear-lens-core,
+    .rpg-clear-secondary-flare,
+    .rpg-night-moon,
+    .rpg-night-moon-glow,
+    .rpg-night-star,
+    .rpg-night-star-bright,
+    .rpg-night-firefly,
+    .rpg-night-shooting-star,
+    .rpg-lightning-flash,
+    .rpg-wind-line,
+    .rpg-weather-particle,
+    .dooms-pb-speaking-ring,
+    .dooms-dc-loading-icon,
+    .dooms-dc-loading-dots span,
+    .dooms-dc-header i,
+    #dooms-dc-debug-hud .dooms-dc-hud-dot {
+        animation: none !important;
+    }
+
+    /* Keep functional spinners but simplify */
+    .rpg-mobile-toggle.rpg-fab-loading i,
+    .rpg-strip-refresh-btn i.fa-spin,
+    #rpg-mobile-toggle.rpg-fab-loading {
+        animation-duration: 2s !important;
+    }
+}
