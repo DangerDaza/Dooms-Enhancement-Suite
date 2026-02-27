@@ -845,7 +845,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Low Tension Ceiling</span>
-                                <span class="rpg-setting-hint">Tension values 1 to N count as "low" (out of 10)</span>
+                                <span class="rpg-setting-hint">What counts as "low" tension. Tension values at or below this number will increment the streak counter. Higher = more sensitive (triggers more often). Lower = only truly calm moments count.</span>
                             </div>
                             <div class="rpg-slider-group">
                                 <input type="range" id="rpg-dc-ceiling" class="rpg-range-slider" min="2" max="6" value="4" />
@@ -855,7 +855,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Low Tension Threshold</span>
-                                <span class="rpg-setting-hint">Consecutive low-tension responses before countdown starts</span>
+                                <span class="rpg-setting-hint">How many consecutive low-tension AI responses are needed before the visible countdown begins. Higher = more patience before intervening. The streak resets if tension rises above the ceiling.</span>
                             </div>
                             <div class="rpg-slider-group">
                                 <input type="range" id="rpg-dc-threshold" class="rpg-range-slider" min="3" max="10" value="5" />
@@ -867,7 +867,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Countdown Length</span>
-                                <span class="rpg-setting-hint">Starting countdown value (lower tension = faster tick)</span>
+                                <span class="rpg-setting-hint">Once the threshold is reached, a visible countdown begins at this number. Each low-tension response ticks it down (very low tension ticks faster). When it hits zero, you'll be prompted to pick a plot twist.</span>
                             </div>
                             <div class="rpg-slider-group">
                                 <input type="range" id="rpg-dc-countdown" class="rpg-range-slider" min="1" max="8" value="3" />
@@ -877,7 +877,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Twist Choices</span>
-                                <span class="rpg-setting-hint">Number of twist options generated</span>
+                                <span class="rpg-setting-hint">How many twist options the AI generates for you to pick from. More choices = more variety but slightly longer API call.</span>
                             </div>
                             <select id="rpg-dc-choices" class="rpg-accordion-select">
                                 <option value="2">2 choices</option>
@@ -891,6 +891,7 @@
                         <div class="rpg-subsection-label">Speed Rules</div>
                         <div class="rpg-setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                             <span class="rpg-setting-hint" style="font-size: 0.78em; opacity: 0.7;">
+                                The countdown ticks faster when tension is very low:<br>
                                 Tension 1 → countdown ticks by 3<br>
                                 Tension 2 → countdown ticks by 2<br>
                                 Tension 3-4 → countdown ticks by 1<br>
@@ -916,7 +917,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Show in Scene Tracker</span>
-                                <span class="rpg-setting-hint">Display tension, streak, and countdown badge in the scene header</span>
+                                <span class="rpg-setting-hint">Adds a live debug badge to scene headers showing the current tension reading, streak count, and countdown status. Useful for verifying the system is working.</span>
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="rpg-dc-debug-display" />
