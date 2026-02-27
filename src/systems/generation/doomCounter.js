@@ -194,14 +194,17 @@ function buildTwistPrompt(twistCount) {
     const context = getContext();
     const chatMessages = context.chat || [];
 
-    // Extract scene context from committed data
+    // ── Player & AI character identity ──
+    const playerName = context.name1 || 'the player';
+    const aiCharName = context.name2 || 'the character';
+
+    // ── Scene context from committed tracker data ──
     let location = 'Unknown';
     let time = 'Unknown';
     let date = 'Unknown';
-    let characters = [];
     let recentEvents = [];
+    let tension = 'low';
 
-    // Parse committed infoBox
     let infoBox = committedTrackerData.infoBox;
     if (infoBox) {
         if (typeof infoBox === 'string') {
@@ -218,10 +221,12 @@ function buildTwistPrompt(twistCount) {
             if (Array.isArray(infoBox.recentEvents)) {
                 recentEvents = infoBox.recentEvents;
             }
+            tension = infoBox.tension?.value || infoBox.tension || 'low';
         }
     }
 
-    // Parse committed characters
+    // ── Rich character data (name, relationship, thoughts, presence) ──
+    let characterSummaries = [];
     let charData = committedTrackerData.characterThoughts;
     if (charData) {
         if (typeof charData === 'string') {
@@ -229,24 +234,41 @@ function buildTwistPrompt(twistCount) {
         }
         if (charData) {
             const arr = Array.isArray(charData) ? charData : (charData.characters || []);
-            characters = arr.map(c => c.name).filter(Boolean);
+            characterSummaries = arr.filter(c => c.name).map(c => {
+                const parts = [c.name];
+                // Relationship to player
+                const rel = c.Relationship || c.relationship?.status || c.relationship;
+                if (rel) parts.push(`(${rel} to ${playerName})`);
+                // Present or absent
+                if (c.present === false) parts.push('[absent]');
+                // Current thoughts if available
+                const thoughts = c.thoughts?.content || c.thoughts;
+                if (thoughts) parts.push(`— thinking: "${thoughts}"`);
+                return parts.join(' ');
+            });
         }
     }
 
-    // Get last 5 messages for context
-    const recentChat = chatMessages.slice(-5).map(m => {
-        const role = m.is_user ? 'User' : (m.name || 'Character');
-        const text = (m.mes || '').substring(0, 200);
+    // ── Recent conversation (last 8 messages for better context) ──
+    const recentChat = chatMessages.slice(-8).map(m => {
+        const role = m.is_user ? playerName : (m.name || aiCharName);
+        const text = (m.mes || '').substring(0, 300);
         return `${role}: ${text}`;
     }).join('\n');
 
-    const systemPrompt = `You are a creative plot twist generator for a roleplay story. The story has been calm for a while and needs a dramatic shake-up. Based on the current scene, generate exactly ${twistCount} plot twist options.
+    const systemPrompt = `You are a creative plot twist generator for an ongoing roleplay story. The story has been calm for several exchanges and could use something unexpected to shift the dynamic.
+
+CRITICAL — Character knowledge:
+- The PLAYER CHARACTER is named "${playerName}" — they are already in the story, do NOT introduce them as a new or unknown character.
+- The main AI character is "${aiCharName}" — also already established in the story.
+- The following characters are ALREADY ESTABLISHED in this story. Do NOT treat any of them as strangers or newcomers:
+${characterSummaries.length > 0 ? characterSummaries.map(s => `  • ${s}`).join('\n') : '  (No character data available)'}
 
 Current scene:
 - Location: ${location}
 - Time: ${time}
 - Date: ${date}
-- Characters present: ${characters.length > 0 ? characters.join(', ') : 'Unknown'}
+- Tension level: ${tension}
 - Recent events: ${recentEvents.length > 0 ? recentEvents.join('; ') : 'None noted'}
 
 Recent conversation:
@@ -254,15 +276,20 @@ ${recentChat}
 
 Return ONLY a JSON array with exactly ${twistCount} objects:
 [
-  {"emoji": "🌀", "title": "Short 3-5 word title", "description": "2-3 sentence description of the twist and how it disrupts the current calm"},
-  ...
+  {"emoji": "🌀", "title": "Short 3-5 word title", "description": "2-3 sentence description of what happens and how it changes the scene dynamic"}
 ]
 
 Rules:
-- Twists must be plausible given the current scene and characters
-- Each twist should be a DIFFERENT type (interpersonal, environmental, revelation, arrival, threat, etc.)
-- Twists should be dramatic but not story-breaking
-- The goal is to shake the story out of a lull, not destroy it`;
+- ONLY reference characters listed above — never invent new characters or treat existing ones as strangers
+- Vary the TONE across the ${twistCount} options. Include a MIX of:
+  • Positive/exciting twists (unexpected good fortune, a breakthrough, romantic moment, lucky discovery)
+  • Dramatic/tense twists (a confrontation, revelation, moral dilemma, betrayal)
+  • Mysterious/intriguing twists (something strange, a clue, an omen, an unexplained event)
+  Do NOT make all options negative or catastrophic.
+- Twists should be proportional to the scene — no world-ending disasters for a quiet afternoon
+- Each twist should be a DIFFERENT type (interpersonal, environmental, revelation, discovery, emotional, etc.)
+- Build on existing character relationships and recent events rather than introducing random catastrophes
+- The goal is to make the story MORE interesting, not to punish the characters`;
 
     return [
         { role: 'system', content: systemPrompt },
