@@ -2475,6 +2475,192 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     white-space: nowrap !important;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CHARACTER CARD FLIP — 3D flip to reveal detail sheet on the back
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Outer wrapper — provides perspective for the 3D rotation */
+.rpg-card-flipper {
+    perspective: 800px;
+    width: 100%;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* Inner container — holds both faces, gets rotated on flip */
+.rpg-card-inner {
+    position: relative;
+    width: 100%;
+    transition: transform 0.5s ease;
+    transform-style: preserve-3d;
+}
+
+.rpg-card-flipper.flipped .rpg-card-inner {
+    transform: rotateY(180deg);
+}
+
+/* Front face — existing card styles still apply via .rpg-character-card */
+.rpg-card-front {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Back face — pre-rotated 180°, hidden until the card flips */
+.rpg-card-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: rotateY(180deg);
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--rpg-highlight);
+    border-radius: clamp(4px, 0.5vh, 6px);
+    padding: clamp(8px, 1.2vh, 12px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rpg-border) transparent;
+}
+
+.rpg-card-back::-webkit-scrollbar { width: 4px; }
+.rpg-card-back::-webkit-scrollbar-track { background: transparent; }
+.rpg-card-back::-webkit-scrollbar-thumb { background: var(--rpg-border); border-radius: 2px; }
+
+/* Back face header — name + flip-back hint */
+.rpg-card-back-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.rpg-card-back-emoji {
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.rpg-card-back-name {
+    font-weight: 700;
+    font-size: clamp(0.8rem, 0.85vw, 0.95rem);
+    color: var(--rpg-highlight);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rpg-card-back-flip-hint {
+    color: var(--rpg-text);
+    opacity: 0.35;
+    font-size: 0.8em;
+    transition: opacity 0.2s;
+}
+
+.rpg-card-back:hover .rpg-card-back-flip-hint {
+    opacity: 0.7;
+}
+
+/* Back face body — scrollable content area */
+.rpg-card-back-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Individual sections (thoughts, relationship, custom fields) */
+.rpg-card-back-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rpg-card-back-label {
+    font-size: clamp(0.6rem, 0.6vw, 0.7rem);
+    font-weight: 600;
+    color: var(--rpg-highlight);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
+}
+
+.rpg-card-back-value {
+    font-size: clamp(0.7rem, 0.7vw, 0.8rem);
+    color: var(--rpg-text);
+    line-height: 1.35;
+    opacity: 0.9;
+}
+
+/* Thoughts section gets slightly more emphasis */
+.rpg-card-back-thoughts .rpg-card-back-value {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+/* Stats section with mini progress bars */
+.rpg-card-back-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.rpg-card-back-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rpg-card-back-stat-name {
+    font-size: clamp(0.6rem, 0.6vw, 0.7rem);
+    font-weight: 600;
+    color: var(--rpg-text);
+    opacity: 0.7;
+    min-width: 4em;
+    flex-shrink: 0;
+}
+
+.rpg-card-back-stat-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.rpg-card-back-stat-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.rpg-card-back-stat-val {
+    font-size: clamp(0.6rem, 0.55vw, 0.65rem);
+    color: var(--rpg-text);
+    opacity: 0.6;
+    min-width: 2.5em;
+    text-align: right;
+    font-weight: 500;
+}
+
+/* Empty state for fields with no data */
+.rpg-card-back-empty {
+    opacity: 0.4;
+    font-style: italic;
+}
+
 /* Placeholder styles for empty sections */
 .rpg-thoughts-placeholder,
 .rpg-placeholder-widget {

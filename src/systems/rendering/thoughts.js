@@ -215,6 +215,17 @@ export function initThoughtsEventDelegation() {
         e.stopPropagation();
         addNewCharacter();
     });
+    // Card flip — left click on the card (not on interactive children) toggles front/back.
+    // All interactive children (.rpg-editable, .rpg-avatar-upload, .rpg-character-remove,
+    // .rpg-section-lock-icon, button) already call e.stopPropagation() so this handler
+    // only fires when clicking the card background or non-interactive areas.
+    $thoughtsContainer.on('click', '.rpg-card-flipper', function(e) {
+        // Extra guard: don't flip if click originated from an interactive child
+        if ($(e.target).closest('.rpg-editable, .rpg-avatar-upload, .rpg-character-remove, .rpg-section-lock-icon, .rpg-add-character-btn, button').length) {
+            return;
+        }
+        $(this).toggleClass('flipped');
+    });
 }
 /**
  * Renders character thoughts (Present Characters) panel.
@@ -528,8 +539,12 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     }
                 }
                 debugLog(`[RPG Thoughts] Building HTML card for ${char.name}...`);
+
+                // ── FRONT FACE (existing card, wrapped in flipper) ──
                 html += `
-                    <div class="rpg-character-card" data-character-name="${char.name}">
+                    <div class="rpg-card-flipper" data-character-name="${char.name}">
+                    <div class="rpg-card-inner">
+                    <div class="rpg-card-front rpg-character-card">
                         <div class="rpg-character-header-row">
                             <div class="rpg-character-avatar rpg-avatar-upload" data-character="${char.name}" title="Click to upload avatar">
                                 <img src="${characterPortrait}" alt="${char.name}" onerror="this.style.opacity='0.5';this.onerror=null;" />
@@ -597,6 +612,77 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 }
                 html += `
                         </div>
+                    </div>
+                `;
+                // ── BACK FACE (read-only detail sheet) ──
+                const thoughtsContent = char.ThoughtsContent || '';
+                const relationshipText = char.Relationship || '';
+                html += `
+                    <div class="rpg-card-back">
+                        <div class="rpg-card-back-header">
+                            <span class="rpg-card-back-emoji">${char.emoji}</span>
+                            <span class="rpg-card-back-name">${char.name}</span>
+                            <span class="rpg-card-back-flip-hint"><i class="fa-solid fa-rotate-left"></i></span>
+                        </div>
+                        <div class="rpg-card-back-body">
+                `;
+                // Thoughts section
+                if (thoughtsContent) {
+                    html += `
+                            <div class="rpg-card-back-section rpg-card-back-thoughts">
+                                <span class="rpg-card-back-label">Thoughts</span>
+                                <span class="rpg-card-back-value">${thoughtsContent}</span>
+                            </div>
+                    `;
+                }
+                // Relationship section
+                if (hasRelationshipEnabled) {
+                    html += `
+                            <div class="rpg-card-back-section">
+                                <span class="rpg-card-back-label">Relationship</span>
+                                <span class="rpg-card-back-value${relationshipText ? '' : ' rpg-card-back-empty'}">${relationshipText || 'Unknown'}</span>
+                            </div>
+                    `;
+                }
+                // All custom fields with labels
+                for (const field of enabledFields) {
+                    const rawVal = char[field.name];
+                    const val = extractFieldValue(rawVal);
+                    html += `
+                            <div class="rpg-card-back-section">
+                                <span class="rpg-card-back-label">${field.name}</span>
+                                <span class="rpg-card-back-value${val ? '' : ' rpg-card-back-empty'}">${val || 'Not set'}</span>
+                            </div>
+                    `;
+                }
+                // Stats with visual bars
+                if (enabledCharStats.length > 0) {
+                    html += `<div class="rpg-card-back-stats">`;
+                    for (const stat of enabledCharStats) {
+                        const sv = char[stat.name] || 0;
+                        const sc = getStatColor(
+                            sv,
+                            extensionSettings.statBarColorLow,
+                            extensionSettings.statBarColorHigh,
+                            extensionSettings.statBarColorLowOpacity ?? 100,
+                            extensionSettings.statBarColorHighOpacity ?? 100
+                        );
+                        html += `
+                                <div class="rpg-card-back-stat">
+                                    <span class="rpg-card-back-stat-name">${stat.name}</span>
+                                    <div class="rpg-card-back-stat-bar">
+                                        <div class="rpg-card-back-stat-fill" style="width: ${sv}%; background: ${sc};"></div>
+                                    </div>
+                                    <span class="rpg-card-back-stat-val">${sv}%</span>
+                                </div>
+                        `;
+                    }
+                    html += `</div>`;
+                }
+                html += `
+                        </div>
+                    </div>
+                    </div>
                     </div>
                 `;
                 debugLog(`[RPG Thoughts] ✓ Successfully built HTML for ${char.name}`);
