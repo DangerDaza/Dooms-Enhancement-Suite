@@ -1473,24 +1473,33 @@ jQuery(async () => {
             throw error; // This is critical - can't continue without UI
         }
         // Mobile keyboard resize fix — when the on-screen keyboard opens/closes
-        // the viewport height changes and every `transition: all` rule tries to
-        // smoothly animate viewport-relative properties (height, min-height, etc.)
-        // causing a slow "rubber-band" effect.  We temporarily kill ALL transitions
-        // during the resize so the layout snaps back instantly.
+        // the viewport height changes and CSS transitions try to smoothly animate
+        // viewport-relative properties, causing a slow "rubber-band" effect.
+        // We kill ALL transitions during the resize and hold the kill long enough
+        // for the keyboard animation + browser reflow to fully complete.
         try {
-            if (window.visualViewport) {
-                let vkTimer;
-                window.visualViewport.addEventListener('resize', () => {
-                    document.body.classList.add('dooms-vk-resizing');
-                    clearTimeout(vkTimer);
-                    vkTimer = setTimeout(() => {
+            let vkTimer;
+            const killTransitions = () => {
+                document.body.classList.add('dooms-vk-resizing');
+                clearTimeout(vkTimer);
+                // 500ms covers the keyboard close animation (~300ms) plus one
+                // full reflow cycle.  We only re-enable after a full rAF so the
+                // browser has actually painted the new layout before transitions
+                // can kick in again.
+                vkTimer = setTimeout(() => {
+                    requestAnimationFrame(() => {
                         document.body.classList.remove('dooms-vk-resizing');
-                    }, 120);
-                });
+                    });
+                }, 500);
+            };
+            // visualViewport fires during the keyboard animation itself
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', killTransitions);
             }
+            // window resize fires as a fallback / when visualViewport isn't available
+            window.addEventListener('resize', killTransitions);
         } catch (error) {
-            console.error('[Dooms Tracker] Visual viewport listener failed:', error);
-            // Non-critical — transitions will just be slow on keyboard close
+            console.error('[Dooms Tracker] Viewport resize listener failed:', error);
         }
         // Load chat-specific data for current chat
         try {
