@@ -333,6 +333,7 @@ export function updatePortraitBar() {
     }
     $('#dooms-portrait-bar-wrapper').show();
 
+    try {
     // Apply alignment setting
     const centered = extensionSettings.portraitAlignment === 'center';
     $scroll.toggleClass('dooms-pb-centered', centered);
@@ -382,7 +383,12 @@ export function updatePortraitBar() {
             : '';
         const newBadge = isNew ? '<span class="dooms-pb-new-badge">&#x2726; New</span>' : '';
 
-        const backFace = buildPortraitBackFace(char.name, emoji);
+        let backFace = '';
+        try {
+            backFace = buildPortraitBackFace(char.name, emoji);
+        } catch (e) {
+            console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
+        }
         const flippedClass = flippedPortraitCards.has(char.name) ? ' dooms-pb-flipped' : '';
 
         if (portraitSrc) {
@@ -443,6 +449,9 @@ export function updatePortraitBar() {
 
     // Re-apply visual settings (header visibility, arrow visibility, etc.)
     applyPortraitBarSettings();
+    } catch (e) {
+        console.error('[Dooms Portrait Bar] Error updating portrait bar:', e);
+    }
 }
 
 /**
@@ -830,6 +839,7 @@ function sanitizeFilename(name) {
 
 function escapeHtml(str) {
     if (!str) return '';
+    if (typeof str !== 'string') str = String(str);
     return str
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -870,8 +880,11 @@ function buildPortraitBackFace(charName, emoji) {
     let sectionsHtml = '';
 
     if (details) {
-        // Thoughts
-        const thoughts = details.thoughts?.content || details.thoughts || '';
+        // Thoughts — details.thoughts may be a string or an object { content: "..." }
+        const rawThoughts = details.thoughts;
+        const thoughts = (typeof rawThoughts === 'string') ? rawThoughts
+            : (rawThoughts?.content && typeof rawThoughts.content === 'string') ? rawThoughts.content
+            : '';
         if (thoughts) {
             sectionsHtml += `<div class="dooms-pb-back-section">
                 <div class="dooms-pb-back-label">💭 Thoughts</div>
@@ -879,8 +892,9 @@ function buildPortraitBackFace(charName, emoji) {
             </div>`;
         }
 
-        // Relationship
-        const relationship = details.Relationship || details.relationship || '';
+        // Relationship — may also be an object in some formats
+        const rawRelationship = details.Relationship || details.relationship || '';
+        const relationship = (typeof rawRelationship === 'string') ? rawRelationship : String(rawRelationship || '');
         if (relationship) {
             sectionsHtml += `<div class="dooms-pb-back-section">
                 <div class="dooms-pb-back-label">❤️ Relationship</div>
@@ -889,9 +903,9 @@ function buildPortraitBackFace(charName, emoji) {
         }
 
         // Show other fields (skip name, emoji, thoughts, relationship which are already shown)
-        const skipFields = new Set(['name', 'emoji', 'thoughts', 'relationship', 'stats']);
+        const skipFields = new Set(['name', 'emoji', 'thoughts', 'relationship', 'stats', 'ThoughtsContent']);
         for (const [key, val] of Object.entries(details)) {
-            if (skipFields.has(key.toLowerCase()) || !val || typeof val === 'object') continue;
+            if (skipFields.has(key.toLowerCase()) || skipFields.has(key) || !val || typeof val === 'object') continue;
             sectionsHtml += `<div class="dooms-pb-back-section">
                 <div class="dooms-pb-back-label">${escapeHtml(key)}</div>
                 <div class="dooms-pb-back-value">${escapeHtml(String(val))}</div>
