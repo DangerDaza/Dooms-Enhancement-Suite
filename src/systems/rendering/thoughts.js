@@ -137,6 +137,33 @@ function namesMatch(cardName, aiName) {
     return wordBoundary.test(aiCore);
 }
 /**
+ * Animates a card flip using a 2D scaleX squish effect.
+ * Phase 1: squish card to 0 width (200ms)
+ * Phase 2: swap front/back face, then expand back out (200ms)
+ * Works inside overflow containers where CSS 3D preserve-3d breaks.
+ * @param {jQuery} $flipper - The .rpg-card-flipper element to flip
+ */
+function animateCardFlip($flipper) {
+    if ($flipper.hasClass('flipping')) return; // prevent double-click
+    const charName = $flipper.data('character-name');
+    // Phase 1: squish to zero
+    $flipper.addClass('flipping');
+    // Phase 2: at midpoint, swap faces and expand back
+    setTimeout(() => {
+        $flipper.toggleClass('flipped');
+        $flipper.removeClass('flipping');
+        // Track state for re-render preservation
+        if (charName) {
+            if ($flipper.hasClass('flipped')) {
+                flippedCards.add(charName);
+            } else {
+                flippedCards.delete(charName);
+            }
+        }
+    }, 200); // matches CSS transition duration
+}
+
+/**
  * Registers delegated event handlers on $thoughtsContainer ONCE.
  * Uses event delegation so handlers survive DOM replacement via .html().
  * Call this once during init, after $thoughtsContainer is set.
@@ -194,16 +221,7 @@ export function initThoughtsEventDelegation() {
     $thoughtsContainer.on('click', '.rpg-character-avatar', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        const $flipper = $(this).closest('.rpg-card-flipper');
-        $flipper.toggleClass('flipped');
-        const charName = $flipper.data('character-name');
-        if (charName) {
-            if ($flipper.hasClass('flipped')) {
-                flippedCards.add(charName);
-            } else {
-                flippedCards.delete(charName);
-            }
-        }
+        animateCardFlip($(this).closest('.rpg-card-flipper'));
     });
     // Avatar upload — small camera icon button in the corner of the avatar
     $thoughtsContainer.on('click', '.rpg-avatar-upload-btn', function(e) {
@@ -242,15 +260,7 @@ export function initThoughtsEventDelegation() {
         if ($(e.target).closest('.rpg-editable, .rpg-character-avatar, .rpg-avatar-upload-btn, .rpg-character-remove, .rpg-section-lock-icon, .rpg-add-character-btn, button').length) {
             return;
         }
-        $(this).toggleClass('flipped');
-        const charName = $(this).data('character-name');
-        if (charName) {
-            if ($(this).hasClass('flipped')) {
-                flippedCards.add(charName);
-            } else {
-                flippedCards.delete(charName);
-            }
-        }
+        animateCardFlip($(this));
     });
 }
 /**

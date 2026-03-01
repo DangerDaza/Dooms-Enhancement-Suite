@@ -2496,56 +2496,54 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
    CHARACTER CARD FLIP — 3D flip to reveal detail sheet on the back
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-/* Outer wrapper — provides perspective for the 3D rotation */
+/* Outer wrapper — contains the card and handles cursor */
 .rpg-card-flipper {
-    perspective: 800px;
     width: 100%;
     flex-shrink: 0;
     cursor: pointer;
 }
 
-/* Inner container — holds both faces, gets rotated on flip */
+/* Inner container — squishes to 0 width then expands to simulate a flip */
 .rpg-card-inner {
     position: relative;
     width: 100%;
-    transition: transform 0.5s ease;
-    transform-style: preserve-3d;
+    transition: transform 0.2s ease-in;
+    transform-origin: center center;
 }
 
-.rpg-card-flipper.flipped .rpg-card-inner {
-    transform: rotateY(180deg);
+/* Phase 1: squish to zero (card narrows like it's turning sideways) */
+.rpg-card-flipper.flipping .rpg-card-inner {
+    transform: scaleX(0);
 }
 
-/* Front face — existing card styles still apply via .rpg-character-card */
+/* Front face — visible by default, hidden when flipped */
 .rpg-card-front {
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: rotateY(0deg); /* explicit 3D participation for browser compat */
-    overflow: visible; /* override .rpg-character-card overflow:auto to avoid 3D flattening */
+    /* no 3D properties needed */
 }
 
-/* Back face — pre-rotated 180°, hidden until the card flips */
+.rpg-card-flipper.flipped .rpg-card-front {
+    display: none;
+}
+
+/* Back face — hidden by default, shown when flipped */
 .rpg-card-back {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: rotateY(180deg);
+    display: none;
     background: rgba(0, 0, 0, 0.45);
     border: 1px solid var(--rpg-highlight);
     border-radius: clamp(4px, 0.5vh, 6px);
     padding: clamp(8px, 1.2vh, 12px);
     overflow-y: auto;
     overflow-x: hidden;
-    display: flex;
     flex-direction: column;
     gap: 6px;
     box-sizing: border-box;
     scrollbar-width: thin;
     scrollbar-color: var(--rpg-border) transparent;
+    max-height: clamp(250px, 25vh, 350px);
+}
+
+.rpg-card-flipper.flipped .rpg-card-back {
+    display: flex;
 }
 
 .rpg-card-back::-webkit-scrollbar { width: 4px; }
