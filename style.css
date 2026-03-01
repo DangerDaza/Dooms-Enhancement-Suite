@@ -13894,6 +13894,138 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     flex-shrink: 0;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PORTRAIT CARD FLIP — scaleX squish animation to reveal detail sheet
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Phase 1: squish to zero width */
+.dooms-portrait-card.dooms-pb-flipping {
+    transform: scaleX(0) !important;
+    transition: transform 0.2s ease-in !important;
+}
+
+/* When flipped, hide front face elements and show back */
+.dooms-portrait-card.dooms-pb-flipped > img,
+.dooms-portrait-card.dooms-pb-flipped > .dooms-portrait-card-emoji,
+.dooms-portrait-card.dooms-pb-flipped > .dooms-pb-absent-overlay,
+.dooms-portrait-card.dooms-pb-flipped > .dooms-pb-new-badge,
+.dooms-portrait-card.dooms-pb-flipped > .dooms-portrait-card-name {
+    display: none !important;
+}
+
+/* Back face — hidden by default */
+.dooms-pb-card-back {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    padding: 8px 6px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: rgba(0, 0, 0, 0.85);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.dooms-pb-card-back::-webkit-scrollbar { width: 3px; }
+.dooms-pb-card-back::-webkit-scrollbar-track { background: transparent; }
+.dooms-pb-card-back::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* Show back face when flipped */
+.dooms-portrait-card.dooms-pb-flipped .dooms-pb-card-back {
+    display: flex;
+}
+
+/* Back face header */
+.dooms-pb-back-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.dooms-pb-back-emoji {
+    font-size: 0.85em;
+    line-height: 1;
+}
+
+.dooms-pb-back-name {
+    font-weight: 700;
+    font-size: 0.65em;
+    color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 1);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+/* Back face body */
+.dooms-pb-back-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-height: 0;
+}
+
+.dooms-pb-back-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.dooms-pb-back-label {
+    font-size: 0.55em;
+    font-weight: 600;
+    color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.dooms-pb-back-value {
+    font-size: 0.6em;
+    color: #ccc;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.dooms-pb-back-thoughts {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.dooms-pb-back-empty {
+    font-size: 0.6em;
+    color: #888;
+    font-style: italic;
+    text-align: center;
+    padding-top: 10px;
+}
+
+/* Flip-back hint icon */
+.dooms-pb-back-hint {
+    position: absolute;
+    bottom: 3px;
+    right: 4px;
+    font-size: 0.6em;
+    color: #666;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.dooms-pb-card-back:hover .dooms-pb-back-hint {
+    opacity: 0.8;
+}
+
 /* ========================================
    Doom's Floating Settings Button (FAB)
    Small gear button to access settings/editor/prompts

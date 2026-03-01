@@ -98,6 +98,9 @@ try {
     _noPortrait.forEach(name => portraitFileCache.set(name, null));
 } catch (e) { /* ignore */ }
 
+/** Tracks which portrait cards are currently flipped (showing back face) */
+const flippedPortraitCards = new Set();
+
 /** Whether the bar is currently expanded */
 let isExpanded = true;
 
@@ -209,6 +212,30 @@ export function initPortraitBar() {
     });
     $('#dooms-pb-right').on('click', function () {
         $('#dooms-pb-scroll').scrollLeft($('#dooms-pb-scroll').scrollLeft() + 200);
+    });
+
+    // ── Left-click portrait card — flip to show detail sheet ──
+    $(document).on('click', '.dooms-portrait-card', function (e) {
+        // Don't flip if clicking on context menu items or other interactive children
+        if ($(e.target).closest('.dooms-pb-ctx-item, button, a, input').length) return;
+        const $card = $(this);
+        if ($card.hasClass('dooms-pb-flipping')) return; // prevent double-click
+        const charName = $card.attr('data-char');
+        // Phase 1: squish card to zero width
+        $card.addClass('dooms-pb-flipping');
+        // Phase 2: at midpoint, swap faces and expand back
+        setTimeout(() => {
+            $card.toggleClass('dooms-pb-flipped');
+            $card.removeClass('dooms-pb-flipping');
+            // Track state for re-render preservation
+            if (charName) {
+                if ($card.hasClass('dooms-pb-flipped')) {
+                    flippedPortraitCards.add(charName);
+                } else {
+                    flippedPortraitCards.delete(charName);
+                }
+            }
+        }, 200);
     });
 
     // ── Right-click context menu on portrait cards (delegated) ──
@@ -355,20 +382,25 @@ export function updatePortraitBar() {
             : '';
         const newBadge = isNew ? '<span class="dooms-pb-new-badge">&#x2726; New</span>' : '';
 
+        const backFace = buildPortraitBackFace(char.name, emoji);
+        const flippedClass = flippedPortraitCards.has(char.name) ? ' dooms-pb-flipped' : '';
+
         if (portraitSrc) {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}" title="${nameEsc}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}" title="${nameEsc}" data-char="${nameEsc}">
                 <img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                 <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
+                ${backFace}
             </div>`;
         } else {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}" title="${nameEsc}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}" title="${nameEsc}" data-char="${nameEsc}">
                 <div class="dooms-portrait-card-emoji">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
+                ${backFace}
             </div>`;
         }
     });
@@ -809,4 +841,74 @@ function escapeHtml(str) {
 function escapeAttr(str) {
     if (!str) return '';
     return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Extracts the full character details object from committed tracker data.
+ * Returns null if no data is available for the character.
+ */
+function getCharacterDetails(charName) {
+    const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
+    if (!data) return null;
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        return characters.find(c => c.name === charName) || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Builds the HTML for a portrait card back face detail sheet.
+ * Shows thoughts, relationship, and key character info in compact form.
+ */
+function buildPortraitBackFace(charName, emoji) {
+    const details = getCharacterDetails(charName);
+    const nameEsc = escapeHtml(charName);
+
+    let sectionsHtml = '';
+
+    if (details) {
+        // Thoughts
+        const thoughts = details.thoughts?.content || details.thoughts || '';
+        if (thoughts) {
+            sectionsHtml += `<div class="dooms-pb-back-section">
+                <div class="dooms-pb-back-label">💭 Thoughts</div>
+                <div class="dooms-pb-back-value dooms-pb-back-thoughts">${escapeHtml(thoughts)}</div>
+            </div>`;
+        }
+
+        // Relationship
+        const relationship = details.Relationship || details.relationship || '';
+        if (relationship) {
+            sectionsHtml += `<div class="dooms-pb-back-section">
+                <div class="dooms-pb-back-label">❤️ Relationship</div>
+                <div class="dooms-pb-back-value">${escapeHtml(relationship)}</div>
+            </div>`;
+        }
+
+        // Show other fields (skip name, emoji, thoughts, relationship which are already shown)
+        const skipFields = new Set(['name', 'emoji', 'thoughts', 'relationship', 'stats']);
+        for (const [key, val] of Object.entries(details)) {
+            if (skipFields.has(key.toLowerCase()) || !val || typeof val === 'object') continue;
+            sectionsHtml += `<div class="dooms-pb-back-section">
+                <div class="dooms-pb-back-label">${escapeHtml(key)}</div>
+                <div class="dooms-pb-back-value">${escapeHtml(String(val))}</div>
+            </div>`;
+        }
+    }
+
+    if (!sectionsHtml) {
+        sectionsHtml = '<div class="dooms-pb-back-empty">No details available</div>';
+    }
+
+    return `<div class="dooms-pb-card-back">
+        <div class="dooms-pb-back-header">
+            <span class="dooms-pb-back-emoji">${emoji}</span>
+            <span class="dooms-pb-back-name">${nameEsc}</span>
+        </div>
+        <div class="dooms-pb-back-body">${sectionsHtml}</div>
+        <div class="dooms-pb-back-hint"><i class="fa-solid fa-rotate-left"></i></div>
+    </div>`;
 }
