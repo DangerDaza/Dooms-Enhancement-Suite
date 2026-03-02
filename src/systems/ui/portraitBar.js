@@ -871,7 +871,8 @@ function getCharacterDetails(charName) {
 
 /**
  * Builds the HTML for a portrait card back face detail sheet.
- * Shows thoughts, relationship, and key character info in compact form.
+ * Shows relationship status, appearance, demeanor, and other key character info.
+ * Thoughts are omitted here since they're shown in the sidebar Thoughts panel.
  */
 function buildPortraitBackFace(charName, emoji) {
     const details = getCharacterDetails(charName);
@@ -880,21 +881,11 @@ function buildPortraitBackFace(charName, emoji) {
     let sectionsHtml = '';
 
     if (details) {
-        // Thoughts — details.thoughts may be a string or an object { content: "..." }
-        const rawThoughts = details.thoughts;
-        const thoughts = (typeof rawThoughts === 'string') ? rawThoughts
-            : (rawThoughts?.content && typeof rawThoughts.content === 'string') ? rawThoughts.content
-            : '';
-        if (thoughts) {
-            sectionsHtml += `<div class="dooms-pb-back-section">
-                <div class="dooms-pb-back-label">💭 Thoughts</div>
-                <div class="dooms-pb-back-value dooms-pb-back-thoughts">${escapeHtml(thoughts)}</div>
-            </div>`;
-        }
-
-        // Relationship — may also be an object in some formats
+        // Relationship — may be { status: "Lover" } object or a flat string
         const rawRelationship = details.Relationship || details.relationship || '';
-        const relationship = (typeof rawRelationship === 'string') ? rawRelationship : String(rawRelationship || '');
+        const relationship = (typeof rawRelationship === 'object' && rawRelationship !== null)
+            ? (rawRelationship.status || rawRelationship.value || JSON.stringify(rawRelationship))
+            : String(rawRelationship || '');
         if (relationship) {
             sectionsHtml += `<div class="dooms-pb-back-section">
                 <div class="dooms-pb-back-label">❤️ Relationship</div>
@@ -902,10 +893,42 @@ function buildPortraitBackFace(charName, emoji) {
             </div>`;
         }
 
-        // Show other fields (skip name, emoji, thoughts, relationship which are already shown)
-        const skipFields = new Set(['name', 'emoji', 'thoughts', 'relationship', 'stats', 'ThoughtsContent']);
+        // Appearance & demeanor — nested inside details.details object
+        const nested = details.details || {};
+        const appearance = (typeof nested === 'object' && nested !== null)
+            ? (nested.appearance || nested.Appearance || '') : '';
+        const demeanor = (typeof nested === 'object' && nested !== null)
+            ? (nested.demeanor || nested.Demeanor || '') : '';
+
+        if (appearance) {
+            sectionsHtml += `<div class="dooms-pb-back-section">
+                <div class="dooms-pb-back-label">👁️ Appearance</div>
+                <div class="dooms-pb-back-value">${escapeHtml(String(appearance))}</div>
+            </div>`;
+        }
+        if (demeanor) {
+            sectionsHtml += `<div class="dooms-pb-back-section">
+                <div class="dooms-pb-back-label">🎭 Demeanor</div>
+                <div class="dooms-pb-back-value">${escapeHtml(String(demeanor))}</div>
+            </div>`;
+        }
+
+        // Show any other nested detail fields we haven't explicitly handled
+        if (typeof nested === 'object' && nested !== null) {
+            const handledDetailFields = new Set(['appearance', 'demeanor']);
+            for (const [key, val] of Object.entries(nested)) {
+                if (handledDetailFields.has(key.toLowerCase()) || !val || typeof val === 'object') continue;
+                sectionsHtml += `<div class="dooms-pb-back-section">
+                    <div class="dooms-pb-back-label">${escapeHtml(key)}</div>
+                    <div class="dooms-pb-back-value">${escapeHtml(String(val))}</div>
+                </div>`;
+            }
+        }
+
+        // Show other top-level fields (skip name, emoji, thoughts, relationship, details, stats)
+        const skipFields = new Set(['name', 'emoji', 'thoughts', 'relationship', 'details', 'stats', 'thoughtscontent']);
         for (const [key, val] of Object.entries(details)) {
-            if (skipFields.has(key.toLowerCase()) || skipFields.has(key) || !val || typeof val === 'object') continue;
+            if (skipFields.has(key.toLowerCase()) || !val || typeof val === 'object') continue;
             sectionsHtml += `<div class="dooms-pb-back-section">
                 <div class="dooms-pb-back-label">${escapeHtml(key)}</div>
                 <div class="dooms-pb-back-value">${escapeHtml(String(val))}</div>
