@@ -1726,8 +1726,29 @@ jQuery(async () => {
                     mesText.removeAttribute('data-dooms-bubbles-applied');
                     mesText.removeAttribute('data-dooms-bubbles-style');
                 }
-                // Delay to let colored-dialogues finish recoloring (600ms debounce + processing)
-                setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
+                // Delay to let colored-dialogues finish recoloring (600ms debounce + processing).
+                // Re-query the DOM element inside setTimeout because a failed swipe causes ST
+                // to "swipe back" and re-render the message, replacing the DOM node entirely.
+                // Using the stale reference captured above would apply bubbles to a detached node.
+                setTimeout(() => {
+                    const freshEl = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);
+                    if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
+                }, 800);
+            });
+            // GENERATION_STOPPED safety net — when a generation is aborted (e.g. failed
+            // swipe), ST may re-render the last message without firing MESSAGE_SWIPED or
+            // CHARACTER_MESSAGE_RENDERED. Re-apply bubbles to the last message if missing.
+            eventSource.on(event_types.GENERATION_STOPPED, () => {
+                if (!extensionSettings.enabled) return;
+                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
+                setTimeout(() => {
+                    const lastMes = document.querySelector('#chat .mes:last-child');
+                    if (!lastMes) return;
+                    const mesText = lastMes.querySelector('.mes_text');
+                    if (mesText && !mesText.getAttribute('data-dooms-bubbles-applied')) {
+                        applyChatBubbles(lastMes, extensionSettings.chatBubbleMode);
+                    }
+                }, 1200);
             });
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
