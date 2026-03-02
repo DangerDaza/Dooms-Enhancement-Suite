@@ -13923,19 +13923,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     height: 100%;
     flex-direction: column;
-    padding: 6px 7px 14px;
+    padding: 6px 7px;
     box-sizing: border-box;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     background: rgba(0, 0, 0, 0.92);
     border-radius: inherit;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
-
-.dooms-pb-card-back::-webkit-scrollbar { width: 3px; }
-.dooms-pb-card-back::-webkit-scrollbar-track { background: transparent; }
-.dooms-pb-card-back::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 
 /* Show back face when flipped */
 .dooms-portrait-card.dooms-pb-flipped .dooms-pb-card-back {
@@ -13949,7 +13942,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 5px;
     padding-bottom: 5px;
     border-bottom: 1px solid rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.3);
-    margin-bottom: 6px;
+    margin-bottom: 2px;
     flex-shrink: 0;
 }
 
@@ -13968,21 +13961,32 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    min-width: 0;
 }
 
-/* ── Back face body ── */
+/* ── Back face body (scrollable) ── */
 .dooms-pb-back-body {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 1px 16px 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
+
+.dooms-pb-back-body::-webkit-scrollbar { width: 3px; }
+.dooms-pb-back-body::-webkit-scrollbar-track { background: transparent; }
+.dooms-pb-back-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 
 .dooms-pb-back-section {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex-shrink: 0;
 }
 
 .dooms-pb-back-section + .dooms-pb-back-section {
@@ -13996,6 +14000,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.9);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dooms-pb-back-value {
@@ -14003,6 +14010,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: rgba(255, 255, 255, 0.88);
     line-height: 1.4;
     word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .dooms-pb-back-thoughts {
@@ -14025,7 +14033,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     right: 4px;
     font-size: 0.55em;
     color: rgba(255, 255, 255, 0.25);
-    transition: opacity 0.2s;
+    pointer-events: none;
+    transition: color 0.2s;
 }
 
 .dooms-pb-card-back:hover .dooms-pb-back-hint {
