@@ -13971,6 +13971,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 5px;
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 4px 1px 16px 0;
@@ -13987,6 +13989,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     flex-direction: column;
     gap: 2px;
     flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .dooms-pb-back-section + .dooms-pb-back-section {
@@ -14011,6 +14015,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     line-height: 1.4;
     word-break: break-word;
     overflow-wrap: anywhere;
+    white-space: normal;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .dooms-pb-back-thoughts {
