@@ -3,6 +3,8 @@
  * Handles safe avatar/thumbnail URL generation with error handling
  */
 import { getThumbnailUrl } from '../../../../../../script.js';
+import { extensionSettings } from '../core/state.js';
+import { getExpressionPortraitForCharacter } from '../systems/integration/expressionSync.js';
 /**
  * Safely retrieves a thumbnail URL from SillyTavern's API with error handling.
  * Returns null instead of throwing errors to prevent extension crashes.
@@ -36,4 +38,17 @@ export function getSafeThumbnailUrl(type, filename) {
         });
         return null;
     }
+}
+
+
+/**
+ * Returns a synced Character Expressions portrait for a character when enabled.
+ * Falls back to the provided portrait URL when no synced expression is available.
+ */
+export function getExpressionAwarePortrait(characterName, fallbackUrl = null) {
+    if (extensionSettings.syncExpressionsToPresentCharacters) {
+        const expressionUrl = getExpressionPortraitForCharacter(characterName);
+        if (expressionUrl) return expressionUrl;
+    }
+    return fallbackUrl;
 }

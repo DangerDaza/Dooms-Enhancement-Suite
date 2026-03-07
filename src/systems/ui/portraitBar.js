@@ -19,7 +19,7 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
-import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -601,6 +601,9 @@ function namesMatch(cardName, aiName) {
  */
 export function resolvePortrait(name) {
     if (!name) return null;
+
+    const syncedExpression = getExpressionAwarePortrait(name, null);
+    if (syncedExpression) return syncedExpression;
 
     // 1. Custom uploaded avatars (npcAvatars)
     const avatars = extensionSettings.npcAvatars;

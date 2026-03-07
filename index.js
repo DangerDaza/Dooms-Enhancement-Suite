@@ -131,6 +131,15 @@ import {
     initHistoryInjection,
     initDoomCounterListener
 } from './src/systems/integration/sillytavern.js';
+import {
+    initExpressionSync,
+    queueExpressionCaptureForSpeaker,
+    syncExpressionFromLatestMessage,
+    onExpressionSyncSettingChanged,
+    onHideDefaultExpressionDisplaySettingChanged,
+    clearExpressionSyncCache,
+    onExpressionSyncChatChanged
+} from './src/systems/integration/expressionSync.js';
 // Doom Counter
 import { triggerDoomCounter, updateDoomCounterUI, resetCounters } from './src/systems/generation/doomCounter.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -161,11 +170,18 @@ async function addExtensionSettings() {
             clearExtensionPrompts();
             updateChatThoughts(); // Remove thought bubbles
             updateChatSceneHeaders(); // Remove scene headers (handles enabled check internally)
+            clearExpressionSyncCache();
+            onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
             loadChatData(); // Load chat data for current chat
             updateChatThoughts(); // Create thought bubbles if data exists
+            onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
+            if (extensionSettings.syncExpressionsToPresentCharacters) {
+                initExpressionSync();
+                syncExpressionFromLatestMessage();
+            }
         }
     });
     // Set up language selector
@@ -386,6 +402,16 @@ async function initUI() {
     $('#rpg-pb-show-absent').on('change', function() { _pbSettings().showAbsentCharacters = $(this).prop('checked'); _savePb(); updatePortraitBar(); });
     $('#rpg-pb-show-arrows').on('change', function() { _pbSettings().showScrollArrows = $(this).prop('checked'); _savePb(); });
     $('#rpg-pb-auto-import').on('change', function() { extensionSettings.portraitAutoImport = $(this).prop('checked'); saveSettings(); });
+    $('#rpg-pb-sync-expressions').on('change', function() {
+        extensionSettings.syncExpressionsToPresentCharacters = $(this).prop('checked');
+        saveSettings();
+        onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters);
+    });
+    $('#rpg-pb-hide-default-expressions').on('change', function() {
+        extensionSettings.hideDefaultExpressionDisplay = $(this).prop('checked');
+        saveSettings();
+        onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
+    });
 
     // Card size sliders
     $('#rpg-pb-card-width').on('input', function() {
@@ -1223,6 +1249,8 @@ async function initUI() {
     $('#rpg-pb-show-absent').prop('checked', pb.showAbsentCharacters !== false);
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
+    $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
+    $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');
     $('#rpg-pb-card-height').val(pb.cardHeight ?? 150);
@@ -1393,6 +1421,7 @@ async function initUI() {
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
+    try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch(e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
     try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch(e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
     // always accessible even when the portrait bar is hidden
@@ -1600,7 +1629,7 @@ jQuery(async () => {
                 [event_types.MESSAGE_RECEIVED]: onMessageReceived,
                 [event_types.GENERATION_STOPPED]: onGenerationEnded,
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache],
                 [event_types.MESSAGE_SWIPED]: onMessageSwiped,
                 [event_types.USER_MESSAGE_RENDERED]: updatePersonaAvatar,
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar
@@ -1709,6 +1738,10 @@ jQuery(async () => {
                 }
                 // Update scene tracker (new data may be available after message render)
                 setTimeout(() => updateChatSceneHeaders(), 100);
+                const renderedMessage = chat[messageId];
+                if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
+                    queueExpressionCaptureForSpeaker(renderedMessage.name);
+                }
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
@@ -1727,7 +1760,8 @@ jQuery(async () => {
                 }
                 // Inject reasoning TTS buttons into all messages
                 setTimeout(() => injectReasoningTtsButtons(), 150);
-                // Scene tracker re-render is handled by onCharacterChanged via CHAT_CHANGED
+                // Re-attach expression sync / native expression visibility after chat DOM rebuilds.
+                setTimeout(() => onExpressionSyncChatChanged(), 0);
             });
             // TTS Highlight: clear all highlights when switching chats
             eventSource.on(event_types.CHAT_CHANGED, () => {
@@ -1758,6 +1792,18 @@ jQuery(async () => {
                 // Re-insert inline character thoughts (editing replaces .mes_text
                 // contents, destroying any previously appended thought elements)
                 setTimeout(() => updateChatThoughts(), 100);
+                const updatedMessage = chat[messageId];
+                if (updatedMessage && !updatedMessage.is_user && !updatedMessage.is_system) {
+                    queueExpressionCaptureForSpeaker(updatedMessage.name);
+                }
+            });
+            // MESSAGE_DELETED does not fire the same render/update hooks as swipes or edits.
+            // Reset Doom's transient expression-sync state so the observer doesn't keep
+            // attributing later ST expression changes to the speaker of the deleted message.
+            eventSource.on(event_types.MESSAGE_DELETED, () => {
+                if (!extensionSettings.enabled) return;
+                clearExpressionSyncCache();
+                setTimeout(() => onExpressionSyncChatChanged(), 0);
             });
             // MESSAGE_SWIPED fires when the user navigates between swipe variants.
             // SillyTavern replaces .mes_text with the new swipe content, destroying
@@ -1766,6 +1812,10 @@ jQuery(async () => {
             // We wait 800ms because colored-dialogues recolors on swipe with a 600ms
             // debounce, and we need the <font color> tags in place before parsing.
             eventSource.on(event_types.MESSAGE_SWIPED, (messageIndex) => {
+                const swipedMessage = chat[messageIndex];
+                if (swipedMessage && !swipedMessage.is_user && !swipedMessage.is_system) {
+                    queueExpressionCaptureForSpeaker(swipedMessage.name);
+                }
                 if (!extensionSettings.enabled) return;
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
 
