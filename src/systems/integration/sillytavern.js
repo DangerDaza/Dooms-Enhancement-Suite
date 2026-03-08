@@ -179,9 +179,9 @@ export async function onMessageReceived(data) {
                 const dcResult = doomCounterOnResponse();
                 updateDoomCounterUI();
                 if (dcResult.triggered && !isTriggerInProgress()) {
-                    // Auto-launch the twist modal — no intermediate toast button
+                    // Auto-launch the inline twist picker
                     toastr.warning('☠️ The Doom Counter has triggered!', '', { timeOut: 2000 });
-                    // Small delay so the user sees the notification before the modal opens
+                    // Small delay so the AI response finishes rendering before we append
                     setTimeout(() => triggerDoomCounter().catch(err => console.error('[Doom Counter] Auto-trigger failed:', err)), 600);
                 } else if (dcResult.countdownActive) {
                     toastr.info(

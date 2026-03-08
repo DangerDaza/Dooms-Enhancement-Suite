@@ -199,14 +199,14 @@ function buildTwistPrompt(twistCount) {
     const playerName = context.name1 || 'the player';
     const aiCharName = context.name2 || 'the character';
 
-    // ── Scene context from committed tracker data ──
+    // ── Scene context from FRESH tracker data (lastGeneratedData has the latest state) ──
     let location = 'Unknown';
     let time = 'Unknown';
     let date = 'Unknown';
     let recentEvents = [];
     let tension = 'low';
 
-    let infoBox = committedTrackerData.infoBox;
+    let infoBox = lastGeneratedData.infoBox || committedTrackerData.infoBox;
     if (infoBox) {
         if (typeof infoBox === 'string') {
             try { infoBox = JSON.parse(infoBox); } catch { infoBox = null; }
@@ -228,7 +228,7 @@ function buildTwistPrompt(twistCount) {
 
     // ── Rich character data (name, relationship, thoughts, presence) ──
     let characterSummaries = [];
-    let charData = committedTrackerData.characterThoughts;
+    let charData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (charData) {
         if (typeof charData === 'string') {
             try { charData = JSON.parse(charData); } catch { charData = null; }
@@ -250,10 +250,10 @@ function buildTwistPrompt(twistCount) {
         }
     }
 
-    // ── Recent conversation (last 8 messages for better context) ──
-    const recentChat = chatMessages.slice(-8).map(m => {
+    // ── Recent conversation (last 15 messages for richer context) ──
+    const recentChat = chatMessages.slice(-15).map(m => {
         const role = m.is_user ? playerName : (m.name || aiCharName);
-        const text = (m.mes || '').substring(0, 300);
+        const text = (m.mes || '').substring(0, 600);
         return `${role}: ${text}`;
     }).join('\n');
 
@@ -422,11 +422,11 @@ export function isTriggerInProgress() {
 }
 
 /**
- * Main trigger flow: show loading modal immediately → generate twists → swap in cards → store pending twist.
+ * Main trigger flow: inject inline twist element into chat → generate twists → show cards → store pending twist.
  * Called when the Doom Counter triggers naturally or via "Trigger Now" button.
  *
- * The modal appears instantly so the user sees feedback right away.
- * The loading spinner is replaced with twist cards once the API responds.
+ * The inline element appears at the bottom of chat so the user can still read
+ * the last message while choosing a twist.
  *
  * @returns {Promise<void>}
  */
@@ -441,27 +441,32 @@ export async function triggerDoomCounter() {
     }
     _triggerInProgress = true;
 
-    // ── Show overlay + modal shell immediately (loading state) ──────────────
-    const $overlay = $('<div class="dooms-dc-overlay"></div>');
-    const $dialog = $(`
-        <div class="dooms-dc-dialog">
-            <div class="dooms-dc-modal">
-                <div class="dooms-dc-header">
-                    <i class="fa-solid fa-skull"></i> The Doom Counter has triggered...
-                </div>
-                <div class="dooms-dc-subtitle">The calm has lasted too long. Consulting the fates...</div>
+    // ── Inject inline element into chat (loading state) ──────────────
+    const $inline = $(`
+        <div class="dooms-dc-inline">
+            <div class="dooms-dc-inline-header">
+                <i class="fa-solid fa-skull"></i>
+                <span>The Doom Counter has triggered...</span>
+            </div>
+            <div class="dooms-dc-inline-body">
                 <div class="dooms-dc-loading">
-                    <div class="dooms-dc-loading-icon"><i class="fa-solid fa-skull"></i></div>
                     <div class="dooms-dc-loading-dots">
                         <span></span><span></span><span></span>
                     </div>
-                    <div class="dooms-dc-loading-label">Generating twists...</div>
+                    <div class="dooms-dc-loading-label">Consulting the fates...</div>
                 </div>
             </div>
         </div>
     `);
-    $('body').append($overlay);
-    $('body').append($dialog);
+
+    const $chat = $('#chat');
+    $chat.append($inline);
+
+    // Scroll chat to bottom so the inline element is visible
+    const chatEl = $chat[0];
+    if (chatEl) {
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
 
     try {
         console.log('[Doom Counter] Generating twist options...');
@@ -478,31 +483,44 @@ export async function triggerDoomCounter() {
             </div>
         `).join('');
 
-        const $modal = $dialog.find('.dooms-dc-modal');
-        $modal.find('.dooms-dc-loading').remove();
-        $modal.find('.dooms-dc-subtitle').text('Choose your fate:');
-        $modal.append(`<div class="dooms-dc-cards dooms-dc-cards-enter">${cardsHtml}</div>`);
+        const $body = $inline.find('.dooms-dc-inline-body');
+        $body.empty();
+        $inline.find('.dooms-dc-inline-header span').text('Choose your fate:');
+        $body.append(`<div class="dooms-dc-cards dooms-dc-cards-enter">${cardsHtml}</div>`);
 
         // Remove enter class after animation fires
-        setTimeout(() => $modal.find('.dooms-dc-cards').removeClass('dooms-dc-cards-enter'), 400);
+        setTimeout(() => $body.find('.dooms-dc-cards').removeClass('dooms-dc-cards-enter'), 400);
+
+        // Scroll to show the cards
+        if (chatEl) {
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
 
         // ── Wait for user to pick a card ────────────────────────────────────
         const chosenTwist = await new Promise((resolve) => {
-            $dialog.on('click', '.dooms-dc-card', function () {
+            $inline.on('click', '.dooms-dc-card', function () {
                 const index = parseInt($(this).data('index'));
                 const chosen = twists[index];
 
                 $(this).addClass('dooms-dc-card-selected');
-                $dialog.find('.dooms-dc-card').not(this).addClass('dooms-dc-card-dimmed');
+                $inline.find('.dooms-dc-card').not(this).addClass('dooms-dc-card-dimmed');
 
+                // Collapse to a compact "twist chosen" summary after a brief pause
                 setTimeout(() => {
-                    $overlay.remove();
-                    $dialog.remove();
+                    $inline.find('.dooms-dc-inline-header span').text('Twist selected');
+                    $body.html(`
+                        <div class="dooms-dc-chosen">
+                            <span class="dooms-dc-chosen-emoji">${chosen.emoji}</span>
+                            <span class="dooms-dc-chosen-title">${chosen.title}</span>
+                            <span class="dooms-dc-chosen-hint">— will be woven into the next response</span>
+                        </div>
+                    `);
+                    $inline.addClass('dooms-dc-inline-resolved');
                     resolve(chosen.description);
-                }, 400);
+                }, 500);
             });
 
-            $dialog.on('keydown', '.dooms-dc-card', function (e) {
+            $inline.on('keydown', '.dooms-dc-card', function (e) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     $(this).trigger('click');
@@ -520,15 +538,13 @@ export async function triggerDoomCounter() {
         setDoomCounterState(state);
 
         console.log(`[Doom Counter] Twist chosen: "${chosenTwist}"`);
-        toastr.success('Twist selected! It will be woven into the next AI response.', '', { timeOut: 4000 });
 
         // Update the settings panel display
         updateDoomCounterUI();
     } catch (error) {
-        $overlay.remove();
-        $dialog.remove();
+        $inline.remove();
         console.error('[Doom Counter] Error during trigger flow:', error);
-        toastr.error('Failed to generate twists. Try again or use Trigger Now in settings.', '☠️ Doom Counter Error', { timeOut: 5000 });
+        toastr.error('Failed to generate twists. Try again or use Trigger Now in settings.', '', { timeOut: 5000 });
     } finally {
         _triggerInProgress = false;
     }
