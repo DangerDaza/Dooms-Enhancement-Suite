@@ -9283,8 +9283,7 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
-    contain: strict;
-    will-change: transform;
+    contain: layout paint;
 }
 
 /* Base particle */
@@ -14671,77 +14670,54 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   DOOM COUNTER — Twist selection modal + settings styles
+   DOOM COUNTER — Inline twist selection + settings styles
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-/* Overlay behind modal */
-.dooms-dc-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    z-index: 99998;
-    animation: dooms-dc-fade-in 0.3s ease;
-}
-
-/* Modal dialog container */
-.dooms-dc-dialog {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 99999;
-    max-width: 800px;
-    width: 90vw;
-    max-height: 85vh;
-    overflow-y: auto;
-    animation: dooms-dc-slide-in 0.4s ease;
-}
-
-/* Modal content */
-.dooms-dc-modal {
+/* Inline twist container (appended to #chat) */
+.dooms-dc-inline {
+    margin: 12px 8px;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     border: 1px solid rgba(233, 69, 96, 0.3);
-    border-radius: 16px;
-    padding: 32px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(233, 69, 96, 0.15);
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 20px rgba(233, 69, 96, 0.1);
+    animation: dooms-dc-fade-in 0.35s ease;
 }
 
-/* Header */
-.dooms-dc-header {
-    font-size: 1.5em;
+.dooms-dc-inline-resolved {
+    border-color: rgba(233, 69, 96, 0.15);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Header row (skull icon + text) */
+.dooms-dc-inline-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.15em;
     font-weight: 700;
     color: #e94560;
-    text-align: center;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+    letter-spacing: 0.3px;
 }
 
-.dooms-dc-header i {
-    margin-right: 8px;
+.dooms-dc-inline-header i {
     animation: dooms-dc-pulse 2s ease-in-out infinite;
-}
-
-.dooms-dc-subtitle {
-    text-align: center;
-    color: #888;
-    font-size: 0.9em;
-    margin-bottom: 24px;
 }
 
 /* Card grid */
 .dooms-dc-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
+    gap: 14px;
 }
 
 /* Individual twist card */
 .dooms-dc-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 16px;
     cursor: pointer;
     transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
     text-align: center;
@@ -14752,7 +14728,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-color: rgba(233, 69, 96, 0.5);
     background: rgba(233, 69, 96, 0.08);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(233, 69, 96, 0.15);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.15);
 }
 
 .dooms-dc-card:focus-visible {
@@ -14763,8 +14739,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-dc-card-selected {
     border-color: #e94560 !important;
     background: rgba(233, 69, 96, 0.15) !important;
-    transform: scale(1.03) !important;
-    box-shadow: 0 0 30px rgba(233, 69, 96, 0.3) !important;
+    transform: scale(1.02) !important;
+    box-shadow: 0 0 24px rgba(233, 69, 96, 0.25) !important;
 }
 
 .dooms-dc-card-dimmed {
@@ -14774,35 +14750,55 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* Card emoji */
 .dooms-dc-card-emoji {
-    font-size: 2.2rem;
-    margin-bottom: 10px;
+    font-size: 2rem;
+    margin-bottom: 8px;
     line-height: 1;
 }
 
 /* Card title */
 .dooms-dc-card-title {
     font-weight: 600;
-    font-size: 1em;
+    font-size: 0.95em;
     color: #eaeaea;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 /* Card description */
 .dooms-dc-card-desc {
-    font-size: 0.82em;
+    font-size: 0.8em;
     color: #999;
     line-height: 1.5;
 }
 
-/* Animations */
-@keyframes dooms-dc-fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+/* Chosen twist summary (collapsed after selection) */
+.dooms-dc-chosen {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    flex-wrap: wrap;
 }
 
-@keyframes dooms-dc-slide-in {
-    from { opacity: 0; transform: translate(-50%, -45%); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
+.dooms-dc-chosen-emoji {
+    font-size: 1.3em;
+}
+
+.dooms-dc-chosen-title {
+    font-weight: 600;
+    color: #eaeaea;
+    font-size: 0.95em;
+}
+
+.dooms-dc-chosen-hint {
+    color: #666;
+    font-size: 0.8em;
+    font-style: italic;
+}
+
+/* Animations */
+@keyframes dooms-dc-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes dooms-dc-pulse {
@@ -14897,59 +14893,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* Mobile responsive — anchor to top and scroll instead of centering vertically
    (mirrors the settings panel treatment so it doesn't render above the screen). */
 @media (max-width: 600px) {
-    .dooms-dc-dialog {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        transform: none;
-        width: 100vw;
-        max-width: 100vw;
-        /* Explicit height forces the dialog to fill the viewport instead of
-           collapsing to content size.  dvh accounts for mobile browser chrome. */
-        height: 100vh;
-        height: 100dvh;
-        display: flex;
-        flex-direction: column;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        animation: dooms-dc-slide-up 0.35s ease;
-        /* Generous top padding clears status bar / notch without needing
-           viewport-fit=cover (which ST doesn't set) */
-        padding-top: 52px;
-        box-sizing: border-box;
-    }
-    .dooms-dc-modal {
-        border-radius: 0;
-        border: none;
-        /* flex: 1 makes the modal fill all remaining space inside the dialog */
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        padding: 20px 16px max(20px, env(safe-area-inset-bottom, 20px));
-    }
-    /* Loading state fills remaining height so the spinner centers */
-    .dooms-dc-loading {
-        flex: 1;
+    /* Inline twist cards stack vertically on narrow screens */
+    .dooms-dc-inline {
+        margin: 10px 4px;
+        padding: 14px 12px;
     }
     .dooms-dc-cards {
         grid-template-columns: 1fr;
-        gap: 12px;
-        flex: 1;
+        gap: 10px;
     }
     .dooms-dc-card {
-        padding: 16px;
+        padding: 14px;
     }
-    .dooms-dc-header {
-        font-size: 1.2em;
-    }
-    .dooms-dc-subtitle {
-        margin-bottom: 16px;
-    }
-    @keyframes dooms-dc-slide-up {
-        from { opacity: 0; transform: translateY(30px); }
-        to { opacity: 1; transform: translateY(0); }
+    .dooms-dc-inline-header {
+        font-size: 1em;
     }
 }
 
@@ -15057,24 +15014,28 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     .rpg-st-hud,
     .rpg-st-inline-row,
     .dooms-intro-overlay,
-    .dooms-dc-overlay,
     .rpg-fab-widget,
     #dooms-dc-debug-hud {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
 
-    /* ── Disable weather particle animations on mobile ──
-       These run constantly (snow, rain, mist, stars, fireflies, etc.)
-       and each particle triggers its own compositor layer + repaint. */
-    .rpg-snowflakes-container,
-    .rpg-weather-particles,
-    .rpg-weather-foreground {
+    /* ── Lighten weather particle effects on mobile ──
+       Reduce particle visibility instead of hiding entirely.
+       This keeps the atmosphere while cutting GPU overhead. */
+    .rpg-snowflakes-container {
+        display: none !important;
+    }
+    .rpg-weather-particles {
+        opacity: 0.5;
+    }
+    /* Hide most particles — keep every 4th for a lighter effect */
+    .rpg-weather-particle:not(:nth-child(4n)) {
         display: none !important;
     }
 
     /* ── Disable heavy filter: blur() on mobile ── */
-    .rpg-clear-orb,
+    .rpg-clear-light-orb,
     .rpg-night-moon-glow,
     .rpg-clear-ambient-glow {
         filter: none !important;
@@ -15094,12 +15055,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     /* Modal shadows — reduce to simpler single shadow */
     .rpg-settings-popup-content,
     .rpg-encounter-container,
-    .dooms-dc-modal {
+    .dooms-dc-inline {
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
     }
 
     /* Portrait bar — disable the glow burst animation on mobile */
     .dooms-pb-glow-burst {
+        display: none !important;
+    }
+}
+
+/* Phone-only: fully disable weather for very small screens */
+@media (max-width: 600px) {
+    .rpg-weather-particles,
+    .rpg-weather-foreground {
         display: none !important;
     }
 }
