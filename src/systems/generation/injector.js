@@ -24,6 +24,7 @@ import {
     DEFAULT_NARRATOR_PROMPT,
     DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT
 } from './promptBuilder.js';
+import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Type imports
@@ -112,7 +113,8 @@ function injectNewFieldBoost(shouldSuppress) {
 
     // Build a short, high-priority note
     const fieldList = boostedFields.map(f => FIELD_BOOST_HINTS[f]).join(', ');
-    const boostPrompt = `\n[TRACKER NOTE: The following fields have just been enabled and MUST be included in the infoBox JSON this turn: ${fieldList}. Do not omit them.]\n`;
+    const boostTemplate = extensionSettings.customNewFieldsBoostPrompt || DEFAULT_NEW_FIELDS_BOOST_PROMPT;
+    const boostPrompt = `\n${boostTemplate.replace('{fieldList}', fieldList)}\n`;
 
     setExtensionPrompt(SLOT, boostPrompt, extension_prompt_types.IN_PROMPT, 0, false);
 
@@ -631,7 +633,8 @@ export async function onGenerationStarted(type, data, dryRun) {
     if (extensionSettings.doomCounter?.enabled) {
         const pendingTwist = getPendingTwist();
         if (pendingTwist) {
-            const twistPrompt = `\n[PLOT TWIST: A dramatic development occurs in this scene. Weave this naturally into your response — don't announce it directly, let it unfold organically: "${pendingTwist}"]\n`;
+            const twistTemplate = extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT;
+            const twistPrompt = `\n${twistTemplate.replace('{twist}', pendingTwist)}\n`;
             setExtensionPrompt(DOOM_TWIST_SLOT, twistPrompt, extension_prompt_types.IN_PROMPT, 0, false);
             // Clear the pending twist after injecting — it's a one-shot
             clearPendingTwist();

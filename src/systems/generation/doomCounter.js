@@ -19,6 +19,7 @@ import { chat } from '../../../../../../../script.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { getDoomCounterState, setDoomCounterState, saveChatData } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
+import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -279,17 +280,7 @@ Return ONLY a JSON array with exactly ${twistCount} objects:
   {"emoji": "🌀", "title": "Short 3-5 word title", "description": "2-3 sentence description of what happens and how it changes the scene dynamic"}
 ]
 
-Rules:
-- ONLY reference characters listed above — never invent new characters or treat existing ones as strangers
-- Vary the TONE across the ${twistCount} options. Include a MIX of:
-  • Positive/exciting twists (unexpected good fortune, a breakthrough, romantic moment, lucky discovery)
-  • Dramatic/tense twists (a confrontation, revelation, moral dilemma, betrayal)
-  • Mysterious/intriguing twists (something strange, a clue, an omen, an unexplained event)
-  Do NOT make all options negative or catastrophic.
-- Twists should be proportional to the scene — no world-ending disasters for a quiet afternoon
-- Each twist should be a DIFFERENT type (interpersonal, environmental, revelation, discovery, emotional, etc.)
-- Build on existing character relationships and recent events rather than introducing random catastrophes
-- The goal is to make the story MORE interesting, not to punish the characters`;
+${extensionSettings.customTwistGeneratorRulesPrompt || DEFAULT_TWIST_GENERATOR_RULES_PROMPT}`;
 
     return [
         { role: 'system', content: systemPrompt },
