@@ -26,6 +26,14 @@ export let extensionSettings = {
     customHtmlPrompt: '', // Custom HTML prompt text (empty = use default)
     enableDialogueColoring: false, // Enable dialogue coloring prompt injection
     customDialogueColoringPrompt: '', // Custom dialogue coloring prompt text (empty = use default)
+    customTrackerInstructionsPrompt: '', // Custom tracker instructions prompt (empty = use default)
+    customTrackerContinuationPrompt: '', // Custom tracker continuation prompt (empty = use default)
+    customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
+    customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
+    customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)
+    customCombatNarrativePrompt: '', // Custom combat narrative style prompt (empty = use default)
+    customPlotRandomPrompt: '', // Custom randomized plot prompt (empty = use default)
+    customPlotNaturalPrompt: '', // Custom natural plot prompt (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic
     // and their custom prompt fields have been archived to src/archived-features.js
     enableDynamicWeather: false, // Enable dynamic weather effects based on Info Box weather field
