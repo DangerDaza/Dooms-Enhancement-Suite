@@ -217,7 +217,10 @@ export function initQuestEventDelegation() {
     $questsContainer.on('click', '[data-action="add-quest"]', function() {
         const field = $(this).data('field');
         $(`#rpg-add-quest-form-${field}`).show();
-        $(`#rpg-new-quest-${field}`).focus();
+        // Only auto-focus on desktop — on mobile this triggers the virtual keyboard
+        if (window.innerWidth > 1000) {
+            $(`#rpg-new-quest-${field}`).focus();
+        }
     });
     // Cancel add quest
     $questsContainer.on('click', '[data-action="cancel-add-quest"]', function() {
@@ -251,7 +254,10 @@ export function initQuestEventDelegation() {
         const field = $(this).data('field');
         $(`#rpg-edit-quest-form-${field}`).show();
         $('.rpg-quest-item[data-field="main"]').hide();
-        $(`#rpg-edit-quest-${field}`).focus();
+        // Only auto-focus on desktop — on mobile this triggers the virtual keyboard
+        if (window.innerWidth > 1000) {
+            $(`#rpg-edit-quest-${field}`).focus();
+        }
     });
     // Cancel edit quest
     $questsContainer.on('click', '[data-action="cancel-edit-quest"]', function() {

@@ -1530,6 +1530,35 @@ jQuery(async () => {
         } catch (error) {
             console.error('[Dooms Tracker] Viewport resize listener failed:', error);
         }
+        // Mobile keyboard dismissal — prevent virtual keyboard from appearing
+        // when tapping buttons, tabs, or other non-input elements while an
+        // input/contenteditable is focused. Blurs the active editable element
+        // so the keyboard is dismissed on any non-input tap.
+        try {
+            if (window.innerWidth <= 1000) {
+                document.addEventListener('touchend', function(e) {
+                    const target = e.target;
+                    // Don't blur if the user tapped an editable element (they want to type)
+                    if (target.isContentEditable ||
+                        target.tagName === 'INPUT' ||
+                        target.tagName === 'TEXTAREA' ||
+                        target.tagName === 'SELECT') {
+                        return;
+                    }
+                    // If something editable is currently focused, blur it to dismiss keyboard
+                    const active = document.activeElement;
+                    if (active && (
+                        active.isContentEditable ||
+                        active.tagName === 'INPUT' ||
+                        active.tagName === 'TEXTAREA'
+                    )) {
+                        active.blur();
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('[Dooms Tracker] Mobile keyboard dismissal setup failed:', error);
+        }
         // Load chat-specific data for current chat
         try {
             loadChatData();
