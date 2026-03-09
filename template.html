@@ -1348,7 +1348,7 @@
                     Injected when "Enable Dialogue Coloring" is enabled. Affects all generation modes.
                 </small>
                 <textarea id="rpg-prompt-dialogue-coloring" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogue-coloring" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogueColoring" style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
@@ -1377,6 +1377,48 @@
                 </small>
                 <textarea id="rpg-prompt-context-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="contextInstructions" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Plot Twist Template -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-plot-twist-template" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-bolt"></i> Plot Twist Injection Template
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Wrapper text injected around user-selected twists from the Doom Counter. <code>{twist}</code> is replaced with the chosen twist description.
+                </small>
+                <textarea id="rpg-prompt-plot-twist-template" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="plotTwistTemplate" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- New Fields Boost Template -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-new-fields-boost" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-plus-circle"></i> New Fields Boost Template
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Injected when new tracker fields are enabled, reminding the AI to include them. <code>{fieldList}</code> is replaced with the field descriptions.
+                </small>
+                <textarea id="rpg-prompt-new-fields-boost" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="newFieldsBoost" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Twist Generator Rules -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-twist-generator-rules" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Twist Generator Rules
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Creative guidance appended to the Doom Counter's twist generation prompt. Controls tone, variety, and style of generated twist options.
+                </small>
+                <textarea id="rpg-prompt-twist-generator-rules" class="rpg-prompt-textarea" rows="6"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="twistGeneratorRules" style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
