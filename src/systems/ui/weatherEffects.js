@@ -15,18 +15,18 @@ let currentHour = null;
 function parseHourFromTime(timeStr) {
     if (!timeStr) return null;
     const text = timeStr.toLowerCase().trim();
-    // Check for descriptive time words first
+    // Check for descriptive time words first (longer/more specific phrases before shorter ones)
     if (text.includes('dawn') || text.includes('sunrise')) return 6;
     if (text.includes('early morning')) return 7;
     if (text.includes('morning')) return 9;
     if (text.includes('midday') || text.includes('noon') || text.includes('mid-day')) return 12;
-    if (text.includes('afternoon')) return 14;
     if (text.includes('late afternoon')) return 16;
+    if (text.includes('afternoon')) return 14;
     if (text.includes('evening') || text.includes('dusk') || text.includes('sunset')) return 19;
     if (text.includes('twilight')) return 20;
-    if (text.includes('night') || text.includes('nighttime')) return 22;
     if (text.includes('midnight')) return 0;
     if (text.includes('late night')) return 2;
+    if (text.includes('night') || text.includes('nighttime')) return 22;
     // Try to parse numeric time formats
     // Format: "3:00 PM" or "3:00PM" or "3 PM"
     const ampmMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
@@ -701,7 +701,11 @@ export function updateWeatherEffect() {
             weatherContainer.style.zIndex = '1'; // Behind chat (default)
             weatherContainer.classList.remove('rpg-weather-foreground');
         } else {
-            // Both disabled - don't show weather
+            // Both disabled - don't show weather, clean up created container
+            weatherContainer = null;
+            currentWeatherType = null;
+            currentTimeOfDay = null;
+            currentHour = null;
             return;
         }
         document.body.appendChild(weatherContainer);
