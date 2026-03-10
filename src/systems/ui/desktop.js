@@ -103,7 +103,6 @@ export function setupDesktopTabs() {
     if ($('.rpg-tabs-nav').length > 0) return;
     const $contentBox = $('.rpg-content-box');
     // Get existing sections
-    // NOTE: #rpg-user-stats and #rpg-inventory removed — systems archived
     const $infoBox = $('#rpg-info-box');
     const $thoughts = $('#rpg-thoughts');
     const $quests = $('#rpg-quests');

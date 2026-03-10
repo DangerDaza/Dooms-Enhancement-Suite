@@ -4,35 +4,7 @@
  */
 import { committedTrackerData, extensionSettings, updateCommittedTrackerData, updateExtensionSettings } from '../core/state.js';
 import { saveSettings, saveChatData } from '../core/persistence.js';
-/**
- * Helper to separate emoji from text in a string
- * @param {string} str - String potentially containing emoji followed by text
- * @returns {{emoji: string, text: string}} Separated emoji and text
- */
-function separateEmojiFromText(str) {
-    if (!str) return { emoji: '', text: '' };
-    str = str.trim();
-    // Regex to match emoji at the start
-    const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F910}-\u{1F96B}\u{1F980}-\u{1F9E0}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]+/u;
-    const emojiMatch = str.match(emojiRegex);
-    if (emojiMatch) {
-        const emoji = emojiMatch[0];
-        let text = str.substring(emoji.length).trim();
-        // Remove leading comma or space
-        text = text.replace(/^[,\s]+/, '');
-        return { emoji, text };
-    }
-    // Check if there's a comma separator anyway
-    const commaParts = str.split(',');
-    if (commaParts.length >= 2) {
-        return {
-            emoji: commaParts[0].trim(),
-            text: commaParts.slice(1).join(',').trim()
-        };
-    }
-    // No clear separation - return original as text
-    return { emoji: '', text: str };
-}
+import { separateEmojiFromText } from './textUtils.js';
 /**
  * Parses item text to JSON format
  * Handles "3x Item Name" or "Item Name" formats

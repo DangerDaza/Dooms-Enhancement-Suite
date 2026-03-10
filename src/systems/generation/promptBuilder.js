@@ -216,8 +216,7 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 instructions += `\n\nAfter updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
             }
         }
-        // NOTE: RPG attributes and dice roll context have been archived to src/archived/archived-features-userstats.js
-    }
+        }
     // Append HTML prompt if enabled AND includeHtmlPrompt is true
     if (extensionSettings.enableHtmlPrompt && includeHtmlPrompt) {
         // Add newlines only if we had tracker instructions
@@ -647,7 +646,6 @@ export function generateContextualSummary() {
             console.warn('[Dooms Tracker] Failed to format characters for context:', e);
         }
     }
-    // NOTE: RPG attributes and dice roll context have been archived to src/archived/archived-features-userstats.js
     return summary.trim();
 }
 /**

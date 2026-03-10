@@ -454,7 +454,6 @@ export function setupMobileTabs() {
     $('body').addClass('rpg-panel-position-' + position);
     const $contentBox = $panel.find('.rpg-content-box');
     // Get existing sections
-    // NOTE: #rpg-user-stats and #rpg-inventory removed — systems archived
     const $infoBox = $('#rpg-info-box');
     const $thoughts = $('#rpg-thoughts');
     const $quests = $('#rpg-quests');

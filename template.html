@@ -1147,67 +1147,6 @@
     </div>
 </div>
 
-<!-- Dice Roll Modal -->
-<div id="rpg-dice-popup" class="rpg-dice-popup" role="dialog" aria-modal="true" aria-labelledby="rpg-dice-title">
-    <div class="rpg-dice-popup-content">
-        <header class="rpg-dice-popup-header">
-            <h3 id="rpg-dice-title">
-                <span class="doom-icon" aria-hidden="true"></span>
-                <span>Roll Dice</span>
-            </h3>
-            <button id="rpg-dice-popup-close" class="rpg-btn-icon" type="button" aria-label="Close dialog">
-                <i class="fa-solid fa-times" aria-hidden="true"></i>
-            </button>
-        </header>
-
-        <div class="rpg-dice-popup-body">
-            <div class="rpg-dice-selector-container">
-                <div class="rpg-dice-selector">
-                    <div class="rpg-dice-input-group">
-                        <label for="rpg-dice-count">Number of Dice:</label>
-                        <input type="number" id="rpg-dice-count" name="dice-count" min="1" max="20" value="1"
-                            class="rpg-input" />
-                    </div>
-                    <div class="rpg-dice-input-group">
-                        <label for="rpg-dice-sides">Dice Type:</label>
-                        <select id="rpg-dice-sides" name="dice-sides" class="rpg-select">
-                            <option value="4">d4</option>
-                            <option value="6">d6</option>
-                            <option value="8">d8</option>
-                            <option value="10">d10</option>
-                            <option value="12">d12</option>
-                            <option value="20" selected>d20</option>
-                            <option value="100">d100</option>
-                        </select>
-                    </div>
-                </div>
-                <button id="rpg-dice-roll-btn" class="rpg-btn-primary" type="button">
-                    <i class="fa-solid fa-dice" aria-hidden="true"></i>
-                    <span>Roll Dice</span>
-                </button>
-            </div>
-
-            <div id="rpg-dice-animation" class="rpg-dice-animation" hidden aria-live="polite" aria-busy="true">
-                <div class="rpg-dice-rolling">
-                    <span class="doom-icon fa-spin" aria-hidden="true" style="font-size: 2em;"></span>
-                </div>
-                <div class="rpg-dice-rolling-text">Rolling...</div>
-            </div>
-
-            <div id="rpg-dice-result" class="rpg-dice-result" hidden aria-live="polite">
-                <div class="rpg-dice-result-label">Result:</div>
-                <output id="rpg-dice-result-value" class="rpg-dice-result-value"
-                    for="rpg-dice-count rpg-dice-sides">0</output>
-                <div id="rpg-dice-result-details" class="rpg-dice-result-details" role="status"></div>
-                <button id="rpg-dice-save-btn" class="rpg-btn-primary rpg-dice-save-btn" type="button">
-                    <i class="fa-solid fa-check" aria-hidden="true"></i>
-                    <span>Save Roll</span>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Tracker Editor Modal -->
 <div id="rpg-tracker-editor-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
     aria-labelledby="rpg-editor-title" style="display: none;">

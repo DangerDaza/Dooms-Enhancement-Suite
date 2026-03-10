@@ -16,7 +16,6 @@ import {
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
 import { extensionName } from './config.js';
-// NOTE: FEATURE_FLAGS, migrateInventory, validateStoredInventory, cleanItemString imports removed — userStats system archived
 /**
  * Validates extension settings structure
  * @param {Object} settings - Settings object to validate
@@ -32,7 +31,6 @@ function validateSettings(settings) {
         console.warn('[Dooms Tracker] Settings validation failed: missing required properties');
         return false;
     }
-    // NOTE: userStats validation removed — system archived
     return true;
 }
 /**
@@ -287,15 +285,12 @@ export function loadSettings() {
         }
         // Migrate to preset manager system if presets don't exist
         migrateToPresetManager();
-        // NOTE: userStats string parsing, initializeCustomStatusFields, ensureStatsHaveMaxValue
-        // removed — userStats system archived to src/archived/archived-features-userstats.js
     } catch (error) {
         console.error('[Dooms Tracker] Error loading settings:', error);
         console.error('[Dooms Tracker] Error details:', error.message, error.stack);
         console.warn('[Dooms Tracker] Using default settings due to load error');
         // Settings will remain at defaults from state.js
     }
-    // NOTE: userStats parsing and inventory validation removed — system archived
 }
 /**
  * Saves the extension settings to the global settings object.
@@ -413,7 +408,6 @@ export function loadChatData() {
         return;
     }
     const savedData = chat_metadata.dooms_tracker;
-    // NOTE: userStats and classicStats restoration removed — system archived
     // Restore quests
     if (savedData.quests) {
         extensionSettings.quests = { ...savedData.quests };
@@ -487,7 +481,6 @@ export function loadChatData() {
     } catch (e) {
         console.warn('[Dooms Tracker] Per-message data sync skipped:', e.message);
     }
-    // NOTE: inventory validation removed — userStats system archived
 }
 /**
  * Gets the current Doom Counter state from chat metadata.
@@ -521,7 +514,6 @@ export function setDoomCounterState(state) {
     saveChatDebounced();
 }
 
-// NOTE: validateInventoryStructure() removed — inventory system archived to src/archived/
 /**
  * Migrates old settings format to new trackerConfig format
  * Converts statNames to customStats array and sets up default config
@@ -577,9 +569,6 @@ function migrateToTrackerConfig() {
             }
         };
     }
-    // NOTE: userStats migration code (statNames, customStats, rpgAttributes, classicStats)
-    // has been archived to src/archived/archived-features-userstats.js
-    // Legacy trackerConfig.userStats data in saved settings is ignored.
 
     // Ensure quests config exists at top level of trackerConfig
     if (!extensionSettings.trackerConfig.quests) {
@@ -710,7 +699,6 @@ export function migrateToPresetManager() {
         saveSettings();
     }
 }
-// NOTE: initializeCustomStatusFields() and ensureStatsHaveMaxValue() removed — userStats system archived
 /**
  * Gets all available presets
  * @returns {Object} Map of preset ID to preset data
