@@ -1135,7 +1135,6 @@ export function updateFabWidgets() {
         });
     }
 }
-// NOTE: getStatColor() and hexToRgb() removed — stat bars archived
 /**
  * Updates the FAB widget container position to match FAB button position.
  * Call this after FAB is dragged.

@@ -41,36 +41,6 @@ function debugLog(message, data = null) {
     }
 }
 /**
- * Interpolates color based on percentage value between low and high colors
- * @param {number} percentage - Value from 0-100
- * @param {string} lowColor - Hex color for low values (e.g., '#ff0000')
- * @param {string} highColor - Hex color for high values (e.g., '#00ff00')
- * @param {number} lowOpacity - Opacity for low values (0-100)
- * @param {number} highOpacity - Opacity for high values (0-100)
- * @returns {string} Interpolated rgba color
- */
-function getStatColor(percentage, lowColor, highColor, lowOpacity = 100, highOpacity = 100) {
-    // Clamp percentage to 0-100
-    const percent = Math.max(0, Math.min(100, percentage)) / 100;
-    // Parse hex colors
-    const parseHex = (hex) => {
-        const clean = hex.replace('#', '');
-        return {
-            r: parseInt(clean.substring(0, 2), 16),
-            g: parseInt(clean.substring(2, 4), 16),
-            b: parseInt(clean.substring(4, 6), 16)
-        };
-    };
-    const low = parseHex(lowColor);
-    const high = parseHex(highColor);
-    // Interpolate each channel
-    const r = Math.round(low.r + (high.r - low.r) * percent);
-    const g = Math.round(low.g + (high.g - low.g) * percent);
-    const b = Math.round(low.b + (high.b - low.b) * percent);
-    const a = (lowOpacity + (highOpacity - lowOpacity) * percent) / 100;
-    return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-/**
  * Strips leading and trailing square brackets from a string value.
  * Used to clean placeholder notation that AI might include in responses.
  * @param {string} value - The value to clean
@@ -627,16 +597,9 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                         <div class="rpg-character-stats-inner">`;
                     for (const stat of enabledCharStats) {
                         const statValue = char[stat.name] || 0;
-                        const statColor = getStatColor(
-                            statValue,
-                            extensionSettings.statBarColorLow,
-                            extensionSettings.statBarColorHigh,
-                            extensionSettings.statBarColorLowOpacity ?? 100,
-                            extensionSettings.statBarColorHighOpacity ?? 100
-                        );
                         html += `
                                 <div class="rpg-character-stat">
-                                    <span class="rpg-stat-name">${stat.name}: </span><span class="rpg-editable" contenteditable="true" data-character="${char.name}" data-field="${stat.name}" style="color: ${statColor}" title="Click to edit ${stat.name}">${statValue}%</span>
+                                    <span class="rpg-stat-name">${stat.name}: </span><span class="rpg-editable" contenteditable="true" data-character="${char.name}" data-field="${stat.name}" title="Click to edit ${stat.name}">${statValue}%</span>
                                 </div>
                         `;
                     }
@@ -692,18 +655,11 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     html += `<div class="rpg-card-back-stats">`;
                     for (const stat of enabledCharStats) {
                         const sv = char[stat.name] || 0;
-                        const sc = getStatColor(
-                            sv,
-                            extensionSettings.statBarColorLow,
-                            extensionSettings.statBarColorHigh,
-                            extensionSettings.statBarColorLowOpacity ?? 100,
-                            extensionSettings.statBarColorHighOpacity ?? 100
-                        );
                         html += `
                                 <div class="rpg-card-back-stat">
                                     <span class="rpg-card-back-stat-name">${stat.name}</span>
                                     <div class="rpg-card-back-stat-bar">
-                                        <div class="rpg-card-back-stat-fill" style="width: ${sv}%; background: ${sc};"></div>
+                                        <div class="rpg-card-back-stat-fill" style="width: ${sv}%;"></div>
                                     </div>
                                     <span class="rpg-card-back-stat-val">${sv}%</span>
                                 </div>
