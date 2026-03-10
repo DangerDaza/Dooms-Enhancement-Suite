@@ -91,7 +91,6 @@ export function updateStripWidgets() {
         $locationWidget.removeClass('rpg-strip-widget-visible');
     }
 }
-// NOTE: getStatColor() and hexToRgb() removed — stat bars archived
 /**
  * Sets up desktop tab navigation for organizing content.
  * Only runs on desktop viewports (>1000px).

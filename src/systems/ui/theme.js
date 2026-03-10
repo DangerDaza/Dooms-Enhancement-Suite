@@ -17,22 +17,6 @@ export function hexToRgba(hex, opacity = 100) {
     return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 /**
- * Gets stat bar colors with opacity applied
- * @returns {{low: string, high: string}} RGBA color strings for stat bars
- */
-export function getStatBarColors() {
-    return {
-        low: hexToRgba(
-            extensionSettings.statBarColorLow || '#cc3333',
-            extensionSettings.statBarColorLowOpacity ?? 100
-        ),
-        high: hexToRgba(
-            extensionSettings.statBarColorHigh || '#33cc66',
-            extensionSettings.statBarColorHighOpacity ?? 100
-        )
-    };
-}
-/**
  * Applies the selected theme to the panel.
  */
 export function applyTheme() {

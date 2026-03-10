@@ -104,7 +104,6 @@ export let extensionSettings = {
         highlight: '#e94560',
         highlightOpacity: 100
     },
-    // NOTE: statBarColorLow, statBarColorHigh, statBarColorLowOpacity, statBarColorHighOpacity archived
     enableAnimations: true, // Enable smooth animations for content updates
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',

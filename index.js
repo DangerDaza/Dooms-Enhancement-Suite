@@ -1009,29 +1009,6 @@ async function initUI() {
         applySceneTrackerSettings();
         updateChatSceneHeaders();
     });
-    // ── Stat bar colors ──
-    $('#rpg-stat-bar-color-low').on('change', function() {
-        extensionSettings.statBarColorLow = String($(this).val());
-        saveSettings();
-    });
-    $('#rpg-stat-bar-color-low-opacity').on('input', function() {
-        const opacity = Number($(this).val());
-        extensionSettings.statBarColorLowOpacity = opacity;
-        $('#rpg-stat-bar-color-low-opacity-value').text(opacity + '%');
-    }).on('change', function() {
-        saveSettings();
-    });
-    $('#rpg-stat-bar-color-high').on('change', function() {
-        extensionSettings.statBarColorHigh = String($(this).val());
-        saveSettings();
-    });
-    $('#rpg-stat-bar-color-high-opacity').on('input', function() {
-        const opacity = Number($(this).val());
-        extensionSettings.statBarColorHighOpacity = opacity;
-        $('#rpg-stat-bar-color-high-opacity-value').text(opacity + '%');
-    }).on('change', function() {
-        saveSettings();
-    });
     // Custom color pickers
     $('#rpg-custom-bg').on('change', function() {
         extensionSettings.customColors.bg = String($(this).val());
@@ -1314,13 +1291,6 @@ async function initUI() {
     $('#rpg-custom-highlight').val(extensionSettings.customColors.highlight);
     $('#rpg-custom-highlight-opacity').val(extensionSettings.customColors.highlightOpacity ?? 100);
     $('#rpg-custom-highlight-opacity-value').text((extensionSettings.customColors.highlightOpacity ?? 100) + '%');
-    // Stat bar colors
-    $('#rpg-stat-bar-color-low').val(extensionSettings.statBarColorLow || '#cc3333');
-    $('#rpg-stat-bar-color-low-opacity').val(extensionSettings.statBarColorLowOpacity ?? 100);
-    $('#rpg-stat-bar-color-low-opacity-value').text((extensionSettings.statBarColorLowOpacity ?? 100) + '%');
-    $('#rpg-stat-bar-color-high').val(extensionSettings.statBarColorHigh || '#33cc66');
-    $('#rpg-stat-bar-color-high-opacity').val(extensionSettings.statBarColorHighOpacity ?? 100);
-    $('#rpg-stat-bar-color-high-opacity-value').text((extensionSettings.statBarColorHighOpacity ?? 100) + '%');
     // External API
     if (extensionSettings.externalApiSettings) {
         $('#rpg-external-base-url').val(extensionSettings.externalApiSettings.baseUrl || '');
