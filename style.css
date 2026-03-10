@@ -14632,8 +14632,26 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     .rpg-lb-field-group.sm, .rpg-lb-field-group.md { flex: 1; }
     .rpg-lb-global-row { flex-direction: column; }
     .rpg-lb-global-field { min-width: unset; }
+    /* On mobile, pull the sticky footer out of scroll flow entirely:
+       it becomes a flex-end child of modal-content instead of being
+       position:sticky inside the scrollable modal-body. */
     .rpg-lb-sticky-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 3;
         padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+    }
+    /* Always show bulk footer on mobile — the transform:translateY(100%) hide trick
+       doesn't work well with the fixed positioning and causes layout gaps. */
+    .rpg-lb-bulk-footer {
+        transform: none;
+    }
+    /* Reserve space at the bottom of modal-body so content isn't hidden behind the
+       fixed footer. The footer is roughly: bulk(~42px) + stats(~32px) + buttons(~52px) + padding */
+    .rpg-lb-modal-body {
+        padding-bottom: 140px;
     }
     /* Make close button larger touch target on mobile */
     .rpg-lb-close {
