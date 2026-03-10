@@ -31,9 +31,6 @@ export let extensionSettings = {
     customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
     customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)
-    customCombatNarrativePrompt: '', // Custom combat narrative style prompt (empty = use default)
-    customPlotRandomPrompt: '', // Custom randomized plot prompt (empty = use default)
-    customPlotNaturalPrompt: '', // Custom natural plot prompt (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic
     // and their custom prompt fields have been archived to src/archived-features.js
     enableDynamicWeather: false, // Enable dynamic weather effects based on Info Box weather field
@@ -295,12 +292,6 @@ export let extensionSettings = {
         activeTextColor: '#ffffff',      // Active sentence text color (only if overrideTextColor is true)
         borderRadius: 4,                 // Pill border radius in px
         transitionSpeed: 300,            // Transition duration in ms
-    },
-    // Combat encounter settings
-    encounterSettings: {
-        enabled: false, // Show Start Encounter button above chat input
-        historyDepth: 8, // Number of recent messages to include in combat initialization
-        autoSaveLogs: false // Save detailed combat logs to file
     },
     // Portrait auto-import: match NPC names to SillyTavern character card avatars
     portraitAutoImport: true,
