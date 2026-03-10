@@ -464,7 +464,10 @@ export function renderLorebook() {
 
     html += '</div>'; // book-list
 
-    // ── Bulk action footer ──────────────────────────────────────────────────
+    // ── Sticky bottom controls (stays visible while scrolling) ──────────────
+    html += '<div class="rpg-lb-sticky-footer">';
+
+    // Bulk action footer
     html += '<div class="rpg-lb-bulk-footer">';
     html += '<span class="rpg-lb-bulk-count">Selected: 0</span>';
     html += '<button class="rpg-lb-bulk-btn" data-action="select-all">Select All</button>';
@@ -475,14 +478,16 @@ export function renderLorebook() {
     html += '</div>';
     html += '</div>';
 
-    // ── Footer stats ────────────────────────────────────────────────────────
+    // Footer stats
     html += `<div class="rpg-lb-footer-stats">Active: ${activeCount} books | Total: ${allNames.length} lorebooks</div>`;
 
-    // ── New book button ─────────────────────────────────────────────────────
+    // New book / Import buttons
     html += '<div class="rpg-lb-new-book-row">';
     html += '<button class="rpg-lb-btn-new-book"><i class="fa-solid fa-plus"></i> New Lorebook</button>';
     html += '<button class="rpg-lb-btn-import"><i class="fa-solid fa-file-import"></i> Import</button>';
     html += '</div>';
+
+    html += '</div>'; // rpg-lb-sticky-footer
     html += '<input type="file" class="rpg-lb-import-file" accept=".json,.lorebook,.png" hidden>';
 
     container.innerHTML = html;

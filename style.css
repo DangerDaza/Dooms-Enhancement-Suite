@@ -13677,12 +13677,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* ── Book list ── */
 .rpg-lb-book-list {
     flex: 1;
-    overflow-y: auto;
-    max-height: 900px;
+    /* No overflow or max-height — let the modal body be the sole scroll container
+       to avoid the double-scrollbar problem on mobile. */
 }
-.rpg-lb-book-list::-webkit-scrollbar { width: 6px; }
-.rpg-lb-book-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-.rpg-lb-book-list::-webkit-scrollbar-thumb { background: rgba(233,69,96,0.3); border-radius: 3px; }
 
 .rpg-lb-book-spine {
     display: flex;
@@ -14294,11 +14291,19 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .rpg-lb-entry.disabled > .rpg-lb-entry-header { opacity: 0.45; }
 .rpg-lb-entry.disabled > .rpg-lb-entry-header:hover { opacity: 0.65; }
 
+/* ── Sticky footer wrapper — keeps bulk actions, stats, and import always visible ── */
+.rpg-lb-sticky-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--rpg-accent, #16213e);
+    border-top: 1px solid rgba(74,123,167,0.2);
+}
+
 /* ── Footer stats ── */
 .rpg-lb-footer-stats {
     padding: 10px 18px;
     border-top: 1px solid rgba(74,123,167,0.2);
-    background: rgba(0,0,0,0.1);
     font-size: 0.72em;
     color: #666;
     text-align: center;
@@ -14627,10 +14632,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     .rpg-lb-field-group.sm, .rpg-lb-field-group.md { flex: 1; }
     .rpg-lb-global-row { flex-direction: column; }
     .rpg-lb-global-field { min-width: unset; }
-    .rpg-lb-bulk-footer {
-        padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
-    }
-    .rpg-lb-footer-stats {
+    .rpg-lb-sticky-footer {
         padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
     }
     /* Make close button larger touch target on mobile */
