@@ -601,6 +601,26 @@ function applySearchFilter(container, query) {
     }
 }
 
+// ─── State Sync Helpers ─────────────────────────────────────────────────────
+
+/**
+ * Re-syncs every book spine toggle's visual state from the model
+ * (selected_world_info).  This prevents the DOM from drifting out of sync
+ * with the actual activation state — which can happen after import, or
+ * when ST's native handlers modify selected_world_info asynchronously.
+ *
+ * @param {JQuery} $modal - The lorebook modal jQuery element
+ */
+function syncAllBookToggleStates($modal) {
+    $modal.find('.rpg-lb-book-spine').each(function () {
+        const $spine = $(this);
+        const worldName = $spine.data('world');
+        const isActive = lorebookAPI.isWorldActive(worldName);
+        $spine.find('.rpg-lb-toggle[data-type="book"]').toggleClass('active', isActive);
+        $spine.toggleClass('active-book', isActive).toggleClass('inactive', !isActive);
+    });
+}
+
 // ─── Stats Helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -792,19 +812,16 @@ export function initLorebookEventDelegation() {
         e.stopPropagation();
         const $toggle = $(this);
         const worldName = $toggle.data('world');
-        const isActive = $toggle.hasClass('active');
 
-        if (isActive) {
+        // Use model state to decide direction (prevents DOM/model drift issues)
+        if (lorebookAPI.isWorldActive(worldName)) {
             await lorebookAPI.deactivateWorld(worldName);
-            $toggle.removeClass('active');
-            $toggle.closest('.rpg-lb-book-spine').removeClass('active-book').addClass('inactive');
         } else {
             await lorebookAPI.activateWorld(worldName);
-            $toggle.addClass('active');
-            $toggle.closest('.rpg-lb-book-spine').addClass('active-book').removeClass('inactive');
         }
 
-        // Refresh campaign stats, footer counts, and campaign toggle state
+        // Re-sync visual state from model
+        syncAllBookToggleStates($modal);
         refreshActiveStats();
         refreshCampaignToggles();
     });
@@ -812,40 +829,40 @@ export function initLorebookEventDelegation() {
     // ── Campaign toggle-all (activate/deactivate all books in campaign) ──────
     $modal.on('click', '.rpg-lb-campaign-toggle', async function (e) {
         e.stopPropagation();
-        const $toggle = $(this);
-        const campaignId = $toggle.data('campaign');
-        const isActive = $toggle.hasClass('active');
-        const $group = $toggle.closest('.rpg-lb-campaign-group');
+        const $group = $(this).closest('.rpg-lb-campaign-group');
         const $spines = $group.find('.rpg-lb-book-spine');
 
         if ($spines.length === 0) return;
 
-        // Determine target state: if all are active, deactivate all; otherwise activate all
-        if (isActive) {
-            // Deactivate all books in this campaign
+        // Use model state to decide direction (same approach as master toggle)
+        let allActive = true;
+        for (const spine of $spines) {
+            if (!lorebookAPI.isWorldActive($(spine).data('world'))) {
+                allActive = false;
+                break;
+            }
+        }
+
+        if (allActive) {
             for (const spine of $spines) {
                 const worldName = $(spine).data('world');
                 if (lorebookAPI.isWorldActive(worldName)) {
                     await lorebookAPI.deactivateWorld(worldName);
                 }
-                $(spine).find('.rpg-lb-toggle[data-type="book"]').removeClass('active');
-                $(spine).removeClass('active-book').addClass('inactive');
             }
-            $toggle.removeClass('active');
         } else {
-            // Activate all books in this campaign
             for (const spine of $spines) {
                 const worldName = $(spine).data('world');
                 if (!lorebookAPI.isWorldActive(worldName)) {
                     await lorebookAPI.activateWorld(worldName);
                 }
-                $(spine).find('.rpg-lb-toggle[data-type="book"]').addClass('active');
-                $(spine).addClass('active-book').removeClass('inactive');
             }
-            $toggle.addClass('active');
         }
 
+        // Re-sync ALL visual state from the model
+        syncAllBookToggleStates($modal);
         refreshActiveStats();
+        refreshCampaignToggles();
     });
 
     // ── Entry toggle (enable / disable) ─────────────────────────────────────
@@ -964,10 +981,14 @@ export function initLorebookEventDelegation() {
 
     // ── Header: Master Toggle All Books ─────────────────────────────────────
     $modal.on('click', '.rpg-lb-header-toggle', async function () {
-        const $masterToggle = $(this).find('.rpg-lb-toggle[data-type="master"]');
-        const activeNames = lorebookAPI.getActiveWorldNames();
         const allNames = lorebookAPI.getAllWorldNames();
-        const allActive = allNames.length > 0 && activeNames.length >= allNames.length;
+        if (allNames.length === 0) return;
+
+        // Use model state (not DOM) to decide direction — prevents the
+        // toggle from silently going the wrong way when DOM drifts from
+        // selected_world_info (e.g. right after import).
+        const activeNames = lorebookAPI.getActiveWorldNames();
+        const allActive = activeNames.length >= allNames.length;
 
         const $spines = $modal.find('.rpg-lb-book-spine');
 
@@ -978,10 +999,7 @@ export function initLorebookEventDelegation() {
                 if (lorebookAPI.isWorldActive(worldName)) {
                     await lorebookAPI.deactivateWorld(worldName);
                 }
-                $(spine).find('.rpg-lb-toggle[data-type="book"]').removeClass('active');
-                $(spine).removeClass('active-book').addClass('inactive');
             }
-            $masterToggle.removeClass('active');
         } else {
             // Activate all
             for (const spine of $spines) {
@@ -989,12 +1007,11 @@ export function initLorebookEventDelegation() {
                 if (!lorebookAPI.isWorldActive(worldName)) {
                     await lorebookAPI.activateWorld(worldName);
                 }
-                $(spine).find('.rpg-lb-toggle[data-type="book"]').addClass('active');
-                $(spine).addClass('active-book').removeClass('inactive');
             }
-            $masterToggle.addClass('active');
         }
 
+        // Re-sync ALL visual state from the model so DOM can't drift
+        syncAllBookToggleStates($modal);
         refreshActiveStats();
         refreshCampaignToggles();
     });
@@ -1409,8 +1426,23 @@ export function initLorebookEventDelegation() {
     $modal.on('change', '.rpg-lb-import-file', async function (e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        // Snapshot current world names so we can detect the newly imported book
+        const namesBefore = new Set(lorebookAPI.getAllWorldNames());
+
         await lorebookAPI.importWorld(file);
         e.target.value = ''; // allow re-selecting same file
+
+        // Auto-activate any newly imported book(s) so the book toggle matches
+        // the entry toggles (entries default to enabled). This also prevents
+        // the master toggle-all from getting out of sync with the UI.
+        const namesAfter = lorebookAPI.getAllWorldNames();
+        for (const name of namesAfter) {
+            if (!namesBefore.has(name) && !lorebookAPI.isWorldActive(name)) {
+                await lorebookAPI.activateWorld(name);
+            }
+        }
+
         renderLorebook();
     });
 
