@@ -13772,6 +13772,19 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 .rpg-lb-book-spine:hover .rpg-lb-spine-export { opacity: 1; }
 .rpg-lb-spine-export:hover { color: #4a7ba7; background: rgba(74,123,167,0.1); }
+.rpg-lb-spine-delete {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    transition: opacity 0.15s, color 0.2s;
+    opacity: 0;
+}
+.rpg-lb-book-spine:hover .rpg-lb-spine-delete { opacity: 1; }
+.rpg-lb-spine-delete:hover { color: #e74c3c; background: rgba(231,76,60,0.1); }
 
 /* ── Bulk action footer ── */
 .rpg-lb-bulk-footer {

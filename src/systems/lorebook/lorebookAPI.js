@@ -32,7 +32,7 @@ import {
     updateWorldInfoSettings,
 } from '../../../../../../../scripts/world-info.js';
 
-import { saveSettingsDebounced } from '../../../../../../../script.js';
+import { saveSettingsDebounced, getRequestHeaders } from '../../../../../../../script.js';
 import { download } from '../../../../../../../scripts/utils.js';
 
 // ─── Cache ──────────────────────────────────────────────────────────────────
@@ -172,6 +172,37 @@ export async function deleteEntry(data, uid) {
  */
 export async function createNewWorld(name) {
     await createNewWorldInfo(name, { interactive: false });
+}
+
+/**
+ * Deletes a WI file entirely via ST's API endpoint.
+ * Deactivates the world first if active, removes from world_names, and clears cache.
+ * @param {string} name - WI filename to delete
+ */
+export async function deleteWorld(name) {
+    // Deactivate if currently active
+    await deactivateWorld(name);
+
+    // Call ST's server-side delete endpoint
+    const response = await fetch('/api/worldinfo/delete', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete lorebook "${name}": ${response.statusText}`);
+    }
+
+    // Remove from the in-memory world_names array
+    const idx = world_names.indexOf(name);
+    if (idx !== -1) {
+        world_names.splice(idx, 1);
+    }
+
+    // Clear cache and refresh ST's WI dropdown
+    invalidateWICache(name);
+    await updateWorldInfoList();
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────

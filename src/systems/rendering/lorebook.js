@@ -533,6 +533,7 @@ function buildBookSpineHtml(worldName, campaignId, activeNames) {
     html += '<span class="rpg-lb-spine-meta">? entries</span>';
     html += '<span class="rpg-lb-spine-tokens">...</span>';
     html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
+    html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete lorebook"><i class="fa-solid fa-trash"></i></button>`;
     html += '<button class="rpg-lb-spine-edit"><i class="fa-solid fa-pen-to-square"></i></button>';
     html += '</div>';
     html += `<div class="rpg-lb-lore-entries" data-world="${w}"></div>`;
@@ -781,7 +782,7 @@ export function initLorebookEventDelegation() {
     // ── Book spine expand/collapse (lazy-load entries) ──────────────────────
     $modal.on('click', '.rpg-lb-book-spine.expandable', function (e) {
         // Don't trigger when clicking toggles, checkboxes, or edit buttons
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export').length) return;
+        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete').length) return;
 
         const $spine = $(this);
         const worldName = $spine.data('world');
@@ -1139,6 +1140,36 @@ export function initLorebookEventDelegation() {
         // Remove the entry element from DOM
         const $entry = $(this).closest('.rpg-lb-entry');
         $entry.slideUp(200, () => $entry.remove());
+    });
+
+    // ── Lorebook (book) delete ─────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-spine-delete', async function (e) {
+        e.stopPropagation();
+        const worldName = $(this).data('world');
+        if (!worldName) return;
+
+        if (!confirm(`Permanently delete lorebook "${worldName}" and all its entries? This cannot be undone.`)) return;
+
+        try {
+            // Remove from any campaign it belongs to
+            const ownerCampaign = campaignManager.getCampaignForBook(worldName);
+            if (ownerCampaign) {
+                campaignManager.removeBookFromCampaign(ownerCampaign.id, worldName);
+            }
+            // Clean up expanded state
+            if (campaignManager.isBookExpanded(worldName)) {
+                campaignManager.toggleBookExpanded(worldName);
+            }
+            // Delete the world info file via ST API
+            await lorebookAPI.deleteWorld(worldName);
+            // Remove the book spine + entries from the DOM
+            const $spine = $(this).closest('.rpg-lb-book-spine');
+            const $entries = $spine.next('.rpg-lb-lore-entries');
+            $spine.slideUp(200, () => { $spine.remove(); $entries.remove(); });
+        } catch (err) {
+            console.error('[DES] Failed to delete lorebook:', err);
+            alert(`Failed to delete lorebook: ${err.message}`);
+        }
     });
 
     // ── Add entry button ────────────────────────────────────────────────────
