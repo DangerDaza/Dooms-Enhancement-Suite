@@ -14253,12 +14253,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: flex;
     flex-direction: column;
     width: 100%;
+    overflow: visible;
 }
 
 /* ── Reset: undo default .mes_text padding when bubbles active ── */
 .mes_text:has(.dooms-bubbles) {
     padding-left: 0 !important;
     padding-right: 0 !important;
+    overflow: visible !important;
+}
+/* Allow bubble avatars to extend into the ST avatar column */
+.mes:has(.dooms-bubbles) .mes_block {
+    overflow: visible !important;
+}
+.mes:has(.dooms-bubbles) {
     overflow: visible !important;
 }
 
@@ -14278,6 +14286,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     transition: background 0.1s;
     border-left: 3px solid transparent;
+    overflow: visible;
 }
 
 .dooms-bubble:hover {
