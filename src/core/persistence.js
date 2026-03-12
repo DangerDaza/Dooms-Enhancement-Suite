@@ -141,8 +141,6 @@ export function loadSettings() {
                 if (extensionSettings.customColors.accentOpacity === undefined) extensionSettings.customColors.accentOpacity = 100;
                 if (extensionSettings.customColors.textOpacity === undefined) extensionSettings.customColors.textOpacity = 100;
                 if (extensionSettings.customColors.highlightOpacity === undefined) extensionSettings.customColors.highlightOpacity = 100;
-                if (extensionSettings.statBarColorLowOpacity === undefined) extensionSettings.statBarColorLowOpacity = 100;
-                if (extensionSettings.statBarColorHighOpacity === undefined) extensionSettings.statBarColorHighOpacity = 100;
                 extensionSettings.settingsVersion = 5;
                 settingsChanged = true;
             }
