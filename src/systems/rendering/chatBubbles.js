@@ -411,6 +411,7 @@ function renderDiscordBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
     const cbs = extensionSettings.chatBubbleSettings || {};
+    const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
     const showNarratorLabel = cbs.showNarratorLabel !== false;
 
@@ -432,9 +433,11 @@ function renderDiscordBubbles(segments) {
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        // Avatars are now shown in ST's .mes_avatar position (outside the bubble).
-        // No inline avatar inside the bubble.
-        const avatarContent = '';
+        // Show avatar for new character speakers — positioned in ST's avatar column via CSS
+        const avatarContent = (!showAvatars || isContinuation || isNarrator) ? '' : `
+            <div class="dooms-bubble-avatar">
+                ${getAvatarHtml(seg.speaker, 'dooms-bubble')}
+            </div>`;
 
         // Respect showAuthorNames + showNarratorLabel toggles
         const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
@@ -478,6 +481,7 @@ function renderDiscordUserBubble(html) {
 function renderCardBubbles(segments) {
     if (!segments.length) return '';
     const cbs = extensionSettings.chatBubbleSettings || {};
+    const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
     const showNarratorLabel = cbs.showNarratorLabel !== false;
 
@@ -490,10 +494,22 @@ function renderCardBubbles(segments) {
         const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
         const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
+        const ringStyle = color ? ` style="background: linear-gradient(135deg, ${escapeHtml(color)}, ${escapeHtml(color)}88)"` : '';
         const typeClass = isNarrator ? 'dooms-card-narrator' :
             (seg.speaker ? 'dooms-card-character' : 'dooms-card-unknown');
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
+
+        // Show avatar for character speakers — positioned in ST's avatar column via CSS
+        const avatarCol = (!showAvatars || isNarrator) ? '' : `
+            <div class="dooms-card-avatar-col">
+                <div class="dooms-card-avatar-ring"${ringStyle}>
+                    <div class="dooms-card-avatar">
+                        ${getAvatarHtml(seg.speaker, 'dooms-card')}
+                    </div>
+                </div>
+                <span class="dooms-card-avatar-name">${escapeHtml(displayName)}</span>
+            </div>`;
 
         // Respect showAuthorNames + showNarratorLabel toggles
         const showHeader = showAuthorNames && (!isNarrator || showNarratorLabel);
@@ -504,6 +520,7 @@ function renderCardBubbles(segments) {
                 </div>` : '';
 
         return `<div class="dooms-card ${typeClass}"${borderStyle}>
+            ${avatarCol}
             <div class="dooms-card-body">
                 ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
@@ -578,21 +595,6 @@ export function applyChatBubbles(messageElement, style) {
     const thoughtsHtml = Array.from(thoughts).map(t => t.outerHTML).join('');
 
     mesText.innerHTML = bubblesHtml + thoughtsHtml;
-
-    // Update ST's .mes_avatar with the first character speaker's portrait
-    const cbs = extensionSettings.chatBubbleSettings || {};
-    if (cbs.showAvatars !== false) {
-        const firstCharSpeaker = segments.find(s => s.type !== 'narrator' && s.speaker);
-        if (firstCharSpeaker) {
-            const portrait = resolvePortrait(firstCharSpeaker.speaker);
-            if (portrait) {
-                const mesAvatar = messageElement.querySelector('.mes_avatar img');
-                if (mesAvatar) {
-                    mesAvatar.src = portrait;
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -680,6 +682,8 @@ export function applyChatBubbleSettings() {
 
     // Sizing
     root.style.setProperty('--cb-font-size', `${(s.fontSize ?? 92) / 100}em`);
+    root.style.setProperty('--cb-avatar-size', `${s.avatarSize ?? 40}px`);
+    root.style.setProperty('--cb-avatar-height', `${Math.round((s.avatarSize ?? 40) * 1.28)}px`);
     root.style.setProperty('--cb-border-radius', `${s.borderRadius ?? 6}px`);
     root.style.setProperty('--cb-spacing', `${s.spacing ?? 12}px`);
 }

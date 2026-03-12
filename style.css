@@ -14259,6 +14259,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .mes_text:has(.dooms-bubbles) {
     padding-left: 0 !important;
     padding-right: 0 !important;
+    overflow: visible !important;
 }
 
 /* ========================================
@@ -14298,7 +14299,40 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-bubble.dooms-bubble-continuation {
     padding-top: 2px;
 }
-/* Inline bubble avatars removed — portraits now shown in ST's .mes_avatar position */
+.dooms-bubble.dooms-bubble-continuation .dooms-bubble-avatar {
+    visibility: hidden;
+    height: 0;
+    overflow: hidden;
+}
+
+/* ── Avatar — positioned in ST's avatar column via negative margin ── */
+.dooms-bubble-avatar {
+    width: var(--cb-avatar-size, 60px);
+    height: var(--cb-avatar-height, 77px);
+    border-radius: 6px;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: calc(-1 * var(--cb-avatar-size, 60px) - 14px);
+}
+.dooms-bubble-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+}
+.dooms-bubble-avatar-letter {
+    font-size: 1.4em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+/* Narrator has no avatar — no extra indent needed */
 
 /* ── Content ── */
 .dooms-bubble-content {
@@ -14460,7 +14494,55 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-left-width: 3px;
 }
 
-/* Inline card avatars removed — portraits now shown in ST's .mes_avatar position */
+/* ── Card Avatar column — positioned in ST's avatar column via negative margin ── */
+.dooms-card-avatar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    width: var(--cb-avatar-size, 60px);
+    margin-left: calc(-1 * var(--cb-avatar-size, 60px) - 14px);
+}
+.dooms-card-avatar-ring {
+    padding: 2px;
+    border-radius: 12px;
+    display: inline-flex;
+    background: linear-gradient(135deg, #666, #444);
+}
+.dooms-card-avatar {
+    width: calc(var(--cb-avatar-size, 60px) - 4px);
+    height: calc(var(--cb-avatar-size, 60px) - 4px);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.dooms-card-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+}
+.dooms-card-avatar-letter {
+    font-size: 1.4em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+.dooms-card-avatar-name {
+    font-size: 0.55em;
+    color: #666;
+    text-align: center;
+    max-width: var(--cb-avatar-size, 60px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 /* ── Body ── */
 .dooms-card-body {
@@ -14551,7 +14633,14 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-card-text {
     font-size: var(--cb-font-size, 0.92em);
 }
-/* Inline bubble avatars removed — see .mes_avatar */
+.dooms-bubble-avatar {
+    width: var(--cb-avatar-size, 60px);
+    height: var(--cb-avatar-height, 77px);
+    border-radius: var(--cb-border-radius, 6px);
+}
+.dooms-bubble-avatar img {
+    border-radius: var(--cb-border-radius, 6px);
+}
 .dooms-bubble.dooms-bubble-new-speaker {
     margin-top: var(--cb-spacing, 10px);
     padding-top: var(--cb-spacing, 10px);
@@ -14559,13 +14648,17 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-bubble-user {
     border-left-color: var(--cb-accent, var(--rpg-highlight, #e94560));
 }
-/* (Inline avatar rules removed — avatars now use ST's .mes_avatar) */
 
 /* Card style overrides */
 .dooms-card {
     border-radius: var(--cb-border-radius, 12px);
 }
-/* Card avatar radius overrides removed — avatars now in ST's .mes_avatar */
+.dooms-card-avatar {
+    border-radius: calc(var(--cb-border-radius, 10px) - 2px);
+}
+.dooms-card-avatar img {
+    border-radius: calc(var(--cb-border-radius, 10px) - 2px);
+}
 .dooms-card-narrator .dooms-card-text,
 .dooms-card-narrator .dooms-card-author {
     color: var(--cb-narrator-color, #999);
