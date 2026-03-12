@@ -1165,7 +1165,12 @@ export function initLorebookEventDelegation() {
             // Remove the book spine + entries from the DOM
             const $spine = $(this).closest('.rpg-lb-book-spine');
             const $entries = $spine.next('.rpg-lb-lore-entries');
-            $spine.slideUp(200, () => { $spine.remove(); $entries.remove(); });
+            $spine.slideUp(200, () => {
+                $spine.remove();
+                $entries.remove();
+                refreshActiveStats();
+                refreshCampaignToggles();
+            });
         } catch (err) {
             console.error('[DES] Failed to delete lorebook:', err);
             alert(`Failed to delete lorebook: ${err.message}`);

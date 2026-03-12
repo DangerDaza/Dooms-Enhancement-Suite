@@ -15,9 +15,8 @@
  *   tension 5+  → resets streak entirely (story is tense enough)
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat } from '../../../../../../../script.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
-import { getDoomCounterState, setDoomCounterState, saveChatData } from '../../core/persistence.js';
+import { getDoomCounterState, setDoomCounterState } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
 
@@ -334,78 +333,6 @@ export async function generateTwistOptions(count) {
             { emoji: '🌪️', title: 'Environmental Chaos', description: 'The world around the characters shifts dramatically, creating new urgency.' }
         ].slice(0, twistCount);
     }
-}
-
-// ─── Twist Modal ──────────────────────────────────────────────────────────────
-
-/**
- * Shows the twist selection modal with clickable cards.
- * User MUST pick a twist — there is no cancel option.
- *
- * @param {Array<{emoji: string, title: string, description: string}>} twists - The twist options
- * @returns {Promise<string>} The chosen twist description
- */
-export function showTwistModal(twists) {
-    return new Promise((resolve) => {
-        // Build card HTML
-        const cardsHtml = twists.map((twist, index) => `
-            <div class="dooms-dc-card" data-index="${index}" tabindex="0">
-                <div class="dooms-dc-card-emoji">${twist.emoji}</div>
-                <div class="dooms-dc-card-title">${twist.title}</div>
-                <div class="dooms-dc-card-desc">${twist.description}</div>
-            </div>
-        `).join('');
-
-        const modalHtml = `
-            <div class="dooms-dc-modal">
-                <div class="dooms-dc-header">
-                    <i class="fa-solid fa-skull"></i> The Doom Counter has triggered...
-                </div>
-                <div class="dooms-dc-subtitle">The calm has lasted too long. Choose your fate:</div>
-                <div class="dooms-dc-cards">
-                    ${cardsHtml}
-                </div>
-            </div>
-        `;
-
-        // Use SillyTavern's Popup (callGenericPopup) for the modal
-        // We create a custom popup with no buttons — user must click a card
-        const $modal = $(modalHtml);
-
-        // Create popup dialog
-        const $dialog = $('<div class="dooms-dc-dialog"></div>');
-        $dialog.append($modal);
-        $('body').append($dialog);
-
-        // Add overlay
-        const $overlay = $('<div class="dooms-dc-overlay"></div>');
-        $('body').append($overlay);
-
-        // Card click handlers
-        $dialog.on('click', '.dooms-dc-card', function () {
-            const index = parseInt($(this).data('index'));
-            const chosen = twists[index];
-
-            // Visual feedback
-            $(this).addClass('dooms-dc-card-selected');
-            $dialog.find('.dooms-dc-card').not(this).addClass('dooms-dc-card-dimmed');
-
-            // Close after brief animation
-            setTimeout(() => {
-                $overlay.remove();
-                $dialog.remove();
-                resolve(chosen.description);
-            }, 400);
-        });
-
-        // Keyboard support
-        $dialog.on('keydown', '.dooms-dc-card', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                $(this).trigger('click');
-            }
-        });
-    });
 }
 
 // ─── Orchestration ────────────────────────────────────────────────────────────
