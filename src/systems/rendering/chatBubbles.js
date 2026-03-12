@@ -604,8 +604,9 @@ function _injectBubbleAvatars(mesElement) {
     // The .mes element must be position:relative for absolute children
     mesElement.style.position = 'relative';
 
-    // Read ST's .mes_avatar to match its exact position and size
-    const stAvatar = mesElement.querySelector('.mes_avatar');
+    // Read ST's .mes_avatar img to match its exact position and size.
+    // We measure the <img> (not the container) to avoid padding offsets.
+    const stAvatar = mesElement.querySelector('.mes_avatar img') || mesElement.querySelector('.mes_avatar');
     const mesRect = mesElement.getBoundingClientRect();
     let avatarLeft = 0;
     let avatarWidth = 60;
