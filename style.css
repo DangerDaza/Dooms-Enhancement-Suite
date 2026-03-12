@@ -14278,7 +14278,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     transition: background 0.1s;
     border-left: 3px solid transparent;
-    position: relative;
 }
 
 .dooms-bubble:hover {
@@ -14301,23 +14300,23 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     padding-top: 2px;
 }
 .dooms-bubble.dooms-bubble-continuation .dooms-bubble-avatar {
-    display: none;
+    visibility: hidden;
+    height: 0;
+    width: var(--avatar-base-width, 60px);
+    overflow: hidden;
 }
 
-/* ── Avatar — absolutely positioned in ST's avatar column ── */
+/* ── Avatar — inline, sized to match ST's main avatar ── */
 .dooms-bubble-avatar {
-    position: absolute;
-    left: calc(-1 * var(--avatar-base-width, 60px) - 16px);
-    top: 8px;
     width: var(--avatar-base-width, 60px);
     height: calc(var(--avatar-base-width, 60px) * 1.28);
     border-radius: 6px;
+    flex-shrink: 0;
     overflow: hidden;
     background: rgba(255,255,255,0.05);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1;
 }
 .dooms-bubble-avatar img {
     width: 100%;
@@ -14332,6 +14331,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     justify-content: center;
     width: 100%;
     height: 100%;
+}
+/* Narrator has no avatar — indent content to align with character dialogue */
+.dooms-bubble-narrator .dooms-bubble-content {
+    padding-left: calc(var(--avatar-base-width, 60px) + 12px);
 }
 
 /* ── Content ── */
@@ -14494,20 +14497,14 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-left-width: 3px;
 }
 
-/* ── Card Avatar column — absolutely positioned in ST's avatar column ── */
-.dooms-card {
-    position: relative;
-}
+/* ── Card Avatar column — inline, sized to match ST's main avatar ── */
 .dooms-card-avatar-col {
-    position: absolute;
-    left: calc(-1 * var(--avatar-base-width, 60px) - 16px);
-    top: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
     width: var(--avatar-base-width, 60px);
-    z-index: 1;
 }
 .dooms-card-avatar-ring {
     padding: 2px;
