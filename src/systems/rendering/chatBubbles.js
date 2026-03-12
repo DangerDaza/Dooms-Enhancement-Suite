@@ -632,7 +632,7 @@ function _injectBubbleAvatars(mesElement) {
         avatarEl.className = 'dooms-gutter-avatar';
         avatarEl.style.position = 'absolute';
         avatarEl.style.top = topOffset + 'px';
-        avatarEl.style.left = avatarLeft + 'px';
+        avatarEl.style.left = (avatarLeft + 7) + 'px';
         avatarEl.style.width = avatarWidth + 'px';
         avatarEl.style.height = Math.round(avatarWidth * 1.4) + 'px';
 
