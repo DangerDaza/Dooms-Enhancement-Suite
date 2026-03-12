@@ -14299,42 +14299,34 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-bubble.dooms-bubble-continuation {
     padding-top: 2px;
 }
-.dooms-bubble.dooms-bubble-continuation .dooms-bubble-avatar {
-    visibility: hidden;
-    height: 0;
-    width: var(--avatar-base-width, 60px);
-    overflow: hidden;
-}
 
-/* ── Avatar — inline, sized to match ST's main avatar ── */
-.dooms-bubble-avatar {
+/* ── Gutter avatars — injected into .mes, positioned in ST's avatar column ── */
+.dooms-gutter-avatar {
     width: var(--avatar-base-width, 60px);
-    height: calc(var(--avatar-base-width, 60px) * 1.28);
+    height: calc(var(--avatar-base-width, 60px) * 1.4);
     border-radius: 6px;
-    flex-shrink: 0;
     overflow: hidden;
     background: rgba(255,255,255,0.05);
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 2;
+    pointer-events: none;
 }
-.dooms-bubble-avatar img {
+.dooms-gutter-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     border-radius: 6px;
 }
-.dooms-bubble-avatar-letter {
+.dooms-gutter-avatar-letter {
     font-size: 1.6em;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
-}
-/* Narrator has no avatar — indent content to align with character dialogue */
-.dooms-bubble-narrator .dooms-bubble-content {
-    padding-left: calc(var(--avatar-base-width, 60px) + 12px);
+    color: #aaa;
 }
 
 /* ── Content ── */
@@ -14497,54 +14489,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-left-width: 3px;
 }
 
-/* ── Card Avatar column — inline, sized to match ST's main avatar ── */
-.dooms-card-avatar-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-    width: var(--avatar-base-width, 60px);
-}
-.dooms-card-avatar-ring {
-    padding: 2px;
-    border-radius: 12px;
-    display: inline-flex;
-    background: linear-gradient(135deg, #666, #444);
-}
-.dooms-card-avatar {
-    width: calc(var(--avatar-base-width, 60px) - 4px);
-    height: calc(var(--avatar-base-width, 60px) - 4px);
-    border-radius: 10px;
-    overflow: hidden;
-    background: rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.dooms-card-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 10px;
-}
-.dooms-card-avatar-letter {
-    font-size: 1.6em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-.dooms-card-avatar-name {
-    font-size: 0.55em;
-    color: #666;
-    text-align: center;
-    max-width: var(--avatar-base-width, 60px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+/* Card avatars now use gutter avatars (same as discord style) */
 
 /* ── Body ── */
 .dooms-card-body {
@@ -14635,8 +14580,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-card-text {
     font-size: var(--cb-font-size, 0.92em);
 }
-/* Avatar size now driven by ST's --avatar-base-width for consistency */
-.dooms-bubble-avatar img {
+/* Gutter avatar border-radius override */
+.dooms-gutter-avatar img {
     border-radius: var(--cb-border-radius, 6px);
 }
 .dooms-bubble.dooms-bubble-new-speaker {
@@ -14651,12 +14596,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-card {
     border-radius: var(--cb-border-radius, 12px);
 }
-.dooms-card-avatar {
-    border-radius: calc(var(--cb-border-radius, 10px) - 2px);
-}
-.dooms-card-avatar img {
-    border-radius: calc(var(--cb-border-radius, 10px) - 2px);
-}
+/* Card avatars now handled by .dooms-gutter-avatar */
 .dooms-card-narrator .dooms-card-text,
 .dooms-card-narrator .dooms-card-author {
     color: var(--cb-narrator-color, #999);

@@ -433,11 +433,9 @@ function renderDiscordBubbles(segments) {
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        // Show avatar for new character speakers — positioned in ST's avatar column via CSS
-        const avatarContent = (!showAvatars || isContinuation || isNarrator) ? '' : `
-            <div class="dooms-bubble-avatar">
-                ${getAvatarHtml(seg.speaker, 'dooms-bubble')}
-            </div>`;
+        // Avatars are injected into the .mes element directly (outside .mes_text)
+        // so they can sit in ST's avatar column. See _injectBubbleAvatars().
+        const avatarContent = '';
 
         // Respect showAuthorNames + showNarratorLabel toggles
         const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
@@ -500,16 +498,8 @@ function renderCardBubbles(segments) {
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
 
-        // Show avatar for character speakers — positioned in ST's avatar column via CSS
-        const avatarCol = (!showAvatars || isNarrator) ? '' : `
-            <div class="dooms-card-avatar-col">
-                <div class="dooms-card-avatar-ring"${ringStyle}>
-                    <div class="dooms-card-avatar">
-                        ${getAvatarHtml(seg.speaker, 'dooms-card')}
-                    </div>
-                </div>
-                <span class="dooms-card-avatar-name">${escapeHtml(displayName)}</span>
-            </div>`;
+        // Avatars are injected into the .mes element directly (outside .mes_text)
+        // so they can sit in ST's avatar column. See _injectBubbleAvatars().
 
         // Respect showAuthorNames + showNarratorLabel toggles
         const showHeader = showAuthorNames && (!isNarrator || showNarratorLabel);
@@ -520,7 +510,6 @@ function renderCardBubbles(segments) {
                 </div>` : '';
 
         return `<div class="dooms-card ${typeClass}"${borderStyle}>
-            ${avatarCol}
             <div class="dooms-card-body">
                 ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
@@ -595,6 +584,55 @@ export function applyChatBubbles(messageElement, style) {
     const thoughtsHtml = Array.from(thoughts).map(t => t.outerHTML).join('');
 
     mesText.innerHTML = bubblesHtml + thoughtsHtml;
+
+    // Inject speaker avatars into the .mes element so they sit in ST's avatar column
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    if (cbs.showAvatars !== false) {
+        _injectBubbleAvatars(messageElement);
+    }
+}
+
+/**
+ * Injects speaker avatar elements directly into the .mes container,
+ * positioned absolutely so they appear in ST's avatar column (left gutter).
+ * Each avatar aligns vertically with its corresponding bubble inside .mes_text.
+ */
+function _injectBubbleAvatars(mesElement) {
+    // Remove any previously injected avatars
+    mesElement.querySelectorAll('.dooms-gutter-avatar').forEach(el => el.remove());
+
+    // The .mes element must be position:relative for absolute children
+    mesElement.style.position = 'relative';
+
+    const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character');
+    bubbles.forEach(bubble => {
+        const speakerName = bubble.getAttribute('data-speaker');
+        if (!speakerName) return;
+
+        const portraitSrc = resolvePortrait(speakerName);
+        const emoji = extensionSettings.knownCharacters?.[speakerName]?.emoji || '\u{1F464}';
+
+        // Calculate the bubble's vertical offset relative to the .mes element
+        const mesRect = mesElement.getBoundingClientRect();
+        const bubbleRect = bubble.getBoundingClientRect();
+        const topOffset = bubbleRect.top - mesRect.top;
+
+        const avatarEl = document.createElement('div');
+        avatarEl.className = 'dooms-gutter-avatar';
+        avatarEl.style.position = 'absolute';
+        avatarEl.style.top = topOffset + 'px';
+        avatarEl.style.left = '0';
+
+        if (portraitSrc) {
+            avatarEl.innerHTML = `<img src="${escapeHtml(portraitSrc)}" alt="${escapeHtml(speakerName)}"
+                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                <div class="dooms-gutter-avatar-letter" style="display:none;">${emoji}</div>`;
+        } else {
+            avatarEl.innerHTML = `<div class="dooms-gutter-avatar-letter">${emoji}</div>`;
+        }
+
+        mesElement.appendChild(avatarEl);
+    });
 }
 
 /**
@@ -608,6 +646,12 @@ function revertSingleMessage(mesText) {
     mesText.removeAttribute('data-dooms-bubbles-applied');
     mesText.removeAttribute('data-dooms-bubbles-style');
     mesText.removeAttribute('data-dooms-original-html');
+
+    // Clean up gutter avatars injected into the .mes element
+    const mesEl = mesText.closest('.mes');
+    if (mesEl) {
+        mesEl.querySelectorAll('.dooms-gutter-avatar').forEach(el => el.remove());
+    }
 }
 
 /**
