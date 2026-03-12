@@ -604,6 +604,17 @@ function _injectBubbleAvatars(mesElement) {
     // The .mes element must be position:relative for absolute children
     mesElement.style.position = 'relative';
 
+    // Read ST's .mes_avatar to match its exact position and size
+    const stAvatar = mesElement.querySelector('.mes_avatar');
+    const mesRect = mesElement.getBoundingClientRect();
+    let avatarLeft = 0;
+    let avatarWidth = 60;
+    if (stAvatar) {
+        const stRect = stAvatar.getBoundingClientRect();
+        avatarLeft = stRect.left - mesRect.left;
+        avatarWidth = stRect.width;
+    }
+
     const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character');
     bubbles.forEach(bubble => {
         const speakerName = bubble.getAttribute('data-speaker');
@@ -613,7 +624,6 @@ function _injectBubbleAvatars(mesElement) {
         const emoji = extensionSettings.knownCharacters?.[speakerName]?.emoji || '\u{1F464}';
 
         // Calculate the bubble's vertical offset relative to the .mes element
-        const mesRect = mesElement.getBoundingClientRect();
         const bubbleRect = bubble.getBoundingClientRect();
         const topOffset = bubbleRect.top - mesRect.top;
 
@@ -621,7 +631,9 @@ function _injectBubbleAvatars(mesElement) {
         avatarEl.className = 'dooms-gutter-avatar';
         avatarEl.style.position = 'absolute';
         avatarEl.style.top = topOffset + 'px';
-        avatarEl.style.left = '0';
+        avatarEl.style.left = avatarLeft + 'px';
+        avatarEl.style.width = avatarWidth + 'px';
+        avatarEl.style.height = Math.round(avatarWidth * 1.4) + 'px';
 
         if (portraitSrc) {
             avatarEl.innerHTML = `<img src="${escapeHtml(portraitSrc)}" alt="${escapeHtml(speakerName)}"
