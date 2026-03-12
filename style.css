@@ -14260,14 +14260,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .mes_text:has(.dooms-bubbles) {
     padding-left: 0 !important;
     padding-right: 0 !important;
-    overflow: visible !important;
-}
-/* Allow bubble avatars to extend into the ST avatar column */
-.mes:has(.dooms-bubbles) .mes_block {
-    overflow: visible !important;
-}
-.mes:has(.dooms-bubbles) {
-    overflow: visible !important;
 }
 
 /* ========================================
@@ -14286,7 +14278,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     transition: background 0.1s;
     border-left: 3px solid transparent;
-    overflow: visible;
+    position: relative;
 }
 
 .dooms-bubble:hover {
@@ -14309,23 +14301,23 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     padding-top: 2px;
 }
 .dooms-bubble.dooms-bubble-continuation .dooms-bubble-avatar {
-    visibility: hidden;
-    height: 0;
-    overflow: hidden;
+    display: none;
 }
 
-/* ── Avatar — positioned in ST's avatar column via negative margin ── */
+/* ── Avatar — absolutely positioned in ST's avatar column ── */
 .dooms-bubble-avatar {
-    width: var(--cb-avatar-size, 60px);
-    height: var(--cb-avatar-height, 77px);
+    position: absolute;
+    left: calc(-1 * var(--avatar-base-width, 60px) - 16px);
+    top: 8px;
+    width: var(--avatar-base-width, 60px);
+    height: calc(var(--avatar-base-width, 60px) * 1.28);
     border-radius: 6px;
-    flex-shrink: 0;
     overflow: hidden;
     background: rgba(255,255,255,0.05);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-left: calc(-1 * var(--cb-avatar-size, 60px) - 14px);
+    z-index: 1;
 }
 .dooms-bubble-avatar img {
     width: 100%;
@@ -14334,14 +14326,13 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-radius: 6px;
 }
 .dooms-bubble-avatar-letter {
-    font-size: 1.4em;
+    font-size: 1.6em;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
 }
-/* Narrator has no avatar — no extra indent needed */
 
 /* ── Content ── */
 .dooms-bubble-content {
@@ -14503,15 +14494,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-left-width: 3px;
 }
 
-/* ── Card Avatar column — positioned in ST's avatar column via negative margin ── */
+/* ── Card Avatar column — absolutely positioned in ST's avatar column ── */
+.dooms-card {
+    position: relative;
+}
 .dooms-card-avatar-col {
+    position: absolute;
+    left: calc(-1 * var(--avatar-base-width, 60px) - 16px);
+    top: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    flex-shrink: 0;
-    width: var(--cb-avatar-size, 60px);
-    margin-left: calc(-1 * var(--cb-avatar-size, 60px) - 14px);
+    width: var(--avatar-base-width, 60px);
+    z-index: 1;
 }
 .dooms-card-avatar-ring {
     padding: 2px;
@@ -14520,8 +14516,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     background: linear-gradient(135deg, #666, #444);
 }
 .dooms-card-avatar {
-    width: calc(var(--cb-avatar-size, 60px) - 4px);
-    height: calc(var(--cb-avatar-size, 60px) - 4px);
+    width: calc(var(--avatar-base-width, 60px) - 4px);
+    height: calc(var(--avatar-base-width, 60px) - 4px);
     border-radius: 10px;
     overflow: hidden;
     background: rgba(0,0,0,0.3);
@@ -14536,7 +14532,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-radius: 10px;
 }
 .dooms-card-avatar-letter {
-    font-size: 1.4em;
+    font-size: 1.6em;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -14547,7 +14543,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-size: 0.55em;
     color: #666;
     text-align: center;
-    max-width: var(--cb-avatar-size, 60px);
+    max-width: var(--avatar-base-width, 60px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -14642,11 +14638,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-card-text {
     font-size: var(--cb-font-size, 0.92em);
 }
-.dooms-bubble-avatar {
-    width: var(--cb-avatar-size, 60px);
-    height: var(--cb-avatar-height, 77px);
-    border-radius: var(--cb-border-radius, 6px);
-}
+/* Avatar size now driven by ST's --avatar-base-width for consistency */
 .dooms-bubble-avatar img {
     border-radius: var(--cb-border-radius, 6px);
 }
