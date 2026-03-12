@@ -22,6 +22,7 @@ export const DEFAULT_NEW_FIELDS_BOOST_PROMPT = `[TRACKER NOTE: The following fie
 // Creative guidance for the LLM when generating twist options for the Doom Counter.
 // This is appended to the structural system prompt (character data, scene context, JSON format).
 export const DEFAULT_TWIST_GENERATOR_RULES_PROMPT = `Rules:
+- CRITICAL: Base your twists on what is happening RIGHT NOW in the most recent messages. The twist must make sense for the CURRENT scene, not something from several messages ago.
 - ONLY reference characters listed above — never invent new characters or treat existing ones as strangers
 - Vary the TONE across the options. Include a MIX of:
   • Positive/exciting twists (unexpected good fortune, a breakthrough, romantic moment, lucky discovery)
@@ -31,6 +32,7 @@ export const DEFAULT_TWIST_GENERATOR_RULES_PROMPT = `Rules:
 - Twists should be proportional to the scene — no world-ending disasters for a quiet afternoon
 - Each twist should be a DIFFERENT type (interpersonal, environmental, revelation, discovery, emotional, etc.)
 - Build on existing character relationships and recent events rather than introducing random catastrophes
+- The twist should flow NATURALLY from the current conversation — it should feel like an organic story development, not a random insertion
 - The goal is to make the story MORE interesting, not to punish the characters`;
 
 // Default prompts
