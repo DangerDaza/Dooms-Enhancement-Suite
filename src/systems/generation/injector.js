@@ -744,15 +744,23 @@ export async function onGenerationStarted(type, data, dryRun) {
             }
         }
         // If we have previous tracker data and found an assistant message, inject it as an assistant message
-        if (!shouldSuppress && example && lastAssistantDepth > 0) {
-            setExtensionPrompt('dooms-tracker-example', example, extension_prompt_types.IN_CHAT, lastAssistantDepth, false, extension_prompt_roles.ASSISTANT);
+        // Use custom example depth/role from settings, or fallback to auto-detected depth
+        const exampleDepthSetting = extensionSettings.exampleDepth ?? 'auto';
+        const resolvedExampleDepth = exampleDepthSetting === 'auto' ? lastAssistantDepth : parseInt(String(exampleDepthSetting));
+        const exampleRoleSetting = extensionSettings.exampleRole || 'assistant';
+        const resolvedExampleRole = exampleRoleSetting === 'user' ? extension_prompt_roles.USER : extension_prompt_roles.ASSISTANT;
+        if (!shouldSuppress && example && resolvedExampleDepth > 0) {
+            setExtensionPrompt('dooms-tracker-example', example, extension_prompt_types.IN_CHAT, resolvedExampleDepth, false, resolvedExampleRole);
         } else {
         }
-        // Inject the instructions as a user message at depth 0 (right before generation)
+        // Inject the instructions using configured depth and role
         // If this is a guided generation (user explicitly injected 'instruct'), skip adding
         // our tracker instructions to avoid clobbering the guided prompt.
+        const instructionsDepthSetting = extensionSettings.instructionsDepth ?? 0;
+        const instructionsRoleSetting = extensionSettings.instructionsRole || 'user';
+        const resolvedInstructionsRole = instructionsRoleSetting === 'system' ? extension_prompt_roles.SYSTEM : extension_prompt_roles.USER;
         if (!shouldSuppress) {
-            setExtensionPrompt('dooms-tracker-inject', instructions, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.USER);
+            setExtensionPrompt('dooms-tracker-inject', instructions, extension_prompt_types.IN_CHAT, instructionsDepthSetting, false, resolvedInstructionsRole);
         }
         // Inject HTML prompt separately at depth 0 if enabled (prevents duplication on swipes)
         if (extensionSettings.enableHtmlPrompt && !shouldSuppress) {

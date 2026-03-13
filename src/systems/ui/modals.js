@@ -206,6 +206,65 @@ export function setupSettingsPopup() {
         // NOTE: updateDiceDisplayCore() call removed — dice system archived
         updateChatThoughts();
     });
+    // Character Data Editor
+    let $charEditorModal = $('#rpg-character-data-editor-popup');
+    $('#rpg-edit-character-thoughts').on('click', function() {
+        const thoughtsData = committedTrackerData.characterThoughts || lastGeneratedData.characterThoughts || '{"characters": []}';
+        let formatted;
+        try {
+            const parsed = typeof thoughtsData === 'string' ? JSON.parse(thoughtsData) : thoughtsData;
+            formatted = JSON.stringify(parsed, null, 2);
+        } catch {
+            formatted = typeof thoughtsData === 'string' ? thoughtsData : JSON.stringify(thoughtsData);
+        }
+        $('#rpg-character-data-textarea').val(formatted);
+        $('#rpg-character-data-error').hide();
+        const theme = extensionSettings.theme || 'default';
+        $charEditorModal.attr('data-theme', theme);
+        $charEditorModal.addClass('is-open').css('display', '');
+    });
+    function closeCharDataEditor() {
+        $charEditorModal.removeClass('is-open').addClass('is-closing');
+        setTimeout(() => {
+            $charEditorModal.removeClass('is-closing').hide();
+        }, 200);
+    }
+    $('#rpg-close-character-data-editor').on('click', closeCharDataEditor);
+    $('#rpg-character-data-cancel').on('click', closeCharDataEditor);
+    $('#rpg-character-data-editor-popup').on('click', function(e) {
+        if (e.target === this) closeCharDataEditor();
+    });
+    $('#rpg-character-data-format').on('click', function() {
+        try {
+            const raw = $('#rpg-character-data-textarea').val();
+            const parsed = JSON.parse(raw);
+            $('#rpg-character-data-textarea').val(JSON.stringify(parsed, null, 2));
+            $('#rpg-character-data-error').hide();
+        } catch (err) {
+            $('#rpg-character-data-error').text('Invalid JSON: ' + err.message).show();
+        }
+    });
+    $('#rpg-character-data-save').on('click', function() {
+        try {
+            const raw = $('#rpg-character-data-textarea').val().trim();
+            const parsed = JSON.parse(raw);
+            const jsonStr = JSON.stringify(parsed, null, 2);
+            // Update both committed and last generated data
+            committedTrackerData.characterThoughts = jsonStr;
+            lastGeneratedData.characterThoughts = jsonStr;
+            // Also update extensionSettings for persistence
+            extensionSettings.characterThoughts = parsed;
+            saveChatData();
+            saveSettings();
+            // Re-render the thoughts panel
+            renderThoughts();
+            updateChatThoughts();
+            closeCharDataEditor();
+            if (typeof toastr !== 'undefined') toastr.success('Character data saved successfully.');
+        } catch (err) {
+            $('#rpg-character-data-error').text('Invalid JSON: ' + err.message).show();
+        }
+    });
     return settingsModal;
 }
 /**

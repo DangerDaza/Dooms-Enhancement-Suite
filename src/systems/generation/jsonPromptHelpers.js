@@ -80,7 +80,9 @@ export function buildInfoBoxJSONInstruction() {
     }
     if (widgets.weather?.enabled) {
         const keywordsHint = getWeatherKeywordsAsPromptString('en');
-        instruction += (hasFields ? ',\n' : '') + `  "weather": {"emoji": "WeatherEmoji", "forecast": "SINGLE keyword only. ${keywordsHint}"}`;
+        const defaultWeatherInstruction = `SINGLE keyword only. ${keywordsHint}`;
+        const weatherInstruction = extensionSettings.customWeatherPrompt || defaultWeatherInstruction;
+        instruction += (hasFields ? ',\n' : '') + `  "weather": {"emoji": "WeatherEmoji", "forecast": "${weatherInstruction}"}`;
         hasFields = true;
     }
     if (widgets.temperature?.enabled) {
