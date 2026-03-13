@@ -601,25 +601,21 @@ function _injectBubbleAvatars(mesElement) {
     // Remove any previously injected avatars
     mesElement.querySelectorAll('.dooms-gutter-avatar').forEach(el => el.remove());
 
-    // The .mes element must be position:relative for absolute children
+    // The .mes element must be position:relative so it becomes the offsetParent
+    // for both the bubbles inside .mes_text and our absolutely-positioned avatars.
     mesElement.style.position = 'relative';
 
     // Read ST's .mes_avatar to match its horizontal position and size.
-    const stAvatarImg = mesElement.querySelector('.mes_avatar img');
-    const stAvatarContainer = mesElement.querySelector('.mes_avatar');
+    // Use getBoundingClientRect for horizontal only (not affected by scroll).
+    const stAvatar = mesElement.querySelector('.mes_avatar img') || mesElement.querySelector('.mes_avatar');
+    const mesRect = mesElement.getBoundingClientRect();
     let avatarLeft = 0;
     let avatarWidth = 60;
-    if (stAvatarImg) {
-        avatarLeft = _getOffsetLeftRelativeTo(stAvatarImg, mesElement);
-        avatarWidth = stAvatarImg.offsetWidth || 60;
-    } else if (stAvatarContainer) {
-        avatarLeft = _getOffsetLeftRelativeTo(stAvatarContainer, mesElement);
-        avatarWidth = stAvatarContainer.offsetWidth || 60;
+    if (stAvatar) {
+        const stRect = stAvatar.getBoundingClientRect();
+        avatarLeft = stRect.left - mesRect.left;
+        avatarWidth = stRect.width || 60;
     }
-
-    // Get .mes_text offset so we can calculate bubble positions relative to .mes
-    const mesText = mesElement.querySelector('.mes_text');
-    const mesTextOffsetTop = mesText ? mesText.offsetTop : 0;
 
     const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character');
     bubbles.forEach(bubble => {
@@ -629,9 +625,10 @@ function _injectBubbleAvatars(mesElement) {
         const portraitSrc = resolvePortrait(speakerName);
         const emoji = extensionSettings.knownCharacters?.[speakerName]?.emoji || '\u{1F464}';
 
-        // Use offsetTop (layout-relative, scroll-independent) instead of getBoundingClientRect
-        // Bubble offsetTop is relative to .mes_text, so add mesText's offset to get position in .mes
-        const topOffset = mesTextOffsetTop + _getOffsetTopRelativeTo(bubble, mesText);
+        // Since .mes is position:relative, it is the offsetParent for both the bubble
+        // and our avatar. bubble.offsetTop gives the exact distance from .mes top edge
+        // to the bubble — no helper functions or chain-walking needed.
+        const topOffset = bubble.offsetTop;
 
         const avatarEl = document.createElement('div');
         avatarEl.className = 'dooms-gutter-avatar';
@@ -651,34 +648,6 @@ function _injectBubbleAvatars(mesElement) {
 
         mesElement.appendChild(avatarEl);
     });
-}
-
-/**
- * Walks up the offsetParent chain from `child` to `ancestor`, summing offsetTop values.
- * Returns the total vertical offset of `child` relative to `ancestor`.
- */
-function _getOffsetTopRelativeTo(child, ancestor) {
-    let offset = 0;
-    let el = child;
-    while (el && el !== ancestor) {
-        offset += el.offsetTop;
-        el = el.offsetParent;
-    }
-    return offset;
-}
-
-/**
- * Walks up the offsetParent chain from `child` to `ancestor`, summing offsetLeft values.
- * Returns the total horizontal offset of `child` relative to `ancestor`.
- */
-function _getOffsetLeftRelativeTo(child, ancestor) {
-    let offset = 0;
-    let el = child;
-    while (el && el !== ancestor) {
-        offset += el.offsetLeft;
-        el = el.offsetParent;
-    }
-    return offset;
 }
 
 /**
