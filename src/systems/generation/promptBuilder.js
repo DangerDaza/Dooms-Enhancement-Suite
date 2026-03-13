@@ -33,6 +33,10 @@ export const DEFAULT_NARRATOR_PROMPT = `Infer the identity and details of charac
  */
 export const DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT = `The context above is information about the current scene, and what follows is the last message in the chat history. Ensure these details naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting performance, low hygiene influencing social interactions, environmental factors shaping the scene, or a character's emotional state coloring their responses.`;
 /**
+ * Default Character Thoughts prompt text (customizable by users)
+ */
+export const DEFAULT_CHARACTER_THOUGHTS_PROMPT = `For each present character, provide authentic inner thoughts reflecting their personality, motivations, and reaction to recent events. Thoughts should reveal the character's true feelings, even if they differ from what the character says or shows outwardly. Only include characters currently present in the scene.`;
+/**
  * Gets character card information for current chat (handles both single and group chats)
  * @returns {string} Formatted character information
  */
@@ -206,6 +210,11 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 instructions += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
             }
             instructions += '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
+            // Add character thoughts instruction if characters are enabled
+            if (extensionSettings.showCharacterThoughts) {
+                const charThoughtsPrompt = extensionSettings.customCharacterThoughtsPrompt || DEFAULT_CHARACTER_THOUGHTS_PROMPT;
+                instructions += '\n\n' + charThoughtsPrompt;
+            }
         }
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {

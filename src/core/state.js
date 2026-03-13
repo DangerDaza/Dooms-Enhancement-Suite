@@ -36,6 +36,7 @@ export let extensionSettings = {
     customTrackerInstructionsPrompt: '', // Custom tracker instructions prompt (empty = use default)
     customTrackerContinuationPrompt: '', // Custom tracker continuation prompt (empty = use default)
     customWeatherPrompt: '', // Custom weather forecast instruction for info box JSON (empty = use default)
+    customCharacterThoughtsPrompt: '', // Custom character thoughts/present characters prompt (empty = use default)
     customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
     customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)

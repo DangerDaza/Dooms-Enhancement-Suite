@@ -1267,6 +1267,12 @@
                 Customize the AI prompts used throughout the extension. Leave fields empty to use defaults.
             </small>
 
+            <!-- ═══════ INJECTABLE PROMPTS ═══════ -->
+            <div class="rpg-subsection-label" style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
+                <i class="fa-solid fa-syringe"></i> Injectable Prompts
+                <small style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These prompts are injected directly into the chat at a configurable depth and role.</small>
+            </div>
+
             <!-- HTML Prompt -->
             <div class="rpg-prompt-editor-section">
                 <label for="rpg-prompt-html" style="display: block; margin-bottom: 8px; font-weight: 600;">
@@ -1327,20 +1333,6 @@
                 </div>
             </div>
 
-            <!-- Narrator Mode Prompt -->
-            <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-narrator" style="display: block; margin-bottom: 8px; font-weight: 600;">
-                    <i class="fa-solid fa-book-open"></i> Narrator Mode Prompt
-                </label>
-                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Injected when "Narrator Mode" is enabled. Instructs AI to infer characters from context.
-                </small>
-                <textarea id="rpg-prompt-narrator" class="rpg-prompt-textarea" rows="3"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="narrator" style="margin-top: 8px;">
-                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                </button>
-            </div>
-
             <!-- Context Instructions Prompt -->
             <div class="rpg-prompt-editor-section">
                 <label for="rpg-prompt-context-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
@@ -1369,6 +1361,26 @@
                         </select>
                     </label>
                 </div>
+            </div>
+
+            <!-- ═══════ TEMPLATE PROMPTS ═══════ -->
+            <div class="rpg-subsection-label" style="margin-top: 20px; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
+                <i class="fa-solid fa-file-lines"></i> Template Prompts
+                <small style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These prompts are embedded within other prompts or used as templates. Depth/role does not apply.</small>
+            </div>
+
+            <!-- Narrator Mode Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-narrator" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-book-open"></i> Narrator Mode Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Used when "Narrator Mode" is enabled. Instructs the AI to infer characters from context.
+                </small>
+                <textarea id="rpg-prompt-narrator" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="narrator" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
             </div>
 
             <!-- Plot Twist Template -->
@@ -1453,6 +1465,20 @@
                 </small>
                 <textarea id="rpg-prompt-tracker-continuation" class="rpg-prompt-textarea" rows="4"></textarea>
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerContinuation" style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Character Thoughts Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-character-thoughts" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-brain"></i> Character Thoughts Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instructions for how the AI should generate character thoughts/inner monologue for present characters. Added when the Present Characters tracker is enabled.
+                </small>
+                <textarea id="rpg-prompt-character-thoughts" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="characterThoughts" style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
