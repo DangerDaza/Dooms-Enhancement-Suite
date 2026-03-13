@@ -589,6 +589,9 @@ export function applyChatBubbles(messageElement, style) {
     const cbs = extensionSettings.chatBubbleSettings || {};
     if (cbs.showAvatars !== false) {
         _injectBubbleAvatars(messageElement);
+        // Re-position avatars when collapsible sections (e.g., thinking/reasoning)
+        // are toggled, since expanding/collapsing shifts all content below.
+        _observeHeightChanges(messageElement);
     }
 }
 
@@ -648,6 +651,22 @@ function _injectBubbleAvatars(mesElement) {
 
         mesElement.appendChild(avatarEl);
     });
+}
+
+/**
+ * Watches for height changes in a .mes element (e.g., thinking/reasoning toggle)
+ * and re-positions avatars when detected. Uses a single toggle listener per element.
+ */
+function _observeHeightChanges(mesElement) {
+    // Avoid attaching duplicate listeners
+    if (mesElement._doomsHeightObserved) return;
+    mesElement._doomsHeightObserved = true;
+
+    // Listen for <details> toggle events (thinking/reasoning sections)
+    mesElement.addEventListener('toggle', () => {
+        // Small delay to let the DOM reflow after expand/collapse
+        requestAnimationFrame(() => _injectBubbleAvatars(mesElement));
+    }, true); // capture phase to catch toggle on nested <details>
 }
 
 /**
