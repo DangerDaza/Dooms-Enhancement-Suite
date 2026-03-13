@@ -221,6 +221,23 @@ export function setupSettingsPopup() {
         $('#rpg-character-data-error').hide();
         const theme = extensionSettings.theme || 'default';
         $charEditorModal.attr('data-theme', theme);
+        const $content = $charEditorModal.find('.rpg-settings-popup-content');
+        if (theme === 'custom' && extensionSettings.customColors) {
+            const colors = extensionSettings.customColors;
+            $content.css({
+                '--rpg-bg': colors.bg,
+                '--rpg-accent': colors.accent,
+                '--rpg-text': colors.text,
+                '--rpg-highlight': colors.highlight,
+            });
+        } else {
+            $content.css({
+                '--rpg-bg': '',
+                '--rpg-accent': '',
+                '--rpg-text': '',
+                '--rpg-highlight': '',
+            });
+        }
         $charEditorModal.addClass('is-open').css('display', '');
     });
     function closeCharDataEditor() {

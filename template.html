@@ -1363,6 +1363,36 @@
                 </div>
             </div>
 
+            <!-- Tracker Instructions -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-tracker-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-list-check"></i> Tracker Instructions
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instruction portion only (format specification is hardcoded). {userName} will be replaced with the user's name.
+                </small>
+                <textarea id="rpg-prompt-tracker-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
+                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Depth:
+                        <select class="rpg-prompt-depth-select" data-prompt-key="trackerInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Role:
+                        <select class="rpg-prompt-role-select" data-prompt-key="trackerInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option><option value="user">User</option>
+                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+
             <!-- ═══════ TEMPLATE PROMPTS ═══════ -->
             <div class="rpg-subsection-label" style="margin-top: 20px; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
                 <i class="fa-solid fa-file-lines"></i> Template Prompts
@@ -1423,36 +1453,6 @@
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="twistGeneratorRules" style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
-            </div>
-
-            <!-- Tracker Instructions -->
-            <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-tracker-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
-                    <i class="fa-solid fa-list-check"></i> Tracker Instructions
-                </label>
-                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Instruction portion only (format specification is hardcoded). {userName} will be replaced with the user's name.
-                </small>
-                <textarea id="rpg-prompt-tracker-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
-                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
-                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions">
-                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                    </button>
-                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
-                        Depth:
-                        <select class="rpg-prompt-depth-select" data-prompt-key="trackerInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
-                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
-                        </select>
-                    </label>
-                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
-                        Role:
-                        <select class="rpg-prompt-role-select" data-prompt-key="trackerInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
-                            <option value="">Default</option><option value="user">User</option>
-                            <option value="assistant">Assistant</option><option value="system">System</option>
-                        </select>
-                    </label>
-                </div>
             </div>
 
             <!-- Tracker Continuation Instruction -->

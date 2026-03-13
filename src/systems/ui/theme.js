@@ -87,6 +87,11 @@ export function applyTheme() {
         if (theme === 'default') { $promptsEditorPopup.removeAttr('data-theme'); }
         else { $promptsEditorPopup.attr('data-theme', theme); }
     }
+    const $charDataEditorPopup = $('#rpg-character-data-editor-popup');
+    if ($charDataEditorPopup.length) {
+        if (theme === 'default') { $charDataEditorPopup.removeAttr('data-theme'); }
+        else { $charDataEditorPopup.attr('data-theme', theme); }
+    }
 }
 /**
  * Applies custom colors when custom theme is selected.
