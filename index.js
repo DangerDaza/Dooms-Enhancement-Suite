@@ -597,6 +597,12 @@ async function initUI() {
         _syncOptionalField('terrain', v);
         _saveSt();
     });
+    $('#rpg-st-show-weather').on('change', function() {
+        const v = $(this).prop('checked');
+        _stSettings().showWeather = v;
+        _syncOptionalField('weather', v);
+        _saveSt();
+    });
 
     // Layout
     $('#rpg-st-layout').on('change', function() {
@@ -1240,6 +1246,7 @@ async function initUI() {
     $('#rpg-st-show-timesincerest').prop('checked', st.showTimeSinceRest === true);
     $('#rpg-st-show-conditions').prop('checked', st.showConditions === true);
     $('#rpg-st-show-terrain').prop('checked', st.showTerrain === true);
+    $('#rpg-st-show-weather').prop('checked', st.showWeather === true);
     $('#rpg-st-layout').val(st.layout || 'grid');
     $('#rpg-st-font-size').val(st.fontSize ?? 82);
     $('#rpg-st-font-size-value').text((st.fontSize ?? 82) + '%');

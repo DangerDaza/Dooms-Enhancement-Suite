@@ -69,6 +69,7 @@ export let extensionSettings = {
         showTimeSinceRest: false,
         showConditions: false,
         showTerrain: false,
+        showWeather: false,
         // Layout
         layout: 'grid', // 'grid' (2-col) | 'compact' (inline flow) | 'stacked' (1-col)
         // Colors

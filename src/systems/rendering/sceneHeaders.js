@@ -328,6 +328,7 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
         timeSinceRest: '',
         conditions: '',
         terrain: '',
+        weather: '',
         doomTension: null,
         presentCharacters: [],
         activeQuest: '',
@@ -380,6 +381,15 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
             }
             if (info.terrain) {
                 result.terrain = typeof info.terrain === 'string' ? info.terrain : (info.terrain.value || '');
+            }
+            // Weather — handle nested {emoji, forecast} or flat string
+            if (info.weather) {
+                if (typeof info.weather === 'string') {
+                    result.weather = info.weather;
+                } else {
+                    const parts = [info.weather.emoji, info.weather.forecast].filter(Boolean);
+                    result.weather = parts.join(' ') || info.weather.value || '';
+                }
             }
             // Doom Tension (numeric 1-10)
             if (info.doomTension !== undefined && info.doomTension !== null) {
@@ -504,6 +514,16 @@ function createSceneHeaderHTML(data) {
                 <i class="fa-solid fa-location-dot"></i>
                 <span class="dooms-scene-label">Location:</span>
                 <span class="dooms-scene-value">${escapeHtml(data.location)}</span>
+            </div>
+        `);
+    }
+    // Weather
+    if (data.weather && st.showWeather !== false) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <i class="fa-solid fa-cloud-sun"></i>
+                <span class="dooms-scene-label">Weather:</span>
+                <span class="dooms-scene-value">${escapeHtml(data.weather)}</span>
             </div>
         `);
     }
@@ -632,6 +652,13 @@ function createBannerHTML(data) {
             <span class="dooms-ip-value">${escapeHtml(data.location)}</span>
         </div>`);
     }
+    if (data.weather && st.showWeather !== false) {
+        items.push(`<div class="dooms-ip-item">
+            <i class="fa-solid fa-cloud-sun"></i>
+            <span class="dooms-ip-label">Weather:</span>
+            <span class="dooms-ip-value">${escapeHtml(data.weather)}</span>
+        </div>`);
+    }
     if (data.moonPhase && st.showMoonPhase !== false) {
         items.push(`<div class="dooms-ip-item">
             <i class="fa-solid fa-moon"></i>
@@ -748,6 +775,13 @@ function createHudHTML(data) {
             <i class="fa-solid fa-location-dot"></i>
             <span class="dooms-ip-hud-label">Location</span>
             <span class="dooms-ip-hud-value">${escapeHtml(data.location)}</span>
+        </div>`);
+    }
+    if (data.weather && st.showWeather !== false) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <i class="fa-solid fa-cloud-sun"></i>
+            <span class="dooms-ip-hud-label">Weather</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(data.weather)}</span>
         </div>`);
     }
     if (data.moonPhase && st.showMoonPhase !== false) {
@@ -869,6 +903,11 @@ function createTickerHTML(data) {
             <i class="fa-solid fa-location-dot"></i> ${escapeHtml(trunc(data.location))}
         </span>`);
     }
+    if (data.weather && st.showWeather !== false) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <i class="fa-solid fa-cloud-sun"></i> ${escapeHtml(trunc(data.weather))}
+        </span>`);
+    }
     if (data.moonPhase && st.showMoonPhase !== false) {
         tickerItems.push(`<span class="dooms-ip-ticker-item">
             <i class="fa-solid fa-moon"></i> ${escapeHtml(data.moonPhase)}
@@ -940,6 +979,13 @@ function createTickerHTML(data) {
             <i class="fa-solid fa-location-dot"></i>
             <span class="dooms-ip-panel-label">Location</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.location)}</span>
+        </div>`);
+    }
+    if (data.weather && st.showWeather !== false) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <i class="fa-solid fa-cloud-sun"></i>
+            <span class="dooms-ip-panel-label">Weather</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(data.weather)}</span>
         </div>`);
     }
     if (data.moonPhase && st.showMoonPhase !== false) {
