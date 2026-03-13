@@ -167,7 +167,7 @@ export function buildCharactersJSONInstruction() {
     }
     // Thoughts
     if (thoughtsConfig?.enabled) {
-        const thoughtsDescription = thoughtsConfig.description || 'Internal monologue';
+        const thoughtsDescription = extensionSettings.customCharacterThoughtsPrompt || thoughtsConfig.description || 'Internal monologue';
         instruction += `,\n    "thoughts": {"content": "${thoughtsDescription}"}`;
     }
     instruction += '\n  }\n';
