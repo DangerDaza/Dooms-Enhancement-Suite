@@ -11,11 +11,13 @@ export let extensionSettings = {
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
     generationMode: 'together', // 'together', 'separate', or 'external'
-    // Injection depth & role settings for tracker prompts (Together mode)
-    instructionsDepth: 0, // Depth for tracker instructions injection (0 = right before generation)
-    instructionsRole: 'user', // Role for tracker instructions: 'user' or 'system'
-    exampleDepth: 'auto', // Depth for tracker example injection: 'auto' (last assistant) or a number
-    exampleRole: 'assistant', // Role for tracker example: 'assistant' or 'user'
+    // Per-prompt injection depth & role settings (configured in Customize Prompts editor)
+    promptInjection: {
+        html: { depth: 0, role: '' },
+        dialogueColoring: { depth: 0, role: '' },
+        trackerInstructions: { depth: 0, role: 'user' },
+        contextInstructions: { depth: 1, role: '' },
+    },
     connectionProfile: '', // Connection Manager profile name for tracker generation (empty = use current)
     // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
     showInfoBox: true,

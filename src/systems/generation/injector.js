@@ -743,49 +743,68 @@ export async function onGenerationStarted(type, data, dryRun) {
                 }
             }
         }
+        // Helper to resolve role string to extension_prompt_roles enum
+        const resolveRole = (role) => {
+            if (role === 'user') return extension_prompt_roles.USER;
+            if (role === 'assistant') return extension_prompt_roles.ASSISTANT;
+            if (role === 'system') return extension_prompt_roles.SYSTEM;
+            return undefined; // no role override
+        };
+        const pInjection = extensionSettings.promptInjection || {};
         // If we have previous tracker data and found an assistant message, inject it as an assistant message
-        // Use custom example depth/role from settings, or fallback to auto-detected depth
-        const exampleDepthSetting = extensionSettings.exampleDepth ?? 'auto';
-        const resolvedExampleDepth = exampleDepthSetting === 'auto' ? lastAssistantDepth : parseInt(String(exampleDepthSetting));
-        const exampleRoleSetting = extensionSettings.exampleRole || 'assistant';
-        const resolvedExampleRole = exampleRoleSetting === 'user' ? extension_prompt_roles.USER : extension_prompt_roles.ASSISTANT;
-        if (!shouldSuppress && example && resolvedExampleDepth > 0) {
-            setExtensionPrompt('dooms-tracker-example', example, extension_prompt_types.IN_CHAT, resolvedExampleDepth, false, resolvedExampleRole);
+        if (!shouldSuppress && example && lastAssistantDepth > 0) {
+            setExtensionPrompt('dooms-tracker-example', example, extension_prompt_types.IN_CHAT, lastAssistantDepth, false, extension_prompt_roles.ASSISTANT);
         } else {
         }
-        // Inject the instructions using configured depth and role
+        // Inject the instructions as a user message at depth 0 (right before generation)
         // If this is a guided generation (user explicitly injected 'instruct'), skip adding
         // our tracker instructions to avoid clobbering the guided prompt.
-        const instructionsDepthSetting = extensionSettings.instructionsDepth ?? 0;
-        const instructionsRoleSetting = extensionSettings.instructionsRole || 'user';
-        const resolvedInstructionsRole = instructionsRoleSetting === 'system' ? extension_prompt_roles.SYSTEM : extension_prompt_roles.USER;
+        const tiSettings = pInjection.trackerInstructions || {};
+        const tiDepth = tiSettings.depth ?? 0;
+        const tiRole = resolveRole(tiSettings.role) ?? extension_prompt_roles.USER;
         if (!shouldSuppress) {
-            setExtensionPrompt('dooms-tracker-inject', instructions, extension_prompt_types.IN_CHAT, instructionsDepthSetting, false, resolvedInstructionsRole);
+            setExtensionPrompt('dooms-tracker-inject', instructions, extension_prompt_types.IN_CHAT, tiDepth, false, tiRole);
         }
-        // Inject HTML prompt separately at depth 0 if enabled (prevents duplication on swipes)
+        // Inject HTML prompt separately if enabled (prevents duplication on swipes)
+        const htmlSettings = pInjection.html || {};
+        const htmlDepth = htmlSettings.depth ?? 0;
+        const htmlRole = resolveRole(htmlSettings.role);
         if (extensionSettings.enableHtmlPrompt && !shouldSuppress) {
             // Use custom HTML prompt if set, otherwise use default
             const htmlPromptText = extensionSettings.customHtmlPrompt || DEFAULT_HTML_PROMPT;
             const htmlPrompt = `\n- ${htmlPromptText}\n`;
-            setExtensionPrompt('dooms-tracker-html', htmlPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-html', htmlPrompt, extension_prompt_types.IN_CHAT, htmlDepth, false, htmlRole);
         } else {
             // Clear HTML prompt if disabled
-            setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, htmlDepth, false);
         }
-        // Inject Dialogue Coloring prompt separately at depth 0 if enabled
+        // Inject Dialogue Coloring prompt separately if enabled
+        const dcSettings = pInjection.dialogueColoring || {};
+        const dcDepth = dcSettings.depth ?? 0;
+        const dcRole = resolveRole(dcSettings.role);
         if (extensionSettings.enableDialogueColoring && !shouldSuppress) {
             // Use custom Dialogue Coloring prompt if set, otherwise use default
             const dialogueColoringPromptText = extensionSettings.customDialogueColoringPrompt || DEFAULT_DIALOGUE_COLORING_PROMPT;
             const colorAssignments = buildColorAssignments();
             const dialogueColoringPrompt = `\n- ${dialogueColoringPromptText}${colorAssignments}\n`;
-            setExtensionPrompt('dooms-tracker-dialogue-coloring', dialogueColoringPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-dialogue-coloring', dialogueColoringPrompt, extension_prompt_types.IN_CHAT, dcDepth, false, dcRole);
         } else {
             // Clear Dialogue Coloring prompt if disabled
-            setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
     } else if (extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') {
+        const resolveRole = (role) => {
+            if (role === 'user') return extension_prompt_roles.USER;
+            if (role === 'assistant') return extension_prompt_roles.ASSISTANT;
+            if (role === 'system') return extension_prompt_roles.SYSTEM;
+            return undefined;
+        };
+        const pInjection = extensionSettings.promptInjection || {};
         // In SEPARATE and EXTERNAL modes, inject the contextual summary for main roleplay generation
         const contextSummary = generateContextualSummary();
+        const ciSettings = pInjection.contextInstructions || {};
+        const ciDepth = ciSettings.depth ?? 1;
+        const ciRole = resolveRole(ciSettings.role);
         if (contextSummary) {
             // Use custom context instructions prompt if set, otherwise use default
             const contextInstructionsText = extensionSettings.customContextInstructionsPrompt || DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT;
@@ -794,35 +813,40 @@ export async function onGenerationStarted(type, data, dryRun) {
 ${contextSummary}
 ${contextInstructionsText}
 </context>`;
-            // Inject context at depth 1 (before last user message) as SYSTEM
             // Skip when a guided generation injection is present to avoid conflicting instructions
             if (!shouldSuppress) {
-                setExtensionPrompt('dooms-tracker-context', wrappedContext, extension_prompt_types.IN_CHAT, 1, false);
+                setExtensionPrompt('dooms-tracker-context', wrappedContext, extension_prompt_types.IN_CHAT, ciDepth, false, ciRole);
             }
         } else {
             // Clear if no data yet
-            setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
+            setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, ciDepth, false);
         }
-        // Inject HTML prompt separately at depth 0 if enabled (same as together mode pattern)
+        // Inject HTML prompt separately if enabled (same as together mode pattern)
+        const htmlSettings = pInjection.html || {};
+        const htmlDepth = htmlSettings.depth ?? 0;
+        const htmlRole = resolveRole(htmlSettings.role);
         if (extensionSettings.enableHtmlPrompt && !shouldSuppress) {
             // Use custom HTML prompt if set, otherwise use default
             const htmlPromptText = extensionSettings.customHtmlPrompt || DEFAULT_HTML_PROMPT;
             const htmlPrompt = `\n- ${htmlPromptText}\n`;
-            setExtensionPrompt('dooms-tracker-html', htmlPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-html', htmlPrompt, extension_prompt_types.IN_CHAT, htmlDepth, false, htmlRole);
         } else {
             // Clear HTML prompt if disabled
-            setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, htmlDepth, false);
         }
-        // Inject Dialogue Coloring prompt separately at depth 0 if enabled
+        // Inject Dialogue Coloring prompt separately if enabled
+        const dcSettings = pInjection.dialogueColoring || {};
+        const dcDepth = dcSettings.depth ?? 0;
+        const dcRole = resolveRole(dcSettings.role);
         if (extensionSettings.enableDialogueColoring && !shouldSuppress) {
             // Use custom Dialogue Coloring prompt if set, otherwise use default
             const dialogueColoringPromptText = extensionSettings.customDialogueColoringPrompt || DEFAULT_DIALOGUE_COLORING_PROMPT;
             const colorAssignments = buildColorAssignments();
             const dialogueColoringPrompt = `\n- ${dialogueColoringPromptText}${colorAssignments}\n`;
-            setExtensionPrompt('dooms-tracker-dialogue-coloring', dialogueColoringPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-dialogue-coloring', dialogueColoringPrompt, extension_prompt_types.IN_CHAT, dcDepth, false, dcRole);
         } else {
             // Clear Dialogue Coloring prompt if disabled
-            setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
+            setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
         // Clear together mode injections
         setExtensionPrompt('dooms-tracker-inject', '', extension_prompt_types.IN_CHAT, 0, false);

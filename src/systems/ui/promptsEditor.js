@@ -139,6 +139,15 @@ function openPromptsEditor() {
     $('#rpg-prompt-tracker-instructions').val(extensionSettings.customTrackerInstructionsPrompt || DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(extensionSettings.customTrackerContinuationPrompt || DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(extensionSettings.customWeatherPrompt || DEFAULT_PROMPTS.weather);
+    // Load per-prompt injection depth & role settings
+    const pInjection = extensionSettings.promptInjection || {};
+    const defaultDepths = { html: 0, dialogueColoring: 0, trackerInstructions: 0, contextInstructions: 1 };
+    const defaultRoles = { html: '', dialogueColoring: '', trackerInstructions: 'user', contextInstructions: '' };
+    for (const key of ['html', 'dialogueColoring', 'trackerInstructions', 'contextInstructions']) {
+        const settings = pInjection[key] || {};
+        $(`.rpg-prompt-depth-select[data-prompt-key="${key}"]`).val(settings.depth ?? defaultDepths[key]);
+        $(`.rpg-prompt-role-select[data-prompt-key="${key}"]`).val(settings.role ?? defaultRoles[key]);
+    }
     // Set theme to match current extension theme
     const theme = extensionSettings.theme || 'default';
     $editorModal.attr('data-theme', theme);
@@ -172,6 +181,15 @@ function savePrompts() {
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
+    // Save per-prompt injection depth & role settings
+    if (!extensionSettings.promptInjection) extensionSettings.promptInjection = {};
+    for (const key of ['html', 'dialogueColoring', 'trackerInstructions', 'contextInstructions']) {
+        if (!extensionSettings.promptInjection[key]) extensionSettings.promptInjection[key] = {};
+        const depthVal = $(`.rpg-prompt-depth-select[data-prompt-key="${key}"]`).val();
+        const roleVal = $(`.rpg-prompt-role-select[data-prompt-key="${key}"]`).val();
+        extensionSettings.promptInjection[key].depth = parseInt(String(depthVal));
+        extensionSettings.promptInjection[key].role = roleVal;
+    }
     saveSettings();
 }
 /**
@@ -236,6 +254,19 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-tracker-instructions').val(DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(DEFAULT_PROMPTS.weather);
+    // Reset per-prompt injection depth & role to defaults
+    const defaultDepths = { html: 0, dialogueColoring: 0, trackerInstructions: 0, contextInstructions: 1 };
+    const defaultRoles = { html: '', dialogueColoring: '', trackerInstructions: 'user', contextInstructions: '' };
+    for (const key of ['html', 'dialogueColoring', 'trackerInstructions', 'contextInstructions']) {
+        $(`.rpg-prompt-depth-select[data-prompt-key="${key}"]`).val(defaultDepths[key]);
+        $(`.rpg-prompt-role-select[data-prompt-key="${key}"]`).val(defaultRoles[key]);
+    }
+    extensionSettings.promptInjection = {
+        html: { depth: 0, role: '' },
+        dialogueColoring: { depth: 0, role: '' },
+        trackerInstructions: { depth: 0, role: 'user' },
+        contextInstructions: { depth: 1, role: '' },
+    };
     // Clear all custom prompts
     extensionSettings.customHtmlPrompt = '';
     extensionSettings.customDialogueColoringPrompt = '';

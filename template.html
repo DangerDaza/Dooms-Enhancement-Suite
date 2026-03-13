@@ -61,59 +61,6 @@
                         </select>
                     </div>
 
-                    <!-- Injection Depth & Role (Together mode only) -->
-                    <div id="rpg-injection-settings" class="rpg-injection-settings-group">
-                        <div class="rpg-subsection-label">Injection Depth & Role</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Instructions Depth</span>
-                                <span class="rpg-setting-hint">Where to inject tracker instructions</span>
-                            </div>
-                            <select id="rpg-instructions-depth" class="rpg-accordion-select">
-                                <option value="0">0 (Before generation)</option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                            </select>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Instructions Role</span>
-                                <span class="rpg-setting-hint">Message role for instructions</span>
-                            </div>
-                            <select id="rpg-instructions-role" class="rpg-accordion-select">
-                                <option value="user">User</option>
-                                <option value="system">System</option>
-                            </select>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Example Depth</span>
-                                <span class="rpg-setting-hint">Where to inject tracker example</span>
-                            </div>
-                            <select id="rpg-example-depth" class="rpg-accordion-select">
-                                <option value="auto">Auto (last assistant msg)</option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                                <option value="6">6</option>
-                                <option value="8">8</option>
-                            </select>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Example Role</span>
-                                <span class="rpg-setting-hint">Message role for example data</span>
-                            </div>
-                            <select id="rpg-example-role" class="rpg-accordion-select">
-                                <option value="assistant">Assistant</option>
-                                <option value="user">User</option>
-                            </select>
-                        </div>
-                    </div>
-
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Narrator Mode</span>
                         <label class="rpg-toggle-switch">
@@ -1329,9 +1276,25 @@
                     Injected when "Enable Immersive HTML" is enabled. Affects all generation modes.
                 </small>
                 <textarea id="rpg-prompt-html" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="html" style="margin-top: 8px;">
-                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                </button>
+                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="html">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Depth:
+                        <select class="rpg-prompt-depth-select" data-prompt-key="html" style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Role:
+                        <select class="rpg-prompt-role-select" data-prompt-key="html" style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option><option value="user">User</option>
+                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <!-- Dialogue Coloring Prompt -->
@@ -1343,9 +1306,25 @@
                     Injected when "Enable Dialogue Coloring" is enabled. Affects all generation modes.
                 </small>
                 <textarea id="rpg-prompt-dialogue-coloring" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogueColoring" style="margin-top: 8px;">
-                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                </button>
+                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogueColoring">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Depth:
+                        <select class="rpg-prompt-depth-select" data-prompt-key="dialogueColoring" style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Role:
+                        <select class="rpg-prompt-role-select" data-prompt-key="dialogueColoring" style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option><option value="user">User</option>
+                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <!-- Narrator Mode Prompt -->
@@ -1371,9 +1350,25 @@
                     Injected in Separate/External mode after the context summary. Tells the AI how to use the context.
                 </small>
                 <textarea id="rpg-prompt-context-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="contextInstructions" style="margin-top: 8px;">
-                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                </button>
+                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="contextInstructions">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Depth:
+                        <select class="rpg-prompt-depth-select" data-prompt-key="contextInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Role:
+                        <select class="rpg-prompt-role-select" data-prompt-key="contextInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option><option value="user">User</option>
+                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <!-- Plot Twist Template -->
@@ -1441,9 +1436,25 @@
                     Instruction portion only (format specification is hardcoded). {userName} will be replaced with the user's name.
                 </small>
                 <textarea id="rpg-prompt-tracker-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions" style="margin-top: 8px;">
-                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
-                </button>
+                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                    <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Depth:
+                        <select class="rpg-prompt-depth-select" data-prompt-key="trackerInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
+                        Role:
+                        <select class="rpg-prompt-role-select" data-prompt-key="trackerInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option><option value="user">User</option>
+                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <!-- Tracker Continuation Instruction -->
