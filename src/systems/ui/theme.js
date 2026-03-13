@@ -82,6 +82,11 @@ export function applyTheme() {
         if (theme === 'default') { $trackerEditorPopup.removeAttr('data-theme'); }
         else { $trackerEditorPopup.attr('data-theme', theme); }
     }
+    const $promptsEditorPopup = $('#rpg-prompts-editor-popup');
+    if ($promptsEditorPopup.length) {
+        if (theme === 'default') { $promptsEditorPopup.removeAttr('data-theme'); }
+        else { $promptsEditorPopup.attr('data-theme', theme); }
+    }
 }
 /**
  * Applies custom colors when custom theme is selected.

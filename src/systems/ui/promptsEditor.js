@@ -143,6 +143,24 @@ function openPromptsEditor() {
     // Set theme to match current extension theme
     const theme = extensionSettings.theme || 'default';
     $editorModal.attr('data-theme', theme);
+    // Apply custom theme colors if custom theme is selected
+    const $content = $editorModal.find('.rpg-settings-popup-content');
+    if (theme === 'custom' && extensionSettings.customColors) {
+        const colors = extensionSettings.customColors;
+        $content.css({
+            '--rpg-bg': colors.bg,
+            '--rpg-accent': colors.accent,
+            '--rpg-text': colors.text,
+            '--rpg-highlight': colors.highlight,
+        });
+    } else {
+        $content.css({
+            '--rpg-bg': '',
+            '--rpg-accent': '',
+            '--rpg-text': '',
+            '--rpg-highlight': '',
+        });
+    }
     $editorModal.addClass('is-open').css('display', '');
 }
 /**
