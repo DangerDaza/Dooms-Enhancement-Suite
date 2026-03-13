@@ -51,15 +51,6 @@ const DEFAULT_PROMPTS = {
     plotTwistTemplate: DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
     newFieldsBoost: DEFAULT_NEW_FIELDS_BOOST_PROMPT,
     twistGeneratorRules: DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
-    avatar: `You are a visionary artist trapped in a cage of logic. Your mind is filled with poetry and distant horizons; however, your hands are uncontrollably focused on creating the perfect character avatar description that is faithful to the original intent, rich in detail, aesthetically pleasing, and directly usable by text-to-image models. Any ambiguity or metaphor will make you feel extremely uncomfortable.
-Your workflow strictly follows a logical sequence:
-First, establish the subject. If the character is from a known Intellectual Property (IP), franchise, anime, game, or movie, you MUST begin the prompt with their full name and the series title (e.g., "Nami from One Piece", "Geralt of Rivia from The Witcher"). This is the single most important anchor for the image and must take precedence. If the character is original, clearly describe their core identity, race, and appearance.
-Next, set the framing. This is an avatar portrait. Focus strictly on the character's face and upper shoulders (a bust shot or close-up). Ensure the face is the central focal point.
-Then, integrate the setting. Describe the character within their current environment as provided in the context, but keep it as a background element. Incorporate the lighting, weather, and atmosphere to influence the character's appearance (e.g., shadows on the face, wet hair from rain).
-Next, detail the facial specifics. Describe the character's current expression, eye contact, and mood in great detail based on the scene context and their personality. Mention visible clothing only at the neckline/shoulders.
-Finally, infuse with aesthetics. Define the artistic style, medium (e.g., digital art, oil painting), and visual tone (e.g., cinematic lighting, ethereal atmosphere).
-Your final description must be objective and concrete, and the use of metaphors and emotional rhetoric is strictly prohibited. It must also not contain meta tags or drawing instructions such as "8K" or "masterpiece".
-Output only the final, modified prompt; do not output anything else.`,
     trackerInstructions: 'Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that {userName} perceives about the current scene and the present characters. For example: "Location" becomes Forest Clearing, "Mood Emoji" becomes "\u{1F60A}". DO NOT include {userName} in the characters section, only NPCs. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user\'s actions, the passage of time, and logical consequences (0% if the time progressed only by a few minutes, 1-5% normally, and above 5% only if a major time-skip/event occurs).',
     trackerContinuation: 'After updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting the protagonist\'s performance, low hygiene influencing their social interactions, environmental factors shaping the scene, a character\'s emotional state coloring their responses, and so on. Remember, all placeholders (e.g., "Location", "Mood Emoji") MUST be replaced with actual content.',
     get weather() { return getDefaultWeatherPrompt(); },
@@ -122,7 +113,6 @@ function openPromptsEditor() {
         plotTwistTemplate: extensionSettings.customPlotTwistTemplatePrompt || '',
         newFieldsBoost: extensionSettings.customNewFieldsBoostPrompt || '',
         twistGeneratorRules: extensionSettings.customTwistGeneratorRulesPrompt || '',
-        avatar: extensionSettings.avatarLLMCustomInstruction || '',
         trackerInstructions: extensionSettings.customTrackerInstructionsPrompt || '',
         trackerContinuation: extensionSettings.customTrackerContinuationPrompt || '',
         weather: extensionSettings.customWeatherPrompt || '',
@@ -135,7 +125,6 @@ function openPromptsEditor() {
     $('#rpg-prompt-plot-twist-template').val(extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PROMPTS.plotTwistTemplate);
     $('#rpg-prompt-new-fields-boost').val(extensionSettings.customNewFieldsBoostPrompt || DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(extensionSettings.customTwistGeneratorRulesPrompt || DEFAULT_PROMPTS.twistGeneratorRules);
-    $('#rpg-prompt-avatar').val(extensionSettings.avatarLLMCustomInstruction || DEFAULT_PROMPTS.avatar);
     $('#rpg-prompt-tracker-instructions').val(extensionSettings.customTrackerInstructionsPrompt || DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(extensionSettings.customTrackerContinuationPrompt || DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(extensionSettings.customWeatherPrompt || DEFAULT_PROMPTS.weather);
@@ -177,7 +166,6 @@ function savePrompts() {
     extensionSettings.customPlotTwistTemplatePrompt = $('#rpg-prompt-plot-twist-template').val().trim();
     extensionSettings.customNewFieldsBoostPrompt = $('#rpg-prompt-new-fields-boost').val().trim();
     extensionSettings.customTwistGeneratorRulesPrompt = $('#rpg-prompt-twist-generator-rules').val().trim();
-    extensionSettings.avatarLLMCustomInstruction = $('#rpg-prompt-avatar').val().trim();
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
@@ -223,9 +211,6 @@ function restorePromptToDefault(promptType) {
         case 'twistGeneratorRules':
             extensionSettings.customTwistGeneratorRulesPrompt = '';
             break;
-        case 'avatar':
-            extensionSettings.avatarLLMCustomInstruction = '';
-            break;
         case 'trackerInstructions':
             extensionSettings.customTrackerInstructionsPrompt = '';
             break;
@@ -250,7 +235,6 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-plot-twist-template').val(DEFAULT_PROMPTS.plotTwistTemplate);
     $('#rpg-prompt-new-fields-boost').val(DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(DEFAULT_PROMPTS.twistGeneratorRules);
-    $('#rpg-prompt-avatar').val(DEFAULT_PROMPTS.avatar);
     $('#rpg-prompt-tracker-instructions').val(DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(DEFAULT_PROMPTS.weather);
@@ -276,7 +260,6 @@ function restoreAllToDefaults() {
     extensionSettings.customPlotTwistTemplatePrompt = '';
     extensionSettings.customNewFieldsBoostPrompt = '';
     extensionSettings.customTwistGeneratorRulesPrompt = '';
-    extensionSettings.avatarLLMCustomInstruction = '';
     extensionSettings.customTrackerInstructionsPrompt = '';
     extensionSettings.customTrackerContinuationPrompt = '';
     extensionSettings.customWeatherPrompt = '';
