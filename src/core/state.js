@@ -11,6 +11,11 @@ export let extensionSettings = {
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
     generationMode: 'together', // 'together', 'separate', or 'external'
+    // Injection depth & role settings for tracker prompts (Together mode)
+    instructionsDepth: 0, // Depth for tracker instructions injection (0 = right before generation)
+    instructionsRole: 'user', // Role for tracker instructions: 'user' or 'system'
+    exampleDepth: 'auto', // Depth for tracker example injection: 'auto' (last assistant) or a number
+    exampleRole: 'assistant', // Role for tracker example: 'assistant' or 'user'
     connectionProfile: '', // Connection Manager profile name for tracker generation (empty = use current)
     // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
     showInfoBox: true,
@@ -28,6 +33,7 @@ export let extensionSettings = {
     customDialogueColoringPrompt: '', // Custom dialogue coloring prompt text (empty = use default)
     customTrackerInstructionsPrompt: '', // Custom tracker instructions prompt (empty = use default)
     customTrackerContinuationPrompt: '', // Custom tracker continuation prompt (empty = use default)
+    customWeatherPrompt: '', // Custom weather forecast instruction for info box JSON (empty = use default)
     customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
     customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)

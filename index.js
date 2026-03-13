@@ -226,14 +226,17 @@ function updateGenerationModeUI() {
         $('#rpg-manual-update').hide();
         $('#rpg-auto-update-container').hide();
         $('#rpg-external-api-settings').slideUp(200);
+        $('#rpg-injection-settings').slideDown(200);
     } else if (mode === 'separate') {
         $('#rpg-manual-update').show();
         $('#rpg-auto-update-container').show();
         $('#rpg-external-api-settings').slideUp(200);
+        $('#rpg-injection-settings').slideUp(200);
     } else if (mode === 'external') {
         $('#rpg-manual-update').show();
         $('#rpg-auto-update-container').show();
         $('#rpg-external-api-settings').slideDown(200);
+        $('#rpg-injection-settings').slideUp(200);
     }
 }
 /**
@@ -324,6 +327,24 @@ async function initUI() {
     $('#rpg-update-depth').on('change', function() {
         const value = $(this).val();
         extensionSettings.updateDepth = parseInt(String(value));
+        saveSettings();
+    });
+    // Injection depth & role settings
+    $('#rpg-instructions-depth').on('change', function() {
+        extensionSettings.instructionsDepth = parseInt(String($(this).val()));
+        saveSettings();
+    });
+    $('#rpg-instructions-role').on('change', function() {
+        extensionSettings.instructionsRole = $(this).val();
+        saveSettings();
+    });
+    $('#rpg-example-depth').on('change', function() {
+        const val = $(this).val();
+        extensionSettings.exampleDepth = val === 'auto' ? 'auto' : parseInt(String(val));
+        saveSettings();
+    });
+    $('#rpg-example-role').on('change', function() {
+        extensionSettings.exampleRole = $(this).val();
         saveSettings();
     });
     $('#rpg-manual-update').on('click', async function() {
@@ -1187,6 +1208,13 @@ async function initUI() {
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
+    // Injection depth & role
+    $('#rpg-instructions-depth').val(extensionSettings.instructionsDepth ?? 0);
+    $('#rpg-instructions-role').val(extensionSettings.instructionsRole || 'user');
+    $('#rpg-example-depth').val(extensionSettings.exampleDepth ?? 'auto');
+    $('#rpg-example-role').val(extensionSettings.exampleRole || 'assistant');
+    // Show/hide injection settings based on generation mode
+    $('#rpg-injection-settings').toggle(extensionSettings.generationMode === 'together');
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);
     populateConnectionProfileDropdown();
