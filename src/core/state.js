@@ -269,6 +269,7 @@ export let extensionSettings = {
         showAvatars: true,                // Show character portrait avatars
         showAuthorNames: true,            // Show character name headers
         showNarratorLabel: true,          // Show "Narrator" label for narration blocks
+        narratorItalic: true,             // Italicize narrator text
     },
     infoPanelSettings: {
         bgColor: '#e94560',

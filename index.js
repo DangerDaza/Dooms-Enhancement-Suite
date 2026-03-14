@@ -250,6 +250,7 @@ function loadChatBubbleSettingsUI() {
     $('#rpg-cb-show-avatars').prop('checked', cbs.showAvatars !== false);
     $('#rpg-cb-show-author-names').prop('checked', cbs.showAuthorNames !== false);
     $('#rpg-cb-show-narrator-label').prop('checked', cbs.showNarratorLabel !== false);
+    $('#rpg-cb-narrator-italic').prop('checked', cbs.narratorItalic !== false);
 
     // Bubble colors
     $('#rpg-cb-narrator-color').val(cbs.narratorTextColor || '#999999');
@@ -816,6 +817,7 @@ async function initUI() {
     $('#rpg-cb-show-avatars').on('change', function() { _cbSettings().showAvatars = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-show-author-names').on('change', function() { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-show-narrator-label').on('change', function() { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-narrator-italic').on('change', function() { _cbSettings().narratorItalic = $(this).prop('checked'); _saveCb(); });
 
     // Bubble color pickers
     $('#rpg-cb-narrator-color').on('input', function() { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });

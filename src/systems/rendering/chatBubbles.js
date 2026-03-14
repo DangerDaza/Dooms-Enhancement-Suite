@@ -764,6 +764,9 @@ export function applyChatBubbleSettings() {
     root.style.setProperty('--cb-avatar-height', `${Math.round((s.avatarSize ?? 40) * 1.28)}px`);
     root.style.setProperty('--cb-border-radius', `${s.borderRadius ?? 6}px`);
     root.style.setProperty('--cb-spacing', `${s.spacing ?? 12}px`);
+
+    // Narrator italic toggle
+    root.style.setProperty('--cb-narrator-italic', (s.narratorItalic !== false) ? 'italic' : 'normal');
 }
 
 // ─────────────────────────────────────────────

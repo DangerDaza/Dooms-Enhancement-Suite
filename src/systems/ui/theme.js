@@ -17,6 +17,32 @@ export function hexToRgba(hex, opacity = 100) {
     return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 /**
+ * Converts hex color to "r, g, b" string for use in rgba() with CSS variables
+ * @param {string} hex - Hex color (e.g., '#ff0000')
+ * @returns {string} - RGB triplet string (e.g., '255, 0, 0')
+ */
+function hexToRgbTriplet(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r}, ${g}, ${b}`;
+}
+/**
+ * Highlight color RGB triplets for each preset theme.
+ * Must match the --rpg-highlight-rgb values in style.css theme presets.
+ */
+const THEME_HIGHLIGHT_MAP = {
+    'sci-fi':        { hex: '#ff006e', rgb: '255, 0, 110' },
+    'fantasy':       { hex: '#d4af37', rgb: '212, 175, 55' },
+    'cyberpunk':     { hex: '#ff2a6d', rgb: '255, 42, 109' },
+    'midnight-rose': { hex: '#e8729a', rgb: '232, 114, 154' },
+    'emerald-grove': { hex: '#c8a240', rgb: '200, 162, 64' },
+    'arctic':        { hex: '#64b5f6', rgb: '100, 181, 246' },
+    'volcanic':      { hex: '#e8651a', rgb: '232, 101, 26' },
+    'dracula':       { hex: '#ff5555', rgb: '255, 85, 85' },
+    'ocean-depths':  { hex: '#00e5c8', rgb: '0, 229, 200' },
+};
+/**
  * Applies the selected theme to the panel.
  */
 export function applyTheme() {
@@ -42,6 +68,16 @@ export function applyTheme() {
         // For non-default themes, set the data-theme attribute
         // which will trigger the CSS theme rules
         $panel.attr('data-theme', theme);
+        // Propagate highlight colors to :root for elements outside .rpg-panel
+        const themeColors = THEME_HIGHLIGHT_MAP[theme];
+        if (themeColors) {
+            document.documentElement.style.setProperty('--rpg-highlight', themeColors.hex);
+            document.documentElement.style.setProperty('--rpg-highlight-rgb', themeColors.rgb);
+        }
+    } else {
+        // Default theme: clear :root overrides so CSS defaults apply
+        document.documentElement.style.removeProperty('--rpg-highlight');
+        document.documentElement.style.removeProperty('--rpg-highlight-rgb');
     }
     // For 'default', we do nothing - it will use the CSS variables from .rpg-panel class
     // which fall back to SillyTavern's theme variables
@@ -107,6 +143,9 @@ export function applyCustomTheme() {
     const highlightColor = hexToRgba(colors.highlight, colors.highlightOpacity ?? 100);
     // Create shadow with 50% opacity of highlight color
     const shadowColor = hexToRgba(colors.highlight, (colors.highlightOpacity ?? 100) * 0.5);
+    // Propagate highlight colors to :root for elements outside .rpg-panel
+    document.documentElement.style.setProperty('--rpg-highlight', colors.highlight);
+    document.documentElement.style.setProperty('--rpg-highlight-rgb', hexToRgbTriplet(colors.highlight));
     // Apply custom CSS variables as inline styles to main panel
     $panel.css({
         '--rpg-bg': bgColor,
