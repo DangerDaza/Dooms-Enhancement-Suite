@@ -218,8 +218,9 @@ function createSnowflakes() {
         snowflake.className = 'rpg-weather-particle rpg-snowflake';
         snowflake.textContent = '❄';
         snowflake.style.left = `${Math.random() * 100}%`;
-        snowflake.style.animationDelay = `${Math.random() * 10}s`;
-        snowflake.style.animationDuration = `${10 + Math.random() * 10}s`;
+        // Use CSS custom properties so Firefox resolves them during CSS resolution (after DOM connection)
+        snowflake.style.setProperty('--dur', `${10 + Math.random() * 10}s`);
+        snowflake.style.setProperty('--del', `${Math.random() * 10}s`);
         container.appendChild(snowflake);
     }
     return container;
@@ -235,8 +236,8 @@ function createRain() {
         const raindrop = document.createElement('div');
         raindrop.className = 'rpg-weather-particle rpg-raindrop';
         raindrop.style.left = `${Math.random() * 100}%`;
-        raindrop.style.animationDelay = `${Math.random() * 2}s`;
-        raindrop.style.animationDuration = `${0.5 + Math.random() * 0.5}s`;
+        raindrop.style.setProperty('--dur', `${0.5 + Math.random() * 0.5}s`);
+        raindrop.style.setProperty('--del', `${Math.random() * 2}s`);
         container.appendChild(raindrop);
     }
     return container;
@@ -251,8 +252,8 @@ function createMist() {
     for (let i = 0; i < 5; i++) {
         const mist = document.createElement('div');
         mist.className = 'rpg-weather-particle rpg-mist';
-        mist.style.animationDelay = `${i * 2}s`;
-        mist.style.animationDuration = `${15 + i * 2}s`;
+        mist.style.setProperty('--dur', `${15 + i * 2}s`);
+        mist.style.setProperty('--del', `${i * 2}s`);
         mist.style.opacity = `${0.1 + Math.random() * 0.2}`;
         container.appendChild(mist);
     }
@@ -309,8 +310,8 @@ function createSunshine(hour) {
         particle.className = 'rpg-weather-particle rpg-clear-dust-mote';
         particle.style.left = `${Math.random() * 100}vw`;
         particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
+        particle.style.setProperty('--dur', `${12 + Math.random() * 8}s`);
+        particle.style.setProperty('--del', `${Math.random() * 15}s`);
         // Vary the size slightly
         const size = 2 + Math.random() * 4;
         particle.style.width = `${size}px`;
@@ -323,8 +324,8 @@ function createSunshine(hour) {
         orb.className = 'rpg-weather-particle rpg-clear-light-orb';
         orb.style.left = `${10 + Math.random() * 80}vw`;
         orb.style.top = `${10 + Math.random() * 80}dvh`;
-        orb.style.animationDelay = `${i * 2}s`;
-        orb.style.animationDuration = `${20 + Math.random() * 10}s`;
+        orb.style.setProperty('--dur', `${20 + Math.random() * 10}s`);
+        orb.style.setProperty('--del', `${i * 2}s`);
         // Vary the size
         const size = 80 + Math.random() * 120;
         orb.style.width = `${size}px`;
@@ -371,7 +372,7 @@ function createSunrise(hour) {
         star.className = 'rpg-weather-particle rpg-night-star rpg-sunrise-fading-star';
         star.style.left = `${Math.random() * 100}vw`;
         star.style.top = `${Math.random() * 40}dvh`;
-        star.style.animationDelay = `${Math.random() * 3}s`;
+        star.style.setProperty('--del', `${Math.random() * 3}s`);
         const size = 1 + Math.random() * 1.5;
         star.style.width = `${size}px`;
         star.style.height = `${size}px`;
@@ -383,8 +384,8 @@ function createSunrise(hour) {
         particle.className = 'rpg-weather-particle rpg-clear-dust-mote';
         particle.style.left = `${Math.random() * 100}vw`;
         particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
+        particle.style.setProperty('--dur', `${12 + Math.random() * 8}s`);
+        particle.style.setProperty('--del', `${Math.random() * 15}s`);
         const size = 2 + Math.random() * 3;
         particle.style.width = `${size}px`;
         particle.style.height = `${size}px`;
@@ -426,7 +427,7 @@ function createSunset(hour) {
         star.className = 'rpg-weather-particle rpg-night-star rpg-sunset-emerging-star';
         star.style.left = `${Math.random() * 100}vw`;
         star.style.top = `${Math.random() * 50}dvh`;
-        star.style.animationDelay = `${Math.random() * 5}s`;
+        star.style.setProperty('--del', `${Math.random() * 5}s`);
         const size = 1 + Math.random() * 1.5;
         star.style.width = `${size}px`;
         star.style.height = `${size}px`;
@@ -438,8 +439,8 @@ function createSunset(hour) {
         particle.className = 'rpg-weather-particle rpg-clear-dust-mote rpg-sunset-dust';
         particle.style.left = `${Math.random() * 100}vw`;
         particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
+        particle.style.setProperty('--dur', `${12 + Math.random() * 8}s`);
+        particle.style.setProperty('--del', `${Math.random() * 15}s`);
         const size = 2 + Math.random() * 3;
         particle.style.width = `${size}px`;
         particle.style.height = `${size}px`;
@@ -477,8 +478,8 @@ function createNighttime(hour) {
         star.className = 'rpg-weather-particle rpg-night-star';
         star.style.left = `${Math.random() * 100}vw`;
         star.style.top = `${Math.random() * 60}dvh`; // Stars mostly in upper portion
-        star.style.animationDelay = `${Math.random() * 5}s`;
-        star.style.animationDuration = `${2 + Math.random() * 3}s`;
+        star.style.setProperty('--dur', `${2 + Math.random() * 3}s`);
+        star.style.setProperty('--del', `${Math.random() * 5}s`);
         // Vary the size
         const size = 1 + Math.random() * 2;
         star.style.width = `${size}px`;
@@ -491,8 +492,8 @@ function createNighttime(hour) {
         brightStar.className = 'rpg-weather-particle rpg-night-star rpg-night-star-bright';
         brightStar.style.left = `${Math.random() * 100}vw`;
         brightStar.style.top = `${Math.random() * 50}dvh`;
-        brightStar.style.animationDelay = `${Math.random() * 4}s`;
-        brightStar.style.animationDuration = `${3 + Math.random() * 2}s`;
+        brightStar.style.setProperty('--dur', `${3 + Math.random() * 2}s`);
+        brightStar.style.setProperty('--del', `${Math.random() * 4}s`);
         container.appendChild(brightStar);
     }
     // Create fireflies / floating light particles
@@ -501,8 +502,8 @@ function createNighttime(hour) {
         firefly.className = 'rpg-weather-particle rpg-night-firefly';
         firefly.style.left = `${Math.random() * 100}vw`;
         firefly.style.top = `${40 + Math.random() * 55}dvh`; // Fireflies in lower portion
-        firefly.style.animationDelay = `${Math.random() * 10}s`;
-        firefly.style.animationDuration = `${8 + Math.random() * 7}s`;
+        firefly.style.setProperty('--dur', `${8 + Math.random() * 7}s`);
+        firefly.style.setProperty('--del', `${Math.random() * 10}s`);
         container.appendChild(firefly);
     }
     // Create subtle shooting star occasionally
@@ -534,8 +535,8 @@ function createWind() {
         const streak = document.createElement('div');
         streak.className = 'rpg-weather-particle rpg-wind-streak';
         streak.style.top = `${Math.random() * 100}%`;
-        streak.style.animationDelay = `${Math.random() * 5}s`;
-        streak.style.animationDuration = `${1.5 + Math.random() * 1}s`;
+        streak.style.setProperty('--dur', `${1.5 + Math.random() * 1}s`);
+        streak.style.setProperty('--del', `${Math.random() * 5}s`);
         container.appendChild(streak);
     }
     return container;
@@ -604,10 +605,13 @@ function removeWeatherEffect() {
     if (weatherContainer) {
         weatherContainer.remove();
         weatherContainer = null;
-        currentWeatherType = null;
-        currentTimeOfDay = null;
-        currentHour = null;
     }
+    // Also remove any orphaned weather containers left in the DOM
+    // (e.g. if our reference was lost due to external DOM manipulation)
+    document.querySelectorAll('body > .rpg-weather-particles').forEach(el => el.remove());
+    currentWeatherType = null;
+    currentTimeOfDay = null;
+    currentHour = null;
 }
 /**
  * Update weather effect based on current weather and time
@@ -626,20 +630,29 @@ export function updateWeatherEffect() {
     const timeOfDay = getTimeOfDay(hour);
     // If only the hour changed (same weather and time of day), just update celestial position
     if (weatherType === currentWeatherType && timeOfDay === currentTimeOfDay && hour !== currentHour) {
-        if (updateCelestialPosition(hour)) {
+        if (weatherContainer && weatherContainer.isConnected && updateCelestialPosition(hour)) {
             currentHour = hour;
             return; // Successfully updated position without recreating
         }
     }
-    // Don't recreate if nothing has changed
+    // Don't recreate if nothing has changed AND the container is still in the DOM.
+    // External code (SillyTavern re-renders, chat switches) can remove our container
+    // from the DOM — if that happens, fall through to recreate it.
     if (weatherType === currentWeatherType && timeOfDay === currentTimeOfDay && hour === currentHour) {
-        return;
+        if (weatherContainer && weatherContainer.isConnected) {
+            return;
+        }
+        // Container was removed externally — reset state and fall through to recreate
     }
     // Remove existing effect
     removeWeatherEffect();
     // Create new effect based on weather type
     if (weatherType === 'none') {
-        return; // No effect
+        // Cache 'none' so subsequent calls with same weather skip removeWeatherEffect()
+        currentWeatherType = 'none';
+        currentTimeOfDay = timeOfDay;
+        currentHour = hour;
+        return;
     }
     currentWeatherType = weatherType;
     currentTimeOfDay = timeOfDay;
@@ -670,27 +683,35 @@ export function updateWeatherEffect() {
             weatherContainer = createWind();
             break;
         case 'storm': {
-            // Storm = Rain + Lightning (combined effects)
-            const rainContainer = createRain();
-            const lightningContainer = createLightning();
-            // Merge both containers
+            // Storm = Rain + Lightning (combined into a single container to avoid
+            // nested position:fixed + contain:layout paint which breaks in Firefox)
             weatherContainer = document.createElement('div');
             weatherContainer.className = 'rpg-weather-particles';
-            weatherContainer.appendChild(rainContainer);
-            weatherContainer.appendChild(lightningContainer);
+            const rainContainer = createRain();
+            const lightningContainer = createLightning();
+            // Move child particles into the single container (avoid nesting rpg-weather-particles)
+            while (rainContainer.firstChild) weatherContainer.appendChild(rainContainer.firstChild);
+            while (lightningContainer.firstChild) weatherContainer.appendChild(lightningContainer.firstChild);
             break;
         }
         case 'blizzard': {
-            // Blizzard = Snow + Wind (combined effects)
-            const snowContainer = createSnowflakes();
-            const windContainer = createWind();
-            // Merge both containers
+            // Blizzard = Snow + Wind (combined into a single container to avoid
+            // nested position:fixed + contain:layout paint which breaks in Firefox)
             weatherContainer = document.createElement('div');
             weatherContainer.className = 'rpg-weather-particles';
-            weatherContainer.appendChild(snowContainer);
-            weatherContainer.appendChild(windContainer);
+            const snowContainer = createSnowflakes();
+            const windContainer = createWind();
+            // Move child particles into the single container (avoid nesting rpg-weather-particles)
+            while (snowContainer.firstChild) weatherContainer.appendChild(snowContainer.firstChild);
+            while (windContainer.firstChild) weatherContainer.appendChild(windContainer.firstChild);
             break;
         }
+        default:
+            // Unknown weather type — reset cached state so we don't get stuck
+            currentWeatherType = null;
+            currentTimeOfDay = null;
+            currentHour = null;
+            return;
     }
     if (weatherContainer) {
         // Apply z-index based on background/foreground settings
@@ -709,6 +730,8 @@ export function updateWeatherEffect() {
             return;
         }
         document.body.appendChild(weatherContainer);
+        // Force a reflow so Firefox starts animations on the new elements
+        void weatherContainer.offsetHeight;
     }
 }
 /**

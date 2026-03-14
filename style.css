@@ -11444,7 +11444,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     font-size: 1em;
     font-family: Arial, sans-serif;
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
-    animation: rpg-snowfall linear infinite;
+    animation-name: rpg-snowfall;
+    animation-duration: var(--dur, 10s);
+    animation-timing-function: linear;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     opacity: 0.8;
 }
 
@@ -11462,30 +11466,19 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
 
 /* Create variations for different snowflakes */
 .rpg-snowflake:nth-child(2n) {
-    animation-duration: 12s;
     font-size: 0.8em;
 }
 
 .rpg-snowflake:nth-child(3n) {
-    animation-duration: 15s;
     font-size: 1.2em;
 }
 
 .rpg-snowflake:nth-child(4n) {
-    animation-duration: 18s;
     font-size: 0.6em;
 }
 
 .rpg-snowflake:nth-child(5n) {
-    animation-duration: 10s;
     font-size: 1.4em;
-}
-
-/* Slower mobile animation for performance */
-@media (max-width: 768px) {
-    .rpg-snowflake {
-        animation-duration: 20s;
-    }
 }
 
 /* ============================================
@@ -11516,7 +11509,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     width: 2px;
     height: 50px;
     background: linear-gradient(to bottom, rgba(174, 194, 224, 0), rgba(174, 194, 224, 0.8));
-    animation: rpg-rainfall linear infinite;
+    animation-name: rpg-rainfall;
+    animation-duration: var(--dur, 0.7s);
+    animation-timing-function: linear;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     top: -50px;
 }
 
@@ -11538,7 +11535,6 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
 
 .rpg-raindrop:nth-child(3n) {
     height: 60px;
-    animation-duration: 0.8s;
 }
 
 /* Mist/Fog layers */
@@ -11546,7 +11542,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     width: 100%;
     height: 40%;
     background: radial-gradient(ellipse at center, rgba(200, 200, 220, 0.3) 0%, transparent 70%);
-    animation: rpg-mistFloat ease-in-out infinite;
+    animation-name: rpg-mistFloat;
+    animation-duration: var(--dur, 15s);
+    animation-timing-function: ease-in-out;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     top: 30%;
 }
 
@@ -11611,7 +11611,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
         rgba(255, 235, 180, 0.6) 50%,
         rgba(255, 220, 150, 0) 100%);
     box-shadow: 0 0 6px 2px rgba(255, 245, 200, 0.4);
-    animation: rpg-clear-dust-float linear infinite;
+    animation-name: rpg-clear-dust-float;
+    animation-duration: var(--dur, 15s);
+    animation-timing-function: linear;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     pointer-events: none;
 }
 
@@ -11645,7 +11649,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
         rgba(255, 245, 200, 0.06) 40%,
         transparent 70%);
     filter: blur(20px);
-    animation: rpg-clear-orb-drift ease-in-out infinite;
+    animation-name: rpg-clear-orb-drift;
+    animation-duration: var(--dur, 20s);
+    animation-timing-function: ease-in-out;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     pointer-events: none;
 }
 
@@ -11819,7 +11827,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
 /* Fading stars at sunrise */
 .rpg-sunrise-fading-star {
     opacity: 0.3 !important;
-    animation: rpg-star-fade-out 4s ease-in-out infinite !important;
+    animation-name: rpg-star-fade-out !important;
+    animation-duration: 4s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-delay: var(--del, 0s) !important;
+    animation-iteration-count: infinite !important;
 }
 
 @keyframes rpg-star-fade-out {
@@ -11907,7 +11919,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
 
 /* Emerging stars at sunset */
 .rpg-sunset-emerging-star {
-    animation: rpg-star-emerge 5s ease-in-out infinite !important;
+    animation-name: rpg-star-emerge !important;
+    animation-duration: 5s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-delay: var(--del, 0s) !important;
+    animation-iteration-count: infinite !important;
 }
 
 @keyframes rpg-star-emerge {
@@ -12097,7 +12113,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
         rgba(200, 220, 255, 0.8) 40%,
         transparent 70%);
     border-radius: 50%;
-    animation: rpg-night-star-twinkle ease-in-out infinite;
+    animation-name: rpg-night-star-twinkle;
+    animation-duration: var(--dur, 3s);
+    animation-timing-function: ease-in-out;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     pointer-events: none;
 }
 
@@ -12162,7 +12182,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     box-shadow:
         0 0 6px 3px rgba(180, 255, 120, 0.6),
         0 0 12px 6px rgba(150, 230, 100, 0.3);
-    animation: rpg-night-firefly-float ease-in-out infinite;
+    animation-name: rpg-night-firefly-float;
+    animation-duration: var(--dur, 10s);
+    animation-timing-function: ease-in-out;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     pointer-events: none;
 }
 
@@ -12426,7 +12450,11 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     width: 80px;
     height: 2px;
     background: linear-gradient(to right, rgba(200, 200, 220, 0), rgba(200, 200, 220, 0.5), rgba(200, 200, 220, 0));
-    animation: rpg-windBlow linear infinite;
+    animation-name: rpg-windBlow;
+    animation-duration: var(--dur, 2s);
+    animation-timing-function: linear;
+    animation-delay: var(--del, 0s);
+    animation-iteration-count: infinite;
     left: -100px;
     opacity: 0.6;
     transform: skewX(-20deg);
@@ -17224,33 +17252,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    REDUCED MOTION — respect OS accessibility setting (also helps performance)
    ═══════════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
-    /* Pause all infinite animations */
-    .rpg-snowflake,
-    .rpg-raindrop,
-    .rpg-mist-layer,
-    .rpg-clear-ambient-glow,
-    .rpg-clear-dust-mote,
-    .rpg-clear-orb,
-    .rpg-clear-sun,
-    .rpg-clear-sun-glow,
-    .rpg-sunrise-overlay,
-    .rpg-sunset-overlay,
-    .rpg-sunrise-horizon-glow,
-    .rpg-sunset-horizon-glow,
-    .rpg-sunrise-fading-star,
-    .rpg-sunset-emerging-star,
-    .rpg-clear-lens-flare,
-    .rpg-clear-lens-core,
-    .rpg-clear-secondary-flare,
-    .rpg-night-moon,
-    .rpg-night-moon-glow,
-    .rpg-night-star,
-    .rpg-night-star-bright,
-    .rpg-night-firefly,
-    .rpg-night-shooting-star,
-    .rpg-lightning-flash,
-    .rpg-wind-line,
-    .rpg-weather-particle,
+    /* Weather effects are controlled by the extension's own toggle (enableDynamicWeather).
+       Users who explicitly enable weather effects should see them regardless of OS motion
+       preferences. Do NOT kill weather animations here — the extension toggle is the
+       correct opt-out mechanism for weather. */
+
+    /* Pause non-weather UI animations */
     .dooms-pb-speaking-ring,
     .dooms-dc-loading-icon,
     .dooms-dc-loading-dots span,

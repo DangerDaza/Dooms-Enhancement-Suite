@@ -19,10 +19,9 @@ function createSnowflakes() {
         snowflake.textContent = '❄';
         // Random horizontal position
         snowflake.style.left = `${Math.random() * 100}%`;
-        // Random animation delay for staggered effect
-        snowflake.style.animationDelay = `${Math.random() * 10}s`;
-        // Random animation duration (between 10-20s)
-        snowflake.style.animationDuration = `${10 + Math.random() * 10}s`;
+        // Use CSS custom properties so Firefox resolves them during CSS resolution (after DOM connection)
+        snowflake.style.setProperty('--dur', `${10 + Math.random() * 10}s`);
+        snowflake.style.setProperty('--del', `${Math.random() * 10}s`);
         snowflakesContainer.appendChild(snowflake);
     }
     document.body.appendChild(snowflakesContainer);
