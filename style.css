@@ -6533,7 +6533,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 .rpg-toggle-switch input:checked + .rpg-toggle-slider {
-    background: rgba(233, 69, 96, 0.5);
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 50%, transparent);
 }
 
 .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
@@ -13510,7 +13510,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-style: italic;
     line-height: 1.45;
     opacity: 0.9;
-    border-top: 1px solid rgba(233, 69, 96, 0.15);
+    border-top: 1px solid color-mix(in srgb, var(--rpg-highlight, #e94560) 15%, transparent);
 }
 
 /* ========================================
@@ -13576,7 +13576,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     gap: 6px;
     margin-top: 4px;
     padding-top: 6px;
-    border-top: 1px solid rgba(var(--st-accent-rgb, 233, 69, 96), 0.1);
+    border-top: 1px solid rgba(var(--rpg-highlight-rgb, 233, 69, 96), 0.1);
     flex-wrap: wrap;
 }
 /* In compact layout, characters don't need full-width override */
@@ -14488,8 +14488,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* ── Gutter avatars — injected into .mes, positioned in ST's avatar column ── */
 .dooms-gutter-avatar {
-    width: var(--avatar-base-width, 60px);
-    height: calc(var(--avatar-base-width, 60px) * 1.4);
+    width: var(--cb-avatar-size, 40px);
+    height: var(--cb-avatar-height, 51px);
     border-radius: 6px;
     overflow: hidden;
     background: rgba(255,255,255,0.05);
@@ -14627,15 +14627,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* ── Narrator ── */
 .dooms-bubble-narrator {
-    border-left-color: rgba(233, 69, 96, 0.2);
+    border-left-color: color-mix(in srgb, var(--rpg-highlight, #e94560) 20%, transparent);
 }
 .dooms-bubble-narrator .dooms-bubble-author {
-    color: #999;
-    font-style: italic;
+    color: var(--cb-narrator-color, #999);
+    font-style: var(--cb-narrator-font-style, italic);
 }
 .dooms-bubble-narrator .dooms-bubble-text {
-    color: #999;
-    font-style: italic;
+    color: var(--cb-narrator-color, #999);
+    font-style: var(--cb-narrator-font-style, italic);
 }
 
 /* ── User ── */
@@ -14728,16 +14728,16 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* ── Narrator card ── */
 .dooms-card-narrator {
-    background: rgba(233, 69, 96, 0.03);
-    border-left-color: rgba(233, 69, 96, 0.2);
-    border-color: rgba(233, 69, 96, 0.08);
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 3%, transparent);
+    border-left-color: color-mix(in srgb, var(--rpg-highlight, #e94560) 20%, transparent);
+    border-color: color-mix(in srgb, var(--rpg-highlight, #e94560) 8%, transparent);
 }
 .dooms-card-narrator .dooms-card-text {
-    font-style: italic;
-    color: #999;
+    font-style: var(--cb-narrator-font-style, italic);
+    color: var(--cb-narrator-color, #999);
 }
 .dooms-card-narrator .dooms-card-author {
-    color: #999;
+    color: var(--cb-narrator-color, #999);
 }
 
 /* ── User card ── */
@@ -15225,7 +15225,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     overflow: hidden;
 }
 .dooms-ip-panel-row i {
-    color: var(--st-accent, #e94560);
+    color: var(--rpg-highlight, #e94560);
     font-size: 0.8em;
     width: 13px;
     text-align: center;
@@ -15267,7 +15267,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-ip-panel-char-dot {
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: var(--st-accent, #e94560);
+    background: var(--rpg-highlight, #e94560);
     flex-shrink: 0;
 }
 
@@ -15316,7 +15316,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     margin-bottom: 2px;
 }
 .dooms-ip-panel-event-bullet {
-    color: var(--st-accent, #e94560);
+    color: var(--rpg-highlight, #e94560);
     flex-shrink: 0;
 }
 
