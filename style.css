@@ -10,8 +10,6 @@ body.dooms-vk-resizing [class*="dooms-"],
 body.dooms-vk-resizing [class*="rpg-"],
 body.dooms-vk-resizing #dooms-tracker-panel,
 body.dooms-vk-resizing #dooms-tracker-panel *,
-body.dooms-vk-resizing .rpg-weather-particles,
-body.dooms-vk-resizing .rpg-weather-particles *,
 /* SillyTavern input area — #send_textarea has clip-path transition,
    buttons have opacity transitions, .drag-grabber has transition: all.
    These cause the chat bar to rubber-band instead of snapping to keyboard. */
@@ -22,11 +20,6 @@ body.dooms-vk-resizing .drag-grabber {
     transition: none !important;
     animation-duration: 0s !important;
     animation-delay: 0s !important;
-}
-/* Hide weather particles entirely during keyboard resize — avoids expensive
-   recompositing of fixed+animated elements while viewport is changing */
-body.dooms-vk-resizing .rpg-weather-particles {
-    visibility: hidden !important;
 }
 /* ── Critical mobile keyboard layout fix ──
    #sheld uses 100dvh (shrinks with keyboard) but #chat uses 100vh for max-height
@@ -11503,7 +11496,6 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
-    contain: layout paint;
 }
 
 /* Base particle */
@@ -17166,27 +17158,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
         -webkit-backdrop-filter: none !important;
     }
 
-    /* ── Lighten weather particle effects on mobile ──
-       Reduce particle visibility instead of hiding entirely.
-       This keeps the atmosphere while cutting GPU overhead. */
-    .rpg-snowflakes-container {
-        display: none !important;
-    }
-    .rpg-weather-particles {
-        opacity: 0.5;
-    }
-    /* Hide most particles — keep every 4th for a lighter effect */
-    .rpg-weather-particle:not(:nth-child(4n)) {
-        display: none !important;
-    }
-
-    /* ── Disable heavy filter: blur() on mobile ── */
-    .rpg-clear-light-orb,
-    .rpg-night-moon-glow,
-    .rpg-clear-ambient-glow {
-        filter: none !important;
-    }
-
     /* ── Reduce extreme box-shadow blur radii on mobile ──
        Shadows with 40-80px blur cause full-layer repaints. Scale them
        down to something the mobile GPU can handle. */
@@ -17212,45 +17183,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     }
 }
 
-/* Phone-only: fully disable weather for very small screens */
-@media (max-width: 600px) {
-    .rpg-weather-particles,
-    .rpg-weather-foreground {
-        display: none !important;
-    }
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════════
    REDUCED MOTION — respect OS accessibility setting (also helps performance)
    ═══════════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
     /* Pause all infinite animations */
-    .rpg-snowflake,
-    .rpg-raindrop,
-    .rpg-mist-layer,
-    .rpg-clear-ambient-glow,
-    .rpg-clear-dust-mote,
-    .rpg-clear-orb,
-    .rpg-clear-sun,
-    .rpg-clear-sun-glow,
-    .rpg-sunrise-overlay,
-    .rpg-sunset-overlay,
-    .rpg-sunrise-horizon-glow,
-    .rpg-sunset-horizon-glow,
-    .rpg-sunrise-fading-star,
-    .rpg-sunset-emerging-star,
-    .rpg-clear-lens-flare,
-    .rpg-clear-lens-core,
-    .rpg-clear-secondary-flare,
-    .rpg-night-moon,
-    .rpg-night-moon-glow,
-    .rpg-night-star,
-    .rpg-night-star-bright,
-    .rpg-night-firefly,
-    .rpg-night-shooting-star,
-    .rpg-lightning-flash,
-    .rpg-wind-line,
-    .rpg-weather-particle,
     .dooms-pb-speaking-ring,
     .dooms-dc-loading-icon,
     .dooms-dc-loading-dots span,
