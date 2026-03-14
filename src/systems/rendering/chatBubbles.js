@@ -509,7 +509,7 @@ function renderCardBubbles(segments) {
                     <span class="dooms-card-role ${roleClass}">${roleLabel}</span>
                 </div>` : '';
 
-        return `<div class="dooms-card ${typeClass}"${borderStyle}>
+        return `<div class="dooms-card ${typeClass}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
             <div class="dooms-card-body">
                 ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
@@ -752,6 +752,7 @@ export function applyChatBubbleSettings() {
     root.style.setProperty('--cb-narrator-color', s.narratorTextColor || '#999999');
     root.style.setProperty('--cb-unknown-color', s.unknownSpeakerColor || '#aaaaaa');
     root.style.setProperty('--cb-accent', s.accentColor || '#e94560');
+    root.style.setProperty('--cb-narrator-font-style', (s.narratorItalic !== false) ? 'italic' : 'normal');
 
     // Background tint — decompose into RGB for rgba()
     const tintRgb = hexToRgb(s.backgroundTint || '#1a1a2e');
