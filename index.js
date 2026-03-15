@@ -803,6 +803,13 @@ async function initUI() {
     };
     const _saveCb = () => { saveSettings(); applyChatBubbleSettings(); };
     const _saveCbRerender = () => { _saveCb(); revertAllChatBubbles(); applyAllChatBubbles(); };
+    // Debounced rerender for sliders — update CSS vars instantly, rerender once after dragging stops
+    let _rerenderTimer = null;
+    const _saveCbRerenderDebounced = () => {
+        _saveCb();
+        clearTimeout(_rerenderTimer);
+        _rerenderTimer = setTimeout(() => { revertAllChatBubbles(); applyAllChatBubbles(); }, 300);
+    };
 
     // Bubble mode selector
     $('#rpg-cb-bubble-mode').on('change', function() {
@@ -836,13 +843,13 @@ async function initUI() {
         const v = parseInt($(this).val());
         _cbSettings().fontSize = v;
         $('#rpg-cb-font-size-value').text(v + '%');
-        _saveCbRerender();
+        _saveCbRerenderDebounced();
     });
     $('#rpg-cb-avatar-size').on('input', function() {
         const v = parseInt($(this).val());
         _cbSettings().avatarSize = v;
         $('#rpg-cb-avatar-size-value').text(v + 'px');
-        _saveCbRerender();
+        _saveCbRerenderDebounced();
     });
     $('#rpg-cb-border-radius').on('input', function() {
         const v = parseInt($(this).val());
