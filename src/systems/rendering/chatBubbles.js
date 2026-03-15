@@ -599,6 +599,9 @@ export function applyChatBubbles(messageElement, style) {
  * Injects speaker avatar elements directly into the .mes container,
  * positioned absolutely so they appear in ST's avatar column (left gutter).
  * Each avatar aligns vertically with its corresponding bubble inside .mes_text.
+ *
+ * Size is controlled by the --cb-avatar-size / --cb-avatar-height CSS variables
+ * (set by applyChatBubbleSettings). This function only sets position (top/left).
  */
 function _injectBubbleAvatars(mesElement) {
     // Remove any previously injected avatars
@@ -608,19 +611,16 @@ function _injectBubbleAvatars(mesElement) {
     // for both the bubbles inside .mes_text and our absolutely-positioned avatars.
     mesElement.style.position = 'relative';
 
-    // Read ST's .mes_avatar to match its horizontal position and size.
-    // Use getBoundingClientRect for horizontal only (not affected by scroll).
+    // Read ST's .mes_avatar for horizontal alignment only.
     const stAvatar = mesElement.querySelector('.mes_avatar img') || mesElement.querySelector('.mes_avatar');
     const mesRect = mesElement.getBoundingClientRect();
     let avatarLeft = 0;
-    let avatarWidth = 60;
     if (stAvatar) {
         const stRect = stAvatar.getBoundingClientRect();
         avatarLeft = stRect.left - mesRect.left;
-        avatarWidth = stRect.width || 60;
     }
 
-    const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character');
+    const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character[data-speaker]:not([data-speaker=""])');
     bubbles.forEach(bubble => {
         const speakerName = bubble.getAttribute('data-speaker');
         if (!speakerName) return;
@@ -628,9 +628,7 @@ function _injectBubbleAvatars(mesElement) {
         const portraitSrc = resolvePortrait(speakerName);
         const emoji = extensionSettings.knownCharacters?.[speakerName]?.emoji || '\u{1F464}';
 
-        // Since .mes is position:relative, it is the offsetParent for both the bubble
-        // and our avatar. bubble.offsetTop gives the exact distance from .mes top edge
-        // to the bubble — no helper functions or chain-walking needed.
+        // bubble.offsetTop gives position relative to .mes (our offsetParent).
         const topOffset = bubble.offsetTop;
 
         const avatarEl = document.createElement('div');
@@ -638,8 +636,8 @@ function _injectBubbleAvatars(mesElement) {
         avatarEl.style.position = 'absolute';
         avatarEl.style.top = topOffset + 'px';
         avatarEl.style.left = (avatarLeft + 7) + 'px';
-        avatarEl.style.width = avatarWidth + 'px';
-        avatarEl.style.height = Math.round(avatarWidth * 1.4) + 'px';
+        // Width and height are controlled by CSS variables --cb-avatar-size and
+        // --cb-avatar-height (no inline overrides).
 
         if (portraitSrc) {
             avatarEl.innerHTML = `<img src="${escapeHtml(portraitSrc)}" alt="${escapeHtml(speakerName)}"

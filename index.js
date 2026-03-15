@@ -836,13 +836,13 @@ async function initUI() {
         const v = parseInt($(this).val());
         _cbSettings().fontSize = v;
         $('#rpg-cb-font-size-value').text(v + '%');
-        _saveCb();
+        _saveCbRerender();
     });
     $('#rpg-cb-avatar-size').on('input', function() {
         const v = parseInt($(this).val());
         _cbSettings().avatarSize = v;
         $('#rpg-cb-avatar-size-value').text(v + 'px');
-        _saveCb();
+        _saveCbRerender();
     });
     $('#rpg-cb-border-radius').on('input', function() {
         const v = parseInt($(this).val());
@@ -872,6 +872,7 @@ async function initUI() {
             showAvatars: true,
             showAuthorNames: true,
             showNarratorLabel: true,
+            narratorItalic: true,
         };
         // Update all inputs to defaults
         loadChatBubbleSettingsUI();
