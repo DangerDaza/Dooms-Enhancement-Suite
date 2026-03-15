@@ -585,17 +585,13 @@ export function applyChatBubbles(messageElement, style) {
 
     mesText.innerHTML = bubblesHtml + thoughtsHtml;
 
-    // Inject speaker avatars into the .mes element so they sit in ST's avatar column.
-    // Toggle .dooms-no-avatars so CSS can remove the left padding when avatars are off.
+    // Inject speaker avatars into the .mes element so they sit in ST's avatar column
     const cbs = extensionSettings.chatBubbleSettings || {};
     if (cbs.showAvatars !== false) {
-        mesText.classList.remove('dooms-no-avatars');
         _injectBubbleAvatars(messageElement);
         // Re-position avatars when collapsible sections (e.g., thinking/reasoning)
         // are toggled, since expanding/collapsing shifts all content below.
         _observeHeightChanges(messageElement);
-    } else {
-        mesText.classList.add('dooms-no-avatars');
     }
 }
 
@@ -615,13 +611,21 @@ function _injectBubbleAvatars(mesElement) {
     // for both the bubbles inside .mes_text and our absolutely-positioned avatars.
     mesElement.style.position = 'relative';
 
-    // Read ST's .mes_avatar for horizontal alignment only.
-    const stAvatar = mesElement.querySelector('.mes_avatar img') || mesElement.querySelector('.mes_avatar');
+    // Position avatars so their right edge sits at the .mes_text left boundary
+    // (with a small overlap). This keeps the avatar flush against the text area
+    // regardless of avatar size.
     const mesRect = mesElement.getBoundingClientRect();
+    const mesText = mesElement.querySelector('.mes_text');
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    const avatarSize = cbs.avatarSize ?? 40;
     let avatarLeft = 0;
-    if (stAvatar) {
-        const stRect = stAvatar.getBoundingClientRect();
-        avatarLeft = stRect.left - mesRect.left;
+    if (mesText) {
+        const textRect = mesText.getBoundingClientRect();
+        const mesTextLeft = textRect.left - mesRect.left;
+        // Place avatar so right edge is 6px into .mes_text (slight overlap for visual effect)
+        avatarLeft = mesTextLeft - avatarSize + 6;
+        // Don't go negative (very small gutter case)
+        if (avatarLeft < 0) avatarLeft = 0;
     }
 
     const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character[data-speaker]:not([data-speaker=""])');
@@ -639,7 +643,7 @@ function _injectBubbleAvatars(mesElement) {
         avatarEl.className = 'dooms-gutter-avatar';
         avatarEl.style.position = 'absolute';
         avatarEl.style.top = topOffset + 'px';
-        avatarEl.style.left = (avatarLeft + 7) + 'px';
+        avatarEl.style.left = avatarLeft + 'px';
         // Width and height are controlled by CSS variables --cb-avatar-size and
         // --cb-avatar-height (no inline overrides).
 
