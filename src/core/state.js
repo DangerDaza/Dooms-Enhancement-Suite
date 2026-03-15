@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 10, // Version number for settings migrations (v10 = add Doom Counter defaults)
+    settingsVersion: 13, // Version number for settings migrations (v12-v13 add expression sync settings)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -305,6 +305,8 @@ export let extensionSettings = {
     },
     // Portrait auto-import: match NPC names to SillyTavern character card avatars
     portraitAutoImport: true,
+    syncExpressionsToPresentCharacters: false, // Mirror ST Character Expressions into Present Characters portraits
+    hideDefaultExpressionDisplay: false, // Hide SillyTavern's built-in expression displays
     // Auto avatar generation settings
     autoGenerateAvatars: false, // Master toggle for auto-generating avatars
     avatarLLMCustomInstruction: '', // Custom instruction for LLM prompt generation
@@ -403,6 +405,29 @@ export function getSessionAvatarPrompt(characterName) {
 }
 export function clearSessionAvatarPrompts() {
     sessionAvatarPrompts = {};
+}
+
+/**
+ * Session-only storage for Character Expressions portrait sync
+ * Maps character names to their last captured expression image URL
+ */
+export let syncedExpressionPortraits = {};
+export function setSyncedExpressionPortrait(characterName, src) {
+    if (!characterName || !src) return;
+    syncedExpressionPortraits[characterName] = src;
+}
+export function removeSyncedExpressionPortrait(characterName) {
+    if (!characterName) return;
+    delete syncedExpressionPortraits[characterName];
+}
+export function setSyncedExpressionPortraits(portraits) {
+    syncedExpressionPortraits = portraits && typeof portraits === 'object' ? { ...portraits } : {};
+}
+export function getSyncedExpressionPortrait(characterName) {
+    return syncedExpressionPortraits[characterName] || null;
+}
+export function clearSyncedExpressionPortraits() {
+    syncedExpressionPortraits = {};
 }
 /**
  * Tracks whether the last action was a swipe (for separate mode)

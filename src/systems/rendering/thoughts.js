@@ -14,7 +14,7 @@ import {
     addDebugLog
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
-import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 /**
  * Tracks which character cards are currently flipped (showing the back face).
@@ -528,6 +528,7 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                         debugLog('[RPG Thoughts] Found avatar from current character');
                     }
                 }
+                characterPortrait = getExpressionAwarePortrait(char.name, characterPortrait) || characterPortrait;
                 debugLog(`[RPG Thoughts] Final avatar for ${char.name}:`, characterPortrait.substring(0, 50) + '...');
                 // Get relationship badge - only if relationships are enabled in config
                 let relationshipBadge = '⚖️'; // Default

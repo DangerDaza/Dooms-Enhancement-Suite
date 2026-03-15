@@ -36,6 +36,8 @@ export const defaultSettings = {
     showQuests: true,
     showLockIcons: false, // Disabled — lock UI not yet wired into scene tracker
     showThoughtsInChat: true,
+    syncExpressionsToPresentCharacters: false,
+    hideDefaultExpressionDisplay: false,
     enableHtmlPrompt: false,
     skipInjectionsForGuided: 'none',
     saveTrackerHistory: false,
