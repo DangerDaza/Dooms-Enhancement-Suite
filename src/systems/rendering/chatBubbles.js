@@ -592,6 +592,9 @@ export function applyChatBubbles(messageElement, style) {
         // Re-position avatars when collapsible sections (e.g., thinking/reasoning)
         // are toggled, since expanding/collapsing shifts all content below.
         _observeHeightChanges(messageElement);
+    } else {
+        // Clear any extra padding when avatars are off
+        mesText.style.paddingLeft = '';
     }
 }
 
@@ -611,21 +614,34 @@ function _injectBubbleAvatars(mesElement) {
     // for both the bubbles inside .mes_text and our absolutely-positioned avatars.
     mesElement.style.position = 'relative';
 
-    // Position avatars so their right edge sits at the .mes_text left boundary
-    // (with a small overlap). This keeps the avatar flush against the text area
-    // regardless of avatar size.
+    // Position avatars so their right edge is always ~19px (≈5mm) to the left
+    // of the chat bubble edge, regardless of avatar size.
+    // If the avatar is wider than the gutter, we add left padding to .mes_text
+    // so the bubbles shift right to make room.
     const mesRect = mesElement.getBoundingClientRect();
     const mesText = mesElement.querySelector('.mes_text');
     const cbs = extensionSettings.chatBubbleSettings || {};
     const avatarSize = cbs.avatarSize ?? 40;
-    let avatarLeft = 0;
+    const gap = 19; // ~5mm gap between avatar right edge and bubble left edge
+
+    let avatarLeft = 4; // small left margin
+    let extraPadding = 0;
+
     if (mesText) {
         const textRect = mesText.getBoundingClientRect();
-        const mesTextLeft = textRect.left - mesRect.left;
-        // Place avatar so right edge is 6px into .mes_text (slight overlap for visual effect)
-        avatarLeft = mesTextLeft - avatarSize + 6;
-        // Don't go negative (very small gutter case)
+        const gutterWidth = textRect.left - mesRect.left;
+        // Space needed: avatar + gap. If that exceeds the gutter, push text right.
+        const spaceNeeded = avatarSize + gap;
+        if (spaceNeeded > gutterWidth) {
+            extraPadding = spaceNeeded - gutterWidth;
+        }
+        // Avatar left: position so right edge = mesText left + extraPadding - gap
+        // i.e. avatar sits in the gutter, right edge is `gap` px before the (shifted) text
+        avatarLeft = gutterWidth - avatarSize - gap + extraPadding;
         if (avatarLeft < 0) avatarLeft = 0;
+
+        // Apply the extra padding to .mes_text to push bubbles right
+        mesText.style.paddingLeft = extraPadding > 0 ? extraPadding + 'px' : '';
     }
 
     const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character[data-speaker]:not([data-speaker=""])');

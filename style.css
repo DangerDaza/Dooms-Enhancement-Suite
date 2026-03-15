@@ -14443,8 +14443,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* ── Reset: undo default .mes_text padding when bubbles active ── */
+/* padding-left is set dynamically by JS (_injectBubbleAvatars) to accommodate avatar size */
 .mes_text:has(.dooms-bubbles) {
-    padding-left: 0 !important;
     padding-right: 0 !important;
 }
 
