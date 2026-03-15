@@ -585,13 +585,17 @@ export function applyChatBubbles(messageElement, style) {
 
     mesText.innerHTML = bubblesHtml + thoughtsHtml;
 
-    // Inject speaker avatars into the .mes element so they sit in ST's avatar column
+    // Inject speaker avatars into the .mes element so they sit in ST's avatar column.
+    // Toggle .dooms-no-avatars so CSS can remove the left padding when avatars are off.
     const cbs = extensionSettings.chatBubbleSettings || {};
     if (cbs.showAvatars !== false) {
+        mesText.classList.remove('dooms-no-avatars');
         _injectBubbleAvatars(messageElement);
         // Re-position avatars when collapsible sections (e.g., thinking/reasoning)
         // are toggled, since expanding/collapsing shifts all content below.
         _observeHeightChanges(messageElement);
+    } else {
+        mesText.classList.add('dooms-no-avatars');
     }
 }
 
