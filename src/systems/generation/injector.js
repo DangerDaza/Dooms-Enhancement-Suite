@@ -9,7 +9,8 @@ import {
     committedTrackerData,
     lastGeneratedData,
     isGenerating,
-    lastActionWasSwipe
+    lastActionWasSwipe,
+    setIsAwaitingNewMessage
 } from '../../core/state.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
@@ -707,6 +708,10 @@ export async function onGenerationStarted(type, data, dryRun) {
     // BUT: Only do this for the MAIN generation, not the tracker update generation
     // If isGenerating is true, this is the tracker update generation (second call), so skip flag logic
     if ((extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') && !isGenerating) {
+        // Safety net: ensure the awaiting flag is set for the main generation.
+        // MESSAGE_SENT should have set this already, but some generation paths
+        // (slash commands, group chats, Continue) may not fire MESSAGE_SENT.
+        setIsAwaitingNewMessage(true);
         if (!lastActionWasSwipe) {
             // User sent a new message - commit lastGeneratedData before generation
             //      userStats: committedTrackerData.userStats ? 'exists' : 'null',

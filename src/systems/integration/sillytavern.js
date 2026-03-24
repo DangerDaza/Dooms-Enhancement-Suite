@@ -72,6 +72,11 @@ export function commitTrackerData() {
  */
 export function onMessageSent() {
     if (!extensionSettings.enabled) return;
+    // Set flag FIRST — before the placeholder check — so separate/external
+    // mode's auto-update in onMessageReceived always knows a generation was
+    // requested by the user.  The flag must be set regardless of whether the
+    // current chat tail is the user message or the "..." streaming placeholder.
+    setIsAwaitingNewMessage(true);
     // Check if this is a streaming placeholder message (content = "...")
     // When streaming is on, ST sends a "..." placeholder before generation starts
     const context = getContext();
@@ -80,9 +85,6 @@ export function onMessageSent() {
     if (lastMessage && lastMessage.mes === '...') {
         return;
     }
-    // Set flag to indicate we're expecting a new message from generation
-    // This allows auto-update to distinguish between new generations and loading chat history
-    setIsAwaitingNewMessage(true);
     // Note: FAB spinning is NOT shown for together mode since no extra API request is made
     // The RPG data comes embedded in the main response
     // FAB spinning is handled by apiClient.js for separate/external modes when updateRPGData() is called
