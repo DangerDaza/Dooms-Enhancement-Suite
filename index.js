@@ -1638,30 +1638,56 @@ jQuery(async () => {
                 // Prior versions set display_text to a font-stripped copy for TTS,
                 // but SillyTavern also uses display_text for RENDERING — causing
                 // dialogue colours to vanish on reload.
+                //
+                // Chunked into batches via requestAnimationFrame to avoid blocking
+                // the main thread on large chats (perf fix).
+                const CHUNK_SIZE = 50;
+                let cursor = 0;
                 const affectedIds = [];
-                for (let i = 0; i < chat.length; i++) {
-                    const msg = chat[i];
-                    if (!msg || msg.is_user || !msg.extra) continue;
-                    if (msg.extra.display_text !== undefined) {
-                        delete msg.extra.display_text;
-                        // Only need to re-render if the message actually has font tags
-                        if (msg.mes && /<font\s/i.test(msg.mes)) {
-                            affectedIds.push(i);
+
+                function processChunk() {
+                    const end = Math.min(cursor + CHUNK_SIZE, chat.length);
+                    for (let i = cursor; i < end; i++) {
+                        const msg = chat[i];
+                        if (!msg || msg.is_user || !msg.extra) continue;
+                        if (msg.extra.display_text !== undefined) {
+                            delete msg.extra.display_text;
+                            if (msg.mes && /<font\s/i.test(msg.mes)) {
+                                affectedIds.push(i);
+                            }
+                        }
+                    }
+                    cursor = end;
+                    if (cursor < chat.length) {
+                        requestAnimationFrame(processChunk);
+                    } else {
+                        // All messages scanned — re-render affected ones in chunks too
+                        if (affectedIds.length > 0) {
+                            console.log(`[Dooms Tracker] Re-rendering ${affectedIds.length} messages to restore dialogue colours`);
+                            let renderCursor = 0;
+                            function renderChunk() {
+                                const renderEnd = Math.min(renderCursor + CHUNK_SIZE, affectedIds.length);
+                                for (let j = renderCursor; j < renderEnd; j++) {
+                                    const id = affectedIds[j];
+                                    const msg = chat[id];
+                                    const mesEl = document.querySelector(`#chat .mes[mesid="${id}"] .mes_text`);
+                                    if (mesEl && msg) {
+                                        mesEl.innerHTML = messageFormatting(
+                                            msg.mes, msg.name, msg.is_system, msg.is_user, id, {}, false
+                                        );
+                                    }
+                                }
+                                renderCursor = renderEnd;
+                                if (renderCursor < affectedIds.length) {
+                                    requestAnimationFrame(renderChunk);
+                                }
+                            }
+                            requestAnimationFrame(renderChunk);
                         }
                     }
                 }
-                // Re-render affected messages so the DOM reflects msg.mes (with colours)
-                if (affectedIds.length > 0) {
-                    console.log(`[Dooms Tracker] Re-rendering ${affectedIds.length} messages to restore dialogue colours`);
-                    for (const id of affectedIds) {
-                        const msg = chat[id];
-                        const mesEl = document.querySelector(`#chat .mes[mesid="${id}"] .mes_text`);
-                        if (mesEl && msg) {
-                            mesEl.innerHTML = messageFormatting(
-                                msg.mes, msg.name, msg.is_system, msg.is_user, id, {}, false
-                            );
-                        }
-                    }
+                if (chat.length > 0) {
+                    requestAnimationFrame(processChunk);
                 }
                 // Auto-configure TTS regex to strip <font> tags at narration time.
                 // This keeps colours visible in the chat while giving TTS clean text.
@@ -1741,8 +1767,8 @@ jQuery(async () => {
                     // Delay to let SillyTavern finish rendering all messages
                     setTimeout(() => applyAllChatBubbles(), 150);
                 }
-                // Inject reasoning TTS buttons into all messages
-                setTimeout(() => injectReasoningTtsButtons(), 150);
+                // Inject reasoning TTS buttons into all messages (deferred to idle)
+                (window.requestIdleCallback || requestAnimationFrame)(() => injectReasoningTtsButtons());
                 // Scene tracker re-render is handled by onCharacterChanged via CHAT_CHANGED
             });
             // TTS Highlight: clear all highlights when switching chats

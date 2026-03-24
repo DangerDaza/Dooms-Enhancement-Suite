@@ -711,15 +711,78 @@ function revertSingleMessage(mesText) {
 }
 
 /**
+ * Shared IntersectionObserver for lazy chat-bubble application.
+ * Created once, reused across calls to applyAllChatBubbles().
+ * @type {IntersectionObserver|null}
+ */
+let _bubbleObserver = null;
+
+/**
+ * Disconnect and discard the current bubble observer (if any).
+ * Called when bubbles are reverted or on chat change before re-observing.
+ */
+function _teardownBubbleObserver() {
+    if (_bubbleObserver) {
+        _bubbleObserver.disconnect();
+        _bubbleObserver = null;
+    }
+}
+
+/**
  * Apply bubbles to ALL messages in the chat.
+ *
+ * Visible messages are processed immediately; off-screen messages are
+ * deferred via an IntersectionObserver so the main thread isn't blocked
+ * on large chats (perf fix).
  */
 export function applyAllChatBubbles() {
     const style = extensionSettings.chatBubbleMode;
     if (!style || style === 'off') return;
 
-    const messages = document.querySelectorAll('#chat .mes');
+    // Tear down any prior observer so we don't double-process
+    _teardownBubbleObserver();
+
+    const chatContainer = document.querySelector('#chat');
+    if (!chatContainer) return;
+
+    const messages = chatContainer.querySelectorAll('.mes');
+    if (messages.length === 0) return;
+
+    // Determine the visible viewport bounds once
+    const viewTop = 0;
+    const viewBottom = window.innerHeight;
+
+    const deferred = [];
+
     for (const msg of messages) {
-        applyChatBubbles(msg, style);
+        const rect = msg.getBoundingClientRect();
+        // Visible (with generous margin) — apply now
+        if (rect.bottom >= viewTop - 200 && rect.top <= viewBottom + 200) {
+            applyChatBubbles(msg, style);
+        } else {
+            deferred.push(msg);
+        }
+    }
+
+    // Lazy-apply to off-screen messages as they scroll into view
+    if (deferred.length > 0) {
+        _bubbleObserver = new IntersectionObserver((entries, obs) => {
+            const currentStyle = extensionSettings.chatBubbleMode;
+            if (!currentStyle || currentStyle === 'off') {
+                obs.disconnect();
+                return;
+            }
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    applyChatBubbles(entry.target, currentStyle);
+                    obs.unobserve(entry.target);
+                }
+            }
+        }, { rootMargin: '300px 0px' });
+
+        for (const msg of deferred) {
+            _bubbleObserver.observe(msg);
+        }
     }
 }
 
@@ -741,6 +804,8 @@ export function revertLastMessageBubbles() {
  * Revert ALL messages in the chat to original HTML.
  */
 export function revertAllChatBubbles() {
+    // Stop observing any pending off-screen messages
+    _teardownBubbleObserver();
     const processed = document.querySelectorAll('#chat .mes .mes_text[data-dooms-bubbles-applied]');
     for (const mesText of processed) {
         revertSingleMessage(mesText);
