@@ -145,6 +145,8 @@ import { triggerDoomCounter, updateDoomCounterUI, resetCounters } from './src/sy
 // System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
+// Character Sheet
+import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet } from './src/systems/ui/characterSheet.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -1459,6 +1461,7 @@ async function initUI() {
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
+    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
     try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch(e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
     try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch(e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
@@ -1834,6 +1837,21 @@ jQuery(async () => {
                 const renderedMessage = chat[messageId];
                 if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
+                    // Add fullsheet import button if message contains fullsheet data
+                    if (messageHasFullSheet(renderedMessage.mes) && messageElement) {
+                        const $extraBtns = $(messageElement).find('.mes_buttons .extraMesButtons');
+                        if ($extraBtns.length && !$extraBtns.find('.dooms-import-fullsheet-btn').length) {
+                            $extraBtns.prepend(`<div class="dooms-import-fullsheet-btn mes_button fa-solid fa-scroll" title="Import Character Sheet"></div>`);
+                        }
+                    }
+                }
+            });
+            // ── Fullsheet import button click handler ──
+            $(document).on('click', '.dooms-import-fullsheet-btn', function (e) {
+                e.stopPropagation();
+                const messageId = $(this).closest('.mes').attr('mesid');
+                if (messageId !== undefined) {
+                    importFullSheetFromMessage(parseInt(messageId));
                 }
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {

@@ -20,6 +20,7 @@ import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
+import { openCharacterSheet } from './characterSheet.js';
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -179,6 +180,10 @@ export function initPortraitBar() {
                 <i class="fa-solid fa-eraser"></i> Clear Dialogue Color
             </div>
             <div class="dooms-pb-ctx-divider"></div>
+            <div class="dooms-pb-ctx-item" data-action="character-sheet">
+                <i class="fa-solid fa-scroll"></i> Character Sheet
+            </div>
+            <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item dooms-pb-ctx-danger" data-action="remove-character">
                 <i class="fa-solid fa-user-xmark"></i> Remove Character
             </div>
@@ -320,6 +325,8 @@ export function initPortraitBar() {
             removeCharacter(characterName);
         } else if (action === 'clear-color') {
             clearCharacterColor(characterName);
+        } else if (action === 'character-sheet') {
+            openCharacterSheet(characterName);
         }
     });
 

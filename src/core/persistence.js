@@ -335,6 +335,7 @@ export function saveChatData() {
         committedTrackerData: committedTrackerData,
         syncedExpressionPortraits: syncedExpressionPortraits,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
+        characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
         timestamp: Date.now()
     };
     // Persist per-chat character tracking data when enabled
@@ -440,6 +441,7 @@ export function loadChatData() {
                 knownCharacters: {},
                 removedCharacters: [],
                 characterColors: {},
+                characterSheets: {},
                 timestamp: Date.now()
             };
             saveChatDebounced();
