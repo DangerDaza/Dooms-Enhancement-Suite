@@ -17270,3 +17270,67 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     padding: 24px 0;
 }
 
+/* ========================================
+   NOTIFICATION LOG VIEWER
+   ======================================== */
+
+.rpg-notification-log-entries {
+    font-size: 0.82em;
+    line-height: 1.6;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.rpg-notif-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.rpg-notif-badge {
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.rpg-notif-error .rpg-notif-badge {
+    background: rgba(233, 69, 96, 0.25);
+    color: #e94560;
+}
+
+.rpg-notif-warning .rpg-notif-badge {
+    background: rgba(240, 173, 78, 0.25);
+    color: #f0ad4e;
+}
+
+.rpg-notif-info .rpg-notif-badge {
+    background: rgba(91, 192, 222, 0.25);
+    color: #5bc0de;
+}
+
+.rpg-notif-success .rpg-notif-badge {
+    background: rgba(92, 184, 92, 0.25);
+    color: #5cb85c;
+}
+
+.rpg-notif-time {
+    color: #666;
+    font-size: 0.85em;
+    font-family: 'Consolas', 'Monaco', monospace;
+    flex-shrink: 0;
+}
+
+.rpg-notif-text {
+    color: #ccc;
+    word-break: break-word;
+}
+

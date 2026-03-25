@@ -142,8 +142,9 @@ import {
 } from './src/systems/integration/expressionSync.js';
 // Doom Counter
 import { triggerDoomCounter, updateDoomCounterUI, resetCounters } from './src/systems/generation/doomCounter.js';
-// System Log
+// System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
+import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -156,8 +157,9 @@ function updateDynamicLabels() {
  * Adds the extension settings to the Extensions tab.
  */
 async function addExtensionSettings() {
-    // Initialize system log capture early so it catches all init messages
+    // Initialize log captures early so they catch all init messages
     try { initSystemLog(); } catch(e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
+    try { initNotificationLog(); } catch(e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
     // Load the HTML template for the settings
     const settingsHtml = await renderExtensionTemplateAsync(extensionName, 'settings');

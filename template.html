@@ -1223,13 +1223,16 @@
                 </div>
             </div>
 
-            <!-- System Log button (below all accordion sections) -->
-            <div style="margin-top: 12px; padding: 0 8px;">
+            <!-- Log buttons (below all accordion sections) -->
+            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap;">
                 <button id="rpg-open-system-log" class="rpg-accordion-action-btn" type="button">
                     <i class="fa-solid fa-terminal"></i> System Log
                 </button>
-                <p class="rpg-note-text" style="margin-top:4px;">View extension system messages for troubleshooting.</p>
+                <button id="rpg-open-notification-log" class="rpg-accordion-action-btn" type="button">
+                    <i class="fa-solid fa-bell"></i> Notification Log
+                </button>
             </div>
+            <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for troubleshooting.</p>
 
         </div>
     </div>
@@ -1254,6 +1257,31 @@
                 <i class="fa-solid fa-copy"></i> Copy All
             </button>
             <button id="rpg-system-log-clear" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
+                <i class="fa-solid fa-trash"></i> Clear
+            </button>
+        </footer>
+    </div>
+</div>
+
+<!-- Notification Log Modal -->
+<div id="rpg-notification-log-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-notification-log-title" style="display: none;">
+    <div class="rpg-settings-popup-content" style="max-width: 720px;">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-notification-log-title">
+                <i class="fa-solid fa-bell" aria-hidden="true"></i>
+                <span>Notification Log</span>
+            </h3>
+            <button id="rpg-close-notification-log" class="rpg-popup-close" type="button">&times;</button>
+        </header>
+        <div class="rpg-settings-popup-body" style="padding: 0;">
+            <div class="rpg-notification-log-entries"></div>
+        </div>
+        <footer class="rpg-settings-popup-footer">
+            <button id="rpg-notification-log-copy" class="rpg-accordion-action-btn" type="button">
+                <i class="fa-solid fa-copy"></i> Copy All
+            </button>
+            <button id="rpg-notification-log-clear" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
                 <i class="fa-solid fa-trash"></i> Clear
             </button>
         </footer>
