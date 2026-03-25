@@ -36,6 +36,9 @@ Mirrors SillyTavern's active Character Expressions into the Present Characters p
 ### Character Sheets (Bunny Mo Integration)
 Right-click any character in the portrait bar and select **Character Sheet** to open a full popup with the character's art on the left and a detailed character sheet on the right. Compatible with Bunny Mo's `!fullsheet` and `!quicksheet` commands — run either in chat, click the import button on the resulting message, and the sheet auto-populates with collapsible sections. Sheet data persists per-chat. Enable via the **Bunny Mo Integration** toggle in settings.
 
+<img width="1258" height="1114" alt="image" src="https://github.com/user-attachments/assets/74b703ab-3e9c-444c-8e32-f06be79a33df" />
+
+
 ### Scene Tracker
 Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, weather, present characters, active quest, and recent events. Placed outside the message text so TTS won't read them. Multiple layout modes available:
 - **Grid** — 2-column layout
