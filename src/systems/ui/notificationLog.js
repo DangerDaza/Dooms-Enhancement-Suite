@@ -27,6 +27,12 @@ function formatTimestamp(date) {
 /**
  * Captures a toastr notification into the buffer.
  */
+function stringify(val) {
+    if (val == null) return '';
+    if (typeof val === 'string') return val;
+    try { return JSON.stringify(val, null, 2); } catch { return String(val); }
+}
+
 function capture(level, message, title) {
     try {
         const maxEntries = extensionSettings.systemLog?.maxEntries || 200;
@@ -34,8 +40,8 @@ function capture(level, message, title) {
         notifBuffer.push({
             timestamp: formatTimestamp(new Date()),
             level,
-            title: title || '',
-            message: message || '',
+            title: stringify(title),
+            message: stringify(message),
         });
 
         // Trim ring buffer
