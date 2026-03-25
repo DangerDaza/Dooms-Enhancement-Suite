@@ -359,14 +359,15 @@ function extractTimeString(infoBox) {
 function buildTransitionCard(style, location, time, locationChanged, timeChanged) {
     const locHTML = locationChanged ? `<div class="dooms-scene-transition-location">${location}</div>` : '';
     const timeHTML = timeChanged ? `<div class="dooms-scene-transition-time">${time}</div>` : '';
+    const styleVars = buildStyleVars();
 
     if (style === 'cinematic') {
-        return `<div class="dooms-scene-transition dooms-transition-cinematic">${locHTML}${timeHTML}</div>`;
+        return `<div class="dooms-scene-transition dooms-transition-cinematic" style="${styleVars}">${locHTML}${timeHTML}</div>`;
     } else if (style === 'minimal') {
-        return `<div class="dooms-scene-transition dooms-transition-minimal"><div class="dooms-transition-line"></div>${locHTML}${timeHTML}<div class="dooms-transition-line"></div></div>`;
+        return `<div class="dooms-scene-transition dooms-transition-minimal" style="${styleVars}"><div class="dooms-transition-line"></div>${locHTML}${timeHTML}<div class="dooms-transition-line"></div></div>`;
     } else {
         // hybrid (pill)
-        return `<div class="dooms-scene-transition dooms-transition-hybrid">${locHTML}${timeHTML}</div>`;
+        return `<div class="dooms-scene-transition dooms-transition-hybrid" style="${styleVars}">${locHTML}${timeHTML}</div>`;
     }
 }
 
