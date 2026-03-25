@@ -24,10 +24,7 @@ Once installed, enable the extension in **Extensions > Doom's Enhancement Suite*
 ## Features
 
 ### Present Characters Panel
-Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback). Supports per-chat character tracking — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
-
-### Portrait Bar
-A horizontal card shelf displaying character portraits between the chat and input area. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet. Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts.
+A horizontal card shelf displaying character portraits between the chat and input area. Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback). Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts. Supports per-chat character tracking — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
 <img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
 
 ### Character Expressions Sync
