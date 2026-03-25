@@ -12,6 +12,9 @@ import {
     updateExtensionSettings,
     setLastGeneratedData,
     setCommittedTrackerData,
+    syncedExpressionPortraits,
+    setSyncedExpressionPortraits,
+    clearSyncedExpressionPortraits,
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
@@ -269,6 +272,22 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 11;
                 settingsChanged = true;
             }
+            // Migration to version 12: Initialize Character Expressions portrait sync toggle
+            if (currentVersion < 12) {
+                if (extensionSettings.syncExpressionsToPresentCharacters === undefined) {
+                    extensionSettings.syncExpressionsToPresentCharacters = false;
+                }
+                extensionSettings.settingsVersion = 12;
+                settingsChanged = true;
+            }
+            // Migration to version 13: Initialize native expression display hide toggle
+            if (currentVersion < 13) {
+                if (extensionSettings.hideDefaultExpressionDisplay === undefined) {
+                    extensionSettings.hideDefaultExpressionDisplay = false;
+                }
+                extensionSettings.settingsVersion = 13;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {
@@ -314,6 +333,7 @@ export function saveChatData() {
         quests: extensionSettings.quests,
         lastGeneratedData: lastGeneratedData,
         committedTrackerData: committedTrackerData,
+        syncedExpressionPortraits: syncedExpressionPortraits,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
         timestamp: Date.now()
     };
@@ -424,6 +444,7 @@ export function loadChatData() {
             };
             saveChatDebounced();
         }
+        clearSyncedExpressionPortraits();
         return;
     }
     const savedData = chat_metadata.dooms_tracker;
@@ -444,6 +465,12 @@ export function loadChatData() {
     // Restore last generated data from saved metadata as initial fallback
     if (savedData.lastGeneratedData) {
         setLastGeneratedData({ ...savedData.lastGeneratedData });
+    }
+    // Restore synced expression portraits for this chat
+    if (savedData.syncedExpressionPortraits && typeof savedData.syncedExpressionPortraits === 'object') {
+        setSyncedExpressionPortraits(savedData.syncedExpressionPortraits);
+    } else {
+        clearSyncedExpressionPortraits();
     }
     // Restore Doom Counter state (per-chat counter data)
     // This is exported so doomCounter.js can access it on chat load
