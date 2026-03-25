@@ -310,13 +310,20 @@ export function saveChatData() {
     if (!chat_metadata) {
         return;
     }
-    chat_metadata.dooms_tracker = {
+    const trackerData = {
         quests: extensionSettings.quests,
         lastGeneratedData: lastGeneratedData,
         committedTrackerData: committedTrackerData,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
         timestamp: Date.now()
     };
+    // Persist per-chat character tracking data when enabled
+    if (extensionSettings.perChatCharacterTracking) {
+        trackerData.knownCharacters = chat_metadata.dooms_tracker?.knownCharacters || {};
+        trackerData.removedCharacters = chat_metadata.dooms_tracker?.removedCharacters || [];
+        trackerData.characterColors = chat_metadata.dooms_tracker?.characterColors || {};
+    }
+    chat_metadata.dooms_tracker = trackerData;
     // Use debounced save — the standard SillyTavern pattern.
     // Immediate saves (saveChatConditional) on every UI edit caused performance issues.
     saveChatDebounced();
@@ -384,7 +391,10 @@ export function loadChatData() {
     } catch (e) {
         console.warn('[Dooms Tracker] Swipe data migration skipped:', e.message);
     }
-    if (!chat_metadata || !chat_metadata.dooms_tracker) {
+    if (!chat_metadata) {
+        return;
+    }
+    if (!chat_metadata.dooms_tracker) {
         // Reset to defaults if no data exists
         updateExtensionSettings({
             quests: {
@@ -403,6 +413,17 @@ export function loadChatData() {
             infoBox: null,
             characterThoughts: null
         });
+        // Scaffold per-chat character tracking for new chats so accessors
+        // never fall through to global state when the toggle is on.
+        if (extensionSettings.perChatCharacterTracking) {
+            chat_metadata.dooms_tracker = {
+                knownCharacters: {},
+                removedCharacters: [],
+                characterColors: {},
+                timestamp: Date.now()
+            };
+            saveChatDebounced();
+        }
         return;
     }
     const savedData = chat_metadata.dooms_tracker;
@@ -479,7 +500,91 @@ export function loadChatData() {
     } catch (e) {
         console.warn('[Dooms Tracker] Per-message data sync skipped:', e.message);
     }
+
+    // Initialize per-chat character tracking data if enabled and not yet present
+    if (extensionSettings.perChatCharacterTracking && chat_metadata?.dooms_tracker) {
+        if (!chat_metadata.dooms_tracker.knownCharacters) {
+            chat_metadata.dooms_tracker.knownCharacters = {};
+        }
+        if (!chat_metadata.dooms_tracker.removedCharacters) {
+            chat_metadata.dooms_tracker.removedCharacters = [];
+        }
+        if (!chat_metadata.dooms_tracker.characterColors) {
+            chat_metadata.dooms_tracker.characterColors = {};
+        }
+    }
 }
+
+// ─────────────────────────────────────────────
+//  Per-chat character tracking accessors
+// ─────────────────────────────────────────────
+
+/**
+ * Returns the active knownCharacters object.
+ * When perChatCharacterTracking is ON, reads from chat_metadata; otherwise from extensionSettings.
+ * @returns {Object} knownCharacters map (name → { emoji })
+ */
+export function getActiveKnownCharacters() {
+    if (extensionSettings.perChatCharacterTracking && chat_metadata?.dooms_tracker) {
+        if (!chat_metadata.dooms_tracker.knownCharacters) {
+            chat_metadata.dooms_tracker.knownCharacters = {};
+        }
+        return chat_metadata.dooms_tracker.knownCharacters;
+    }
+    if (!extensionSettings.knownCharacters) {
+        extensionSettings.knownCharacters = {};
+    }
+    return extensionSettings.knownCharacters;
+}
+
+/**
+ * Returns the active removedCharacters array.
+ * When perChatCharacterTracking is ON, reads from chat_metadata; otherwise from extensionSettings.
+ * @returns {Array<string>} removedCharacters list
+ */
+export function getActiveRemovedCharacters() {
+    if (extensionSettings.perChatCharacterTracking && chat_metadata?.dooms_tracker) {
+        if (!chat_metadata.dooms_tracker.removedCharacters) {
+            chat_metadata.dooms_tracker.removedCharacters = [];
+        }
+        return chat_metadata.dooms_tracker.removedCharacters;
+    }
+    if (!extensionSettings.removedCharacters) {
+        extensionSettings.removedCharacters = [];
+    }
+    return extensionSettings.removedCharacters;
+}
+
+/**
+ * Returns the active characterColors object.
+ * When perChatCharacterTracking is ON, reads from chat_metadata; otherwise from extensionSettings.
+ * @returns {Object} characterColors map (name → hex color)
+ */
+export function getActiveCharacterColors() {
+    if (extensionSettings.perChatCharacterTracking && chat_metadata?.dooms_tracker) {
+        if (!chat_metadata.dooms_tracker.characterColors) {
+            chat_metadata.dooms_tracker.characterColors = {};
+        }
+        return chat_metadata.dooms_tracker.characterColors;
+    }
+    if (!extensionSettings.characterColors) {
+        extensionSettings.characterColors = {};
+    }
+    return extensionSettings.characterColors;
+}
+
+/**
+ * Persists a character roster change to the correct storage location.
+ * When perChatCharacterTracking is ON, saves to chat_metadata; otherwise to extensionSettings.
+ */
+export function saveCharacterRosterChange() {
+    if (extensionSettings.perChatCharacterTracking) {
+        saveChatData();
+    } else {
+        saveSettings();
+    }
+}
+
 /**
  * Gets the current Doom Counter state from chat metadata.
  * @returns {Object} The doom counter state, or defaults if not present
