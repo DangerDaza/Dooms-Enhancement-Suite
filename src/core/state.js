@@ -363,6 +363,7 @@ export let extensionSettings = {
         // Advanced twist generation settings
         twistContextMessages: 15,              // Number of recent chat messages included in twist prompt (1-30)
         twistMessageTruncation: 1200,          // Max characters per message in twist prompt (200-3000)
+        twistInjectionDepth: 0,                // Insertion depth for the twist prompt (0 = bottom of context, higher = further back)
     },
     // Preset management for tracker configurations
     presetManager: {

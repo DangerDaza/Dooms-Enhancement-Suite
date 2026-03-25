@@ -824,6 +824,14 @@ async function initUI() {
         saveSettings();
     });
 
+    // ── Advanced: Twist Injection Depth ──
+    $('#rpg-dc-injection-depth').on('input', function () {
+        const v = parseInt($(this).val());
+        _dcSettings().twistInjectionDepth = v;
+        $('#rpg-dc-injection-depth-value').text(v);
+        saveSettings();
+    });
+
     $('#rpg-dc-debug-display').on('change', function () {
         const isDebug = $(this).prop('checked');
         _dcSettings().debugDisplay = isDebug;
@@ -1429,6 +1437,8 @@ async function initUI() {
     $('#rpg-dc-context-messages-value').text(dc.twistContextMessages || 15);
     $('#rpg-dc-msg-truncation').val(dc.twistMessageTruncation || 1200);
     $('#rpg-dc-msg-truncation-value').text(dc.twistMessageTruncation || 1200);
+    $('#rpg-dc-injection-depth').val(dc.twistInjectionDepth || 0);
+    $('#rpg-dc-injection-depth-value').text(dc.twistInjectionDepth || 0);
     $('#rpg-dc-debug-display').prop('checked', dc.debugDisplay || false);
     updateDoomCounterUI();
     // Initialize Doom Counter toast button listener

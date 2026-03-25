@@ -970,6 +970,16 @@
                                     <span id="rpg-dc-msg-truncation-value" class="rpg-slider-value">1200</span>
                                 </div>
                             </div>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Twist Injection Depth</span>
+                                    <span class="rpg-setting-hint">Where the chosen twist is inserted into the prompt context. 0 = at the very bottom (closest to the AI's next response). Higher values push it further back in the conversation history. Increase if the AI ignores the twist or treats it as old context.</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-dc-injection-depth" class="rpg-range-slider" min="0" max="10" value="0" />
+                                    <span id="rpg-dc-injection-depth-value" class="rpg-slider-value">0</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="rpg-subsection-label">Debug</div>
