@@ -179,6 +179,8 @@ export function resetCounters() {
     state.triggered = false;
     state.pendingTwist = null;
     setDoomCounterState(state);
+    // Remove any twist banners from the chat DOM
+    $('.dooms-dc-inline').remove();
 }
 
 // ─── Twist Generation ─────────────────────────────────────────────────────────
