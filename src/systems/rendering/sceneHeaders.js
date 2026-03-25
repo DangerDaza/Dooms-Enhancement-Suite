@@ -12,7 +12,7 @@
  *   - "ticker"   — collapsible bar pinned to top of chat
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
-import { getDoomCounterState } from '../../core/persistence.js';
+import { getDoomCounterState, getActiveCharacterColors } from '../../core/persistence.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
 let _lastSceneDataJSON = null;
@@ -178,7 +178,7 @@ export function resetSceneHeaderCache() {
 // ─────────────────────────────────────────────
 
 function getCharacterColor(name) {
-    return extensionSettings.characterColors?.[name] || null;
+    return getActiveCharacterColors()[name] || null;
 }
 
 /**

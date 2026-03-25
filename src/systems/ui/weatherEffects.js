@@ -215,7 +215,7 @@ function getCurrentWeather() {
 
     // Try to parse as JSON first (new format)
     try {
-        const parsed = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+        const parsed = typeof infoBoxData === 'string' ? repairJSON(infoBoxData) : infoBoxData;
         if (parsed && parsed.weather) {
             // Return the forecast text from the weather object
             return parsed.weather.forecast || parsed.weather.emoji || null;

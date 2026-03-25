@@ -12,6 +12,7 @@ import {
     lastActionWasSwipe,
     setIsAwaitingNewMessage
 } from '../../core/state.js';
+import { getActiveCharacterColors } from '../../core/persistence.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
 import { getPendingTwist, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
@@ -159,7 +160,7 @@ export function clearBoostForAppearedFields() {
  * Returns an empty string if no colors are configured.
  */
 function buildColorAssignments() {
-    const colors = extensionSettings.characterColors;
+    const colors = getActiveCharacterColors();
     if (!colors || typeof colors !== 'object') return '';
     const entries = Object.entries(colors).filter(([, color]) => color);
     if (entries.length === 0) return '';

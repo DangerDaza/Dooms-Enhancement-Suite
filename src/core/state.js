@@ -230,6 +230,7 @@ export let extensionSettings = {
     knownCharacters: {}, // Persistent roster of all characters ever seen (key: name, value: { emoji })
     removedCharacters: [], // Blacklist of character names explicitly removed by the user
     characterColors: {}, // Per-character dialogue colors (key: character name, value: hex color string e.g. "#C71585")
+    perChatCharacterTracking: false, // When true, knownCharacters/removedCharacters/characterColors are per-chat instead of global
     portraitAlignment: 'left', // Portrait bar alignment: 'left' (inline) or 'center'
     portraitPosition: 'above', // Portrait bar position: 'above', 'below', or 'top' (top of screen)
     portraitBarSettings: {

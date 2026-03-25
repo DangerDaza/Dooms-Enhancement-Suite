@@ -413,6 +413,12 @@ async function initUI() {
         saveSettings();
         onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
     });
+    $('#rpg-pb-per-chat-tracking').on('change', function() {
+        extensionSettings.perChatCharacterTracking = $(this).prop('checked');
+        saveSettings();
+        loadChatData();
+        updatePortraitBar();
+    });
 
     // Card size sliders
     $('#rpg-pb-card-width').on('input', function() {
@@ -1244,6 +1250,7 @@ async function initUI() {
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
     $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
+    $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');
     $('#rpg-pb-card-height').val(pb.cardHeight ?? 150);
