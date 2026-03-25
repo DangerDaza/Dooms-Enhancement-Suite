@@ -375,6 +375,9 @@ export let extensionSettings = {
         activePresetId: null,
         // Default preset ID (used when no character association exists)
         defaultPresetId: null
+    },
+    systemLog: {
+        maxEntries: 200,                       // Ring buffer size for captured console messages
     }
 };
 /**

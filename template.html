@@ -1223,7 +1223,40 @@
                 </div>
             </div>
 
+            <!-- System Log button (below all accordion sections) -->
+            <div style="margin-top: 12px; padding: 0 8px;">
+                <button id="rpg-open-system-log" class="rpg-accordion-action-btn" type="button">
+                    <i class="fa-solid fa-terminal"></i> System Log
+                </button>
+                <p class="rpg-note-text" style="margin-top:4px;">View extension system messages for troubleshooting.</p>
+            </div>
+
         </div>
+    </div>
+</div>
+
+<!-- System Log Modal -->
+<div id="rpg-system-log-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-system-log-title" style="display: none;">
+    <div class="rpg-settings-popup-content" style="max-width: 720px;">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-system-log-title">
+                <i class="fa-solid fa-terminal" aria-hidden="true"></i>
+                <span>System Log</span>
+            </h3>
+            <button id="rpg-close-system-log" class="rpg-popup-close" type="button">&times;</button>
+        </header>
+        <div class="rpg-settings-popup-body" style="padding: 0;">
+            <div class="rpg-system-log-entries"></div>
+        </div>
+        <footer class="rpg-settings-popup-footer">
+            <button id="rpg-system-log-copy" class="rpg-accordion-action-btn" type="button">
+                <i class="fa-solid fa-copy"></i> Copy All
+            </button>
+            <button id="rpg-system-log-clear" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
+                <i class="fa-solid fa-trash"></i> Clear
+            </button>
+        </footer>
     </div>
 </div>
 
