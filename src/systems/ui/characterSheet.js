@@ -6,7 +6,7 @@
  * Bunny Mo !fullsheet output.
  */
 import { extensionSettings } from '../../core/state.js';
-import { saveChatData } from '../../core/persistence.js';
+import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
 import { chat_metadata, chat } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
