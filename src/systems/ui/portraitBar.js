@@ -671,6 +671,63 @@ export function resolvePortrait(name) {
 }
 
 /**
+ * Returns a full-resolution portrait URL for a character.
+ * Same logic as resolvePortrait() but uses full-res avatar paths
+ * instead of thumbnails. Use this for character sheets and chat bubbles
+ * where image quality matters.
+ */
+export function resolveFullPortrait(name) {
+    if (!name) return null;
+
+    const syncedExpression = getExpressionAwarePortrait(name, null);
+    if (syncedExpression) return syncedExpression;
+
+    // 1. Custom uploaded avatars (already full-res data URIs)
+    const avatars = extensionSettings.npcAvatars;
+    if (avatars) {
+        if (avatars[name]) return avatars[name];
+        const lowerName = name.toLowerCase();
+        for (const key of Object.keys(avatars)) {
+            if (key.toLowerCase().startsWith(lowerName + ' ')) {
+                return avatars[key];
+            }
+        }
+    }
+
+    // 2. SillyTavern character card avatars — full resolution
+    if (extensionSettings.portraitAutoImport !== false) {
+        try {
+            const findFullRes = (charList) => {
+                const match = charList?.find(c => c?.name && namesMatch(c.name, name));
+                if (match?.avatar && match.avatar !== 'none') {
+                    return `/characters/${encodeURIComponent(match.avatar)}`;
+                }
+                return null;
+            };
+
+            if (selected_group) {
+                const groupMembers = getGroupMembers(selected_group);
+                const url = findFullRes(groupMembers);
+                if (url) return url;
+            }
+            if (characters?.length) {
+                const url = findFullRes(characters);
+                if (url) return url;
+            }
+            if (this_chid !== undefined && characters[this_chid]?.name &&
+                namesMatch(characters[this_chid].name, name)) {
+                return `/characters/${encodeURIComponent(characters[this_chid].avatar)}`;
+            }
+        } catch (e) {
+            console.warn('[Dooms Portrait Bar] Full-res avatar lookup failed:', e.message);
+        }
+    }
+
+    // 3. Fall back to regular resolve (file-based portraits, thumbnails)
+    return resolvePortrait(name);
+}
+
+/**
  * Returns a portrait file URL, probing asynchronously on first call.
  */
 function getPortraitFileUrl(name) {

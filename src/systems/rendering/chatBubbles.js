@@ -9,7 +9,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { getActiveCharacterColors, getActiveKnownCharacters } from '../../core/persistence.js';
-import { resolvePortrait, getCharacterList } from '../ui/portraitBar.js';
+import { resolvePortrait, resolveFullPortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 
@@ -391,7 +391,7 @@ function getAvatarHtml(speakerName, prefix) {
         return `<div class="${prefix}-avatar-letter">\u{1F4D6}</div>`;
     }
 
-    const portraitSrc = resolvePortrait(speakerName);
+    const portraitSrc = resolveFullPortrait(speakerName);
     const emoji = getActiveKnownCharacters()[speakerName]?.emoji || '\u{1F464}';
 
     if (portraitSrc) {
@@ -650,7 +650,7 @@ function _injectBubbleAvatars(mesElement) {
         const speakerName = bubble.getAttribute('data-speaker');
         if (!speakerName) return;
 
-        const portraitSrc = resolvePortrait(speakerName);
+        const portraitSrc = resolveFullPortrait(speakerName);
         const emoji = getActiveKnownCharacters()[speakerName]?.emoji || '\u{1F464}';
 
         // bubble.offsetTop gives position relative to .mes (our offsetParent).

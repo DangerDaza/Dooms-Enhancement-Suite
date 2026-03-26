@@ -7,7 +7,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveChatData } from '../../core/persistence.js';
-import { resolvePortrait } from './portraitBar.js';
+import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
 import { chat_metadata, chat } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 
@@ -422,7 +422,7 @@ export function openCharacterSheet(characterName) {
     if (!$modal.length) return;
 
     const sheetData = getCharacterSheet(characterName);
-    const portraitSrc = resolvePortrait(characterName);
+    const portraitSrc = resolveFullPortrait(characterName);
 
     // Hero art
     const $art = $modal.find('.rpg-cs-hero-art');
