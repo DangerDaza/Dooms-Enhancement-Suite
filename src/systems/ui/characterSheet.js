@@ -129,7 +129,11 @@ function namesMatchLoose(a, b) {
 }
 
 /**
- * Mines per-message tracker data to compute stats for a character.
+ * Mines chat data to compute stats for a character.
+ * Uses two passes:
+ *   1. Basic pass over ALL messages — speaking frequency, name mentions, first/last seen
+ *      (works even for messages created before the tracker was installed)
+ *   2. Rich pass using tracker data — relationships, locations, thoughts, presence tracking
  * Returns a stats object or null if no data found.
  */
 export function computeCharacterStats(characterName) {
@@ -139,9 +143,35 @@ export function computeCharacterStats(characterName) {
     if (cached) return cached;
 
     const target = characterName.toLowerCase();
+
+    // ── Pass 1: Basic stats from raw chat (ALL messages) ──
     let totalAssistantMessages = 0;
-    let presentCount = 0;
     let speakingCount = 0;
+    let mentionCount = 0;
+    let firstSpoken = null;
+    let lastSpoken = null;
+
+    for (let i = 0; i < chat.length; i++) {
+        const message = chat[i];
+        if (!message || message.is_user || message.is_system) continue;
+        totalAssistantMessages++;
+
+        // Speaking: this character is the message author
+        if (message.name && namesMatchLoose(message.name, target)) {
+            speakingCount++;
+            if (firstSpoken === null) firstSpoken = i;
+            lastSpoken = i;
+        }
+
+        // Mentioned in message text (lightweight check)
+        if (message.mes && message.mes.toLowerCase().includes(target)) {
+            mentionCount++;
+        }
+    }
+
+    // ── Pass 2: Rich stats from tracker data (messages with dooms_tracker_swipes) ──
+    let trackerPresentCount = 0;
+    let trackerTotalMessages = 0;
     let firstSeen = null;
     let lastSeen = null;
     let longestAbsence = 0;
@@ -154,7 +184,6 @@ export function computeCharacterStats(characterName) {
     for (let i = 0; i < chat.length; i++) {
         const message = chat[i];
         if (!message || message.is_user || message.is_system) continue;
-        totalAssistantMessages++;
 
         // Get per-swipe tracker data
         const swipeId = message.swipe_id || 0;
@@ -163,6 +192,8 @@ export function computeCharacterStats(characterName) {
             swipeData = message.swipe_info[swipeId].extra.dooms_tracker_swipes[swipeId];
         }
         if (!swipeData) continue;
+
+        trackerTotalMessages++;
 
         // Parse characterThoughts
         let charData = swipeData.characterThoughts;
@@ -175,7 +206,7 @@ export function computeCharacterStats(characterName) {
         const charEntry = characters.find(c => namesMatchLoose(c.name, target));
 
         if (charEntry && charEntry.present !== false) {
-            presentCount++;
+            trackerPresentCount++;
             if (firstSeen === null) firstSeen = i;
             lastSeen = i;
             if (currentAbsence > longestAbsence) longestAbsence = currentAbsence;
@@ -197,11 +228,6 @@ export function computeCharacterStats(characterName) {
             currentAbsence++;
         }
 
-        // Speaking check (is this character the message speaker?)
-        if (message.name && namesMatchLoose(message.name, target)) {
-            speakingCount++;
-        }
-
         // Location from infoBox
         let infoBox = swipeData.infoBox;
         if (typeof infoBox === 'string') {
@@ -219,10 +245,18 @@ export function computeCharacterStats(characterName) {
     // Finalize longest absence
     if (currentAbsence > longestAbsence) longestAbsence = currentAbsence;
 
-    if (totalAssistantMessages === 0 || presentCount === 0) {
+    // Need at least some data to show stats
+    if (totalAssistantMessages === 0 && trackerTotalMessages === 0) {
         statsCache.set(target, null);
         return null;
     }
+
+    // Use the best available presence data:
+    // - If tracker data exists, use it for presence (more accurate)
+    // - Fall back to speaking + mention counts for basic presence estimate
+    const hasTrackerData = trackerTotalMessages > 0;
+    const presentCount = hasTrackerData ? trackerPresentCount : speakingCount;
+    const presentBase = hasTrackerData ? trackerTotalMessages : totalAssistantMessages;
 
     // Sort locations by frequency
     const topLocations = Object.entries(locationCounts)
@@ -235,14 +269,18 @@ export function computeCharacterStats(characterName) {
 
     const stats = {
         totalMessages: totalAssistantMessages,
+        trackerMessages: trackerTotalMessages,
+        hasTrackerData,
         presentCount,
-        presentPercent: Math.round((presentCount / totalAssistantMessages) * 100),
+        presentPercent: presentBase > 0 ? Math.round((presentCount / presentBase) * 100) : 0,
         speakingCount,
-        speakingPercent: presentCount > 0 ? Math.round((speakingCount / presentCount) * 100) : 0,
-        silentCount: presentCount - speakingCount,
-        silentPercent: presentCount > 0 ? Math.round(((presentCount - speakingCount) / presentCount) * 100) : 0,
-        firstSeen,
-        lastSeen,
+        speakingPercent: totalAssistantMessages > 0 ? Math.round((speakingCount / totalAssistantMessages) * 100) : 0,
+        mentionCount,
+        mentionPercent: totalAssistantMessages > 0 ? Math.round((mentionCount / totalAssistantMessages) * 100) : 0,
+        silentCount: presentCount > speakingCount ? presentCount - speakingCount : 0,
+        silentPercent: presentCount > 0 ? Math.round((Math.max(0, presentCount - speakingCount) / presentCount) * 100) : 0,
+        firstSeen: firstSeen !== null ? firstSeen : firstSpoken,
+        lastSeen: lastSeen !== null ? lastSeen : lastSpoken,
         longestAbsence,
         relationshipChanges,
         topLocations,
@@ -270,19 +308,36 @@ function renderStatsPage(characterName, stats) {
 
     let html = '';
 
+    // Data coverage note
+    if (stats.hasTrackerData && stats.trackerMessages < stats.totalMessages) {
+        html += `<div class="rpg-cs-stat-note">
+            <i class="fa-solid fa-info-circle"></i>
+            Tracker data available for ${stats.trackerMessages} of ${stats.totalMessages} messages. Basic stats (speaking, mentions) cover all messages.
+        </div>`;
+    }
+
     // Presence section
     html += `<div class="rpg-cs-stat-section"><div class="rpg-cs-stat-section-title">Presence</div>`;
-    html += statBar('Screen Time', stats.presentPercent, `${stats.presentCount} / ${stats.totalMessages} messages`);
+    html += statBar('Speaking', stats.speakingPercent, `${stats.speakingCount} / ${stats.totalMessages} messages`);
+    html += statBar('Mentioned', stats.mentionPercent, `${stats.mentionCount} / ${stats.totalMessages} messages`);
+    if (stats.hasTrackerData) {
+        html += statBar('Scene Presence', stats.presentPercent, `${stats.presentCount} / ${stats.trackerMessages} tracked`);
+    }
     html += statRow('First Seen', stats.firstSeen !== null ? `Message #${stats.firstSeen + 1}` : '—');
     html += statRow('Last Seen', stats.lastSeen !== null ? `Message #${stats.lastSeen + 1}` : '—');
-    html += statRow('Longest Absence', stats.longestAbsence > 0 ? `${stats.longestAbsence} messages` : 'None');
+    if (stats.longestAbsence > 0) {
+        html += statRow('Longest Absence', `${stats.longestAbsence} messages`);
+    }
     html += `</div>`;
 
-    // Activity section
-    html += `<div class="rpg-cs-stat-section"><div class="rpg-cs-stat-section-title">Activity</div>`;
-    html += statBar('Speaking', stats.speakingPercent, `${stats.speakingCount} messages`);
-    html += statBar('Silent Presence', stats.silentPercent, `${stats.silentCount} messages`);
-    html += `</div>`;
+    // Activity section (only if tracker data exists for silent/speaking split)
+    if (stats.hasTrackerData && stats.presentCount > 0) {
+        html += `<div class="rpg-cs-stat-section"><div class="rpg-cs-stat-section-title">Activity (Tracked)</div>`;
+        const trackerSpeakPct = stats.presentCount > 0 ? Math.round((stats.speakingCount / stats.presentCount) * 100) : 0;
+        html += statBar('Speaking', trackerSpeakPct, `${stats.speakingCount} messages`);
+        html += statBar('Silent Presence', stats.silentPercent, `${stats.silentCount} messages`);
+        html += `</div>`;
+    }
 
     // Relationship timeline
     if (stats.relationshipChanges.length > 0) {

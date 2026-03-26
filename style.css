@@ -17600,6 +17600,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* ── Character Sheet Stats Page ── */
+.rpg-cs-stat-note {
+    font-size: 0.78em;
+    color: #666;
+    padding: 8px 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rpg-cs-stat-note i {
+    color: var(--rpg-accent, #e94560);
+    opacity: 0.6;
+}
+
 .rpg-cs-stat-section {
     margin-bottom: 20px;
     padding: 0 16px;
