@@ -135,55 +135,124 @@ function saveHeroPosition(characterName, x, y) {
     saveSettings();
 }
 
-function initHeroArtDrag($art, characterName) {
-    let isDragging = false;
+let _repositionActive = false;
+let _repositionCharName = null;
+
+function showHeroContextMenu(e, characterName) {
+    e.preventDefault();
+    // Remove any existing menu
+    $('.rpg-cs-hero-ctx').remove();
+
+    const $menu = $(`
+        <div class="rpg-cs-hero-ctx">
+            <div class="rpg-cs-hero-ctx-item" data-action="reposition">
+                <i class="fa-solid fa-arrows-up-down-left-right"></i> Reposition Image
+            </div>
+        </div>
+    `);
+
+    // Position near cursor
+    const $hero = $(e.currentTarget).closest('.rpg-cs-hero');
+    const heroRect = $hero[0].getBoundingClientRect();
+    $menu.css({
+        position: 'absolute',
+        top: (e.clientY - heroRect.top) + 'px',
+        left: (e.clientX - heroRect.left) + 'px',
+        zIndex: 1000
+    });
+
+    $hero.append($menu);
+
+    $menu.on('click', '[data-action="reposition"]', function () {
+        $menu.remove();
+        enterRepositionMode(characterName);
+    });
+
+    // Close on click outside
+    setTimeout(() => {
+        $(document).one('click.heroCtx', () => $menu.remove());
+    }, 10);
+}
+
+function enterRepositionMode(characterName) {
+    _repositionActive = true;
+    _repositionCharName = characterName;
+
+    const $art = $('.rpg-cs-hero-art');
+    const $hero = $art.closest('.rpg-cs-hero');
+    const pos = getHeroPosition(characterName);
+    let currentX = pos.x;
+    let currentY = pos.y;
     let startMouseX = 0, startMouseY = 0;
     let startPosX = 0, startPosY = 0;
+    let isDragging = false;
 
-    // Prevent default context menu on the hero art
-    $art.on('contextmenu.heroDrag', (e) => e.preventDefault());
+    $art.addClass('rpg-cs-hero-repositioning');
 
-    // Right-click drag to reposition
-    $art.on('mousedown.heroDrag', function (e) {
-        if (e.button !== 2) return; // Only right-click
+    // Add confirm/cancel bar
+    $hero.append(`
+        <div class="rpg-cs-hero-reposition-bar">
+            <span class="rpg-cs-reposition-hint">Drag to reposition</span>
+            <button class="rpg-cs-reposition-confirm" title="Confirm position"><i class="fa-solid fa-check"></i></button>
+            <button class="rpg-cs-reposition-cancel" title="Cancel"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    `);
+
+    // Drag to reposition
+    $art.on('mousedown.reposition', function (e) {
         e.preventDefault();
         isDragging = true;
         startMouseX = e.clientX;
         startMouseY = e.clientY;
-        const pos = getHeroPosition(characterName);
-        startPosX = pos.x;
-        startPosY = pos.y;
-        $art.addClass('rpg-cs-hero-dragging');
+        startPosX = currentX;
+        startPosY = currentY;
     });
 
-    $(document).on('mousemove.heroDrag', function (e) {
+    $(document).on('mousemove.reposition', function (e) {
         if (!isDragging) return;
         e.preventDefault();
-        // Convert pixel movement to percentage offset
-        // Negative because moving mouse right should shift image left (lower %)
         const artWidth = $art.width() || 320;
         const artHeight = $art.height() || 600;
         const dx = ((e.clientX - startMouseX) / artWidth) * -100;
         const dy = ((e.clientY - startMouseY) / artHeight) * -100;
-        const newX = Math.max(0, Math.min(100, startPosX + dx));
-        const newY = Math.max(0, Math.min(100, startPosY + dy));
-        $art.css('object-position', `${newX}% ${newY}%`);
+        currentX = Math.max(0, Math.min(100, startPosX + dx));
+        currentY = Math.max(0, Math.min(100, startPosY + dy));
+        $art.css('object-position', `${currentX}% ${currentY}%`);
     });
 
-    $(document).on('mouseup.heroDrag', function (e) {
-        if (!isDragging) return;
+    $(document).on('mouseup.reposition', function () {
         isDragging = false;
-        $art.removeClass('rpg-cs-hero-dragging');
-        // Parse final position from CSS and save
-        const pos = $art.css('object-position') || '50% 20%';
-        const parts = pos.split(/\s+/).map(p => parseFloat(p));
-        saveHeroPosition(characterName, parts[0] || 50, parts[1] || 20);
+    });
+
+    // Confirm
+    $hero.on('click.reposition', '.rpg-cs-reposition-confirm', function () {
+        saveHeroPosition(characterName, currentX, currentY);
+        exitRepositionMode();
+        toastr.success('Image position saved.', '', { timeOut: 1500 });
+    });
+
+    // Cancel
+    $hero.on('click.reposition', '.rpg-cs-reposition-cancel', function () {
+        // Restore original position
+        $art.css('object-position', `${pos.x}% ${pos.y}%`);
+        exitRepositionMode();
     });
 }
 
+function exitRepositionMode() {
+    _repositionActive = false;
+    _repositionCharName = null;
+    const $art = $('.rpg-cs-hero-art');
+    $art.removeClass('rpg-cs-hero-repositioning');
+    $art.off('.reposition');
+    $(document).off('.reposition');
+    $('.rpg-cs-hero').off('.reposition');
+    $('.rpg-cs-hero-reposition-bar').remove();
+}
+
 function cleanupHeroArtDrag() {
-    $('.rpg-cs-hero-art').off('.heroDrag');
-    $(document).off('.heroDrag');
+    if (_repositionActive) exitRepositionMode();
+    $('.rpg-cs-hero-ctx').remove();
 }
 
 // ─────────────────────────────────────────────
@@ -494,14 +563,17 @@ export function openCharacterSheet(characterName) {
     const portraitSrc = resolveFullPortrait(characterName);
 
     // Hero art
-    cleanupHeroArtDrag(); // Clean up any previous drag handlers
+    cleanupHeroArtDrag(); // Clean up any previous state
     const $art = $modal.find('.rpg-cs-hero-art');
     if (portraitSrc) {
         const pos = getHeroPosition(characterName);
         $art.attr('src', portraitSrc)
             .css('object-position', `${pos.x}% ${pos.y}%`)
             .show();
-        initHeroArtDrag($art, characterName);
+        // Right-click context menu on hero art
+        $art.off('contextmenu.heroCtx').on('contextmenu.heroCtx', (e) => {
+            if (!_repositionActive) showHeroContextMenu(e, characterName);
+        });
     } else {
         $art.hide();
     }

@@ -17453,16 +17453,96 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     height: 100%;
     object-fit: cover;
     object-position: 50% 20%;
-    cursor: default;
 }
 
-.rpg-cs-hero-art:active {
-    cursor: grabbing;
+/* ── Hero art reposition mode ── */
+.rpg-cs-hero-repositioning {
+    cursor: grab !important;
+    outline: 2px dashed rgba(233, 69, 96, 0.5);
+    outline-offset: -2px;
 }
 
-.rpg-cs-hero-dragging {
+.rpg-cs-hero-repositioning:active {
     cursor: grabbing !important;
-    user-select: none;
+}
+
+.rpg-cs-hero-reposition-bar {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    border-radius: 8px;
+    z-index: 10;
+}
+
+.rpg-cs-reposition-hint {
+    font-size: 0.75em;
+    color: #999;
+    margin-right: 4px;
+}
+
+.rpg-cs-reposition-confirm,
+.rpg-cs-reposition-cancel {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+.rpg-cs-reposition-confirm {
+    background: rgba(92, 184, 92, 0.3);
+    color: #5cb85c;
+}
+
+.rpg-cs-reposition-confirm:hover {
+    background: rgba(92, 184, 92, 0.5);
+}
+
+.rpg-cs-reposition-cancel {
+    background: rgba(233, 69, 96, 0.3);
+    color: #e94560;
+}
+
+.rpg-cs-reposition-cancel:hover {
+    background: rgba(233, 69, 96, 0.5);
+}
+
+/* ── Hero art context menu ── */
+.rpg-cs-hero-ctx {
+    background: rgba(20, 20, 40, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.rpg-cs-hero-ctx-item {
+    padding: 8px 14px;
+    font-size: 0.85em;
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.1s;
+}
+
+.rpg-cs-hero-ctx-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
 }
 
 .rpg-cs-hero-gradient {
