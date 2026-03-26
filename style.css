@@ -16853,6 +16853,24 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
+/* Trap mode badge on messages */
+.dooms-dc-trap-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    margin-top: 8px;
+    font-size: 0.72em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+    border: 1px solid rgba(233, 69, 96, 0.2);
+    border-radius: 4px;
+    cursor: help;
+    animation: dooms-fadein 0.35s ease both;
+}
+
 /* Header row (skull icon + text) */
 .dooms-dc-inline-header {
     display: flex;

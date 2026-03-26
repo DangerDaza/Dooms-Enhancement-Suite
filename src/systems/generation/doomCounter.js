@@ -527,8 +527,23 @@ export function getPendingTwist() {
  * Clears the pending twist after it has been injected.
  * Called by injector.js after injection.
  */
+/** Flag set when a trap mode twist is being injected into the next generation */
+let _trapTwistPending = false;
+
+export function isTrapTwistPending() {
+    return _trapTwistPending;
+}
+
+export function clearTrapTwistFlag() {
+    _trapTwistPending = false;
+}
+
 export function clearPendingTwist() {
     const state = getDoomCounterState();
+    // If this was a trap mode twist, set the flag so the next message shows a badge
+    if (state.pendingTwist && extensionSettings.doomCounter?.trapMode) {
+        _trapTwistPending = true;
+    }
     state.pendingTwist = null;
     setDoomCounterState(state);
 }

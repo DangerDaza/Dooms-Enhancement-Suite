@@ -141,7 +141,7 @@ import {
     onExpressionSyncChatChanged
 } from './src/systems/integration/expressionSync.js';
 // Doom Counter
-import { triggerDoomCounter, updateDoomCounterUI, resetCounters } from './src/systems/generation/doomCounter.js';
+import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag } from './src/systems/generation/doomCounter.js';
 // System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
@@ -1883,6 +1883,18 @@ jQuery(async () => {
                 }
                 // Update scene tracker (new data may be available after message render)
                 setTimeout(() => updateChatSceneHeaders(), 100);
+                // Show trap mode notification on the message that received the silent twist
+                if (isTrapTwistPending() && messageElement) {
+                    clearTrapTwistFlag();
+                    const $mes = $(messageElement);
+                    if (!$mes.find('.dooms-dc-trap-badge').length) {
+                        $mes.find('.mes_block').append(`
+                            <div class="dooms-dc-trap-badge" title="A hidden plot twist was woven into this response by the Doom Counter's Trap Mode">
+                                <i class="fa-solid fa-skull"></i> Trap triggered
+                            </div>
+                        `);
+                    }
+                }
                 const renderedMessage = chat[messageId];
                 if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
