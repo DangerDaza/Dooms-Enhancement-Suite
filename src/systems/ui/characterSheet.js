@@ -198,8 +198,14 @@ function enterRepositionMode(characterName) {
         </div>
     `);
 
-    // Drag to reposition
+    // Stop mousedown on the confirm/cancel bar from triggering drag
+    $hero.on('mousedown.reposition', '.rpg-cs-hero-reposition-bar, .rpg-cs-hero-reposition-bar *', function (e) {
+        e.stopPropagation();
+    });
+
+    // Drag to reposition (only on the image itself)
     $art.on('mousedown.reposition', function (e) {
+        if (e.button !== 0) return; // Left click only
         e.preventDefault();
         isDragging = true;
         startMouseX = e.clientX;
@@ -224,16 +230,17 @@ function enterRepositionMode(characterName) {
         isDragging = false;
     });
 
-    // Confirm
-    $hero.on('click.reposition', '.rpg-cs-reposition-confirm', function () {
+    // Confirm — use document delegation so clicks always reach the handler
+    $(document).on('click.reposition', '.rpg-cs-reposition-confirm', function (e) {
+        e.stopPropagation();
         saveHeroPosition(characterName, currentX, currentY);
         exitRepositionMode();
         toastr.success('Image position saved.', '', { timeOut: 1500 });
     });
 
     // Cancel
-    $hero.on('click.reposition', '.rpg-cs-reposition-cancel', function () {
-        // Restore original position
+    $(document).on('click.reposition', '.rpg-cs-reposition-cancel', function (e) {
+        e.stopPropagation();
         $art.css('object-position', `${pos.x}% ${pos.y}%`);
         exitRepositionMode();
     });
