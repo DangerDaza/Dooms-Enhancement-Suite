@@ -353,20 +353,6 @@ function renderStatsPage(characterName, stats) {
         html += `</div></div>`;
     }
 
-    // Top locations
-    if (stats.topLocations.length > 0) {
-        html += `<div class="rpg-cs-stat-section"><div class="rpg-cs-stat-section-title">Top Locations</div>`;
-        for (const loc of stats.topLocations) {
-            const pct = stats.maxLocationCount > 0 ? Math.round((loc.count / stats.maxLocationCount) * 100) : 0;
-            html += `<div class="rpg-cs-stat-row">
-                <span class="rpg-cs-stat-label">${loc.name}</span>
-                <div class="rpg-cs-stat-bar"><div class="rpg-cs-stat-bar-fill" style="width: ${pct}%"></div></div>
-                <span class="rpg-cs-stat-value">${loc.count}</span>
-            </div>`;
-        }
-        html += `</div>`;
-    }
-
     // Recent thoughts
     if (stats.lastThoughts.length > 0) {
         html += `<div class="rpg-cs-stat-section"><div class="rpg-cs-stat-section-title">Recent Thoughts</div>`;
