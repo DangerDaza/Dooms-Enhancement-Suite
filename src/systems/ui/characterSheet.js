@@ -118,6 +118,75 @@ export function saveCharacterSheet(name, data) {
 }
 
 // ─────────────────────────────────────────────
+//  Hero art positioning (right-click + drag to reposition)
+// ─────────────────────────────────────────────
+
+function getHeroPosition(characterName) {
+    if (!extensionSettings.heroPositions) extensionSettings.heroPositions = {};
+    return extensionSettings.heroPositions[characterName] || { x: 50, y: 20 };
+}
+
+function saveHeroPosition(characterName, x, y) {
+    if (!extensionSettings.heroPositions) extensionSettings.heroPositions = {};
+    extensionSettings.heroPositions[characterName] = {
+        x: Math.max(0, Math.min(100, x)),
+        y: Math.max(0, Math.min(100, y))
+    };
+    saveSettings();
+}
+
+function initHeroArtDrag($art, characterName) {
+    let isDragging = false;
+    let startMouseX = 0, startMouseY = 0;
+    let startPosX = 0, startPosY = 0;
+
+    // Prevent default context menu on the hero art
+    $art.on('contextmenu.heroDrag', (e) => e.preventDefault());
+
+    // Right-click drag to reposition
+    $art.on('mousedown.heroDrag', function (e) {
+        if (e.button !== 2) return; // Only right-click
+        e.preventDefault();
+        isDragging = true;
+        startMouseX = e.clientX;
+        startMouseY = e.clientY;
+        const pos = getHeroPosition(characterName);
+        startPosX = pos.x;
+        startPosY = pos.y;
+        $art.addClass('rpg-cs-hero-dragging');
+    });
+
+    $(document).on('mousemove.heroDrag', function (e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        // Convert pixel movement to percentage offset
+        // Negative because moving mouse right should shift image left (lower %)
+        const artWidth = $art.width() || 320;
+        const artHeight = $art.height() || 600;
+        const dx = ((e.clientX - startMouseX) / artWidth) * -100;
+        const dy = ((e.clientY - startMouseY) / artHeight) * -100;
+        const newX = Math.max(0, Math.min(100, startPosX + dx));
+        const newY = Math.max(0, Math.min(100, startPosY + dy));
+        $art.css('object-position', `${newX}% ${newY}%`);
+    });
+
+    $(document).on('mouseup.heroDrag', function (e) {
+        if (!isDragging) return;
+        isDragging = false;
+        $art.removeClass('rpg-cs-hero-dragging');
+        // Parse final position from CSS and save
+        const pos = $art.css('object-position') || '50% 20%';
+        const parts = pos.split(/\s+/).map(p => parseFloat(p));
+        saveHeroPosition(characterName, parts[0] || 50, parts[1] || 20);
+    });
+}
+
+function cleanupHeroArtDrag() {
+    $('.rpg-cs-hero-art').off('.heroDrag');
+    $(document).off('.heroDrag');
+}
+
+// ─────────────────────────────────────────────
 //  Stats computation
 // ─────────────────────────────────────────────
 
@@ -425,9 +494,14 @@ export function openCharacterSheet(characterName) {
     const portraitSrc = resolveFullPortrait(characterName);
 
     // Hero art
+    cleanupHeroArtDrag(); // Clean up any previous drag handlers
     const $art = $modal.find('.rpg-cs-hero-art');
     if (portraitSrc) {
-        $art.attr('src', portraitSrc).show();
+        const pos = getHeroPosition(characterName);
+        $art.attr('src', portraitSrc)
+            .css('object-position', `${pos.x}% ${pos.y}%`)
+            .show();
+        initHeroArtDrag($art, characterName);
     } else {
         $art.hide();
     }
@@ -485,6 +559,7 @@ export function openCharacterSheet(characterName) {
 }
 
 function closeCharacterSheet() {
+    cleanupHeroArtDrag();
     $('#rpg-character-sheet-popup').css('display', 'none');
 }
 

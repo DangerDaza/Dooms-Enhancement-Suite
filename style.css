@@ -17452,7 +17452,17 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: top center;
+    object-position: 50% 20%;
+    cursor: default;
+}
+
+.rpg-cs-hero-art:active {
+    cursor: grabbing;
+}
+
+.rpg-cs-hero-dragging {
+    cursor: grabbing !important;
+    user-select: none;
 }
 
 .rpg-cs-hero-gradient {
