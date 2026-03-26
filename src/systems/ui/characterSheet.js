@@ -458,6 +458,17 @@ function renderStatsPage(characterName, stats) {
 
     let html = '';
 
+    // Accuracy warning icon
+    html += `<div class="rpg-cs-stats-header">
+        <div class="rpg-cs-stats-info-btn" title="Click for info about stat accuracy">
+            <i class="fa-solid fa-exclamation-circle"></i>
+        </div>
+        <div class="rpg-cs-stats-info-popup" style="display: none;">
+            <p>If you have changed a character's dialogue color or renamed them at any point, the speaking and mention counts may not be fully accurate.</p>
+            <p>Stats based on tracker data (scene presence, relationships, thoughts) are not affected by color changes.</p>
+        </div>
+    </div>`;
+
     // Data coverage note
     if (stats.hasTrackerData && stats.trackerMessages < stats.totalMessages) {
         html += `<div class="rpg-cs-stat-note">
@@ -783,6 +794,11 @@ export function initCharacterSheet() {
                 $statsPanel.html(renderStatsPage(charName, stats));
             }
         }
+    });
+
+    // Stats info popup toggle
+    $(document).on('click', '.rpg-cs-stats-info-btn', function () {
+        $(this).siblings('.rpg-cs-stats-info-popup').slideToggle(150);
     });
 
     // Section collapse/expand

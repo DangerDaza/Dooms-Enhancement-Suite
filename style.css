@@ -17691,6 +17691,54 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 /* ── Character Sheet Stats Page ── */
+.rpg-cs-stats-header {
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 16px 0;
+}
+
+.rpg-cs-stats-info-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #666;
+    font-size: 0.95em;
+    transition: color 0.15s;
+}
+
+.rpg-cs-stats-info-btn:hover {
+    color: #e94560;
+}
+
+.rpg-cs-stats-info-popup {
+    position: absolute;
+    top: 36px;
+    right: 16px;
+    width: 280px;
+    padding: 12px 14px;
+    background: rgba(15, 15, 35, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(233, 69, 96, 0.2);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    font-size: 0.78em;
+    color: #aaa;
+    line-height: 1.5;
+}
+
+.rpg-cs-stats-info-popup p {
+    margin: 0 0 8px;
+}
+
+.rpg-cs-stats-info-popup p:last-child {
+    margin-bottom: 0;
+}
+
 .rpg-cs-stat-note {
     font-size: 0.78em;
     color: #666;
