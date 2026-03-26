@@ -1398,7 +1398,7 @@ function createTickerHTML(data) {
  */
 function buildDoomCounterBadge(doomTension) {
     const dc = extensionSettings.doomCounter;
-    if (!dc?.enabled || !dc?.debugDisplay) return '';
+    if (!dc?.enabled || !dc?.debugDisplay || dc?.trapMode) return '';
 
     const state = getDoomCounterState();
     const ceiling = dc.lowTensionCeiling || 4;
