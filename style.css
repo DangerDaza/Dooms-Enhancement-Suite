@@ -17876,6 +17876,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-style: italic;
 }
 
+/* ── Character Sheet mobile responsive ── */
+@media (max-width: 768px) {
+    .rpg-cs-hero {
+        display: none !important;
+    }
+    .rpg-cs-content {
+        max-width: 100%;
+        max-height: 95vh;
+    }
+    .rpg-cs-sections {
+        padding: 12px 14px;
+    }
+}
+
 /* Import fullsheet button on messages */
 .dooms-import-fullsheet-btn {
     cursor: pointer;
