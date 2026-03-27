@@ -24,7 +24,14 @@ Once installed, enable the extension in **Extensions > Doom's Enhancement Suite*
 ## Features
 
 ### Present Characters Panel
-A horizontal card shelf displaying character portraits between the chat and input area. Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields. Each character gets their own card with an avatar (custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback). Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out. Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen). Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts. Supports per-chat character tracking — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
+
+A horizontal card shelf displaying character portraits between the chat and input area. Tracks every character in the scene with their portrait, relationship to the player, internal thoughts, status, and up to 8 custom tracker fields.
+
+Each character gets their own card with an avatar — custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out.
+
+Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen).
+
+Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts. Per-chat character tracking is available — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
 <img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
 
 ### Character Expressions Sync
@@ -32,6 +39,9 @@ Mirrors SillyTavern's active Character Expressions into the Present Characters p
 
 ### Character Sheets (Bunny Mo Integration)
 Right-click any character in the portrait bar and select **Character Sheet** to open a full popup with the character's art on the left and a detailed character sheet on the right. Compatible with Bunny Mo's `!fullsheet` and `!quicksheet` commands — run either in chat, click the import button on the resulting message, and the sheet auto-populates with collapsible sections. Sheet data persists per-chat. Enable via the **Bunny Mo Integration** toggle in settings.
+
+<img width="1258" height="1114" alt="image" src="https://github.com/user-attachments/assets/74b703ab-3e9c-444c-8e32-f06be79a33df" />
+
 
 ### Scene Tracker
 Compact scene info blocks injected after assistant messages in chat. Displays time, date, location, weather, present characters, active quest, and recent events. Placed outside the message text so TTS won't read them. Multiple layout modes available:
@@ -120,9 +130,9 @@ Captures every SillyTavern toast notification (API errors, system messages, warn
 Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create your own with full color picker controls for background, accent, text, highlight, stat bars, and per-element opacity.
 
 ### Settings Panel
-<img width="1380" height="377" alt="image" src="https://github.com/user-attachments/assets/e27027e6-a4bb-42a4-8da4-e206a49a6427" />
+<img width="813" height="252" alt="image" src="https://github.com/user-attachments/assets/8449e4f8-edd6-49d2-b5a9-22311637adae" />
 
-<img width="1182" height="1474" alt="image" src="https://github.com/user-attachments/assets/5042424e-10a0-4644-af0b-ab0fc93b9fee" />
+<img width="601" height="792" alt="image" src="https://github.com/user-attachments/assets/faf752a6-df04-4b79-b94c-3bc1478c7037" />
 
 The settings panel (accessed via the **D** icon) is organized into sections:
 1. **Display & Features** — Toggle every feature on/off individually
