@@ -235,7 +235,7 @@ function buildGraphHTML() {
 
     // Book list with visibility toggles
     html += '<div class="rpg-lb-graph-section">';
-    html += '<label class="rpg-lb-graph-label">Lorebooks <button class="rpg-lb-graph-books-toggle-all" title="Toggle all">All</button></label>';
+    html += '<label class="rpg-lb-graph-label">Lore Libraries <button class="rpg-lb-graph-books-toggle-all" title="Toggle all">All</button></label>';
     html += '<div class="rpg-lb-graph-book-list">';
     const scopeBooks = getScopeBooks();
     // Initialize visibility for new books
@@ -483,6 +483,30 @@ function initNetwork(container, data) {
         }
     });
 
+    // Right-click context menu — attach directly to the canvas element
+    const canvasEl = container.querySelector('canvas');
+    if (canvasEl) {
+        canvasEl.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = container.getBoundingClientRect();
+            const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            const nodeId = network.getNodeAt(pointer);
+            const ctxMenu = document.getElementById('rpg-lb-graph-context-menu');
+            if (!ctxMenu) return;
+
+            if (!nodeId) {
+                ctxMenu.style.display = 'none';
+                return;
+            }
+
+            ctxMenu.style.left = e.clientX + 'px';
+            ctxMenu.style.top = e.clientY + 'px';
+            ctxMenu.style.display = 'block';
+            ctxMenu.dataset.nodeId = nodeId;
+        });
+    }
+
     return network;
 }
 
@@ -602,27 +626,6 @@ function setupGraphEvents() {
         if (indicator) indicator.style.display = 'none';
         await applyBookFilter();
     });
-
-    // Right-click context menu on nodes
-    if (network) {
-        network.on('oncontext', (params) => {
-            params.event.preventDefault();
-            const nodeId = network.getNodeAt(params.pointer.DOM);
-            const ctxMenu = document.getElementById('rpg-lb-graph-context-menu');
-            if (!ctxMenu) return;
-
-            if (!nodeId) {
-                ctxMenu.style.display = 'none';
-                return;
-            }
-
-            // Position and show context menu
-            ctxMenu.style.left = params.event.pageX + 'px';
-            ctxMenu.style.top = params.event.pageY + 'px';
-            ctxMenu.style.display = 'block';
-            ctxMenu.dataset.nodeId = nodeId;
-        });
-    }
 
     // Context menu item clicks
     modal.addEventListener('click', async (e) => {
