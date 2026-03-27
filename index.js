@@ -1942,7 +1942,7 @@ jQuery(async () => {
                 const renderedMessage = chat[messageId];
                 if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
-                    // Add fullsheet import button if message contains fullsheet data and Bunny Mo integration is on
+                    // Add fullsheet import button if message contains fullsheet data and character sheet integration is on
                     if (extensionSettings.bunnyMoIntegration && messageHasFullSheet(renderedMessage.mes) && messageElement) {
                         const $extraBtns = $(messageElement).find('.mes_buttons .extraMesButtons');
                         if ($extraBtns.length && !$extraBtns.find('.dooms-import-fullsheet-btn').length) {

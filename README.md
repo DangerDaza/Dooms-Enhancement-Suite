@@ -162,6 +162,7 @@ Fully responsive design with touch-friendly controls. All panels adapt to small 
 - Originally forked from [marinara_spaghetti's RPG Companion](https://github.com/SpicyMarinara) extension
 - Character Expressions sync contributed by **Tremendoussly**
 - Twist generator prompt contributed by **thekittymix**
+- Character sheet parser based on [CarrotKernel](https://github.com/Coneja-Chibi/CarrotKernel) by **Coneja**
 
 ## License
 

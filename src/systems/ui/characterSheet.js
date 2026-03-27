@@ -3,7 +3,8 @@
  *
  * Data is stored per-chat in chat_metadata.dooms_tracker.characterSheets.
  * Users import sheets by clicking an import button on messages containing
- * Bunny Mo !fullsheet output.
+ * numbered section headers (e.g. "## SECTION 1/8: Core Identity").
+ * Works standalone — no external extensions required.
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
@@ -24,22 +25,28 @@ export function clearStatsCache() {
 //  Parser
 // ─────────────────────────────────────────────
 
+// Language-agnostic section header regex (ported from CarrotKernel).
+// Matches: "## SECTION 1/8:", "##セクション 1/8", "# 部分 1/8", "SECCIÓN 1/8:", etc.
+// \S+ matches ANY Unicode non-whitespace so it works for all languages.
+const SECTION_HEADER_REGEX = /^#{0,2}\s*(\S+)\s+(\d+)\s*\/\s*(\d+):?\s*(.*)$/gim;
+
 /**
- * Parses a Bunny Mo !fullsheet output from a message string.
+ * Parses a fullsheet output from a message string.
+ * Supports any language — section headers just need the N/M numbering pattern.
  * Returns { characterTitle, sections: [{ number, emoji, title, content }] } or null.
  */
 export function parseFullSheet(text) {
-    if (!text || !text.includes('SECTION 1/')) return null;
+    if (!text) return null;
 
-    // Match sections like: ## SECTION 1/14: 🆔 **Core Identity & Context**
-    const sectionRegex = /##\s*SECTION\s+(\d+)\/\d+:\s*(.+)/g;
+    // Collect all section header matches
+    const sectionHeaderRegex = new RegExp(SECTION_HEADER_REGEX.source, SECTION_HEADER_REGEX.flags);
     const matches = [];
     let match;
 
-    while ((match = sectionRegex.exec(text)) !== null) {
+    while ((match = sectionHeaderRegex.exec(text)) !== null) {
         matches.push({
-            number: parseInt(match[1]),
-            fullHeader: match[2].trim(),
+            number: parseInt(match[2]),
+            fullHeader: match[4].trim(),
             startIndex: match.index,
             headerEndIndex: match.index + match[0].length,
         });
@@ -57,7 +64,9 @@ export function parseFullSheet(text) {
         content = content.replace(/\n---\s*$/, '').trim();
 
         // Extract emoji and title from header like "🆔 **Core Identity & Context**"
-        const headerClean = m.fullHeader.replace(/\*\*/g, '').trim();
+        // If the header is empty, the section keyword itself (e.g. "SECTION") was consumed —
+        // fall back to the full content's first line as a title hint.
+        const headerClean = (m.fullHeader || '').replace(/\*\*/g, '').trim();
         // First character(s) might be emoji
         const emojiMatch = headerClean.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*/u);
         const emoji = emojiMatch ? emojiMatch[1] : '';
@@ -750,9 +759,13 @@ export async function importFullSheetFromMessage(messageId) {
 /**
  * Checks if a message contains fullsheet content and returns true if so.
  * Used to determine whether to show the import button.
+ * Language-agnostic — matches any N/M numbered section headers, not just English "SECTION".
  */
 export function messageHasFullSheet(messageText) {
-    return messageText && messageText.includes('SECTION 1/') && messageText.includes('SECTION 2/');
+    if (!messageText) return false;
+    // Count how many numbered section headers (e.g. "## SECTION 1/8", "## 部分 1/8") are present
+    const headerMatches = messageText.match(/^#{0,2}\s*\S+\s+\d+\s*\/\s*\d+/gim);
+    return headerMatches !== null && headerMatches.length >= 2;
 }
 
 /**
