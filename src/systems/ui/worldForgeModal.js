@@ -69,6 +69,7 @@ function buildModalHTML() {
     html += '</select>';
     html += '<select class="rpg-wf-mode" id="rpg-wf-mode" title="Generation mode">';
     html += '<option value="new">New Entries</option>';
+    html += '<option value="deepdive">Deep Dive</option>';
     html += '<option value="expand">Expand Existing</option>';
     html += '<option value="revise">Revise Entry</option>';
     html += '</select>';
@@ -273,7 +274,12 @@ async function handleGenerate() {
         removeLoadingMessage();
 
         if (entries.length === 0) {
-            addMessage('assistant', 'I wasn\'t able to parse valid entries from the response. Try rephrasing your prompt or being more specific.');
+            // In deep dive mode, the AI may respond with questions (not JSON) — show as conversation
+            if (mode === 'deepdive' && rawResponse && rawResponse.trim().length > 0) {
+                addMessage('assistant', rawResponse);
+            } else {
+                addMessage('assistant', 'I wasn\'t able to parse valid entries from the response. Try rephrasing your prompt or being more specific.');
+            }
         } else {
             addMessage('assistant', `Generated ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}. Review them in the panel on the right.`);
             pendingEntries = [...entries, ...pendingEntries.filter(e => e._accepted)];

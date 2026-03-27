@@ -45,6 +45,25 @@ EXPAND the provided existing entries with more detail, depth, and connections. K
 
     revise: `\n\n## Your Task
 REVISE and IMPROVE the provided existing entries. Fix any issues, improve writing quality, add missing keywords, and enhance the content. Return the complete revised entries.`,
+
+    deepdive: `\n\n## Your Task — Deep Dive Mode
+You are in DEEP DIVE mode. Do NOT generate entries yet. Instead, act as a worldbuilding consultant.
+
+When the user describes what they want, respond with 5-8 probing questions that will help you create richer, more interconnected lore. Ask about:
+- History and origins
+- Relationships and conflicts
+- Rules, limitations, and costs
+- Cultural impact and societal views
+- Notable figures and exceptions
+- Connections to other existing lore
+- Sensory details and aesthetics
+- Secrets, mysteries, or hidden aspects
+
+Format your response as plain text with numbered questions. Do NOT use JSON format yet.
+
+Once the user has answered your questions (they may answer some or all), THEN generate the lorebook entries as a JSON array. The entries should be significantly deeper and more detailed than they would be without the questionnaire — that's the whole point.
+
+If the user says something like "generate", "create them", "that's enough", or "go ahead", treat that as the signal to produce the JSON entries based on everything discussed so far.`,
 };
 
 // ─── Conversation State ──────────────────────────────────────────────────────
@@ -141,7 +160,7 @@ function parseEntryResponse(response) {
  * Generate lorebook entries from a user prompt
  * @param {string} userMessage - The user's creative direction
  * @param {Object} options
- * @param {string} options.mode - 'new' | 'expand' | 'revise'
+ * @param {string} options.mode - 'new' | 'expand' | 'revise' | 'deepdive'
  * @param {string} options.targetBook - Target lorebook name
  * @param {boolean} options.includeExisting - Include existing entries as context
  * @param {Object[]} [options.selectedEntries] - Entries to expand/revise (for expand/revise modes)
