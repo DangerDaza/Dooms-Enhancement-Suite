@@ -73,10 +73,24 @@ function buildModalHTML() {
     html += '<option value="expand">Expand Existing</option>';
     html += '<option value="revise">Revise Entry</option>';
     html += '</select>';
-    html += '<label class="rpg-wf-context-toggle" title="Include existing lorebook entries as context for the AI">';
-    html += '<input type="checkbox" id="rpg-wf-include-context"> Include existing lore';
-    html += '</label>';
+    html += '<button class="rpg-wf-context-btn" id="rpg-wf-context-btn" title="Select lore to include as context"><i class="fa-solid fa-book-open"></i> Context <span class="rpg-wf-context-count" id="rpg-wf-context-count"></span></button>';
     html += '</div>';
+
+    // Context picker (hidden by default)
+    html += '<div class="rpg-wf-context-picker" id="rpg-wf-context-picker" style="display:none;">';
+    html += '<div class="rpg-wf-context-picker-header">';
+    html += '<span>Select lore to include as context:</span>';
+    html += '<button class="rpg-wf-context-select-none" id="rpg-wf-context-select-none" title="Deselect all">Clear</button>';
+    html += '</div>';
+    html += '<div class="rpg-wf-context-picker-list" id="rpg-wf-context-picker-list">';
+    for (const name of allNames) {
+        html += `<div class="rpg-wf-context-book" data-world="${name}">`;
+        html += `<label class="rpg-wf-context-book-label"><input type="checkbox" class="rpg-wf-context-book-cb" data-world="${name}"> <i class="fa-solid fa-book"></i> ${name}</label>`;
+        html += `<button class="rpg-wf-context-book-expand" data-world="${name}" title="Pick individual entries"><i class="fa-solid fa-chevron-down"></i></button>`;
+        html += `<div class="rpg-wf-context-entries" data-world="${name}" style="display:none;"></div>`;
+        html += '</div>';
+    }
+    html += '</div></div>';
 
     // Input row
     html += '<div class="rpg-wf-input-row">';
@@ -237,6 +251,39 @@ function openEntryEditor(index) {
     });
 }
 
+// ─── Context Picker Helpers ──────────────────────────────────────────────────
+
+function updateContextCount() {
+    const count = document.getElementById('rpg-wf-context-count');
+    const bookCbs = document.querySelectorAll('.rpg-wf-context-book-cb:checked');
+    const entryCbs = document.querySelectorAll('.rpg-wf-context-entry-cb:checked');
+    const total = bookCbs.length + entryCbs.length;
+    if (count) count.textContent = total > 0 ? `(${total})` : '';
+}
+
+/**
+ * Get the selected context — returns { books: string[], entries: {world, uid}[] }
+ */
+function getSelectedContext() {
+    const selectedBooks = [];
+    const selectedEntries = [];
+
+    // Fully-checked books (all entries selected)
+    document.querySelectorAll('.rpg-wf-context-book-cb:checked').forEach(cb => {
+        selectedBooks.push(cb.dataset.world);
+    });
+
+    // Individual entries from unchecked books
+    document.querySelectorAll('.rpg-wf-context-entry-cb:checked').forEach(cb => {
+        const world = cb.dataset.world;
+        if (!selectedBooks.includes(world)) {
+            selectedEntries.push({ world, uid: Number(cb.dataset.uid) });
+        }
+    });
+
+    return { books: selectedBooks, entries: selectedEntries };
+}
+
 // ─── Event Handlers ──────────────────────────────────────────────────────────
 
 async function handleGenerate() {
@@ -245,7 +292,6 @@ async function handleGenerate() {
     const input = document.getElementById('rpg-wf-input');
     const targetSelect = document.getElementById('rpg-wf-target');
     const modeSelect = document.getElementById('rpg-wf-mode');
-    const contextCheckbox = document.getElementById('rpg-wf-include-context');
     const generateBtn = document.getElementById('rpg-wf-generate-btn');
 
     const userMessage = input?.value?.trim();
@@ -253,7 +299,8 @@ async function handleGenerate() {
 
     const targetBook = targetSelect?.value || '';
     const mode = modeSelect?.value || 'new';
-    const includeExisting = contextCheckbox?.checked || false;
+    const selectedContext = getSelectedContext();
+    const includeExisting = selectedContext.books.length > 0 || selectedContext.entries.length > 0;
 
     // Disable UI
     isGenerating = true;
@@ -269,6 +316,7 @@ async function handleGenerate() {
             mode,
             targetBook,
             includeExisting,
+            selectedContext,
         });
 
         removeLoadingMessage();
@@ -394,6 +442,71 @@ function setupEvents(container) {
             toastr.error(`Failed to create lorebook: ${err.message}`);
             e.target.value = ''; // Reset to placeholder
         }
+    });
+
+    // Context picker toggle
+    container.querySelector('#rpg-wf-context-btn')?.addEventListener('click', () => {
+        const picker = document.getElementById('rpg-wf-context-picker');
+        if (picker) picker.style.display = picker.style.display === 'none' ? '' : 'none';
+    });
+
+    // Context picker — clear all
+    container.querySelector('#rpg-wf-context-select-none')?.addEventListener('click', () => {
+        const cbs = document.querySelectorAll('.rpg-wf-context-book-cb, .rpg-wf-context-entry-cb');
+        cbs.forEach(cb => cb.checked = false);
+        updateContextCount();
+    });
+
+    // Context picker — book checkbox (select/deselect all entries in book)
+    container.querySelector('#rpg-wf-context-picker-list')?.addEventListener('change', (e) => {
+        const bookCb = e.target.closest('.rpg-wf-context-book-cb');
+        if (bookCb) {
+            const world = bookCb.dataset.world;
+            const entryCbs = document.querySelectorAll(`.rpg-wf-context-entry-cb[data-world="${CSS.escape(world)}"]`);
+            entryCbs.forEach(cb => cb.checked = bookCb.checked);
+        }
+        updateContextCount();
+    });
+
+    // Context picker — expand book to show individual entries
+    container.querySelector('#rpg-wf-context-picker-list')?.addEventListener('click', async (e) => {
+        const expandBtn = e.target.closest('.rpg-wf-context-book-expand');
+        if (!expandBtn) return;
+
+        const world = expandBtn.dataset.world;
+        const entriesDiv = document.querySelector(`.rpg-wf-context-entries[data-world="${CSS.escape(world)}"]`);
+        if (!entriesDiv) return;
+
+        // Toggle visibility
+        if (entriesDiv.style.display !== 'none') {
+            entriesDiv.style.display = 'none';
+            expandBtn.querySelector('i').className = 'fa-solid fa-chevron-down';
+            return;
+        }
+
+        // Load entries if not already loaded
+        if (!entriesDiv.dataset.loaded) {
+            try {
+                const data = await lorebookAPI.loadWorldData(world);
+                if (data?.entries) {
+                    const sorted = lorebookAPI.getEntriesSorted(data);
+                    const bookCb = document.querySelector(`.rpg-wf-context-book-cb[data-world="${CSS.escape(world)}"]`);
+                    const bookChecked = bookCb?.checked || false;
+                    let html = '';
+                    for (const { uid, entry } of sorted) {
+                        const title = entry.comment || `Entry ${uid}`;
+                        html += `<label class="rpg-wf-context-entry-label"><input type="checkbox" class="rpg-wf-context-entry-cb" data-world="${world}" data-uid="${uid}" ${bookChecked ? 'checked' : ''}> ${title}</label>`;
+                    }
+                    entriesDiv.innerHTML = html || '<span class="rpg-wf-context-empty">No entries</span>';
+                    entriesDiv.dataset.loaded = 'true';
+                }
+            } catch {
+                entriesDiv.innerHTML = '<span class="rpg-wf-context-empty">Failed to load</span>';
+            }
+        }
+
+        entriesDiv.style.display = '';
+        expandBtn.querySelector('i').className = 'fa-solid fa-chevron-up';
     });
 
     // Enter to send (Ctrl+Enter or Shift+Enter)

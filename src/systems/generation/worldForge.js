@@ -77,26 +77,67 @@ function buildSystemPrompt(mode) {
     return SYSTEM_PROMPT_BASE + (MODE_PROMPTS[mode] || MODE_PROMPTS.new);
 }
 
-async function buildContextBlock(targetBook, includeExisting) {
-    if (!includeExisting || !targetBook) return '';
+async function buildContextBlock(targetBook, includeExisting, selectedContext = null) {
+    if (!includeExisting) return '';
+
+    const contextParts = [];
 
     try {
-        const data = await lorebookAPI.loadWorldData(targetBook);
-        if (!data?.entries) return '';
+        if (selectedContext) {
+            // Load selected books
+            for (const bookName of (selectedContext.books || [])) {
+                const data = await lorebookAPI.loadWorldData(bookName);
+                if (!data?.entries) continue;
+                const sorted = lorebookAPI.getEntriesSorted(data);
+                const entries = sorted.slice(0, 30).map(({ entry }) => ({
+                    comment: entry.comment || '',
+                    key: entry.key || [],
+                    content: (entry.content || '').substring(0, 300) + ((entry.content || '').length > 300 ? '...' : ''),
+                }));
+                if (entries.length > 0) {
+                    contextParts.push(`### ${bookName}\n${JSON.stringify(entries, null, 2)}`);
+                }
+            }
 
-        const sorted = lorebookAPI.getEntriesSorted(data);
-        if (sorted.length === 0) return '';
-
-        const entries = sorted.slice(0, 30).map(({ entry }) => ({
-            comment: entry.comment || '',
-            key: entry.key || [],
-            content: (entry.content || '').substring(0, 200) + ((entry.content || '').length > 200 ? '...' : ''),
-        }));
-
-        return `\n\n## Existing Entries in "${targetBook}" (for context)\n${JSON.stringify(entries, null, 2)}`;
-    } catch {
-        return '';
+            // Load individual selected entries
+            const entriesByBook = {};
+            for (const { world, uid } of (selectedContext.entries || [])) {
+                if (!entriesByBook[world]) entriesByBook[world] = [];
+                entriesByBook[world].push(uid);
+            }
+            for (const [bookName, uids] of Object.entries(entriesByBook)) {
+                const data = await lorebookAPI.loadWorldData(bookName);
+                if (!data?.entries) continue;
+                const entries = uids.map(uid => data.entries[uid]).filter(Boolean).map(entry => ({
+                    comment: entry.comment || '',
+                    key: entry.key || [],
+                    content: (entry.content || '').substring(0, 300) + ((entry.content || '').length > 300 ? '...' : ''),
+                }));
+                if (entries.length > 0) {
+                    contextParts.push(`### ${bookName} (selected entries)\n${JSON.stringify(entries, null, 2)}`);
+                }
+            }
+        } else if (targetBook) {
+            // Fallback: load target book
+            const data = await lorebookAPI.loadWorldData(targetBook);
+            if (data?.entries) {
+                const sorted = lorebookAPI.getEntriesSorted(data);
+                const entries = sorted.slice(0, 30).map(({ entry }) => ({
+                    comment: entry.comment || '',
+                    key: entry.key || [],
+                    content: (entry.content || '').substring(0, 200) + ((entry.content || '').length > 200 ? '...' : ''),
+                }));
+                if (entries.length > 0) {
+                    contextParts.push(`### ${targetBook}\n${JSON.stringify(entries, null, 2)}`);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[WorldForge] Error building context:', err);
     }
+
+    if (contextParts.length === 0) return '';
+    return `\n\n## Existing Lore (for context)\n${contextParts.join('\n\n')}`;
 }
 
 function buildMessageArray(systemPrompt, userMessage, existingContext) {
@@ -167,10 +208,10 @@ function parseEntryResponse(response) {
  * @returns {Promise<{entries: Object[], rawResponse: string}>}
  */
 export async function generateEntries(userMessage, options = {}) {
-    const { mode = 'new', targetBook = '', includeExisting = false, selectedEntries = [] } = options;
+    const { mode = 'new', targetBook = '', includeExisting = false, selectedEntries = [], selectedContext = null } = options;
 
     const systemPrompt = buildSystemPrompt(mode);
-    const existingContext = await buildContextBlock(targetBook, includeExisting);
+    const existingContext = await buildContextBlock(targetBook, includeExisting, selectedContext);
 
     // For expand/revise, prepend selected entries to the user message
     let fullUserMessage = userMessage;
