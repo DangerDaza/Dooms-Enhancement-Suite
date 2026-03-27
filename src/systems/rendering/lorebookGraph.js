@@ -26,16 +26,42 @@ const EXTENSION_PATH = 'scripts/extensions/third-party/Dooms-Enhancement-Suite';
 
 // ─── Node Colors ─────────────────────────────────────────────────────────────
 
-// Book color palette — distinct colors for different lorebooks
-const BOOK_COLORS = [
-    '#4a7ba7', '#7c4dff', '#e94560', '#00bfa5', '#ff6d00',
-    '#ab47bc', '#26a69a', '#ef5350', '#42a5f5', '#66bb6a',
-    '#ffa726', '#8d6e63', '#78909c', '#ec407a', '#5c6bc0',
+// Fallback palette for unfiled books
+const UNFILED_COLORS = [
+    '#78909c', '#8d6e63', '#90a4ae', '#a1887f', '#b0bec5',
 ];
 
-function getBookColor(bookName, allBooks) {
-    const idx = allBooks.indexOf(bookName);
-    return BOOK_COLORS[idx % BOOK_COLORS.length];
+// Cache: bookName → campaign color
+let bookColorCache = {};
+
+function buildBookColorCache() {
+    bookColorCache = {};
+    const campaigns = campaignManager.getCampaignsInOrder();
+    const allNames = lorebookAPI.getAllWorldNames();
+    const assigned = new Set();
+
+    for (const { campaign } of campaigns) {
+        const color = campaign.color || '#4a7ba7';
+        for (const bookName of (campaign.books || [])) {
+            if (allNames.includes(bookName)) {
+                bookColorCache[bookName] = color;
+                assigned.add(bookName);
+            }
+        }
+    }
+
+    // Unfiled books get grey-ish fallback colors
+    let unfiledIdx = 0;
+    for (const name of allNames) {
+        if (!assigned.has(name)) {
+            bookColorCache[name] = UNFILED_COLORS[unfiledIdx % UNFILED_COLORS.length];
+            unfiledIdx++;
+        }
+    }
+}
+
+function getBookColor(bookName) {
+    return bookColorCache[bookName] || '#78909c';
 }
 
 // ─── Lazy Load vis-network ───────────────────────────────────────────────────
@@ -135,7 +161,7 @@ function computeBookGraph(worldDataMap) {
     // Create book nodes
     for (const bookName of allBooks) {
         const isActive = activeNames.includes(bookName);
-        const bookColor = getBookColor(bookName, allBooks);
+        const bookColor = getBookColor(bookName);
         const entryCount = bookEntryCount[bookName] || 0;
         const tokens = bookTokens[bookName] || 0;
         const size = Math.max(20, Math.min(60, 20 + entryCount / 2));
@@ -249,7 +275,7 @@ function computeEntryGraph(worldDataMap) {
             const id = `${bookName}::${uid}`;
             const title = entry.comment || entry.key?.join(', ') || `Entry ${uid}`;
             const tokenEst = Math.round((entry.content || '').length / 3.5);
-            const bookColor = getBookColor(bookName, allBooks);
+            const bookColor = getBookColor(bookName);
 
             let state = 'enabled';
             if (entry.disable) state = 'disabled';
@@ -1014,6 +1040,9 @@ async function rebuildGraph() {
         network.destroy();
         network = null;
     }
+
+    // Build color cache from campaign settings
+    buildBookColorCache();
 
     // Load data for scoped books
     const books = getScopeBooks();
