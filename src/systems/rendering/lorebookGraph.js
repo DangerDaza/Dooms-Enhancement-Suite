@@ -417,11 +417,11 @@ function buildGraphHTML() {
     html += '<label class="rpg-lb-graph-label">Layout</label>';
     html += '<div class="rpg-lb-graph-slider-row">';
     html += '<span class="rpg-lb-graph-slider-label">Spacing</span>';
-    html += '<input type="range" class="rpg-lb-graph-slider" data-param="spacing" min="30" max="400" value="120" step="10">';
+    html += '<input type="range" class="rpg-lb-graph-slider" data-param="spacing" min="80" max="500" value="150" step="10">';
     html += '</div>';
     html += '<div class="rpg-lb-graph-slider-row">';
     html += '<span class="rpg-lb-graph-slider-label">Repulsion</span>';
-    html += '<input type="range" class="rpg-lb-graph-slider" data-param="repulsion" min="-10000" max="-500" value="-3000" step="100">';
+    html += '<input type="range" class="rpg-lb-graph-slider" data-param="repulsion" min="-8000" max="-1000" value="-3000" step="100">';
     html += '</div>';
     html += '<button class="rpg-lb-graph-relayout-btn"><i class="fa-solid fa-arrows-rotate"></i> Re-layout</button>';
     html += '</div>';
@@ -676,7 +676,7 @@ function initNetwork(container, data) {
                 centralGravity: 0.1,
                 springLength: 150,
                 springConstant: 0.01,
-                damping: 0.3,
+                damping: 0.5,
                 avoidOverlap: 1.0,
             },
             stabilization: {
