@@ -62,6 +62,7 @@ function buildModalHTML() {
     html += '<div class="rpg-wf-controls-row">';
     html += '<select class="rpg-wf-target" id="rpg-wf-target" title="Target lorebook">';
     html += '<option value="">Select target lorebook...</option>';
+    html += '<option value="__new__">+ Create New Lorebook</option>';
     for (const name of allNames) {
         html += `<option value="${name}">${name}</option>`;
     }
@@ -295,7 +296,7 @@ async function handleAcceptEntry(index) {
     const targetSelect = document.getElementById('rpg-wf-target');
     const targetBook = targetSelect?.value;
 
-    if (!targetBook) {
+    if (!targetBook || targetBook === '__new__') {
         toastr.warning('Please select a target lorebook first.');
         return;
     }
@@ -314,7 +315,7 @@ async function handleAcceptAll() {
     const targetSelect = document.getElementById('rpg-wf-target');
     const targetBook = targetSelect?.value;
 
-    if (!targetBook) {
+    if (!targetBook || targetBook === '__new__') {
         toastr.warning('Please select a target lorebook first.');
         return;
     }
@@ -363,6 +364,31 @@ function setupEvents(container) {
 
     // Generate button
     container.querySelector('#rpg-wf-generate-btn')?.addEventListener('click', handleGenerate);
+
+    // Target lorebook dropdown — handle "Create New Lorebook"
+    container.querySelector('#rpg-wf-target')?.addEventListener('change', async (e) => {
+        if (e.target.value !== '__new__') return;
+
+        const newName = prompt('Enter a name for the new lorebook:');
+        if (!newName || !newName.trim()) {
+            e.target.value = ''; // Reset to placeholder
+            return;
+        }
+
+        try {
+            await lorebookAPI.createNewWorld(newName.trim());
+            // Add the new option and select it
+            const option = document.createElement('option');
+            option.value = newName.trim();
+            option.textContent = newName.trim();
+            e.target.insertBefore(option, e.target.querySelector('option:last-child'));
+            e.target.value = newName.trim();
+            toastr.success(`Created lorebook: ${newName.trim()}`);
+        } catch (err) {
+            toastr.error(`Failed to create lorebook: ${err.message}`);
+            e.target.value = ''; // Reset to placeholder
+        }
+    });
 
     // Enter to send (Ctrl+Enter or Shift+Enter)
     container.querySelector('#rpg-wf-input')?.addEventListener('keydown', (e) => {
