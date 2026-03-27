@@ -7,7 +7,8 @@
 import * as lorebookAPI from '../lorebook/lorebookAPI.js';
 import * as campaignManager from '../lorebook/campaignManager.js';
 import { loadFileToDocument } from '../../../../../../../scripts/utils.js';
-import { extensionSettings, saveSettings } from '../../core/state.js';
+import { extensionSettings } from '../../core/state.js';
+import { saveSettings } from '../../core/persistence.js';
 
 // ─── Module State ────────────────────────────────────────────────────────────
 
