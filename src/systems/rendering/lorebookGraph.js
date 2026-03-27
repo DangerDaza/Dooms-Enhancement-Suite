@@ -317,28 +317,36 @@ function computeEntryGraph(worldDataMap) {
         }
     }
 
-    const edgeSet = new Set();
+    // Consolidate keyword edges: one edge per node pair with shared keyword count
+    const edgePairKeywords = {}; // "nodeA|nodeB" → [keyword1, keyword2, ...]
     if (graphFilters.keywords) {
         for (const [keyword, ids] of Object.entries(keywordIndex)) {
             if (ids.length < 2 || ids.length > 20) continue;
             for (let i = 0; i < ids.length; i++) {
                 for (let j = i + 1; j < ids.length; j++) {
                     const edgeKey = [ids[i], ids[j]].sort().join('|');
-                    if (!edgeSet.has(edgeKey)) {
-                        edgeSet.add(edgeKey);
-                        edges.push({
-                            from: ids[i], to: ids[j], label: keyword,
-                            color: { color: 'rgba(74, 123, 167, 0.3)', highlight: 'rgba(74, 123, 167, 0.8)' },
-                            font: { color: '#888', size: 0, strokeWidth: 0 },
-                            width: 1, _type: 'keyword',
-                        });
-                    }
+                    if (!edgePairKeywords[edgeKey]) edgePairKeywords[edgeKey] = [];
+                    edgePairKeywords[edgeKey].push(keyword);
                 }
             }
         }
+        for (const [edgeKey, keywords] of Object.entries(edgePairKeywords)) {
+            const [from, to] = edgeKey.split('|');
+            const count = keywords.length;
+            edges.push({
+                from, to,
+                label: count === 1 ? keywords[0] : `${count} shared`,
+                title: keywords.slice(0, 15).join(', ') + (keywords.length > 15 ? '...' : ''),
+                color: { color: 'rgba(74, 123, 167, 0.3)', highlight: 'rgba(74, 123, 167, 0.8)' },
+                font: { color: '#888', size: 0, strokeWidth: 0 },
+                width: Math.min(4, 1 + count / 3),
+                _type: 'keyword',
+            });
+        }
     }
 
-    // Inclusion group edges
+    // Consolidate inclusion group edges: one edge per node pair
+    const edgeSet = new Set(Object.keys(edgePairKeywords));
     if (graphFilters.groups) {
         const groupIndex = {};
         for (const item of entries) {
@@ -350,9 +358,11 @@ function computeEntryGraph(worldDataMap) {
         for (const [group, ids] of Object.entries(groupIndex)) {
             for (let i = 0; i < ids.length; i++) {
                 for (let j = i + 1; j < ids.length; j++) {
-                    const edgeKey = [ids[i], ids[j]].sort().join('|group|');
-                    if (!edgeSet.has(edgeKey)) {
-                        edgeSet.add(edgeKey);
+                    const edgeKey = [ids[i], ids[j]].sort().join('|');
+                    // Don't duplicate if keyword edge already exists between this pair
+                    const groupEdgeKey = edgeKey + '|group';
+                    if (!edgeSet.has(groupEdgeKey)) {
+                        edgeSet.add(groupEdgeKey);
                         edges.push({
                             from: ids[i], to: ids[j], label: group, dashes: true,
                             color: { color: 'rgba(171, 71, 188, 0.4)', highlight: 'rgba(171, 71, 188, 0.8)' },
@@ -664,10 +674,10 @@ function initNetwork(container, data) {
             barnesHut: {
                 gravitationalConstant: -3000,
                 centralGravity: 0.1,
-                springLength: 120,
-                springConstant: 0.02,
+                springLength: 150,
+                springConstant: 0.01,
                 damping: 0.3,
-                avoidOverlap: 0.2,
+                avoidOverlap: 1.0,
             },
             stabilization: {
                 enabled: true,
