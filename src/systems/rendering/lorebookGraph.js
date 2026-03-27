@@ -74,6 +74,25 @@ function getScopeBooks() {
     return allNames;
 }
 
+// ─── Campaign Book Lookup ────────────────────────────────────────────────
+
+function getCampaignBooks(campaignId) {
+    const allNames = lorebookAPI.getAllWorldNames();
+    if (campaignId === '__unfiled__') {
+        const assigned = new Set();
+        for (const { campaign } of campaignManager.getCampaignsInOrder()) {
+            for (const b of (campaign.books || [])) assigned.add(b);
+        }
+        return allNames.filter(b => !assigned.has(b));
+    }
+    const campaigns = campaignManager.getCampaignsInOrder();
+    const match = campaigns.find(c => c.id === campaignId);
+    if (match) {
+        return (match.campaign.books || []).filter(b => allNames.includes(b));
+    }
+    return [];
+}
+
 // ─── Edge Computation ────────────────────────────────────────────────────────
 
 function computeGraphData(worldDataMap) {
@@ -233,25 +252,51 @@ function buildGraphHTML() {
     html += `<label class="rpg-lb-graph-checkbox"><input type="checkbox" data-filter="groups" ${graphFilters.groups ? 'checked' : ''}> Inclusion Groups</label>`;
     html += '</div>';
 
-    // Book list with visibility toggles
+    // Library (campaign) list with visibility toggles
     html += '<div class="rpg-lb-graph-section">';
     html += '<label class="rpg-lb-graph-label">Lore Libraries <button class="rpg-lb-graph-books-toggle-all" title="Toggle all">All</button></label>';
     html += '<div class="rpg-lb-graph-book-list">';
     const scopeBooks = getScopeBooks();
-    // Initialize visibility for new books
+    // Initialize visibility for all books
     for (const name of scopeBooks) {
         if (bookVisibility[name] === undefined) bookVisibility[name] = true;
     }
-    for (const name of scopeBooks) {
-        const isActive = activeNames.includes(name);
-        const isVisible = bookVisibility[name] !== false;
-        const shortName = name.length > 25 ? name.substring(0, 23) + '...' : name;
-        html += `<div class="rpg-lb-graph-book-item ${isActive ? 'active' : ''} ${!isVisible ? 'filtered-out' : ''}" data-world="${name}" title="${name}">`;
-        html += `<input type="checkbox" class="rpg-lb-graph-book-toggle" data-world="${name}" ${isVisible ? 'checked' : ''}>`;
-        html += `<span class="rpg-lb-graph-book-dot" style="background: ${getBookColor(name, scopeBooks)};"></span>`;
+
+    // Build campaign-level entries
+    const assignedBooks = new Set();
+    for (const { id, campaign } of campaigns) {
+        const books = (campaign.books || []).filter(b => scopeBooks.includes(b));
+        if (books.length === 0) continue;
+        books.forEach(b => assignedBooks.add(b));
+
+        const activeCount = books.filter(b => activeNames.includes(b)).length;
+        const allVisible = books.every(b => bookVisibility[b] !== false);
+        const iconClass = campaign.icon || 'fa-folder';
+        const iconColor = campaign.color ? ` style="color: ${campaign.color};"` : '';
+        const shortName = campaign.name.length > 22 ? campaign.name.substring(0, 20) + '...' : campaign.name;
+
+        html += `<div class="rpg-lb-graph-book-item rpg-lb-graph-library-item ${activeCount > 0 ? 'active' : ''} ${!allVisible ? 'filtered-out' : ''}" data-campaign="${id}" title="${campaign.name} (${books.length} books)">`;
+        html += `<input type="checkbox" class="rpg-lb-graph-library-toggle" data-campaign="${id}" ${allVisible ? 'checked' : ''}>`;
+        html += `<i class="fa-solid ${iconClass}"${iconColor}></i>`;
         html += `<span class="rpg-lb-graph-book-name">${shortName}</span>`;
+        html += `<span class="rpg-lb-graph-library-count">${activeCount}/${books.length}</span>`;
         html += '</div>';
     }
+
+    // Unfiled books
+    const unfiledBooks = scopeBooks.filter(b => !assignedBooks.has(b));
+    if (unfiledBooks.length > 0) {
+        const activeCount = unfiledBooks.filter(b => activeNames.includes(b)).length;
+        const allVisible = unfiledBooks.every(b => bookVisibility[b] !== false);
+
+        html += `<div class="rpg-lb-graph-book-item rpg-lb-graph-library-item ${activeCount > 0 ? 'active' : ''} ${!allVisible ? 'filtered-out' : ''}" data-campaign="__unfiled__" title="Unfiled (${unfiledBooks.length} books)">`;
+        html += `<input type="checkbox" class="rpg-lb-graph-library-toggle" data-campaign="__unfiled__" ${allVisible ? 'checked' : ''}>`;
+        html += `<i class="fa-solid fa-folder-open"></i>`;
+        html += `<span class="rpg-lb-graph-book-name">Unfiled</span>`;
+        html += `<span class="rpg-lb-graph-library-count">${activeCount}/${unfiledBooks.length}</span>`;
+        html += '</div>';
+    }
+
     html += '</div>';
     html += '</div>';
 
@@ -577,41 +622,44 @@ function setupGraphEvents() {
         });
     });
 
-    // Book name click in sidebar → focus on that book's nodes
-    modal.querySelectorAll('.rpg-lb-graph-book-name').forEach(nameEl => {
+    // Library name click in sidebar → focus on that library's nodes
+    modal.querySelectorAll('.rpg-lb-graph-library-item .rpg-lb-graph-book-name').forEach(nameEl => {
         nameEl.addEventListener('click', () => {
-            const world = nameEl.closest('.rpg-lb-graph-book-item')?.dataset.world;
-            if (!world || !network) return;
-            const bookNodes = allEntriesCache
-                .filter(e => e.bookName === world)
+            const item = nameEl.closest('.rpg-lb-graph-library-item');
+            const campaignId = item?.dataset.campaign;
+            if (!campaignId || !network) return;
+            const books = getCampaignBooks(campaignId);
+            const libraryNodes = allEntriesCache
+                .filter(e => books.includes(e.bookName))
                 .map(e => e.id);
-            if (bookNodes.length > 0) {
-                network.selectNodes(bookNodes);
-                network.fit({ nodes: bookNodes, animation: true });
+            if (libraryNodes.length > 0) {
+                network.selectNodes(libraryNodes);
+                network.fit({ nodes: libraryNodes, animation: true });
             }
         });
     });
 
-    // Book toggle checkboxes → show/hide books on the graph
-    modal.querySelectorAll('.rpg-lb-graph-book-toggle').forEach(cb => {
+    // Library toggle checkboxes → show/hide all books in that campaign
+    modal.querySelectorAll('.rpg-lb-graph-library-toggle').forEach(cb => {
         cb.addEventListener('change', async (e) => {
             e.stopPropagation();
-            const world = e.target.dataset.world;
-            bookVisibility[world] = e.target.checked;
+            const campaignId = e.target.dataset.campaign;
+            const books = getCampaignBooks(campaignId);
+            for (const b of books) bookVisibility[b] = e.target.checked;
             const item = e.target.closest('.rpg-lb-graph-book-item');
             if (item) item.classList.toggle('filtered-out', !e.target.checked);
             await applyBookFilter();
         });
     });
 
-    // Toggle all books button
+    // Toggle all libraries button
     modal.querySelector('.rpg-lb-graph-books-toggle-all')?.addEventListener('click', async () => {
         const scopeBooks = getScopeBooks();
         const allVisible = scopeBooks.every(b => bookVisibility[b] !== false);
         const newState = !allVisible;
         for (const b of scopeBooks) bookVisibility[b] = newState;
         // Update checkboxes in UI
-        modal.querySelectorAll('.rpg-lb-graph-book-toggle').forEach(cb => {
+        modal.querySelectorAll('.rpg-lb-graph-library-toggle').forEach(cb => {
             cb.checked = newState;
             const item = cb.closest('.rpg-lb-graph-book-item');
             if (item) item.classList.toggle('filtered-out', !newState);

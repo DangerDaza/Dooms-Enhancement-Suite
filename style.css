@@ -18212,6 +18212,17 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .rpg-lb-graph-book-item.filtered-out .rpg-lb-graph-book-dot {
     background: #555 !important;
 }
+.rpg-lb-graph-library-item i {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.rpg-lb-graph-library-count {
+    margin-left: auto;
+    font-size: 0.75em;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
 .rpg-lb-graph-books-toggle-all {
     font-size: 0.75em;
     padding: 2px 8px;
