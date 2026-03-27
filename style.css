@@ -18575,6 +18575,76 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     background: rgba(74, 123, 167, 0.1);
 }
 
+/* ── Markdown Rendering ────────────────────────────────────────────── */
+.rpg-wf-msg-text p { margin: 0 0 8px 0; }
+.rpg-wf-msg-text p:last-child { margin-bottom: 0; }
+.rpg-wf-md-h2 { font-size: 1.05em; font-weight: 700; margin: 12px 0 6px 0; color: var(--SmartThemeBodyColor, #ddd); }
+.rpg-wf-md-h3 { font-size: 0.95em; font-weight: 600; margin: 10px 0 4px 0; color: var(--SmartThemeBodyColor, #ccc); }
+.rpg-wf-md-li { padding: 2px 0 2px 4px; }
+.rpg-wf-md-num { font-weight: 600; color: var(--SmartThemeAccentColor, #8b9dc3); margin-right: 4px; }
+.rpg-wf-md-bullet { color: var(--SmartThemeAccentColor, #8b9dc3); margin-right: 6px; }
+
+/* ── Deep Dive Question Cards ──────────────────────────────────────── */
+.rpg-wf-deepdive-questions { display: flex; flex-direction: column; gap: 10px; }
+.rpg-wf-deepdive-intro { margin-bottom: 6px; opacity: 0.85; font-size: 0.9em; }
+.rpg-wf-deepdive-card {
+    display: flex;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+}
+.rpg-wf-deepdive-card-num {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--SmartThemeAccentColor, #4a7ba7);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85em;
+}
+.rpg-wf-deepdive-card-body { flex: 1; min-width: 0; }
+.rpg-wf-deepdive-card-title { font-weight: 600; font-size: 0.92em; margin-bottom: 4px; color: var(--SmartThemeBodyColor, #eee); }
+.rpg-wf-deepdive-card-question { font-size: 0.85em; opacity: 0.8; margin-bottom: 8px; line-height: 1.4; }
+.rpg-wf-deepdive-card-question p { margin: 0; }
+.rpg-wf-deepdive-answer {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--SmartThemeBodyColor, #ddd);
+    padding: 8px;
+    font-size: 0.85em;
+    resize: vertical;
+    font-family: inherit;
+}
+.rpg-wf-deepdive-answer:focus {
+    border-color: var(--SmartThemeAccentColor, #4a7ba7);
+    outline: none;
+}
+.rpg-wf-deepdive-answer:disabled { opacity: 0.5; }
+.rpg-wf-deepdive-submit {
+    align-self: flex-end;
+    background: var(--SmartThemeAccentColor, #4a7ba7);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 0.88em;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rpg-wf-deepdive-submit:hover { filter: brightness(1.15); }
+.rpg-wf-deepdive-submit:disabled { opacity: 0.5; cursor: default; }
+
 /* ── Entries Preview Panel ──────────────────────────────────────────── */
 .rpg-wf-entries-panel {
     width: 380px;

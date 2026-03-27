@@ -208,7 +208,107 @@ function renderEntriesList() {
 
 // ─── Message Rendering ───────────────────────────────────────────────────────
 
-function addMessage(role, text) {
+/**
+ * Simple markdown-ish rendering for AI responses
+ * Handles: **bold**, *italic*, numbered lists, headers (##), bullet points
+ */
+function renderMarkdown(text) {
+    let html = text
+        // Escape HTML
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        // Headers: ## Title → <h4>
+        .replace(/^###\s*(.+)$/gm, '<h5 class="rpg-wf-md-h3">$1</h5>')
+        .replace(/^##\s*(.+)$/gm, '<h4 class="rpg-wf-md-h2">$1</h4>')
+        // Bold: **text**
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic: *text*
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Numbered lists: 1. item
+        .replace(/^(\d+)\.\s+(.+)$/gm, '<div class="rpg-wf-md-li"><span class="rpg-wf-md-num">$1.</span> $2</div>')
+        // Bullet points: - item
+        .replace(/^[-•]\s+(.+)$/gm, '<div class="rpg-wf-md-li"><span class="rpg-wf-md-bullet">•</span> $1</div>')
+        // Double newlines → paragraph breaks
+        .replace(/\n\n/g, '</p><p>')
+        // Single newlines → line breaks
+        .replace(/\n/g, '<br>');
+
+    return `<p>${html}</p>`;
+}
+
+/**
+ * Parse deep dive questions into interactive question cards
+ * Looks for numbered questions with options (a/b/c or bullet sub-items)
+ */
+function parseDeepDiveQuestions(text) {
+    // Match numbered questions like "1. **Title:** question text"
+    const questionPattern = /(\d+)\.\s+\*?\*?([^*:\n]+?)(?:\*?\*?)?[:\s]+(.+?)(?=\n\d+\.\s|\n*$)/gs;
+    const questions = [];
+    let match;
+
+    while ((match = questionPattern.exec(text)) !== null) {
+        const num = match[1];
+        const title = match[2].trim();
+        const body = match[3].trim();
+
+        // Try to extract options from the body (a), b), c) or — delimited choices)
+        const optionPattern = /(?:^|\n)\s*(?:[a-z]\)|[a-z]\.|-|—|•)\s*(.+?)(?=(?:\n\s*(?:[a-z]\)|[a-z]\.|-|—|•))|$)/gs;
+        const options = [];
+        let optMatch;
+        const bodyForOptions = body.replace(/\?.*$/, (m) => m); // keep question marks
+
+        // Simple option extraction: split on " or " and comma-separated options
+        const orSplit = body.match(/,\s*(?:or\s+)?|;\s*(?:or\s+)?|\?\s*/);
+        if (orSplit) {
+            // Look for structured choices after the question mark
+            const afterQ = body.split('?');
+            if (afterQ.length > 1 && afterQ[1].trim()) {
+                const choices = afterQ[1].split(/,\s*(?:or\s+)?/).map(s => s.trim()).filter(Boolean);
+                choices.forEach(c => options.push(c));
+            }
+        }
+
+        questions.push({ num, title, body, options });
+    }
+
+    return questions;
+}
+
+function renderDeepDiveMessage(text) {
+    const questions = parseDeepDiveQuestions(text);
+
+    // If we couldn't parse structured questions, fall back to markdown
+    if (questions.length === 0) {
+        return renderMarkdown(text);
+    }
+
+    let html = '<div class="rpg-wf-deepdive-questions">';
+
+    // Intro text (everything before first question)
+    const introMatch = text.match(/^([\s\S]*?)(?=\d+\.\s)/);
+    if (introMatch && introMatch[1].trim()) {
+        html += `<div class="rpg-wf-deepdive-intro">${renderMarkdown(introMatch[1].trim())}</div>`;
+    }
+
+    for (const q of questions) {
+        html += '<div class="rpg-wf-deepdive-card">';
+        html += `<div class="rpg-wf-deepdive-card-num">${q.num}</div>`;
+        html += '<div class="rpg-wf-deepdive-card-body">';
+        html += `<div class="rpg-wf-deepdive-card-title">${q.title}</div>`;
+        html += `<div class="rpg-wf-deepdive-card-question">${renderMarkdown(q.body)}</div>`;
+
+        // Text answer area for each question
+        html += `<textarea class="rpg-wf-deepdive-answer" data-question="${q.num}" placeholder="Your answer..." rows="2"></textarea>`;
+        html += '</div></div>';
+    }
+
+    // Submit all answers button
+    html += '<button class="rpg-wf-deepdive-submit" id="rpg-wf-deepdive-submit"><i class="fa-solid fa-reply"></i> Submit Answers</button>';
+    html += '</div>';
+
+    return html;
+}
+
+function addMessage(role, text, isDeepDive = false) {
     const container = document.getElementById('rpg-wf-messages');
     if (!container) return;
 
@@ -220,9 +320,45 @@ function addMessage(role, text) {
     msgDiv.className = `rpg-wf-message rpg-wf-message--${role}`;
 
     const icon = role === 'user' ? 'fa-user' : 'fa-robot';
-    msgDiv.innerHTML = `<div class="rpg-wf-msg-icon"><i class="fa-solid ${icon}"></i></div><div class="rpg-wf-msg-text">${text}</div>`;
+    const renderedText = role === 'assistant'
+        ? (isDeepDive ? renderDeepDiveMessage(text) : renderMarkdown(text))
+        : text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    msgDiv.innerHTML = `<div class="rpg-wf-msg-icon"><i class="fa-solid ${icon}"></i></div><div class="rpg-wf-msg-text">${renderedText}</div>`;
     container.appendChild(msgDiv);
     container.scrollTop = container.scrollHeight;
+
+    // Bind deep dive submit button if present
+    if (isDeepDive) {
+        const submitBtn = msgDiv.querySelector('#rpg-wf-deepdive-submit');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+                const answers = [];
+                msgDiv.querySelectorAll('.rpg-wf-deepdive-answer').forEach(ta => {
+                    const qNum = ta.dataset.question;
+                    const answer = ta.value.trim();
+                    if (answer) answers.push(`${qNum}. ${answer}`);
+                });
+
+                if (answers.length === 0) {
+                    toastr.warning('Please answer at least one question');
+                    return;
+                }
+
+                // Inject answers into the input and trigger generate
+                const input = document.getElementById('rpg-wf-input');
+                if (input) {
+                    input.value = answers.join('\n');
+                    handleGenerate();
+                }
+
+                // Disable the submit button and textareas
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitted';
+                msgDiv.querySelectorAll('.rpg-wf-deepdive-answer').forEach(ta => ta.disabled = true);
+            });
+        }
+    }
 }
 
 function addLoadingMessage() {
@@ -379,9 +515,9 @@ async function handleGenerate() {
         removeLoadingMessage();
 
         if (entries.length === 0) {
-            // In deep dive mode, the AI may respond with questions (not JSON) — show as conversation
+            // In deep dive mode, the AI may respond with questions (not JSON) — show as interactive cards
             if (mode === 'deepdive' && rawResponse && rawResponse.trim().length > 0) {
-                addMessage('assistant', rawResponse);
+                addMessage('assistant', rawResponse, true);
             } else {
                 addMessage('assistant', 'I wasn\'t able to parse valid entries from the response. Try rephrasing your prompt or being more specific.');
             }
