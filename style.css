@@ -18797,29 +18797,52 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 .rpg-wf-context-select-none:hover { background: var(--SmartThemeBorderColor, #555); }
 
-.rpg-wf-context-book {
-    margin-bottom: 4px;
+/* Campaign level */
+.rpg-wf-context-campaign { margin-bottom: 2px; }
+.rpg-wf-context-campaign-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 600;
 }
-.rpg-wf-context-book-label {
+.rpg-wf-context-campaign-header:hover { background: rgba(255,255,255,0.06); }
+.rpg-wf-context-campaign-count {
+    margin-left: auto;
+    font-size: 0.8em;
+    opacity: 0.5;
+    font-weight: 400;
+}
+.rpg-wf-context-chevron {
+    font-size: 0.7em;
+    opacity: 0.5;
+    margin-left: 4px;
+    transition: transform 0.15s;
+}
+
+/* Book level */
+.rpg-wf-context-campaign-body { padding-left: 16px; }
+.rpg-wf-context-book { margin-bottom: 1px; }
+.rpg-wf-context-book-header {
     display: flex;
     align-items: center;
     gap: 6px;
     cursor: pointer;
     padding: 4px 6px;
     border-radius: 4px;
-    font-size: 0.88em;
+    font-size: 0.85em;
 }
-.rpg-wf-context-book-label:hover { background: rgba(255,255,255,0.05); }
-.rpg-wf-context-book-expand {
-    background: transparent;
-    border: none;
-    color: var(--SmartThemeBodyColor, #999);
-    cursor: pointer;
-    padding: 2px 6px;
-    float: right;
-    margin-top: -24px;
+.rpg-wf-context-book-header:hover { background: rgba(255,255,255,0.05); }
+.rpg-wf-context-book-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpg-wf-context-chevron-book {
+    font-size: 0.65em;
+    opacity: 0.4;
+    margin-left: auto;
+    transition: transform 0.15s;
 }
-.rpg-wf-context-book-expand:hover { color: var(--SmartThemeBodyColor, #fff); }
 
 .rpg-wf-context-entries {
     padding-left: 28px;

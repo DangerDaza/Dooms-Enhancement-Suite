@@ -6,6 +6,7 @@
  */
 import * as worldForge from '../generation/worldForge.js';
 import * as lorebookAPI from '../lorebook/lorebookAPI.js';
+import * as campaignManager from '../lorebook/campaignManager.js';
 /* global toastr */ // toastr is a jQuery plugin loaded globally by SillyTavern
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -76,20 +77,76 @@ function buildModalHTML() {
     html += '<button class="rpg-wf-context-btn" id="rpg-wf-context-btn" title="Select lore to include as context"><i class="fa-solid fa-book-open"></i> Context <span class="rpg-wf-context-count" id="rpg-wf-context-count"></span></button>';
     html += '</div>';
 
-    // Context picker (hidden by default)
+    // Context picker (hidden by default) — hierarchical: Library → Book → Entry
     html += '<div class="rpg-wf-context-picker" id="rpg-wf-context-picker" style="display:none;">';
     html += '<div class="rpg-wf-context-picker-header">';
     html += '<span>Select lore to include as context:</span>';
     html += '<button class="rpg-wf-context-select-none" id="rpg-wf-context-select-none" title="Deselect all">Clear</button>';
     html += '</div>';
     html += '<div class="rpg-wf-context-picker-list" id="rpg-wf-context-picker-list">';
-    for (const name of allNames) {
-        html += `<div class="rpg-wf-context-book" data-world="${name}">`;
-        html += `<label class="rpg-wf-context-book-label"><input type="checkbox" class="rpg-wf-context-book-cb" data-world="${name}"> <i class="fa-solid fa-book"></i> ${name}</label>`;
-        html += `<button class="rpg-wf-context-book-expand" data-world="${name}" title="Pick individual entries"><i class="fa-solid fa-chevron-down"></i></button>`;
-        html += `<div class="rpg-wf-context-entries" data-world="${name}" style="display:none;"></div>`;
+
+    // Build campaign tree
+    const campaigns = campaignManager.getCampaignsInOrder();
+    const unfiled = campaignManager.getUnfiledBooks();
+
+    for (const { id, campaign } of campaigns) {
+        const books = (campaign.books || []).filter(b => allNames.includes(b));
+        if (books.length === 0) continue;
+
+        const iconClass = campaign.icon || 'fa-folder';
+        const iconColor = campaign.color ? ` style="color: ${campaign.color};"` : '';
+
+        // Campaign row
+        html += `<div class="rpg-wf-context-campaign" data-campaign="${id}">`;
+        html += `<div class="rpg-wf-context-campaign-header" data-campaign="${id}">`;
+        html += `<input type="checkbox" class="rpg-wf-context-campaign-cb" data-campaign="${id}">`;
+        html += `<i class="fa-solid ${iconClass}"${iconColor}></i>`;
+        html += `<span class="rpg-wf-context-campaign-name">${campaign.name}</span>`;
+        html += `<span class="rpg-wf-context-campaign-count">${books.length}</span>`;
+        html += `<i class="fa-solid fa-chevron-right rpg-wf-context-chevron"></i>`;
         html += '</div>';
+
+        // Books inside campaign (collapsed by default)
+        html += `<div class="rpg-wf-context-campaign-body" data-campaign="${id}" style="display:none;">`;
+        for (const bookName of books) {
+            html += `<div class="rpg-wf-context-book" data-world="${bookName}">`;
+            html += `<div class="rpg-wf-context-book-header">`;
+            html += `<input type="checkbox" class="rpg-wf-context-book-cb" data-world="${bookName}" data-campaign="${id}">`;
+            html += `<i class="fa-solid fa-book"></i>`;
+            html += `<span class="rpg-wf-context-book-name">${bookName}</span>`;
+            html += `<i class="fa-solid fa-chevron-right rpg-wf-context-chevron-book"></i>`;
+            html += '</div>';
+            html += `<div class="rpg-wf-context-entries" data-world="${bookName}" style="display:none;"></div>`;
+            html += '</div>';
+        }
+        html += '</div></div>';
     }
+
+    // Unfiled books
+    if (unfiled.length > 0) {
+        html += '<div class="rpg-wf-context-campaign" data-campaign="__unfiled__">';
+        html += '<div class="rpg-wf-context-campaign-header" data-campaign="__unfiled__">';
+        html += '<input type="checkbox" class="rpg-wf-context-campaign-cb" data-campaign="__unfiled__">';
+        html += '<i class="fa-solid fa-folder"></i>';
+        html += '<span class="rpg-wf-context-campaign-name">Unfiled</span>';
+        html += `<span class="rpg-wf-context-campaign-count">${unfiled.length}</span>`;
+        html += '<i class="fa-solid fa-chevron-right rpg-wf-context-chevron"></i>';
+        html += '</div>';
+        html += '<div class="rpg-wf-context-campaign-body" data-campaign="__unfiled__" style="display:none;">';
+        for (const bookName of unfiled) {
+            html += `<div class="rpg-wf-context-book" data-world="${bookName}">`;
+            html += `<div class="rpg-wf-context-book-header">`;
+            html += `<input type="checkbox" class="rpg-wf-context-book-cb" data-world="${bookName}" data-campaign="__unfiled__">`;
+            html += `<i class="fa-solid fa-book"></i>`;
+            html += `<span class="rpg-wf-context-book-name">${bookName}</span>`;
+            html += `<i class="fa-solid fa-chevron-right rpg-wf-context-chevron-book"></i>`;
+            html += '</div>';
+            html += `<div class="rpg-wf-context-entries" data-world="${bookName}" style="display:none;"></div>`;
+            html += '</div>';
+        }
+        html += '</div></div>';
+    }
+
     html += '</div></div>';
 
     // Input row
@@ -452,61 +509,90 @@ function setupEvents(container) {
 
     // Context picker — clear all
     container.querySelector('#rpg-wf-context-select-none')?.addEventListener('click', () => {
-        const cbs = document.querySelectorAll('.rpg-wf-context-book-cb, .rpg-wf-context-entry-cb');
+        const cbs = document.querySelectorAll('.rpg-wf-context-campaign-cb, .rpg-wf-context-book-cb, .rpg-wf-context-entry-cb');
         cbs.forEach(cb => cb.checked = false);
         updateContextCount();
     });
 
-    // Context picker — book checkbox (select/deselect all entries in book)
+    // Context picker — delegated click handler for tree
+    container.querySelector('#rpg-wf-context-picker-list')?.addEventListener('click', async (e) => {
+        // Campaign header click — toggle expand/collapse
+        const campaignHeader = e.target.closest('.rpg-wf-context-campaign-header');
+        if (campaignHeader && !e.target.closest('input')) {
+            const campId = campaignHeader.dataset.campaign;
+            const body = document.querySelector(`.rpg-wf-context-campaign-body[data-campaign="${CSS.escape(campId)}"]`);
+            const chevron = campaignHeader.querySelector('.rpg-wf-context-chevron');
+            if (body) {
+                const show = body.style.display === 'none';
+                body.style.display = show ? '' : 'none';
+                if (chevron) chevron.className = `fa-solid ${show ? 'fa-chevron-down' : 'fa-chevron-right'} rpg-wf-context-chevron`;
+            }
+            return;
+        }
+
+        // Book header click — toggle expand entries
+        const bookHeader = e.target.closest('.rpg-wf-context-book-header');
+        if (bookHeader && !e.target.closest('input')) {
+            const world = bookHeader.closest('.rpg-wf-context-book')?.dataset.world;
+            if (!world) return;
+            const entriesDiv = document.querySelector(`.rpg-wf-context-entries[data-world="${CSS.escape(world)}"]`);
+            const chevron = bookHeader.querySelector('.rpg-wf-context-chevron-book');
+            if (!entriesDiv) return;
+
+            const show = entriesDiv.style.display === 'none';
+
+            // Load entries on first expand
+            if (show && !entriesDiv.dataset.loaded) {
+                try {
+                    const data = await lorebookAPI.loadWorldData(world);
+                    if (data?.entries) {
+                        const sorted = lorebookAPI.getEntriesSorted(data);
+                        const bookCb = document.querySelector(`.rpg-wf-context-book-cb[data-world="${CSS.escape(world)}"]`);
+                        const bookChecked = bookCb?.checked || false;
+                        let html = '';
+                        for (const { uid, entry } of sorted) {
+                            const title = entry.comment || `Entry ${uid}`;
+                            html += `<label class="rpg-wf-context-entry-label"><input type="checkbox" class="rpg-wf-context-entry-cb" data-world="${world}" data-uid="${uid}" ${bookChecked ? 'checked' : ''}> ${title}</label>`;
+                        }
+                        entriesDiv.innerHTML = html || '<span class="rpg-wf-context-empty">No entries</span>';
+                        entriesDiv.dataset.loaded = 'true';
+                    }
+                } catch {
+                    entriesDiv.innerHTML = '<span class="rpg-wf-context-empty">Failed to load</span>';
+                }
+            }
+
+            entriesDiv.style.display = show ? '' : 'none';
+            if (chevron) chevron.className = `fa-solid ${show ? 'fa-chevron-down' : 'fa-chevron-right'} rpg-wf-context-chevron-book`;
+            return;
+        }
+    });
+
+    // Context picker — checkbox cascading
     container.querySelector('#rpg-wf-context-picker-list')?.addEventListener('change', (e) => {
+        // Campaign checkbox — cascade to all books
+        const campCb = e.target.closest('.rpg-wf-context-campaign-cb');
+        if (campCb) {
+            const campId = campCb.dataset.campaign;
+            const bookCbs = document.querySelectorAll(`.rpg-wf-context-book-cb[data-campaign="${CSS.escape(campId)}"]`);
+            bookCbs.forEach(cb => {
+                cb.checked = campCb.checked;
+                // Also cascade to loaded entries
+                const world = cb.dataset.world;
+                const entryCbs = document.querySelectorAll(`.rpg-wf-context-entry-cb[data-world="${CSS.escape(world)}"]`);
+                entryCbs.forEach(ecb => ecb.checked = campCb.checked);
+            });
+        }
+
+        // Book checkbox — cascade to entries
         const bookCb = e.target.closest('.rpg-wf-context-book-cb');
         if (bookCb) {
             const world = bookCb.dataset.world;
             const entryCbs = document.querySelectorAll(`.rpg-wf-context-entry-cb[data-world="${CSS.escape(world)}"]`);
             entryCbs.forEach(cb => cb.checked = bookCb.checked);
         }
+
         updateContextCount();
-    });
-
-    // Context picker — expand book to show individual entries
-    container.querySelector('#rpg-wf-context-picker-list')?.addEventListener('click', async (e) => {
-        const expandBtn = e.target.closest('.rpg-wf-context-book-expand');
-        if (!expandBtn) return;
-
-        const world = expandBtn.dataset.world;
-        const entriesDiv = document.querySelector(`.rpg-wf-context-entries[data-world="${CSS.escape(world)}"]`);
-        if (!entriesDiv) return;
-
-        // Toggle visibility
-        if (entriesDiv.style.display !== 'none') {
-            entriesDiv.style.display = 'none';
-            expandBtn.querySelector('i').className = 'fa-solid fa-chevron-down';
-            return;
-        }
-
-        // Load entries if not already loaded
-        if (!entriesDiv.dataset.loaded) {
-            try {
-                const data = await lorebookAPI.loadWorldData(world);
-                if (data?.entries) {
-                    const sorted = lorebookAPI.getEntriesSorted(data);
-                    const bookCb = document.querySelector(`.rpg-wf-context-book-cb[data-world="${CSS.escape(world)}"]`);
-                    const bookChecked = bookCb?.checked || false;
-                    let html = '';
-                    for (const { uid, entry } of sorted) {
-                        const title = entry.comment || `Entry ${uid}`;
-                        html += `<label class="rpg-wf-context-entry-label"><input type="checkbox" class="rpg-wf-context-entry-cb" data-world="${world}" data-uid="${uid}" ${bookChecked ? 'checked' : ''}> ${title}</label>`;
-                    }
-                    entriesDiv.innerHTML = html || '<span class="rpg-wf-context-empty">No entries</span>';
-                    entriesDiv.dataset.loaded = 'true';
-                }
-            } catch {
-                entriesDiv.innerHTML = '<span class="rpg-wf-context-empty">Failed to load</span>';
-            }
-        }
-
-        entriesDiv.style.display = '';
-        expandBtn.querySelector('i').className = 'fa-solid fa-chevron-up';
     });
 
     // Enter to send (Ctrl+Enter or Shift+Enter)
