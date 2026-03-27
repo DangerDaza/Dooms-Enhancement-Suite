@@ -18444,6 +18444,44 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     background: rgba(255, 165, 0, 0.2);
 }
 
+/* ── Header ─────────────────────────────────────────────────────────── */
+.rpg-wf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+.rpg-wf-header h3 {
+    margin: 0;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffa500;
+}
+.rpg-wf-header-actions {
+    display: flex;
+    gap: 8px;
+}
+.rpg-wf-back-btn, .rpg-wf-clear-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    color: var(--rpg-text, #e0e0e0);
+    cursor: pointer;
+    font-size: 0.82em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+}
+.rpg-wf-back-btn:hover, .rpg-wf-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 /* ── Container ──────────────────────────────────────────────────────── */
 .rpg-wf-container {
     position: absolute;

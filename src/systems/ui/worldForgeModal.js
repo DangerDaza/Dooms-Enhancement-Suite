@@ -18,7 +18,15 @@ let pendingEntries = []; // Entries in the preview panel awaiting accept/reject
 function buildModalHTML() {
     const allNames = lorebookAPI.getAllWorldNames();
 
-    let html = '<div class="rpg-wf-layout">';
+    let html = '<div class="rpg-wf-header">';
+    html += '<h3><i class="fa-solid fa-hammer"></i> World Forge</h3>';
+    html += '<div class="rpg-wf-header-actions">';
+    html += '<button class="rpg-wf-clear-btn" title="Clear conversation"><i class="fa-solid fa-eraser"></i> Clear</button>';
+    html += '<button class="rpg-wf-back-btn" title="Back to Lore Library"><i class="fa-solid fa-arrow-left"></i> Back</button>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="rpg-wf-layout">';
 
     // ── Left: Conversation Panel ──
     html += '<div class="rpg-wf-conversation">';
@@ -332,6 +340,27 @@ function handleDiscardEntry(index) {
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 function setupEvents(container) {
+    // Back button — close forge, return to lore library
+    container.querySelector('.rpg-wf-back-btn')?.addEventListener('click', () => {
+        const forgeContainer = document.getElementById('rpg-wf-container');
+        const modal = document.getElementById('rpg-lorebook-modal');
+        if (forgeContainer) forgeContainer.style.display = 'none';
+        const body = modal?.querySelector('.rpg-lb-modal-body');
+        if (body) body.style.display = '';
+        modal?.querySelector('.rpg-wf-open-btn')?.classList.remove('active');
+    });
+
+    // Clear button — reset conversation
+    container.querySelector('.rpg-wf-clear-btn')?.addEventListener('click', () => {
+        worldForge.clearConversation();
+        pendingEntries = [];
+        const messages = container.querySelector('#rpg-wf-messages');
+        if (messages) {
+            messages.innerHTML = '<div class="rpg-wf-welcome"><i class="fa-solid fa-hammer"></i><h3>World Forge</h3><p>Describe the lore you want to create and your connected AI will generate lorebook entries.</p></div>';
+        }
+        renderEntriesList();
+    });
+
     // Generate button
     container.querySelector('#rpg-wf-generate-btn')?.addEventListener('click', handleGenerate);
 
