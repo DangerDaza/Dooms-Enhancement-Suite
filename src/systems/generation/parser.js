@@ -123,15 +123,17 @@ export function parseResponse(responseText) {
     // from any JSON found using brace-matching for maximum compatibility
     // Use brace-matching to find complete JSON objects
     const extractedObjects = [];
+    // Limit brace-matching to first 50k chars to prevent pathological scanning on huge responses
+    const scanLimit = Math.min(cleanedResponse.length, 50000);
     let i = 0;
-    while (i < cleanedResponse.length) {
+    while (i < scanLimit) {
         if (cleanedResponse[i] === '{') {
             // Found opening brace, find matching closing brace
             let depth = 1;
             let j = i + 1;
             let inString = false;
             let escapeNext = false;
-            while (j < cleanedResponse.length && depth > 0) {
+            while (j < scanLimit && depth > 0) {
                 const char = cleanedResponse[j];
                 if (escapeNext) {
                     escapeNext = false;

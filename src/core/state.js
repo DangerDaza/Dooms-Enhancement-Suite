@@ -279,6 +279,7 @@ export let extensionSettings = {
         showAuthorNames: true,            // Show character name headers
         showNarratorLabel: true,          // Show "Narrator" label for narration blocks
         narratorItalic: true,             // Italicize narrator text
+        hideStAvatar: false,              // Hide SillyTavern's default character avatar when bubbles active
     },
     infoPanelSettings: {
         bgColor: '#e94560',

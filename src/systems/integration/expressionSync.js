@@ -27,6 +27,7 @@ let lastCapturedExpressionSrc = null;
 let scheduledCaptureTimers = [];
 let hiddenExpressionStyleElement = null;
 let pendingCaptureRequestId = 0;
+let _refreshRAF = 0;
 
 function normalizeName(name) {
     return String(name || '').trim().toLowerCase();
@@ -263,8 +264,15 @@ function findExpressionImageElement(speakerName = null) {
 }
 
 function refreshExpressionConsumers() {
-    renderThoughts({ preserveScroll: true });
-    updatePortraitBar();
+    // Batch rapid mutations (e.g. expression animations) into one render per frame
+    cancelAnimationFrame(_refreshRAF);
+    _refreshRAF = requestAnimationFrame(() => {
+        renderThoughts({ preserveScroll: true });
+        updatePortraitBar();
+        // Dynamic import to avoid circular dependency:
+        // expressionSync → chatBubbles → portraitBar → avatars → expressionSync
+        import('../rendering/chatBubbles.js').then(m => m.refreshBubbleAvatars()).catch(() => {});
+    });
 }
 
 function getHideStyleCss() {

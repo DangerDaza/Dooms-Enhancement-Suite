@@ -275,6 +275,7 @@ function loadChatBubbleSettingsUI() {
     $('#rpg-cb-show-author-names').prop('checked', cbs.showAuthorNames !== false);
     $('#rpg-cb-show-narrator-label').prop('checked', cbs.showNarratorLabel !== false);
     $('#rpg-cb-narrator-italic').prop('checked', cbs.narratorItalic !== false);
+    $('#rpg-cb-hide-st-avatar').prop('checked', cbs.hideStAvatar === true);
 
     // Bubble colors
     $('#rpg-cb-narrator-color').val(cbs.narratorTextColor || '#999999');
@@ -956,13 +957,6 @@ async function initUI() {
     };
     const _saveCb = () => { saveSettings(); applyChatBubbleSettings(); };
     const _saveCbRerender = () => { _saveCb(); revertAllChatBubbles(); applyAllChatBubbles(); };
-    // Debounced rerender for sliders — update CSS vars instantly, rerender once after dragging stops
-    let _rerenderTimer = null;
-    const _saveCbRerenderDebounced = () => {
-        _saveCb();
-        clearTimeout(_rerenderTimer);
-        _rerenderTimer = setTimeout(() => { revertAllChatBubbles(); applyAllChatBubbles(); }, 300);
-    };
 
     // Bubble mode selector
     $('#rpg-cb-bubble-mode').on('change', function() {
@@ -974,10 +968,22 @@ async function initUI() {
     });
 
     // Bubble appearance toggles
-    $('#rpg-cb-show-avatars').on('change', function() { _cbSettings().showAvatars = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-show-avatars').on('change', function() {
+        _cbSettings().showAvatars = $(this).prop('checked');
+        _saveCb();
+        const show = $(this).prop('checked');
+        document.querySelectorAll('.dooms-bubbles').forEach(el => {
+            el.classList.toggle('dooms-bubbles--no-avatars', !show);
+        });
+    });
     $('#rpg-cb-show-author-names').on('change', function() { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-show-narrator-label').on('change', function() { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-narrator-italic').on('change', function() { _cbSettings().narratorItalic = $(this).prop('checked'); _saveCb(); });
+    $('#rpg-cb-hide-st-avatar').on('change', function() {
+        _cbSettings().hideStAvatar = $(this).prop('checked');
+        _saveCb();
+        document.body.classList.toggle('dooms-hide-st-avatar', $(this).prop('checked'));
+    });
 
     // Bubble color pickers
     $('#rpg-cb-narrator-color').on('input', function() { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });
@@ -996,13 +1002,13 @@ async function initUI() {
         const v = parseInt($(this).val());
         _cbSettings().fontSize = v;
         $('#rpg-cb-font-size-value').text(v + '%');
-        _saveCbRerenderDebounced();
+        _saveCb();
     });
     $('#rpg-cb-avatar-size').on('input', function() {
         const v = parseInt($(this).val());
         _cbSettings().avatarSize = v;
         $('#rpg-cb-avatar-size-value').text(v + 'px');
-        _saveCbRerenderDebounced();
+        _saveCb();
     });
     $('#rpg-cb-border-radius').on('input', function() {
         const v = parseInt($(this).val());
@@ -1033,7 +1039,9 @@ async function initUI() {
             showAuthorNames: true,
             showNarratorLabel: true,
             narratorItalic: true,
+            hideStAvatar: false,
         };
+        document.body.classList.remove('dooms-hide-st-avatar');
         // Update all inputs to defaults
         loadChatBubbleSettingsUI();
         _saveCb();
@@ -1542,6 +1550,9 @@ async function initUI() {
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();
+    if (extensionSettings.chatBubbleSettings?.hideStAvatar) {
+        document.body.classList.add('dooms-hide-st-avatar');
+    }
     updateSectionVisibility();
     applyTheme();
     toggleCustomColors();

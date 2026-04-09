@@ -2,7 +2,6 @@
  * Lorebook Rendering & Event Delegation Module (v2 — Three-Panel Layout)
  *
  * Layout:  Left panel (campaign tree) → Middle panel (entry list) → Right panel (editor)
- * Views:   List View (three-panel)  |  Graph View (future, Phase 2)
  *
  * Exported API:
  *   - initLorebookEventDelegation()  -- call once during extension init
@@ -15,8 +14,7 @@ import { saveSettings } from '../../core/persistence.js';
 import * as lorebookAPI from '../lorebook/lorebookAPI.js';
 import * as campaignManager from '../lorebook/campaignManager.js';
 import { getLorebookModal } from '../ui/lorebookModal.js';
-import { renderGraphView, destroyGraphView } from './lorebookGraph.js';
-import { renderWorldForge, clearWorldForge } from '../ui/worldForgeModal.js';
+import { renderMobileLorebook, initMobileLorebookEventDelegation } from './lorebookMobile.js';
 
 // ─── Icon Palette ────────────────────────────────────────────────────────────
 
@@ -86,10 +84,9 @@ export function resetLorebookViewState() {
     selectedBook = null;
     selectedEntry = null;
     expandedEditor = false;
-    destroyGraphView();
 }
 
-/** Sets the selected book and entry (used by graph view to jump to list editor) */
+/** Sets the selected book and entry */
 export function setSelectedBookAndEntry(bookName, uid) {
     selectedBook = bookName;
     selectedEntry = uid != null ? { world: bookName, uid: Number(uid) } : null;
@@ -111,26 +108,13 @@ export function renderLorebook() {
     const body = document.querySelector('#rpg-lorebook-modal .rpg-lb-modal-body');
     if (!body) return;
 
-    const viewMode = extensionSettings.lorebook?.viewMode || 'list';
-
-    if (viewMode === 'graph') {
-        destroyGraphView();
-        renderGraphView(body);
-        renderFooter();
-        syncViewToggle(viewMode);
+    if (isMobileView()) {
+        renderMobileLorebook();
         return;
-    } else {
-        renderListView(body);
     }
 
+    renderListView(body);
     renderFooter();
-    syncViewToggle(viewMode);
-}
-
-function syncViewToggle(mode) {
-    const $modal = $('#rpg-lorebook-modal');
-    $modal.find('.rpg-lb-view-btn').removeClass('active');
-    $modal.find(`.rpg-lb-view-btn[data-view="${mode}"]`).addClass('active');
 }
 
 // ─── List View (Three-Panel) ─────────────────────────────────────────────────
@@ -139,7 +123,8 @@ function renderListView(body) {
     if (expandedEditor && selectedEntry) {
         body.innerHTML = renderExpandedEditor();
     } else {
-        let html = '<div class="rpg-lb-list-layout" data-mobile-panel="left">';
+        const hasEditor = selectedEntry ? 'true' : 'false';
+        let html = `<div class="rpg-lb-list-layout" data-mobile-panel="left" data-has-editor="${hasEditor}">`;
         html += renderLeftPanel();
         html += renderMiddlePanel();
         html += renderRightPanel();
@@ -218,13 +203,13 @@ function renderLeftPanel() {
 
         if (visibleUnfiled.length > 0 || lastFilter === 'all') {
             html += '<div class="rpg-lb-campaign-group unfiled-group" data-campaign="unfiled">';
-            html += '<div class="rpg-lb-campaign-header" data-campaign="unfiled">';
+            html += '<div class="rpg-lb-campaign-header collapsed" data-campaign="unfiled">';
             html += '<i class="fa-solid fa-folder-open rpg-lb-campaign-icon"></i>';
             html += '<span class="rpg-lb-campaign-name">Unfiled</span>';
             html += `<span class="rpg-lb-campaign-stats">${unfiled.length}</span>`;
             html += '<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>';
             html += '</div>';
-            html += '<div class="rpg-lb-campaign-body">';
+            html += '<div class="rpg-lb-campaign-body" style="display:none;">';
             for (const worldName of unfiled) {
                 html += buildTreeBookHtml(worldName, activeNames, lastFilter);
             }
@@ -485,6 +470,7 @@ function buildEditorHtml(worldName, uid, entry, isExpanded) {
     html += `<span class="rpg-lb-editor-title"><i class="fa-solid fa-scroll"></i> ${escapeHtml(entry.comment || `Entry ${uid}`)}</span>`;
     if (!isExpanded) {
         html += '<button class="rpg-lb-expand-btn" title="Expand to full width"><i class="fa-solid fa-expand"></i></button>';
+        html += '<button class="rpg-lb-close-editor-btn" title="Close editor"><i class="fa-solid fa-xmark"></i></button>';
     }
     html += '</div>';
 
@@ -682,12 +668,21 @@ function applySearchFilter(container, query) {
 
 function syncAllBookToggleStates() {
     const $modal = $('#rpg-lorebook-modal');
+    // V2 desktop layout
     $modal.find('.rpg-lb-tree-book').each(function () {
         const $book = $(this);
         const worldName = $book.data('world');
         const isActive = lorebookAPI.isWorldActive(worldName);
         $book.find('.rpg-lb-toggle[data-type="book"]').toggleClass('active', isActive);
         $book.toggleClass('active-book', isActive).toggleClass('inactive', !isActive);
+    });
+    // Mobile layout (main branch spine elements)
+    $modal.find('.rpg-lb-book-spine').each(function () {
+        const $spine = $(this);
+        const worldName = $spine.data('world');
+        const isActive = lorebookAPI.isWorldActive(worldName);
+        $spine.find('.rpg-lb-toggle[data-type="book"]').toggleClass('active', isActive);
+        $spine.toggleClass('active-book', isActive).toggleClass('inactive', !isActive);
     });
 }
 
@@ -699,7 +694,7 @@ function refreshActiveStats() {
         const $group = $(this);
         const campaignId = $group.data('campaign');
         const $statsSpan = $group.find('.rpg-lb-campaign-stats').first();
-        const books = $group.find('.rpg-lb-tree-book');
+        const books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
         let groupActive = 0;
         books.each(function () {
             if (activeNames.includes($(this).data('world'))) groupActive++;
@@ -722,7 +717,7 @@ function refreshCampaignToggles() {
     $modal.find('.rpg-lb-campaign-toggle').each(function () {
         const $toggle = $(this);
         const $group = $toggle.closest('.rpg-lb-campaign-group');
-        const $books = $group.find('.rpg-lb-tree-book');
+        const $books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
         if ($books.length === 0) { $toggle.removeClass('active'); return; }
         let allActive = true;
         $books.each(function () {
@@ -736,7 +731,12 @@ function refreshCampaignToggles() {
 // ─── Mobile Panel Navigation ─────────────────────────────────────────────────
 
 function isMobileView() {
-    return window.matchMedia('(max-width: 600px)').matches;
+    // Detect actual mobile devices — not just narrow desktop windows.
+    // The modal is full-screen, so desktop should always get the v2 three-panel layout.
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.matchMedia('(max-width: 1024px)').matches;
+    const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    return (isTouch && isSmallScreen) || isMobileUA;
 }
 
 function setMobilePanel(panel) {
@@ -766,6 +766,9 @@ function updateRightPanel() {
     const temp = document.createElement('div');
     temp.innerHTML = newHtml;
     parent.replaceChild(temp.firstElementChild, container);
+    // Update layout attribute so CSS can show/hide editor panel
+    const layout = document.querySelector('.rpg-lb-list-layout');
+    if (layout) layout.dataset.hasEditor = selectedEntry ? 'true' : 'false';
 }
 
 // ─── Event Delegation ────────────────────────────────────────────────────────
@@ -773,6 +776,9 @@ function updateRightPanel() {
 export function initLorebookEventDelegation() {
     const $modal = $('#rpg-lorebook-modal');
     if (!$modal.length) return;
+
+    // Initialize mobile event handlers (main branch selectors — no conflict with v2)
+    initMobileLorebookEventDelegation();
 
     // ── Close ────────────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-close', function () {
@@ -800,40 +806,6 @@ export function initLorebookEventDelegation() {
                     e.stopImmediatePropagation();
                 }
             }
-        }
-    });
-
-    // ── View toggle ──────────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-view-btn', function () {
-        const view = $(this).data('view');
-        if (extensionSettings.lorebook) extensionSettings.lorebook.viewMode = view;
-        saveSettings();
-        // Hide forge if open
-        const forgeContainer = document.getElementById('rpg-wf-container');
-        if (forgeContainer) forgeContainer.style.display = 'none';
-        const body = $modal.find('.rpg-lb-modal-body')[0];
-        if (body) body.style.display = '';
-        renderLorebook();
-    });
-
-    // ── World Forge toggle ──────────────────────────────────────────────────
-    $modal.on('click', '.rpg-wf-open-btn', function () {
-        const forgeContainer = document.getElementById('rpg-wf-container');
-        const body = $modal.find('.rpg-lb-modal-body')[0];
-        if (!forgeContainer) return;
-
-        const isVisible = forgeContainer.style.display !== 'none';
-        if (isVisible) {
-            // Close forge, show lore library
-            forgeContainer.style.display = 'none';
-            if (body) body.style.display = '';
-            $(this).removeClass('active');
-        } else {
-            // Open forge, hide lore library
-            forgeContainer.style.display = 'flex';
-            if (body) body.style.display = 'none';
-            $(this).addClass('active');
-            renderWorldForge(forgeContainer);
         }
     });
 
@@ -1147,6 +1119,13 @@ export function initLorebookEventDelegation() {
         renderLorebook();
     });
 
+    // ── Close editor (deselect entry, expand middle panel) ────────────────────
+    $modal.on('click', '.rpg-lb-close-editor-btn', function () {
+        selectedEntry = null;
+        expandedEditor = false;
+        renderLorebook();
+    });
+
     // ── Breadcrumb back ──────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-breadcrumb-back', function () {
         expandedEditor = false;
@@ -1200,7 +1179,7 @@ export function initLorebookEventDelegation() {
     $modal.on('click', '.rpg-lb-campaign-toggle', async function (e) {
         e.stopPropagation();
         const $group = $(this).closest('.rpg-lb-campaign-group');
-        const $books = $group.find('.rpg-lb-tree-book');
+        const $books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
         if ($books.length === 0) return;
 
         let allActive = true;

@@ -24,7 +24,8 @@ export class LorebookModal {
     open() {
         if (this.isAnimating || !this.modal) return;
 
-        // Apply theme
+        // Apply theme — copy --rpg-* variables from the panel so the modal
+        // matches the active theme (volcanic, cyberpunk, etc.)
         const theme = extensionSettings.theme || 'default';
         this.modal.setAttribute('data-theme', theme);
 

@@ -28,6 +28,9 @@ const flippedCards = new Set();
  * @param {string} path - Item path
  * @returns {string} Lock icon HTML or empty string
  */
+/** Cache key for skipping redundant renderThoughts() calls */
+let _lastThoughtsDataKey = null;
+
 /** @deprecated Lock UI disabled — preserved for future scene tracker integration */
 function getLockIconHtml(_tracker, _path) {
     return '';
@@ -249,7 +252,18 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     const thoughtsData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (!thoughtsData) {
         $thoughtsContainer.html('<div class="rpg-inventory-empty">No character data generated yet</div>');
+        _lastThoughtsDataKey = null;
         return;
+    }
+    // Skip full rebuild if data unchanged and this is a passive refresh (not a user action)
+    if (preserveScroll) {
+        const dataKey = thoughtsData + '|' + (extensionSettings.trackerConfig?.presentCharacters ? JSON.stringify(extensionSettings.trackerConfig.presentCharacters) : '');
+        if (dataKey === _lastThoughtsDataKey && $thoughtsContainer.children().length > 0) {
+            return;
+        }
+        _lastThoughtsDataKey = dataKey;
+    } else {
+        _lastThoughtsDataKey = null; // User action — force rebuild and reset cache
     }
     debugLog('[RPG Thoughts] ==================== RENDERING PRESENT CHARACTERS ====================');
     debugLog('[RPG Thoughts] showCharacterThoughts setting:', extensionSettings.showCharacterThoughts);
