@@ -1,11 +1,12 @@
 /**
- * Lorebook Rendering & Event Delegation Module
- * Handles UI rendering and event handling for the Lorebook Manager modal.
- * Follows the same init-once / render-often pattern as quests.js.
+ * Lorebook Rendering & Event Delegation Module (v2 — Three-Panel Layout)
+ *
+ * Layout:  Left panel (campaign tree) → Middle panel (entry list) → Right panel (editor)
  *
  * Exported API:
  *   - initLorebookEventDelegation()  -- call once during extension init
  *   - renderLorebook()               -- call to populate/refresh the modal body
+ *   - resetLorebookViewState()       -- call on modal open to clear transient state
  */
 
 import { extensionSettings } from '../../core/state.js';
@@ -13,46 +14,25 @@ import { saveSettings } from '../../core/persistence.js';
 import * as lorebookAPI from '../lorebook/lorebookAPI.js';
 import * as campaignManager from '../lorebook/campaignManager.js';
 import { getLorebookModal } from '../ui/lorebookModal.js';
+import { renderMobileLorebook, initMobileLorebookEventDelegation } from './lorebookMobile.js';
 
 // ─── Icon Palette ────────────────────────────────────────────────────────────
 
-/** Curated list of Font Awesome icons for campaign icon picker */
 const CAMPAIGN_ICONS = [
-    // Fantasy
     'fa-dragon', 'fa-hat-wizard', 'fa-wand-sparkles', 'fa-shield-halved',
     'fa-skull-crossbones', 'fa-crown', 'fa-dungeon',
-    // Sci-Fi
     'fa-rocket', 'fa-robot', 'fa-atom', 'fa-satellite', 'fa-meteor', 'fa-user-astronaut',
-    // Nature / World
     'fa-mountain-sun', 'fa-tree', 'fa-water', 'fa-globe', 'fa-seedling',
-    // Genre
     'fa-ghost', 'fa-heart', 'fa-masks-theater', 'fa-gun', 'fa-car', 'fa-city',
     'fa-house', 'fa-scroll',
-    // Utility
     'fa-folder', 'fa-book', 'fa-star', 'fa-fire', 'fa-bolt', 'fa-gem',
 ];
 
-/** Preset color palette for campaign icons */
 const CAMPAIGN_COLORS = [
-    '#e94560', // red
-    '#e07b39', // orange
-    '#f0c040', // gold
-    '#2ecc71', // green
-    '#1abc9c', // teal
-    '#4a7ba7', // blue
-    '#9b59b6', // purple
-    '#e84393', // pink
-    '#95a5a6', // gray
-    '',         // default (no color override)
+    '#e94560', '#e07b39', '#f0c040', '#2ecc71', '#1abc9c',
+    '#4a7ba7', '#9b59b6', '#e84393', '#95a5a6', '',
 ];
 
-/**
- * Builds the HTML for the icon picker popup
- * @param {string} campaignId - Campaign ID to associate with
- * @param {string} currentIcon - Currently selected icon class
- * @param {string} currentColor - Currently selected color hex
- * @returns {string} HTML string
- */
 function buildIconPickerHtml(campaignId, currentIcon, currentColor) {
     let html = `<div class="rpg-lb-icon-picker" data-campaign="${campaignId}">`;
     html += '<div class="rpg-lb-icon-grid">';
@@ -60,8 +40,7 @@ function buildIconPickerHtml(campaignId, currentIcon, currentColor) {
         const isSelected = icon === currentIcon ? ' selected' : '';
         html += `<button class="rpg-lb-icon-option${isSelected}" data-icon="${icon}" title="${icon.replace('fa-', '')}"><i class="fa-solid ${icon}"></i></button>`;
     }
-    html += '</div>';
-    html += '<div class="rpg-lb-color-row">';
+    html += '</div><div class="rpg-lb-color-row">';
     for (const color of CAMPAIGN_COLORS) {
         const isSelected = color === currentColor ? ' selected' : '';
         if (color) {
@@ -70,32 +49,19 @@ function buildIconPickerHtml(campaignId, currentIcon, currentColor) {
             html += `<button class="rpg-lb-color-swatch${isSelected}" data-color="" title="Default"><i class="fa-solid fa-xmark"></i></button>`;
         }
     }
-    html += '</div>';
-    html += '</div>';
+    html += '</div></div>';
     return html;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Escapes a string for safe HTML insertion
- * @param {string} text - Raw text to escape
- * @returns {string} HTML-safe string
- */
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-/** @type {ReturnType<typeof setTimeout>|null} */
 let saveDebounceTimer = null;
-
-/**
- * Debounced save for WI data — collapses rapid-fire edits into a single write
- * @param {string} worldName - WI filename
- * @param {Object} data - WI data object
- */
 function debouncedSave(worldName, data) {
     clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(() => {
@@ -103,271 +69,185 @@ function debouncedSave(worldName, data) {
     }, 500);
 }
 
-/** @type {ReturnType<typeof setTimeout>|null} */
 let searchDebounceTimer = null;
 
-// ─── Entry Rendering (lazy) ─────────────────────────────────────────────────
+const posBadgeMap = { 0: '↑Char', 1: '↓Char', 2: '↑AN', 3: '↓AN', 4: '@D', 5: '↑EM', 6: '↓EM', 7: 'Outlet' };
+
+// ─── Transient View State ────────────────────────────────────────────────────
+
+let selectedBook = null;       // worldName of currently selected lorebook
+let selectedEntry = null;      // { world: string, uid: number } | null
+let expandedEditor = false;    // full-width editor mode
+
+/** Resets transient view state (call on modal open) */
+export function resetLorebookViewState() {
+    selectedBook = null;
+    selectedEntry = null;
+    expandedEditor = false;
+}
+
+/** Sets the selected book and entry */
+export function setSelectedBookAndEntry(bookName, uid) {
+    selectedBook = bookName;
+    selectedEntry = uid != null ? { world: bookName, uid: Number(uid) } : null;
+    expandedEditor = false;
+}
+
+// ─── Panel-specific Data Cache ───────────────────────────────────────────────
+
+let middlePanelData = null;   // cached WI data for the currently selected book
+let middlePanelEntries = [];  // sorted entries for the middle panel
+
+// ─── Main Render (Orchestrator) ──────────────────────────────────────────────
 
 /**
- * Renders all entries for a single lorebook into the given container.
- * Called lazily when a book spine is expanded for the first time.
- *
- * @param {string} worldName - WI filename
- * @param {HTMLElement} container - The `.rpg-lb-lore-entries` element
- * @param {Object|null} [preloadedData=null] - Pre-loaded WI data to use instead of cache/disk
+ * Renders the entire Lorebook Manager modal body.
+ * Delegates to the appropriate view renderer based on viewMode.
  */
-async function renderEntriesForBook(worldName, container, preloadedData = null) {
-    container.innerHTML = '<div class="rpg-lb-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading entries...</div>';
+export function renderLorebook() {
+    const body = document.querySelector('#rpg-lorebook-modal .rpg-lb-modal-body');
+    if (!body) return;
 
-    const data = preloadedData || await lorebookAPI.loadWorldData(worldName);
-    if (!data) {
-        container.innerHTML = '<div class="rpg-lb-loading">Failed to load world data.</div>';
+    if (isMobileView()) {
+        renderMobileLorebook();
         return;
     }
 
-    const sorted = lorebookAPI.getEntriesSorted(data);
-    let html = '';
+    renderListView(body);
+    renderFooter();
+}
 
-    for (const { uid, entry } of sorted) {
-        html += buildEntryHtml(worldName, uid, entry);
-    }
+// ─── List View (Three-Panel) ─────────────────────────────────────────────────
 
-    // "Add Entry" button at the bottom
-    html += `<button class="rpg-lb-btn-add-entry" data-world="${escapeHtml(worldName)}"><i class="fa-solid fa-plus"></i> Add Entry</button>`;
-
-    container.innerHTML = html;
-
-    // Update the parent book spine's meta badges
-    const spineEl = container.previousElementSibling;
-    if (spineEl) {
-        const metaEl = spineEl.querySelector('.rpg-lb-spine-meta');
-        const tokenEl = spineEl.querySelector('.rpg-lb-spine-tokens');
-        if (metaEl) metaEl.textContent = `${sorted.length} entries`;
-        if (tokenEl) tokenEl.textContent = `~${lorebookAPI.estimateTokens(data)} tok`;
+function renderListView(body) {
+    if (expandedEditor && selectedEntry) {
+        body.innerHTML = renderExpandedEditor();
+    } else {
+        const hasEditor = selectedEntry ? 'true' : 'false';
+        let html = `<div class="rpg-lb-list-layout" data-mobile-panel="left" data-has-editor="${hasEditor}">`;
+        html += renderLeftPanel();
+        html += renderMiddlePanel();
+        html += renderRightPanel();
+        html += '</div>';
+        body.innerHTML = html;
     }
 }
 
-/**
- * Builds the full HTML for a single WI entry (header + collapsible body).
- *
- * @param {string} worldName - WI filename
- * @param {number} uid - Entry UID
- * @param {Object} entry - The WI entry object
- * @returns {string} HTML string
- */
-function buildEntryHtml(worldName, uid, entry) {
-    const w = escapeHtml(worldName);
-    const isEnabled = !entry.disable;
-    const titleText = entry.comment || `Entry ${uid}`;
-    const tokEst = Math.round((entry.content?.length || 0) / 3.5);
+// ─── Left Panel (Campaign / Book Tree) ───────────────────────────────────────
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    let header = `<div class="rpg-lb-entry-header">`;
-    header += `<i class="fa-solid fa-chevron-right rpg-lb-entry-chevron"></i>`;
-    header += `<div class="rpg-lb-toggle ${isEnabled ? 'active' : ''}" data-type="entry" data-world="${w}" data-uid="${uid}"></div>`;
-    // Entry state selector (🟢 Normal, 🔵 Constant, 🔗 Vectorized)
-    header += `<select class="rpg-lb-state-select" data-world="${w}" data-uid="${uid}" data-field="entryState" title="Entry Status">`;
-    header += `<option value="normal" ${!entry.constant && !entry.vectorized ? 'selected' : ''}>&#x1F7E2;</option>`;
-    header += `<option value="constant" ${entry.constant ? 'selected' : ''}>&#x1F535;</option>`;
-    header += `<option value="vectorized" ${entry.vectorized ? 'selected' : ''}>&#x1F517;</option>`;
-    header += `</select>`;
-    header += `<span class="rpg-lb-entry-title"><i class="fa-solid fa-scroll"></i> ${escapeHtml(titleText)}</span>`;
-    // Position badge
-    const posBadgeMap = { 0: '↑Char', 1: '↓Char', 2: '↑AN', 3: '↓AN', 4: '@D', 5: '↑EM', 6: '↓EM', 7: 'Outlet' };
-    header += `<span class="rpg-lb-entry-badge">${posBadgeMap[entry.position] ?? '↑Char'} ${entry.position == 4 ? 'd' + (entry.depth ?? 4) : ''}</span>`;
-    header += `<span class="rpg-lb-entry-badge">~${tokEst} tok</span>`;
-    header += `<div class="rpg-lb-entry-order-inline"><span>Order</span><input type="number" value="${entry.order ?? 100}" min="0" max="9999" data-world="${w}" data-uid="${uid}" data-field="order"></div>`;
-    header += `<div class="rpg-lb-entry-actions">`;
-    header += `<button class="rpg-lb-entry-action-btn rpg-lb-entry-delete" data-world="${w}" data-uid="${uid}" title="Delete"><i class="fa-solid fa-trash"></i></button>`;
-    header += `</div>`;
-    header += `</div>`;
-
-    // ── Body (form) ─────────────────────────────────────────────────────────
-    let body = `<div class="rpg-lb-entry-body">`;
-
-    // Title / Memo + UID
-    body += `<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-tag"></i> Title / Memo</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.comment || '')}" data-world="${w}" data-uid="${uid}" data-field="comment"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-fingerprint"></i> UID</div><input class="rpg-lb-input" type="text" value="${uid}" disabled style="opacity:0.5;text-align:center;"></div>`;
-    body += `</div></div>`;
-
-    // Position + Depth (role is baked into @D sub-options, matching ST's approach)
-    const posVal = entry.position ?? 0;
-    const roleVal = entry.role ?? 0;
-    body += `<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group md"><div class="rpg-lb-field-label"><i class="fa-solid fa-location-dot"></i> Position</div>`;
-    body += `<select class="rpg-lb-select rpg-lb-position-select" data-world="${w}" data-uid="${uid}" data-field="position">`;
-    body += `<option value="0" data-role="" ${posVal == 0 ? 'selected' : ''}>&#8593;Char &#8212; Before Char Defs</option>`;
-    body += `<option value="1" data-role="" ${posVal == 1 ? 'selected' : ''}>&#8595;Char &#8212; After Char Defs</option>`;
-    body += `<option value="2" data-role="" ${posVal == 2 ? 'selected' : ''}>&#8593;AN &#8212; Before Author's Note</option>`;
-    body += `<option value="3" data-role="" ${posVal == 3 ? 'selected' : ''}>&#8595;AN &#8212; After Author's Note</option>`;
-    body += `<option value="4" data-role="0" ${posVal == 4 && roleVal == 0 ? 'selected' : ''}>@D &#9881;&#65039; &#8212; At Depth (System)</option>`;
-    body += `<option value="4" data-role="1" ${posVal == 4 && roleVal == 1 ? 'selected' : ''}>@D &#128100; &#8212; At Depth (User)</option>`;
-    body += `<option value="4" data-role="2" ${posVal == 4 && roleVal == 2 ? 'selected' : ''}>@D &#129302; &#8212; At Depth (Assistant)</option>`;
-    body += `<option value="5" data-role="" ${posVal == 5 ? 'selected' : ''}>&#8593;EM &#8212; Before Examples</option>`;
-    body += `<option value="6" data-role="" ${posVal == 6 ? 'selected' : ''}>&#8595;EM &#8212; After Examples</option>`;
-    body += `<option value="7" data-role="" ${posVal == 7 ? 'selected' : ''}>&#10145;&#65039; Outlet</option>`;
-    body += `</select></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-layer-group"></i> Depth</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.depth ?? 4}" data-world="${w}" data-uid="${uid}" data-field="depth"></div>`;
-    body += `</div>`;
-    // Outlet Name (shown only when position=7)
-    body += `<div class="rpg-lb-form-row rpg-lb-outlet-row" ${posVal != 7 ? 'style="display:none;"' : ''}>`;
-    body += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-plug"></i> Outlet Name</div>`;
-    body += `<input class="rpg-lb-input" type="text" value="${escapeHtml(entry.outletName || '')}" data-world="${w}" data-uid="${uid}" data-field="outletName" placeholder="Outlet Name"></div>`;
-    body += `</div>`;
-    body += `</div>`;
-
-    // Keywords card
-    body += `<div class="rpg-lb-keywords-card">`;
-    // Primary
-    body += `<div class="rpg-lb-kw-section"><div class="rpg-lb-kw-section-header"><div class="rpg-lb-field-label"><i class="fa-solid fa-key"></i> Primary Keywords</div></div>`;
-    body += `<textarea class="rpg-lb-input rpg-lb-kw-textarea" data-world="${w}" data-uid="${uid}" data-field="key" rows="2" placeholder="Comma-separated keywords">${(entry.key || []).join(', ')}</textarea></div>`;
-    // Secondary
-    body += `<div class="rpg-lb-kw-section"><div class="rpg-lb-kw-section-header"><div class="rpg-lb-field-label"><i class="fa-solid fa-key"></i> Secondary Keywords</div>`;
-    body += `<select class="rpg-lb-kw-logic-select" data-world="${w}" data-uid="${uid}" data-field="selectiveLogic">`;
-    body += `<option value="0" ${entry.selectiveLogic == 0 ? 'selected' : ''}>AND ANY</option>`;
-    body += `<option value="1" ${entry.selectiveLogic == 1 ? 'selected' : ''}>AND ALL</option>`;
-    body += `<option value="2" ${entry.selectiveLogic == 2 ? 'selected' : ''}>NOT ALL</option>`;
-    body += `<option value="3" ${entry.selectiveLogic == 3 ? 'selected' : ''}>NOT ANY</option>`;
-    body += `</select></div>`;
-    body += `<textarea class="rpg-lb-input rpg-lb-kw-textarea secondary" data-world="${w}" data-uid="${uid}" data-field="keysecondary" rows="2" placeholder="Comma-separated secondary keywords">${(entry.keysecondary || []).join(', ')}</textarea></div>`;
-    body += `</div>`; // keywords-card
-
-    // Content
-    body += `<div class="rpg-lb-form-section"><div class="rpg-lb-field-label"><i class="fa-solid fa-align-left"></i> Content</div>`;
-    body += `<textarea class="rpg-lb-textarea" data-world="${w}" data-uid="${uid}" data-field="content" rows="4">${escapeHtml(entry.content || '')}</textarea>`;
-    body += `<div class="rpg-lb-content-footer">`;
-    body += `<span class="rpg-lb-token-count"><i class="fa-solid fa-coins"></i> ~${tokEst} tokens</span>`;
-    body += `<label class="rpg-lb-wi-checkbox"><input type="checkbox" ${entry.selective ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="selective"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> Selective</label>`;
-    body += `</div></div>`;
-
-    // Order / Trigger% / Scan Depth / Inclusion Group
-    body += `<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-sort-numeric-up"></i> Order</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.order ?? 100}" data-world="${w}" data-uid="${uid}" data-field="order"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-percent"></i> Trigger %</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.probability ?? 100}" data-world="${w}" data-uid="${uid}" data-field="probability"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-magnifying-glass"></i> Scan Depth</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.scanDepth ?? ''}" placeholder="Global" data-world="${w}" data-uid="${uid}" data-field="scanDepth"></div>`;
-    body += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-object-group"></i> Inclusion Group</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.group || '')}" placeholder="Group label" data-world="${w}" data-uid="${uid}" data-field="group"></div>`;
-    body += `</div></div>`;
-
-    // ── Advanced Options (collapsible) ──────────────────────────────────────
-    body += `<div class="rpg-lb-section-divider collapsed"><i class="fa-solid fa-sliders"></i> Advanced Options <i class="fa-solid fa-chevron-down rpg-lb-section-toggle"></i></div>`;
-    body += `<div class="rpg-lb-collapsible-section" style="display:none;">`;
-
-    // Matching options
-    body += `<div class="rpg-lb-form-row">`;
-    body += buildTriStateSelect(w, uid, 'caseSensitive', 'Case Sensitive', entry.caseSensitive);
-    body += buildTriStateSelect(w, uid, 'matchWholeWords', 'Match Whole Words', entry.matchWholeWords);
-    body += buildTriStateSelect(w, uid, 'useGroupScoring', 'Group Scoring', entry.useGroupScoring);
-    body += `</div>`;
-
-    // Group weight + prioritize
-    body += `<div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label">Group Weight</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.groupWeight ?? 100}" data-world="${w}" data-uid="${uid}" data-field="groupWeight"></div>`;
-    body += `<div class="rpg-lb-field-group" style="display:flex;align-items:flex-end;padding-bottom:2px;"><label class="rpg-lb-wi-checkbox"><input type="checkbox" ${entry.groupOverride ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="groupOverride"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> Prioritize in group</label></div>`;
-    body += `</div>`;
-
-    // Timed effects
-    body += `<div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-thumbtack"></i> Sticky</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.sticky ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="sticky"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-clock"></i> Cooldown</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.cooldown ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="cooldown"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-hourglass-start"></i> Delay</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.delay ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="delay"></div>`;
-    body += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-repeat"></i> Recursion Lv</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.delayUntilRecursion ?? 0}" data-world="${w}" data-uid="${uid}" data-field="delayUntilRecursion"></div>`;
-    body += `</div>`;
-
-    // Checkbox flags
-    body += `<div class="rpg-lb-wi-checkbox-row">`;
-    body += buildCheckbox(w, uid, 'excludeRecursion', 'Non-recursable', entry.excludeRecursion);
-    body += buildCheckbox(w, uid, 'preventRecursion', 'Prevent recursion', entry.preventRecursion);
-    body += buildCheckbox(w, uid, 'ignoreBudget', 'Ignore budget', entry.ignoreBudget);
-    body += buildCheckbox(w, uid, 'useProbability', 'Use probability', entry.useProbability !== false);
-    body += buildCheckbox(w, uid, 'constant', 'Constant', entry.constant);
-    body += `</div>`;
-
-    // Automation ID
-    body += `<div class="rpg-lb-form-row">`;
-    body += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-bolt"></i> Automation ID</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.automationId || '')}" placeholder="( None )" data-world="${w}" data-uid="${uid}" data-field="automationId"></div>`;
-    body += `</div>`;
-
-    body += `</div>`; // collapsible-section
-    body += `</div>`; // entry-body
-
-    return `<div class="rpg-lb-entry" data-world="${w}" data-uid="${uid}">${header}${body}</div>`;
-}
-
-/**
- * Helper: builds a tri-state select (Use global / Yes / No) for advanced options
- * @param {string} w - Escaped world name
- * @param {number} uid - Entry UID
- * @param {string} field - Field name
- * @param {string} label - Display label
- * @param {boolean|null} value - Current value
- * @returns {string} HTML
- */
-function buildTriStateSelect(w, uid, field, label, value) {
-    return `<div class="rpg-lb-field-group md"><div class="rpg-lb-field-label">${label}</div><select class="rpg-lb-select" data-world="${w}" data-uid="${uid}" data-field="${field}"><option value="null" ${value === null || value === undefined ? 'selected' : ''}>Use global</option><option value="true" ${value === true ? 'selected' : ''}>Yes</option><option value="false" ${value === false ? 'selected' : ''}>No</option></select></div>`;
-}
-
-/**
- * Helper: builds a labeled checkbox
- * @param {string} w - Escaped world name
- * @param {number} uid - Entry UID
- * @param {string} field - Field name
- * @param {string} label - Display label
- * @param {boolean} checked - Whether checked
- * @returns {string} HTML
- */
-function buildCheckbox(w, uid, field, label, checked) {
-    return `<label class="rpg-lb-wi-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="${field}"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> ${label}</label>`;
-}
-
-// ─── Main Render ────────────────────────────────────────────────────────────
-
-/**
- * Renders (or re-renders) the entire Lorebook Manager modal body.
- * Safe to call repeatedly; rebuilds from current state each time.
- */
-export function renderLorebook() {
-    const container = document.querySelector('#rpg-lorebook-modal .rpg-lb-modal-body');
-    if (!container) return;
-
+function renderLeftPanel() {
     const allNames = lorebookAPI.getAllWorldNames();
     const activeNames = lorebookAPI.getActiveWorldNames();
     const campaigns = campaignManager.getCampaignsInOrder();
     const unfiled = campaignManager.getUnfiledBooks();
     const lb = extensionSettings.lorebook || {};
-    const lastTab = lb.lastActiveTab || 'all';
     const lastFilter = lb.lastFilter || 'all';
 
-    // Pre-compute total active count for the toolbar toggle-all button
-    const totalActiveCount = activeNames.length;
-    let activeCount = 0;
-    let html = '';
+    let html = '<aside class="rpg-lb-panel-left">';
 
-    // ── Global WI Settings (collapsible) ────────────────────────────────────
+    // ── Search + filter ──
+    html += '<div class="rpg-lb-panel-header">';
+    html += '<div class="rpg-lb-search-wrap"><i class="fa-solid fa-magnifying-glass"></i>';
+    html += `<input type="text" class="rpg-lb-search" placeholder="Search..." value="${escapeHtml(lb.lastSearch || '')}">`;
+    html += '</div>';
+    html += '<div class="rpg-lb-filter-pills">';
+    html += `<button class="rpg-lb-fpill ${lastFilter === 'all' ? 'active' : ''}" data-filter="all">All</button>`;
+    html += `<button class="rpg-lb-fpill ${lastFilter === 'active' ? 'active' : ''}" data-filter="active">Active</button>`;
+    html += `<button class="rpg-lb-fpill ${lastFilter === 'inactive' ? 'active' : ''}" data-filter="inactive">Inactive</button>`;
+    html += '</div></div>';
+
+    // ── Book tree ──
+    html += '<div class="rpg-lb-tree-list">';
+
+    for (const { id, campaign } of campaigns) {
+        const isCollapsed = campaignManager.isCampaignCollapsed(id);
+        const books = (campaign.books || []).filter(b => allNames.includes(b));
+        const activeInCampaign = books.filter(b => activeNames.includes(b)).length;
+
+        // Skip campaign entirely if filter would hide all its books
+        const visibleBooks = lastFilter === 'active'
+            ? books.filter(b => activeNames.includes(b))
+            : lastFilter === 'inactive'
+                ? books.filter(b => !activeNames.includes(b))
+                : books;
+        if (visibleBooks.length === 0 && lastFilter !== 'all') continue;
+
+        html += `<div class="rpg-lb-campaign-group" data-campaign="${id}">`;
+
+        // Campaign header
+        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}" data-campaign="${id}">`;
+        const iconClass = campaign.icon || 'fa-folder';
+        const iconColor = campaign.color ? ` style="color: ${escapeHtml(campaign.color)};"` : '';
+        html += `<i class="fa-solid ${escapeHtml(iconClass)} rpg-lb-campaign-icon" data-campaign="${id}"${iconColor} title="Click to change icon"></i>`;
+        html += `<span class="rpg-lb-campaign-name">${escapeHtml(campaign.name)}</span>`;
+        html += `<span class="rpg-lb-campaign-stats">${activeInCampaign}/${books.length}</span>`;
+        html += `<button class="rpg-lb-campaign-delete" data-campaign="${id}" title="Delete"><i class="fa-solid fa-trash"></i></button>`;
+        html += `<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>`;
+        html += '</div>';
+
+        // Books inside campaign
+        html += `<div class="rpg-lb-campaign-body" ${isCollapsed ? 'style="display:none;"' : ''}>`;
+        for (const worldName of books) {
+            html += buildTreeBookHtml(worldName, activeNames, lastFilter);
+        }
+        html += '</div></div>';
+    }
+
+    // Unfiled
+    if (unfiled.length > 0) {
+        const visibleUnfiled = lastFilter === 'active'
+            ? unfiled.filter(b => activeNames.includes(b))
+            : lastFilter === 'inactive'
+                ? unfiled.filter(b => !activeNames.includes(b))
+                : unfiled;
+
+        if (visibleUnfiled.length > 0 || lastFilter === 'all') {
+            html += '<div class="rpg-lb-campaign-group unfiled-group" data-campaign="unfiled">';
+            html += '<div class="rpg-lb-campaign-header collapsed" data-campaign="unfiled">';
+            html += '<i class="fa-solid fa-folder-open rpg-lb-campaign-icon"></i>';
+            html += '<span class="rpg-lb-campaign-name">Unfiled</span>';
+            html += `<span class="rpg-lb-campaign-stats">${unfiled.length}</span>`;
+            html += '<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>';
+            html += '</div>';
+            html += '<div class="rpg-lb-campaign-body" style="display:none;">';
+            for (const worldName of unfiled) {
+                html += buildTreeBookHtml(worldName, activeNames, lastFilter);
+            }
+            html += '</div></div>';
+        }
+    }
+
+    html += '</div>'; // tree-list
+
+    // ── Bottom actions ──
+    html += '<div class="rpg-lb-panel-actions">';
+    html += '<button class="rpg-lb-tab-add" title="New Library"><i class="fa-solid fa-folder-plus"></i></button>';
+    html += '<button class="rpg-lb-btn-new-book"><i class="fa-solid fa-plus"></i> Lorebook</button>';
+    html += '<button class="rpg-lb-btn-import"><i class="fa-solid fa-file-import"></i> Import</button>';
+    html += '<input type="file" class="rpg-lb-import-file" accept=".json,.lorebook,.png" hidden>';
+    html += '</div>';
+
+    // ── Global WI Settings (collapsible) ──
     const gs = lorebookAPI.getGlobalWISettings();
     html += '<div class="rpg-lb-global-settings">';
-    html += '<div class="rpg-lb-global-settings-header"><i class="fa-solid fa-sliders"></i> <span>Global WI Settings</span>';
+    html += '<div class="rpg-lb-global-settings-header"><i class="fa-solid fa-sliders"></i> <span>Global Settings</span>';
     html += '<i class="fa-solid fa-chevron-right rpg-lb-global-chevron"></i></div>';
     html += '<div class="rpg-lb-global-settings-body" style="display:none;">';
-    // Number inputs row
     html += '<div class="rpg-lb-global-row">';
     html += `<div class="rpg-lb-global-field"><label>Scan Depth</label><input type="number" data-global="world_info_depth" value="${gs.world_info_depth}" min="0" max="1000"></div>`;
     html += `<div class="rpg-lb-global-field"><label>Context %</label><input type="number" data-global="world_info_budget" value="${gs.world_info_budget}" min="1" max="100"></div>`;
     html += `<div class="rpg-lb-global-field"><label>Budget Cap</label><input type="number" data-global="world_info_budget_cap" value="${gs.world_info_budget_cap}" min="0" max="65536"></div>`;
+    html += '</div><div class="rpg-lb-global-row">';
     html += `<div class="rpg-lb-global-field"><label>Min Activations</label><input type="number" data-global="world_info_min_activations" value="${gs.world_info_min_activations}" min="0" max="100"></div>`;
     html += `<div class="rpg-lb-global-field"><label>Max Depth</label><input type="number" data-global="world_info_min_activations_depth_max" value="${gs.world_info_min_activations_depth_max}" min="0" max="100"></div>`;
     html += `<div class="rpg-lb-global-field"><label>Max Recursion</label><input type="number" data-global="world_info_max_recursion_steps" value="${gs.world_info_max_recursion_steps}" min="0" max="10"></div>`;
     html += '</div>';
-    // Strategy select
-    html += '<div class="rpg-lb-global-row">';
-    html += '<div class="rpg-lb-global-field wide"><label>Insertion Strategy</label>';
+    html += '<div class="rpg-lb-global-row"><div class="rpg-lb-global-field wide"><label>Strategy</label>';
     html += `<select data-global="world_info_character_strategy">`;
     html += `<option value="0" ${gs.world_info_character_strategy == 0 ? 'selected' : ''}>Sorted Evenly</option>`;
     html += `<option value="1" ${gs.world_info_character_strategy == 1 ? 'selected' : ''}>Character Lore First</option>`;
     html += `<option value="2" ${gs.world_info_character_strategy == 2 ? 'selected' : ''}>Global Lore First</option>`;
-    html += '</select></div>';
-    html += '</div>';
-    // Checkboxes row
+    html += '</select></div></div>';
     html += '<div class="rpg-lb-global-row checkboxes">';
     html += `<label><input type="checkbox" data-global="world_info_include_names" ${gs.world_info_include_names ? 'checked' : ''}> Include Names</label>`;
     html += `<label><input type="checkbox" data-global="world_info_recursive" ${gs.world_info_recursive ? 'checked' : ''}> Recursive Scan</label>`;
@@ -375,249 +255,428 @@ export function renderLorebook() {
     html += `<label><input type="checkbox" data-global="world_info_match_whole_words" ${gs.world_info_match_whole_words ? 'checked' : ''}> Match Whole Words</label>`;
     html += `<label><input type="checkbox" data-global="world_info_use_group_scoring" ${gs.world_info_use_group_scoring ? 'checked' : ''}> Use Group Scoring</label>`;
     html += `<label><input type="checkbox" data-global="world_info_overflow_alert" ${gs.world_info_overflow_alert ? 'checked' : ''}> Alert On Overflow</label>`;
-    html += '</div>';
-    html += '</div></div>'; // global-settings-body + global-settings
+    html += '</div></div></div>';
 
-    // ── Tab bar ─────────────────────────────────────────────────────────────
-    html += '<div class="rpg-lb-tab-bar">';
-    html += `<div class="rpg-lb-tab ${lastTab === 'all' ? 'active' : ''}" data-tab="all">All</div>`;
-    for (const { id, campaign } of campaigns) {
-        const hasActiveBooks = (campaign.books || []).some(b => activeNames.includes(b));
-        html += `<div class="rpg-lb-tab ${lastTab === id ? 'active' : ''}" data-tab="${id}">`;
-        html += `<span class="rpg-lb-tab-dot ${hasActiveBooks ? 'has-active' : ''}"></span> ${escapeHtml(campaign.name)}`;
-        html += '</div>';
-    }
-    html += `<div class="rpg-lb-tab ${lastTab === 'unfiled' ? 'active' : ''}" data-tab="unfiled">Unfiled</div>`;
-    html += '<div class="rpg-lb-tab-add" title="New Lore Library"><i class="fa-solid fa-plus"></i></div>';
-    html += '</div>';
+    html += '</aside>';
 
-    // ── Search + filter row ─────────────────────────────────────────────────
-    html += '<div class="rpg-lb-filter-row">';
-    html += '<div class="rpg-lb-search-wrap"><i class="fa-solid fa-magnifying-glass"></i>';
-    html += `<input type="text" class="rpg-lb-search" placeholder="Search lorebooks..." value="${escapeHtml(lb.lastSearch || '')}">`;
-    html += '</div>';
-    html += '<div class="rpg-lb-filter-pills">';
-    html += `<button class="rpg-lb-fpill ${lastFilter === 'all' || !lastFilter ? 'active' : ''}" data-filter="all">All</button>`;
-    html += `<button class="rpg-lb-fpill ${lastFilter === 'active' ? 'active' : ''}" data-filter="active">Active</button>`;
-    html += `<button class="rpg-lb-fpill ${lastFilter === 'inactive' ? 'active' : ''}" data-filter="inactive">Inactive</button>`;
-    html += '</div></div>';
-
-    // ── Toolbar ─────────────────────────────────────────────────────────────
-    html += '<div class="rpg-lb-toolbar">';
-    html += '<button class="rpg-lb-toolbar-btn accent" data-action="apply-order"><i class="fa-solid fa-arrow-down-1-9"></i> Apply Current Sorting as Order</button>';
-    html += '<span class="rpg-lb-spacer"></span>';
-    html += '<button class="rpg-lb-toolbar-btn" data-action="expand-all"><i class="fa-solid fa-angles-down"></i> Expand All</button>';
-    html += '<div class="rpg-lb-toolbar-sep"></div>';
-    html += '<button class="rpg-lb-toolbar-btn" data-action="collapse-all"><i class="fa-solid fa-angles-up"></i> Collapse All</button>';
-    html += '</div>';
-
-    // ── Book list: Campaign groups ──────────────────────────────────────────
-    html += '<div class="rpg-lb-book-list">';
-
-    for (const { id, campaign } of campaigns) {
-        const isCollapsed = campaignManager.isCampaignCollapsed(id);
-        const books = (campaign.books || []).filter(b => allNames.includes(b));
-        const activeInCampaign = books.filter(b => activeNames.includes(b)).length;
-        activeCount += activeInCampaign;
-
-        html += `<div class="rpg-lb-campaign-group" data-campaign="${id}">`;
-        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}" data-campaign="${id}">`;
-        const iconClass = campaign.icon || 'fa-folder';
-        const iconColor = campaign.color ? ` style="color: ${escapeHtml(campaign.color)};"` : '';
-        html += `<i class="fa-solid ${escapeHtml(iconClass)} rpg-lb-campaign-icon" data-campaign="${id}"${iconColor} title="Click to change icon"></i>`;
-        html += `<span class="rpg-lb-campaign-name">${escapeHtml(campaign.name)}</span>`;
-        html += `<span class="rpg-lb-campaign-stats">${activeInCampaign}/${books.length} active</span>`;
-        const allBooksActive = books.length > 0 && activeInCampaign === books.length;
-        html += `<div class="rpg-lb-toggle rpg-lb-campaign-toggle ${allBooksActive ? 'active' : ''}" data-type="campaign" data-campaign="${id}" title="Toggle all books in this library"></div>`;
-        html += `<button class="rpg-lb-campaign-delete" data-campaign="${id}" title="Delete library"><i class="fa-solid fa-trash"></i></button>`;
-        html += `<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>`;
-        html += '</div>';
-        html += `<div class="rpg-lb-campaign-body" ${isCollapsed ? 'style="display:none;"' : ''}>`;
-
-        for (const worldName of books) {
-            html += buildBookSpineHtml(worldName, id, activeNames);
-        }
-
-        html += '</div></div>'; // campaign-body + campaign-group
-    }
-
-    // ── Unfiled section ─────────────────────────────────────────────────────
-    if (unfiled.length > 0 || lastTab === 'all' || lastTab === 'unfiled') {
-        const activeInUnfiled = unfiled.filter(b => activeNames.includes(b)).length;
-        activeCount += activeInUnfiled;
-
-        html += '<div class="rpg-lb-campaign-group unfiled-group" data-campaign="unfiled">';
-        html += '<div class="rpg-lb-campaign-header" data-campaign="unfiled">';
-        html += '<i class="fa-solid fa-folder-open rpg-lb-campaign-icon"></i>';
-        html += `<span class="rpg-lb-campaign-name">Unfiled</span>`;
-        html += `<span class="rpg-lb-campaign-stats">${unfiled.length} books</span>`;
-        html += '<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>';
-        html += '</div>';
-        html += '<div class="rpg-lb-campaign-body">';
-
-        for (const worldName of unfiled) {
-            html += buildBookSpineHtml(worldName, '', activeNames);
-        }
-
-        html += '</div></div>';
-    }
-
-    html += '</div>'; // book-list
-
-    // ── Sticky bottom controls (stays visible while scrolling) ──────────────
-    html += '<div class="rpg-lb-sticky-footer">';
-
-    // Bulk action footer
-    html += '<div class="rpg-lb-bulk-footer">';
-    html += '<span class="rpg-lb-bulk-count">Selected: 0</span>';
-    html += '<button class="rpg-lb-bulk-btn" data-action="select-all">Select All</button>';
-    html += '<button class="rpg-lb-bulk-btn rpg-lb-bulk-activate" data-action="activate">Activate</button>';
-    html += '<button class="rpg-lb-bulk-btn rpg-lb-bulk-deactivate" data-action="deactivate">Deactivate</button>';
-    html += '<div class="rpg-lb-move-dropdown">';
-    html += '<button class="rpg-lb-bulk-btn" data-action="move">Move to &#9662;</button>';
-    html += '</div>';
-    html += '</div>';
-
-    // Footer stats
-    html += `<div class="rpg-lb-footer-stats">Active: ${activeCount} books | Total: ${allNames.length} lorebooks</div>`;
-
-    // New book / Import buttons
-    html += '<div class="rpg-lb-new-book-row">';
-    html += '<button class="rpg-lb-btn-new-book"><i class="fa-solid fa-plus"></i> New Lorebook</button>';
-    html += '<button class="rpg-lb-btn-import"><i class="fa-solid fa-file-import"></i> Import</button>';
-    html += '</div>';
-
-    html += '</div>'; // rpg-lb-sticky-footer
-    html += '<input type="file" class="rpg-lb-import-file" accept=".json,.lorebook,.png" hidden>';
-
-    container.innerHTML = html;
-
-    // ── Apply tab filter (show/hide campaign groups) ────────────────────────
-    applyTabFilter(container, lastTab);
-
-    // ── Apply active/inactive filter ────────────────────────────────────────
-    applyStatusFilter(container, lastFilter);
-
-    // ── Apply search filter ─────────────────────────────────────────────────
-    const searchVal = (lb.lastSearch || '').trim().toLowerCase();
-    if (searchVal) {
-        applySearchFilter(container, searchVal);
-    }
-
-    // ── Sync master toggle in the header ────────────────────────────────────
-    const allGloballyActive = allNames.length > 0 && totalActiveCount === allNames.length;
-    const $masterToggle = $('#rpg-lorebook-modal .rpg-lb-toggle[data-type="master"]');
-    $masterToggle.toggleClass('active', allGloballyActive);
-}
-
-/**
- * Builds the HTML for a single book spine row + its empty entries container.
- *
- * @param {string} worldName - WI filename
- * @param {string} campaignId - Parent campaign ID (empty string for unfiled)
- * @param {string[]} activeNames - Currently active WI filenames
- * @returns {string} HTML string
- */
-function buildBookSpineHtml(worldName, campaignId, activeNames) {
-    const isActive = activeNames.includes(worldName);
-    const w = escapeHtml(worldName);
-    const cid = escapeHtml(campaignId);
-
-    let html = '';
-    html += `<div class="rpg-lb-book-spine expandable ${isActive ? 'active-book' : 'inactive'}" data-world="${w}" data-campaign="${cid}">`;
-    html += '<i class="fa-solid fa-chevron-right rpg-lb-spine-chevron"></i>';
-    html += '<div class="rpg-lb-book-check"><i class="fa-solid fa-check"></i></div>';
-    html += `<div class="rpg-lb-toggle ${isActive ? 'active' : ''}" data-type="book" data-world="${w}"></div>`;
-    html += '<i class="fa-solid fa-book rpg-lb-spine-icon"></i>';
-    html += `<span class="rpg-lb-spine-name">${w}</span>`;
-    html += '<span class="rpg-lb-spine-meta">? entries</span>';
-    html += '<span class="rpg-lb-spine-tokens">...</span>';
-    html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
-    html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete lorebook"><i class="fa-solid fa-trash"></i></button>`;
-    html += '<button class="rpg-lb-spine-edit"><i class="fa-solid fa-pen-to-square"></i></button>';
-    html += '</div>';
-    html += `<div class="rpg-lb-lore-entries" data-world="${w}"></div>`;
+    // Apply status/search filters after render via post-processing
+    setTimeout(() => {
+        const leftPanel = document.querySelector('.rpg-lb-panel-left');
+        if (!leftPanel) return;
+        applyStatusFilter(leftPanel, lb.lastFilter || 'all');
+        const searchVal = (lb.lastSearch || '').trim().toLowerCase();
+        if (searchVal) applySearchFilter(leftPanel, searchVal);
+    }, 0);
 
     return html;
 }
 
-/**
- * Shows/hides campaign groups based on the active tab.
- *
- * @param {HTMLElement} container - The modal body container
- * @param {string} tab - Active tab ID ('all', campaign ID, or 'unfiled')
- */
-function applyTabFilter(container, tab) {
-    const groups = container.querySelectorAll('.rpg-lb-campaign-group');
-    for (const group of groups) {
-        const gid = group.dataset.campaign;
-        if (tab === 'all') {
-            group.style.display = '';
-        } else if (tab === 'unfiled') {
-            group.style.display = gid === 'unfiled' ? '' : 'none';
-        } else {
-            group.style.display = gid === tab ? '' : 'none';
-        }
+function buildTreeBookHtml(worldName, activeNames, filter) {
+    const isActive = activeNames.includes(worldName);
+    const w = escapeHtml(worldName);
+    const isSelected = selectedBook === worldName;
+
+    // Apply status filter at build time
+    if (filter === 'active' && !isActive) return '';
+    if (filter === 'inactive' && isActive) return '';
+
+    let html = `<div class="rpg-lb-tree-book ${isActive ? 'active-book' : 'inactive'} ${isSelected ? 'selected' : ''}" data-world="${w}">`;
+    html += `<div class="rpg-lb-toggle ${isActive ? 'active' : ''}" data-type="book" data-world="${w}"></div>`;
+    html += `<i class="fa-solid fa-book rpg-lb-tree-book-icon"></i>`;
+    html += `<span class="rpg-lb-tree-book-name">${w}</span>`;
+    html += `<span class="rpg-lb-tree-book-badge">...</span>`;
+    html += '</div>';
+    return html;
+}
+
+// ─── Middle Panel (Entry List) ───────────────────────────────────────────────
+
+function renderMiddlePanel() {
+    let html = '<section class="rpg-lb-panel-middle">';
+
+    // Mobile back button
+    html += '<button class="rpg-lb-mobile-back" data-target="left"><i class="fa-solid fa-chevron-left"></i> Libraries</button>';
+
+    if (!selectedBook) {
+        html += '<div class="rpg-lb-placeholder"><i class="fa-solid fa-arrow-left"></i><p>Select a lorebook</p></div>';
+        html += '</section>';
+        return html;
     }
+
+    const w = escapeHtml(selectedBook);
+    const isBookActive = lorebookAPI.isWorldActive(selectedBook);
+
+    // Header
+    html += '<div class="rpg-lb-panel-header">';
+    html += `<h4 class="rpg-lb-panel-title"><i class="fa-solid fa-book"></i> ${w}</h4>`;
+    html += '<div class="rpg-lb-panel-header-actions">';
+    html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
+    html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete"><i class="fa-solid fa-trash"></i></button>`;
+    html += '</div></div>';
+
+    // Inactive banner
+    if (!isBookActive) {
+        html += '<div class="rpg-lb-inactive-banner"><i class="fa-solid fa-eye-slash"></i> Book is deactivated — entries won\'t be scanned</div>';
+    }
+
+    // Sort dropdown
+    html += '<div class="rpg-lb-panel-toolbar">';
+    html += '<select class="rpg-lb-entry-sort" title="Sort entries"><option value="order">By Order</option><option value="title">By Title</option><option value="tokens">By Tokens</option><option value="status">By Status</option></select>';
+    html += '</div>';
+
+    // Entry list (placeholder — populated asynchronously)
+    html += `<div class="rpg-lb-entry-list ${!isBookActive ? 'book-inactive' : ''}" data-world="${w}">`;
+    html += '<div class="rpg-lb-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading entries...</div>';
+    html += '</div>';
+
+    // Add entry button
+    html += `<div class="rpg-lb-panel-actions"><button class="rpg-lb-btn-add-entry" data-world="${w}"><i class="fa-solid fa-plus"></i> New Entry</button></div>`;
+
+    html += '</section>';
+
+    // Trigger async entry loading
+    setTimeout(() => loadMiddlePanelEntries(selectedBook), 0);
+
+    return html;
+}
+
+async function loadMiddlePanelEntries(worldName) {
+    const container = document.querySelector(`.rpg-lb-entry-list[data-world="${CSS.escape(worldName)}"]`);
+    if (!container) return;
+
+    const data = await lorebookAPI.loadWorldData(worldName);
+    if (!data) {
+        container.innerHTML = '<div class="rpg-lb-placeholder"><p>Failed to load</p></div>';
+        return;
+    }
+
+    middlePanelData = data;
+    middlePanelEntries = lorebookAPI.getEntriesSorted(data);
+
+    let html = '';
+    for (const { uid, entry } of middlePanelEntries) {
+        html += buildEntryRowHtml(worldName, uid, entry);
+    }
+
+    if (middlePanelEntries.length === 0) {
+        html = '<div class="rpg-lb-placeholder"><p>No entries yet</p></div>';
+    }
+
+    container.innerHTML = html;
+
+    // Update book badge in left panel
+    const bookEl = document.querySelector(`.rpg-lb-tree-book[data-world="${CSS.escape(worldName)}"] .rpg-lb-tree-book-badge`);
+    if (bookEl) bookEl.textContent = `${middlePanelEntries.length}`;
+}
+
+function buildEntryRowHtml(worldName, uid, entry) {
+    const w = escapeHtml(worldName);
+    const isEnabled = !entry.disable;
+    const titleText = entry.comment || `Entry ${uid}`;
+    const tokEst = Math.round((entry.content?.length || 0) / 3.5);
+    const isSelected = selectedEntry && selectedEntry.world === worldName && selectedEntry.uid === uid;
+
+    // State emoji
+    let stateEmoji = '🟢';
+    if (entry.constant) stateEmoji = '🔵';
+    else if (entry.vectorized) stateEmoji = '🔗';
+
+    let html = `<div class="rpg-lb-entry-row ${isSelected ? 'selected' : ''} ${isEnabled ? '' : 'disabled'}" data-world="${w}" data-uid="${uid}">`;
+    html += `<div class="rpg-lb-toggle ${isEnabled ? 'active' : ''}" data-type="entry" data-world="${w}" data-uid="${uid}"></div>`;
+    html += `<span class="rpg-lb-entry-row-state">${stateEmoji}</span>`;
+    html += `<span class="rpg-lb-entry-row-title">${escapeHtml(titleText)}</span>`;
+    html += `<span class="rpg-lb-entry-row-meta">${tokEst}t</span>`;
+    html += `<span class="rpg-lb-entry-row-pos">${posBadgeMap[entry.position] ?? '↑Char'}${entry.position == 4 ? 'd' + (entry.depth ?? 4) : ''}</span>`;
+    html += '</div>';
+    return html;
+}
+
+// ─── Right Panel (Entry Editor) ──────────────────────────────────────────────
+
+function renderRightPanel() {
+    let html = '<main class="rpg-lb-panel-right">';
+
+    // Mobile back button
+    html += `<button class="rpg-lb-mobile-back" data-target="middle"><i class="fa-solid fa-chevron-left"></i> ${selectedBook ? escapeHtml(selectedBook) : 'Entries'}</button>`;
+
+    if (!selectedEntry) {
+        html += '<div class="rpg-lb-placeholder"><i class="fa-solid fa-pen-to-square"></i><p>Select an entry to edit</p></div>';
+        html += '</main>';
+        return html;
+    }
+
+    // Find the entry data
+    const entry = findSelectedEntry();
+    if (!entry) {
+        html += '<div class="rpg-lb-placeholder"><p>Entry not found</p></div>';
+        html += '</main>';
+        return html;
+    }
+
+    html += buildEditorHtml(selectedEntry.world, selectedEntry.uid, entry, false);
+    html += '</main>';
+
+    return html;
+}
+
+function renderExpandedEditor() {
+    const entry = findSelectedEntry();
+    if (!entry) return '<div class="rpg-lb-placeholder"><p>Entry not found</p></div>';
+
+    const campaign = campaignManager.getCampaignForBook(selectedEntry.world);
+    const campaignName = campaign ? campaign.campaign.name : 'Unfiled';
+
+    let html = '<div class="rpg-lb-expanded-layout">';
+    // Breadcrumb
+    html += '<div class="rpg-lb-breadcrumb">';
+    html += '<button class="rpg-lb-breadcrumb-back" title="Back to list"><i class="fa-solid fa-arrow-left"></i></button>';
+    html += `<span class="rpg-lb-breadcrumb-text">`;
+    html += `<span class="rpg-lb-breadcrumb-part">${escapeHtml(campaignName)}</span>`;
+    html += `<i class="fa-solid fa-chevron-right"></i>`;
+    html += `<span class="rpg-lb-breadcrumb-part">${escapeHtml(selectedEntry.world)}</span>`;
+    html += `<i class="fa-solid fa-chevron-right"></i>`;
+    html += `<span class="rpg-lb-breadcrumb-part">${escapeHtml(entry.comment || `Entry ${selectedEntry.uid}`)}</span>`;
+    html += '</span></div>';
+
+    html += '<div class="rpg-lb-expanded-editor">';
+    html += buildEditorHtml(selectedEntry.world, selectedEntry.uid, entry, true);
+    html += '</div></div>';
+
+    return html;
+}
+
+function findSelectedEntry() {
+    if (!selectedEntry) return null;
+    // Use cached data if it matches
+    if (middlePanelData && selectedEntry.world === selectedBook) {
+        const found = middlePanelEntries.find(e => e.uid === selectedEntry.uid);
+        if (found) return found.entry;
+    }
+    return null;
 }
 
 /**
- * Shows/hides book spines based on the active/inactive filter.
- *
- * @param {HTMLElement} container - The modal body container
- * @param {string} filter - 'all', 'active', or 'inactive'
+ * Builds the full entry editor form HTML.
+ * Used by both the right panel and the expanded editor.
  */
+function buildEditorHtml(worldName, uid, entry, isExpanded) {
+    const w = escapeHtml(worldName);
+    const tokEst = Math.round((entry.content?.length || 0) / 3.5);
+
+    let html = '<div class="rpg-lb-editor" data-world="' + w + '" data-uid="' + uid + '">';
+
+    // Header with title + expand/collapse button
+    html += '<div class="rpg-lb-editor-header">';
+    html += `<span class="rpg-lb-editor-title"><i class="fa-solid fa-scroll"></i> ${escapeHtml(entry.comment || `Entry ${uid}`)}</span>`;
+    if (!isExpanded) {
+        html += '<button class="rpg-lb-expand-btn" title="Expand to full width"><i class="fa-solid fa-expand"></i></button>';
+        html += '<button class="rpg-lb-close-editor-btn" title="Close editor"><i class="fa-solid fa-xmark"></i></button>';
+    }
+    html += '</div>';
+
+    // Status selector
+    html += '<div class="rpg-lb-editor-status">';
+    html += `<select class="rpg-lb-state-select" data-world="${w}" data-uid="${uid}" data-field="entryState" title="Entry Status">`;
+    html += `<option value="normal" ${!entry.constant && !entry.vectorized ? 'selected' : ''}>🟢 Normal</option>`;
+    html += `<option value="constant" ${entry.constant ? 'selected' : ''}>🔵 Constant</option>`;
+    html += `<option value="vectorized" ${entry.vectorized ? 'selected' : ''}>🔗 Vectorized</option>`;
+    html += `</select></div>`;
+
+    // Title / Memo + UID
+    html += '<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-tag"></i> Title / Memo</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.comment || '')}" data-world="${w}" data-uid="${uid}" data-field="comment"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-fingerprint"></i> UID</div><input class="rpg-lb-input" type="text" value="${uid}" disabled style="opacity:0.5;text-align:center;"></div>`;
+    html += '</div></div>';
+
+    // Position + Depth
+    const posVal = entry.position ?? 0;
+    const roleVal = entry.role ?? 0;
+    html += '<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group md"><div class="rpg-lb-field-label"><i class="fa-solid fa-location-dot"></i> Position</div>`;
+    html += `<select class="rpg-lb-select rpg-lb-position-select" data-world="${w}" data-uid="${uid}" data-field="position">`;
+    html += `<option value="0" data-role="" ${posVal == 0 ? 'selected' : ''}>↑Char — Before Char Defs</option>`;
+    html += `<option value="1" data-role="" ${posVal == 1 ? 'selected' : ''}>↓Char — After Char Defs</option>`;
+    html += `<option value="2" data-role="" ${posVal == 2 ? 'selected' : ''}>↑AN — Before Author's Note</option>`;
+    html += `<option value="3" data-role="" ${posVal == 3 ? 'selected' : ''}>↓AN — After Author's Note</option>`;
+    html += `<option value="4" data-role="0" ${posVal == 4 && roleVal == 0 ? 'selected' : ''}>@D ⚙️ — At Depth (System)</option>`;
+    html += `<option value="4" data-role="1" ${posVal == 4 && roleVal == 1 ? 'selected' : ''}>@D 👤 — At Depth (User)</option>`;
+    html += `<option value="4" data-role="2" ${posVal == 4 && roleVal == 2 ? 'selected' : ''}>@D 🤖 — At Depth (Assistant)</option>`;
+    html += `<option value="5" data-role="" ${posVal == 5 ? 'selected' : ''}>↑EM — Before Examples</option>`;
+    html += `<option value="6" data-role="" ${posVal == 6 ? 'selected' : ''}>↓EM — After Examples</option>`;
+    html += `<option value="7" data-role="" ${posVal == 7 ? 'selected' : ''}>➡️ Outlet</option>`;
+    html += '</select></div>';
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-layer-group"></i> Depth</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.depth ?? 4}" data-world="${w}" data-uid="${uid}" data-field="depth"></div>`;
+    html += '</div>';
+    // Outlet Name
+    html += `<div class="rpg-lb-form-row rpg-lb-outlet-row" ${posVal != 7 ? 'style="display:none;"' : ''}>`;
+    html += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-plug"></i> Outlet Name</div>`;
+    html += `<input class="rpg-lb-input" type="text" value="${escapeHtml(entry.outletName || '')}" data-world="${w}" data-uid="${uid}" data-field="outletName" placeholder="Outlet Name"></div>`;
+    html += '</div></div>';
+
+    // Keywords card
+    html += '<div class="rpg-lb-keywords-card">';
+    html += '<div class="rpg-lb-kw-section"><div class="rpg-lb-kw-section-header"><div class="rpg-lb-field-label"><i class="fa-solid fa-key"></i> Primary Keywords</div></div>';
+    html += `<textarea class="rpg-lb-input rpg-lb-kw-textarea" data-world="${w}" data-uid="${uid}" data-field="key" rows="2" placeholder="Comma-separated keywords">${(entry.key || []).join(', ')}</textarea></div>`;
+    html += '<div class="rpg-lb-kw-section"><div class="rpg-lb-kw-section-header"><div class="rpg-lb-field-label"><i class="fa-solid fa-key"></i> Secondary Keywords</div>';
+    html += `<select class="rpg-lb-kw-logic-select" data-world="${w}" data-uid="${uid}" data-field="selectiveLogic">`;
+    html += `<option value="0" ${entry.selectiveLogic == 0 ? 'selected' : ''}>AND ANY</option>`;
+    html += `<option value="1" ${entry.selectiveLogic == 1 ? 'selected' : ''}>AND ALL</option>`;
+    html += `<option value="2" ${entry.selectiveLogic == 2 ? 'selected' : ''}>NOT ALL</option>`;
+    html += `<option value="3" ${entry.selectiveLogic == 3 ? 'selected' : ''}>NOT ANY</option>`;
+    html += '</select></div>';
+    html += `<textarea class="rpg-lb-input rpg-lb-kw-textarea secondary" data-world="${w}" data-uid="${uid}" data-field="keysecondary" rows="2" placeholder="Comma-separated secondary keywords">${(entry.keysecondary || []).join(', ')}</textarea></div>`;
+    html += '</div>';
+
+    // Content
+    html += '<div class="rpg-lb-form-section"><div class="rpg-lb-field-label"><i class="fa-solid fa-align-left"></i> Content</div>';
+    html += `<textarea class="rpg-lb-textarea" data-world="${w}" data-uid="${uid}" data-field="content" rows="${isExpanded ? 10 : 5}">${escapeHtml(entry.content || '')}</textarea>`;
+    html += '<div class="rpg-lb-content-footer">';
+    html += `<span class="rpg-lb-token-count"><i class="fa-solid fa-coins"></i> ~${tokEst} tokens</span>`;
+    html += `<label class="rpg-lb-wi-checkbox"><input type="checkbox" ${entry.selective ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="selective"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> Selective</label>`;
+    html += '</div></div>';
+
+    // Order / Trigger% / Scan Depth / Inclusion Group
+    html += '<div class="rpg-lb-form-section"><div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-sort-numeric-up"></i> Order</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.order ?? 100}" data-world="${w}" data-uid="${uid}" data-field="order"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-percent"></i> Trigger %</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.probability ?? 100}" data-world="${w}" data-uid="${uid}" data-field="probability"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-magnifying-glass"></i> Scan Depth</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.scanDepth ?? ''}" placeholder="Global" data-world="${w}" data-uid="${uid}" data-field="scanDepth"></div>`;
+    html += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-object-group"></i> Inclusion Group</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.group || '')}" placeholder="Group label" data-world="${w}" data-uid="${uid}" data-field="group"></div>`;
+    html += '</div></div>';
+
+    // Advanced Options (collapsible)
+    html += '<div class="rpg-lb-section-divider collapsed"><i class="fa-solid fa-sliders"></i> Advanced Options <i class="fa-solid fa-chevron-down rpg-lb-section-toggle"></i></div>';
+    html += '<div class="rpg-lb-collapsible-section" style="display:none;">';
+
+    html += '<div class="rpg-lb-form-row">';
+    html += buildTriStateSelect(w, uid, 'caseSensitive', 'Case Sensitive', entry.caseSensitive);
+    html += buildTriStateSelect(w, uid, 'matchWholeWords', 'Match Whole Words', entry.matchWholeWords);
+    html += buildTriStateSelect(w, uid, 'useGroupScoring', 'Group Scoring', entry.useGroupScoring);
+    html += '</div>';
+
+    html += '<div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label">Group Weight</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.groupWeight ?? 100}" data-world="${w}" data-uid="${uid}" data-field="groupWeight"></div>`;
+    html += `<div class="rpg-lb-field-group" style="display:flex;align-items:flex-end;padding-bottom:2px;"><label class="rpg-lb-wi-checkbox"><input type="checkbox" ${entry.groupOverride ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="groupOverride"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> Prioritize in group</label></div>`;
+    html += '</div>';
+
+    html += '<div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-thumbtack"></i> Sticky</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.sticky ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="sticky"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-clock"></i> Cooldown</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.cooldown ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="cooldown"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-hourglass-start"></i> Delay</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.delay ?? ''}" placeholder="Off" data-world="${w}" data-uid="${uid}" data-field="delay"></div>`;
+    html += `<div class="rpg-lb-field-group sm"><div class="rpg-lb-field-label"><i class="fa-solid fa-repeat"></i> Recursion Lv</div><input class="rpg-lb-input rpg-lb-number" type="number" value="${entry.delayUntilRecursion ?? 0}" data-world="${w}" data-uid="${uid}" data-field="delayUntilRecursion"></div>`;
+    html += '</div>';
+
+    html += '<div class="rpg-lb-wi-checkbox-row">';
+    html += buildCheckbox(w, uid, 'excludeRecursion', 'Non-recursable', entry.excludeRecursion);
+    html += buildCheckbox(w, uid, 'preventRecursion', 'Prevent recursion', entry.preventRecursion);
+    html += buildCheckbox(w, uid, 'ignoreBudget', 'Ignore budget', entry.ignoreBudget);
+    html += buildCheckbox(w, uid, 'useProbability', 'Use probability', entry.useProbability !== false);
+    html += buildCheckbox(w, uid, 'constant', 'Constant', entry.constant);
+    html += '</div>';
+
+    html += '<div class="rpg-lb-form-row">';
+    html += `<div class="rpg-lb-field-group"><div class="rpg-lb-field-label"><i class="fa-solid fa-bolt"></i> Automation ID</div><input class="rpg-lb-input" type="text" value="${escapeHtml(entry.automationId || '')}" placeholder="( None )" data-world="${w}" data-uid="${uid}" data-field="automationId"></div>`;
+    html += '</div>';
+
+    html += '</div>'; // collapsible-section
+
+    // Action buttons
+    html += '<div class="rpg-lb-editor-actions">';
+    html += `<button class="rpg-lb-entry-action-btn rpg-lb-entry-delete" data-world="${w}" data-uid="${uid}" title="Delete"><i class="fa-solid fa-trash"></i> Delete</button>`;
+    html += '</div>';
+
+    html += '</div>'; // rpg-lb-editor
+    return html;
+}
+
+function buildTriStateSelect(w, uid, field, label, value) {
+    return `<div class="rpg-lb-field-group md"><div class="rpg-lb-field-label">${label}</div><select class="rpg-lb-select" data-world="${w}" data-uid="${uid}" data-field="${field}"><option value="null" ${value === null || value === undefined ? 'selected' : ''}>Use global</option><option value="true" ${value === true ? 'selected' : ''}>Yes</option><option value="false" ${value === false ? 'selected' : ''}>No</option></select></div>`;
+}
+
+function buildCheckbox(w, uid, field, label, checked) {
+    return `<label class="rpg-lb-wi-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} data-world="${w}" data-uid="${uid}" data-field="${field}"><span class="rpg-lb-check-box"><i class="fa-solid fa-check"></i></span> ${label}</label>`;
+}
+
+// ─── Footer ──────────────────────────────────────────────────────────────────
+
+function renderFooter() {
+    const footer = document.querySelector('#rpg-lorebook-modal .rpg-lb-modal-footer');
+    if (!footer) return;
+
+    const allNames = lorebookAPI.getAllWorldNames();
+    const activeNames = lorebookAPI.getActiveWorldNames();
+    const gs = lorebookAPI.getGlobalWISettings();
+    const budgetCap = gs.world_info_budget_cap || 0;
+
+    // Count total entries across active books (estimate)
+    let totalEntries = 0;
+    for (const entry of middlePanelEntries) {
+        totalEntries++;
+    }
+
+    let html = '<div class="rpg-lb-footer-left">';
+    html += `<span class="rpg-lb-footer-dot"></span>`;
+    html += `<span class="rpg-lb-footer-stat">Active: ${activeNames.length} Lorebooks</span>`;
+    html += `<span class="rpg-lb-footer-stat">Total: ${allNames.length} Lorebooks</span>`;
+    html += '</div>';
+
+    html += '<div class="rpg-lb-footer-right">';
+    if (budgetCap > 0) {
+        // Estimate context load — rough approximation
+        html += `<span class="rpg-lb-footer-stat">Budget Cap: ${budgetCap} tokens</span>`;
+        html += '<div class="rpg-lb-context-bar"><div class="rpg-lb-context-fill" style="width: 0%"></div></div>';
+    }
+    html += '</div>';
+
+    footer.innerHTML = html;
+}
+
+// ─── Filter Functions ────────────────────────────────────────────────────────
+
 function applyStatusFilter(container, filter) {
-    if (filter === 'all') return;
-    const spines = container.querySelectorAll('.rpg-lb-book-spine');
-    for (const spine of spines) {
-        const isActive = spine.classList.contains('active-book');
+    if (filter === 'all') {
+        // Show all campaign groups too
+        container.querySelectorAll('.rpg-lb-campaign-group').forEach(g => g.style.display = '');
+        return;
+    }
+    const books = container.querySelectorAll('.rpg-lb-tree-book');
+    for (const book of books) {
+        const isActive = book.classList.contains('active-book');
         if (filter === 'active') {
-            spine.style.display = isActive ? '' : 'none';
+            book.style.display = isActive ? '' : 'none';
         } else if (filter === 'inactive') {
-            spine.style.display = isActive ? 'none' : '';
-        }
-        // Also hide the sibling entries container
-        const entries = spine.nextElementSibling;
-        if (entries && entries.classList.contains('rpg-lb-lore-entries')) {
-            entries.style.display = spine.style.display;
+            book.style.display = isActive ? 'none' : '';
         }
     }
+    // Hide campaign groups where all books are now hidden
+    container.querySelectorAll('.rpg-lb-campaign-group').forEach(group => {
+        const visibleBooks = group.querySelectorAll('.rpg-lb-tree-book:not([style*="display: none"])');
+        group.style.display = visibleBooks.length === 0 ? 'none' : '';
+    });
 }
 
-/**
- * Shows/hides book spines based on a text search query.
- *
- * @param {HTMLElement} container - The modal body container
- * @param {string} query - Lowercased search string
- */
 function applySearchFilter(container, query) {
-    const spines = container.querySelectorAll('.rpg-lb-book-spine');
-    for (const spine of spines) {
-        const name = (spine.dataset.world || '').toLowerCase();
-        const matches = name.includes(query);
-        // Only hide if it doesn't match; don't un-hide things already hidden by other filters
-        if (!matches) {
-            spine.style.display = 'none';
-            const entries = spine.nextElementSibling;
-            if (entries && entries.classList.contains('rpg-lb-lore-entries')) {
-                entries.style.display = 'none';
-            }
+    const books = container.querySelectorAll('.rpg-lb-tree-book');
+    for (const book of books) {
+        const name = (book.dataset.world || '').toLowerCase();
+        if (!name.includes(query)) {
+            book.style.display = 'none';
         }
     }
 }
 
-// ─── State Sync Helpers ─────────────────────────────────────────────────────
+// ─── State Sync Helpers ──────────────────────────────────────────────────────
 
-/**
- * Re-syncs every book spine toggle's visual state from the model
- * (selected_world_info).  This prevents the DOM from drifting out of sync
- * with the actual activation state — which can happen after import, or
- * when ST's native handlers modify selected_world_info asynchronously.
- *
- * @param {JQuery} $modal - The lorebook modal jQuery element
- */
-function syncAllBookToggleStates($modal) {
+function syncAllBookToggleStates() {
+    const $modal = $('#rpg-lorebook-modal');
+    // V2 desktop layout
+    $modal.find('.rpg-lb-tree-book').each(function () {
+        const $book = $(this);
+        const worldName = $book.data('world');
+        const isActive = lorebookAPI.isWorldActive(worldName);
+        $book.find('.rpg-lb-toggle[data-type="book"]').toggleClass('active', isActive);
+        $book.toggleClass('active-book', isActive).toggleClass('inactive', !isActive);
+    });
+    // Mobile layout (main branch spine elements)
     $modal.find('.rpg-lb-book-spine').each(function () {
         const $spine = $(this);
         const worldName = $spine.data('world');
@@ -627,132 +686,467 @@ function syncAllBookToggleStates($modal) {
     });
 }
 
-// ─── Stats Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Refreshes the campaign stats counters and the footer stats
- * without re-rendering the entire lorebook modal.
- */
 function refreshActiveStats() {
     const $modal = $('#rpg-lorebook-modal');
-    if (!$modal.length) return;
-
     const activeNames = lorebookAPI.getActiveWorldNames();
-    const allNames = lorebookAPI.getAllWorldNames();
-    let totalActive = 0;
 
-    // Update each campaign group's stats
     $modal.find('.rpg-lb-campaign-group').each(function () {
         const $group = $(this);
         const campaignId = $group.data('campaign');
         const $statsSpan = $group.find('.rpg-lb-campaign-stats').first();
-
-        // Count active books within this campaign group
-        const spines = $group.find('.rpg-lb-book-spine');
-        let groupTotal = 0;
+        const books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
         let groupActive = 0;
-
-        spines.each(function () {
-            const worldName = $(this).data('world');
-            groupTotal++;
-            if (activeNames.includes(worldName)) {
-                groupActive++;
-            }
+        books.each(function () {
+            if (activeNames.includes($(this).data('world'))) groupActive++;
         });
-
-        totalActive += groupActive;
-
         if (campaignId === 'unfiled') {
-            $statsSpan.text(`${groupTotal} books`);
+            $statsSpan.text(`${books.length}`);
         } else {
-            $statsSpan.text(`${groupActive}/${groupTotal} active`);
+            $statsSpan.text(`${groupActive}/${books.length}`);
         }
     });
 
-    // Update footer stats
-    $modal.find('.rpg-lb-footer-stats').text(
-        `Active: ${totalActive} books | Total: ${allNames.length} lorebooks`
-    );
+    renderFooter();
 }
 
-/**
- * Updates the state of all toggle buttons: per-library toggles AND the master
- * header toggle. A library toggle shows "active" only when ALL books in that
- * library are active. The master toggle shows "active" when ALL books globally
- * are active.
- */
 function refreshCampaignToggles() {
     const $modal = $('#rpg-lorebook-modal');
-    if (!$modal.length) return;
-
     const activeNames = lorebookAPI.getActiveWorldNames();
     const allNames = lorebookAPI.getAllWorldNames();
 
-    // Per-library toggles
     $modal.find('.rpg-lb-campaign-toggle').each(function () {
         const $toggle = $(this);
         const $group = $toggle.closest('.rpg-lb-campaign-group');
-        const $spines = $group.find('.rpg-lb-book-spine');
-
-        if ($spines.length === 0) {
-            $toggle.removeClass('active');
-            return;
-        }
-
+        const $books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
+        if ($books.length === 0) { $toggle.removeClass('active'); return; }
         let allActive = true;
-        $spines.each(function () {
-            const worldName = $(this).data('world');
-            if (!activeNames.includes(worldName)) {
-                allActive = false;
-                return false; // break .each()
-            }
+        $books.each(function () {
+            if (!activeNames.includes($(this).data('world'))) { allActive = false; return false; }
         });
-
         $toggle.toggleClass('active', allActive);
     });
 
-    // Master header toggle
-    const allGloballyActive = allNames.length > 0 && activeNames.length >= allNames.length;
-    $modal.find('.rpg-lb-toggle[data-type="master"]').toggleClass('active', allGloballyActive);
 }
 
-// ─── Event Delegation ───────────────────────────────────────────────────────
+// ─── Mobile Panel Navigation ─────────────────────────────────────────────────
 
-/**
- * Registers all delegated event handlers on the lorebook modal.
- * Must be called exactly once after the modal DOM is available.
- */
+function isMobileView() {
+    // Detect actual mobile devices — not just narrow desktop windows.
+    // The modal is full-screen, so desktop should always get the v2 three-panel layout.
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.matchMedia('(max-width: 1024px)').matches;
+    const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    return (isTouch && isSmallScreen) || isMobileUA;
+}
+
+function setMobilePanel(panel) {
+    const layout = document.querySelector('.rpg-lb-list-layout');
+    if (layout) layout.dataset.mobilePanel = panel;
+}
+
+// ─── Targeted Panel Updates ──────────────────────────────────────────────────
+
+function updateMiddlePanel() {
+    const container = document.querySelector('.rpg-lb-panel-middle');
+    if (!container) return;
+    const parent = container.parentElement;
+    if (!parent) return;
+    const newHtml = renderMiddlePanel();
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    parent.replaceChild(temp.firstElementChild, container);
+}
+
+function updateRightPanel() {
+    const container = document.querySelector('.rpg-lb-panel-right');
+    if (!container) return;
+    const parent = container.parentElement;
+    if (!parent) return;
+    const newHtml = renderRightPanel();
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    parent.replaceChild(temp.firstElementChild, container);
+    // Update layout attribute so CSS can show/hide editor panel
+    const layout = document.querySelector('.rpg-lb-list-layout');
+    if (layout) layout.dataset.hasEditor = selectedEntry ? 'true' : 'false';
+}
+
+// ─── Event Delegation ────────────────────────────────────────────────────────
+
 export function initLorebookEventDelegation() {
     const $modal = $('#rpg-lorebook-modal');
     if (!$modal.length) return;
 
-    // ── Close button ────────────────────────────────────────────────────────
+    // Initialize mobile event handlers (main branch selectors — no conflict with v2)
+    initMobileLorebookEventDelegation();
+
+    // ── Close ────────────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-close', function () {
         const modal = getLorebookModal();
         if (modal) modal.close();
     });
 
-    // ── Backdrop click to close ──────────────────────────────────────────────
     $modal.on('click', function (e) {
-        // Only close if clicking the backdrop (not the content)
         if (e.target === $modal[0]) {
             const modal = getLorebookModal();
             if (modal) modal.close();
         }
     });
 
-    // ── Escape key to close ──────────────────────────────────────────────────
     $(document).on('keydown.rpgLorebook', function (e) {
         if (e.key === 'Escape') {
             const modal = getLorebookModal();
             if (modal && modal.isOpen()) {
-                modal.close();
-                e.stopImmediatePropagation();
+                if (expandedEditor) {
+                    expandedEditor = false;
+                    renderLorebook();
+                    e.stopImmediatePropagation();
+                } else {
+                    modal.close();
+                    e.stopImmediatePropagation();
+                }
             }
         }
     });
 
-    // ── Campaign delete ─────────────────────────────────────────────────────
+    // ── Book selection (left panel) ──────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-tree-book', function (e) {
+        if ($(e.target).closest('.rpg-lb-toggle').length) return;
+        const worldName = $(this).data('world');
+        selectedBook = worldName;
+        selectedEntry = null;
+        expandedEditor = false;
+        // Highlight in left panel
+        $modal.find('.rpg-lb-tree-book').removeClass('selected');
+        $(this).addClass('selected');
+        updateMiddlePanel();
+        updateRightPanel();
+        // Mobile: drill into middle panel
+        if (isMobileView()) setMobilePanel('middle');
+    });
+
+    // ── Context Menu (right-click) ───────────────────────────────────────────
+    function showContextMenu(e, items) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Remove any existing context menu
+        $('.rpg-lb-context-menu').remove();
+        const $menu = $('<div class="rpg-lb-context-menu"></div>');
+
+        function populateMenu(menuItems, isSubmenu) {
+            $menu.empty();
+            if (isSubmenu) {
+                const $back = $(`<div class="rpg-lb-context-menu-item rpg-lb-context-menu-back"><i class="fa-solid fa-chevron-left"></i> Back</div>`);
+                $back.on('click', (ev) => { ev.stopPropagation(); populateMenu(items, false); });
+                $menu.append($back);
+                $menu.append('<div class="rpg-lb-context-menu-sep"></div>');
+            }
+            for (const item of menuItems) {
+                if (item.separator) {
+                    $menu.append('<div class="rpg-lb-context-menu-sep"></div>');
+                    continue;
+                }
+                const dangerClass = item.danger ? ' rpg-lb-context-menu-danger' : '';
+                const arrowHint = item.submenu ? '<i class="fa-solid fa-chevron-right" style="margin-left:auto;opacity:0.4;font-size:0.75em;"></i>' : '';
+                const $item = $(`<div class="rpg-lb-context-menu-item${dangerClass}"><i class="${item.icon}"></i> ${item.label}${arrowHint}</div>`);
+                $item.on('click', (ev) => {
+                    ev.stopPropagation();
+                    if (item.submenu) {
+                        // submenu action returns sub-items array
+                        const subItems = item.action();
+                        populateMenu(subItems, true);
+                    } else {
+                        $('.rpg-lb-context-menu').remove();
+                        item.action();
+                    }
+                });
+                $menu.append($item);
+            }
+        }
+
+        populateMenu(items, false);
+        // Position but keep on screen
+        $menu.css({ top: Math.min(e.clientY, window.innerHeight - 200), left: Math.min(e.clientX, window.innerWidth - 180) });
+        $('body').append($menu);
+        // Close on click outside
+        setTimeout(() => $(document).one('click', () => $('.rpg-lb-context-menu').remove()), 0);
+    }
+
+    // Right-click on campaign header
+    $modal.on('contextmenu', '.rpg-lb-campaign-header', function (e) {
+        const campaignId = $(this).data('campaign');
+        if (campaignId === '__unfiled__') return; // Can't rename Unfiled
+        showContextMenu(e, [
+            {
+                icon: 'fa-solid fa-pen',
+                label: 'Rename',
+                action: () => {
+                    const currentName = $(this).find('.rpg-lb-campaign-name').text();
+                    const newName = prompt('Rename campaign:', currentName);
+                    if (newName && newName.trim() && newName.trim() !== currentName) {
+                        campaignManager.renameCampaign(campaignId, newName.trim());
+                        saveSettings();
+                        renderLorebook();
+                    }
+                },
+            },
+        ]);
+    });
+
+    // Right-click on book
+    $modal.on('contextmenu', '.rpg-lb-tree-book', function (e) {
+        const worldName = $(this).data('world');
+        const currentCampaign = campaignManager.getCampaignForBook(worldName);
+        const campaigns = campaignManager.getCampaignsInOrder();
+
+        const menuItems = [
+            {
+                icon: 'fa-solid fa-pen',
+                label: 'Rename',
+                action: async () => {
+                    const newName = prompt('Rename lorebook:', worldName);
+                    if (newName && newName.trim() && newName.trim() !== worldName) {
+                        const trimmed = newName.trim();
+                        try {
+                            // Update campaign assignment (swap old name for new)
+                            if (currentCampaign) {
+                                campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
+                                campaignManager.addBookToCampaign(currentCampaign.id, trimmed);
+                            }
+                            await lorebookAPI.renameWorld(worldName, trimmed);
+                            if (selectedBook === worldName) selectedBook = trimmed;
+                            saveSettings();
+                            renderLorebook();
+                        } catch (err) {
+                            console.error('[LoreLibrary] Rename failed:', err);
+                            alert('Rename failed: ' + err.message);
+                        }
+                    }
+                },
+            },
+            {
+                icon: 'fa-solid fa-arrows-up-down-left-right',
+                label: 'Move to...',
+                submenu: true,
+                action: () => {
+                    // Return submenu items for all campaigns + Unfiled
+                    const subItems = [];
+                    for (const { id, campaign } of campaigns) {
+                        if (currentCampaign && currentCampaign.id === id) continue;
+                        subItems.push({
+                            icon: 'fa-solid fa-folder',
+                            label: campaign.name,
+                            action: () => {
+                                campaignManager.moveBookBetweenCampaigns(
+                                    currentCampaign ? currentCampaign.id : null,
+                                    id,
+                                    worldName,
+                                );
+                                saveSettings();
+                                renderLorebook();
+                            },
+                        });
+                    }
+                    if (currentCampaign) {
+                        subItems.push({
+                            icon: 'fa-solid fa-folder-minus',
+                            label: 'Unfiled',
+                            action: () => {
+                                campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
+                                saveSettings();
+                                renderLorebook();
+                            },
+                        });
+                    }
+                    return subItems;
+                },
+            },
+            { separator: true },
+            {
+                icon: 'fa-solid fa-trash',
+                label: 'Delete',
+                danger: true,
+                action: async () => {
+                    if (!confirm(`Delete "${worldName}"? This cannot be undone.`)) return;
+                    try {
+                        // Remove from campaign first
+                        if (currentCampaign) {
+                            campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
+                        }
+                        await lorebookAPI.deleteWorld(worldName);
+                        if (selectedBook === worldName) {
+                            selectedBook = null;
+                            selectedEntry = null;
+                        }
+                        saveSettings();
+                        renderLorebook();
+                    } catch (err) {
+                        console.error('[LoreLibrary] Delete failed:', err);
+                        alert('Delete failed: ' + err.message);
+                    }
+                },
+            },
+        ];
+
+        showContextMenu(e, menuItems);
+    });
+
+    // ── Entry context menu (right-click) ────────────────────────────────────
+    $modal.on('contextmenu', '.rpg-lb-entry-row', function (e) {
+        const worldName = $(this).data('world');
+        const uid = Number($(this).data('uid'));
+        const allBooks = lorebookAPI.getAllWorldNames().filter(n => n !== worldName);
+
+        const menuItems = [
+            {
+                icon: 'fa-solid fa-copy',
+                label: 'Duplicate',
+                action: async () => {
+                    try {
+                        const data = await lorebookAPI.loadWorldData(worldName);
+                        if (!data) return;
+                        const source = data.entries[uid];
+                        if (!source) return;
+                        const newEntry = lorebookAPI.createEntry(worldName, data);
+                        // Copy fields from source
+                        const copyFields = ['key', 'keysecondary', 'comment', 'content', 'position', 'depth',
+                            'order', 'disable', 'selectiveLogic', 'constant', 'group', 'groupOverride',
+                            'groupWeight', 'scanDepth', 'caseSensitive', 'matchWholeWords', 'automationId',
+                            'excludeRecursion', 'preventRecursion', 'delayUntilRecursion', 'probability',
+                            'useProbability', 'sticky', 'cooldown', 'delay', 'role', 'vectorized'];
+                        for (const field of copyFields) {
+                            if (source[field] !== undefined) newEntry[field] = JSON.parse(JSON.stringify(source[field]));
+                        }
+                        newEntry.comment = (source.comment || '') + ' (Copy)';
+                        await lorebookAPI.saveWorldData(worldName, data);
+                        updateMiddlePanel();
+                    } catch (err) {
+                        console.error('[LoreLibrary] Duplicate failed:', err);
+                    }
+                },
+            },
+            {
+                icon: 'fa-solid fa-arrow-right-arrow-left',
+                label: 'Move to...',
+                submenu: true,
+                action: () => {
+                    return allBooks.map(bookName => ({
+                        icon: 'fa-solid fa-book',
+                        label: bookName,
+                        action: async () => {
+                            try {
+                                const sourceData = await lorebookAPI.loadWorldData(worldName, true);
+                                const targetData = await lorebookAPI.loadWorldData(bookName, true);
+                                if (!sourceData || !targetData) return;
+                                const source = sourceData.entries[uid];
+                                if (!source) return;
+                                // Create in target
+                                const newEntry = lorebookAPI.createEntry(bookName, targetData);
+                                const copyFields = ['key', 'keysecondary', 'comment', 'content', 'position', 'depth',
+                                    'order', 'disable', 'selectiveLogic', 'constant', 'group', 'groupOverride',
+                                    'groupWeight', 'scanDepth', 'caseSensitive', 'matchWholeWords', 'automationId',
+                                    'excludeRecursion', 'preventRecursion', 'delayUntilRecursion', 'probability',
+                                    'useProbability', 'sticky', 'cooldown', 'delay', 'role', 'vectorized'];
+                                for (const field of copyFields) {
+                                    if (source[field] !== undefined) newEntry[field] = JSON.parse(JSON.stringify(source[field]));
+                                }
+                                await lorebookAPI.saveWorldData(bookName, targetData);
+                                // Delete from source
+                                await lorebookAPI.deleteEntry(sourceData, uid);
+                                await lorebookAPI.saveWorldData(worldName, sourceData);
+                                if (selectedEntry && selectedEntry.uid === uid) selectedEntry = null;
+                                updateMiddlePanel();
+                                updateRightPanel();
+                            } catch (err) {
+                                console.error('[LoreLibrary] Move entry failed:', err);
+                                alert('Move failed: ' + err.message);
+                            }
+                        },
+                    }));
+                },
+            },
+            { separator: true },
+            {
+                icon: 'fa-solid fa-trash',
+                label: 'Delete',
+                danger: true,
+                action: async () => {
+                    const data = await lorebookAPI.loadWorldData(worldName, true);
+                    if (!data) return;
+                    const entry = data.entries[uid];
+                    const entryName = entry?.comment || entry?.key?.join(', ') || `Entry ${uid}`;
+                    if (!confirm(`Delete "${entryName}"? This cannot be undone.`)) return;
+                    try {
+                        await lorebookAPI.deleteEntry(data, uid);
+                        await lorebookAPI.saveWorldData(worldName, data);
+                        if (selectedEntry && selectedEntry.uid === uid) {
+                            selectedEntry = null;
+                            updateRightPanel();
+                        }
+                        updateMiddlePanel();
+                    } catch (err) {
+                        console.error('[LoreLibrary] Delete entry failed:', err);
+                    }
+                },
+            },
+        ];
+
+        showContextMenu(e, menuItems);
+    });
+
+    // ── Entry selection (middle panel) ───────────────────────────────────────
+    $modal.on('click', '.rpg-lb-entry-row', function (e) {
+        if ($(e.target).closest('.rpg-lb-toggle').length) return;
+        const worldName = $(this).data('world');
+        const uid = Number($(this).data('uid'));
+        selectedEntry = { world: worldName, uid };
+        $modal.find('.rpg-lb-entry-row').removeClass('selected');
+        $(this).addClass('selected');
+        updateRightPanel();
+        // Mobile: drill into editor panel
+        if (isMobileView()) setMobilePanel('right');
+    });
+
+    // ── Mobile back button ──────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-mobile-back', function () {
+        const target = $(this).data('target');
+        setMobilePanel(target);
+    });
+
+    // ── Expand editor ────────────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-expand-btn', function () {
+        expandedEditor = true;
+        renderLorebook();
+    });
+
+    // ── Close editor (deselect entry, expand middle panel) ────────────────────
+    $modal.on('click', '.rpg-lb-close-editor-btn', function () {
+        selectedEntry = null;
+        expandedEditor = false;
+        renderLorebook();
+    });
+
+    // ── Breadcrumb back ──────────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-breadcrumb-back', function () {
+        expandedEditor = false;
+        renderLorebook();
+    });
+
+    // ── Campaign header collapse/expand ──────────────────────────────────────
+    $modal.on('click', '.rpg-lb-campaign-header', function (e) {
+        if ($(e.target).closest('.rpg-lb-campaign-toggle, .rpg-lb-campaign-delete, .rpg-lb-icon-picker').length) return;
+        const id = $(this).data('campaign');
+        if (!id || id === 'unfiled') {
+            $(this).toggleClass('collapsed');
+            $(this).next('.rpg-lb-campaign-body').slideToggle(200);
+            return;
+        }
+        campaignManager.toggleCampaignCollapsed(id);
+        $(this).toggleClass('collapsed');
+        $(this).next('.rpg-lb-campaign-body').slideToggle(200);
+    });
+
+    // ── Campaign delete ──────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-campaign-delete', function (e) {
         e.stopPropagation();
         const campaignId = $(this).data('campaign');
@@ -763,115 +1157,59 @@ export function initLorebookEventDelegation() {
         renderLorebook();
     });
 
-    // ── Campaign header collapse/expand ─────────────────────────────────────
-    $modal.on('click', '.rpg-lb-campaign-header', function (e) {
-        // Don't collapse/expand when clicking the campaign toggle, delete button, or icon picker
-        if ($(e.target).closest('.rpg-lb-campaign-toggle, .rpg-lb-campaign-delete, .rpg-lb-icon-picker').length) return;
-        const id = $(this).data('campaign');
-        if (!id || id === 'unfiled') {
-            // Unfiled group just toggles the body
-            $(this).toggleClass('collapsed');
-            $(this).next('.rpg-lb-campaign-body').slideToggle(200);
-            return;
-        }
-        campaignManager.toggleCampaignCollapsed(id);
-        $(this).toggleClass('collapsed');
-        $(this).next('.rpg-lb-campaign-body').slideToggle(200);
-    });
-
-    // ── Book spine expand/collapse (lazy-load entries) ──────────────────────
-    $modal.on('click', '.rpg-lb-book-spine.expandable', function (e) {
-        // Don't trigger when clicking toggles, checkboxes, or edit buttons
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete').length) return;
-
-        const $spine = $(this);
-        const worldName = $spine.data('world');
-        const $entries = $spine.next('.rpg-lb-lore-entries');
-
-        $spine.toggleClass('expanded');
-        $spine.find('.rpg-lb-spine-chevron').toggleClass('rotated');
-
-        if ($spine.hasClass('expanded')) {
-            // Lazy-load entries if container is empty
-            if (!$entries.children().length || $entries.find('.rpg-lb-loading').length) {
-                renderEntriesForBook(worldName, $entries[0]);
-            }
-            $entries.slideDown(200);
-        } else {
-            $entries.slideUp(200);
-        }
-    });
-
-    // ── Entry header expand/collapse ────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-entry-header', function (e) {
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-entry-action-btn, .rpg-lb-entry-order-inline, .rpg-lb-state-select').length) return;
-
-        const $header = $(this);
-        const $body = $header.next('.rpg-lb-entry-body');
-
-        $header.find('.rpg-lb-entry-chevron').toggleClass('rotated');
-        $body.slideToggle(200);
-    });
-
-    // ── Book toggle (activate / deactivate) ─────────────────────────────────
+    // ── Book toggle (activate/deactivate) ────────────────────────────────────
     $modal.on('click', '.rpg-lb-toggle[data-type="book"]', async function (e) {
         e.stopPropagation();
-        const $toggle = $(this);
-        const worldName = $toggle.data('world');
-
-        // Use model state to decide direction (prevents DOM/model drift issues)
+        const worldName = $(this).data('world');
         if (lorebookAPI.isWorldActive(worldName)) {
             await lorebookAPI.deactivateWorld(worldName);
         } else {
             await lorebookAPI.activateWorld(worldName);
         }
-
-        // Re-sync visual state from model
-        syncAllBookToggleStates($modal);
+        syncAllBookToggleStates();
         refreshActiveStats();
         refreshCampaignToggles();
+        // Refresh middle panel to show/hide inactive banner
+        if (selectedBook === worldName) {
+            updateMiddlePanel();
+        }
     });
 
-    // ── Campaign toggle-all (activate/deactivate all books in campaign) ──────
+    // ── Campaign toggle-all ──────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-campaign-toggle', async function (e) {
         e.stopPropagation();
         const $group = $(this).closest('.rpg-lb-campaign-group');
-        const $spines = $group.find('.rpg-lb-book-spine');
+        const $books = $group.find('.rpg-lb-tree-book, .rpg-lb-book-spine');
+        if ($books.length === 0) return;
 
-        if ($spines.length === 0) return;
-
-        // Use model state to decide direction (same approach as master toggle)
         let allActive = true;
-        for (const spine of $spines) {
-            if (!lorebookAPI.isWorldActive($(spine).data('world'))) {
-                allActive = false;
-                break;
+        for (const book of $books) {
+            if (!lorebookAPI.isWorldActive($(book).data('world'))) { allActive = false; break; }
+        }
+
+        for (const book of $books) {
+            const wn = $(book).data('world');
+            if (allActive) {
+                if (lorebookAPI.isWorldActive(wn)) await lorebookAPI.deactivateWorld(wn);
+            } else {
+                if (!lorebookAPI.isWorldActive(wn)) await lorebookAPI.activateWorld(wn);
             }
         }
 
-        if (allActive) {
-            for (const spine of $spines) {
-                const worldName = $(spine).data('world');
-                if (lorebookAPI.isWorldActive(worldName)) {
-                    await lorebookAPI.deactivateWorld(worldName);
-                }
-            }
-        } else {
-            for (const spine of $spines) {
-                const worldName = $(spine).data('world');
-                if (!lorebookAPI.isWorldActive(worldName)) {
-                    await lorebookAPI.activateWorld(worldName);
-                }
-            }
-        }
-
-        // Re-sync ALL visual state from the model
-        syncAllBookToggleStates($modal);
+        syncAllBookToggleStates();
         refreshActiveStats();
         refreshCampaignToggles();
+
+        // If the currently selected book is in this campaign, refresh its entry list
+        if (selectedBook) {
+            const bookInGroup = $group.find(`.rpg-lb-tree-book[data-world="${CSS.escape(selectedBook)}"]`).length > 0;
+            if (bookInGroup) {
+                updateMiddlePanel();
+            }
+        }
     });
 
-    // ── Entry toggle (enable / disable) ─────────────────────────────────────
+    // ── Entry toggle (enable/disable) ────────────────────────────────────────
     $modal.on('click', '.rpg-lb-toggle[data-type="entry"]', async function (e) {
         e.stopPropagation();
         const $toggle = $(this);
@@ -884,237 +1222,69 @@ export function initLorebookEventDelegation() {
 
         lorebookAPI.updateEntryField(data, uid, 'disable', isActive);
         await lorebookAPI.saveWorldData(worldName, data);
-
         $toggle.toggleClass('active');
+        // Update the entry row styling
+        $toggle.closest('.rpg-lb-entry-row').toggleClass('disabled', isActive);
     });
 
-    // ── Tab switching ───────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-tab', function () {
-        const tab = $(this).data('tab');
-        $modal.find('.rpg-lb-tab').removeClass('active');
-        $(this).addClass('active');
-        campaignManager.setLastActiveTab(tab);
-
-        const container = $modal.find('.rpg-lb-modal-body')[0];
-        if (container) {
-            applyTabFilter(container, tab);
-            // Re-apply status + search filters after tab change
-            const lb = extensionSettings.lorebook || {};
-            applyStatusFilter(container, lb.lastFilter || 'all');
-            const search = (lb.lastSearch || '').trim().toLowerCase();
-            if (search) applySearchFilter(container, search);
-        }
+    // ── Entry state selector ─────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-state-select', function (e) {
+        e.stopPropagation();
     });
 
-    // ── Filter pills (active / inactive / all) ─────────────────────────────
+    $modal.on('change', '.rpg-lb-state-select', async function () {
+        const $sel = $(this);
+        const worldName = $sel.data('world');
+        const uid = Number($sel.data('uid'));
+        const stateValue = $sel.val();
+
+        const data = await lorebookAPI.loadWorldData(worldName);
+        if (!data) return;
+
+        const isConstant = stateValue === 'constant';
+        const isVectorized = stateValue === 'vectorized';
+        lorebookAPI.updateEntryField(data, uid, 'constant', isConstant);
+        lorebookAPI.updateEntryField(data, uid, 'vectorized', isVectorized);
+        await lorebookAPI.saveWorldData(worldName, data);
+
+        // Update the entry row in middle panel
+        const $row = $modal.find(`.rpg-lb-entry-row[data-world="${CSS.escape(worldName)}"][data-uid="${uid}"] .rpg-lb-entry-row-state`);
+        $row.text(isConstant ? '🔵' : isVectorized ? '🔗' : '🟢');
+    });
+
+    // ── Filter pills ─────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-fpill', function () {
         const filter = $(this).data('filter');
         $modal.find('.rpg-lb-fpill').removeClass('active');
         $(this).addClass('active');
         campaignManager.setLastFilter(filter);
 
-        // Reset visibility then re-apply filters
-        const container = $modal.find('.rpg-lb-modal-body')[0];
-        if (container) {
-            // Reset all spines to visible first
-            container.querySelectorAll('.rpg-lb-book-spine').forEach(s => {
-                s.style.display = '';
-                const entries = s.nextElementSibling;
-                if (entries && entries.classList.contains('rpg-lb-lore-entries')) {
-                    entries.style.display = '';
-                }
-            });
-            // Re-apply tab filter
+        const leftPanel = $modal.find('.rpg-lb-panel-left')[0];
+        if (leftPanel) {
+            leftPanel.querySelectorAll('.rpg-lb-tree-book').forEach(b => b.style.display = '');
+            applyStatusFilter(leftPanel, filter);
             const lb = extensionSettings.lorebook || {};
-            applyTabFilter(container, lb.lastActiveTab || 'all');
-            applyStatusFilter(container, filter);
             const search = (lb.lastSearch || '').trim().toLowerCase();
-            if (search) applySearchFilter(container, search);
+            if (search) applySearchFilter(leftPanel, search);
         }
     });
 
-    // ── Toolbar: Expand All ─────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-toolbar-btn[data-action="expand-all"]', function () {
-        // Expand campaigns
-        $modal.find('.rpg-lb-campaign-header.collapsed').each(function () {
-            $(this).removeClass('collapsed');
-            $(this).next('.rpg-lb-campaign-body').show();
-        });
-        // Expand book spines
-        $modal.find('.rpg-lb-book-spine.expandable:not(.expanded)').each(function () {
-            const $spine = $(this);
-            const worldName = $spine.data('world');
-            const $entries = $spine.next('.rpg-lb-lore-entries');
-            $spine.addClass('expanded');
-            $spine.find('.rpg-lb-spine-chevron').addClass('rotated');
-            if (!$entries.children().length || $entries.find('.rpg-lb-loading').length) {
-                renderEntriesForBook(worldName, $entries[0]);
-            }
-            $entries.show();
-        });
-        // Expand entries
-        $modal.find('.rpg-lb-entry-header').each(function () {
-            $(this).find('.rpg-lb-entry-chevron').addClass('rotated');
-            $(this).next('.rpg-lb-entry-body').show();
-        });
+    // ── Search ───────────────────────────────────────────────────────────────
+    $modal.on('input', '.rpg-lb-search', function () {
+        const query = $(this).val().trim().toLowerCase();
+        campaignManager.setLastSearch(query);
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => saveSettings(), 500);
+
+        const leftPanel = $modal.find('.rpg-lb-panel-left')[0];
+        if (!leftPanel) return;
+        leftPanel.querySelectorAll('.rpg-lb-tree-book').forEach(b => b.style.display = '');
+        const lb = extensionSettings.lorebook || {};
+        applyStatusFilter(leftPanel, lb.lastFilter || 'all');
+        if (query) applySearchFilter(leftPanel, query);
     });
 
-    // ── Toolbar: Collapse All ───────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-toolbar-btn[data-action="collapse-all"]', function () {
-        // Collapse campaigns
-        $modal.find('.rpg-lb-campaign-header:not(.collapsed)').each(function () {
-            const id = $(this).data('campaign');
-            if (id && id !== 'unfiled') {
-                if (!campaignManager.isCampaignCollapsed(id)) {
-                    campaignManager.toggleCampaignCollapsed(id);
-                }
-            }
-            $(this).addClass('collapsed');
-            $(this).next('.rpg-lb-campaign-body').hide();
-        });
-        // Collapse book spines
-        $modal.find('.rpg-lb-book-spine.expanded').each(function () {
-            $(this).removeClass('expanded');
-            $(this).find('.rpg-lb-spine-chevron').removeClass('rotated');
-            $(this).next('.rpg-lb-lore-entries').hide();
-        });
-        // Collapse entries
-        $modal.find('.rpg-lb-entry-header').each(function () {
-            $(this).find('.rpg-lb-entry-chevron').removeClass('rotated');
-            $(this).next('.rpg-lb-entry-body').hide();
-        });
-    });
-
-    // ── Header: Master Toggle All Books ─────────────────────────────────────
-    $modal.on('click', '.rpg-lb-header-toggle', async function () {
-        const allNames = lorebookAPI.getAllWorldNames();
-        if (allNames.length === 0) return;
-
-        // Use model state (not DOM) to decide direction — prevents the
-        // toggle from silently going the wrong way when DOM drifts from
-        // selected_world_info (e.g. right after import).
-        const activeNames = lorebookAPI.getActiveWorldNames();
-        const allActive = activeNames.length >= allNames.length;
-
-        const $spines = $modal.find('.rpg-lb-book-spine');
-
-        if (allActive) {
-            // Deactivate all
-            for (const spine of $spines) {
-                const worldName = $(spine).data('world');
-                if (lorebookAPI.isWorldActive(worldName)) {
-                    await lorebookAPI.deactivateWorld(worldName);
-                }
-            }
-        } else {
-            // Activate all
-            for (const spine of $spines) {
-                const worldName = $(spine).data('world');
-                if (!lorebookAPI.isWorldActive(worldName)) {
-                    await lorebookAPI.activateWorld(worldName);
-                }
-            }
-        }
-
-        // Re-sync ALL visual state from the model so DOM can't drift
-        syncAllBookToggleStates($modal);
-        refreshActiveStats();
-        refreshCampaignToggles();
-    });
-
-    // ── Toolbar: Apply Current Sorting as Order ─────────────────────────────
-    $modal.on('click', '.rpg-lb-toolbar-btn[data-action="apply-order"]', async function () {
-        const spines = $modal.find('.rpg-lb-book-spine:visible');
-        let order = spines.length * 10; // Start high and count down
-
-        for (const spine of spines) {
-            const worldName = $(spine).data('world');
-            const $entries = $(spine).next('.rpg-lb-lore-entries');
-            const entryEls = $entries.find('.rpg-lb-entry');
-
-            if (entryEls.length > 0) {
-                const data = await lorebookAPI.loadWorldData(worldName);
-                if (data) {
-                    let entryOrder = entryEls.length;
-                    for (const entryEl of entryEls) {
-                        const uid = Number($(entryEl).data('uid'));
-                        lorebookAPI.updateEntryField(data, uid, 'order', entryOrder * 10);
-                        // Update the inline order input if visible
-                        $(entryEl).find('input[data-field="order"]').val(entryOrder * 10);
-                        entryOrder--;
-                    }
-                    await lorebookAPI.saveWorldData(worldName, data);
-                }
-            }
-            order -= 10;
-        }
-    });
-
-    // ── Book check (bulk select toggle) ─────────────────────────────────────
-    $modal.on('click', '.rpg-lb-book-check', function (e) {
-        e.stopPropagation();
-        $(this).toggleClass('checked');
-
-        // Update bulk count
-        const count = $modal.find('.rpg-lb-book-check.checked').length;
-        $modal.find('.rpg-lb-bulk-count').text(`Selected: ${count}`);
-    });
-
-    // ── Bulk: Select All ────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-bulk-btn[data-action="select-all"]', function () {
-        const checks = $modal.find('.rpg-lb-book-spine:visible .rpg-lb-book-check');
-        const allChecked = checks.filter('.checked').length === checks.length;
-
-        if (allChecked) {
-            checks.removeClass('checked');
-        } else {
-            checks.addClass('checked');
-        }
-
-        const count = $modal.find('.rpg-lb-book-check.checked').length;
-        $modal.find('.rpg-lb-bulk-count').text(`Selected: ${count}`);
-    });
-
-    // ── Bulk: Activate ──────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-bulk-activate', async function () {
-        const checked = $modal.find('.rpg-lb-book-check.checked');
-        for (const el of checked) {
-            const $spine = $(el).closest('.rpg-lb-book-spine');
-            const worldName = $spine.data('world');
-            await lorebookAPI.activateWorld(worldName);
-            $spine.find('.rpg-lb-toggle[data-type="book"]').addClass('active');
-            $spine.addClass('active-book').removeClass('inactive');
-        }
-        checked.removeClass('checked');
-        $modal.find('.rpg-lb-bulk-count').text('Selected: 0');
-        refreshActiveStats();
-        refreshCampaignToggles();
-    });
-
-    // ── Bulk: Deactivate ────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-bulk-deactivate', async function () {
-        const checked = $modal.find('.rpg-lb-book-check.checked');
-        for (const el of checked) {
-            const $spine = $(el).closest('.rpg-lb-book-spine');
-            const worldName = $spine.data('world');
-            await lorebookAPI.deactivateWorld(worldName);
-            $spine.find('.rpg-lb-toggle[data-type="book"]').removeClass('active');
-            $spine.removeClass('active-book').addClass('inactive');
-        }
-        checked.removeClass('checked');
-        $modal.find('.rpg-lb-bulk-count').text('Selected: 0');
-        refreshActiveStats();
-        refreshCampaignToggles();
-    });
-
-    // ── Advanced options section divider toggle ─────────────────────────────
-    $modal.on('click', '.rpg-lb-section-divider', function (e) {
-        e.stopPropagation();
-        $(this).toggleClass('collapsed');
-        $(this).next('.rpg-lb-collapsible-section').slideToggle(200);
-    });
-
-    // ── Tab-add: New Campaign ───────────────────────────────────────────────
+    // ── Tab-add: New Campaign ────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-tab-add', function () {
         const name = prompt('Enter a name for the new Lore Library:');
         if (name && name.trim()) {
@@ -1123,7 +1293,7 @@ export function initLorebookEventDelegation() {
         }
     });
 
-    // ── Entry delete ────────────────────────────────────────────────────────
+    // ── Entry delete ─────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-entry-delete', async function (e) {
         e.stopPropagation();
         const worldName = $(this).data('world');
@@ -1137,47 +1307,44 @@ export function initLorebookEventDelegation() {
         await lorebookAPI.deleteEntry(data, uid);
         await lorebookAPI.saveWorldData(worldName, data);
 
-        // Remove the entry element from DOM
-        const $entry = $(this).closest('.rpg-lb-entry');
-        $entry.slideUp(200, () => $entry.remove());
+        // If we were editing this entry, clear selection
+        if (selectedEntry && selectedEntry.world === worldName && selectedEntry.uid === uid) {
+            selectedEntry = null;
+            expandedEditor = false;
+        }
+
+        // Refresh middle panel
+        if (selectedBook === worldName) {
+            await loadMiddlePanelEntries(worldName);
+        }
+        updateRightPanel();
     });
 
-    // ── Lorebook (book) delete ─────────────────────────────────────────────
+    // ── Book delete ──────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-spine-delete', async function (e) {
         e.stopPropagation();
         const worldName = $(this).data('world');
         if (!worldName) return;
-
-        if (!confirm(`Permanently delete lorebook "${worldName}" and all its entries? This cannot be undone.`)) return;
+        if (!confirm(`Permanently delete lorebook "${worldName}" and all its entries?`)) return;
 
         try {
-            // Remove from any campaign it belongs to
             const ownerCampaign = campaignManager.getCampaignForBook(worldName);
-            if (ownerCampaign) {
-                campaignManager.removeBookFromCampaign(ownerCampaign.id, worldName);
-            }
-            // Clean up expanded state
-            if (campaignManager.isBookExpanded(worldName)) {
-                campaignManager.toggleBookExpanded(worldName);
-            }
-            // Delete the world info file via ST API
+            if (ownerCampaign) campaignManager.removeBookFromCampaign(ownerCampaign.id, worldName);
             await lorebookAPI.deleteWorld(worldName);
-            // Remove the book spine + entries from the DOM
-            const $spine = $(this).closest('.rpg-lb-book-spine');
-            const $entries = $spine.next('.rpg-lb-lore-entries');
-            $spine.slideUp(200, () => {
-                $spine.remove();
-                $entries.remove();
-                refreshActiveStats();
-                refreshCampaignToggles();
-            });
+
+            if (selectedBook === worldName) {
+                selectedBook = null;
+                selectedEntry = null;
+                expandedEditor = false;
+            }
+            renderLorebook();
         } catch (err) {
             console.error('[DES] Failed to delete lorebook:', err);
             alert(`Failed to delete lorebook: ${err.message}`);
         }
     });
 
-    // ── Add entry button ────────────────────────────────────────────────────
+    // ── Add entry ────────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-btn-add-entry', async function () {
         const worldName = $(this).data('world');
         const data = await lorebookAPI.loadWorldData(worldName);
@@ -1186,19 +1353,14 @@ export function initLorebookEventDelegation() {
         const newEntry = lorebookAPI.createEntry(worldName, data);
         if (!newEntry) return;
 
-        // Save in background — don't let save errors block the UI re-render
         lorebookAPI.saveWorldData(worldName, data).catch(err =>
             console.error('[DES] Failed to save after creating entry:', err),
         );
 
-        // Re-render entries using the in-memory data (already has the new entry)
-        const $entries = $(this).closest('.rpg-lb-lore-entries');
-        if ($entries.length) {
-            await renderEntriesForBook(worldName, $entries[0], data);
-        }
+        await loadMiddlePanelEntries(worldName);
     });
 
-    // ── New lorebook button ─────────────────────────────────────────────────
+    // ── New lorebook ─────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-btn-new-book', async function () {
         const name = prompt('Enter a name for the new lorebook:');
         if (name && name.trim()) {
@@ -1207,21 +1369,141 @@ export function initLorebookEventDelegation() {
         }
     });
 
-    // ── Spine edit button (open in ST's native WI editor) ───────────────────
-    $modal.on('click', '.rpg-lb-spine-edit', function (e) {
+    // ── Import ───────────────────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-btn-import', function () {
+        $modal.find('.rpg-lb-import-file').trigger('click');
+    });
+
+    $modal.on('change', '.rpg-lb-import-file', async function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const namesBefore = new Set(lorebookAPI.getAllWorldNames());
+        await lorebookAPI.importWorld(file);
+        e.target.value = '';
+        const namesAfter = lorebookAPI.getAllWorldNames();
+        for (const name of namesAfter) {
+            if (!namesBefore.has(name) && !lorebookAPI.isWorldActive(name)) {
+                await lorebookAPI.activateWorld(name);
+            }
+        }
+        renderLorebook();
+    });
+
+    // ── Export ────────────────────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-spine-export', async function (e) {
         e.stopPropagation();
-        const worldName = $(this).closest('.rpg-lb-book-spine').data('world');
-        // Open ST's built-in World Info editor for this world
-        const selectEl = document.getElementById('world_info');
-        if (selectEl) {
-            $(selectEl).val(worldName).trigger('change');
+        const worldName = $(this).data('world');
+        await lorebookAPI.exportWorld(worldName);
+    });
+
+    // ── Field changes (editor) ───────────────────────────────────────────────
+    $modal.on('change', '.rpg-lb-editor input, .rpg-lb-editor select', async function () {
+        await handleFieldChange($(this));
+    });
+
+    $modal.on('input', '.rpg-lb-editor textarea', async function () {
+        const $el = $(this);
+        const worldName = $el.data('world');
+        const uid = Number($el.data('uid'));
+        const field = $el.data('field');
+
+        const data = await lorebookAPI.loadWorldData(worldName);
+        if (!data) return;
+
+        const value = parseFieldValue(field, $el.val(), $el);
+        lorebookAPI.updateEntryField(data, uid, field, value);
+        debouncedSave(worldName, data);
+
+        if (field === 'content') {
+            const tokEst = Math.round(($el.val()?.length || 0) / 3.5);
+            $el.closest('.rpg-lb-form-section').find('.rpg-lb-token-count').html(
+                `<i class="fa-solid fa-coins"></i> ~${tokEst} tokens`,
+            );
+        }
+
+        // Update title in middle panel if comment field changed
+        if (field === 'comment') {
+            const $row = $modal.find(`.rpg-lb-entry-row[data-world="${CSS.escape(worldName)}"][data-uid="${uid}"] .rpg-lb-entry-row-title`);
+            $row.text($el.val() || `Entry ${uid}`);
         }
     });
 
-    // ── Move dropdown (bulk action) ─────────────────────────────────────────
+    // ── Advanced options toggle ───────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-section-divider', function (e) {
+        e.stopPropagation();
+        $(this).toggleClass('collapsed');
+        $(this).next('.rpg-lb-collapsible-section').slideToggle(200);
+    });
+
+    // ── Global WI settings ───────────────────────────────────────────────────
+    $modal.on('change', '[data-global]', function () {
+        const $el = $(this);
+        const key = $el.data('global');
+        const isCheckbox = $el.is(':checkbox');
+        const value = isCheckbox ? $el.prop('checked') : Number($el.val());
+        lorebookAPI.setGlobalWISetting(key, value);
+    });
+
+    $modal.on('click', '.rpg-lb-global-settings-header', function () {
+        $(this).find('.rpg-lb-global-chevron').toggleClass('rotated');
+        $(this).next('.rpg-lb-global-settings-body').slideToggle(200);
+    });
+
+    // ── Campaign icon picker ─────────────────────────────────────────────────
+    $modal.on('click', '.rpg-lb-campaign-icon[data-campaign]', function (e) {
+        e.stopPropagation();
+        const $icon = $(this);
+        const campaignId = $icon.data('campaign');
+        if (!campaignId || campaignId === 'unfiled') return;
+        $modal.find('.rpg-lb-icon-picker').remove();
+        const campaign = (extensionSettings.lorebook?.campaigns || {})[campaignId];
+        if (!campaign) return;
+        const pickerHtml = buildIconPickerHtml(campaignId, campaign.icon || 'fa-folder', campaign.color || '');
+        const $picker = $(pickerHtml);
+        $icon.closest('.rpg-lb-campaign-header').append($picker);
+        $picker.hide().fadeIn(150);
+    });
+
+    $modal.on('click', '.rpg-lb-icon-option', function (e) {
+        e.stopPropagation();
+        const $btn = $(this);
+        const $picker = $btn.closest('.rpg-lb-icon-picker');
+        const campaignId = $picker.data('campaign');
+        const newIcon = $btn.data('icon');
+        campaignManager.updateCampaignIcon(campaignId, newIcon);
+        const $header = $picker.closest('.rpg-lb-campaign-header');
+        const $iconEl = $header.find('.rpg-lb-campaign-icon');
+        const classes = $iconEl.attr('class').split(/\s+/).filter(c => !c.startsWith('fa-') || c === 'fa-solid');
+        classes.push(newIcon, 'rpg-lb-campaign-icon');
+        $iconEl.attr('class', classes.join(' '));
+        $picker.find('.rpg-lb-icon-option').removeClass('selected');
+        $btn.addClass('selected');
+        $picker.fadeOut(150, () => $picker.remove());
+    });
+
+    $modal.on('click', '.rpg-lb-color-swatch', function (e) {
+        e.stopPropagation();
+        const $btn = $(this);
+        const $picker = $btn.closest('.rpg-lb-icon-picker');
+        const campaignId = $picker.data('campaign');
+        const newColor = $btn.data('color');
+        campaignManager.updateCampaignColor(campaignId, newColor);
+        const $header = $picker.closest('.rpg-lb-campaign-header');
+        $header.find('.rpg-lb-campaign-icon').css('color', newColor || '');
+        $picker.find('.rpg-lb-color-swatch').removeClass('selected');
+        $btn.addClass('selected');
+        $picker.fadeOut(150, () => $picker.remove());
+    });
+
+    $modal.on('click', function (e) {
+        if (!$(e.target).closest('.rpg-lb-icon-picker, .rpg-lb-campaign-icon').length) {
+            $modal.find('.rpg-lb-icon-picker').fadeOut(150, function () { $(this).remove(); });
+        }
+    });
+
+    // ── Move dropdown ────────────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-bulk-btn[data-action="move"]', function () {
         const $dropdown = $(this).parent('.rpg-lb-move-dropdown');
-        // Build campaign list if not already present
         if (!$dropdown.find('.rpg-lb-move-menu').length) {
             const campaigns = campaignManager.getCampaignsInOrder();
             let menu = '<div class="rpg-lb-move-menu">';
@@ -1235,276 +1517,31 @@ export function initLorebookEventDelegation() {
         $dropdown.find('.rpg-lb-move-menu').toggle();
     });
 
-    // ── Move menu item click ────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-move-menu-item', function () {
         const targetCampaignId = $(this).data('campaign');
         const checked = $modal.find('.rpg-lb-book-check.checked');
-
         for (const el of checked) {
-            const $spine = $(el).closest('.rpg-lb-book-spine');
-            const worldName = $spine.data('world');
-            const currentCampaign = $spine.data('campaign') || '';
-
+            const $book = $(el).closest('.rpg-lb-tree-book');
+            const worldName = $book.data('world');
+            const currentCampaign = $book.closest('.rpg-lb-campaign-group').data('campaign') || '';
             if (targetCampaignId) {
                 campaignManager.moveBookBetweenCampaigns(currentCampaign || null, targetCampaignId, worldName);
             } else if (currentCampaign) {
                 campaignManager.removeBookFromCampaign(currentCampaign, worldName);
             }
         }
-
-        // Hide menu and re-render
         $(this).closest('.rpg-lb-move-menu').hide();
         checked.removeClass('checked');
-        $modal.find('.rpg-lb-bulk-count').text('Selected: 0');
         renderLorebook();
-    });
-
-    // ── Search input ────────────────────────────────────────────────────────
-    $modal.on('input', '.rpg-lb-search', function () {
-        const query = $(this).val().trim().toLowerCase();
-        campaignManager.setLastSearch(query);
-
-        // Debounce the settings save
-        clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(() => saveSettings(), 500);
-
-        // Reset visibility then apply all filters
-        const container = $modal.find('.rpg-lb-modal-body')[0];
-        if (!container) return;
-
-        container.querySelectorAll('.rpg-lb-book-spine').forEach(s => {
-            s.style.display = '';
-            const entries = s.nextElementSibling;
-            if (entries && entries.classList.contains('rpg-lb-lore-entries')) {
-                entries.style.display = '';
-            }
-        });
-
-        const lb = extensionSettings.lorebook || {};
-        applyTabFilter(container, lb.lastActiveTab || 'all');
-        applyStatusFilter(container, lb.lastFilter || 'all');
-        if (query) applySearchFilter(container, query);
-    });
-
-    // ── Change handlers for entry fields ────────────────────────────────────
-    $modal.on('change', '.rpg-lb-entry-body input, .rpg-lb-entry-body select', async function () {
-        await handleFieldChange($(this));
-    });
-
-    // Textarea changes use debounced save
-    $modal.on('input', '.rpg-lb-entry-body textarea', async function () {
-        const $el = $(this);
-        const worldName = $el.data('world');
-        const uid = Number($el.data('uid'));
-        const field = $el.data('field');
-
-        const data = await lorebookAPI.loadWorldData(worldName);
-        if (!data) return;
-
-        const value = parseFieldValue(field, $el.val(), $el);
-        lorebookAPI.updateEntryField(data, uid, field, value);
-        debouncedSave(worldName, data);
-
-        // Update token count for content fields
-        if (field === 'content') {
-            const tokEst = Math.round(($el.val()?.length || 0) / 3.5);
-            $el.closest('.rpg-lb-form-section').find('.rpg-lb-token-count').html(
-                `<i class="fa-solid fa-coins"></i> ~${tokEst} tokens`
-            );
-        }
-    });
-
-    // Inline order input on entry header (stopPropagation so header doesn't toggle)
-    $modal.on('click', '.rpg-lb-entry-order-inline input', function (e) {
-        e.stopPropagation();
-    });
-
-    $modal.on('change', '.rpg-lb-entry-order-inline input', async function () {
-        const $el = $(this);
-        const worldName = $el.data('world');
-        const uid = Number($el.data('uid'));
-        const value = Number($el.val());
-
-        const data = await lorebookAPI.loadWorldData(worldName);
-        if (!data) return;
-
-        lorebookAPI.updateEntryField(data, uid, 'order', value);
-        await lorebookAPI.saveWorldData(worldName, data);
-
-        // Also update the order input inside the entry body if it exists
-        const $entry = $el.closest('.rpg-lb-entry, .rpg-lb-entry-header').parent();
-        $entry.find('.rpg-lb-entry-body input[data-field="order"]').val(value);
-    });
-
-    // ── Entry state selector (🟢 Normal, 🔵 Constant, 🔗 Vectorized) ────────
-    $modal.on('click', '.rpg-lb-state-select', function (e) {
-        e.stopPropagation(); // Don't toggle entry header expand/collapse
-    });
-
-    $modal.on('change', '.rpg-lb-state-select', async function () {
-        const $sel = $(this);
-        const worldName = $sel.data('world');
-        const uid = Number($sel.data('uid'));
-        const stateValue = $sel.val();
-
-        const data = await lorebookAPI.loadWorldData(worldName);
-        if (!data) return;
-
-        // Set constant / vectorized based on selection
-        const isConstant = stateValue === 'constant';
-        const isVectorized = stateValue === 'vectorized';
-        lorebookAPI.updateEntryField(data, uid, 'constant', isConstant);
-        lorebookAPI.updateEntryField(data, uid, 'vectorized', isVectorized);
-        await lorebookAPI.saveWorldData(worldName, data);
-
-        // Sync checkboxes in the entry body if expanded
-        const $entry = $sel.closest('.rpg-lb-entry');
-        $entry.find('.rpg-lb-entry-body input[data-field="constant"]').prop('checked', isConstant);
-    });
-
-    // ── Global WI settings change handler ────────────────────────────────────
-    $modal.on('change', '[data-global]', function () {
-        const $el = $(this);
-        const key = $el.data('global');
-        const isCheckbox = $el.is(':checkbox');
-        const value = isCheckbox ? $el.prop('checked') : Number($el.val());
-        lorebookAPI.setGlobalWISetting(key, value);
-    });
-
-    // ── Global settings section collapse/expand ──────────────────────────────
-    $modal.on('click', '.rpg-lb-global-settings-header', function () {
-        $(this).find('.rpg-lb-global-chevron').toggleClass('rotated');
-        $(this).next('.rpg-lb-global-settings-body').slideToggle(200);
-    });
-
-    // ── Campaign icon picker ─────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-campaign-icon[data-campaign]', function (e) {
-        e.stopPropagation(); // Don't trigger campaign header collapse
-
-        const $icon = $(this);
-        const campaignId = $icon.data('campaign');
-        if (!campaignId || campaignId === 'unfiled') return;
-
-        // Close any existing picker
-        $modal.find('.rpg-lb-icon-picker').remove();
-
-        // Get current icon/color from campaign data
-        const campaign = (extensionSettings.lorebook?.campaigns || {})[campaignId];
-        if (!campaign) return;
-
-        const pickerHtml = buildIconPickerHtml(campaignId, campaign.icon || 'fa-folder', campaign.color || '');
-        const $picker = $(pickerHtml);
-
-        // Position near the icon
-        $icon.closest('.rpg-lb-campaign-header').append($picker);
-        $picker.hide().fadeIn(150);
-    });
-
-    // Icon selection
-    $modal.on('click', '.rpg-lb-icon-option', function (e) {
-        e.stopPropagation();
-        const $btn = $(this);
-        const $picker = $btn.closest('.rpg-lb-icon-picker');
-        const campaignId = $picker.data('campaign');
-        const newIcon = $btn.data('icon');
-
-        // Update data
-        campaignManager.updateCampaignIcon(campaignId, newIcon);
-
-        // Update the icon element in place
-        const $header = $picker.closest('.rpg-lb-campaign-header');
-        const $iconEl = $header.find('.rpg-lb-campaign-icon');
-        // Remove all fa-* classes except fa-solid, then add new one
-        const classes = $iconEl.attr('class').split(/\s+/).filter(c => !c.startsWith('fa-') || c === 'fa-solid');
-        classes.push(newIcon, 'rpg-lb-campaign-icon');
-        $iconEl.attr('class', classes.join(' '));
-
-        // Highlight selected
-        $picker.find('.rpg-lb-icon-option').removeClass('selected');
-        $btn.addClass('selected');
-
-        // Close picker
-        $picker.fadeOut(150, () => $picker.remove());
-    });
-
-    // Color selection
-    $modal.on('click', '.rpg-lb-color-swatch', function (e) {
-        e.stopPropagation();
-        const $btn = $(this);
-        const $picker = $btn.closest('.rpg-lb-icon-picker');
-        const campaignId = $picker.data('campaign');
-        const newColor = $btn.data('color');
-
-        // Update data
-        campaignManager.updateCampaignColor(campaignId, newColor);
-
-        // Update icon color in place
-        const $header = $picker.closest('.rpg-lb-campaign-header');
-        const $iconEl = $header.find('.rpg-lb-campaign-icon');
-        $iconEl.css('color', newColor || '');
-
-        // Highlight selected
-        $picker.find('.rpg-lb-color-swatch').removeClass('selected');
-        $btn.addClass('selected');
-
-        // Close picker
-        $picker.fadeOut(150, () => $picker.remove());
-    });
-
-    // Close picker when clicking elsewhere in modal
-    $modal.on('click', function (e) {
-        if (!$(e.target).closest('.rpg-lb-icon-picker, .rpg-lb-campaign-icon').length) {
-            $modal.find('.rpg-lb-icon-picker').fadeOut(150, function () { $(this).remove(); });
-        }
-    });
-
-    // ── Import button → trigger hidden file input ────────────────────────────
-    $modal.on('click', '.rpg-lb-btn-import', function () {
-        $modal.find('.rpg-lb-import-file').trigger('click');
-    });
-
-    // ── File selected → import and re-render ─────────────────────────────────
-    $modal.on('change', '.rpg-lb-import-file', async function (e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Snapshot current world names so we can detect the newly imported book
-        const namesBefore = new Set(lorebookAPI.getAllWorldNames());
-
-        await lorebookAPI.importWorld(file);
-        e.target.value = ''; // allow re-selecting same file
-
-        // Auto-activate any newly imported book(s) so the book toggle matches
-        // the entry toggles (entries default to enabled). This also prevents
-        // the master toggle-all from getting out of sync with the UI.
-        const namesAfter = lorebookAPI.getAllWorldNames();
-        for (const name of namesAfter) {
-            if (!namesBefore.has(name) && !lorebookAPI.isWorldActive(name)) {
-                await lorebookAPI.activateWorld(name);
-            }
-        }
-
-        renderLorebook();
-    });
-
-    // ── Per-book export button ───────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-spine-export', async function (e) {
-        e.stopPropagation(); // don't toggle spine expand
-        const worldName = $(this).data('world');
-        await lorebookAPI.exportWorld(worldName);
     });
 }
 
-/**
- * Processes a field change event and persists the update.
- *
- * @param {JQuery} $el - The changed input/select element
- */
+// ─── Field Change Handler ────────────────────────────────────────────────────
+
 async function handleFieldChange($el) {
     const worldName = $el.data('world');
     const uid = Number($el.data('uid'));
     const field = $el.data('field');
-
     if (!worldName || uid === undefined || !field) return;
 
     const data = await lorebookAPI.loadWorldData(worldName);
@@ -1513,16 +1550,14 @@ async function handleFieldChange($el) {
     const value = parseFieldValue(field, $el.is(':checkbox') ? $el.prop('checked') : $el.val(), $el);
     lorebookAPI.updateEntryField(data, uid, field, value);
 
-    // Position changes: also set role from data-role attribute + toggle outlet row
     if (field === 'position') {
         const $selected = $el.find('option:selected');
         const roleStr = $selected.data('role');
         if (roleStr !== '' && roleStr !== undefined) {
             lorebookAPI.updateEntryField(data, uid, 'role', Number(roleStr));
         }
-        // Show/hide outlet name row
-        const $entry = $el.closest('.rpg-lb-entry');
-        const $outletRow = $entry.find('.rpg-lb-outlet-row');
+        const $editor = $el.closest('.rpg-lb-editor');
+        const $outletRow = $editor.find('.rpg-lb-outlet-row');
         if (Number(value) === 7) {
             $outletRow.slideDown(200);
         } else {
@@ -1531,31 +1566,24 @@ async function handleFieldChange($el) {
     }
 
     await lorebookAPI.saveWorldData(worldName, data);
+
+    // Update middle panel row metadata
+    if (field === 'comment') {
+        const $row = $(`#rpg-lorebook-modal .rpg-lb-entry-row[data-world="${CSS.escape(worldName)}"][data-uid="${uid}"] .rpg-lb-entry-row-title`);
+        $row.text($el.val() || `Entry ${uid}`);
+    }
 }
 
-/**
- * Parses a raw field value into the correct type for the WI data model.
- *
- * @param {string} field - Field name
- * @param {*} rawValue - Raw value from the input element
- * @param {JQuery} $el - The source element (for checkbox detection)
- * @returns {*} Parsed value
- */
 function parseFieldValue(field, rawValue, $el) {
-    // Comma-separated array fields
     if (field === 'key' || field === 'keysecondary') {
         return String(rawValue).split(',').map(s => s.trim()).filter(Boolean);
     }
-
-    // Tri-state selects (null / true / false)
     if (field === 'caseSensitive' || field === 'matchWholeWords' || field === 'useGroupScoring') {
         if (rawValue === 'null') return null;
         if (rawValue === 'true') return true;
         if (rawValue === 'false') return false;
         return rawValue;
     }
-
-    // Numeric fields
     const numericFields = [
         'position', 'depth', 'role', 'selectiveLogic', 'order',
         'probability', 'scanDepth', 'groupWeight', 'sticky',
@@ -1565,8 +1593,6 @@ function parseFieldValue(field, rawValue, $el) {
         const num = Number(rawValue);
         return isNaN(num) ? undefined : num;
     }
-
-    // Boolean checkbox fields
     const boolFields = [
         'selective', 'constant', 'excludeRecursion', 'preventRecursion',
         'ignoreBudget', 'useProbability', 'groupOverride', 'disable',
@@ -1574,7 +1600,5 @@ function parseFieldValue(field, rawValue, $el) {
     if (boolFields.includes(field)) {
         return $el.is(':checkbox') ? $el.prop('checked') : Boolean(rawValue);
     }
-
-    // Default: string
     return rawValue;
 }

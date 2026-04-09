@@ -204,6 +204,18 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
         return segments;
     }
 
+    // Pre-build a Set of elements that contain font[color] descendants.
+    // This avoids calling child.querySelector('font[color]') inside the recursive
+    // walk (O(n²) → O(n) by doing one upfront pass instead of per-child queries).
+    const fontAncestors = new Set();
+    for (const font of fontElements) {
+        let el = font.parentElement;
+        while (el && el !== block) {
+            fontAncestors.add(el);
+            el = el.parentElement;
+        }
+    }
+
     // Recursively walk the DOM tree to find <font color> elements at any depth.
     // Elements that DON'T contain a <font color> descendant are kept as opaque
     // narration HTML.  Elements that DO contain one are descended into so we
@@ -214,18 +226,14 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
         for (const child of parent.childNodes) {
             if (child.nodeType === Node.ELEMENT_NODE &&
                 child.tagName === 'FONT' && child.getAttribute('color')) {
-                // Found a <font color="..."> — yield it as dialogue
                 parts.push({ type: 'font', node: child });
             } else if (child.nodeType === Node.TEXT_NODE) {
                 const text = child.textContent;
                 if (text) parts.push({ type: 'text', html: text });
             } else if (child.nodeType === Node.ELEMENT_NODE) {
-                // Does this element contain a <font color> somewhere inside?
-                if (child.querySelector('font[color]')) {
-                    // Yes — descend into it to split around the font tags
+                if (fontAncestors.has(child)) {
                     walkNodes(child);
                 } else {
-                    // No font descendants — treat the whole element as narration
                     parts.push({ type: 'text', html: child.outerHTML });
                 }
             }
@@ -367,18 +375,16 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
 /**
  * Merge consecutive narrator segments into one so we don't get fragmented blocks.
  */
+/**
+ * Merge consecutive narrator segments, but only within the same paragraph.
+ * Short fragments (single <br>-separated lines from the same block) get merged,
+ * but separate paragraphs (<p>/<div> blocks) stay as individual bubbles.
+ * This prevents giant walls of narration text in a single bubble.
+ */
 function mergeConsecutiveNarration(segments) {
-    if (segments.length <= 1) return segments;
-    const merged = [];
-    for (const seg of segments) {
-        const prev = merged[merged.length - 1];
-        if (prev && prev.type === 'narrator' && seg.type === 'narrator') {
-            prev.html += '<br>' + seg.html;
-        } else {
-            merged.push({ ...seg });
-        }
-    }
-    return merged;
+    // Don't merge — each paragraph from the parser stays as its own bubble.
+    // This gives visual breathing room to long narration passages.
+    return segments;
 }
 
 // ─────────────────────────────────────────────
@@ -391,7 +397,10 @@ function getAvatarHtml(speakerName, prefix) {
         return `<div class="${prefix}-avatar-letter">\u{1F4D6}</div>`;
     }
 
-    const portraitSrc = resolveFullPortrait(speakerName);
+    // Use resolvePortrait (cropped npcAvatars / ST thumbnails) instead of
+    // resolveFullPortrait (raw character card images) — the cropped versions
+    // are portrait-oriented and look much better in small bubble avatars.
+    const portraitSrc = resolvePortrait(speakerName);
     const emoji = getActiveKnownCharacters()[speakerName]?.emoji || '\u{1F464}';
 
     if (portraitSrc) {
@@ -414,6 +423,7 @@ function renderDiscordBubbles(segments) {
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
     const showNarratorLabel = cbs.showNarratorLabel !== false;
+    const noAvatarsClass = showAvatars ? '' : ' dooms-bubbles--no-avatars';
 
     const html = segments.map((seg, index) => {
         const isNarrator = seg.type === 'narrator';
@@ -422,8 +432,6 @@ function renderDiscordBubbles(segments) {
         const isContinuation = speaker === lastSpeaker;
         lastSpeaker = speaker;
 
-        // Prefer the AI's font tag color (what the AI intended for this dialogue),
-        // fall back to the extension's assigned color for the detected speaker
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
@@ -433,11 +441,14 @@ function renderDiscordBubbles(segments) {
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        // Avatars are injected into the .mes element directly (outside .mes_text)
-        // so they can sit in ST's avatar column. See _injectBubbleAvatars().
-        const avatarContent = '';
+        // Inline avatar: new-speaker dialogue gets avatar, continuation gets spacer, narrator gets nothing
+        let avatarContent = '';
+        if (!isNarrator && !isContinuation && seg.speaker) {
+            avatarContent = `<div class="dooms-bubble-avatar">${getAvatarHtml(seg.speaker, 'dooms-bubble')}</div>`;
+        } else if (!isNarrator && isContinuation) {
+            avatarContent = '<div class="dooms-bubble-avatar-spacer"></div>';
+        }
 
-        // Respect showAuthorNames + showNarratorLabel toggles
         const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
         const headerContent = showHeader ? `
             <div class="dooms-bubble-header">
@@ -445,8 +456,6 @@ function renderDiscordBubbles(segments) {
             </div>` : '';
 
         const textHtml = stripFontColors(seg.html);
-
-        // TTS button (visible on hover)
         const ttsButton = `<button class="dooms-bubble-tts" title="Read from here"><i class="fa-solid fa-bullhorn"></i></button>`;
 
         return `<div class="dooms-bubble ${typeClass} ${contClass}" data-segment-index="${index}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
@@ -459,7 +468,7 @@ function renderDiscordBubbles(segments) {
         </div>`;
     }).join('');
 
-    return `<div class="dooms-bubbles dooms-bubbles-discord">${html}</div>`;
+    return `<div class="dooms-bubbles dooms-bubbles-discord${noAvatarsClass}">${html}</div>`;
 }
 
 function renderDiscordUserBubble(html) {
@@ -478,46 +487,60 @@ function renderDiscordUserBubble(html) {
 
 function renderCardBubbles(segments) {
     if (!segments.length) return '';
+    let lastSpeaker = null;
     const cbs = extensionSettings.chatBubbleSettings || {};
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
     const showNarratorLabel = cbs.showNarratorLabel !== false;
+    const noAvatarsClass = showAvatars ? '' : ' dooms-bubbles--no-avatars';
 
-    const html = segments.map(seg => {
+    const html = segments.map((seg, index) => {
         const isNarrator = seg.type === 'narrator';
+        const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        // Prefer the AI's font tag color (what the AI intended for this dialogue),
-        // fall back to the extension's assigned color for the detected speaker
+        const isContinuation = speaker === lastSpeaker;
+        lastSpeaker = speaker;
+
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
         const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
-        const ringStyle = color ? ` style="background: linear-gradient(135deg, ${escapeHtml(color)}, ${escapeHtml(color)}88)"` : '';
         const typeClass = isNarrator ? 'dooms-card-narrator' :
             (seg.speaker ? 'dooms-card-character' : 'dooms-card-unknown');
+        const contClass = isContinuation ? 'dooms-card-continuation' : 'dooms-card-new-speaker';
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
 
-        // Avatars are injected into the .mes element directly (outside .mes_text)
-        // so they can sit in ST's avatar column. See _injectBubbleAvatars().
+        // Inline avatar: new-speaker gets avatar, continuation gets spacer, narrator gets nothing
+        let avatarContent = '';
+        if (!isNarrator && !isContinuation && seg.speaker) {
+            avatarContent = `<div class="dooms-card-avatar">${getAvatarHtml(seg.speaker, 'dooms-card')}</div>`;
+        } else if (!isNarrator && isContinuation) {
+            avatarContent = '<div class="dooms-card-avatar-spacer"></div>';
+        }
 
-        // Respect showAuthorNames + showNarratorLabel toggles
-        const showHeader = showAuthorNames && (!isNarrator || showNarratorLabel);
+        // Only show header on new speaker, same as discord
+        const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
+        const roleBadge = !isNarrator ? `<span class="dooms-card-role ${roleClass}">${roleLabel}</span>` : '';
         const headerHtml = showHeader ? `
                 <div class="dooms-card-header">
                     <span class="dooms-card-author">${escapeHtml(displayName)}</span>
-                    <span class="dooms-card-role ${roleClass}">${roleLabel}</span>
+                    ${roleBadge}
                 </div>` : '';
 
-        return `<div class="dooms-card ${typeClass}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
+        const ttsButton = `<button class="dooms-bubble-tts" title="Read from here"><i class="fa-solid fa-bullhorn"></i></button>`;
+
+        return `<div class="dooms-card ${typeClass} ${contClass}" data-segment-index="${index}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
+            ${avatarContent}
             <div class="dooms-card-body">
                 ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
+                ${ttsButton}
             </div>
         </div>`;
     }).join('');
 
-    return `<div class="dooms-bubbles dooms-bubbles-cards">${html}</div>`;
+    return `<div class="dooms-bubbles dooms-bubbles-cards${noAvatarsClass}">${html}</div>`;
 }
 
 function renderCardUserBubble(html) {
@@ -584,112 +607,6 @@ export function applyChatBubbles(messageElement, style) {
     const thoughtsHtml = Array.from(thoughts).map(t => t.outerHTML).join('');
 
     mesText.innerHTML = bubblesHtml + thoughtsHtml;
-
-    // Inject speaker avatars into the .mes element so they sit in ST's avatar column
-    const cbs = extensionSettings.chatBubbleSettings || {};
-    if (cbs.showAvatars !== false) {
-        _injectBubbleAvatars(messageElement);
-        // Re-position avatars when collapsible sections (e.g., thinking/reasoning)
-        // are toggled, since expanding/collapsing shifts all content below.
-        _observeHeightChanges(messageElement);
-    } else {
-        // Clear any extra padding when avatars are off
-        mesText.style.paddingLeft = '';
-    }
-}
-
-/**
- * Injects speaker avatar elements directly into the .mes container,
- * positioned absolutely so they appear in ST's avatar column (left gutter).
- * Each avatar aligns vertically with its corresponding bubble inside .mes_text.
- *
- * Size is controlled by the --cb-avatar-size / --cb-avatar-height CSS variables
- * (set by applyChatBubbleSettings). This function only sets position (top/left).
- */
-function _injectBubbleAvatars(mesElement) {
-    // Remove any previously injected avatars
-    mesElement.querySelectorAll('.dooms-gutter-avatar').forEach(el => el.remove());
-
-    // The .mes element must be position:relative so it becomes the offsetParent
-    // for both the bubbles inside .mes_text and our absolutely-positioned avatars.
-    mesElement.style.position = 'relative';
-
-    // Position avatars so their right edge is always ~19px (≈5mm) to the left
-    // of the chat bubble edge, regardless of avatar size.
-    // If the avatar is wider than the gutter, we add left padding to .mes_text
-    // so the bubbles shift right to make room.
-    const mesRect = mesElement.getBoundingClientRect();
-    const mesText = mesElement.querySelector('.mes_text');
-    const cbs = extensionSettings.chatBubbleSettings || {};
-    const avatarSize = cbs.avatarSize ?? 40;
-    const gap = 19; // ~5mm gap between avatar right edge and bubble left edge
-
-    let avatarLeft = 4; // small left margin
-    let extraPadding = 0;
-
-    if (mesText) {
-        const textRect = mesText.getBoundingClientRect();
-        const gutterWidth = textRect.left - mesRect.left;
-        // Space needed: avatar + gap. If that exceeds the gutter, push text right.
-        const spaceNeeded = avatarSize + gap;
-        if (spaceNeeded > gutterWidth) {
-            extraPadding = spaceNeeded - gutterWidth;
-        }
-        // Center the avatar horizontally in the available gutter space.
-        // The gutter extends from the left edge of .mes to the left edge of .mes_text
-        // (plus any extra padding we added). Center the avatar within that total width.
-        const totalGutter = gutterWidth + extraPadding;
-        avatarLeft = Math.max(0, Math.round((totalGutter - avatarSize) / 2));
-
-        // Apply the extra padding to .mes_text to push bubbles right
-        mesText.style.paddingLeft = extraPadding > 0 ? extraPadding + 'px' : '';
-    }
-
-    const bubbles = mesElement.querySelectorAll('.dooms-bubble.dooms-bubble-new-speaker[data-speaker]:not([data-speaker=""]), .dooms-card.dooms-card-character[data-speaker]:not([data-speaker=""])');
-    bubbles.forEach(bubble => {
-        const speakerName = bubble.getAttribute('data-speaker');
-        if (!speakerName) return;
-
-        const portraitSrc = resolveFullPortrait(speakerName);
-        const emoji = getActiveKnownCharacters()[speakerName]?.emoji || '\u{1F464}';
-
-        // bubble.offsetTop gives position relative to .mes (our offsetParent).
-        const topOffset = bubble.offsetTop;
-
-        const avatarEl = document.createElement('div');
-        avatarEl.className = 'dooms-gutter-avatar';
-        avatarEl.style.position = 'absolute';
-        avatarEl.style.top = topOffset + 'px';
-        avatarEl.style.left = avatarLeft + 'px';
-        // Width and height are controlled by CSS variables --cb-avatar-size and
-        // --cb-avatar-height (no inline overrides).
-
-        if (portraitSrc) {
-            avatarEl.innerHTML = `<img src="${escapeHtml(portraitSrc)}" alt="${escapeHtml(speakerName)}"
-                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-                <div class="dooms-gutter-avatar-letter" style="display:none;">${emoji}</div>`;
-        } else {
-            avatarEl.innerHTML = `<div class="dooms-gutter-avatar-letter">${emoji}</div>`;
-        }
-
-        mesElement.appendChild(avatarEl);
-    });
-}
-
-/**
- * Watches for height changes in a .mes element (e.g., thinking/reasoning toggle)
- * and re-positions avatars when detected. Uses a single toggle listener per element.
- */
-function _observeHeightChanges(mesElement) {
-    // Avoid attaching duplicate listeners
-    if (mesElement._doomsHeightObserved) return;
-    mesElement._doomsHeightObserved = true;
-
-    // Listen for <details> toggle events (thinking/reasoning sections)
-    mesElement.addEventListener('toggle', () => {
-        // Small delay to let the DOM reflow after expand/collapse
-        requestAnimationFrame(() => _injectBubbleAvatars(mesElement));
-    }, true); // capture phase to catch toggle on nested <details>
 }
 
 /**
@@ -703,12 +620,6 @@ function revertSingleMessage(mesText) {
     mesText.removeAttribute('data-dooms-bubbles-applied');
     mesText.removeAttribute('data-dooms-bubbles-style');
     mesText.removeAttribute('data-dooms-original-html');
-
-    // Clean up gutter avatars injected into the .mes element
-    const mesEl = mesText.closest('.mes');
-    if (mesEl) {
-        mesEl.querySelectorAll('.dooms-gutter-avatar').forEach(el => el.remove());
-    }
 }
 
 /**
@@ -749,7 +660,8 @@ export function applyAllChatBubbles() {
     const messages = chatContainer.querySelectorAll('.mes');
     if (messages.length === 0) return;
 
-    // Determine the visible viewport bounds once
+    // Defer to next animation frame so we don't block the triggering event
+    requestAnimationFrame(() => {
     const viewTop = 0;
     const viewBottom = window.innerHeight;
 
@@ -785,6 +697,7 @@ export function applyAllChatBubbles() {
             _bubbleObserver.observe(msg);
         }
     }
+    }); // end requestAnimationFrame
 }
 
 /**
@@ -829,6 +742,24 @@ export function onChatBubbleModeChanged(oldMode, newMode) {
 }
 
 /**
+ * Update avatar images in existing chat bubbles without a full re-render.
+ * Called when expression portraits change so bubble avatars stay in sync.
+ */
+export function refreshBubbleAvatars() {
+    const avatars = document.querySelectorAll('.dooms-bubble-avatar img, .dooms-card-avatar img');
+    for (const img of avatars) {
+        const bubble = img.closest('[data-speaker]');
+        if (!bubble) continue;
+        const speaker = bubble.getAttribute('data-speaker');
+        if (!speaker) continue;
+        const newSrc = resolvePortrait(speaker);
+        if (newSrc && img.src !== newSrc) {
+            img.src = newSrc;
+        }
+    }
+}
+
+/**
  * Apply chat bubble CSS custom properties to :root for live theming.
  * Called when chatBubbleSettings change so the CSS vars update in real-time.
  */
@@ -867,13 +798,13 @@ export function applyChatBubbleSettings() {
 function getTextFromBubbleForward(bubbleEl) {
     const container = bubbleEl.closest('.dooms-bubbles');
     if (!container) return '';
-    const allBubbles = container.querySelectorAll('.dooms-bubble');
+    const allBubbles = container.querySelectorAll('.dooms-bubble, .dooms-card');
     const startIdx = Array.from(allBubbles).indexOf(bubbleEl);
     if (startIdx === -1) return '';
 
     let text = '';
     for (let i = startIdx; i < allBubbles.length; i++) {
-        const textDiv = allBubbles[i].querySelector('.dooms-bubble-text');
+        const textDiv = allBubbles[i].querySelector('.dooms-bubble-text, .dooms-card-text');
         if (textDiv) {
             text += textDiv.textContent.trim() + '\n';
         }
@@ -890,7 +821,7 @@ export function initBubbleTtsHandlers() {
         e.preventDefault();
         e.stopPropagation();
 
-        const bubble = $(this).closest('.dooms-bubble')[0];
+        const bubble = $(this).closest('.dooms-bubble, .dooms-card')[0];
         if (!bubble) return;
 
         const text = getTextFromBubbleForward(bubble);

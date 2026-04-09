@@ -1121,6 +1121,13 @@
                         </label>
                     </div>
                     <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Hide ST Character Avatar</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-cb-hide-st-avatar" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Show Author Names</span>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-cb-show-author-names" />
@@ -1792,7 +1799,7 @@
     </div>
 </div>
 
-<!-- Lorebook Manager Modal -->
+<!-- Lorebook Manager Modal (v2 Three-Panel) -->
 <div id="rpg-lorebook-modal" class="rpg-lb-modal" role="dialog" aria-modal="true">
     <div class="rpg-lb-modal-content">
         <header class="rpg-lb-modal-header">
@@ -1800,15 +1807,15 @@
                 <i class="fa-solid fa-book-atlas" aria-hidden="true"></i>
                 <span>Lore Library</span>
             </h3>
-            <div class="rpg-lb-header-toggle" data-action="toggle-all-books" title="Toggle all lorebooks on/off">
-                <div class="rpg-lb-toggle" data-type="master"></div>
-                <span>All</span>
-            </div>
+            <span class="rpg-lb-spacer"></span>
             <button class="rpg-lb-close" type="button" aria-label="Close lorebook manager">&times;</button>
         </header>
         <div class="rpg-lb-modal-body">
             <!-- Populated dynamically by renderLorebook() -->
         </div>
+        <footer class="rpg-lb-modal-footer">
+            <!-- Populated dynamically by renderFooter() -->
+        </footer>
     </div>
 </div>
 

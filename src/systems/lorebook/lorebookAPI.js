@@ -14,6 +14,8 @@ import {
     createNewWorldInfo,
     updateWorldInfoList,
     importWorldInfo,
+    deleteWorldInfo,
+    world_info,
     // Global WI settings (read)
     world_info_depth,
     world_info_budget,
@@ -321,6 +323,46 @@ export async function importWorld(file) {
  * Exports a lorebook as a .json download.
  * @param {string} name - WI filename to export
  */
+/**
+ * Renames a lorebook (World Info) by saving under the new name, deleting the old,
+ * and updating any character lore references and campaign assignments.
+ * @param {string} oldName - Current WI filename
+ * @param {string} newName - New name to rename to
+ */
+export async function renameWorld(oldName, newName) {
+    const data = await loadWorldData(oldName, true);
+    if (!data) throw new Error(`Could not load world data for "${oldName}"`);
+
+    // Capture active state BEFORE delete (deleteWorldInfo removes from selected_world_info)
+    const wasActive = selected_world_info.includes(oldName);
+
+    // Save under new name
+    await saveWorldInfo(newName, data, true);
+    // Delete old (this will deactivate it)
+    await deleteWorldInfo(oldName);
+
+    // Re-activate under new name if it was previously active
+    if (wasActive) {
+        selected_world_info.push(newName);
+        saveSettingsDebounced();
+    }
+
+    // Update character lore references
+    const existingCharLores = world_info?.charLore?.filter(e => e.extraBooks.includes(oldName));
+    if (existingCharLores && existingCharLores.length > 0) {
+        existingCharLores.forEach(charLore => {
+            charLore.extraBooks = charLore.extraBooks.filter(e => e !== oldName).concat(newName);
+        });
+        saveSettingsDebounced();
+    }
+
+    // Update cache
+    wiDataCache.delete(oldName);
+    wiDataCache.set(newName, data);
+
+    await updateWorldInfoList();
+}
+
 export async function exportWorld(name) {
     const data = await loadWorldData(name, true);
     if (!data) return;

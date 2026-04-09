@@ -279,6 +279,7 @@ export let extensionSettings = {
         showAuthorNames: true,            // Show character name headers
         showNarratorLabel: true,          // Show "Narrator" label for narration blocks
         narratorItalic: true,             // Italicize narrator text
+        hideStAvatar: false,              // Hide SillyTavern's default character avatar when bubbles active
     },
     infoPanelSettings: {
         bgColor: '#e94560',
@@ -354,7 +355,8 @@ export let extensionSettings = {
         expandedBooks: [],      // WI filenames of expanded book spines (UI state)
         lastActiveTab: 'all',   // last selected campaign tab
         lastFilter: 'all',      // 'all', 'active', 'inactive'
-        lastSearch: ''           // last search query
+        lastSearch: '',          // last search query
+        viewMode: 'list',       // 'list' | 'graph' (v2 view mode)
     },
     // Doom Counter — tension-driven plot twist system
     // Uses its own 1-10 numeric tension scale (independent of the infoBox tension widget)
