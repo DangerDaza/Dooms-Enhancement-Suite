@@ -17,7 +17,7 @@ import { extensionFolderPath } from '../../core/config.js';
 import { saveSettings, getActiveKnownCharacters, getActiveRemovedCharacters, getActiveCharacterColors, saveCharacterRosterChange } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
-import { this_chid, characters, chat_metadata } from '../../../../../../../script.js';
+import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
 import { openCharacterSheet } from './characterSheet.js';
@@ -183,6 +183,9 @@ export function initPortraitBar() {
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
                 <i class="fa-solid fa-scroll"></i> Character Sheet
             </div>
+            <div class="dooms-pb-ctx-item" data-action="open-expressions">
+                <i class="fa-solid fa-face-smile"></i> Open Expression Folder
+            </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item dooms-pb-ctx-danger" data-action="remove-character">
                 <i class="fa-solid fa-user-xmark"></i> Remove Character
@@ -329,6 +332,8 @@ export function initPortraitBar() {
             clearCharacterColor(characterName);
         } else if (action === 'character-sheet') {
             openCharacterSheet(characterName);
+        } else if (action === 'open-expressions') {
+            openExpressionFolder(characterName);
         }
     });
 
@@ -900,6 +905,37 @@ function removePortrait(characterName) {
         } catch (e) { /* ignore */ }
         updatePortraitBar();
         console.log(`[Dooms Tracker] Portrait removed for ${characterName}`);
+    }
+}
+
+/**
+ * Opens the character's expression/sprite folder in the OS file explorer.
+ */
+async function openExpressionFolder(characterName) {
+    try {
+        const response = await fetch('/api/sprites/open-folder', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ name: characterName }),
+        });
+        if (response.ok) {
+            console.log(`[Dooms Tracker] Opened expression folder for: ${characterName}`);
+        } else if (response.status === 404) {
+            toastr.info(
+                `Expression sprites go in: data/default-user/characters/${characterName}/`,
+                'Open Folder Not Available',
+                { timeOut: 6000 }
+            );
+        } else {
+            toastr.error('Failed to open expression folder.', 'Error');
+        }
+    } catch (err) {
+        console.error('[Dooms Tracker] Failed to open expression folder:', err);
+        toastr.info(
+            `Expression sprites go in: data/default-user/characters/${characterName}/`,
+            'Open Folder Not Available',
+            { timeOut: 6000 }
+        );
     }
 }
 

@@ -27,6 +27,7 @@ import {
     DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT
 } from './promptBuilder.js';
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
+import { buildNameBanInstruction } from '../features/nameBan.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Type imports
@@ -615,6 +616,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
+        setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
         return;
     }
     const context = getContext();
@@ -815,6 +817,17 @@ export async function onGenerationStarted(type, data, dryRun) {
             // Clear Dialogue Coloring prompt if disabled
             setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
+        // ── Name Ban prompt injection ──
+        if (extensionSettings.nameBan?.enabled && extensionSettings.nameBan?.injectIntoPrompt && !shouldSuppress) {
+            const nameBanPrompt = buildNameBanInstruction();
+            if (nameBanPrompt) {
+                setExtensionPrompt('dooms-tracker-name-ban', nameBanPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            } else {
+                setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+            }
+        } else {
+            setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+        }
     } else if (extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') {
         const resolveRole = (role) => {
             if (role === 'user') return extension_prompt_roles.USER;
@@ -871,6 +884,17 @@ ${contextInstructionsText}
             // Clear Dialogue Coloring prompt if disabled
             setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
+        // ── Name Ban prompt injection (separate/external mode) ──
+        if (extensionSettings.nameBan?.enabled && extensionSettings.nameBan?.injectIntoPrompt && !shouldSuppress) {
+            const nameBanPrompt = buildNameBanInstruction();
+            if (nameBanPrompt) {
+                setExtensionPrompt('dooms-tracker-name-ban', nameBanPrompt, extension_prompt_types.IN_CHAT, 0, false);
+            } else {
+                setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+            }
+        } else {
+            setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+        }
         // Clear together mode injections
         setExtensionPrompt('dooms-tracker-inject', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-example', '', extension_prompt_types.IN_CHAT, 0, false);
@@ -881,6 +905,7 @@ ${contextInstructionsText}
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
     }
     // Set suppression state for the historical context injection
     currentSuppressionState = shouldSuppress;

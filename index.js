@@ -2,6 +2,7 @@ import { getContext, renderExtensionTemplateAsync, extension_settings as st_exte
 import { eventSource, event_types, substituteParams, chat, saveSettingsDebounced, chat_metadata, saveChatDebounced, user_avatar, getThumbnailUrl, characters, this_chid, extension_prompt_types, extension_prompt_roles, setExtensionPrompt, reloadCurrentChat, Generate, getRequestHeaders, messageFormatting } from '../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../group-chats.js';
 import { power_user } from '../../../power-user.js';
+import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 // Core modules
 import { extensionName, extensionFolderPath } from './src/core/config.js';
 import { i18n } from './src/core/i18n.js';
@@ -115,6 +116,7 @@ import { initLorebookEventDelegation, renderLorebook } from './src/systems/rende
 // Feature modules
 import { ensureHtmlCleaningRegex, detectConflictingRegexScripts, ensureTrackerCleaningRegex } from './src/systems/features/htmlCleaning.js';
 import { ensureJsonCleaningRegex, removeJsonCleaningRegex } from './src/systems/features/jsonCleaning.js';
+import { renderApprovedNamesTags, renderIgnoredNamesTags, renderMappingsTable } from './src/systems/features/nameBan.js';
 import { DEFAULT_HTML_PROMPT } from './src/systems/generation/promptBuilder.js';
 // Scene headers (inline chat rendering)
 import { updateChatSceneHeaders, applySceneTrackerSettings, resetSceneHeaderCache } from './src/systems/rendering/sceneHeaders.js';
@@ -460,6 +462,16 @@ async function initUI() {
         extensionSettings.syncExpressionsToPresentCharacters = $(this).prop('checked');
         saveSettings();
         onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters);
+        $('#rpg-expression-options').toggle($(this).prop('checked'));
+    });
+    $('#rpg-expression-classifier-api').on('change', function() {
+        extensionSettings.expressionClassifierApi = $(this).val();
+        saveSettings();
+        $('#rpg-expression-batch-row').toggle($(this).val() === 'llm');
+    });
+    $('#rpg-expression-batch-mode').on('change', function() {
+        extensionSettings.expressionBatchMode = $(this).prop('checked');
+        saveSettings();
     });
     $('#rpg-pb-hide-default-expressions').on('change', function() {
         extensionSettings.hideDefaultExpressionDisplay = $(this).prop('checked');
@@ -950,6 +962,41 @@ async function initUI() {
         toastr.info('Doom Counter reset.', '', { timeOut: 2000 });
     });
 
+    // ── Name Ban ──
+    const _nbSettings = () => {
+        if (!extensionSettings.nameBan) extensionSettings.nameBan = {};
+        return extensionSettings.nameBan;
+    };
+    const _renderNbLists = () => {
+        renderApprovedNamesTags($('#rpg-nb-approved-tags'));
+        renderIgnoredNamesTags($('#rpg-nb-ignored-tags'));
+        renderMappingsTable($('#rpg-nb-mappings-container'));
+    };
+
+    $('#rpg-toggle-name-ban').on('change', function () {
+        _nbSettings().enabled = $(this).prop('checked');
+        saveSettings();
+        $('#rpg-nb-badge').text($(this).prop('checked') ? 'on' : 'off');
+        $('#rpg-nb-options').toggle($(this).prop('checked'));
+    });
+    $('#rpg-nb-sensitivity').on('change', function () { _nbSettings().sensitivity = $(this).val(); saveSettings(); });
+    $('#rpg-nb-show-modal').on('change', function () { _nbSettings().showModalForNew = $(this).prop('checked'); saveSettings(); });
+    $('#rpg-nb-auto-apply').on('change', function () { _nbSettings().autoApplyKnownMappings = $(this).prop('checked'); saveSettings(); });
+    $('#rpg-nb-inject-prompt').on('change', function () { _nbSettings().injectIntoPrompt = $(this).prop('checked'); saveSettings(); });
+    const addApprovedName = () => { const name = $('#rpg-nb-add-approved').val().trim(); if (!name) return; const nb = _nbSettings(); if (!nb.approvedNames) nb.approvedNames = []; if (!nb.approvedNames.includes(name)) { nb.approvedNames.push(name); saveSettings(); _renderNbLists(); } $('#rpg-nb-add-approved').val(''); };
+    $('#rpg-nb-add-approved-btn').on('click', addApprovedName);
+    $('#rpg-nb-add-approved').on('keypress', function (e) { if (e.key === 'Enter') addApprovedName(); });
+    const addIgnoredName = () => { const name = $('#rpg-nb-add-ignored').val().trim(); if (!name) return; const nb = _nbSettings(); if (!nb.ignoredNames) nb.ignoredNames = []; if (!nb.ignoredNames.includes(name)) { nb.ignoredNames.push(name); saveSettings(); _renderNbLists(); } $('#rpg-nb-add-ignored').val(''); };
+    $('#rpg-nb-add-ignored-btn').on('click', addIgnoredName);
+    $('#rpg-nb-add-ignored').on('keypress', function (e) { if (e.key === 'Enter') addIgnoredName(); });
+    const addMapping = () => { const from = $('#rpg-nb-add-mapping-from').val().trim(); const to = $('#rpg-nb-add-mapping-to').val().trim(); if (!from || !to) return; const nb = _nbSettings(); if (!nb.nameMappings) nb.nameMappings = {}; nb.nameMappings[from] = to; saveSettings(); _renderNbLists(); $('#rpg-nb-add-mapping-from').val(''); $('#rpg-nb-add-mapping-to').val(''); };
+    $('#rpg-nb-add-mapping-btn').on('click', addMapping);
+    $('#rpg-nb-add-mapping-to').on('keypress', function (e) { if (e.key === 'Enter') addMapping(); });
+    $(document).on('click', '.dooms-nb-tag-remove', function () { const name = $(this).data('name'); const list = $(this).data('list'); const nb = _nbSettings(); if (nb[list]) { nb[list] = nb[list].filter(n => n !== name); saveSettings(); _renderNbLists(); } });
+    $(document).on('click', '.dooms-nb-mapping-delete', function () { const banned = $(this).data('banned'); const nb = _nbSettings(); if (nb.nameMappings) { delete nb.nameMappings[banned]; saveSettings(); _renderNbLists(); } });
+    $('#rpg-nb-excluded-words').on('change', function () { _nbSettings().customExcludedWords = $(this).val().split('\n').map(w => w.trim()).filter(Boolean); saveSettings(); });
+    $('#rpg-nb-clear-all').on('click', async function () { const confirm = await callGenericPopup('Clear all Name Ban data?', POPUP_TYPE.CONFIRM); if (confirm === POPUP_RESULT.AFFIRMATIVE) { const nb = _nbSettings(); nb.approvedNames = []; nb.nameMappings = {}; nb.ignoredNames = []; nb.customExcludedWords = []; saveSettings(); _renderNbLists(); $('#rpg-nb-excluded-words').val(''); } });
+
     // ── Chat Bubbles & Info Panel customization ──
     const _cbSettings = () => {
         if (!extensionSettings.chatBubbleSettings) extensionSettings.chatBubbleSettings = {};
@@ -1378,6 +1425,10 @@ async function initUI() {
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
+    $('#rpg-expression-options').toggle(extensionSettings.syncExpressionsToPresentCharacters === true);
+    $('#rpg-expression-classifier-api').val(extensionSettings.expressionClassifierApi || 'local');
+    $('#rpg-expression-batch-mode').prop('checked', extensionSettings.expressionBatchMode !== false);
+    $('#rpg-expression-batch-row').toggle((extensionSettings.expressionClassifierApi || 'local') === 'llm');
     $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
     $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
@@ -1546,6 +1597,20 @@ async function initUI() {
     updateDoomCounterUI();
     // Initialize Doom Counter toast button listener
     initDoomCounterListener();
+
+    // Name Ban
+    const nb = extensionSettings.nameBan || {};
+    $('#rpg-toggle-name-ban').prop('checked', nb.enabled || false);
+    $('#rpg-nb-badge').text(nb.enabled ? 'on' : 'off');
+    $('#rpg-nb-options').toggle(nb.enabled || false);
+    $('#rpg-nb-sensitivity').val(nb.sensitivity || 'normal');
+    $('#rpg-nb-show-modal').prop('checked', nb.showModalForNew !== false);
+    $('#rpg-nb-auto-apply').prop('checked', nb.autoApplyKnownMappings !== false);
+    $('#rpg-nb-inject-prompt').prop('checked', nb.injectIntoPrompt !== false);
+    $('#rpg-nb-excluded-words').val((nb.customExcludedWords || []).join('\n'));
+    renderApprovedNamesTags($('#rpg-nb-approved-tags'));
+    renderIgnoredNamesTags($('#rpg-nb-ignored-tags'));
+    renderMappingsTable($('#rpg-nb-mappings-container'));
 
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();

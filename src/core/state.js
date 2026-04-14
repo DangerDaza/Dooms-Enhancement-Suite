@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 13, // Version number for settings migrations (v12-v13 add expression sync settings)
+    settingsVersion: 15, // Version number for settings migrations (v14-v15 add Name Ban + expression classifier settings)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -58,6 +58,18 @@ export let extensionSettings = {
     skipInjectionsForGuided: 'none', // skip injections for instruct injections and quiet prompts (GuidedGenerations compatibility)
     enableRandomizedPlot: false, // Show randomized plot progression button above chat input
     enableNaturalPlot: false, // Show natural plot progression button above chat input
+    // Name Ban — control which character names the AI can use
+    nameBan: {
+        enabled: false,
+        sensitivity: 'normal',        // 'strict' | 'normal' | 'aggressive'
+        autoApplyKnownMappings: true, // Skip modal for known mappings
+        showModalForNew: true,        // Show popup for unknown names (false = auto-approve)
+        injectIntoPrompt: true,       // Tell AI about banned/approved names
+        approvedNames: [],            // string[] — names approved as-is
+        nameMappings: {},             // { "bannedName": "approvedReplacement" }
+        ignoredNames: [],             // string[] — never flag these
+        customExcludedWords: [],      // Words that are never names
+    },
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature
@@ -316,8 +328,10 @@ export let extensionSettings = {
     },
     // Portrait auto-import: match NPC names to SillyTavern character card avatars
     portraitAutoImport: true,
-    syncExpressionsToPresentCharacters: false, // Mirror ST Character Expressions into Present Characters portraits
+    syncExpressionsToPresentCharacters: false, // Classify and display per-character expressions on portrait bar
     hideDefaultExpressionDisplay: false, // Hide SillyTavern's built-in expression displays
+    expressionClassifierApi: 'local', // 'local' (BERT) or 'llm' (Main API)
+    expressionBatchMode: true, // Batch all characters in one LLM call (only when llm)
     // Auto avatar generation settings
     autoGenerateAvatars: false, // Master toggle for auto-generating avatars
     avatarLLMCustomInstruction: '', // Custom instruction for LLM prompt generation

@@ -33,6 +33,10 @@ import { renderQuests } from '../rendering/quests.js';
 import { updateChatSceneHeaders, resetSceneHeaderCache } from '../rendering/sceneHeaders.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
+// Name Ban
+import { enforceNameBan } from '../features/nameBan.js';
+// Expression classification
+import { classifyAllCharacterExpressions } from './expressionSync.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 /**
@@ -137,6 +141,20 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) {
                 lastGeneratedData.characterThoughts = parsedData.characterThoughts;
             }
+            // ── Name Ban: enforce name rules before rendering & swipe storage ──
+            if (extensionSettings.nameBan?.enabled) {
+                const nbResult = await enforceNameBan(lastMessage.mes, parsedData.characterThoughts);
+                if (nbResult.text !== lastMessage.mes) {
+                    lastMessage.mes = nbResult.text;
+                    if (Array.isArray(lastMessage.swipes) && lastMessage.swipe_id !== undefined) {
+                        lastMessage.swipes[lastMessage.swipe_id] = nbResult.text;
+                    }
+                }
+                if (nbResult.thoughts) {
+                    parsedData.characterThoughts = nbResult.thoughts;
+                    lastGeneratedData.characterThoughts = nbResult.thoughts;
+                }
+            }
             // Store RPG data for this specific swipe in the message's extra field
             if (!lastMessage.extra) {
                 lastMessage.extra = {};
@@ -167,6 +185,12 @@ export async function onMessageReceived(data) {
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateWeatherEffect();
+            }
+            // ── Expression classification: classify per-character after portrait bar renders ──
+            if (extensionSettings.syncExpressionsToPresentCharacters && parsedData.characterThoughts && isAwaitingNewMessage) {
+                classifyAllCharacterExpressions(lastMessage.mes)
+                    .then(() => updatePortraitBar())
+                    .catch(err => console.error('[DES] Expression classification failed:', err));
             }
             // Insert inline thought dropdowns into the chat message
             // (CHARACTER_MESSAGE_RENDERED fires after addOneMessage, so thoughts go in then)
@@ -202,10 +226,35 @@ export async function onMessageReceived(data) {
         if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
             setTimeout(async () => {
                 await updateRPGData(renderInfoBox, renderThoughts);
+                // ── Name Ban: enforce in separate/external mode ──
+                if (extensionSettings.nameBan?.enabled) {
+                    const lastMsg = chat[chat.length - 1];
+                    if (lastMsg && !lastMsg.is_user) {
+                        const nbResult = await enforceNameBan(lastMsg.mes, lastGeneratedData.characterThoughts);
+                        if (nbResult.text !== lastMsg.mes) {
+                            lastMsg.mes = nbResult.text;
+                            if (Array.isArray(lastMsg.swipes) && lastMsg.swipe_id !== undefined) {
+                                lastMsg.swipes[lastMsg.swipe_id] = nbResult.text;
+                            }
+                        }
+                        if (nbResult.thoughts) {
+                            lastGeneratedData.characterThoughts = nbResult.thoughts;
+                        }
+                    }
+                }
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateWeatherEffect();
                 updateChatThoughts();
+                // ── Expression classification (separate/external mode) ──
+                if (extensionSettings.syncExpressionsToPresentCharacters) {
+                    const sepMsg = chat[chat.length - 1];
+                    if (sepMsg && !sepMsg.is_user) {
+                        classifyAllCharacterExpressions(sepMsg.mes)
+                            .then(() => updatePortraitBar())
+                            .catch(err => console.error('[DES] Expression classification failed:', err));
+                    }
+                }
                 // Doom Counter: evaluate tension after separate mode update
                 if (extensionSettings.doomCounter?.enabled) {
                     const dcResult = doomCounterOnResponse();

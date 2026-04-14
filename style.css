@@ -13953,6 +13953,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center top;
 }
 
 /* Name overlay with gradient */
@@ -19171,4 +19172,53 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-import-fullsheet-btn:hover {
     opacity: 1;
 }
+
+/* ═══════════════════════════════════════════════
+   NAME BAN
+   ═══════════════════════════════════════════════ */
+.dooms-nb-tag-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; }
+.dooms-nb-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.82em; border: 1px solid var(--SmartThemeBorderColor, #444); }
+.dooms-nb-tag-approved { background: rgba(78, 204, 163, 0.12); border-color: rgba(78, 204, 163, 0.3); }
+.dooms-nb-tag-ignored { background: rgba(107, 115, 148, 0.12); border-color: rgba(107, 115, 148, 0.3); }
+.dooms-nb-tag-remove { background: none; border: none; color: var(--SmartThemeBodyColor, #aaa); cursor: pointer; font-size: 0.85em; padding: 0 2px; opacity: 0.6; transition: opacity 0.15s; }
+.dooms-nb-tag-remove:hover { opacity: 1; color: #e94560; }
+.dooms-nb-mappings-table { width: 100%; border-collapse: collapse; font-size: 0.85em; background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.15)); border-radius: 6px; overflow: hidden; }
+.dooms-nb-mappings-table th { text-align: left; padding: 6px 10px; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; font-weight: 500; border-bottom: 1px solid var(--SmartThemeBorderColor, #333); }
+.dooms-nb-mappings-table td { padding: 6px 10px; border-bottom: 1px solid var(--SmartThemeBorderColor, #333); }
+.dooms-nb-mappings-table tr:last-child td { border-bottom: none; }
+.dooms-nb-from { color: #f0a500; font-weight: 500; }
+.dooms-nb-to { color: #4ecca3; font-weight: 500; }
+.dooms-nb-mapping-delete { padding: 2px 6px !important; min-width: auto !important; font-size: 0.9em; }
+.dooms-nb-modal { display: flex; flex-direction: column; gap: 16px; max-width: 560px; }
+.dooms-nb-modal::before { content: '\1F6E1\FE0F  New Names Detected'; font-size: 1.05em; font-weight: 600; margin-bottom: 4px; }
+.dooms-nb-detection { background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.2)); border: 1px solid var(--SmartThemeBorderColor, #444); border-radius: 8px; overflow: hidden; }
+.dooms-nb-context { padding: 10px 14px; font-size: 0.88em; line-height: 1.6; font-style: italic; opacity: 0.85; border-bottom: 1px solid var(--SmartThemeBorderColor, #333); background: rgba(0,0,0,0.1); }
+.dooms-nb-highlight { background: rgba(240, 165, 0, 0.2); color: #f0a500; padding: 1px 5px; border-radius: 3px; font-weight: 700; font-style: normal; border-bottom: 2px solid #f0a500; }
+.dooms-nb-actions { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.dooms-nb-radio { display: flex; align-items: center; gap: 8px; font-size: 0.88em; padding: 4px 6px; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+.dooms-nb-radio:hover { background: rgba(255,255,255,0.04); }
+.dooms-nb-replace-label { flex-wrap: wrap; align-items: flex-start !important; }
+.dooms-nb-replace-label input[type="radio"] { margin-top: 6px; }
+.dooms-nb-select { padding: 4px 8px !important; font-size: 0.85em !important; }
+.dooms-nb-custom { padding: 4px 8px !important; font-size: 0.85em !important; }
+.dooms-nb-remember { display: flex; align-items: center; gap: 6px; font-size: 0.78em; opacity: 0.6; padding: 6px 6px 2px; border-top: 1px solid var(--SmartThemeBorderColor, #333); margin-top: 4px; }
+
+/* ═══════════════════════════════════════════════
+   CHARACTER SHEET — EXPRESSIONS TAB
+   ═══════════════════════════════════════════════ */
+.rpg-cs-expr-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 12px; flex-wrap: wrap; gap: 8px; }
+.rpg-cs-expr-actions { display: flex; gap: 6px; }
+.rpg-cs-expr-actions .menu_button { padding: 4px 10px !important; font-size: 0.8em !important; min-width: auto !important; }
+.rpg-cs-expression-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 8px; padding-bottom: 16px; }
+.rpg-cs-expr-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rpg-cs-expr-thumb { position: relative; width: 100%; aspect-ratio: 3/4; border-radius: 6px; overflow: hidden; border: 1px solid var(--SmartThemeBorderColor, #444); background: rgba(0,0,0,0.15); cursor: pointer; }
+.rpg-cs-expr-has-sprite .rpg-cs-expr-thumb { border-color: rgba(78, 204, 163, 0.4); }
+.rpg-cs-expr-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.rpg-cs-expr-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.2; font-size: 1.5em; }
+.rpg-cs-expr-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.15s; }
+.rpg-cs-expr-thumb:hover .rpg-cs-expr-overlay { opacity: 1; }
+.rpg-cs-expr-overlay button { background: rgba(255,255,255,0.15); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.85em; transition: background 0.15s; }
+.rpg-cs-expr-overlay button:hover { background: rgba(255,255,255,0.3); }
+.rpg-cs-expr-delete:hover { background: rgba(233, 69, 96, 0.5) !important; }
+.rpg-cs-expr-label { font-size: 0.72em; text-align: center; opacity: 0.7; text-transform: capitalize; }
 

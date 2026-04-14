@@ -1,279 +1,443 @@
 /**
- * Character Expressions -> Present Characters portrait sync
+ * Per-Character Expression Classification & Sprite Display
  *
- * Mirrors SillyTavern's currently displayed Character Expressions image
- * into Doom's Present Characters panel and Portrait Bar, persisting the
- * last known expression for each character until they speak again.
+ * Independent system that classifies emotions for each character in the scene
+ * using their dialogue/thoughts text, looks up sprite files per NPC name,
+ * and displays expression sprites on portrait bar cards.
+ *
+ * Replaces the old MutationObserver-based passthrough that mirrored ST's
+ * single-character expression panel.
  */
-import { chat } from '../../../../../../../script.js';
+import { chat, getRequestHeaders, generateRaw } from '../../../../../../../script.js';
 import {
     extensionSettings,
     syncedExpressionPortraits,
     setSyncedExpressionPortrait,
     getSyncedExpressionPortrait,
-    removeSyncedExpressionPortrait,
+    clearSyncedExpressionPortraits,
+    lastGeneratedData,
+    committedTrackerData,
 } from '../../core/state.js';
+import { getActiveCharacterColors, saveChatData } from '../../core/persistence.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
-import { saveChatData } from '../../core/persistence.js';
 
-let expressionContainerObserver = null;
-let expressionImageObserver = null;
-let observedExpressionImage = null;
-let pendingSpeakerName = null;
-let pendingSpeakerBaselineSignature = null;
-let pendingSpeakerQueuedAt = 0;
-let lastCapturedExpressionSrc = null;
-let scheduledCaptureTimers = [];
+// ─────────────────────────────────────────────
+//  Constants
+// ─────────────────────────────────────────────
+
+const DEFAULT_EXPRESSIONS = [
+    'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
+    'confusion', 'curiosity', 'desire', 'disappointment', 'disapproval',
+    'disgust', 'embarrassment', 'excitement', 'fear', 'gratitude', 'grief',
+    'joy', 'love', 'nervousness', 'neutral', 'optimism', 'pride',
+    'realization', 'relief', 'remorse', 'sadness', 'surprise',
+];
+
+/** Sprite cache: Map<normalizedName, { sprites: Map<label, path>, fetchedAt: number }> */
+const spriteCache = new Map();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+/** Hidden style element for hiding ST's native expression display */
 let hiddenExpressionStyleElement = null;
-let pendingCaptureRequestId = 0;
-let _refreshRAF = 0;
+
+// ─────────────────────────────────────────────
+//  Sprite cache
+// ─────────────────────────────────────────────
 
 function normalizeName(name) {
     return String(name || '').trim().toLowerCase();
 }
 
-function normalizeExpressionSrc(src) {
-    return String(src || '').trim();
-}
-
-function resolveExpressionUrl(src) {
-    const normalized = normalizeExpressionSrc(src);
-    if (!normalized) return null;
+/**
+ * Fetches and caches the sprite list for a character from ST's sprites API.
+ * @param {string} name - Character name (used as folder name)
+ * @returns {Promise<Map<string, string>|null>} Map of label→path, or null if no sprites
+ */
+async function fetchAndCacheSpriteList(name) {
+    const key = normalizeName(name);
+    const cached = spriteCache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
+        return cached.sprites.size > 0 ? cached.sprites : null;
+    }
 
     try {
-        return new URL(normalized, window.location.href);
-    } catch {
+        const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(name)}`, {
+            headers: getRequestHeaders(),
+        });
+        if (!response.ok) {
+            spriteCache.set(key, { sprites: new Map(), fetchedAt: Date.now() });
+            return null;
+        }
+        const data = await response.json();
+        const sprites = new Map();
+        if (Array.isArray(data)) {
+            for (const entry of data) {
+                if (entry.label && entry.path) {
+                    // Keep first match per label (e.g., joy.png beats joy-1.png)
+                    if (!sprites.has(entry.label)) {
+                        sprites.set(entry.label, entry.path);
+                    }
+                }
+            }
+        }
+        spriteCache.set(key, { sprites, fetchedAt: Date.now() });
+        return sprites.size > 0 ? sprites : null;
+    } catch (err) {
+        console.warn(`[DES Expressions] Failed to fetch sprites for "${name}":`, err);
         return null;
     }
 }
 
-function isDocumentLikeUrl(src) {
-    const candidate = resolveExpressionUrl(src);
-    if (!candidate) return false;
+/**
+ * Resolves a sprite URL for a character + expression label.
+ * Falls back through: exact label → neutral → first available → null.
+ * @param {string} name
+ * @param {string} label
+ * @returns {string|null}
+ */
+function resolveSpriteUrl(name, label) {
+    const cached = spriteCache.get(normalizeName(name));
+    if (!cached || cached.sprites.size === 0) return null;
 
-    const current = new URL(window.location.href);
-    return candidate.origin === current.origin
-        && candidate.pathname === current.pathname
-        && candidate.search === current.search;
+    const sprites = cached.sprites;
+    if (sprites.has(label)) return sprites.get(label);
+    if (sprites.has('neutral')) return sprites.get('neutral');
+    // Return first available sprite as last resort
+    return sprites.values().next().value || null;
 }
 
-function isUsableExpressionSrc(src) {
-    const normalized = normalizeExpressionSrc(src);
-    if (!normalized) return false;
-
-    const lower = normalized.toLowerCase();
-    if (lower.includes('/img/default-expressions/') || lower.includes('/default-expressions/')) {
-        return false;
-    }
-
-    if (isDocumentLikeUrl(normalized)) {
-        return false;
-    }
-
-    return true;
+/**
+ * Invalidates the sprite cache for a character (call after upload/delete).
+ * @param {string} name
+ */
+export function invalidateSpriteCacheFor(name) {
+    spriteCache.delete(normalizeName(name));
 }
 
-function purgeInvalidSyncedExpressionPortraits() {
+/**
+ * Clears the entire sprite cache.
+ */
+export function clearSpriteCache() {
+    spriteCache.clear();
+}
+
+// ─────────────────────────────────────────────
+//  Text extraction
+// ─────────────────────────────────────────────
+
+/**
+ * Extracts per-character text from a message and character thoughts.
+ * Uses dialogue color attribution and character thoughts content.
+ * @param {string} messageText - Raw message HTML/text
+ * @param {Array} characters - Parsed character objects from characterThoughts
+ * @returns {Map<string, string>} Map of characterName → text for classification
+ */
+function extractCharacterTexts(messageText, characters) {
+    const result = new Map();
+
+    // Build color → name mapping from active character colors
+    const colors = getActiveCharacterColors();
+    const colorToName = new Map();
+    if (colors && typeof colors === 'object') {
+        for (const [name, color] of Object.entries(colors)) {
+            if (color) colorToName.set(color.toLowerCase(), name);
+        }
+    }
+
+    // Extract dialogue from <font color=...> tags
+    if (messageText && colorToName.size > 0) {
+        const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>([\s\S]*?)<\/font>/gi;
+        for (const match of messageText.matchAll(fontTagRegex)) {
+            const color = match[1].toLowerCase();
+            const dialogue = match[2].replace(/<[^>]+>/g, '').trim();
+            const name = colorToName.get(color);
+            if (name && dialogue) {
+                const existing = result.get(name) || '';
+                result.set(name, existing + ' ' + dialogue);
+            }
+        }
+    }
+
+    // Supplement with character thoughts (always available from characterThoughts)
+    if (Array.isArray(characters)) {
+        for (const char of characters) {
+            if (!char.name) continue;
+            const thoughtText = char.thoughts?.content || char.thoughts || '';
+            const demeanor = char.details?.demeanor || '';
+            const supplement = [thoughtText, demeanor].filter(Boolean).join(' ').trim();
+            if (supplement) {
+                const existing = result.get(char.name) || '';
+                result.set(char.name, (existing + ' ' + supplement).trim());
+            }
+        }
+    }
+
+    return result;
+}
+
+// ─────────────────────────────────────────────
+//  Classification engine
+// ─────────────────────────────────────────────
+
+/**
+ * Classifies a single text snippet using the local BERT model.
+ * @param {string} text
+ * @returns {Promise<string|null>}
+ */
+async function classifyLocal(text) {
+    try {
+        const response = await fetch('/api/extra/classify', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ text: text.slice(0, 500) }),
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data?.classification?.[0]?.label || null;
+    } catch (err) {
+        console.warn('[DES Expressions] Local classification failed:', err);
+        return null;
+    }
+}
+
+/**
+ * Classifies emotions for multiple characters in one LLM call.
+ * @param {Map<string, string>} characterTexts - Map of name → text
+ * @param {Map<string, Map<string, string>>} availableSprites - Map of name → sprites map
+ * @returns {Promise<Map<string, string>>} Map of name → expression label
+ */
+async function classifyLlmBatch(characterTexts, availableSprites) {
+    const results = new Map();
+    if (characterTexts.size === 0) return results;
+
+    // Build prompt with per-character available labels
+    const charEntries = [];
+    for (const [name, text] of characterTexts) {
+        const sprites = availableSprites.get(normalizeName(name));
+        const labels = sprites ? [...sprites.keys()] : DEFAULT_EXPRESSIONS;
+        const snippet = text.slice(0, 200);
+        charEntries.push(`${name} (labels: ${labels.join(', ')}): "${snippet}"`);
+    }
+
+    const prompt = `Classify the emotion of each character based on their text. Return ONLY valid JSON with character names as keys and emotion labels as values. Choose only from each character's listed labels.
+
+${charEntries.join('\n')}
+
+Return JSON like: {"Name1":"emotion1","Name2":"emotion2"}`;
+
+    try {
+        const response = await generateRaw({
+            prompt: prompt,
+            systemPrompt: 'You are an emotion classifier. Output only valid JSON.',
+            instructOverride: false,
+            responseLength: 200,
+        });
+
+        // Parse JSON from response
+        const jsonMatch = response.match(/\{[^{}]*\}/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            for (const [name, label] of Object.entries(parsed)) {
+                if (typeof label === 'string') {
+                    results.set(name, label.toLowerCase().trim());
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('[DES Expressions] LLM batch classification failed:', err);
+    }
+
+    return results;
+}
+
+/**
+ * Classifies a single text snippet using the LLM.
+ * @param {string} text
+ * @param {string[]} availableLabels
+ * @returns {Promise<string|null>}
+ */
+async function classifyLlmSingle(text, availableLabels) {
+    const labels = availableLabels.length > 0 ? availableLabels : DEFAULT_EXPRESSIONS;
+    const prompt = `Classify the emotion of this text. Output just one word from: ${labels.join(', ')}\n\nText: "${text.slice(0, 300)}"`;
+
+    try {
+        const response = await generateRaw({
+            prompt: prompt,
+            systemPrompt: 'You are an emotion classifier. Output only one emotion word.',
+            instructOverride: false,
+            responseLength: 20,
+        });
+        const word = response.trim().toLowerCase().replace(/[^a-z]/g, '');
+        return labels.includes(word) ? word : null;
+    } catch (err) {
+        console.warn('[DES Expressions] LLM single classification failed:', err);
+        return null;
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Orchestrator
+// ─────────────────────────────────────────────
+
+/**
+ * Main entry point: classify expressions for all present characters and
+ * update their portrait bar sprites.
+ * @param {string} messageText - The raw message text (chat[].mes)
+ */
+export async function classifyAllCharacterExpressions(messageText) {
+    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
+
+    // Get character list from parsed thoughts
+    const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
+    if (!data) return;
+
+    let characters;
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+    } catch {
+        return;
+    }
+
+    if (characters.length === 0) return;
+
+    const charNames = characters.filter(c => c.name).map(c => c.name);
+
+    // Fetch sprite lists for all characters in parallel
+    const spriteFetches = charNames.map(async name => {
+        const sprites = await fetchAndCacheSpriteList(name);
+        return { name, sprites };
+    });
+    const spriteResults = await Promise.all(spriteFetches);
+
+    // Build map of characters that have sprites
+    const availableSprites = new Map();
+    const classifiableNames = [];
+    for (const { name, sprites } of spriteResults) {
+        if (sprites) {
+            availableSprites.set(normalizeName(name), sprites);
+            classifiableNames.push(name);
+        }
+    }
+
+    if (classifiableNames.length === 0) return;
+
+    // Extract per-character text
+    const characterTexts = extractCharacterTexts(messageText, characters);
+
+    // Filter to only characters with both sprites AND text
+    const toClassify = new Map();
+    for (const name of classifiableNames) {
+        const text = characterTexts.get(name);
+        if (text && text.trim().length > 10) {
+            toClassify.set(name, text);
+        }
+    }
+
+    if (toClassify.size === 0) return;
+
+    // Classify based on selected API
+    const api = extensionSettings.expressionClassifierApi || 'local';
+    let classifications = new Map();
+
+    if (api === 'llm' && extensionSettings.expressionBatchMode && toClassify.size > 1) {
+        // LLM batch mode
+        classifications = await classifyLlmBatch(toClassify, availableSprites);
+    } else if (api === 'llm') {
+        // LLM individual
+        const promises = [...toClassify.entries()].map(async ([name, text]) => {
+            const sprites = availableSprites.get(normalizeName(name));
+            const labels = sprites ? [...sprites.keys()] : DEFAULT_EXPRESSIONS;
+            const label = await classifyLlmSingle(text, labels);
+            return { name, label };
+        });
+        const results = await Promise.all(promises);
+        for (const { name, label } of results) {
+            if (label) classifications.set(name, label);
+        }
+    } else {
+        // Local BERT (parallel)
+        const promises = [...toClassify.entries()].map(async ([name, text]) => {
+            const label = await classifyLocal(text);
+            return { name, label };
+        });
+        const results = await Promise.all(promises);
+        for (const { name, label } of results) {
+            if (label) classifications.set(name, label);
+        }
+    }
+
+    // Resolve sprites and store in state
     let changed = false;
-
-    for (const [storedName, src] of Object.entries(syncedExpressionPortraits)) {
-        if (!isUsableExpressionSrc(src)) {
-            removeSyncedExpressionPortrait(storedName);
-            changed = true;
+    for (const [name, label] of classifications) {
+        const spriteUrl = resolveSpriteUrl(name, label);
+        if (spriteUrl) {
+            const prev = getSyncedExpressionPortrait(normalizeName(name));
+            if (prev !== spriteUrl) {
+                setSyncedExpressionPortrait(normalizeName(name), spriteUrl);
+                changed = true;
+                console.log(`[DES Expressions] ${name} → ${label} (${spriteUrl})`);
+            }
         }
     }
 
     if (changed) {
         saveChatData();
+        refreshExpressionConsumers();
     }
-
-    return changed;
 }
 
-function namesMatch(a, b) {
-    const left = normalizeName(a);
-    const right = normalizeName(b);
-    if (!left || !right) return false;
-    return left === right || left.startsWith(right + ' ') || right.startsWith(left + ' ');
+// ─────────────────────────────────────────────
+//  Consumer refresh
+// ─────────────────────────────────────────────
+
+let _refreshRAF = 0;
+
+function refreshExpressionConsumers() {
+    if (_refreshRAF) cancelAnimationFrame(_refreshRAF);
+    _refreshRAF = requestAnimationFrame(() => {
+        _refreshRAF = 0;
+        renderThoughts({ preserveScroll: true });
+        updatePortraitBar();
+        // Dynamic import to avoid circular dependency
+        import('../rendering/chatBubbles.js').then(m => m.refreshBubbleAvatars()).catch(() => {});
+    });
 }
 
+// ─────────────────────────────────────────────
+//  Portrait lookup (used by avatars.js)
+// ─────────────────────────────────────────────
+
+/**
+ * Gets the expression portrait URL for a character.
+ * @param {string} characterName
+ * @returns {string|null}
+ */
 export function getExpressionPortraitForCharacter(characterName) {
+    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return null;
+
     const target = normalizeName(characterName);
     if (!target) return null;
 
     const exact = getSyncedExpressionPortrait(target);
-    if (isUsableExpressionSrc(exact)) return exact;
+    if (exact) return exact;
 
+    // Fuzzy match: "Stella" matches "stella voss"
     for (const [storedName, src] of Object.entries(syncedExpressionPortraits)) {
-        if (namesMatch(storedName, target) && isUsableExpressionSrc(src)) return src;
+        const stored = normalizeName(storedName);
+        if (!stored) continue;
+        if (stored.startsWith(target + ' ') || target.startsWith(stored + ' ')) {
+            return src;
+        }
     }
 
     return null;
 }
 
-function getLatestAssistantSpeakerName() {
-    for (let i = chat.length - 1; i >= 0; i--) {
-        const message = chat[i];
-        if (!message || message.is_user || message.is_system) continue;
-        return message.name || null;
-    }
-    return null;
-}
-
-function shouldHideNativeExpressionDisplay() {
-    return extensionSettings.enabled === true && extensionSettings.hideDefaultExpressionDisplay === true;
-}
-
-function shouldRunExpressionObservers() {
-    return extensionSettings.enabled === true && (
-        extensionSettings.syncExpressionsToPresentCharacters === true
-        || extensionSettings.hideDefaultExpressionDisplay === true
-    );
-}
-
-function isExpressionContainerNode(node) {
-    if (!(node instanceof Element)) return false;
-    return !!node.closest('#expression-wrapper, #expression-holder, .expression-holder, [data-expression-container], #visual-novel-wrapper');
-}
-
-function getExpressionImageState(img) {
-    if (!(img instanceof HTMLImageElement)) return null;
-
-    const rawSrc = normalizeExpressionSrc(img.getAttribute('src'));
-    const resolvedSrc = normalizeExpressionSrc(img.currentSrc || img.src || '');
-    const src = rawSrc || '';
-    const spriteFolderName = String(img.getAttribute('data-sprite-folder-name') || '').trim();
-    const spriteFileName = String(img.getAttribute('data-sprite-filename') || '').trim();
-    const expression = String(img.getAttribute('data-expression') || img.getAttribute('title') || '').trim();
-    const isDefault = img.classList.contains('default')
-        || rawSrc.toLowerCase().includes('/img/default-expressions/')
-        || resolvedSrc.toLowerCase().includes('/img/default-expressions/');
-
-    return {
-        src,
-        resolvedSrc,
-        spriteFolderName,
-        spriteFileName,
-        expression,
-        isDefault,
-        signature: JSON.stringify({
-            src,
-            resolvedSrc,
-            spriteFolderName,
-            spriteFileName,
-            expression,
-            isDefault,
-        }),
-    };
-}
-
-function hasMeaningfulMetadataValue(value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    return Boolean(normalized && normalized !== 'null' && normalized !== 'undefined');
-}
-
-function looksLikeFallbackExpressionAsset(state) {
-    if (!state) return true;
-
-    const combined = [state.src, state.spriteFolderName, state.spriteFileName, state.expression]
-        .map(value => String(value || '').trim().toLowerCase())
-        .join(' ');
-
-    return [
-        '/img/default-expressions/',
-        '/default-expressions/',
-        '/emote/',
-        '/emotes/',
-        '/emoji/',
-        '/emotion/',
-        '/emotions/',
-        ' default ',
-        ' fallback ',
-        ' placeholder ',
-    ].some(fragment => combined.includes(fragment.trim()));
-}
-
-function hasRealSyncedSprite(state) {
-    if (!state) return false;
-    if (!state.src || state.isDefault) return false;
-    if (!isUsableExpressionSrc(state.src)) return false;
-    if (!hasMeaningfulMetadataValue(state.spriteFolderName)) return false;
-    if (!hasMeaningfulMetadataValue(state.spriteFileName)) return false;
-    if (!hasMeaningfulMetadataValue(state.expression)) return false;
-    if (looksLikeFallbackExpressionAsset(state)) return false;
-
-    return true;
-}
-
-function isProbablyExpressionImage(img) {
-    if (!(img instanceof HTMLImageElement)) return false;
-    const state = getExpressionImageState(img);
-    if (!state?.src) return false;
-
-    const hasExpressionClass = img.classList.contains('expression') || img.id === 'expression-image';
-    const hasExpressionMetadata = Boolean(state.expression || state.spriteFolderName || state.spriteFileName);
-
-    if (!hasExpressionClass && !hasExpressionMetadata && !isExpressionContainerNode(img)) return false;
-    return true;
-}
-
-function getPreferredVisualNovelImage(speakerName) {
-    const target = normalizeName(speakerName);
-    const candidates = Array.from(document.querySelectorAll('#visual-novel-wrapper .expression-holder img'))
-        .filter(node => isProbablyExpressionImage(node) && hasRealSyncedSprite(getExpressionImageState(node)));
-
-    if (!candidates.length) return null;
-    if (!target) return candidates.find(node => node.offsetParent !== null) || candidates[0] || null;
-
-    const exactMatch = candidates.find(node => {
-        const state = getExpressionImageState(node);
-        const folderRoot = String(state?.spriteFolderName || '').split('/')[0];
-        return namesMatch(folderRoot, target);
-    });
-    if (exactMatch) return exactMatch;
-
-    return candidates.find(node => node.offsetParent !== null) || candidates[0] || null;
-}
-
-function findExpressionImageElement(speakerName = null) {
-    if (observedExpressionImage && observedExpressionImage.isConnected && isProbablyExpressionImage(observedExpressionImage)) {
-        return observedExpressionImage;
-    }
-
-    const preferredSelectors = [
-        '#expression-wrapper img.expression',
-        '#expression-holder > img.expression',
-        '#expression-image',
-    ];
-
-    for (const selector of preferredSelectors) {
-        const nodes = Array.from(document.querySelectorAll(selector));
-        const visibleMatch = nodes.find(node => isProbablyExpressionImage(node) && hasRealSyncedSprite(getExpressionImageState(node)) && node.offsetParent !== null);
-        if (visibleMatch) return visibleMatch;
-
-        const anyRealMatch = nodes.find(node => isProbablyExpressionImage(node) && hasRealSyncedSprite(getExpressionImageState(node)));
-        if (anyRealMatch) return anyRealMatch;
-    }
-
-    const vnMatch = getPreferredVisualNovelImage(speakerName);
-    if (vnMatch) return vnMatch;
-
-    const allImages = Array.from(document.querySelectorAll('img.expression, #visual-novel-wrapper .expression-holder img'));
-    return allImages.find(node => isProbablyExpressionImage(node) && hasRealSyncedSprite(getExpressionImageState(node))) || null;
-}
-
-function refreshExpressionConsumers() {
-    // Batch rapid mutations (e.g. expression animations) into one render per frame
-    cancelAnimationFrame(_refreshRAF);
-    _refreshRAF = requestAnimationFrame(() => {
-        renderThoughts({ preserveScroll: true });
-        updatePortraitBar();
-        // Dynamic import to avoid circular dependency:
-        // expressionSync → chatBubbles → portraitBar → avatars → expressionSync
-        import('../rendering/chatBubbles.js').then(m => m.refreshBubbleAvatars()).catch(() => {});
-    });
-}
+// ─────────────────────────────────────────────
+//  Native expression display hiding (preserved)
+// ─────────────────────────────────────────────
 
 function getHideStyleCss() {
     return `
@@ -300,7 +464,6 @@ function getHideStyleCss() {
 
 function hideNativeExpressionDisplay() {
     if (hiddenExpressionStyleElement?.isConnected) return;
-
     const styleElement = document.createElement('style');
     styleElement.id = 'rpg-hidden-native-expression-display-style';
     styleElement.textContent = getHideStyleCss();
@@ -318,242 +481,78 @@ function showNativeExpressionDisplay() {
 }
 
 function syncNativeExpressionDisplayVisibility() {
-
-    if (shouldHideNativeExpressionDisplay()) {
+    if (extensionSettings.enabled && extensionSettings.hideDefaultExpressionDisplay) {
         hideNativeExpressionDisplay();
     } else {
         showNativeExpressionDisplay();
     }
 }
 
-function teardownExpressionObservers() {
-    if (expressionContainerObserver) {
-        expressionContainerObserver.disconnect();
-        expressionContainerObserver = null;
-    }
+// ─────────────────────────────────────────────
+//  Lifecycle exports (same interface as before)
+// ─────────────────────────────────────────────
 
-    if (expressionImageObserver) {
-        expressionImageObserver.disconnect();
-        expressionImageObserver = null;
-    }
-
-    observedExpressionImage = null;
-}
-
-function captureExpressionForSpeaker(speakerName, expectedRequestId = null) {
-    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return false;
-    if (expectedRequestId !== null && expectedRequestId !== pendingCaptureRequestId) return false;
-
-    const name = normalizeName(speakerName || pendingSpeakerName || getLatestAssistantSpeakerName());
-    if (!name) return false;
-
-    const previous = getSyncedExpressionPortrait(name);
-    const img = findExpressionImageElement(name);
-    const state = getExpressionImageState(img);
-    if (!hasRealSyncedSprite(state)) {
-        const elapsed = pendingSpeakerQueuedAt ? (Date.now() - pendingSpeakerQueuedAt) : 0;
-        if (previous && elapsed >= 1200) {
-            removeSyncedExpressionPortrait(name);
-            saveChatData();
-            refreshExpressionConsumers();
-        }
-        return false;
-    }
-
-    pendingSpeakerName = name;
-
-    // After a speaker switch, SillyTavern may continue showing the previous
-    // speaker's portrait until the classifier finishes. Do not capture that
-    // unchanged baseline for the new speaker; wait for the expression widget to
-    // actually change or for this speaker's previously stored portrait to remain.
-    if (pendingSpeakerBaselineSignature && state.signature === pendingSpeakerBaselineSignature && previous !== state.src) {
-        return false;
-    }
-
-    if (previous === state.src && lastCapturedExpressionSrc === state.src) {
-        return true;
-    }
-
-    lastCapturedExpressionSrc = state.src;
-    pendingSpeakerBaselineSignature = null;
-    setSyncedExpressionPortrait(name, state.src);
-    saveChatData();
-    refreshExpressionConsumers();
-    return true;
-}
-
-function observeExpressionImage(img) {
-    if (!shouldRunExpressionObservers()) return;
-    if (!img || observedExpressionImage === img) return;
-
-    if (expressionImageObserver) {
-        expressionImageObserver.disconnect();
-    }
-
-    observedExpressionImage = img;
-    expressionImageObserver = new MutationObserver(() => {
-        captureExpressionForSpeaker(pendingSpeakerName, pendingCaptureRequestId);
-    });
-
-    expressionImageObserver.observe(img, {
-        attributes: true,
-        attributeFilter: ['src', 'class', 'style', 'title', 'data-expression', 'data-sprite-folder-name', 'data-sprite-filename'],
-    });
-}
-
-function ensureExpressionObservers() {
-    syncNativeExpressionDisplayVisibility();
-
-    if (!shouldRunExpressionObservers()) {
-        teardownExpressionObservers();
-        return;
-    }
-
-    const currentImg = findExpressionImageElement(pendingSpeakerName);
-    if (currentImg) {
-        observeExpressionImage(currentImg);
-    } else if (expressionImageObserver) {
-        expressionImageObserver.disconnect();
-        expressionImageObserver = null;
-        observedExpressionImage = null;
-    }
-
-    if (expressionContainerObserver) return;
-
-    expressionContainerObserver = new MutationObserver(() => {
-        if (!shouldRunExpressionObservers()) {
-            teardownExpressionObservers();
-            syncNativeExpressionDisplayVisibility();
-            return;
-        }
-
-        const img = findExpressionImageElement(pendingSpeakerName);
-        if (img) {
-            observeExpressionImage(img);
-            captureExpressionForSpeaker(pendingSpeakerName, pendingCaptureRequestId);
-        } else if (expressionImageObserver) {
-            expressionImageObserver.disconnect();
-            expressionImageObserver = null;
-            observedExpressionImage = null;
-        }
-        syncNativeExpressionDisplayVisibility();
-    });
-
-    expressionContainerObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-    });
-}
-
-function clearScheduledCaptures() {
-    for (const timer of scheduledCaptureTimers) {
-        clearTimeout(timer);
-    }
-    scheduledCaptureTimers = [];
-}
-
+/**
+ * Triggers re-classification for a single character.
+ * Called when a specific character speaks.
+ */
 export function queueExpressionCaptureForSpeaker(speakerName) {
     if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
-
-    pendingSpeakerName = normalizeName(speakerName || getLatestAssistantSpeakerName());
-    if (!pendingSpeakerName) return;
-
-    const currentImg = findExpressionImageElement(pendingSpeakerName);
-    const currentState = getExpressionImageState(currentImg);
-    pendingSpeakerBaselineSignature = currentState?.signature || null;
-    pendingSpeakerQueuedAt = Date.now();
-    pendingCaptureRequestId += 1;
-    const requestId = pendingCaptureRequestId;
-
-    ensureExpressionObservers();
-    clearScheduledCaptures();
-
-    for (const delay of [50, 200, 500, 900, 1500, 2200]) {
-        const timer = setTimeout(() => captureExpressionForSpeaker(pendingSpeakerName, requestId), delay);
-        scheduledCaptureTimers.push(timer);
-    }
+    // The orchestrator handles all characters at once, so this is a no-op
+    // in the new system. Classification happens in onMessageReceived.
 }
 
+/**
+ * Syncs expression from latest message (manual trigger).
+ */
 export function syncExpressionFromLatestMessage() {
     if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
-    queueExpressionCaptureForSpeaker(getLatestAssistantSpeakerName());
+    const lastMessage = chat[chat.length - 1];
+    if (lastMessage && !lastMessage.is_user) {
+        classifyAllCharacterExpressions(lastMessage.mes);
+    }
 }
 
+/**
+ * Initialize the expression system.
+ */
 export function initExpressionSync() {
-    if (purgeInvalidSyncedExpressionPortraits()) {
-        refreshExpressionConsumers();
-    }
-    ensureExpressionObservers();
-    if (extensionSettings.syncExpressionsToPresentCharacters) {
-        syncExpressionFromLatestMessage();
-    }
-}
-
-export function onExpressionSyncChatChanged() {
-    if (!extensionSettings.enabled) {
-        showNativeExpressionDisplay();
-        return;
-    }
-
-    const purged = purgeInvalidSyncedExpressionPortraits();
-    if (purged) {
-        refreshExpressionConsumers();
-    }
-
-    const retryDelays = [0, 80, 220, 500];
-    for (const delay of retryDelays) {
-        setTimeout(() => {
-            ensureExpressionObservers();
-            syncNativeExpressionDisplayVisibility();
-            if (extensionSettings.syncExpressionsToPresentCharacters) {
-                syncExpressionFromLatestMessage();
-            } else {
-                refreshExpressionConsumers();
-            }
-        }, delay);
-    }
-}
-
-export function onExpressionSyncSettingChanged(enabled) {
-    if (enabled) {
-        const purged = purgeInvalidSyncedExpressionPortraits();
-        initExpressionSync();
-        // Re-apply any previously restored per-chat synced portraits immediately,
-        // then allow the current speaker to update their own portrait if needed.
-        if (!purged) {
-            refreshExpressionConsumers();
-        }
-        syncExpressionFromLatestMessage();
-        return;
-    }
-
-    ensureExpressionObservers();
-    clearScheduledCaptures();
-    pendingCaptureRequestId += 1;
-    pendingSpeakerName = null;
-    pendingSpeakerBaselineSignature = null;
-    pendingSpeakerQueuedAt = 0;
-    lastCapturedExpressionSrc = null;
-    // Intentionally keep persisted per-chat synced portraits intact while the
-    // feature is disabled so they can be restored when re-enabled.
-    refreshExpressionConsumers();
-}
-
-export function onHideDefaultExpressionDisplaySettingChanged(enabled) {
-    extensionSettings.hideDefaultExpressionDisplay = enabled === true;
-    ensureExpressionObservers();
+    clearSpriteCache();
     syncNativeExpressionDisplayVisibility();
-    setTimeout(() => syncNativeExpressionDisplayVisibility(), 0);
-    setTimeout(() => syncNativeExpressionDisplayVisibility(), 120);
 }
 
+/**
+ * Called when chat changes.
+ */
+export function onExpressionSyncChatChanged() {
+    clearSpriteCache();
+    syncNativeExpressionDisplayVisibility();
+    // Synced portraits are loaded from chat_metadata by persistence.js
+}
+
+/**
+ * Called when expression sync toggle changes.
+ */
+export function onExpressionSyncSettingChanged(enabled) {
+    if (!enabled) {
+        clearSyncedExpressionPortraits();
+        clearSpriteCache();
+        refreshExpressionConsumers();
+    }
+    syncNativeExpressionDisplayVisibility();
+}
+
+/**
+ * Called when hide native display toggle changes.
+ */
+export function onHideDefaultExpressionDisplaySettingChanged(enabled) {
+    syncNativeExpressionDisplayVisibility();
+}
+
+/**
+ * Clears all cached data.
+ */
 export function clearExpressionSyncCache() {
-    clearScheduledCaptures();
-    pendingCaptureRequestId += 1;
-    pendingSpeakerName = null;
-    pendingSpeakerBaselineSignature = null;
-    pendingSpeakerQueuedAt = 0;
-    lastCapturedExpressionSrc = null;
-    teardownExpressionObservers();
-    showNativeExpressionDisplay();
+    clearSyncedExpressionPortraits();
+    clearSpriteCache();
 }

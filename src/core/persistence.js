@@ -288,6 +288,35 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 13;
                 settingsChanged = true;
             }
+            // Migration to version 14: Initialize Name Ban settings
+            if (currentVersion < 14) {
+                if (!extensionSettings.nameBan) {
+                    extensionSettings.nameBan = {
+                        enabled: false,
+                        sensitivity: 'normal',
+                        autoApplyKnownMappings: true,
+                        showModalForNew: true,
+                        injectIntoPrompt: true,
+                        approvedNames: [],
+                        nameMappings: {},
+                        ignoredNames: [],
+                        customExcludedWords: [],
+                    };
+                }
+                extensionSettings.settingsVersion = 14;
+                settingsChanged = true;
+            }
+            // Migration to version 15: Add expression classifier settings
+            if (currentVersion < 15) {
+                if (extensionSettings.expressionClassifierApi === undefined) {
+                    extensionSettings.expressionClassifierApi = 'local';
+                }
+                if (extensionSettings.expressionBatchMode === undefined) {
+                    extensionSettings.expressionBatchMode = true;
+                }
+                extensionSettings.settingsVersion = 15;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {

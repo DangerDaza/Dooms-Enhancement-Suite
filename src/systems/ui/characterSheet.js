@@ -9,8 +9,18 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
-import { chat_metadata, chat } from '../../../../../../../script.js';
+import { chat_metadata, chat, getRequestHeaders } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
+import { getBase64Async } from '../../../../../../utils.js';
+
+// Dynamic import to avoid circular dependency:
+// characterSheet → expressionSync → portraitBar → characterSheet
+async function invalidateSpriteCacheFor(name) {
+    try {
+        const mod = await import('../integration/expressionSync.js');
+        mod.invalidateSpriteCacheFor(name);
+    } catch { /* ignore */ }
+}
 
 // ─────────────────────────────────────────────
 //  Stats cache (cleared on chat change)
@@ -665,6 +675,7 @@ export function openCharacterSheet(characterName) {
         <div class="rpg-cs-tabs">
             <div class="rpg-cs-tab active" data-tab="sheet"><i class="fa-solid fa-scroll"></i> Sheet</div>
             <div class="rpg-cs-tab" data-tab="stats"><i class="fa-solid fa-chart-bar"></i> Stats</div>
+            <div class="rpg-cs-tab" data-tab="expressions"><i class="fa-solid fa-face-smile"></i> Expressions</div>
         </div>
     `);
 
@@ -701,6 +712,9 @@ export function openCharacterSheet(characterName) {
 
     // Stats tab content (lazy — computed on first click)
     $sections.append(`<div class="rpg-cs-tab-content" data-tab="stats" style="display: none;" data-character="${characterName}"></div>`);
+
+    // Expressions tab content (lazy — fetched on first click)
+    $sections.append(`<div class="rpg-cs-tab-content" data-tab="expressions" style="display: none;" data-character="${characterName}"></div>`);
 
     $modal.css('display', 'flex');
 }
@@ -850,6 +864,15 @@ export function initCharacterSheet() {
                 $statsPanel.html(renderStatsPage(charName, stats));
             }
         }
+
+        // Lazy-load expressions on first click
+        if (tabName === 'expressions') {
+            const $exprPanel = $modal.find('.rpg-cs-tab-content[data-tab="expressions"]');
+            if ($exprPanel.children().length === 0) {
+                const charName = $exprPanel.data('character');
+                renderExpressionsTab($exprPanel, charName);
+            }
+        }
     });
 
     // Stats info popup toggle
@@ -876,5 +899,226 @@ export function initCharacterSheet() {
         if (e.target === this) closeCharacterSheet();
     });
 
+    // ── Expression upload (event delegation) ──
+    $(document).on('click', '.rpg-cs-expr-upload', function () {
+        const label = $(this).data('label');
+        const charName = $(this).closest('.rpg-cs-tab-content').data('character');
+        if (!label || !charName) return;
+
+        const $input = $('<input type="file" accept="image/*" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            try {
+                const dataUrl = await getBase64Async(file);
+                const croppedImage = await callGenericPopup(
+                    `<h3>Crop "${label}" expression for ${charName}</h3>`,
+                    POPUP_TYPE.CROP,
+                    '',
+                    { cropAspect: 3 / 4, cropImage: dataUrl }
+                );
+                if (!croppedImage) return;
+
+                const croppedBlob = await fetch(croppedImage).then(r => r.blob());
+                const croppedFile = new File([croppedBlob], `${label}.png`, { type: 'image/png' });
+
+                const formData = new FormData();
+                formData.append('name', charName);
+                formData.append('label', label);
+                formData.append('avatar', croppedFile);
+                formData.append('spriteName', label);
+
+                const response = await fetch('/api/sprites/upload', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: formData,
+                });
+                if (response.ok) {
+                    invalidateSpriteCacheFor(charName);
+                    const $panel = $(`.rpg-cs-tab-content[data-tab="expressions"][data-character="${charName}"]`);
+                    $panel.empty();
+                    renderExpressionsTab($panel, charName);
+                    toastr.success(`Uploaded ${label} expression for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    toastr.error('Upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[DES] Expression upload failed:', err);
+                toastr.error('Upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // ── Expression delete (event delegation) ──
+    $(document).on('click', '.rpg-cs-expr-delete', async function () {
+        const label = $(this).data('label');
+        const charName = $(this).closest('.rpg-cs-tab-content').data('character');
+        if (!label || !charName) return;
+
+        try {
+            const response = await fetch('/api/sprites/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName, label: label }),
+            });
+            if (response.ok) {
+                invalidateSpriteCacheFor(charName);
+                const $panel = $(`.rpg-cs-tab-content[data-tab="expressions"][data-character="${charName}"]`);
+                $panel.empty();
+                renderExpressionsTab($panel, charName);
+                toastr.info(`Removed ${label} expression for ${charName}`, '', { timeOut: 2000 });
+            }
+        } catch (err) {
+            console.error('[DES] Expression delete failed:', err);
+        }
+    });
+
+    // ── Expression ZIP upload ──
+    $(document).on('click', '.rpg-cs-expr-upload-zip', function () {
+        const charName = $(this).closest('.rpg-cs-tab-content').data('character');
+        if (!charName) return;
+
+        const $input = $('<input type="file" accept=".zip" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('name', charName);
+            formData.append('avatar', file);
+
+            try {
+                const response = await fetch('/api/sprites/upload-zip', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: formData,
+                });
+                if (response.ok) {
+                    invalidateSpriteCacheFor(charName);
+                    const $panel = $(`.rpg-cs-tab-content[data-tab="expressions"][data-character="${charName}"]`);
+                    $panel.empty();
+                    renderExpressionsTab($panel, charName);
+                    toastr.success(`Sprite pack uploaded for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    toastr.error('ZIP upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[DES] Expression ZIP upload failed:', err);
+                toastr.error('ZIP upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // ── Open expression folder ──
+    $(document).on('click', '.rpg-cs-expr-open-folder', async function () {
+        const charName = $(this).closest('.rpg-cs-tab-content').data('character');
+        if (!charName) return;
+        try {
+            const response = await fetch('/api/sprites/open-folder', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName }),
+            });
+            if (!response.ok && response.status === 404) {
+                toastr.info(
+                    `Expression sprites go in: data/default-user/characters/${charName}/`,
+                    'Open Folder Not Available',
+                    { timeOut: 6000 }
+                );
+            }
+        } catch (err) {
+            console.error('[DES] Failed to open expression folder:', err);
+            toastr.info(
+                `Expression sprites go in: data/default-user/characters/${charName}/`,
+                'Open Folder Not Available',
+                { timeOut: 6000 }
+            );
+        }
+    });
+
     console.log('[Dooms Tracker] Character Sheet module initialized');
+}
+
+// ─────────────────────────────────────────────
+//  Expressions tab renderer
+// ─────────────────────────────────────────────
+
+const EXPRESSION_LABELS = [
+    'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
+    'confusion', 'curiosity', 'desire', 'disappointment', 'disapproval',
+    'disgust', 'embarrassment', 'excitement', 'fear', 'gratitude', 'grief',
+    'joy', 'love', 'nervousness', 'neutral', 'optimism', 'pride',
+    'realization', 'relief', 'remorse', 'sadness', 'surprise',
+];
+
+async function renderExpressionsTab($panel, characterName) {
+    $panel.html('<div style="padding:20px; opacity:0.5; text-align:center;">Loading sprites...</div>');
+
+    let existingSprites = [];
+    try {
+        const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
+            headers: getRequestHeaders(),
+        });
+        if (response.ok) {
+            existingSprites = await response.json();
+        }
+    } catch (err) {
+        console.warn('[DES] Failed to fetch sprites:', err);
+    }
+
+    const spriteMap = new Map();
+    for (const sprite of existingSprites) {
+        if (sprite.label && !spriteMap.has(sprite.label)) {
+            spriteMap.set(sprite.label, sprite.path);
+        }
+    }
+
+    const uploadedCount = spriteMap.size;
+    let html = `
+        <div class="rpg-cs-expr-header">
+            <span style="font-size:0.85em; opacity:0.7;">${uploadedCount} / ${EXPRESSION_LABELS.length} expressions uploaded</span>
+            <div class="rpg-cs-expr-actions">
+                <button class="rpg-cs-expr-upload-zip menu_button"><i class="fa-solid fa-file-zipper"></i> Upload ZIP</button>
+                <button class="rpg-cs-expr-open-folder menu_button"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+            </div>
+        </div>
+        <div class="rpg-cs-expression-grid">
+    `;
+
+    for (const label of EXPRESSION_LABELS) {
+        const spritePath = spriteMap.get(label);
+        const hasSprite = !!spritePath;
+
+        html += `
+            <div class="rpg-cs-expr-slot ${hasSprite ? 'rpg-cs-expr-has-sprite' : ''}">
+                <div class="rpg-cs-expr-thumb">
+                    ${hasSprite
+                        ? `<img src="${spritePath}" alt="${label}" loading="lazy" />`
+                        : '<div class="rpg-cs-expr-placeholder"><i class="fa-solid fa-image"></i></div>'
+                    }
+                    <div class="rpg-cs-expr-overlay">
+                        <button class="rpg-cs-expr-upload" data-label="${label}" title="Upload ${label}">
+                            <i class="fa-solid fa-upload"></i>
+                        </button>
+                        ${hasSprite ? `
+                            <button class="rpg-cs-expr-delete" data-label="${label}" title="Delete ${label}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="rpg-cs-expr-label">${label}</div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    $panel.html(html);
 }
