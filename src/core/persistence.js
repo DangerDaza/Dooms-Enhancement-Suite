@@ -317,6 +317,14 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 15;
                 settingsChanged = true;
             }
+            // Migration to version 16: Initialize Character Workshop feature flag
+            if (currentVersion < 16) {
+                if (extensionSettings.characterWorkshopEnabled === undefined) {
+                    extensionSettings.characterWorkshopEnabled = true;
+                }
+                extensionSettings.settingsVersion = 16;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {
