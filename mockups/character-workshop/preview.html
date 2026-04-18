@@ -1,0 +1,2915 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DES Character Workshop — all three mockups</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#0b0b16;color:#eaeaea;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif}
+  .switcher{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;gap:.5rem;padding:0 .75rem;background:rgba(22,33,62,.95);border-bottom:2px solid #4a7ba7;z-index:100}
+  .switcher .brand{color:#e94560;font-weight:600;font-size:.85rem;margin-right:1rem;letter-spacing:.02em}
+  .switcher button{appearance:none;background:rgba(255,255,255,.04);border:1px solid #4a7ba7;color:#eaeaea;padding:.4rem .8rem;border-radius:.3rem;font:inherit;font-size:.8rem;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+  .switcher button:hover{background:rgba(255,255,255,.08);border-color:#e94560}
+  .switcher button.active{background:#e94560;border-color:#e94560;color:#fff;font-weight:600}
+  .switcher .note{margin-left:auto;font-size:.7rem;color:rgba(234,234,234,.6)}
+  iframe{position:absolute;top:44px;left:0;width:100%;height:calc(100% - 44px);border:0;background:#0b0b16}
+</style>
+</head><body>
+<nav class="switcher" role="tablist" aria-label="Mockup variant">
+  <span class="brand">DES · Character Workshop</span>
+  <button class="var-btn active" data-var="a" role="tab">Variant A · Tabbed</button>
+  <button class="var-btn" data-var="b" role="tab">Variant B · Split</button>
+  <button class="var-btn" data-var="c" role="tab">Variant C · Wizard</button>
+  <span class="note">Open directly — no server needed.</span>
+</nav>
+<iframe id="stage" title="Mockup preview"></iframe>
+<script type="text/template" id="tpl-a">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DES Character Workshop — Variant A (Tabbed)</title>
+    <style>
+/* ---------------------------------------------------------------------------
+   DES Character Workshop mockups — shared styles
+   Mirrors tokens and component primitives from style.css so the three
+   layout variants read visually as "real DES". Nothing here is wired to
+   SillyTavern; this stylesheet is for mockup files only.
+   --------------------------------------------------------------------------- */
+
+:root {
+    /* DES theme tokens, default preset (style.css:90-95) */
+    --rpg-bg: rgba(26, 26, 46, 0.9);
+    --rpg-accent: rgba(22, 33, 62, 0.9);
+    --rpg-text: #eaeaea;
+    --rpg-highlight: #e94560;
+    --rpg-border: #4a7ba7;
+    --rpg-shadow: rgba(0, 0, 0, 0.5);
+
+    /* Modal sizing (style.css:5817-5831) */
+    --modal-padding: clamp(0.5rem, 2vw, 0.75rem);
+    --modal-gap: clamp(0.375rem, 1.5vw, 0.5rem);
+    --modal-border-width: 2px;
+    --modal-font-base: clamp(0.8rem, 3vw, 0.9rem);
+    --modal-font-small: clamp(0.7rem, 2.5vw, 0.8rem);
+    --modal-font-heading: clamp(0.9rem, 3.5vw, 1rem);
+
+    /* Portrait card sizing (style.css:13933-13972) */
+    --dooms-pb-card-w: 110px;
+    --dooms-pb-card-h: 150px;
+    --dooms-pb-card-radius: 8px;
+    --dooms-pb-name-opacity: 0.85;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 20% 10%, rgba(74, 123, 167, 0.18), transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(233, 69, 96, 0.14), transparent 55%),
+        #0b0b16;
+    color: var(--rpg-text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.mockup-stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.mockup-label {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(234, 234, 234, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(74, 123, 167, 0.4);
+    pointer-events: none;
+    z-index: 20;
+}
+
+/* ---------- Modal shell (from .rpg-settings-popup*) ---------- */
+
+.rpg-settings-popup-content {
+    position: relative;
+    width: 100%;
+    max-width: min(92vw, 820px);
+    max-height: min(90vh, 720px);
+    background: rgba(30, 30, 30, 0.92);
+    border: var(--modal-border-width) solid var(--rpg-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+    color: var(--rpg-text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.rpg-settings-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-bottom: var(--modal-border-width) solid var(--rpg-border);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-header h3 {
+    margin: 0;
+    font-size: var(--modal-font-heading);
+    color: var(--rpg-highlight);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    font-weight: 600;
+}
+
+.rpg-settings-popup-header h3 .workshop-subject {
+    color: var(--rpg-text);
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.rpg-popup-close {
+    background: transparent;
+    border: none;
+    color: var(--rpg-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 0.25rem;
+    line-height: 1;
+    transition: background 0.2s, color 0.2s;
+}
+.rpg-popup-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--rpg-highlight);
+}
+
+.rpg-settings-popup-body {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: transparent;
+    font-size: var(--modal-font-base);
+}
+
+.rpg-settings-popup-footer {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-top: var(--modal-border-width) solid var(--rpg-border);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-footer .spacer { flex: 1; }
+
+/* ---------- Buttons ---------- */
+
+.rpg-btn {
+    appearance: none;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.3rem;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+.rpg-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-btn:active { transform: translateY(1px); }
+
+.rpg-btn-primary {
+    background: var(--rpg-highlight);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+    font-weight: 600;
+}
+.rpg-btn-primary:hover {
+    background: #f4607a;
+    border-color: #f4607a;
+}
+
+.rpg-btn-danger {
+    border-color: rgba(214, 48, 49, 0.6);
+    color: #ff9090;
+}
+.rpg-btn-danger:hover {
+    background: rgba(214, 48, 49, 0.15);
+    border-color: #d63031;
+}
+
+.rpg-btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: rgba(234, 234, 234, 0.7);
+}
+.rpg-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--rpg-text);
+}
+
+/* ---------- Tabs (from .rpg-editor-tabs) ---------- */
+
+.rpg-editor-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--rpg-border);
+    background: rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.rpg-editor-tab {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(234, 234, 234, 0.7);
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.6rem 1.1rem;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rpg-editor-tab:hover {
+    color: var(--rpg-text);
+    background: rgba(255, 255, 255, 0.03);
+}
+.rpg-editor-tab.active {
+    color: var(--rpg-highlight);
+    border-bottom-color: var(--rpg-highlight);
+}
+
+.rpg-editor-pane { display: none; }
+.rpg-editor-pane.active { display: block; }
+
+/* ---------- Form primitives ---------- */
+
+.rpg-editor-section {
+    margin-bottom: 1.1rem;
+}
+.rpg-editor-section h4 {
+    margin: 0 0 0.5rem;
+    color: var(--rpg-highlight);
+    font-size: var(--modal-font-heading);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+.rpg-editor-section p.helper {
+    margin: 0 0 0.75rem;
+    color: rgba(234, 234, 234, 0.65);
+    font-size: var(--modal-font-small);
+    line-height: 1.4;
+}
+
+.rpg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.8rem;
+}
+.rpg-field-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+}
+.rpg-field-row > .rpg-field { flex: 1; margin-bottom: 0; }
+
+.rpg-field label {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.85);
+    font-weight: 500;
+}
+
+.rpg-input,
+.rpg-textarea,
+.rpg-select {
+    font: inherit;
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--rpg-border);
+    border-radius: 0.3rem;
+    padding: 0.45rem 0.6rem;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.rpg-input:focus,
+.rpg-textarea:focus,
+.rpg-select:focus {
+    border-color: var(--rpg-highlight);
+    box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+    background: rgba(0, 0, 0, 0.5);
+}
+.rpg-textarea {
+    resize: vertical;
+    min-height: 5rem;
+    font-family: inherit;
+}
+
+/* ---------- Toggle switch ---------- */
+
+.rpg-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: var(--modal-font-small);
+}
+.rpg-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.rpg-switch-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--rpg-border);
+    position: relative;
+    transition: background 0.2s, border-color 0.2s;
+}
+.rpg-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #ddd;
+    transition: transform 0.2s, background 0.2s;
+}
+.rpg-switch input:checked + .rpg-switch-track {
+    background: rgba(233, 69, 96, 0.35);
+    border-color: var(--rpg-highlight);
+}
+.rpg-switch input:checked + .rpg-switch-track::after {
+    transform: translateX(14px);
+    background: var(--rpg-highlight);
+}
+
+/* ---------- Dialogue color palette ---------- */
+
+.rpg-color-palette {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+}
+.rpg-color-swatch {
+    appearance: none;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+.rpg-color-swatch:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.rpg-color-swatch.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--rpg-highlight);
+}
+
+/* ---------- Relationship chips ---------- */
+
+.rpg-rel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.rpg-rel-chip {
+    appearance: none;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-rel-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-rel-chip.selected {
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+}
+
+/* ---------- Portrait card preview (from .dooms-portrait-card) ---------- */
+
+.dooms-portrait-card {
+    flex-shrink: 0;
+    width: var(--dooms-pb-card-w);
+    height: var(--dooms-pb-card-h);
+    border-radius: var(--dooms-pb-card-radius);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.dooms-portrait-card:hover {
+    border-color: rgba(233, 69, 96, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.25);
+}
+.dooms-portrait-card img,
+.dooms-portrait-card .dooms-portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.dooms-portrait-card .dooms-portrait-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    background:
+        linear-gradient(135deg, rgba(74, 123, 167, 0.35), rgba(233, 69, 96, 0.25));
+    color: rgba(255, 255, 255, 0.8);
+}
+.dooms-portrait-card-name {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 18px 5px 5px;
+    background: linear-gradient(to top, rgba(0, 0, 0, var(--dooms-pb-name-opacity)), transparent);
+    font-size: 0.72em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ddd;
+}
+.dooms-portrait-card.dooms-pb-speaking {
+    border-color: rgba(233, 69, 96, 0.5);
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.15);
+}
+
+/* ---------- Custom field / stat rows ---------- */
+
+.rpg-row-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.rpg-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+}
+.rpg-row .rpg-row-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.rpg-row .rpg-row-title strong {
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+}
+.rpg-row .rpg-row-title span {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.65);
+}
+.rpg-row .rpg-row-drag {
+    color: rgba(234, 234, 234, 0.4);
+    cursor: grab;
+    user-select: none;
+    font-size: 1rem;
+}
+
+.rpg-add-row {
+    appearance: none;
+    background: transparent;
+    border: 1px dashed var(--rpg-border);
+    border-radius: 0.3rem;
+    color: rgba(234, 234, 234, 0.7);
+    padding: 0.5rem;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-add-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--rpg-highlight);
+    color: var(--rpg-text);
+}
+
+/* ---------- Sheet section accordion ---------- */
+
+.rpg-sheet-section {
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.025);
+}
+.rpg-sheet-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    user-select: none;
+}
+.rpg-sheet-section-header .emoji { font-size: 1.1rem; }
+.rpg-sheet-section-header .num {
+    color: rgba(234, 234, 234, 0.55);
+    font-size: var(--modal-font-small);
+    font-variant-numeric: tabular-nums;
+}
+.rpg-sheet-section-header .title {
+    flex: 1;
+    color: var(--rpg-text);
+    font-weight: 600;
+    font-size: var(--modal-font-base);
+}
+.rpg-sheet-section-header .chev {
+    color: rgba(234, 234, 234, 0.5);
+    transition: transform 0.2s;
+}
+.rpg-sheet-section.open .rpg-sheet-section-header .chev {
+    transform: rotate(90deg);
+    color: var(--rpg-highlight);
+}
+.rpg-sheet-section-body {
+    display: none;
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid rgba(74, 123, 167, 0.35);
+}
+.rpg-sheet-section.open .rpg-sheet-section-body { display: block; }
+
+/* ---------- Utility ---------- */
+
+.stack { display: flex; flex-direction: column; gap: 0.45rem; }
+.hstack { display: flex; align-items: center; gap: 0.5rem; }
+.muted { color: rgba(234, 234, 234, 0.6); }
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+
+</style>
+    <style>
+        /* Variant A is the most compact of the three — mirrors the existing
+           tracker-editor popup (.rpg-settings-popup ~500px) so it reads as
+           instantly familiar to existing DES users. */
+        .workshop-a .rpg-settings-popup-content { max-width: min(92vw, 560px); }
+        .workshop-a .tab-body { padding-top: 0.5rem; }
+    </style>
+</head>
+<body class="workshop-a">
+    <div class="mockup-stage">
+        <section class="rpg-settings-popup-content" role="dialog" aria-label="Character Workshop">
+
+            <header class="rpg-settings-popup-header">
+                <h3>
+                    <span>Character Workshop</span>
+                    <span class="muted" aria-hidden="true">—</span>
+                    <span class="workshop-subject" id="char-title">Aria Vex</span>
+                </h3>
+                <button class="rpg-popup-close" aria-label="Close">×</button>
+            </header>
+
+            <nav class="rpg-editor-tabs" role="tablist" aria-label="Workshop sections">
+                <button class="rpg-editor-tab active" role="tab" aria-selected="true" data-pane="identity">Identity</button>
+                <button class="rpg-editor-tab" role="tab" aria-selected="false" data-pane="appearance">Appearance</button>
+                <button class="rpg-editor-tab" role="tab" aria-selected="false" data-pane="trackers">Trackers</button>
+                <button class="rpg-editor-tab" role="tab" aria-selected="false" data-pane="sheet">Sheet</button>
+            </nav>
+
+            <div class="rpg-settings-popup-body">
+
+                <!-- IDENTITY -->
+                <div class="rpg-editor-pane active tab-body" data-pane="identity">
+                    <div class="rpg-editor-section">
+                        <h4>Identity</h4>
+                        <p class="helper">Basic name and relationship to the player. These drive the portrait label and the emoji badge on the portrait card.</p>
+
+                        <div class="rpg-field">
+                            <label for="a-name">Character name</label>
+                            <input id="a-name" class="rpg-input" type="text" value="Aria Vex" placeholder="e.g. Aria Vex">
+                        </div>
+
+                        <div class="rpg-field">
+                            <label>Relationship to player</label>
+                            <div class="rpg-rel-chips" role="radiogroup" aria-label="Relationship">
+                                <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Lover"><span>❤️</span> Lover</button>
+                                <button class="rpg-rel-chip selected" role="radio" aria-checked="true" data-rel="Friend"><span>⭐</span> Friend</button>
+                                <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Ally"><span>🤝</span> Ally</button>
+                                <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Enemy"><span>⚔️</span> Enemy</button>
+                                <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Neutral"><span>⚖️</span> Neutral</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- APPEARANCE -->
+                <div class="rpg-editor-pane tab-body" data-pane="appearance">
+                    <div class="rpg-editor-section">
+                        <h4>Portrait</h4>
+                        <p class="helper">Shown on the portrait bar between the chat and input area. 660×880 recommended; the card displays a cropped 110×150 preview.</p>
+                        <div class="hstack" style="align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                            <div class="dooms-portrait-card" aria-label="Portrait preview">
+                                <div class="dooms-portrait-placeholder" aria-hidden="true">👤</div>
+                                <div class="dooms-portrait-card-name">Aria Vex</div>
+                            </div>
+                            <div class="stack" style="flex: 1; min-width: 180px;">
+                                <label class="rpg-btn" for="a-portrait">
+                                    Upload portrait…
+                                </label>
+                                <input id="a-portrait" type="file" accept="image/*" class="sr-only">
+                                <button class="rpg-btn rpg-btn-ghost" type="button">Remove portrait</button>
+                                <p class="helper" style="margin: 0;">Right-click the card in the portrait bar to reposition the crop later.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rpg-editor-section">
+                        <h4>Dialogue color</h4>
+                        <p class="helper">The color used to highlight this character's dialogue in chat and their name on the portrait card. Pick from the 30-color palette or leave unset to auto-assign.</p>
+                        <div class="rpg-color-palette" role="radiogroup" aria-label="Dialogue color"></div>
+                    </div>
+                </div>
+
+                <!-- TRACKERS -->
+                <div class="rpg-editor-pane tab-body" data-pane="trackers">
+                    <div class="rpg-editor-section">
+                        <h4>Custom tracker fields</h4>
+                        <p class="helper">Per-character fields rendered on the portrait card tooltip and in the info box. Matches the fields configured in Tracker Editor → Present Characters.</p>
+                        <div class="rpg-row-list">
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                <div class="rpg-row-title">
+                                    <strong>Appearance</strong>
+                                    <span>Visible physical appearance (clothing, hair, notable features)</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                <div class="rpg-row-title">
+                                    <strong>Demeanor</strong>
+                                    <span>Observable demeanor or emotional state</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                        </div>
+                        <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add custom field</button>
+                    </div>
+
+                    <div class="rpg-editor-section">
+                        <h4>Thoughts</h4>
+                        <p class="helper">Internal monologue — up to three sentences from the character's POV.</p>
+                        <div class="rpg-row">
+                            <span class="rpg-row-drag" aria-hidden="true">💭</span>
+                            <div class="rpg-row-title">
+                                <strong>Thoughts</strong>
+                                <span>Internal monologue (first person, up to three sentences)</span>
+                            </div>
+                            <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                        </div>
+                    </div>
+
+                    <div class="rpg-editor-section">
+                        <h4>Character stats</h4>
+                        <p class="helper">Gradient bars shown under the portrait when enabled. Values are driven by the AI each turn.</p>
+                        <div class="rpg-row-list">
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">❤</span>
+                                <div class="rpg-row-title">
+                                    <strong>Health</strong>
+                                    <span>Low #ff4444 → High #44ff44</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">⚡</span>
+                                <div class="rpg-row-title">
+                                    <strong>Energy</strong>
+                                    <span>Low #ffaa00 → High #44ffff</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox"><span class="rpg-switch-track"></span></label>
+                            </div>
+                        </div>
+                        <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add stat</button>
+                    </div>
+                </div>
+
+                <!-- SHEET -->
+                <div class="rpg-editor-pane tab-body" data-pane="sheet">
+                    <div class="rpg-editor-section">
+                        <h4>Character sheet sections</h4>
+                        <p class="helper">Bunny Mo-style numbered sections (<code>## SECTION N/M: Title</code>). Click a section to expand and edit its body.</p>
+                        <div class="rpg-sheet-list">
+
+                            <div class="rpg-sheet-section open">
+                                <div class="rpg-sheet-section-header">
+                                    <span class="chev" aria-hidden="true">▸</span>
+                                    <span class="emoji">🧬</span>
+                                    <span class="num">1 / 2</span>
+                                    <span class="title">Core Identity</span>
+                                </div>
+                                <div class="rpg-sheet-section-body">
+                                    <div class="rpg-field-row">
+                                        <div class="rpg-field">
+                                            <label>Emoji</label>
+                                            <input class="rpg-input" type="text" value="🧬" style="text-align:center;">
+                                        </div>
+                                        <div class="rpg-field" style="flex: 2;">
+                                            <label>Title</label>
+                                            <input class="rpg-input" type="text" value="Core Identity">
+                                        </div>
+                                    </div>
+                                    <div class="rpg-field">
+                                        <label>Content</label>
+                                        <textarea class="rpg-textarea" rows="4">A sharp-tongued fixer who trades favors across the neon district. Keeps her real name off every ledger.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rpg-sheet-section">
+                                <div class="rpg-sheet-section-header">
+                                    <span class="chev" aria-hidden="true">▸</span>
+                                    <span class="emoji">📖</span>
+                                    <span class="num">2 / 2</span>
+                                    <span class="title">Background</span>
+                                </div>
+                                <div class="rpg-sheet-section-body">
+                                    <div class="rpg-field">
+                                        <label>Content</label>
+                                        <textarea class="rpg-textarea" rows="4">Grew up running messages between crews. One bad deal left her with a debt she still hasn't finished paying off.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add section</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <footer class="rpg-settings-popup-footer">
+                <button class="rpg-btn rpg-btn-danger" type="button">Delete character</button>
+                <span class="spacer"></span>
+                <button class="rpg-btn rpg-btn-ghost" type="button">Cancel</button>
+                <button class="rpg-btn rpg-btn-primary" type="button">Save</button>
+            </footer>
+
+        </section>
+    </div>
+
+    <script>
+        // Dialogue color palette (src/systems/ui/portraitBar.js:29-38)
+        const PALETTE = [
+            '#e94560', '#e07b39', '#f0c040', '#2ecc71',
+            '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
+            '#5dade2', '#f39c12', '#8e44ad', '#d35400',
+            '#16a085', '#c0392b', '#00b894', '#6c5ce7',
+            '#fd79a8', '#a29bfe', '#55efc4', '#fab1a0',
+            '#74b9ff', '#ffeaa7', '#e17055', '#00cec9',
+            '#0984e3', '#fdcb6e', '#d63031', '#e056fd',
+            '#7ed6df', '#badc58',
+        ];
+
+        const grid = document.querySelector('.rpg-color-palette');
+        PALETTE.forEach((hex, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'rpg-color-swatch' + (i === 0 ? ' selected' : '');
+            b.style.background = hex;
+            b.setAttribute('role', 'radio');
+            b.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+            b.setAttribute('aria-label', hex);
+            b.dataset.hex = hex;
+            grid.appendChild(b);
+        });
+
+        // Cosmetic-only interactivity: tab switch, swatch pick, rel chip, accordion
+        document.addEventListener('click', (e) => {
+            const tab = e.target.closest('.rpg-editor-tab');
+            if (tab) {
+                document.querySelectorAll('.rpg-editor-tab').forEach(t => {
+                    t.classList.toggle('active', t === tab);
+                    t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+                });
+                const key = tab.dataset.pane;
+                document.querySelectorAll('.rpg-editor-pane').forEach(p => {
+                    p.classList.toggle('active', p.dataset.pane === key);
+                });
+                return;
+            }
+            const sw = e.target.closest('.rpg-color-swatch');
+            if (sw) {
+                document.querySelectorAll('.rpg-color-swatch').forEach(s => {
+                    s.classList.toggle('selected', s === sw);
+                    s.setAttribute('aria-checked', s === sw ? 'true' : 'false');
+                });
+                return;
+            }
+            const chip = e.target.closest('.rpg-rel-chip');
+            if (chip) {
+                document.querySelectorAll('.rpg-rel-chip').forEach(c => {
+                    c.classList.toggle('selected', c === chip);
+                    c.setAttribute('aria-checked', c === chip ? 'true' : 'false');
+                });
+                return;
+            }
+            const secHead = e.target.closest('.rpg-sheet-section-header');
+            if (secHead) {
+                secHead.parentElement.classList.toggle('open');
+                return;
+            }
+        });
+
+        // Live header name update
+        const nameInput = document.getElementById('a-name');
+        const titleEl = document.getElementById('char-title');
+        nameInput.addEventListener('input', () => {
+            titleEl.textContent = nameInput.value.trim() || 'New Character';
+        });
+    <\/script>
+</body>
+</html>
+
+</script>
+<script type="text/template" id="tpl-b">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DES Character Workshop — Variant B (Split pane)</title>
+    <style>
+/* ---------------------------------------------------------------------------
+   DES Character Workshop mockups — shared styles
+   Mirrors tokens and component primitives from style.css so the three
+   layout variants read visually as "real DES". Nothing here is wired to
+   SillyTavern; this stylesheet is for mockup files only.
+   --------------------------------------------------------------------------- */
+
+:root {
+    /* DES theme tokens, default preset (style.css:90-95) */
+    --rpg-bg: rgba(26, 26, 46, 0.9);
+    --rpg-accent: rgba(22, 33, 62, 0.9);
+    --rpg-text: #eaeaea;
+    --rpg-highlight: #e94560;
+    --rpg-border: #4a7ba7;
+    --rpg-shadow: rgba(0, 0, 0, 0.5);
+
+    /* Modal sizing (style.css:5817-5831) */
+    --modal-padding: clamp(0.5rem, 2vw, 0.75rem);
+    --modal-gap: clamp(0.375rem, 1.5vw, 0.5rem);
+    --modal-border-width: 2px;
+    --modal-font-base: clamp(0.8rem, 3vw, 0.9rem);
+    --modal-font-small: clamp(0.7rem, 2.5vw, 0.8rem);
+    --modal-font-heading: clamp(0.9rem, 3.5vw, 1rem);
+
+    /* Portrait card sizing (style.css:13933-13972) */
+    --dooms-pb-card-w: 110px;
+    --dooms-pb-card-h: 150px;
+    --dooms-pb-card-radius: 8px;
+    --dooms-pb-name-opacity: 0.85;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 20% 10%, rgba(74, 123, 167, 0.18), transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(233, 69, 96, 0.14), transparent 55%),
+        #0b0b16;
+    color: var(--rpg-text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.mockup-stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.mockup-label {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(234, 234, 234, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(74, 123, 167, 0.4);
+    pointer-events: none;
+    z-index: 20;
+}
+
+/* ---------- Modal shell (from .rpg-settings-popup*) ---------- */
+
+.rpg-settings-popup-content {
+    position: relative;
+    width: 100%;
+    max-width: min(92vw, 820px);
+    max-height: min(90vh, 720px);
+    background: rgba(30, 30, 30, 0.92);
+    border: var(--modal-border-width) solid var(--rpg-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+    color: var(--rpg-text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.rpg-settings-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-bottom: var(--modal-border-width) solid var(--rpg-border);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-header h3 {
+    margin: 0;
+    font-size: var(--modal-font-heading);
+    color: var(--rpg-highlight);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    font-weight: 600;
+}
+
+.rpg-settings-popup-header h3 .workshop-subject {
+    color: var(--rpg-text);
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.rpg-popup-close {
+    background: transparent;
+    border: none;
+    color: var(--rpg-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 0.25rem;
+    line-height: 1;
+    transition: background 0.2s, color 0.2s;
+}
+.rpg-popup-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--rpg-highlight);
+}
+
+.rpg-settings-popup-body {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: transparent;
+    font-size: var(--modal-font-base);
+}
+
+.rpg-settings-popup-footer {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-top: var(--modal-border-width) solid var(--rpg-border);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-footer .spacer { flex: 1; }
+
+/* ---------- Buttons ---------- */
+
+.rpg-btn {
+    appearance: none;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.3rem;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+.rpg-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-btn:active { transform: translateY(1px); }
+
+.rpg-btn-primary {
+    background: var(--rpg-highlight);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+    font-weight: 600;
+}
+.rpg-btn-primary:hover {
+    background: #f4607a;
+    border-color: #f4607a;
+}
+
+.rpg-btn-danger {
+    border-color: rgba(214, 48, 49, 0.6);
+    color: #ff9090;
+}
+.rpg-btn-danger:hover {
+    background: rgba(214, 48, 49, 0.15);
+    border-color: #d63031;
+}
+
+.rpg-btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: rgba(234, 234, 234, 0.7);
+}
+.rpg-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--rpg-text);
+}
+
+/* ---------- Tabs (from .rpg-editor-tabs) ---------- */
+
+.rpg-editor-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--rpg-border);
+    background: rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.rpg-editor-tab {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(234, 234, 234, 0.7);
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.6rem 1.1rem;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rpg-editor-tab:hover {
+    color: var(--rpg-text);
+    background: rgba(255, 255, 255, 0.03);
+}
+.rpg-editor-tab.active {
+    color: var(--rpg-highlight);
+    border-bottom-color: var(--rpg-highlight);
+}
+
+.rpg-editor-pane { display: none; }
+.rpg-editor-pane.active { display: block; }
+
+/* ---------- Form primitives ---------- */
+
+.rpg-editor-section {
+    margin-bottom: 1.1rem;
+}
+.rpg-editor-section h4 {
+    margin: 0 0 0.5rem;
+    color: var(--rpg-highlight);
+    font-size: var(--modal-font-heading);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+.rpg-editor-section p.helper {
+    margin: 0 0 0.75rem;
+    color: rgba(234, 234, 234, 0.65);
+    font-size: var(--modal-font-small);
+    line-height: 1.4;
+}
+
+.rpg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.8rem;
+}
+.rpg-field-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+}
+.rpg-field-row > .rpg-field { flex: 1; margin-bottom: 0; }
+
+.rpg-field label {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.85);
+    font-weight: 500;
+}
+
+.rpg-input,
+.rpg-textarea,
+.rpg-select {
+    font: inherit;
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--rpg-border);
+    border-radius: 0.3rem;
+    padding: 0.45rem 0.6rem;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.rpg-input:focus,
+.rpg-textarea:focus,
+.rpg-select:focus {
+    border-color: var(--rpg-highlight);
+    box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+    background: rgba(0, 0, 0, 0.5);
+}
+.rpg-textarea {
+    resize: vertical;
+    min-height: 5rem;
+    font-family: inherit;
+}
+
+/* ---------- Toggle switch ---------- */
+
+.rpg-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: var(--modal-font-small);
+}
+.rpg-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.rpg-switch-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--rpg-border);
+    position: relative;
+    transition: background 0.2s, border-color 0.2s;
+}
+.rpg-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #ddd;
+    transition: transform 0.2s, background 0.2s;
+}
+.rpg-switch input:checked + .rpg-switch-track {
+    background: rgba(233, 69, 96, 0.35);
+    border-color: var(--rpg-highlight);
+}
+.rpg-switch input:checked + .rpg-switch-track::after {
+    transform: translateX(14px);
+    background: var(--rpg-highlight);
+}
+
+/* ---------- Dialogue color palette ---------- */
+
+.rpg-color-palette {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+}
+.rpg-color-swatch {
+    appearance: none;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+.rpg-color-swatch:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.rpg-color-swatch.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--rpg-highlight);
+}
+
+/* ---------- Relationship chips ---------- */
+
+.rpg-rel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.rpg-rel-chip {
+    appearance: none;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-rel-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-rel-chip.selected {
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+}
+
+/* ---------- Portrait card preview (from .dooms-portrait-card) ---------- */
+
+.dooms-portrait-card {
+    flex-shrink: 0;
+    width: var(--dooms-pb-card-w);
+    height: var(--dooms-pb-card-h);
+    border-radius: var(--dooms-pb-card-radius);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.dooms-portrait-card:hover {
+    border-color: rgba(233, 69, 96, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.25);
+}
+.dooms-portrait-card img,
+.dooms-portrait-card .dooms-portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.dooms-portrait-card .dooms-portrait-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    background:
+        linear-gradient(135deg, rgba(74, 123, 167, 0.35), rgba(233, 69, 96, 0.25));
+    color: rgba(255, 255, 255, 0.8);
+}
+.dooms-portrait-card-name {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 18px 5px 5px;
+    background: linear-gradient(to top, rgba(0, 0, 0, var(--dooms-pb-name-opacity)), transparent);
+    font-size: 0.72em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ddd;
+}
+.dooms-portrait-card.dooms-pb-speaking {
+    border-color: rgba(233, 69, 96, 0.5);
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.15);
+}
+
+/* ---------- Custom field / stat rows ---------- */
+
+.rpg-row-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.rpg-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+}
+.rpg-row .rpg-row-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.rpg-row .rpg-row-title strong {
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+}
+.rpg-row .rpg-row-title span {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.65);
+}
+.rpg-row .rpg-row-drag {
+    color: rgba(234, 234, 234, 0.4);
+    cursor: grab;
+    user-select: none;
+    font-size: 1rem;
+}
+
+.rpg-add-row {
+    appearance: none;
+    background: transparent;
+    border: 1px dashed var(--rpg-border);
+    border-radius: 0.3rem;
+    color: rgba(234, 234, 234, 0.7);
+    padding: 0.5rem;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-add-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--rpg-highlight);
+    color: var(--rpg-text);
+}
+
+/* ---------- Sheet section accordion ---------- */
+
+.rpg-sheet-section {
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.025);
+}
+.rpg-sheet-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    user-select: none;
+}
+.rpg-sheet-section-header .emoji { font-size: 1.1rem; }
+.rpg-sheet-section-header .num {
+    color: rgba(234, 234, 234, 0.55);
+    font-size: var(--modal-font-small);
+    font-variant-numeric: tabular-nums;
+}
+.rpg-sheet-section-header .title {
+    flex: 1;
+    color: var(--rpg-text);
+    font-weight: 600;
+    font-size: var(--modal-font-base);
+}
+.rpg-sheet-section-header .chev {
+    color: rgba(234, 234, 234, 0.5);
+    transition: transform 0.2s;
+}
+.rpg-sheet-section.open .rpg-sheet-section-header .chev {
+    transform: rotate(90deg);
+    color: var(--rpg-highlight);
+}
+.rpg-sheet-section-body {
+    display: none;
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid rgba(74, 123, 167, 0.35);
+}
+.rpg-sheet-section.open .rpg-sheet-section-body { display: block; }
+
+/* ---------- Utility ---------- */
+
+.stack { display: flex; flex-direction: column; gap: 0.45rem; }
+.hstack { display: flex; align-items: center; gap: 0.5rem; }
+.muted { color: rgba(234, 234, 234, 0.6); }
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+
+</style>
+    <style>
+        /* Variant B: split pane with live WYSIWYG preview on the left.
+           Wider modal to give the right pane room for sheet editing. */
+        .workshop-b .rpg-settings-popup-content { max-width: min(95vw, 900px); }
+
+        .workshop-b .workshop-split {
+            display: grid;
+            grid-template-columns: minmax(240px, 35%) 1fr;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .workshop-b .workshop-rail {
+            background: rgba(0, 0, 0, 0.3);
+            border-right: 1px solid var(--rpg-border);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+            overflow-y: auto;
+        }
+
+        .workshop-b .workshop-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .workshop-b .workshop-preview .color-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            vertical-align: middle;
+            margin-right: 0.3rem;
+        }
+        .workshop-b .workshop-preview .preview-name {
+            font-size: 0.95rem;
+            color: var(--rpg-highlight);
+            font-weight: 600;
+            text-align: center;
+            transition: color 0.2s;
+        }
+        .workshop-b .workshop-preview .preview-rel {
+            font-size: var(--modal-font-small);
+            color: rgba(234, 234, 234, 0.75);
+        }
+
+        .workshop-b .workshop-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(74, 123, 167, 0.3);
+        }
+        .workshop-b .workshop-nav button {
+            appearance: none;
+            background: transparent;
+            color: rgba(234, 234, 234, 0.75);
+            border: none;
+            border-left: 2px solid transparent;
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            font: inherit;
+            font-size: var(--modal-font-base);
+            cursor: pointer;
+            border-radius: 0 0.25rem 0.25rem 0;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .workshop-b .workshop-nav button:hover {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--rpg-text);
+        }
+        .workshop-b .workshop-nav button.active {
+            background: rgba(233, 69, 96, 0.12);
+            color: var(--rpg-highlight);
+            border-left-color: var(--rpg-highlight);
+        }
+
+        .workshop-b .workshop-pane-host {
+            padding: 1rem 1.2rem;
+            overflow-y: auto;
+        }
+
+        .workshop-b .preview-portrait-name {
+            color: inherit; /* overridden inline by selected hex */
+        }
+
+        @media (max-width: 640px) {
+            .workshop-b .workshop-split { grid-template-columns: 1fr; }
+            .workshop-b .workshop-rail { border-right: none; border-bottom: 1px solid var(--rpg-border); }
+        }
+    </style>
+</head>
+<body class="workshop-b">
+    <div class="mockup-stage">
+        <section class="rpg-settings-popup-content" role="dialog" aria-label="Character Workshop">
+
+            <header class="rpg-settings-popup-header">
+                <h3>
+                    <span>Character Workshop</span>
+                    <span class="muted" aria-hidden="true">—</span>
+                    <span class="workshop-subject" id="b-char-title">Aria Vex</span>
+                </h3>
+                <button class="rpg-popup-close" aria-label="Close">×</button>
+            </header>
+
+            <div class="workshop-split">
+
+                <!-- LEFT RAIL: live preview + section nav -->
+                <aside class="workshop-rail" aria-label="Preview and navigation">
+
+                    <div class="workshop-preview">
+                        <div class="dooms-portrait-card" id="b-preview-card" aria-label="Live portrait preview">
+                            <div class="dooms-portrait-placeholder" id="b-preview-placeholder" aria-hidden="true">👤</div>
+                            <img id="b-preview-img" alt="" style="display:none;">
+                            <div class="dooms-portrait-card-name preview-portrait-name" id="b-preview-card-name" style="color: #e94560;">Aria Vex</div>
+                        </div>
+                        <div class="preview-name" id="b-preview-name" style="color: #e94560;">Aria Vex</div>
+                        <div class="preview-rel">
+                            <span class="color-dot" id="b-preview-color-dot" style="background:#e94560;"></span>
+                            <span id="b-preview-rel">⭐ Friend</span>
+                        </div>
+                    </div>
+
+                    <nav class="workshop-nav" aria-label="Section">
+                        <button class="active" data-pane="identity">🪪 Identity</button>
+                        <button data-pane="appearance">🎨 Appearance</button>
+                        <button data-pane="trackers">📊 Trackers</button>
+                        <button data-pane="sheet">📖 Sheet</button>
+                    </nav>
+
+                </aside>
+
+                <!-- RIGHT PANE: currently-selected section -->
+                <main class="workshop-pane-host">
+
+                    <!-- IDENTITY -->
+                    <section class="rpg-editor-pane active" data-pane="identity">
+                        <div class="rpg-editor-section">
+                            <h4>Identity</h4>
+                            <p class="helper">Name and relationship. Changes here update the preview on the left in real time.</p>
+
+                            <div class="rpg-field">
+                                <label for="b-name">Character name</label>
+                                <input id="b-name" class="rpg-input" type="text" value="Aria Vex" placeholder="e.g. Aria Vex">
+                            </div>
+
+                            <div class="rpg-field">
+                                <label>Relationship to player</label>
+                                <div class="rpg-rel-chips" role="radiogroup" aria-label="Relationship">
+                                    <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Lover" data-emoji="❤️"><span>❤️</span> Lover</button>
+                                    <button class="rpg-rel-chip selected" role="radio" aria-checked="true" data-rel="Friend" data-emoji="⭐"><span>⭐</span> Friend</button>
+                                    <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Ally" data-emoji="🤝"><span>🤝</span> Ally</button>
+                                    <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Enemy" data-emoji="⚔️"><span>⚔️</span> Enemy</button>
+                                    <button class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Neutral" data-emoji="⚖️"><span>⚖️</span> Neutral</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- APPEARANCE -->
+                    <section class="rpg-editor-pane" data-pane="appearance">
+                        <div class="rpg-editor-section">
+                            <h4>Portrait</h4>
+                            <p class="helper">Shown on the portrait bar. The preview at left updates as soon as you pick a file.</p>
+                            <div class="stack" style="max-width: 320px;">
+                                <label class="rpg-btn" for="b-portrait">Upload portrait…</label>
+                                <input id="b-portrait" type="file" accept="image/*" class="sr-only">
+                                <button class="rpg-btn rpg-btn-ghost" type="button" id="b-portrait-clear">Remove portrait</button>
+                            </div>
+                        </div>
+
+                        <div class="rpg-editor-section">
+                            <h4>Dialogue color</h4>
+                            <p class="helper">Used for this character's dialogue in chat and the name label on the portrait card. Click a swatch to see it applied in the preview.</p>
+                            <div class="rpg-color-palette" id="b-palette" role="radiogroup" aria-label="Dialogue color"></div>
+                        </div>
+                    </section>
+
+                    <!-- TRACKERS -->
+                    <section class="rpg-editor-pane" data-pane="trackers">
+                        <div class="rpg-editor-section">
+                            <h4>Custom tracker fields</h4>
+                            <p class="helper">Per-character fields rendered on the portrait tooltip and info box.</p>
+                            <div class="rpg-row-list">
+                                <div class="rpg-row">
+                                    <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                    <div class="rpg-row-title">
+                                        <strong>Appearance</strong>
+                                        <span>Visible physical appearance (clothing, hair, notable features)</span>
+                                    </div>
+                                    <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                                </div>
+                                <div class="rpg-row">
+                                    <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                    <div class="rpg-row-title">
+                                        <strong>Demeanor</strong>
+                                        <span>Observable demeanor or emotional state</span>
+                                    </div>
+                                    <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                                </div>
+                            </div>
+                            <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add custom field</button>
+                        </div>
+
+                        <div class="rpg-editor-section">
+                            <h4>Thoughts</h4>
+                            <p class="helper">Internal monologue — up to three sentences from the character's POV.</p>
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">💭</span>
+                                <div class="rpg-row-title">
+                                    <strong>Thoughts</strong>
+                                    <span>Internal monologue (first person, up to three sentences)</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                        </div>
+
+                        <div class="rpg-editor-section">
+                            <h4>Character stats</h4>
+                            <p class="helper">Gradient bars shown under the portrait when enabled.</p>
+                            <div class="rpg-row-list">
+                                <div class="rpg-row">
+                                    <span class="rpg-row-drag" aria-hidden="true">❤</span>
+                                    <div class="rpg-row-title">
+                                        <strong>Health</strong>
+                                        <span>Low #ff4444 → High #44ff44</span>
+                                    </div>
+                                    <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                                </div>
+                                <div class="rpg-row">
+                                    <span class="rpg-row-drag" aria-hidden="true">⚡</span>
+                                    <div class="rpg-row-title">
+                                        <strong>Energy</strong>
+                                        <span>Low #ffaa00 → High #44ffff</span>
+                                    </div>
+                                    <label class="rpg-switch"><input type="checkbox"><span class="rpg-switch-track"></span></label>
+                                </div>
+                            </div>
+                            <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add stat</button>
+                        </div>
+                    </section>
+
+                    <!-- SHEET -->
+                    <section class="rpg-editor-pane" data-pane="sheet">
+                        <div class="rpg-editor-section">
+                            <h4>Character sheet sections</h4>
+                            <p class="helper">Bunny Mo-style numbered sections. Click a header to expand.</p>
+
+                            <div class="rpg-sheet-section open">
+                                <div class="rpg-sheet-section-header">
+                                    <span class="chev" aria-hidden="true">▸</span>
+                                    <span class="emoji">🧬</span>
+                                    <span class="num">1 / 3</span>
+                                    <span class="title">Core Identity</span>
+                                </div>
+                                <div class="rpg-sheet-section-body">
+                                    <div class="rpg-field-row">
+                                        <div class="rpg-field">
+                                            <label>Emoji</label>
+                                            <input class="rpg-input" type="text" value="🧬" style="text-align:center;">
+                                        </div>
+                                        <div class="rpg-field" style="flex:2;">
+                                            <label>Title</label>
+                                            <input class="rpg-input" type="text" value="Core Identity">
+                                        </div>
+                                    </div>
+                                    <div class="rpg-field">
+                                        <label>Content</label>
+                                        <textarea class="rpg-textarea" rows="4">A sharp-tongued fixer who trades favors across the neon district. Keeps her real name off every ledger.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rpg-sheet-section">
+                                <div class="rpg-sheet-section-header">
+                                    <span class="chev" aria-hidden="true">▸</span>
+                                    <span class="emoji">📖</span>
+                                    <span class="num">2 / 3</span>
+                                    <span class="title">Background</span>
+                                </div>
+                                <div class="rpg-sheet-section-body">
+                                    <div class="rpg-field">
+                                        <label>Content</label>
+                                        <textarea class="rpg-textarea" rows="4">Grew up running messages between crews. One bad deal left her with a debt she still hasn't finished paying off.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rpg-sheet-section">
+                                <div class="rpg-sheet-section-header">
+                                    <span class="chev" aria-hidden="true">▸</span>
+                                    <span class="emoji">🎭</span>
+                                    <span class="num">3 / 3</span>
+                                    <span class="title">Quirks</span>
+                                </div>
+                                <div class="rpg-sheet-section-body">
+                                    <div class="rpg-field">
+                                        <label>Content</label>
+                                        <textarea class="rpg-textarea" rows="4">Taps her rings when she's lying. Won't drink anything she didn't pour herself.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add section</button>
+                        </div>
+                    </section>
+
+                </main>
+            </div>
+
+            <footer class="rpg-settings-popup-footer">
+                <button class="rpg-btn rpg-btn-danger" type="button">Delete character</button>
+                <span class="spacer"></span>
+                <button class="rpg-btn rpg-btn-ghost" type="button">Cancel</button>
+                <button class="rpg-btn rpg-btn-primary" type="button">Save</button>
+            </footer>
+
+        </section>
+    </div>
+
+    <script>
+        // Dialogue color palette (src/systems/ui/portraitBar.js:29-38)
+        const PALETTE = [
+            '#e94560', '#e07b39', '#f0c040', '#2ecc71',
+            '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
+            '#5dade2', '#f39c12', '#8e44ad', '#d35400',
+            '#16a085', '#c0392b', '#00b894', '#6c5ce7',
+            '#fd79a8', '#a29bfe', '#55efc4', '#fab1a0',
+            '#74b9ff', '#ffeaa7', '#e17055', '#00cec9',
+            '#0984e3', '#fdcb6e', '#d63031', '#e056fd',
+            '#7ed6df', '#badc58',
+        ];
+
+        const palette = document.getElementById('b-palette');
+        PALETTE.forEach((hex, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'rpg-color-swatch' + (i === 0 ? ' selected' : '');
+            b.style.background = hex;
+            b.setAttribute('role', 'radio');
+            b.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+            b.setAttribute('aria-label', hex);
+            b.dataset.hex = hex;
+            palette.appendChild(b);
+        });
+
+        // Live-preview elements
+        const nameInput = document.getElementById('b-name');
+        const titleEl = document.getElementById('b-char-title');
+        const prevName = document.getElementById('b-preview-name');
+        const prevCardName = document.getElementById('b-preview-card-name');
+        const prevRel = document.getElementById('b-preview-rel');
+        const prevDot = document.getElementById('b-preview-color-dot');
+        const prevImg = document.getElementById('b-preview-img');
+        const prevPlaceholder = document.getElementById('b-preview-placeholder');
+        const fileInput = document.getElementById('b-portrait');
+        const clearBtn = document.getElementById('b-portrait-clear');
+
+        // Navigation
+        document.querySelectorAll('.workshop-nav button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.workshop-nav button').forEach(b => b.classList.toggle('active', b === btn));
+                const key = btn.dataset.pane;
+                document.querySelectorAll('.rpg-editor-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === key));
+            });
+        });
+
+        // Name updates
+        nameInput.addEventListener('input', () => {
+            const v = nameInput.value.trim() || 'New Character';
+            titleEl.textContent = v;
+            prevName.textContent = v;
+            prevCardName.textContent = v;
+        });
+
+        // Swatch selection → card name color + preview dot
+        palette.addEventListener('click', (e) => {
+            const sw = e.target.closest('.rpg-color-swatch');
+            if (!sw) return;
+            document.querySelectorAll('.rpg-color-swatch').forEach(s => {
+                s.classList.toggle('selected', s === sw);
+                s.setAttribute('aria-checked', s === sw ? 'true' : 'false');
+            });
+            const hex = sw.dataset.hex;
+            prevCardName.style.color = hex;
+            prevName.style.color = hex;
+            prevDot.style.background = hex;
+        });
+
+        // Relationship chip selection
+        document.querySelectorAll('.rpg-rel-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.rpg-rel-chip').forEach(c => {
+                    c.classList.toggle('selected', c === chip);
+                    c.setAttribute('aria-checked', c === chip ? 'true' : 'false');
+                });
+                prevRel.textContent = `${chip.dataset.emoji} ${chip.dataset.rel}`;
+            });
+        });
+
+        // Portrait upload → live card image
+        fileInput.addEventListener('change', () => {
+            const f = fileInput.files && fileInput.files[0];
+            if (!f) return;
+            const url = URL.createObjectURL(f);
+            prevImg.src = url;
+            prevImg.style.display = 'block';
+            prevPlaceholder.style.display = 'none';
+        });
+        clearBtn.addEventListener('click', () => {
+            prevImg.removeAttribute('src');
+            prevImg.style.display = 'none';
+            prevPlaceholder.style.display = 'flex';
+            fileInput.value = '';
+        });
+
+        // Sheet accordion
+        document.querySelectorAll('.rpg-sheet-section-header').forEach(h => {
+            h.addEventListener('click', () => h.parentElement.classList.toggle('open'));
+        });
+    <\/script>
+</body>
+</html>
+
+</script>
+<script type="text/template" id="tpl-c">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DES Character Workshop — Variant C (Wizard)</title>
+    <style>
+/* ---------------------------------------------------------------------------
+   DES Character Workshop mockups — shared styles
+   Mirrors tokens and component primitives from style.css so the three
+   layout variants read visually as "real DES". Nothing here is wired to
+   SillyTavern; this stylesheet is for mockup files only.
+   --------------------------------------------------------------------------- */
+
+:root {
+    /* DES theme tokens, default preset (style.css:90-95) */
+    --rpg-bg: rgba(26, 26, 46, 0.9);
+    --rpg-accent: rgba(22, 33, 62, 0.9);
+    --rpg-text: #eaeaea;
+    --rpg-highlight: #e94560;
+    --rpg-border: #4a7ba7;
+    --rpg-shadow: rgba(0, 0, 0, 0.5);
+
+    /* Modal sizing (style.css:5817-5831) */
+    --modal-padding: clamp(0.5rem, 2vw, 0.75rem);
+    --modal-gap: clamp(0.375rem, 1.5vw, 0.5rem);
+    --modal-border-width: 2px;
+    --modal-font-base: clamp(0.8rem, 3vw, 0.9rem);
+    --modal-font-small: clamp(0.7rem, 2.5vw, 0.8rem);
+    --modal-font-heading: clamp(0.9rem, 3.5vw, 1rem);
+
+    /* Portrait card sizing (style.css:13933-13972) */
+    --dooms-pb-card-w: 110px;
+    --dooms-pb-card-h: 150px;
+    --dooms-pb-card-radius: 8px;
+    --dooms-pb-name-opacity: 0.85;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 20% 10%, rgba(74, 123, 167, 0.18), transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(233, 69, 96, 0.14), transparent 55%),
+        #0b0b16;
+    color: var(--rpg-text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.mockup-stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.mockup-label {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(234, 234, 234, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(74, 123, 167, 0.4);
+    pointer-events: none;
+    z-index: 20;
+}
+
+/* ---------- Modal shell (from .rpg-settings-popup*) ---------- */
+
+.rpg-settings-popup-content {
+    position: relative;
+    width: 100%;
+    max-width: min(92vw, 820px);
+    max-height: min(90vh, 720px);
+    background: rgba(30, 30, 30, 0.92);
+    border: var(--modal-border-width) solid var(--rpg-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+    color: var(--rpg-text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.rpg-settings-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-bottom: var(--modal-border-width) solid var(--rpg-border);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-header h3 {
+    margin: 0;
+    font-size: var(--modal-font-heading);
+    color: var(--rpg-highlight);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    font-weight: 600;
+}
+
+.rpg-settings-popup-header h3 .workshop-subject {
+    color: var(--rpg-text);
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.rpg-popup-close {
+    background: transparent;
+    border: none;
+    color: var(--rpg-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 0.25rem;
+    line-height: 1;
+    transition: background 0.2s, color 0.2s;
+}
+.rpg-popup-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--rpg-highlight);
+}
+
+.rpg-settings-popup-body {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: transparent;
+    font-size: var(--modal-font-base);
+}
+
+.rpg-settings-popup-footer {
+    padding: var(--modal-padding) calc(var(--modal-padding) * 1.5);
+    background: var(--rpg-accent);
+    border-top: var(--modal-border-width) solid var(--rpg-border);
+    display: flex;
+    align-items: center;
+    gap: var(--modal-gap);
+    flex-shrink: 0;
+}
+
+.rpg-settings-popup-footer .spacer { flex: 1; }
+
+/* ---------- Buttons ---------- */
+
+.rpg-btn {
+    appearance: none;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.3rem;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+.rpg-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-btn:active { transform: translateY(1px); }
+
+.rpg-btn-primary {
+    background: var(--rpg-highlight);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+    font-weight: 600;
+}
+.rpg-btn-primary:hover {
+    background: #f4607a;
+    border-color: #f4607a;
+}
+
+.rpg-btn-danger {
+    border-color: rgba(214, 48, 49, 0.6);
+    color: #ff9090;
+}
+.rpg-btn-danger:hover {
+    background: rgba(214, 48, 49, 0.15);
+    border-color: #d63031;
+}
+
+.rpg-btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: rgba(234, 234, 234, 0.7);
+}
+.rpg-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--rpg-text);
+}
+
+/* ---------- Tabs (from .rpg-editor-tabs) ---------- */
+
+.rpg-editor-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--rpg-border);
+    background: rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.rpg-editor-tab {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(234, 234, 234, 0.7);
+    font: inherit;
+    font-size: var(--modal-font-small);
+    padding: 0.6rem 1.1rem;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rpg-editor-tab:hover {
+    color: var(--rpg-text);
+    background: rgba(255, 255, 255, 0.03);
+}
+.rpg-editor-tab.active {
+    color: var(--rpg-highlight);
+    border-bottom-color: var(--rpg-highlight);
+}
+
+.rpg-editor-pane { display: none; }
+.rpg-editor-pane.active { display: block; }
+
+/* ---------- Form primitives ---------- */
+
+.rpg-editor-section {
+    margin-bottom: 1.1rem;
+}
+.rpg-editor-section h4 {
+    margin: 0 0 0.5rem;
+    color: var(--rpg-highlight);
+    font-size: var(--modal-font-heading);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+.rpg-editor-section p.helper {
+    margin: 0 0 0.75rem;
+    color: rgba(234, 234, 234, 0.65);
+    font-size: var(--modal-font-small);
+    line-height: 1.4;
+}
+
+.rpg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.8rem;
+}
+.rpg-field-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+}
+.rpg-field-row > .rpg-field { flex: 1; margin-bottom: 0; }
+
+.rpg-field label {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.85);
+    font-weight: 500;
+}
+
+.rpg-input,
+.rpg-textarea,
+.rpg-select {
+    font: inherit;
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--rpg-border);
+    border-radius: 0.3rem;
+    padding: 0.45rem 0.6rem;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.rpg-input:focus,
+.rpg-textarea:focus,
+.rpg-select:focus {
+    border-color: var(--rpg-highlight);
+    box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+    background: rgba(0, 0, 0, 0.5);
+}
+.rpg-textarea {
+    resize: vertical;
+    min-height: 5rem;
+    font-family: inherit;
+}
+
+/* ---------- Toggle switch ---------- */
+
+.rpg-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: var(--modal-font-small);
+}
+.rpg-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.rpg-switch-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--rpg-border);
+    position: relative;
+    transition: background 0.2s, border-color 0.2s;
+}
+.rpg-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #ddd;
+    transition: transform 0.2s, background 0.2s;
+}
+.rpg-switch input:checked + .rpg-switch-track {
+    background: rgba(233, 69, 96, 0.35);
+    border-color: var(--rpg-highlight);
+}
+.rpg-switch input:checked + .rpg-switch-track::after {
+    transform: translateX(14px);
+    background: var(--rpg-highlight);
+}
+
+/* ---------- Dialogue color palette ---------- */
+
+.rpg-color-palette {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+}
+.rpg-color-swatch {
+    appearance: none;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+.rpg-color-swatch:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.rpg-color-swatch.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--rpg-highlight);
+}
+
+/* ---------- Relationship chips ---------- */
+
+.rpg-rel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.rpg-rel-chip {
+    appearance: none;
+    border: 1px solid var(--rpg-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-rel-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight);
+}
+.rpg-rel-chip.selected {
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight);
+    color: #fff;
+}
+
+/* ---------- Portrait card preview (from .dooms-portrait-card) ---------- */
+
+.dooms-portrait-card {
+    flex-shrink: 0;
+    width: var(--dooms-pb-card-w);
+    height: var(--dooms-pb-card-h);
+    border-radius: var(--dooms-pb-card-radius);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.dooms-portrait-card:hover {
+    border-color: rgba(233, 69, 96, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.25);
+}
+.dooms-portrait-card img,
+.dooms-portrait-card .dooms-portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.dooms-portrait-card .dooms-portrait-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    background:
+        linear-gradient(135deg, rgba(74, 123, 167, 0.35), rgba(233, 69, 96, 0.25));
+    color: rgba(255, 255, 255, 0.8);
+}
+.dooms-portrait-card-name {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 18px 5px 5px;
+    background: linear-gradient(to top, rgba(0, 0, 0, var(--dooms-pb-name-opacity)), transparent);
+    font-size: 0.72em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #ddd;
+}
+.dooms-portrait-card.dooms-pb-speaking {
+    border-color: rgba(233, 69, 96, 0.5);
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.15);
+}
+
+/* ---------- Custom field / stat rows ---------- */
+
+.rpg-row-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.rpg-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+}
+.rpg-row .rpg-row-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.rpg-row .rpg-row-title strong {
+    font-size: var(--modal-font-base);
+    color: var(--rpg-text);
+}
+.rpg-row .rpg-row-title span {
+    font-size: var(--modal-font-small);
+    color: rgba(234, 234, 234, 0.65);
+}
+.rpg-row .rpg-row-drag {
+    color: rgba(234, 234, 234, 0.4);
+    cursor: grab;
+    user-select: none;
+    font-size: 1rem;
+}
+
+.rpg-add-row {
+    appearance: none;
+    background: transparent;
+    border: 1px dashed var(--rpg-border);
+    border-radius: 0.3rem;
+    color: rgba(234, 234, 234, 0.7);
+    padding: 0.5rem;
+    font: inherit;
+    font-size: var(--modal-font-small);
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.rpg-add-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--rpg-highlight);
+    color: var(--rpg-text);
+}
+
+/* ---------- Sheet section accordion ---------- */
+
+.rpg-sheet-section {
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.025);
+}
+.rpg-sheet-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    user-select: none;
+}
+.rpg-sheet-section-header .emoji { font-size: 1.1rem; }
+.rpg-sheet-section-header .num {
+    color: rgba(234, 234, 234, 0.55);
+    font-size: var(--modal-font-small);
+    font-variant-numeric: tabular-nums;
+}
+.rpg-sheet-section-header .title {
+    flex: 1;
+    color: var(--rpg-text);
+    font-weight: 600;
+    font-size: var(--modal-font-base);
+}
+.rpg-sheet-section-header .chev {
+    color: rgba(234, 234, 234, 0.5);
+    transition: transform 0.2s;
+}
+.rpg-sheet-section.open .rpg-sheet-section-header .chev {
+    transform: rotate(90deg);
+    color: var(--rpg-highlight);
+}
+.rpg-sheet-section-body {
+    display: none;
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid rgba(74, 123, 167, 0.35);
+}
+.rpg-sheet-section.open .rpg-sheet-section-body { display: block; }
+
+/* ---------- Utility ---------- */
+
+.stack { display: flex; flex-direction: column; gap: 0.45rem; }
+.hstack { display: flex; align-items: center; gap: 0.5rem; }
+.muted { color: rgba(234, 234, 234, 0.6); }
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+
+</style>
+    <style>
+        /* Variant C: step-by-step wizard. Wider than A to give each step
+           some breathing room, narrower than B since there's no side rail. */
+        .workshop-c .rpg-settings-popup-content { max-width: min(94vw, 680px); }
+
+        .workshop-c .stepper {
+            display: flex;
+            align-items: stretch;
+            padding: 0.55rem 0.9rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--rpg-border);
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        .workshop-c .step {
+            flex: 1 1 0;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.4rem 0.6rem;
+            color: rgba(234, 234, 234, 0.55);
+            font-size: var(--modal-font-small);
+            border-bottom: 2px solid transparent;
+            min-width: 110px;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .workshop-c .step .num {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid rgba(234, 234, 234, 0.35);
+            font-variant-numeric: tabular-nums;
+            font-size: 0.75rem;
+        }
+
+        .workshop-c .step.done {
+            color: rgba(234, 234, 234, 0.8);
+        }
+        .workshop-c .step.done .num {
+            background: rgba(74, 123, 167, 0.4);
+            border-color: var(--rpg-border);
+            color: #fff;
+        }
+
+        .workshop-c .step.active {
+            color: var(--rpg-highlight);
+            border-bottom-color: var(--rpg-highlight);
+        }
+        .workshop-c .step.active .num {
+            background: var(--rpg-highlight);
+            border-color: var(--rpg-highlight);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .workshop-c .step-arrow {
+            align-self: center;
+            color: rgba(234, 234, 234, 0.3);
+            font-size: 0.8rem;
+        }
+
+        .workshop-c .step-helper {
+            padding: 0.8rem 1rem 0.2rem;
+            color: rgba(234, 234, 234, 0.7);
+            font-size: var(--modal-font-small);
+            line-height: 1.5;
+            border-bottom: 1px dashed rgba(74, 123, 167, 0.3);
+            margin-bottom: 0.8rem;
+        }
+
+        .workshop-c .review-card {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            padding: 0.9rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--rpg-border);
+            border-radius: 0.35rem;
+            margin-bottom: 1rem;
+        }
+        .workshop-c .review-card dl {
+            flex: 1;
+            margin: 0;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.25rem 0.75rem;
+            font-size: var(--modal-font-small);
+        }
+        .workshop-c .review-card dt {
+            color: rgba(234, 234, 234, 0.6);
+            font-weight: 500;
+        }
+        .workshop-c .review-card dd {
+            margin: 0;
+            color: var(--rpg-text);
+        }
+        .workshop-c .review-card dd .review-color-dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #e94560;
+            margin-right: 0.35rem;
+            vertical-align: middle;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        @media (max-width: 600px) {
+            .workshop-c .step { min-width: 0; flex-basis: 40%; }
+            .workshop-c .step-arrow { display: none; }
+        }
+    </style>
+</head>
+<body class="workshop-c">
+    <div class="mockup-stage">
+        <section class="rpg-settings-popup-content" role="dialog" aria-label="Character Workshop">
+
+            <header class="rpg-settings-popup-header">
+                <h3>
+                    <span>Character Workshop</span>
+                    <span class="muted" aria-hidden="true">—</span>
+                    <span class="workshop-subject" id="c-char-title">New Character</span>
+                </h3>
+                <button class="rpg-popup-close" aria-label="Close">×</button>
+            </header>
+
+            <nav class="stepper" aria-label="Workshop steps">
+                <div class="step active" data-step="1"><span class="num">1</span><span>Identity</span></div>
+                <span class="step-arrow" aria-hidden="true">›</span>
+                <div class="step" data-step="2"><span class="num">2</span><span>Appearance</span></div>
+                <span class="step-arrow" aria-hidden="true">›</span>
+                <div class="step" data-step="3"><span class="num">3</span><span>Trackers</span></div>
+                <span class="step-arrow" aria-hidden="true">›</span>
+                <div class="step" data-step="4"><span class="num">4</span><span>Sheet</span></div>
+                <span class="step-arrow" aria-hidden="true">›</span>
+                <div class="step" data-step="5"><span class="num">5</span><span>Review</span></div>
+            </nav>
+
+            <div class="rpg-settings-popup-body">
+
+                <!-- STEP 1 -->
+                <section class="rpg-editor-pane active" data-step="1">
+                    <p class="step-helper">Start with the basics. The name appears on the portrait card; the relationship drives the emoji badge.</p>
+                    <div class="rpg-editor-section">
+                        <div class="rpg-field">
+                            <label for="c-name">Character name</label>
+                            <input id="c-name" class="rpg-input" type="text" placeholder="e.g. Aria Vex">
+                        </div>
+                        <div class="rpg-field">
+                            <label>Relationship to player</label>
+                            <div class="rpg-rel-chips" role="radiogroup" aria-label="Relationship">
+                                <button class="rpg-rel-chip" role="radio" data-rel="Lover" data-emoji="❤️"><span>❤️</span> Lover</button>
+                                <button class="rpg-rel-chip" role="radio" data-rel="Friend" data-emoji="⭐"><span>⭐</span> Friend</button>
+                                <button class="rpg-rel-chip" role="radio" data-rel="Ally" data-emoji="🤝"><span>🤝</span> Ally</button>
+                                <button class="rpg-rel-chip" role="radio" data-rel="Enemy" data-emoji="⚔️"><span>⚔️</span> Enemy</button>
+                                <button class="rpg-rel-chip selected" role="radio" aria-checked="true" data-rel="Neutral" data-emoji="⚖️"><span>⚖️</span> Neutral</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- STEP 2 -->
+                <section class="rpg-editor-pane" data-step="2">
+                    <p class="step-helper">Upload a portrait and pick the dialogue color. You can skip either — defaults will be filled in.</p>
+                    <div class="rpg-editor-section">
+                        <h4>Portrait</h4>
+                        <div class="hstack" style="align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                            <div class="dooms-portrait-card" id="c-preview-card">
+                                <div class="dooms-portrait-placeholder" id="c-preview-placeholder" aria-hidden="true">👤</div>
+                                <img id="c-preview-img" alt="" style="display:none;">
+                                <div class="dooms-portrait-card-name" id="c-preview-card-name">New Character</div>
+                            </div>
+                            <div class="stack" style="flex: 1; min-width: 200px;">
+                                <label class="rpg-btn" for="c-portrait">Upload portrait…</label>
+                                <input id="c-portrait" type="file" accept="image/*" class="sr-only">
+                                <button class="rpg-btn rpg-btn-ghost" type="button" id="c-portrait-clear">Remove portrait</button>
+                                <p class="helper" style="margin: 0;">660×880 recommended.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rpg-editor-section">
+                        <h4>Dialogue color</h4>
+                        <div class="rpg-color-palette" id="c-palette" role="radiogroup" aria-label="Dialogue color"></div>
+                    </div>
+                </section>
+
+                <!-- STEP 3 -->
+                <section class="rpg-editor-pane" data-step="3">
+                    <p class="step-helper">Enable the tracker fields you want the AI to fill out for this character each turn.</p>
+                    <div class="rpg-editor-section">
+                        <h4>Custom tracker fields</h4>
+                        <div class="rpg-row-list">
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                <div class="rpg-row-title">
+                                    <strong>Appearance</strong>
+                                    <span>Visible physical appearance (clothing, hair, notable features)</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                            <div class="rpg-row">
+                                <span class="rpg-row-drag" aria-hidden="true">⋮⋮</span>
+                                <div class="rpg-row-title">
+                                    <strong>Demeanor</strong>
+                                    <span>Observable demeanor or emotional state</span>
+                                </div>
+                                <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                            </div>
+                        </div>
+                        <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add custom field</button>
+                    </div>
+
+                    <div class="rpg-editor-section">
+                        <h4>Thoughts &amp; stats</h4>
+                        <div class="rpg-row">
+                            <span class="rpg-row-drag" aria-hidden="true">💭</span>
+                            <div class="rpg-row-title">
+                                <strong>Thoughts</strong>
+                                <span>Internal monologue (first person, up to three sentences)</span>
+                            </div>
+                            <label class="rpg-switch"><input type="checkbox" checked><span class="rpg-switch-track"></span></label>
+                        </div>
+                        <div class="rpg-row" style="margin-top: 0.5rem;">
+                            <span class="rpg-row-drag" aria-hidden="true">❤</span>
+                            <div class="rpg-row-title">
+                                <strong>Health</strong>
+                                <span>Low #ff4444 → High #44ff44</span>
+                            </div>
+                            <label class="rpg-switch"><input type="checkbox"><span class="rpg-switch-track"></span></label>
+                        </div>
+                        <div class="rpg-row" style="margin-top: 0.5rem;">
+                            <span class="rpg-row-drag" aria-hidden="true">⚡</span>
+                            <div class="rpg-row-title">
+                                <strong>Energy</strong>
+                                <span>Low #ffaa00 → High #44ffff</span>
+                            </div>
+                            <label class="rpg-switch"><input type="checkbox"><span class="rpg-switch-track"></span></label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- STEP 4 -->
+                <section class="rpg-editor-pane" data-step="4">
+                    <p class="step-helper">Optional — paste or write character-sheet sections. You can also populate these later with Bunny Mo's <code>!fullsheet</code>.</p>
+                    <div class="rpg-editor-section">
+                        <div class="rpg-sheet-section open">
+                            <div class="rpg-sheet-section-header">
+                                <span class="chev" aria-hidden="true">▸</span>
+                                <span class="emoji">🧬</span>
+                                <span class="num">1 / 1</span>
+                                <span class="title">Core Identity</span>
+                            </div>
+                            <div class="rpg-sheet-section-body">
+                                <div class="rpg-field-row">
+                                    <div class="rpg-field">
+                                        <label>Emoji</label>
+                                        <input class="rpg-input" type="text" value="🧬" style="text-align:center;">
+                                    </div>
+                                    <div class="rpg-field" style="flex:2;">
+                                        <label>Title</label>
+                                        <input class="rpg-input" type="text" value="Core Identity">
+                                    </div>
+                                </div>
+                                <div class="rpg-field">
+                                    <label>Content</label>
+                                    <textarea class="rpg-textarea" rows="4" placeholder="A sharp-tongued fixer who trades favors…"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="rpg-add-row" type="button" style="margin-top: 0.5rem;">+ Add section</button>
+                    </div>
+                </section>
+
+                <!-- STEP 5 -->
+                <section class="rpg-editor-pane" data-step="5">
+                    <p class="step-helper">Everything looks right? Save to add this character to the current chat's roster.</p>
+                    <div class="rpg-editor-section">
+                        <div class="review-card">
+                            <div class="dooms-portrait-card" style="--dooms-pb-card-w: 90px; --dooms-pb-card-h: 120px;">
+                                <div class="dooms-portrait-placeholder" aria-hidden="true">👤</div>
+                                <div class="dooms-portrait-card-name" id="c-review-card-name">New Character</div>
+                            </div>
+                            <dl>
+                                <dt>Name</dt><dd id="c-review-name">—</dd>
+                                <dt>Relationship</dt><dd id="c-review-rel">⚖️ Neutral</dd>
+                                <dt>Color</dt><dd><span class="review-color-dot" id="c-review-color-dot"></span><span id="c-review-color">#e94560</span></dd>
+                                <dt>Trackers</dt><dd>Appearance, Demeanor, Thoughts</dd>
+                                <dt>Sheet</dt><dd>1 section (Core Identity)</dd>
+                            </dl>
+                        </div>
+                        <p class="helper">You can edit any of this later by re-opening the Workshop from the portrait bar's right-click menu.</p>
+                    </div>
+                </section>
+
+            </div>
+
+            <footer class="rpg-settings-popup-footer">
+                <button class="rpg-btn" type="button" id="c-back" disabled>← Back</button>
+                <span class="spacer"></span>
+                <button class="rpg-btn rpg-btn-ghost" type="button">Cancel</button>
+                <button class="rpg-btn rpg-btn-primary" type="button" id="c-next">Next →</button>
+            </footer>
+
+        </section>
+    </div>
+
+    <script>
+        const PALETTE = [
+            '#e94560', '#e07b39', '#f0c040', '#2ecc71',
+            '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
+            '#5dade2', '#f39c12', '#8e44ad', '#d35400',
+            '#16a085', '#c0392b', '#00b894', '#6c5ce7',
+            '#fd79a8', '#a29bfe', '#55efc4', '#fab1a0',
+            '#74b9ff', '#ffeaa7', '#e17055', '#00cec9',
+            '#0984e3', '#fdcb6e', '#d63031', '#e056fd',
+            '#7ed6df', '#badc58',
+        ];
+
+        let state = {
+            step: 1,
+            name: '',
+            rel: { label: 'Neutral', emoji: '⚖️' },
+            color: '#e94560',
+        };
+        const TOTAL = 5;
+
+        const palette = document.getElementById('c-palette');
+        PALETTE.forEach((hex, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'rpg-color-swatch' + (i === 0 ? ' selected' : '');
+            b.style.background = hex;
+            b.setAttribute('role', 'radio');
+            b.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+            b.setAttribute('aria-label', hex);
+            b.dataset.hex = hex;
+            palette.appendChild(b);
+        });
+
+        const nameInput = document.getElementById('c-name');
+        const titleEl = document.getElementById('c-char-title');
+        const previewCardName = document.getElementById('c-preview-card-name');
+        const reviewCardName = document.getElementById('c-review-card-name');
+        const reviewName = document.getElementById('c-review-name');
+        const reviewRel = document.getElementById('c-review-rel');
+        const reviewColor = document.getElementById('c-review-color');
+        const reviewColorDot = document.getElementById('c-review-color-dot');
+        const backBtn = document.getElementById('c-back');
+        const nextBtn = document.getElementById('c-next');
+
+        function render() {
+            document.querySelectorAll('.step').forEach(s => {
+                const n = Number(s.dataset.step);
+                s.classList.toggle('active', n === state.step);
+                s.classList.toggle('done', n < state.step);
+            });
+            document.querySelectorAll('.rpg-editor-pane').forEach(p => {
+                p.classList.toggle('active', Number(p.dataset.step) === state.step);
+            });
+            backBtn.disabled = state.step === 1;
+            if (state.step === TOTAL) {
+                nextBtn.textContent = 'Save';
+                nextBtn.classList.add('rpg-btn-primary');
+            } else {
+                nextBtn.textContent = 'Next →';
+                nextBtn.classList.add('rpg-btn-primary');
+            }
+            if (state.step === TOTAL) {
+                reviewName.textContent = state.name || '—';
+                reviewCardName.textContent = state.name || 'New Character';
+                reviewRel.textContent = `${state.rel.emoji} ${state.rel.label}`;
+                reviewColor.textContent = state.color;
+                reviewColorDot.style.background = state.color;
+                reviewCardName.style.color = state.color;
+            }
+        }
+
+        backBtn.addEventListener('click', () => {
+            if (state.step > 1) state.step--;
+            render();
+        });
+        nextBtn.addEventListener('click', () => {
+            if (state.step < TOTAL) state.step++;
+            else alert('(mockup) Save');
+            render();
+        });
+
+        nameInput.addEventListener('input', () => {
+            state.name = nameInput.value.trim();
+            const display = state.name || 'New Character';
+            titleEl.textContent = display;
+            previewCardName.textContent = display;
+        });
+
+        document.querySelectorAll('.rpg-rel-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.rpg-rel-chip').forEach(c => {
+                    c.classList.toggle('selected', c === chip);
+                    c.setAttribute('aria-checked', c === chip ? 'true' : 'false');
+                });
+                state.rel = { label: chip.dataset.rel, emoji: chip.dataset.emoji };
+            });
+        });
+
+        palette.addEventListener('click', (e) => {
+            const sw = e.target.closest('.rpg-color-swatch');
+            if (!sw) return;
+            document.querySelectorAll('.rpg-color-swatch').forEach(s => {
+                s.classList.toggle('selected', s === sw);
+                s.setAttribute('aria-checked', s === sw ? 'true' : 'false');
+            });
+            state.color = sw.dataset.hex;
+            previewCardName.style.color = state.color;
+        });
+
+        // Portrait upload
+        const fileInput = document.getElementById('c-portrait');
+        const prevImg = document.getElementById('c-preview-img');
+        const prevPlaceholder = document.getElementById('c-preview-placeholder');
+        fileInput.addEventListener('change', () => {
+            const f = fileInput.files && fileInput.files[0];
+            if (!f) return;
+            prevImg.src = URL.createObjectURL(f);
+            prevImg.style.display = 'block';
+            prevPlaceholder.style.display = 'none';
+        });
+        document.getElementById('c-portrait-clear').addEventListener('click', () => {
+            prevImg.removeAttribute('src');
+            prevImg.style.display = 'none';
+            prevPlaceholder.style.display = 'flex';
+            fileInput.value = '';
+        });
+
+        // Sheet accordion
+        document.querySelectorAll('.rpg-sheet-section-header').forEach(h => {
+            h.addEventListener('click', () => h.parentElement.classList.toggle('open'));
+        });
+
+        render();
+    <\/script>
+</body>
+</html>
+
+</script>
+<script>
+const stage=document.getElementById("stage");
+function show(k){stage.srcdoc=document.getElementById("tpl-"+k).textContent;document.querySelectorAll(".var-btn").forEach(b=>b.classList.toggle("active",b.dataset.var===k));}
+document.querySelectorAll(".var-btn").forEach(b=>b.addEventListener("click",()=>show(b.dataset.var)));
+show("a");
+</script>
+</body></html>
