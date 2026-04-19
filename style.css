@@ -19222,3 +19222,300 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .rpg-cs-expr-delete:hover { background: rgba(233, 69, 96, 0.5) !important; }
 .rpg-cs-expr-label { font-size: 0.72em; text-align: center; opacity: 0.7; text-transform: capitalize; }
 
+
+/* ============================================================================
+   Character Workshop Modal (characterWorkshop.js)
+   All selectors are scoped to #character-workshop-popup so nothing else in
+   DES can be affected. Relies on existing .rpg-settings-popup*, .rpg-btn*,
+   .rpg-field, .rpg-input, .rpg-textarea, .dooms-portrait-card rules.
+   ============================================================================ */
+
+/* Modal shell follows the tracker-editor pattern — .rpg-settings-popup
+   already handles display:none by default plus .is-open to show. Override
+   content-box sizing so the split pane has room to breathe. */
+#character-workshop-popup .rpg-settings-popup-content {
+    max-width: min(95vw, 900px);
+    max-height: min(90vh, 720px);
+    overflow: hidden;
+}
+
+#character-workshop-popup .workshop-subject {
+    color: var(--rpg-text);
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+/* Split pane body */
+#character-workshop-popup .workshop-split {
+    display: grid;
+    grid-template-columns: minmax(240px, 35%) 1fr;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#character-workshop-popup .workshop-rail {
+    background: rgba(0, 0, 0, 0.3);
+    border-right: 1px solid var(--rpg-border);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+#character-workshop-popup .workshop-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#character-workshop-popup .workshop-preview .preview-name {
+    font-size: 0.95rem;
+    color: var(--rpg-highlight, #e94560);
+    font-weight: 600;
+    text-align: center;
+    min-height: 1.2em;
+    transition: color 0.2s;
+}
+
+#character-workshop-popup .workshop-preview .preview-rel {
+    font-size: var(--modal-font-small, 0.8rem);
+    color: rgba(234, 234, 234, 0.75);
+    min-height: 1em;
+}
+
+#character-workshop-popup .workshop-preview .color-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    vertical-align: middle;
+    margin-right: 0.3rem;
+    background: var(--rpg-highlight, #e94560);
+}
+
+/* Portrait card placeholder shown before any image is uploaded. */
+#character-workshop-popup .dooms-portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    background: linear-gradient(135deg, rgba(74, 123, 167, 0.35), rgba(233, 69, 96, 0.25));
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#character-workshop-popup .workshop-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(74, 123, 167, 0.3);
+}
+
+#character-workshop-popup .workshop-nav button {
+    appearance: none;
+    background: transparent;
+    color: rgba(234, 234, 234, 0.75);
+    border: none;
+    border-left: 2px solid transparent;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    font-size: var(--modal-font-base, 0.9rem);
+    cursor: pointer;
+    border-radius: 0 0.25rem 0.25rem 0;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#character-workshop-popup .workshop-nav button:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text);
+}
+
+#character-workshop-popup .workshop-nav button.active {
+    background: rgba(233, 69, 96, 0.12);
+    color: var(--rpg-highlight, #e94560);
+    border-left-color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .workshop-pane-host {
+    padding: 1rem 1.2rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Only the active pane is visible. */
+#character-workshop-popup .rpg-editor-pane { display: none; }
+#character-workshop-popup .rpg-editor-pane.active { display: block; }
+
+/* Section headings and helper text */
+#character-workshop-popup .rpg-editor-section { margin-bottom: 1.1rem; }
+#character-workshop-popup .rpg-editor-section h4 {
+    margin: 0 0 0.5rem;
+    color: var(--rpg-highlight, #e94560);
+    font-size: var(--modal-font-heading, 1rem);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+#character-workshop-popup .rpg-editor-section p.helper {
+    margin: 0 0 0.75rem;
+    color: rgba(234, 234, 234, 0.65);
+    font-size: var(--modal-font-small, 0.8rem);
+    line-height: 1.4;
+}
+
+#character-workshop-popup .stack { display: flex; flex-direction: column; gap: 0.45rem; }
+
+#character-workshop-popup .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+
+/* Relationship chips */
+#character-workshop-popup .rpg-rel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+#character-workshop-popup .rpg-rel-chip {
+    appearance: none;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--rpg-text, #eaeaea);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: var(--modal-font-small, 0.8rem);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+#character-workshop-popup .rpg-rel-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .rpg-rel-chip.selected {
+    background: rgba(233, 69, 96, 0.18);
+    border-color: var(--rpg-highlight, #e94560);
+    color: #fff;
+}
+
+/* Dialogue color palette — 10-column grid. Override the DES default .rpg-color-swatch
+   (32x32) locally so swatches fill the grid cells. */
+#character-workshop-popup .rpg-color-palette {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+}
+#character-workshop-popup .rpg-color-swatch {
+    appearance: none;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+#character-workshop-popup .rpg-color-swatch:hover {
+    transform: scale(1.08);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+#character-workshop-popup .rpg-color-swatch.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--rpg-highlight, #e94560);
+}
+
+/* Sheet section accordions */
+#character-workshop-popup .rpg-sheet-section {
+    border: 1px solid rgba(74, 123, 167, 0.35);
+    border-radius: 0.3rem;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.025);
+}
+#character-workshop-popup .rpg-sheet-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    user-select: none;
+}
+#character-workshop-popup .rpg-sheet-section-header .emoji { font-size: 1.1rem; }
+#character-workshop-popup .rpg-sheet-section-header .num {
+    color: rgba(234, 234, 234, 0.55);
+    font-size: var(--modal-font-small, 0.8rem);
+    font-variant-numeric: tabular-nums;
+}
+#character-workshop-popup .rpg-sheet-section-header .title {
+    flex: 1;
+    color: var(--rpg-text, #eaeaea);
+    font-weight: 600;
+    font-size: var(--modal-font-base, 0.9rem);
+}
+#character-workshop-popup .rpg-sheet-section-header .chev {
+    color: rgba(234, 234, 234, 0.5);
+    transition: transform 0.2s;
+}
+#character-workshop-popup .rpg-sheet-section.open .rpg-sheet-section-header .chev {
+    transform: rotate(90deg);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .rpg-sheet-section-body {
+    display: none;
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid rgba(74, 123, 167, 0.35);
+}
+#character-workshop-popup .rpg-sheet-section.open .rpg-sheet-section-body { display: block; }
+
+/* "+ Add section" / "+ Add row" ghost buttons */
+#character-workshop-popup .rpg-add-row {
+    appearance: none;
+    background: transparent;
+    border: 1px dashed var(--rpg-border, #4a7ba7);
+    border-radius: 0.3rem;
+    color: rgba(234, 234, 234, 0.7);
+    padding: 0.5rem;
+    font: inherit;
+    font-size: var(--modal-font-small, 0.8rem);
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0.5rem;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+#character-workshop-popup .rpg-add-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--rpg-highlight, #e94560);
+    color: var(--rpg-text, #eaeaea);
+}
+
+/* Footer spacer expands to push primary actions right */
+#character-workshop-popup .rpg-settings-popup-footer .spacer { flex: 1; }
+
+/* Mobile: collapse to single column */
+@media (max-width: 640px) {
+    #character-workshop-popup .workshop-split { grid-template-columns: 1fr; }
+    #character-workshop-popup .workshop-rail {
+        border-right: none;
+        border-bottom: 1px solid var(--rpg-border, #4a7ba7);
+    }
+}
