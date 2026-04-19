@@ -220,7 +220,7 @@ function updatePresetUI() {
 /**
  * Open the tracker editor modal
  */
-function openTrackerEditor() {
+export function openTrackerEditor() {
     // Create temporary copy for cancel functionality
     tempConfig = JSON.parse(JSON.stringify(extensionSettings.trackerConfig));
     // Store original association state for cancel functionality

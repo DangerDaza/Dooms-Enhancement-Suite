@@ -13,6 +13,7 @@ import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar } from './portraitBar.js';
 import { getCharacterSheet, saveCharacterSheet } from './characterSheet.js';
+import { openTrackerEditor } from './trackerEditor.js';
 import { i18n } from '../../core/i18n.js';
 
 function t(key, fallback, vars) {
@@ -359,11 +360,19 @@ function bindStaticListeners() {
         $modal.find('#cw-preview-placeholder').show();
     });
 
-    // Trackers placeholder — hand off to the existing Tracker Editor
+    // Trackers placeholder — hand off to the existing Tracker Editor.
+    // Calls openTrackerEditor() directly; the dead #rpg-open-tracker-editor
+    // click listener at trackerEditor.js:80 is not wired to any DOM element.
     $modal.on('click.cw', '#cw-open-tracker-editor', () => {
         closeCharacterWorkshop();
         // Defer slightly so this modal's fade-out doesn't fight the next one.
-        setTimeout(() => $('#rpg-open-tracker-editor').trigger('click'), 220);
+        setTimeout(() => {
+            try {
+                openTrackerEditor();
+            } catch (e) {
+                console.warn('[Dooms Tracker] Workshop: openTrackerEditor failed', e);
+            }
+        }, 220);
     });
 
     // Sheet: accordion toggle (only when clicking the header itself, not inputs)
