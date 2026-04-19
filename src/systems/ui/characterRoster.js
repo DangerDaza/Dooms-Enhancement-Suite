@@ -49,6 +49,9 @@ export function openCharacterRoster() {
     searchQuery = '';
     $modal.find('#cr-search').val('');
     renderGrid();
+    // Apply the active DES theme so the theme-specific token overrides
+    // take effect (matches trackerEditor / settings popup convention).
+    $modal.attr('data-theme', extensionSettings?.theme || 'default');
     $modal.addClass('is-open').css('display', '');
 }
 

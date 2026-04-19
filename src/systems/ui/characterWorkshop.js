@@ -95,6 +95,10 @@ export function openCharacterWorkshop(characterName) {
         listenersBound = true;
     }
 
+    // Apply the active DES theme so #character-workshop-popup[data-theme=X]
+    // rules kick in (mirrors trackerEditor.js:233).
+    $modal.attr('data-theme', extensionSettings?.theme || 'default');
+
     // Mirrors trackerEditor.js:237
     $modal.addClass('is-open').css('display', '');
 }
