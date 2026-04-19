@@ -338,6 +338,13 @@ function bindStaticListeners() {
         $modal.find('#cw-preview-placeholder').show();
     });
 
+    // Trackers placeholder — hand off to the existing Tracker Editor
+    $modal.on('click.cw', '#cw-open-tracker-editor', () => {
+        closeCharacterWorkshop();
+        // Defer slightly so this modal's fade-out doesn't fight the next one.
+        setTimeout(() => $('#rpg-open-tracker-editor').trigger('click'), 220);
+    });
+
     // Sheet: accordion toggle (only when clicking the header itself, not inputs)
     $modal.on('click.cw', '.rpg-sheet-section-header', function (e) {
         // Avoid toggling if the click originated inside an input/textarea
