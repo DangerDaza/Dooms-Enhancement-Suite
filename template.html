@@ -1937,3 +1937,117 @@
     </div>
 </div>
 
+<!-- ============================================================================ -->
+<!-- Character Workshop Modal (per-character editor)                                -->
+<!-- Populated dynamically by characterWorkshop.js; hidden until .is-open is added. -->
+<!-- ============================================================================ -->
+<div id="character-workshop-popup" class="rpg-settings-popup" role="dialog" aria-modal="true" aria-label="Character Workshop">
+    <section class="rpg-settings-popup-content">
+
+        <header class="rpg-settings-popup-header">
+            <h3>
+                <span>Character Workshop</span>
+                <span class="muted" aria-hidden="true">&mdash;</span>
+                <span class="workshop-subject" id="cw-char-title"></span>
+            </h3>
+            <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
+        </header>
+
+        <div class="workshop-split">
+
+            <!-- LEFT RAIL: live preview + section nav -->
+            <aside class="workshop-rail" aria-label="Preview and navigation">
+                <div class="workshop-preview">
+                    <div class="dooms-portrait-card" id="cw-preview-card" aria-label="Live portrait preview">
+                        <div class="dooms-portrait-placeholder" id="cw-preview-placeholder" aria-hidden="true">&#128100;</div>
+                        <img id="cw-preview-img" alt="" style="display:none;">
+                        <div class="dooms-portrait-card-name" id="cw-preview-card-name"></div>
+                    </div>
+                    <div class="preview-name" id="cw-preview-name"></div>
+                    <div class="preview-rel">
+                        <span class="color-dot" id="cw-preview-color-dot"></span>
+                        <span id="cw-preview-rel"></span>
+                    </div>
+                </div>
+
+                <nav class="workshop-nav" aria-label="Section">
+                    <button type="button" class="active" data-pane="identity">&#128481; Identity</button>
+                    <button type="button" data-pane="appearance">&#127912; Appearance</button>
+                    <button type="button" data-pane="trackers">&#128202; Trackers</button>
+                    <button type="button" data-pane="sheet">&#128214; Sheet</button>
+                </nav>
+            </aside>
+
+            <!-- RIGHT PANE: currently-selected section -->
+            <main class="workshop-pane-host">
+
+                <!-- IDENTITY -->
+                <section class="rpg-editor-pane active" data-pane="identity">
+                    <div class="rpg-editor-section">
+                        <h4>Identity</h4>
+                        <p class="helper">Name is read-only in v1. Relationship chip reflects the character's current status.</p>
+                        <div class="rpg-field">
+                            <label for="cw-name">Character name</label>
+                            <input id="cw-name" class="rpg-input" type="text" readonly>
+                        </div>
+                        <div class="rpg-field">
+                            <label>Relationship to player</label>
+                            <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup" aria-label="Relationship">
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Lover" data-emoji="&#10084;&#65039;"><span>&#10084;&#65039;</span> Lover</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Friend" data-emoji="&#11088;"><span>&#11088;</span> Friend</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Ally" data-emoji="&#129309;"><span>&#129309;</span> Ally</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Enemy" data-emoji="&#9876;&#65039;"><span>&#9876;&#65039;</span> Enemy</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span> Neutral</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- APPEARANCE -->
+                <section class="rpg-editor-pane" data-pane="appearance">
+                    <div class="rpg-editor-section">
+                        <h4>Portrait</h4>
+                        <p class="helper">Shown on the portrait bar. The preview at left updates as soon as you pick a file.</p>
+                        <div class="stack" style="max-width: 320px;">
+                            <label class="rpg-btn" for="cw-portrait-file">Upload portrait&hellip;</label>
+                            <input id="cw-portrait-file" type="file" accept="image/*" class="sr-only">
+                            <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-portrait-clear">Remove portrait</button>
+                        </div>
+                    </div>
+                    <div class="rpg-editor-section">
+                        <h4>Dialogue color</h4>
+                        <p class="helper">Used for this character's dialogue in chat and the name label on the portrait card.</p>
+                        <div class="rpg-color-palette" id="cw-palette" role="radiogroup" aria-label="Dialogue color"></div>
+                    </div>
+                </section>
+
+                <!-- TRACKERS (placeholder content arrives in cw-7) -->
+                <section class="rpg-editor-pane" data-pane="trackers">
+                    <div class="rpg-editor-section" id="cw-trackers-placeholder">
+                        <!-- Intentionally empty until cw-7 -->
+                    </div>
+                </section>
+
+                <!-- SHEET -->
+                <section class="rpg-editor-pane" data-pane="sheet">
+                    <div class="rpg-editor-section">
+                        <h4>Character sheet sections</h4>
+                        <p class="helper">Bunny Mo-style numbered sections. Click a header to expand.</p>
+                        <div id="cw-sheet-list"></div>
+                        <button class="rpg-add-row" type="button" id="cw-sheet-add">+ Add section</button>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+
+        <footer class="rpg-settings-popup-footer">
+            <button class="rpg-btn rpg-btn-danger" type="button" id="cw-delete">Delete character</button>
+            <span class="spacer"></span>
+            <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-cancel">Cancel</button>
+            <button class="rpg-btn rpg-btn-primary" type="button" id="cw-save">Save</button>
+        </footer>
+
+    </section>
+</div>
+
