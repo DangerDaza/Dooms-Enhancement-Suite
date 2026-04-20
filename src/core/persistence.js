@@ -377,6 +377,15 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 21;
                 settingsChanged = true;
             }
+            // Migration to version 22: Initialize injectAttachPortrait toggle
+            // (Workshop's "Attach portrait to message" — vision-model addon).
+            if (currentVersion < 22) {
+                if (extensionSettings.injectAttachPortrait !== true) {
+                    extensionSettings.injectAttachPortrait = false;
+                }
+                extensionSettings.settingsVersion = 22;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {

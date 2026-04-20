@@ -2099,11 +2099,11 @@
                 <!-- INJECTION -->
                 <section class="rpg-editor-pane" data-pane="injection">
                     <div class="rpg-editor-section">
-                        <h4>Brief description</h4>
-                        <p class="helper">Optional context the AI sees when you click <strong>Inject into Scene</strong>. A few sentences about appearance, role, manner of speaking &mdash; whatever helps the AI portray them consistently.</p>
+                        <h4>Description (bio + appearance)</h4>
+                        <p class="helper">Optional context the AI sees when you click <strong>Inject into Scene</strong>. Cover physical appearance, role, manner of speaking, anything that helps the AI portray them consistently. Plain text — be specific about what they look like since most models won't actually see the portrait image.</p>
                         <div class="rpg-field">
-                            <label for="cw-inj-description" class="sr-only">Brief description</label>
-                            <textarea id="cw-inj-description" class="rpg-textarea" rows="6" placeholder="e.g. A wiry archivist in his sixties, soft-spoken, always carrying a sealed scroll case&hellip;"></textarea>
+                            <label for="cw-inj-description" class="sr-only">Description (bio and appearance)</label>
+                            <textarea id="cw-inj-description" class="rpg-textarea" rows="6" placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
                         </div>
                     </div>
                     <div class="rpg-editor-section">
@@ -2118,6 +2118,17 @@
                                 </button>
                                 <ul class="cw-combobox-list" id="cw-inj-lorebook-list" role="listbox" hidden></ul>
                             </div>
+                        </div>
+                    </div>
+                    <div class="rpg-editor-section">
+                        <h4>Attach portrait to message</h4>
+                        <p class="helper">When on, clicking <strong>Inject into Scene</strong> also attaches this character's portrait to your next user message so vision-capable models (Claude 3.x, GPT-4o, Gemini, etc.) can actually see them. Silently no-ops on text-only models &mdash; the description above is your reliable channel either way.</p>
+                        <div class="rpg-field rpg-field-row" style="align-items:center;">
+                            <label class="rpg-switch">
+                                <input type="checkbox" id="cw-inj-attach-portrait">
+                                <span class="rpg-switch-track"></span>
+                            </label>
+                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Off by default. Setting is global, not per-character.</span>
                         </div>
                     </div>
                 </section>

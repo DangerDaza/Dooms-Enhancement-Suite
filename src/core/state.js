@@ -255,6 +255,7 @@ export let extensionSettings = {
     portraitPosition: 'above', // Portrait bar position: 'above', 'below', 'top', 'left', or 'right'
     portraitSideColumns: 1,     // Side mode: number of card columns (1 or 2)
     portraitSideHeight: 'auto', // Side mode: 'auto' (fit content, vertical-center) or 'full' (top to bottom)
+    injectAttachPortrait: false, // Inject into Scene: also attach the character portrait to the next user message (vision models only)
     portraitBarSettings: {
         cardWidth: 110,              // Portrait card width in px
         cardHeight: 150,             // Portrait card height in px

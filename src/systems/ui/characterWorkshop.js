@@ -27,6 +27,7 @@ import {
     eventSource,
     event_types,
 } from '../../../../../../../script.js';
+import { getContext } from '../../../../../../extensions.js';
 
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
@@ -240,6 +241,9 @@ function renderInjection() {
     // Pre-fill the combobox input with the saved lorebook (if any).
     $modal.find('#cw-inj-lorebook').val(draft.injection.lorebook || '');
     closeLorebookCombo();
+
+    // Sync the global "Attach portrait to message" toggle.
+    $modal.find('#cw-inj-attach-portrait').prop('checked', extensionSettings?.injectAttachPortrait === true);
 }
 
 function renderLorebookComboList(filter) {
@@ -425,6 +429,14 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.injection.description = String($(this).val() || '');
         draft.dirty.injection = true;
+    });
+
+    // "Attach portrait to message" — global setting (not per-character).
+    // Persisted immediately on toggle so it sticks even if the user closes
+    // the Workshop with Cancel.
+    $modal.on('change.cw', '#cw-inj-attach-portrait', function () {
+        extensionSettings.injectAttachPortrait = $(this).prop('checked');
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Workshop: failed to save injectAttachPortrait', e); }
     });
 
     // Combobox: open on focus / click, filter as the user types.
@@ -673,13 +685,24 @@ function injectIntoScene(name) {
         console.warn('[Dooms Tracker] Workshop: setExtensionPrompt failed', e);
     }
 
-    // 5. User feedback
+    // 5. Optional portrait attachment for vision-capable models. Arms a
+    //    one-shot MESSAGE_SENT listener that stamps extra.image on the
+    //    user's next outgoing message; SillyTavern's Generate then includes
+    //    that image in the request payload (multimodal APIs only).
+    let attached = false;
+    if (extensionSettings?.injectAttachPortrait === true && draft?.avatar) {
+        armPortraitAttach(trimmed, draft.avatar);
+        attached = true;
+    }
+
+    // 6. User feedback
     try {
         if (window.toastr) {
             const extras = [];
             if (relationship) extras.push(`relationship=${relationship}`);
             if (description) extras.push('description');
             if (lorebook) extras.push(`lorebook "${lorebook}"`);
+            if (attached) extras.push('portrait');
             const tail = extras.length ? ` (with ${extras.join(' + ')})` : '';
             window.toastr.success(
                 `${trimmed} will be brought into the scene next turn${tail}.`,
@@ -690,6 +713,48 @@ function injectIntoScene(name) {
     } catch (e) {
         // toastr optional
     }
+}
+
+/**
+ * One-shot: when the user next sends a message, stamp the character's
+ * portrait onto that message's `extra.image` so SillyTavern's Generate
+ * includes the image in the outgoing request (vision-capable models).
+ * Falls back silently if anything in the chain is missing.
+ */
+function armPortraitAttach(name, dataUrl) {
+    let consumed = false;
+    const onSent = () => {
+        if (consumed) return;
+        consumed = true;
+        try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+        try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+        try {
+            const ctx = (typeof getContext === 'function') ? getContext() : null;
+            const chat = ctx?.chat;
+            if (!Array.isArray(chat) || chat.length === 0) return;
+            const last = chat[chat.length - 1];
+            if (!last || last.is_user === false) return; // shouldn't happen; defensive
+            if (!last.extra || typeof last.extra !== 'object') last.extra = {};
+            last.extra.image = dataUrl;
+            last.extra.inline_image = true;
+            console.log(`[Dooms Tracker] Workshop: attached "${name}" portrait to outgoing message`);
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: portrait attach failed', e);
+        }
+    };
+    try {
+        eventSource.on(event_types.MESSAGE_SENT, onSent);
+    } catch (e) {
+        console.warn('[Dooms Tracker] Workshop: failed to register MESSAGE_SENT for portrait attach', e);
+    }
+    // Self-disarm after 2 minutes if the user never sends a message, so the
+    // listener doesn't pile up across multiple unconsumed injects.
+    setTimeout(() => {
+        if (consumed) return;
+        consumed = true;
+        try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+        try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+    }, 2 * 60 * 1000);
 }
 
 function exportDraft() {
