@@ -19959,3 +19959,84 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: var(--rpg-highlight, #e94560);
     background: rgba(255, 255, 255, 0.04);
 }
+
+/* ============================================================================
+   Combobox (typeable + filterable lorebook picker in the Workshop)
+   Scoped to #character-workshop-popup so it can't leak.
+   ============================================================================ */
+
+#character-workshop-popup .cw-combobox {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+}
+#character-workshop-popup .cw-combobox .rpg-input {
+    flex: 1;
+    padding-right: 2rem;
+}
+#character-workshop-popup .cw-combobox-toggle {
+    appearance: none;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: rgba(234, 234, 234, 0.7);
+    cursor: pointer;
+    padding: 0;
+    border-radius: 0.25rem;
+    transition: color 0.15s, background 0.15s, transform 0.15s;
+}
+#character-workshop-popup .cw-combobox-toggle:hover {
+    color: var(--rpg-highlight, #e94560);
+    background: rgba(255, 255, 255, 0.06);
+}
+#character-workshop-popup .cw-combobox.is-open .cw-combobox-toggle {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+#character-workshop-popup .cw-combobox-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--rpg-bg, rgba(30, 30, 30, 0.98));
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 0.3rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+    max-height: 220px;
+    overflow-y: auto;
+}
+#character-workshop-popup .cw-combobox-list li {
+    padding: 0.4rem 0.6rem;
+    color: var(--rpg-text, #eaeaea);
+    cursor: pointer;
+    border-radius: 0.25rem;
+    font-size: var(--modal-font-small, 0.8rem);
+    line-height: 1.3;
+}
+#character-workshop-popup .cw-combobox-list li:hover,
+#character-workshop-popup .cw-combobox-list li.is-active {
+    background: rgba(233, 69, 96, 0.18);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .cw-combobox-list li.cw-combobox-empty {
+    color: rgba(234, 234, 234, 0.55);
+    font-style: italic;
+    cursor: default;
+}
+#character-workshop-popup .cw-combobox-list li.cw-combobox-empty:hover {
+    background: transparent;
+    color: rgba(234, 234, 234, 0.55);
+}
+#character-workshop-popup .cw-combobox-list li.is-missing {
+    opacity: 0.6;
+    font-style: italic;
+}

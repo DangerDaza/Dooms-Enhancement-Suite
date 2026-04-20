@@ -2050,12 +2050,16 @@
                     </div>
                     <div class="rpg-editor-section">
                         <h4>Attached lorebook</h4>
-                        <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is injected. Leave blank to skip.</p>
+                        <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is injected. Type to filter; leave blank to skip.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-lorebook" class="sr-only">Attached lorebook</label>
-                            <select id="cw-inj-lorebook" class="rpg-input">
-                                <option value="">&mdash; None &mdash;</option>
-                            </select>
+                            <div class="cw-combobox" id="cw-inj-lorebook-combo">
+                                <input id="cw-inj-lorebook" class="rpg-input" type="text" autocomplete="off" placeholder="— None —" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cw-inj-lorebook-list">
+                                <button type="button" class="cw-combobox-toggle" id="cw-inj-lorebook-toggle" aria-label="Toggle lorebook list" tabindex="-1">
+                                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="cw-combobox-list" id="cw-inj-lorebook-list" role="listbox" hidden></ul>
+                            </div>
                         </div>
                     </div>
                 </section>

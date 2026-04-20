@@ -207,35 +207,90 @@ function renderAppearance() {
     }
 }
 
+// Cache of available lorebook names; rebuilt every open so newly-created
+// SillyTavern lorebooks show up without a reload. Used by the combobox
+// filter to render the dropdown list.
+let lorebookOptions = [];
+
 function renderInjection() {
     $modal.find('#cw-inj-description').val(draft.injection.description || '');
 
-    // Repopulate the lorebook dropdown each open so newly-created
-    // SillyTavern lorebooks show up without needing a reload.
-    const $select = $modal.find('#cw-inj-lorebook').empty();
-    $select.append('<option value="">— None —</option>');
-    let names = [];
+    // Refresh the available lorebook list.
     try {
-        names = getAllWorldNames() || [];
+        lorebookOptions = getAllWorldNames() || [];
     } catch (e) {
         console.warn('[Dooms Tracker] Workshop: getAllWorldNames failed', e);
+        lorebookOptions = [];
     }
-    for (const wname of names) {
-        const opt = document.createElement('option');
-        opt.value = wname;
-        opt.textContent = wname;
-        $select.append(opt);
+
+    // Pre-fill the combobox input with the saved lorebook (if any).
+    $modal.find('#cw-inj-lorebook').val(draft.injection.lorebook || '');
+    closeLorebookCombo();
+}
+
+function renderLorebookComboList(filter) {
+    const $list = $modal.find('#cw-inj-lorebook-list').empty();
+    const needle = (filter || '').trim().toLowerCase();
+    const matches = lorebookOptions.filter(n => !needle || n.toLowerCase().includes(needle));
+    const saved = draft?.injection?.lorebook || '';
+
+    // Always include "None" at the top so the user can clear without
+    // selecting all the text.
+    if (!needle || 'none'.includes(needle) || '— none —'.includes(needle)) {
+        const $none = $('<li class="cw-combobox-none" data-value="">— None —</li>');
+        if (!saved) $none.addClass('is-active');
+        $list.append($none);
     }
-    // If a previously-saved lorebook is no longer present (renamed/deleted),
-    // keep the option visible but flagged so the user can see it's stale.
-    const saved = draft.injection.lorebook;
-    if (saved && !names.includes(saved)) {
-        const opt = document.createElement('option');
-        opt.value = saved;
-        opt.textContent = `${saved} (missing)`;
-        $select.append(opt);
+
+    if (matches.length === 0 && needle) {
+        $list.append('<li class="cw-combobox-empty">No lorebooks match.</li>');
+    } else {
+        for (const wname of matches) {
+            const $li = $('<li></li>')
+                .attr('data-value', wname)
+                .text(wname);
+            if (wname === saved) $li.addClass('is-active');
+            $list.append($li);
+        }
     }
-    $select.val(saved || '');
+
+    // If the saved value isn't present in the available names, surface it
+    // at the bottom flagged as missing so the user can see it's stale.
+    if (saved && !lorebookOptions.includes(saved) && (!needle || saved.toLowerCase().includes(needle))) {
+        const $li = $('<li></li>')
+            .attr('data-value', saved)
+            .addClass('is-missing is-active')
+            .text(`${saved} (missing)`);
+        $list.append($li);
+    }
+}
+
+function openLorebookCombo() {
+    const $combo = $modal.find('#cw-inj-lorebook-combo');
+    const $list = $modal.find('#cw-inj-lorebook-list');
+    const $input = $modal.find('#cw-inj-lorebook');
+    if ($combo.hasClass('is-open')) return;
+    renderLorebookComboList($input.val());
+    $combo.addClass('is-open');
+    $list.prop('hidden', false);
+    $input.attr('aria-expanded', 'true');
+}
+
+function closeLorebookCombo() {
+    const $combo = $modal.find('#cw-inj-lorebook-combo');
+    const $list = $modal.find('#cw-inj-lorebook-list');
+    const $input = $modal.find('#cw-inj-lorebook');
+    $combo.removeClass('is-open');
+    $list.prop('hidden', true);
+    $input.attr('aria-expanded', 'false');
+}
+
+function commitLorebookSelection(value) {
+    if (!draft) return;
+    draft.injection.lorebook = String(value || '').trim();
+    draft.dirty.injection = true;
+    $modal.find('#cw-inj-lorebook').val(draft.injection.lorebook);
+    closeLorebookCombo();
 }
 
 function applyPreviewColor(hex) {
@@ -302,10 +357,49 @@ function bindStaticListeners() {
         draft.dirty.injection = true;
     });
 
-    $modal.on('change.cw', '#cw-inj-lorebook', function () {
+    // Combobox: open on focus / click, filter as the user types.
+    $modal.on('focus.cw click.cw', '#cw-inj-lorebook', function () {
+        openLorebookCombo();
+    });
+    $modal.on('input.cw', '#cw-inj-lorebook', function () {
+        openLorebookCombo();
+        renderLorebookComboList($(this).val());
+        // Don't commit yet — only on selection or blur. But mark dirty so
+        // a Save right after typing a literal name still persists.
         if (!draft) return;
-        draft.injection.lorebook = String($(this).val() || '');
+        draft.injection.lorebook = String($(this).val() || '').trim();
         draft.dirty.injection = true;
+    });
+    $modal.on('keydown.cw', '#cw-inj-lorebook', function (e) {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            closeLorebookCombo();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            // Pick the first match in the current filter.
+            const first = $modal.find('#cw-inj-lorebook-list li[data-value]').first();
+            if (first.length) commitLorebookSelection(first.attr('data-value') || '');
+        }
+    });
+    $modal.on('click.cw', '#cw-inj-lorebook-toggle', function (e) {
+        e.preventDefault();
+        if ($modal.find('#cw-inj-lorebook-combo').hasClass('is-open')) {
+            closeLorebookCombo();
+        } else {
+            openLorebookCombo();
+            $modal.find('#cw-inj-lorebook').trigger('focus');
+        }
+    });
+    $modal.on('mousedown.cw', '#cw-inj-lorebook-list li[data-value]', function (e) {
+        e.preventDefault(); // keep input focus
+        commitLorebookSelection($(this).attr('data-value') || '');
+    });
+    // Click outside the combobox closes it.
+    $modal.on('click.cw', function (e) {
+        if (!$modal.find('#cw-inj-lorebook-combo').hasClass('is-open')) return;
+        if ($(e.target).closest('#cw-inj-lorebook-combo').length === 0) {
+            closeLorebookCombo();
+        }
     });
 
     $modal.on('click.cw', '#cw-portrait-clear', () => {
