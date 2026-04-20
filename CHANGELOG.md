@@ -1,10 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [1.9.0] - 2026-04-20
 
 ### Added
-- **Character Workshop** — a unified per-character editor modal. Right-click a portrait and pick **Open in Workshop** to edit that character's dialogue color, portrait, and Bunny Mo character sheet from one screen. Split-pane layout with a live portrait preview in the left rail; edits are staged until you click **Save** (Cancel throws them away). The Trackers tab explains that per-turn tracker values are AI-generated and routes you to the existing Tracker Editor for field-definition changes. Feature-flagged behind `extensionSettings.characterWorkshopEnabled` (default `true`).
-- **Character Roster** — a grid view of every character with a saved portrait, color, or roster entry. Opens from **Open Character Roster** in the Present Characters Panel accordion in settings. Click a tile to open that character in the Workshop; click **+ New Character** to add a brand-new one by name. Includes live search.
+- **Character Workshop** — a unified per-character editor modal. Right-click a portrait and pick **Open in Workshop** to edit that character's dialogue color, portrait, and injection extras from one screen. Split-pane layout with a live portrait preview in the left rail; edits are staged until you click **Save** (Cancel throws them away). Tabs: **Identity** (read-only name + relationship), **Appearance** (portrait upload, dialogue color with full palette + custom-color dropper, expression-folder shortcut), **Injection** (brief description + attached lorebook). Tied to the Present Characters Panel feature toggle.
+- **Inject into Scene** — Workshop footer action that adds the character to the active known-characters roster, queues a one-shot extension prompt instructing the AI to incorporate them in the next response, and (if a lorebook is attached) activates that lorebook for the next generation. The injection prompt is automatically cleared on the next `GENERATION_ENDED` *or* the next `GENERATION_STARTED` (whichever fires first), so it's truly one-shot even with regenerate / streaming.
+- **Character Roster** — a grid view of every character with a saved portrait, color, or roster entry. Opens from a button in the portrait-bar header *and* from **Open Character Roster** in the Present Characters Panel accordion. Live search, scope pills (**All / This chat / Currently in scene**), active-in-scene indicator on tiles, right-click context menu with **Open in Workshop** and **Delete character** entries, **+ New Character** tile to add brand-new characters by name.
+- **Side-mode portrait bar** — two new positions for the Present Characters Panel: **Left Side** and **Right Side**. Side mode floats over the chat as a vertical strip with cards stacked top-to-bottom. Settings: **Columns** (1 wide / 2 wide), **Alignment** (Top / Bottom — Bottom uses `flex-wrap: wrap-reverse` so active characters glue to the bottom edge). Collapses to a thin handle via the existing chevron toggle.
+- **Show Expression in Tooltip** toggle (Settings → Present Characters Panel → Expressions). When on, hovering a portrait card shows `Name — happy` / `Name — angry` / etc. based on the most recent classification. Labels persist per-chat across reloads.
+- **Info popup** (circle-i button) on the Expressions subsection header explaining DES handles expressions natively (no separate ST extension needed) and how to drop sprite PNGs into a character's expression folder.
+
+### Changed
+- **Portrait-bar context menu**: "Remove Character" renamed to "Remove from panel" with a softer icon. The action is now a soft remove (preserves Workshop data) — character is hidden from the current chat's panel only. Full delete moved to the Workshop's Delete button and the Roster's right-click → Delete.
+- **Per-Chat Character Tracking** moved out of the Expressions subsection into its own **Roster** subsection so its scope reads correctly.
+- **Tracker Editor**: `openTrackerEditor` is now exported so the Workshop's Trackers tab handoff can call it directly (the previous `#rpg-open-tracker-editor` click target was orphaned).
+
+### Fixed
+- Portrait-bar character lookups now read `data-char` instead of the `title` attribute, so the new expression-tooltip decoration (`Name — emotion`) doesn't leak into action paths like Open Expression Folder (which previously created stray `Celestine — realization`-style folders on disk).
+- The roster's "Open Character Roster" settings button is hidden when the Present Characters Panel toggle is off, instead of staying clickable for a disabled feature.
+- Workshop's Delete and Roster's Delete now wipe the same set of persistence stores (including `characterInjection` extras), so the two paths can't leave residue for the other.
+- Side-mode panel honors the chosen DES theme via `--rpg-bg`.
+- Inner side-mode bar background flattened so cards sit on a single surface instead of nested layers.
+- Side-mode 2-wide column count now actually fits two cards per row (the panel-width calc didn't account for each card's 1px border).
 
 ## [1.5.7] - 2026-02-23
 

@@ -20382,3 +20382,31 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 #dooms-portrait-bar-wrapper.dooms-pb-position-right.dooms-pb-collapsed-side {
     width: var(--dooms-pb-side-toggle-w, 22px);
 }
+
+/* ============================================================================
+   Mobile Lore Library — enlarge the on/off toggle hit area so taps don't
+   drift to the surrounding row (which would switch panels and look like
+   the toggle did nothing). The visible pill stays its current size; an
+   invisible ::after extends the touch surface to the 44px Apple/Google
+   minimum. touch-action: manipulation suppresses iOS's 300ms double-tap
+   delay so the toggle responds immediately.
+   ============================================================================ */
+@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+    .rpg-lb-toggle {
+        position: relative;
+        touch-action: manipulation;
+    }
+    .rpg-lb-toggle::after {
+        content: '';
+        position: absolute;
+        /* Expand hit area to ~44px in both directions, centered on the pill. */
+        inset: -13px -5px;
+        z-index: 1;
+    }
+    /* Make sure the row's click handler still gets the toggle as e.target
+       when the user lands inside the expanded hit area, so the row's
+       'closest .rpg-lb-toggle' bail-out check fires. */
+    .rpg-lb-toggle * {
+        pointer-events: none;
+    }
+}
