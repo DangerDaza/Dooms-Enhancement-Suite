@@ -1462,6 +1462,9 @@ async function initUI() {
     $('#rpg-expression-batch-row').toggle((extensionSettings.expressionClassifierApi || 'local') === 'llm');
     $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
     $('#rpg-pb-show-expression-in-tooltip').prop('checked', extensionSettings.showExpressionInTooltip === true);
+    // Hide the 'Open Character Roster' settings button when the workshop
+    // feature flag is off so the disabled feature isn't discoverable.
+    $('#rpg-open-character-roster').toggle(extensionSettings.characterWorkshopEnabled !== false);
     $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');

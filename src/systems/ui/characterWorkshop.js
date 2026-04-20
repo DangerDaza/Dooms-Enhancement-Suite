@@ -543,6 +543,10 @@ function deleteCharacter(name) {
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
     if (extensionSettings.knownCharacters) delete extensionSettings.knownCharacters[name];
     if (extensionSettings.heroPositions) delete extensionSettings.heroPositions[name];
+    // Match characterRoster.purgeCharacter — wipe Workshop-specific
+    // injection extras too (description / lorebook attachment) so
+    // delete-from-Workshop and delete-from-Roster are symmetric.
+    if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     saveSettings();
     try {
         clearPortraitCache();

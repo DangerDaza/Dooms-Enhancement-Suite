@@ -240,8 +240,5 @@
     "settings.recommendedModels.title": "Recommended Models",
     "settings.recommendedModels.description": "For the extension to work properly, **it is not recommended to use any models below 20B, especially if they're old.** It works best with the SOTA models such as Deepseek, Claude, GPT, or Gemini.",
     "characterWorkshop.confirmDelete": "Delete \"{name}\" from this chat's roster?\n\nThis removes the portrait, dialogue color, and known-character entry. Sheet data is kept.",
-    "characterWorkshop.untitledSection": "(untitled)",
-    "characterWorkshop.contextMenuItem": "Open in Workshop",
-    "characterWorkshop.saveRefreshWarning": "Failed to refresh portrait bar after save",
-    "characterWorkshop.saveSheetWarning": "Failed to save character sheet"
+    "characterWorkshop.contextMenuItem": "Open in Workshop"
 }

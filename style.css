@@ -13851,64 +13851,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     border-color: rgba(100, 200, 100, 0.6);
 }
 
-/* Restore popup */
-.dooms-pb-restore-popup {
-    position: fixed;
-    z-index: 10001;
-    background: rgba(20, 20, 30, 0.97);
-    border: 1px solid rgba(100, 200, 100, 0.3);
-    border-radius: 8px;
-    padding: 8px;
-    min-width: 180px;
-    max-width: 280px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-}
-.dooms-pb-restore-header {
-    font-size: 0.75em;
-    color: rgba(100, 200, 100, 0.8);
-    padding: 2px 4px 6px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    margin-bottom: 4px;
-}
-.dooms-pb-restore-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 6px;
-    font-size: 0.75em;
-    color: #ccc;
-    border-radius: 4px;
-}
-.dooms-pb-restore-item:hover { background: rgba(255,255,255,0.05); }
-.dooms-pb-restore-item-btn {
-    background: none;
-    border: none;
-    color: rgba(100, 200, 100, 0.7);
-    cursor: pointer;
-    padding: 2px 6px;
-    font-size: 1em;
-}
-.dooms-pb-restore-item-btn:hover { color: rgba(100, 200, 100, 1); }
-.dooms-pb-restore-footer {
-    border-top: 1px solid rgba(255,255,255,0.08);
-    margin-top: 4px;
-    padding-top: 6px;
-    text-align: center;
-}
-.dooms-pb-restore-all-btn {
-    background: rgba(100, 200, 100, 0.15);
-    border: 1px solid rgba(100, 200, 100, 0.3);
-    color: rgba(100, 200, 100, 0.8);
-    border-radius: 4px;
-    padding: 3px 12px;
-    font-size: 0.7em;
-    cursor: pointer;
-}
-.dooms-pb-restore-all-btn:hover {
-    background: rgba(100, 200, 100, 0.25);
-    color: rgba(100, 200, 100, 1);
-}
-
 /* Scroll container */
 .dooms-pb-scroll {
     display: flex;
@@ -19441,71 +19383,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 #character-workshop-popup .rpg-color-swatch.selected {
     border-color: #fff;
     box-shadow: 0 0 0 2px var(--rpg-highlight, #e94560);
-}
-
-/* Sheet section accordions */
-#character-workshop-popup .rpg-sheet-section {
-    border: 1px solid rgba(74, 123, 167, 0.35);
-    border-radius: 0.3rem;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-    background: rgba(255, 255, 255, 0.025);
-}
-#character-workshop-popup .rpg-sheet-section-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 0.7rem;
-    background: rgba(0, 0, 0, 0.25);
-    cursor: pointer;
-    user-select: none;
-}
-#character-workshop-popup .rpg-sheet-section-header .emoji { font-size: 1.1rem; }
-#character-workshop-popup .rpg-sheet-section-header .num {
-    color: rgba(234, 234, 234, 0.55);
-    font-size: var(--modal-font-small, 0.8rem);
-    font-variant-numeric: tabular-nums;
-}
-#character-workshop-popup .rpg-sheet-section-header .title {
-    flex: 1;
-    color: var(--rpg-text, #eaeaea);
-    font-weight: 600;
-    font-size: var(--modal-font-base, 0.9rem);
-}
-#character-workshop-popup .rpg-sheet-section-header .chev {
-    color: rgba(234, 234, 234, 0.5);
-    transition: transform 0.2s;
-}
-#character-workshop-popup .rpg-sheet-section.open .rpg-sheet-section-header .chev {
-    transform: rotate(90deg);
-    color: var(--rpg-highlight, #e94560);
-}
-#character-workshop-popup .rpg-sheet-section-body {
-    display: none;
-    padding: 0.6rem 0.7rem;
-    border-top: 1px solid rgba(74, 123, 167, 0.35);
-}
-#character-workshop-popup .rpg-sheet-section.open .rpg-sheet-section-body { display: block; }
-
-/* "+ Add section" / "+ Add row" ghost buttons */
-#character-workshop-popup .rpg-add-row {
-    appearance: none;
-    background: transparent;
-    border: 1px dashed var(--rpg-border, #4a7ba7);
-    border-radius: 0.3rem;
-    color: rgba(234, 234, 234, 0.7);
-    padding: 0.5rem;
-    font: inherit;
-    font-size: var(--modal-font-small, 0.8rem);
-    cursor: pointer;
-    width: 100%;
-    margin-top: 0.5rem;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-#character-workshop-popup .rpg-add-row:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: var(--rpg-highlight, #e94560);
-    color: var(--rpg-text, #eaeaea);
 }
 
 /* Footer spacer expands to push primary actions right */
