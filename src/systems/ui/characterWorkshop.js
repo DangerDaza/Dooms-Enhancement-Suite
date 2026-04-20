@@ -126,6 +126,7 @@ export function openCharacterWorkshop(characterName) {
     draft = buildDraft(characterName);
 
     renderTitle();
+    renderHiddenBanner();
     renderIdentity();
     renderAppearance();
     renderInjection();
@@ -248,6 +249,45 @@ function resolveCurrentRelationship(name) {
 
 function renderTitle() {
     $modal.find('#cw-char-title').text(draft.name);
+}
+
+function isHiddenFromPanel(name) {
+    try {
+        const removed = getActiveRemovedCharacters();
+        if (!Array.isArray(removed)) return false;
+        const lower = String(name || '').toLowerCase();
+        return removed.some(n => typeof n === 'string' && n.toLowerCase() === lower);
+    } catch (e) { return false; }
+}
+
+function renderHiddenBanner() {
+    const hidden = !!draft && isHiddenFromPanel(draft.name);
+    $modal.find('#cw-hidden-banner').prop('hidden', !hidden);
+}
+
+function restoreCharacterToPanel() {
+    if (!draft) return;
+    const name = draft.name;
+    try {
+        const removed = getActiveRemovedCharacters();
+        if (Array.isArray(removed) && removed.length) {
+            const lower = String(name || '').toLowerCase();
+            for (let i = removed.length - 1; i >= 0; i--) {
+                if (typeof removed[i] === 'string' && removed[i].toLowerCase() === lower) {
+                    removed.splice(i, 1);
+                }
+            }
+            saveCharacterRosterChange();
+        }
+        clearPortraitCache();
+        updatePortraitBar();
+    } catch (e) {
+        console.warn('[Dooms Tracker] Workshop: restoreCharacterToPanel failed', e);
+    }
+    renderHiddenBanner();
+    try {
+        if (window.toastr) window.toastr.success(`"${name}" returned to the panel.`, 'Character Workshop', { timeOut: 3000 });
+    } catch (e) {}
 }
 
 function renderIdentity() {
@@ -430,6 +470,7 @@ function bindStaticListeners() {
     });
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
+    $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
     $modal.on('click.cw', function (e) {
         if (e.target === this) closeCharacterWorkshop();
     });

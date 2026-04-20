@@ -20563,3 +20563,30 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.55; }
 }
+
+/* Workshop banner shown when the open character is currently hidden from
+   the chat's Present Characters panel. Lets the user one-click restore. */
+#character-workshop-popup .cw-hidden-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem calc(var(--modal-padding) * 1.5);
+    background: rgba(233, 69, 96, 0.12);
+    border-bottom: 1px solid var(--rpg-border, #4a7ba7);
+    color: var(--rpg-text);
+    font-size: var(--modal-font-small, 0.8rem);
+    flex-shrink: 0;
+}
+#character-workshop-popup .cw-hidden-banner[hidden] { display: none; }
+#character-workshop-popup .cw-hidden-banner i {
+    color: var(--rpg-highlight, #e94560);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+#character-workshop-popup .cw-hidden-banner span {
+    flex: 1;
+    line-height: 1.35;
+}
+#character-workshop-popup .cw-hidden-banner #cw-hidden-restore {
+    flex-shrink: 0;
+}

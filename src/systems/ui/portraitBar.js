@@ -214,8 +214,8 @@ export function initPortraitBar() {
                 <i class="fa-solid fa-face-smile"></i> Open Expression Folder
             </div>
             <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item" data-action="remove-character" title="Hide from this chat's Present Characters panel — data is kept in the Workshop Roster">
-                <i class="fa-solid fa-user-minus"></i> Remove from panel
+            <div class="dooms-pb-ctx-item" data-action="remove-character" title="Hide from this chat's Present Characters panel — character stays in the Workshop where you can Return them later">
+                <i class="fa-solid fa-user-minus"></i> Send to Workshop
             </div>
         </div>
     `;

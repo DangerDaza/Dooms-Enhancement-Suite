@@ -2013,6 +2013,17 @@
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
 
+        <!-- Shown when the open character is currently hidden from the chat's
+             Present Characters panel (in removedCharacters). Click Return to
+             lift the blacklist. -->
+        <div id="cw-hidden-banner" class="cw-hidden-banner" hidden>
+            <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+            <span>Hidden from this chat's Present Characters panel. Manage here, or restore the portrait card below.</span>
+            <button type="button" class="rpg-btn" id="cw-hidden-restore">
+                <i class="fa-solid fa-rotate-left"></i> Return to panel
+            </button>
+        </div>
+
         <div class="workshop-split">
 
             <!-- LEFT RAIL: live preview + section nav -->
