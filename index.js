@@ -418,7 +418,7 @@ async function initUI() {
     });
     $('#rpg-pb-side-columns').on('change', function() {
         const cols = parseInt($(this).val(), 10);
-        extensionSettings.portraitSideColumns = (cols >= 1 && cols <= 3) ? cols : 1;
+        extensionSettings.portraitSideColumns = (cols >= 1 && cols <= 2) ? cols : 1;
         saveSettings();
         try { applySideModeStyling(); } catch (e) {}
     });

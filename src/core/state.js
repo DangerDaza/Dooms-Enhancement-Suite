@@ -254,7 +254,7 @@ export let extensionSettings = {
     portraitAlignment: 'left', // Portrait bar alignment: 'left' (inline) or 'center'
     portraitPosition: 'above', // Portrait bar position: 'above', 'below', 'top', 'left', or 'right'
     portraitSidePush: false,    // Side mode: push chat aside (true) or hover over chat (false)
-    portraitSideColumns: 1,     // Side mode: number of card columns (1, 2, or 3)
+    portraitSideColumns: 1,     // Side mode: number of card columns (1 or 2)
     portraitBarSettings: {
         cardWidth: 110,              // Portrait card width in px
         cardHeight: 150,             // Portrait card height in px

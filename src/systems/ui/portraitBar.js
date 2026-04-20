@@ -610,7 +610,8 @@ export function applySideModeStyling() {
     // would only reach the panel, not the chat container, causing the
     // push calc to fall back to 1 column regardless of the actual setting.
     const cols = Number(extensionSettings.portraitSideColumns) || 1;
-    const safeCols = cols < 1 ? 1 : cols > 3 ? 3 : cols;
+    // Clamp to 1-2; 3+ saved from earlier builds gets pulled back to 2.
+    const safeCols = cols < 1 ? 1 : cols > 2 ? 2 : cols;
     document.documentElement.style.setProperty('--dooms-pb-side-cols', safeCols);
     $wrapper.css('--dooms-pb-side-cols', safeCols);
 
