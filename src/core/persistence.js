@@ -15,6 +15,9 @@ import {
     syncedExpressionPortraits,
     setSyncedExpressionPortraits,
     clearSyncedExpressionPortraits,
+    syncedExpressionLabels,
+    setSyncedExpressionLabels,
+    clearSyncedExpressionLabels,
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
@@ -379,6 +382,7 @@ export function saveChatData() {
         lastGeneratedData: lastGeneratedData,
         committedTrackerData: committedTrackerData,
         syncedExpressionPortraits: syncedExpressionPortraits,
+        syncedExpressionLabels: syncedExpressionLabels,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
         characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
         timestamp: Date.now()
@@ -518,6 +522,12 @@ export function loadChatData() {
         setSyncedExpressionPortraits(savedData.syncedExpressionPortraits);
     } else {
         clearSyncedExpressionPortraits();
+    }
+    // Restore synced expression labels (used by the portrait-tooltip toggle).
+    if (savedData.syncedExpressionLabels && typeof savedData.syncedExpressionLabels === 'object') {
+        setSyncedExpressionLabels(savedData.syncedExpressionLabels);
+    } else {
+        clearSyncedExpressionLabels();
     }
     // Restore Doom Counter state (per-chat counter data)
     // This is exported so doomCounter.js can access it on chat load

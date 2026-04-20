@@ -480,6 +480,17 @@ export function setSyncedExpressionLabel(characterName, label) {
     if (!characterName || !label) return;
     syncedExpressionLabels[_normExprKey(characterName)] = label;
 }
+export function setSyncedExpressionLabels(labels) {
+    if (labels && typeof labels === 'object') {
+        const next = {};
+        for (const [k, v] of Object.entries(labels)) {
+            if (k && v) next[_normExprKey(k)] = v;
+        }
+        syncedExpressionLabels = next;
+    } else {
+        syncedExpressionLabels = {};
+    }
+}
 export function getSyncedExpressionLabel(characterName) {
     return syncedExpressionLabels[_normExprKey(characterName)] || null;
 }
