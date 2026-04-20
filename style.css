@@ -20329,28 +20329,31 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: none;
 }
 
-/* Push-aside layout: when toggled on, the chat container (#sheld)
-   gets a side margin so it reflows next to the bar instead of being
-   overlapped. Body margin would have no effect because #sheld is
-   positioned/sized independently of body's content box. Width matches
-   the bar width — same calc to stay in sync with the columns setting. */
+/* Push-aside layout: when toggled on, reserve horizontal space inside
+   #sheld (the chat container) via padding so its children — #chat
+   and #form_sheld — reflow next to the side bar instead of being
+   overlapped. Padding works regardless of whether #sheld is
+   position: absolute or flex, where margin would be ignored for
+   absolute-positioned elements. */
 body.dooms-pb-side-push-left #sheld {
-    margin-left: calc(
+    padding-left: calc(
         var(--dooms-pb-side-cols, 1) * var(--dooms-pb-card-w, 110px)
         + (var(--dooms-pb-side-cols, 1) - 1) * 8px
         + 20px
         + var(--dooms-pb-side-toggle-w, 22px)
-    );
-    transition: margin-left 0.2s ease;
+    ) !important;
+    box-sizing: border-box;
+    transition: padding-left 0.2s ease;
 }
 body.dooms-pb-side-push-right #sheld {
-    margin-right: calc(
+    padding-right: calc(
         var(--dooms-pb-side-cols, 1) * var(--dooms-pb-card-w, 110px)
         + (var(--dooms-pb-side-cols, 1) - 1) * 8px
         + 20px
         + var(--dooms-pb-side-toggle-w, 22px)
-    );
-    transition: margin-right 0.2s ease;
+    ) !important;
+    box-sizing: border-box;
+    transition: padding-right 0.2s ease;
 }
 
 /* Right mode bar order — keep toggle on the chat-facing edge. */
@@ -20361,10 +20364,10 @@ body.dooms-pb-side-push-right #sheld {
 #dooms-portrait-bar-wrapper.dooms-pb-position-right.dooms-pb-collapsed-side {
     width: var(--dooms-pb-side-toggle-w, 22px);
 }
-/* Push-aside margin shrinks with the collapsed wrapper so chat reflows. */
+/* Collapsed: shrink the push padding to just the toggle-handle width. */
 body.dooms-pb-side-push-left.dooms-pb-side-push-collapsed #sheld {
-    margin-left: var(--dooms-pb-side-toggle-w, 22px);
+    padding-left: var(--dooms-pb-side-toggle-w, 22px) !important;
 }
 body.dooms-pb-side-push-right.dooms-pb-side-push-collapsed #sheld {
-    margin-right: var(--dooms-pb-side-toggle-w, 22px);
+    padding-right: var(--dooms-pb-side-toggle-w, 22px) !important;
 }
