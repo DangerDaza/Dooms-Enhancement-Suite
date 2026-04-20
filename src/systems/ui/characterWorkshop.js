@@ -69,8 +69,11 @@ function t(key, fallback, vars) {
 }
 
 export function initCharacterWorkshop() {
-    if (extensionSettings?.characterWorkshopEnabled === false) {
-        console.log('[Dooms Tracker] Character Workshop disabled via setting, skipping init');
+    // Workshop is part of the Present Characters Panel feature set;
+    // when PCP is disabled the Workshop has nothing useful to do, so
+    // we early-return and skip listener registration.
+    if (extensionSettings?.showPortraitBar === false) {
+        console.log('[Dooms Tracker] Character Workshop disabled (Present Characters Panel off), skipping init');
         return;
     }
     window.addEventListener('dooms:open-workshop', (e) => {

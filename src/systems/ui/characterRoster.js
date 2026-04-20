@@ -34,8 +34,10 @@ let searchQuery = '';
 let scope = 'all'; // 'all' | 'chat' | 'active'
 
 export function initCharacterRoster() {
-    if (extensionSettings?.characterWorkshopEnabled === false) {
-        console.log('[Dooms Tracker] Character Roster disabled (workshop feature flag off), skipping init');
+    // Roster is part of the Present Characters Panel feature set; when
+    // PCP is off there's nothing to roster.
+    if (extensionSettings?.showPortraitBar === false) {
+        console.log('[Dooms Tracker] Character Roster disabled (Present Characters Panel off), skipping init');
         return;
     }
     // The button lives inside the settings popup template; delegate from

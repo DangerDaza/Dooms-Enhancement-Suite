@@ -388,10 +388,14 @@ async function initUI() {
     });
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
     $('#rpg-toggle-portrait-bar').on('change', function() {
-        extensionSettings.showPortraitBar = $(this).prop('checked');
+        const on = $(this).prop('checked');
+        extensionSettings.showPortraitBar = on;
         saveSettings();
         updatePortraitBar();
-        $('#rpg-pb-badge').text($(this).prop('checked') ? 'on' : 'off');
+        $('#rpg-pb-badge').text(on ? 'on' : 'off');
+        // Workshop/Roster are part of PCP — track the live toggle.
+        $('#rpg-open-character-roster').toggle(on);
+        $('#dooms-pb-open-roster').toggle(on);
     });
     $('#rpg-portrait-alignment').on('change', function() {
         extensionSettings.portraitAlignment = $(this).val();
@@ -1462,9 +1466,9 @@ async function initUI() {
     $('#rpg-expression-batch-row').toggle((extensionSettings.expressionClassifierApi || 'local') === 'llm');
     $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
     $('#rpg-pb-show-expression-in-tooltip').prop('checked', extensionSettings.showExpressionInTooltip === true);
-    // Hide the 'Open Character Roster' settings button when the workshop
-    // feature flag is off so the disabled feature isn't discoverable.
-    $('#rpg-open-character-roster').toggle(extensionSettings.characterWorkshopEnabled !== false);
+    // Hide the 'Open Character Roster' settings button when PCP is off —
+    // the Workshop is part of the Present Characters Panel feature set.
+    $('#rpg-open-character-roster').toggle(extensionSettings.showPortraitBar !== false);
     $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');

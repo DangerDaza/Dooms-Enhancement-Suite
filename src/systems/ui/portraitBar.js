@@ -297,7 +297,9 @@ export function initPortraitBar() {
         // Show "Character Sheet" only when Bunny Mo integration is enabled
         $menu.find('[data-action="character-sheet"]').toggle(!!extensionSettings.bunnyMoIntegration);
         // Show "Open in Workshop" unless explicitly disabled via feature flag.
-        $menu.find('[data-action="open-workshop"]').toggle(extensionSettings.characterWorkshopEnabled !== false);
+        // Workshop tracks the PCP toggle; if PCP is off the menu item
+        // wouldn't be reachable anyway, but keep the gate for defensiveness.
+        $menu.find('[data-action="open-workshop"]').toggle(extensionSettings.showPortraitBar !== false);
 
         // Position near the cursor, clamped to viewport
         $menu.css({ display: 'block', top: 0, left: 0 });
@@ -362,11 +364,11 @@ export function initPortraitBar() {
     // ── Open Character Roster button ──
     $('#dooms-pb-open-roster').on('click', function (e) {
         e.stopPropagation();
-        if (extensionSettings.characterWorkshopEnabled === false) return;
+        if (extensionSettings.showPortraitBar === false) return;
         window.dispatchEvent(new CustomEvent('dooms:open-roster'));
     });
-    // Hide the roster button entirely if the workshop feature is disabled.
-    if (extensionSettings.characterWorkshopEnabled === false) {
+    // Hide the roster button when PCP is off (Workshop is part of PCP).
+    if (extensionSettings.showPortraitBar === false) {
         $('#dooms-pb-open-roster').hide();
     }
 

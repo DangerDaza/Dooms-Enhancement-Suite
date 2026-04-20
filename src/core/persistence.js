@@ -320,11 +320,11 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 15;
                 settingsChanged = true;
             }
-            // Migration to version 16: Initialize Character Workshop feature flag
+            // Migration to version 16: previously seeded a Character Workshop
+            // feature flag. Workshop now follows extensionSettings.showPortraitBar
+            // (PCP toggle) instead — keeping the version bump so the migration
+            // chain stays monotonic, no property writes needed.
             if (currentVersion < 16) {
-                if (extensionSettings.characterWorkshopEnabled === undefined) {
-                    extensionSettings.characterWorkshopEnabled = true;
-                }
                 extensionSettings.settingsVersion = 16;
                 settingsChanged = true;
             }
