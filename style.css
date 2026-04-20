@@ -20192,26 +20192,58 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 #dooms-portrait-bar-wrapper.dooms-pb-position-left  { left: 0;  border-right: 1px solid rgba(74, 123, 167, 0.4); }
 #dooms-portrait-bar-wrapper.dooms-pb-position-right { right: 0; border-left:  1px solid rgba(74, 123, 167, 0.4); }
 
-/* The bar itself fills the wrapper minus the toggle handle */
+/* The bar itself fills the wrapper minus the toggle handle. Override
+   the max-height/overflow caps from the horizontal-mode rules
+   (.dooms-portrait-bar.dooms-pb-expanded { max-height: 400px }
+   .dooms-portrait-bar { overflow: hidden }) which would clip side mode
+   to a 400px tall sliver. */
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-portrait-bar,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-portrait-bar {
     flex: 1 1 auto;
     min-height: 0;
+    max-height: none;
+    height: auto;
+    overflow: visible;
     display: flex;
     flex-direction: column;
     padding: var(--dooms-pb-side-pad);
     box-sizing: border-box;
 }
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-portrait-bar.dooms-pb-expanded,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-portrait-bar.dooms-pb-expanded {
+    max-height: none;
+    padding: var(--dooms-pb-side-pad);
+}
 
-/* Header: vertical stack at the top of the side panel */
+/* Header: vertical stack at the top of the side panel. Override the
+   horizontal-mode 'flex-direction: row' so title / count / roster
+   button don't try to share a single line in a narrow column. */
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-header,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-header {
+    display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
-    padding-bottom: 6px;
+    padding: 0 4px 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     margin-bottom: 8px;
+    flex-shrink: 0;
+}
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-header .dooms-pb-title,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-header .dooms-pb-title,
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-header .dooms-pb-count,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-header .dooms-pb-count {
+    text-align: center;
+    line-height: 1.25;
+}
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-header .dooms-pb-title,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-header .dooms-pb-title {
+    justify-content: center;
+}
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-header .dooms-pb-roster-btn,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-header .dooms-pb-roster-btn {
+    align-self: center;
+    margin-left: 0;
 }
 
 /* Hide the horizontal scroll arrows in side mode — vertical scroll is native */
