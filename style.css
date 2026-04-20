@@ -20183,7 +20183,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     /* Side mode lays out wrapper as a row: cards-pane + toggle handle. */
     display: flex;
     flex-direction: row;
-    background: rgba(0, 0, 0, 0.55);
+    /* Solid fill by default so cards sit on their own surface instead of
+       showing the chat behind them. Falls back to an opaque dark if the
+       DES theme token isn't present on :root. */
+    background: var(--rpg-bg, rgba(20, 20, 30, 0.96));
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow: 0 0 18px rgba(0, 0, 0, 0.55);
