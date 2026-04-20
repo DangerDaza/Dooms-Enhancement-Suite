@@ -20289,12 +20289,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-scroll.dooms-pb-centered,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-scroll.dooms-pb-centered {
-    /* In side mode the Alignment dropdown's two options become TOP / BOTTOM
-       (the JS label swap is in index.js). 'Inline (Left)' -> Top keeps the
-       default flex-start. 'Centered' -> Bottom anchors cards to the bottom
-       edge of the bar via align-content: flex-end. */
+    /* 'Bottom' alignment in side mode. Use flex-wrap: wrap-reverse to
+       flip the cross axis so row 1 (= the first DOM items, which are
+       the active characters) lands at the very bottom of the bar;
+       subsequent rows (absent characters) stack ABOVE the actives.
+       align-content: flex-start is correct here because wrap-reverse
+       already inverted the cross axis, so 'start' = bottom. */
     justify-content: flex-start;
-    align-content: flex-end;
+    flex-wrap: wrap-reverse;
+    align-content: flex-start;
 }
 /* Cards keep their existing --dooms-pb-card-w/h sizing — no overrides. */
 
