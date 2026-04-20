@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.9.1] - 2026-04-20
+
+### Added
+- **Relationship chips are now interactive.** In the Workshop's Identity tab, click a chip (Lover / Friend / Ally / Enemy / Neutral) to set a **persistent override** for that character; click the already-selected chip to clear. The override wins over the AI's per-turn classification, is used on Roster tile badges, and is threaded into the Inject prompt ("Relationship to the player: X. Reflect this dynamic…"). Stored globally in `extensionSettings.characterRelationships` (v21 migration).
+- **Description (bio + appearance)** — the Injection tab's description field was relabeled and its placeholder rewritten to cue physical details explicitly. No data change; the existing field now has clearer UX.
+- **Attach portrait to message (vision models only)** — new toggle in the Workshop's Injection tab. When on, clicking **Inject into Scene** also stamps the character's portrait onto your next outgoing user message (`extra.image` + `inline_image`) so Claude 3.x / GPT-4o / Gemini / etc. can actually see them. Silently no-ops on text-only models. Off by default; global setting (v22 migration).
+- **Character appears in the panel immediately on Inject.** Previously a freshly-injected character only showed up in the Present row after the AI's next response confirmed them; now they pop in on click and persist through reload until the AI updates the scene.
+- **INJECTING overlay + Cancel Injection.** The portrait card gets a pulsing `INJECTING…` overlay with a highlight ring while an inject is pending. Right-click the card for a new **Cancel Injection** action — clears the extension prompt, disarms the portrait-attach listener, removes the character from the Present row, all without touching their Workshop data / lorebook / roster entry.
+- **Workshop restore banner.** Opening a character that's been soft-hidden shows a banner under the header: *"Hidden from this chat's Present Characters panel. Manage here, or restore the portrait card below."* with a one-click **Return to panel** button.
+
+### Changed
+- **"Remove from panel"** in the portrait-bar right-click menu is now labeled **"Send to Workshop"** — matches the mental model that the Workshop is where a hidden character's data lives. Tooltip clarifies it's a soft hide, not a delete.
+- **Inject un-hides automatically.** If the character was previously soft-hidden, Inject now also removes them from the removed-characters blacklist so the splice actually lands on the panel.
+- **Inject prompt gets more context.** When you've set a relationship override, it's now included in the one-shot scene direction; toastr feedback lists every extra applied (relationship, description, lorebook, portrait).
+
+### Fixed
+- Soft-hiding a character used to be a one-way trap after the 1.9.0 removal of the old "Restore removed characters" button. Any Workshop session on a hidden character now exposes the restore path clearly, and Inject also un-hides, so the blacklist can't leave characters permanently stuck.
+
 ## [1.9.0] - 2026-04-20
 
 ### Added
