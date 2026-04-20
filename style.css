@@ -20199,7 +20199,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    the max-height/overflow caps from the horizontal-mode rules
    (.dooms-portrait-bar.dooms-pb-expanded { max-height: 400px }
    .dooms-portrait-bar { overflow: hidden }) which would clip side mode
-   to a 400px tall sliver. */
+   to a 400px tall sliver. Also flatten the horizontal-mode gradient
+   background so we only see the wrapper's theme fill (no nested
+   layers). */
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-portrait-bar,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-portrait-bar {
     flex: 1 1 auto;
@@ -20207,6 +20209,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     max-height: none;
     height: auto;
     overflow: visible;
+    background: transparent;
     display: flex;
     flex-direction: column;
     padding: var(--dooms-pb-side-pad);
@@ -20273,6 +20276,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     justify-content: flex-start;
     flex: 1 1 auto;
     min-height: 0;
+    /* Hide the scrollbar chrome but keep the ability to scroll. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-scroll::-webkit-scrollbar,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-scroll.dooms-pb-centered,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-scroll.dooms-pb-centered {
