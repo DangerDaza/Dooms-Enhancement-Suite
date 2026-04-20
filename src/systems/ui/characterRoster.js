@@ -30,6 +30,7 @@ const REL_EMOJI = {
 
 let $modal = null;
 let listenersBound = false;
+let _crInitialized = false; // guard: don't double-register document/window listeners
 let searchQuery = '';
 let scope = 'all'; // 'all' | 'chat' | 'active'
 
@@ -59,6 +60,11 @@ export function initCharacterRoster() {
         console.log('[Dooms Tracker] Character Roster disabled (Present Characters Panel off), skipping init');
         return;
     }
+    // Idempotency guard: prevent double-registration of the settings-button
+    // click delegate and the window 'dooms:open-roster' listener if init
+    // runs twice.
+    if (_crInitialized) return;
+    _crInitialized = true;
     // The button lives inside the settings popup template; delegate from
     // document so we catch clicks even if the popup is re-rendered.
     $(document).on('click.cr', '#rpg-open-character-roster', () => openCharacterRoster());

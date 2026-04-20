@@ -50,6 +50,7 @@ const DIALOGUE_COLORS = [
 let draft = null;
 let $modal = null;
 let listenersBound = false;
+let _wsInitialized = false; // guard: don't double-register window/eventSource listeners
 let pendingInjectClear = false; // true while an inject prompt is queued
 // Number of GENERATION_STARTED fires to let pass before clearing. Set to 1
 // at inject time; the generation the inject was for passes without clearing,
@@ -93,6 +94,12 @@ export function initCharacterWorkshop() {
         console.log('[Dooms Tracker] Character Workshop disabled (Present Characters Panel off), skipping init');
         return;
     }
+    // Idempotency guard: if init runs twice (extension hot-reload, manual
+    // re-init, etc.) don't double-register the window + eventSource
+    // listeners — doing so duplicates every open-workshop / cancel-inject
+    // / generation-ended handler and leads to subtle state corruption.
+    if (_wsInitialized) return;
+    _wsInitialized = true;
     window.addEventListener('dooms:open-workshop', (e) => {
         const name = e?.detail?.characterName;
         if (name) openCharacterWorkshop(name);
