@@ -468,14 +468,20 @@ export function clearSyncedExpressionPortraits() {
  * Session-only storage for the current expression LABEL per character
  * (e.g. "happy", "angry"). Populated alongside syncedExpressionPortraits
  * so UI can surface the label in tooltips without re-classifying.
+ *
+ * Keys are stored lowercase + trimmed (matching expressionSync.js's
+ * normalizeName) so lookups don't have to know about normalization.
  */
 export let syncedExpressionLabels = {};
+function _normExprKey(name) {
+    return String(name || '').trim().toLowerCase();
+}
 export function setSyncedExpressionLabel(characterName, label) {
     if (!characterName || !label) return;
-    syncedExpressionLabels[characterName] = label;
+    syncedExpressionLabels[_normExprKey(characterName)] = label;
 }
 export function getSyncedExpressionLabel(characterName) {
-    return syncedExpressionLabels[characterName] || null;
+    return syncedExpressionLabels[_normExprKey(characterName)] || null;
 }
 export function clearSyncedExpressionLabels() {
     syncedExpressionLabels = {};
