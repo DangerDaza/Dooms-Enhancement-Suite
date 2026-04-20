@@ -20329,31 +20329,34 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     display: none;
 }
 
-/* Push-aside layout: when toggled on, reserve horizontal space inside
-   #sheld (the chat container) via padding so its children — #chat
-   and #form_sheld — reflow next to the side bar instead of being
-   overlapped. Padding works regardless of whether #sheld is
-   position: absolute or flex, where margin would be ignored for
-   absolute-positioned elements. */
+/* Push-aside: shift the chat container visually without shrinking its
+   width. Using padding/margin would constrain #sheld's usable width,
+   and SillyTavern's message column is width-percentage based so it
+   would look cramped. transform: translateX moves the whole container
+   over by the panel width while the chat keeps its natural layout.
+   overflow-x: hidden on body suppresses the horizontal scrollbar that
+   the translated element would otherwise create on its trailing edge. */
+body.dooms-pb-side-push-left,
+body.dooms-pb-side-push-right {
+    overflow-x: hidden;
+}
 body.dooms-pb-side-push-left #sheld {
-    padding-left: calc(
+    transform: translateX(calc(
         var(--dooms-pb-side-cols, 1) * var(--dooms-pb-card-w, 110px)
         + (var(--dooms-pb-side-cols, 1) - 1) * 8px
         + 20px
         + var(--dooms-pb-side-toggle-w, 22px)
-    ) !important;
-    box-sizing: border-box;
-    transition: padding-left 0.2s ease;
+    ));
+    transition: transform 0.2s ease;
 }
 body.dooms-pb-side-push-right #sheld {
-    padding-right: calc(
+    transform: translateX(calc(-1 * (
         var(--dooms-pb-side-cols, 1) * var(--dooms-pb-card-w, 110px)
         + (var(--dooms-pb-side-cols, 1) - 1) * 8px
         + 20px
         + var(--dooms-pb-side-toggle-w, 22px)
-    ) !important;
-    box-sizing: border-box;
-    transition: padding-right 0.2s ease;
+    )));
+    transition: transform 0.2s ease;
 }
 
 /* Right mode bar order — keep toggle on the chat-facing edge. */
@@ -20364,10 +20367,10 @@ body.dooms-pb-side-push-right #sheld {
 #dooms-portrait-bar-wrapper.dooms-pb-position-right.dooms-pb-collapsed-side {
     width: var(--dooms-pb-side-toggle-w, 22px);
 }
-/* Collapsed: shrink the push padding to just the toggle-handle width. */
+/* Collapsed: shrink the translate to just the toggle-handle width. */
 body.dooms-pb-side-push-left.dooms-pb-side-push-collapsed #sheld {
-    padding-left: var(--dooms-pb-side-toggle-w, 22px) !important;
+    transform: translateX(var(--dooms-pb-side-toggle-w, 22px));
 }
 body.dooms-pb-side-push-right.dooms-pb-side-push-collapsed #sheld {
-    padding-right: var(--dooms-pb-side-toggle-w, 22px) !important;
+    transform: translateX(calc(-1 * var(--dooms-pb-side-toggle-w, 22px)));
 }
