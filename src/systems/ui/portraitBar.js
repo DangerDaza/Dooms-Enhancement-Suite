@@ -605,8 +605,13 @@ export function applySideModeStyling() {
     if (!$wrapper.length) return;
 
     // Always update the column var so it tracks even if mode flips back.
+    // Set on :root so both the panel wrapper AND the body.dooms-pb-side-push-*
+    // rules (which translate #sheld) can read it — a wrapper-scoped var
+    // would only reach the panel, not the chat container, causing the
+    // push calc to fall back to 1 column regardless of the actual setting.
     const cols = Number(extensionSettings.portraitSideColumns) || 1;
     const safeCols = cols < 1 ? 1 : cols > 3 ? 3 : cols;
+    document.documentElement.style.setProperty('--dooms-pb-side-cols', safeCols);
     $wrapper.css('--dooms-pb-side-cols', safeCols);
 
     $('body').removeClass('dooms-pb-side-push-left dooms-pb-side-push-right dooms-pb-side-push-collapsed');
