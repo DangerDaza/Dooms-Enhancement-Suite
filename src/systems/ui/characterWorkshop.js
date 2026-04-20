@@ -55,6 +55,19 @@ let pendingInjectClear = false; // true while an inject prompt is queued
 // any subsequent START triggers a clear in case GENERATION_ENDED never fired.
 let injectStartsToSkip = 0;
 
+// Characters currently mid-inject. Keyed lowercase so lookups are stable
+// regardless of casing. Each entry tracks anything we need to undo on
+// either a natural completion or a manual Cancel.
+const pendingInjects = new Map(); // name.toLowerCase() -> { name, disarmAttach: fn|null }
+
+function broadcastInjectState(name, pending) {
+    try {
+        window.dispatchEvent(new CustomEvent('dooms:inject-state-changed', {
+            detail: { name, pending: !!pending },
+        }));
+    } catch (e) {}
+}
+
 function t(key, fallback, vars) {
     let s;
     try {
@@ -82,6 +95,12 @@ export function initCharacterWorkshop() {
     window.addEventListener('dooms:open-workshop', (e) => {
         const name = e?.detail?.characterName;
         if (name) openCharacterWorkshop(name);
+    });
+    // Portrait-bar (or any other surface) can request a pending-inject be
+    // cancelled via this event. Same decoupling pattern as open-workshop.
+    window.addEventListener('dooms:cancel-inject', (e) => {
+        const name = e?.detail?.name;
+        if (name) cancelInject(name);
     });
     // Clear the inject prompt after the targeted generation. Belt-and-
     // suspenders: trigger from ENDED/STOPPED (normal path) and also from
@@ -125,6 +144,59 @@ export function closeCharacterWorkshop() {
     $modal.removeClass('is-open').addClass('is-closing');
     setTimeout(() => $modal.removeClass('is-closing').hide(), 200);
     draft = null;
+}
+
+/**
+ * Is this character currently mid-inject (post-click, pre-AI-reply)?
+ * Case-insensitive. Used by portraitBar to decide whether to show the
+ * INJECTING overlay + Cancel Injection context-menu item.
+ */
+export function isInjectPending(name) {
+    if (!name) return false;
+    return pendingInjects.has(String(name).toLowerCase());
+}
+
+/**
+ * Cancel a pending inject for this character:
+ *  - clears the SillyTavern extension prompt so the AI doesn't receive the
+ *    one-shot scene-direction text
+ *  - disarms the portrait-attach MESSAGE_SENT listener if armed
+ *  - removes the character from the present list (undoes cw-57's splice)
+ *  - removes them from the pending set and broadcasts the new state
+ * Leaves knownCharacters, Workshop data, and lorebook activation alone —
+ * those were either pre-existing or user-chosen, and keeping them avoids
+ * surprise data loss.
+ */
+export function cancelInject(name) {
+    if (!name) return;
+    const key = String(name).toLowerCase();
+    const entry = pendingInjects.get(key);
+    if (!entry) return;
+
+    // Clear the extension-prompt text if this cancel is for the most
+    // recently armed inject. If multiple were queued in rapid succession,
+    // we optimistically clear — a subsequent GENERATION_ENDED would have
+    // cleared it anyway.
+    try {
+        setExtensionPrompt(INJECT_SLOT, '', extension_prompt_types.IN_PROMPT, 0, false);
+    } catch (e) { /* best-effort */ }
+    pendingInjectClear = false;
+    injectStartsToSkip = 0;
+
+    // Disarm the portrait-attach listener if one was armed for this char.
+    try { entry.disarmAttach?.(); } catch (e) {}
+
+    // Undo the "present now" splice so the character no longer sits in the
+    // panel as though they were in the scene.
+    try { unmarkCharacterPresentNow(entry.name); } catch (e) {}
+
+    pendingInjects.delete(key);
+    broadcastInjectState(entry.name, false);
+
+    try {
+        if (window.toastr) window.toastr.info(`Inject cancelled for "${entry.name}".`, 'Character Workshop', { timeOut: 3000 });
+    } catch (e) {}
+    console.log(`[Dooms Tracker] Workshop: inject cancelled for "${entry.name}"`);
 }
 
 // ---------------------------------------------------------------------------
@@ -699,10 +771,16 @@ function injectIntoScene(name) {
     //    user's next outgoing message; SillyTavern's Generate then includes
     //    that image in the request payload (multimodal APIs only).
     let attached = false;
+    let disarmAttach = null;
     if (extensionSettings?.injectAttachPortrait === true && draft?.avatar) {
-        armPortraitAttach(trimmed, draft.avatar);
+        disarmAttach = armPortraitAttach(trimmed, draft.avatar);
         attached = true;
     }
+
+    // 5b. Track this character as mid-inject so the portrait-bar can show
+    //     an 'INJECTING' overlay and a right-click Cancel menu item.
+    pendingInjects.set(trimmed.toLowerCase(), { name: trimmed, disarmAttach });
+    broadcastInjectState(trimmed, true);
 
     // 6. User feedback
     try {
@@ -778,6 +856,31 @@ function markCharacterPresentNow(name) {
 }
 
 /**
+ * Reverse of markCharacterPresentNow — removes the splice from
+ * lastGeneratedData.characterThoughts so the character no longer appears
+ * in the Present row. Best-effort; silent on any structural surprise.
+ */
+function unmarkCharacterPresentNow(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const raw = lastGeneratedData?.characterThoughts;
+    if (!raw) return;
+    let parsed;
+    try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (e) { return; }
+    if (!parsed || !Array.isArray(parsed.characters)) return;
+    const lower = trimmed.toLowerCase();
+    const before = parsed.characters.length;
+    parsed.characters = parsed.characters.filter(c => typeof c?.name !== 'string' || c.name.toLowerCase() !== lower);
+    if (parsed.characters.length === before) return;
+    try { updateLastGeneratedData({ characterThoughts: JSON.stringify(parsed) }); } catch (e) {}
+    try { saveChatData(); } catch (e) {}
+    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    try { renderThoughts(); } catch (e) {}
+}
+
+/**
  * One-shot: when the user next sends a message, stamp the character's
  * portrait onto that message's `extra.image` so SillyTavern's Generate
  * includes the image in the outgoing request (vision-capable models).
@@ -785,6 +888,12 @@ function markCharacterPresentNow(name) {
  */
 function armPortraitAttach(name, dataUrl) {
     let consumed = false;
+    const disarm = () => {
+        if (consumed) return;
+        consumed = true;
+        try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+        try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+    };
     const onSent = () => {
         if (consumed) return;
         consumed = true;
@@ -795,7 +904,7 @@ function armPortraitAttach(name, dataUrl) {
             const chat = ctx?.chat;
             if (!Array.isArray(chat) || chat.length === 0) return;
             const last = chat[chat.length - 1];
-            if (!last || last.is_user === false) return; // shouldn't happen; defensive
+            if (!last || last.is_user === false) return;
             if (!last.extra || typeof last.extra !== 'object') last.extra = {};
             last.extra.image = dataUrl;
             last.extra.inline_image = true;
@@ -809,14 +918,9 @@ function armPortraitAttach(name, dataUrl) {
     } catch (e) {
         console.warn('[Dooms Tracker] Workshop: failed to register MESSAGE_SENT for portrait attach', e);
     }
-    // Self-disarm after 2 minutes if the user never sends a message, so the
-    // listener doesn't pile up across multiple unconsumed injects.
-    setTimeout(() => {
-        if (consumed) return;
-        consumed = true;
-        try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
-        try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
-    }, 2 * 60 * 1000);
+    // Self-disarm after 2 minutes if the user never sends a message.
+    setTimeout(() => disarm(), 2 * 60 * 1000);
+    return disarm;
 }
 
 function exportDraft() {
@@ -883,6 +987,11 @@ function clearInjectPromptIfPending() {
     } finally {
         pendingInjectClear = false;
         injectStartsToSkip = 0;
+        // Inject completed naturally (AI responded) — mark everyone no-longer-pending.
+        for (const [, entry] of pendingInjects) {
+            broadcastInjectState(entry.name, false);
+        }
+        pendingInjects.clear();
     }
 }
 

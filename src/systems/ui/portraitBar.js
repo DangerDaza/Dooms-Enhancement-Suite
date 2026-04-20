@@ -124,6 +124,26 @@ let isExpanded = true;
 /** Tracks character names from the previous render to detect new arrivals */
 let _previousCharacterNames = new Set();
 
+// Characters currently mid-inject. Populated via the
+// 'dooms:inject-state-changed' window event dispatched by characterWorkshop.js
+// — kept decoupled so this module doesn't import the workshop directly.
+// Keys are lowercased for stable lookup.
+const _injectingNames = new Set();
+
+// Register the listener once at module load — safe even if init hasn't
+// been called yet.
+try {
+    window.addEventListener('dooms:inject-state-changed', (e) => {
+        const name = e?.detail?.name;
+        const pending = !!e?.detail?.pending;
+        if (!name) return;
+        const key = String(name).toLowerCase();
+        if (pending) _injectingNames.add(key);
+        else _injectingNames.delete(key);
+        try { updatePortraitBar(); } catch (err) {}
+    });
+} catch (e) {}
+
 /** Whether we've done the initial render (skip entrance anim on first load) */
 let _initialRenderDone = false;
 
@@ -167,6 +187,9 @@ export function initPortraitBar() {
         <div id="dooms-pb-context-menu" class="dooms-pb-context-menu" style="display:none;">
             <div class="dooms-pb-ctx-item" data-action="open-workshop">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Open in Workshop
+            </div>
+            <div class="dooms-pb-ctx-item dooms-pb-ctx-danger" data-action="cancel-inject" style="display:none;">
+                <i class="fa-solid fa-ban"></i> Cancel Injection
             </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="upload">
@@ -311,6 +334,10 @@ export function initPortraitBar() {
         // Workshop tracks the PCP toggle; if PCP is off the menu item
         // wouldn't be reachable anyway, but keep the gate for defensiveness.
         $menu.find('[data-action="open-workshop"]').toggle(extensionSettings.showPortraitBar !== false);
+        // 'Cancel Injection' only shows when this character is currently
+        // mid-inject (post-click, pre-AI-reply).
+        const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
+        $menu.find('[data-action="cancel-inject"]').toggle(isPending);
 
         // Position near the cursor, clamped to viewport
         $menu.css({ display: 'block', top: 0, left: 0 });
@@ -360,6 +387,8 @@ export function initPortraitBar() {
             openExpressionFolder(characterName);
         } else if (action === 'open-workshop') {
             window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName } }));
+        } else if (action === 'cancel-inject') {
+            window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         }
     });
 
@@ -488,20 +517,27 @@ export function updatePortraitBar() {
             if (expr) cardTitle = `${nameEsc} — ${escapeHtml(expr)}`;
         }
 
+        const injectingClass = _injectingNames.has(char.name.toLowerCase()) ? ' dooms-pb-injecting' : '';
+        const injectingOverlay = injectingClass
+            ? '<div class="dooms-pb-injecting-overlay" aria-hidden="true"><span>INJECTING&hellip;</span></div>'
+            : '';
+
         if (portraitSrc) {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
                 <img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                 <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;
         } else {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
                 <div class="dooms-portrait-card-emoji">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;

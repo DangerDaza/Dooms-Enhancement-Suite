@@ -20521,3 +20521,45 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* Explicit full-height class is a no-op structurally (matches the base
    fixed top+bottom the wrapper already has), but the class exists so JS
    can toggle it deterministically without race conditions. */
+
+/* ============================================================================
+   Portrait card — 'INJECTING…' overlay while a character's scene-inject
+   is pending (post-click, pre-AI-reply). A subtle pulsing label sits on
+   top of the card; card itself gets a highlight ring. Cleared when the
+   inject completes naturally or the user right-clicks -> Cancel Injection.
+   ============================================================================ */
+.dooms-portrait-card.dooms-pb-injecting {
+    outline: 2px solid var(--rpg-highlight, #e94560);
+    outline-offset: -2px;
+    box-shadow: 0 0 14px rgba(233, 69, 96, 0.4);
+}
+.dooms-pb-injecting-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.55));
+    pointer-events: none;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 0.72em;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: #fff;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px var(--rpg-highlight, #e94560), 0 1px 2px rgba(0, 0, 0, 0.75);
+    animation: dooms-pb-injecting-pulse 1.4s ease-in-out infinite;
+}
+.dooms-pb-injecting-overlay span {
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+@keyframes dooms-pb-injecting-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
