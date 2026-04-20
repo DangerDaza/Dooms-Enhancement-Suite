@@ -273,7 +273,12 @@ export function initPortraitBar() {
     $(document).on('contextmenu', '.dooms-portrait-card', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        const characterName = $(this).attr('title');
+        // Read from data-char (canonical name). The title attr can contain
+        // the tooltip decoration 'Name — expression' when the expression
+        // tooltip toggle is on, which would then flow through every
+        // action (open-folder, colors, etc.) as if the expression were
+        // part of the name.
+        const characterName = $(this).attr('data-char') || $(this).attr('title');
         if (!characterName) return;
 
         const $menu = $('#dooms-pb-context-menu');
@@ -752,7 +757,7 @@ async function probePortraitFileUrl(name, basePath) {
             if (response.ok) {
                 portraitFileCache.set(name, testUrl);
                 // Update DOM if the card is still showing the optimistic .png
-                const $img = $(`.dooms-portrait-card[title="${escapeAttr(name)}"] img`);
+                const $img = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"] img`);
                 if ($img.length && $img.attr('src') !== testUrl) {
                     $img.attr('src', testUrl);
                 }
@@ -773,7 +778,7 @@ async function probePortraitFileUrl(name, basePath) {
 
     // If no npcAvatar either, show emoji fallback
     if (!(extensionSettings.npcAvatars && extensionSettings.npcAvatars[name])) {
-        const $card = $(`.dooms-portrait-card[title="${escapeAttr(name)}"]`);
+        const $card = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"]`);
         if ($card.length && $card.find('img').length) {
             const $img = $card.find('img');
             $img.hide();
