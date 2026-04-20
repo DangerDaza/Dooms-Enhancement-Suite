@@ -20288,7 +20288,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-scroll.dooms-pb-centered,
 #dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-scroll.dooms-pb-centered {
+    /* Center horizontally AND vertically. Without the align-content tweak
+       the cards would stack from the top of a tall side panel even with
+       only a couple of active characters. */
     justify-content: center;
+    align-content: center;
 }
 /* Cards keep their existing --dooms-pb-card-w/h sizing — no overrides. */
 
