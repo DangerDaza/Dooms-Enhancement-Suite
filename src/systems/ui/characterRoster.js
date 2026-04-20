@@ -18,6 +18,8 @@ import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar } from './portraitBar.js';
 
+let contextMenuTarget = ''; // character name currently under right-click
+
 const REL_EMOJI = {
     Lover: '❤️',
     Friend: '⭐',
@@ -85,7 +87,41 @@ function bindListeners() {
     });
     // Esc key while modal is open
     $(document).on('keydown.cr', (e) => {
-        if (e.key === 'Escape' && $modal.hasClass('is-open')) closeCharacterRoster();
+        if (e.key !== 'Escape') return;
+        // If the context menu is open, Esc only closes that.
+        if (!$modal.find('#cr-context-menu').prop('hidden')) {
+            hideContextMenu();
+            return;
+        }
+        if ($modal.hasClass('is-open')) closeCharacterRoster();
+    });
+
+    // Right-click a tile → open contextual menu
+    $modal.on('contextmenu.cr', '.cr-tile[data-character]', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        contextMenuTarget = $(this).attr('data-character') || '';
+        showContextMenu(e.clientX, e.clientY);
+    });
+    // Plain left-click anywhere in the modal hides the menu if open.
+    $modal.on('mousedown.cr', function (e) {
+        if ($(e.target).closest('#cr-context-menu').length) return;
+        hideContextMenu();
+    });
+    // Act on menu item
+    $modal.on('click.cr', '.cr-context-item', function () {
+        const action = $(this).attr('data-action');
+        const name = contextMenuTarget;
+        hideContextMenu();
+        if (!name) return;
+        if (action === 'edit') {
+            closeCharacterRoster();
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name } }));
+            }, 220);
+        } else if (action === 'delete') {
+            confirmAndDelete(name);
+        }
     });
 
     // Live search
@@ -233,4 +269,59 @@ function escapeAttr(s) {
 }
 function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function showContextMenu(x, y) {
+    const $menu = $modal.find('#cr-context-menu');
+    if (!$menu.length) return;
+    $menu.css({ visibility: 'hidden' }).prop('hidden', false);
+    // Clamp to viewport so the menu doesn't spill off the screen.
+    const menuW = $menu.outerWidth() || 180;
+    const menuH = $menu.outerHeight() || 80;
+    const maxX = window.innerWidth - menuW - 6;
+    const maxY = window.innerHeight - menuH - 6;
+    $menu.css({
+        left: Math.max(6, Math.min(x, maxX)) + 'px',
+        top: Math.max(6, Math.min(y, maxY)) + 'px',
+        visibility: 'visible',
+    });
+}
+
+function hideContextMenu() {
+    const $menu = $modal?.find('#cr-context-menu');
+    if ($menu && $menu.length) $menu.prop('hidden', true);
+    contextMenuTarget = '';
+}
+
+function confirmAndDelete(name) {
+    const ok = window.confirm(
+        `Delete "${name}" from this chat's roster?\n\n` +
+        `Removes the portrait, dialogue color, relationship/hero position, ` +
+        `known-character entry, and any Workshop injection extras (description / lorebook). ` +
+        `Sheet data is kept.`
+    );
+    if (!ok) return;
+    purgeCharacter(name);
+    renderGrid();
+    try {
+        clearPortraitCache();
+        updatePortraitBar();
+    } catch (e) {
+        console.warn('[Dooms Tracker] Roster: failed to refresh portrait bar after delete', e);
+    }
+    try {
+        if (window.toastr) window.toastr.info(`Deleted "${name}".`, 'Roster', { timeOut: 3000 });
+    } catch (e) {}
+}
+
+function purgeCharacter(name) {
+    const s = extensionSettings;
+    if (!s) return;
+    if (s.characterColors) delete s.characterColors[name];
+    if (s.npcAvatars) delete s.npcAvatars[name];
+    if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];
+    if (s.knownCharacters) delete s.knownCharacters[name];
+    if (s.heroPositions) delete s.heroPositions[name];
+    if (s.characterInjection) delete s.characterInjection[name];
+    saveSettings();
 }

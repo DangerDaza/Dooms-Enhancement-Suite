@@ -20040,3 +20040,40 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     opacity: 0.6;
     font-style: italic;
 }
+
+/* Character Roster right-click context menu */
+#character-roster-popup .cr-context-menu {
+    position: fixed;
+    z-index: 10010;
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    min-width: 180px;
+    background: var(--rpg-bg, rgba(30, 30, 30, 0.98));
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 0.3rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
+    color: var(--rpg-text, #eaeaea);
+    font-size: var(--modal-font-small, 0.8rem);
+}
+#character-roster-popup .cr-context-menu[hidden] { display: none; }
+#character-roster-popup .cr-context-item {
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+}
+#character-roster-popup .cr-context-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-roster-popup .cr-context-item.cr-context-danger {
+    color: #ff9090;
+}
+#character-roster-popup .cr-context-item.cr-context-danger:hover {
+    background: rgba(214, 48, 49, 0.15);
+    color: #ffb4b4;
+}

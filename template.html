@@ -2036,6 +2036,15 @@
                         <p class="helper">Used for this character's dialogue in chat and the name label on the portrait card.</p>
                         <div class="rpg-color-palette" id="cw-palette" role="radiogroup" aria-label="Dialogue color"></div>
                     </div>
+                    <div class="rpg-editor-section">
+                        <h4>Expressions</h4>
+                        <p class="helper">Expression sprites live in <code>data/default-user/characters/&lt;name&gt;/</code>. Open the folder to add <code>happy.png</code>, <code>sad.png</code>, etc.; DES's expression sync will pick them up automatically.</p>
+                        <div class="stack" style="max-width: 320px;">
+                            <button class="rpg-btn" type="button" id="cw-open-expressions">
+                                <i class="fa-solid fa-folder-open"></i> Open expression folder
+                            </button>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- INJECTION -->
@@ -2115,9 +2124,19 @@
             <span class="spacer"></span>
             <span class="cr-tip muted">
                 <i class="fa-regular fa-lightbulb" aria-hidden="true"></i>
-                Tip: click a tile to edit, or use <strong>+ New Character</strong> to add one.
+                Tip: click a tile to edit, right-click for more, or use <strong>+ New Character</strong>.
             </span>
         </footer>
+
+        <!-- Right-click context menu (positioned absolutely on open) -->
+        <ul class="cr-context-menu" id="cr-context-menu" role="menu" hidden>
+            <li class="cr-context-item" data-action="edit" role="menuitem">
+                <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Open in Workshop
+            </li>
+            <li class="cr-context-item cr-context-danger" data-action="delete" role="menuitem">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete character
+            </li>
+        </ul>
     </section>
 </div>
 

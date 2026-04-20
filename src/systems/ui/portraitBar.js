@@ -941,7 +941,7 @@ function removePortrait(characterName) {
 /**
  * Opens the character's expression/sprite folder in the OS file explorer.
  */
-async function openExpressionFolder(characterName) {
+export async function openExpressionFolder(characterName) {
     try {
         const response = await fetch('/api/sprites/open-folder', {
             method: 'POST',

@@ -18,7 +18,7 @@ import {
     getActiveKnownCharacters,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
-import { clearPortraitCache, updatePortraitBar } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder } from './portraitBar.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 import {
@@ -399,6 +399,15 @@ function bindStaticListeners() {
         if (!$modal.find('#cw-inj-lorebook-combo').hasClass('is-open')) return;
         if ($(e.target).closest('#cw-inj-lorebook-combo').length === 0) {
             closeLorebookCombo();
+        }
+    });
+
+    $modal.on('click.cw', '#cw-open-expressions', () => {
+        if (!draft) return;
+        try {
+            openExpressionFolder(draft.name);
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: openExpressionFolder failed', e);
         }
     });
 
