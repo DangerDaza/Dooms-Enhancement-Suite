@@ -20261,8 +20261,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* Scroll container is a wrapping flex row so:
    - Cards keep their natural 110x150 dimensions (no stretch/squash).
-   - Alignment follows the Inline/Centered setting — the shared
-     .dooms-pb-centered class still toggles justify-content.
+   - Alignment follows the Top/Bottom setting (the Alignment dropdown is
+     relabeled to Top/Bottom whenever side mode is active — see
+     relabelPortraitAlignmentOptions in index.js). In side mode the
+     .dooms-pb-centered class means Bottom and switches flex-wrap to
+     wrap-reverse so active characters land at the bottom of the bar.
    - A partial last row (fewer cards than column count) centers or
      left-aligns per the setting, instead of always left. */
 #dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-scroll,
