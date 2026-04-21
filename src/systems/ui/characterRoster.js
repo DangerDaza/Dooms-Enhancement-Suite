@@ -564,9 +564,12 @@ function importCharacterPayload(payload) {
     if (inj) {
         const desc = typeof inj.description === 'string' ? inj.description.trim() : '';
         const book = typeof inj.lorebook === 'string' ? inj.lorebook.trim() : '';
-        if (desc || book) {
+        const tpl = typeof inj.promptTemplate === 'string' ? inj.promptTemplate.trim() : '';
+        if (desc || book || tpl) {
             if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
-            extensionSettings.characterInjection[targetName] = { description: desc, lorebook: book };
+            const entry = { description: desc, lorebook: book };
+            if (tpl) entry.promptTemplate = tpl;
+            extensionSettings.characterInjection[targetName] = entry;
         }
     }
 

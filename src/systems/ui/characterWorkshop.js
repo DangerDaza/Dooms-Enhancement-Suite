@@ -35,6 +35,27 @@ import { getContext } from '../../../../../../extensions.js';
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
 
+// Default scene-direction template. Users can override per-character via the
+// Injection tab. Supports {name}/{description}/{lorebook}/{relationship}
+// substitution plus conditional blocks {?var}...{/var} that are emitted only
+// when the variable is a non-empty string.
+const DEFAULT_INJECT_PROMPT =
+`[SCENE DIRECTION — INJECT CHARACTER]
+Incorporate the character "{name}" into your next response. Have them arrive, reveal themselves, or otherwise become present in a way that fits the current scene naturally. Include them in your presentCharacters tracker output for this turn.
+{?relationship}
+Relationship to the player: {relationship}. Reflect this dynamic in how they act and speak.
+{/relationship}{?description}
+
+Character notes for "{name}":
+{description}
+{/description}{?lorebook}
+
+The lorebook "{lorebook}" has been activated for additional context about this character; consult its entries as relevant.
+{/lorebook}
+
+This is a one-time direction from the user; do not mention these bracketed instructions in your reply.
+`;
+
 // Dialogue color palette copied verbatim from portraitBar.js:29-38.
 const DIALOGUE_COLORS = [
     '#e94560', '#e07b39', '#f0c040', '#2ecc71',
@@ -232,6 +253,7 @@ function buildDraft(name) {
         injection: {
             description: typeof inj.description === 'string' ? inj.description : '',
             lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
+            promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
         },
         dirty: { color: false, avatar: false, injection: false, relationship: false },
     };
@@ -351,6 +373,7 @@ let lorebookOptions = [];
 
 function renderInjection() {
     $modal.find('#cw-inj-description').val(draft.injection.description || '');
+    $modal.find('#cw-inj-prompt').val(draft.injection.promptTemplate || '');
 
     // Refresh the available lorebook list.
     try {
@@ -554,6 +577,19 @@ function bindStaticListeners() {
         draft.dirty.injection = true;
     });
 
+    $modal.on('input.cw change.cw', '#cw-inj-prompt', function () {
+        if (!draft) return;
+        draft.injection.promptTemplate = String($(this).val() || '');
+        draft.dirty.injection = true;
+    });
+    $modal.on('click.cw', '#cw-inj-prompt-reset', function (e) {
+        e.preventDefault();
+        if (!draft) return;
+        draft.injection.promptTemplate = DEFAULT_INJECT_PROMPT;
+        draft.dirty.injection = true;
+        $modal.find('#cw-inj-prompt').val(DEFAULT_INJECT_PROMPT).trigger('focus');
+    });
+
     // "Attach portrait to message" — global setting (not per-character).
     // Persisted immediately on toggle so it sticks even if the user closes
     // the Workshop with Cancel.
@@ -705,8 +741,16 @@ function commitDraft() {
         if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
         const desc = (draft.injection.description || '').trim();
         const book = (draft.injection.lorebook || '').trim();
-        if (desc || book) {
-            extensionSettings.characterInjection[name] = { description: desc, lorebook: book };
+        // Only persist the template when it actually differs from the
+        // default — this keeps settings compact for unmodified characters
+        // and lets us ship default-prompt changes in the future without
+        // every character being pinned to the old text.
+        const tplRaw = (draft.injection.promptTemplate || '').trim();
+        const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
+        if (desc || book || tpl) {
+            const entry = { description: desc, lorebook: book };
+            if (tpl) entry.promptTemplate = tpl;
+            extensionSettings.characterInjection[name] = entry;
         } else {
             delete extensionSettings.characterInjection[name];
         }
@@ -791,11 +835,12 @@ function injectIntoScene(name) {
         console.warn('[Dooms Tracker] Workshop: failed to mark character present', e);
     }
 
-    // 2. Resolve any persisted injection extras (description + lorebook + relationship).
+    // 2. Resolve any persisted injection extras (description + lorebook + relationship + prompt template).
     const stored = extensionSettings?.characterInjection?.[trimmed] || {};
     const description = (draft.injection?.description ?? stored.description ?? '').trim();
     const lorebook = (draft.injection?.lorebook ?? stored.lorebook ?? '').trim();
     const relationship = (draft.relationship || extensionSettings?.characterRelationships?.[trimmed] || '').trim();
+    const promptTemplate = (draft.injection?.promptTemplate ?? stored.promptTemplate ?? '').trim();
 
     // 3. If a lorebook is attached and not already active, activate it so
     //    SillyTavern's WI engine pulls from it for the next generation.
@@ -811,7 +856,7 @@ function injectIntoScene(name) {
     }
 
     // 4. One-shot prompt
-    const prompt = buildInjectPrompt(trimmed, { description, lorebook, relationship });
+    const prompt = buildInjectPrompt(trimmed, { description, lorebook, relationship, promptTemplate });
     try {
         setExtensionPrompt(
             INJECT_SLOT,
@@ -999,6 +1044,7 @@ function exportDraft() {
         injection: {
             description: draft.injection?.description || '',
             lorebook: draft.injection?.lorebook || '',
+            promptTemplate: draft.injection?.promptTemplate || '',
         },
     };
     const json = JSON.stringify(payload, null, 2);
@@ -1020,25 +1066,25 @@ function exportDraft() {
 }
 
 function buildInjectPrompt(name, extras) {
-    const description = extras?.description || '';
-    const lorebook = extras?.lorebook || '';
-    const relationship = extras?.relationship || '';
-    let out =
-        `[SCENE DIRECTION — INJECT CHARACTER]\n` +
-        `Incorporate the character "${name}" into your next response. ` +
-        `Have them arrive, reveal themselves, or otherwise become present in a way that fits the current scene naturally. ` +
-        `Include them in your presentCharacters tracker output for this turn.`;
-    if (relationship) {
-        out += `\n\nRelationship to the player: ${relationship}. Reflect this dynamic in how they act and speak.`;
-    }
-    if (description) {
-        out += `\n\nCharacter notes for "${name}":\n${description}`;
-    }
-    if (lorebook) {
-        out += `\n\nThe lorebook "${lorebook}" has been activated for additional context about this character; consult its entries as relevant.`;
-    }
-    out += `\n\nThis is a one-time direction from the user; do not mention these bracketed instructions in your reply.\n`;
-    return out;
+    const vars = {
+        name: String(name || ''),
+        description: String(extras?.description || ''),
+        lorebook: String(extras?.lorebook || ''),
+        relationship: String(extras?.relationship || ''),
+    };
+    const raw = (extras?.promptTemplate || '').trim();
+    const template = raw || DEFAULT_INJECT_PROMPT;
+    // Emit conditional blocks {?var}...{/var} only when the variable is
+    // non-empty, then substitute plain {var} placeholders.
+    let out = template.replace(/\{\?(\w+)\}([\s\S]*?)\{\/\1\}/g, (_, key, body) => {
+        return vars[key] ? body : '';
+    });
+    out = out.replace(/\{(\w+)\}/g, (match, key) => {
+        return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match;
+    });
+    // Collapse runs of 3+ newlines that empty conditional blocks can leave
+    // behind so the final prompt stays tidy regardless of which vars are set.
+    return out.replace(/\n{3,}/g, '\n\n');
 }
 
 function clearInjectPromptIfPending() {

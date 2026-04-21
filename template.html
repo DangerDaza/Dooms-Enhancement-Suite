@@ -2132,6 +2132,19 @@
                         </div>
                     </div>
                     <div class="rpg-editor-section">
+                        <h4>Injection prompt <span class="muted" style="font-weight: normal; font-size: 0.85em;">(advanced)</span></h4>
+                        <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>, <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable is filled in.</p>
+                        <div class="rpg-field">
+                            <label for="cw-inj-prompt" class="sr-only">Injection prompt template</label>
+                            <textarea id="cw-inj-prompt" class="rpg-textarea" rows="10" spellcheck="false" placeholder="(Default scene-direction prompt will be used. Click Reset to default to load it here and customize.)"></textarea>
+                        </div>
+                        <div class="rpg-field rpg-field-row" style="justify-content: flex-end; gap: 0.5em;">
+                            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-inj-prompt-reset" title="Load the default template into the editor">
+                                <i class="fa-solid fa-rotate-left"></i> Reset to default
+                            </button>
+                        </div>
+                    </div>
+                    <div class="rpg-editor-section">
                         <h4>Attach portrait to message</h4>
                         <p class="helper">When on, clicking <strong>Inject into Scene</strong> also attaches this character's portrait to your next user message so vision-capable models (Claude 3.x, GPT-4o, Gemini, etc.) can actually see them. Silently no-ops on text-only models &mdash; the description above is your reliable channel either way.</p>
                         <div class="rpg-field rpg-field-row" style="align-items:center;">
