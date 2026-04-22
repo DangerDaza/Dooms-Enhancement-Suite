@@ -221,6 +221,14 @@ async function addExtensionSettings() {
     $('#dooms-github-star-btn').on('click', function() {
         window.open('https://github.com/DangerDaza/Dooms-Enhancement-Suite', '_blank', 'noopener,noreferrer');
     });
+    fetch('https://api.github.com/repos/DangerDaza/Dooms-Enhancement-Suite', { headers: { 'Accept': 'application/vnd.github+json' } })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+            if (data && typeof data.stargazers_count === 'number') {
+                $('#dooms-github-star-btn .dooms-github-star-count').text(data.stargazers_count.toLocaleString());
+            }
+        })
+        .catch(() => {});
 }
 /**
  * Populates the Connection Profile dropdown from the Connection Manager extension.
