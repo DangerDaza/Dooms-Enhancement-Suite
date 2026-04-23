@@ -17,8 +17,9 @@ import { extensionFolderPath } from '../../core/config.js';
 import { saveSettings, getActiveKnownCharacters, getActiveRemovedCharacters, getActiveCharacterColors, saveCharacterRosterChange } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
-import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
+import { this_chid, characters, chat_metadata, getRequestHeaders, user_avatar } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
+import { getContext } from '../../../../../../extensions.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
 import { openCharacterSheet } from './characterSheet.js';
 
@@ -670,6 +671,40 @@ function namesMatch(cardName, aiName) {
 }
 
 /**
+ * Returns the active persona's display name, or null if unavailable.
+ * Used so portrait/expression lookups can resolve when the persona speaks.
+ */
+function getActivePersonaName() {
+    try {
+        const ctx = getContext();
+        const name = (ctx && ctx.name1) || '';
+        return name.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+function matchesActivePersona(name) {
+    const persona = getActivePersonaName();
+    if (!persona || !name) return false;
+    return persona.toLowerCase() === String(name).toLowerCase();
+}
+
+/**
+ * Returns a thumbnail URL for the currently selected persona, or null.
+ */
+function getPersonaThumbnailUrl() {
+    try {
+        const ctx = getContext();
+        const filename = (ctx && ctx.user_avatar) || user_avatar;
+        if (!filename) return null;
+        return getSafeThumbnailUrl('persona', filename);
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Returns the best available portrait source for a character.
  * Priority: npcAvatars base64 → ST character card avatar → portraits/ folder → null
  */
@@ -725,7 +760,17 @@ export function resolvePortrait(name) {
         }
     }
 
-    // 3. Check file-based portraits/ folder
+    // 3. If the name matches the active persona, use ST's persona thumbnail.
+    //    Runs after npcAvatars / character-card lookups so a real NPC sharing
+    //    the persona name still wins above. Runs before the file-based check
+    //    because getPortraitFileUrl always returns a speculative URL (whose
+    //    404 is handled via <img onerror>), which would otherwise shadow this.
+    if (matchesActivePersona(name)) {
+        const personaUrl = getPersonaThumbnailUrl();
+        if (personaUrl) return personaUrl;
+    }
+
+    // 4. Check file-based portraits/ folder
     return getPortraitFileUrl(name);
 }
 

@@ -20,6 +20,7 @@ import {
     committedTrackerData,
 } from '../../core/state.js';
 import { getActiveCharacterColors, saveChatData } from '../../core/persistence.js';
+import { getContext } from '../../../../../../extensions.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
 
@@ -278,6 +279,23 @@ async function classifyLlmSingle(text, availableLabels) {
 }
 
 // ─────────────────────────────────────────────
+//  Persona helper
+// ─────────────────────────────────────────────
+
+/**
+ * Returns the active persona's display name (trimmed), or null if unavailable.
+ */
+function getActivePersonaName() {
+    try {
+        const ctx = getContext();
+        const name = (ctx && ctx.name1) || '';
+        return name.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+// ─────────────────────────────────────────────
 //  Orchestrator
 // ─────────────────────────────────────────────
 
@@ -289,21 +307,30 @@ async function classifyLlmSingle(text, availableLabels) {
 export async function classifyAllCharacterExpressions(messageText) {
     if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
 
-    // Get character list from parsed thoughts
+    // Get character list from parsed thoughts (may be empty; persona still wants classification)
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
-    if (!data) return;
 
-    let characters;
-    try {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-        characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
-    } catch {
-        return;
+    let characters = [];
+    if (data) {
+        try {
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        } catch {
+            characters = [];
+        }
     }
 
-    if (characters.length === 0) return;
-
     const charNames = characters.filter(c => c.name).map(c => c.name);
+
+    // Include the active persona so the user's own expression sprite can be
+    // resolved when they appear in color-attributed dialogue. De-duped against
+    // an existing NPC of the same name.
+    const personaName = getActivePersonaName();
+    if (personaName && !charNames.some(n => n.toLowerCase() === personaName.toLowerCase())) {
+        charNames.push(personaName);
+    }
+
+    if (charNames.length === 0) return;
 
     // Fetch sprite lists for all characters in parallel
     const spriteFetches = charNames.map(async name => {
@@ -336,7 +363,24 @@ export async function classifyAllCharacterExpressions(messageText) {
         }
     }
 
-    if (toClassify.size === 0) return;
+    // If no character has classifiable text but the persona has sprites, fall
+    // back to 'neutral' for the persona. This keeps the persona showing a
+    // sprite (not the emoji) in scenes where their dialogue isn't color-tagged.
+    if (toClassify.size === 0) {
+        if (personaName && availableSprites.has(normalizeName(personaName))) {
+            const spriteUrl = resolveSpriteUrl(personaName, 'neutral');
+            if (spriteUrl) {
+                const key = normalizeName(personaName);
+                setSyncedExpressionLabel(key, 'neutral');
+                if (getSyncedExpressionPortrait(key) !== spriteUrl) {
+                    setSyncedExpressionPortrait(key, spriteUrl);
+                    saveChatData();
+                    refreshExpressionConsumers();
+                }
+            }
+        }
+        return;
+    }
 
     // Classify based on selected API
     const api = extensionSettings.expressionClassifierApi || 'local';
@@ -382,6 +426,21 @@ export async function classifyAllCharacterExpressions(messageText) {
                 setSyncedExpressionPortrait(normalizeName(name), spriteUrl);
                 changed = true;
                 console.log(`[DES Expressions] ${name} → ${label} (${spriteUrl})`);
+            }
+        }
+    }
+
+    // If the persona has sprites but wasn't classified (no color-tagged
+    // dialogue), default them to 'neutral' so they still show a sprite.
+    if (personaName && availableSprites.has(normalizeName(personaName)) &&
+        !classifications.has(personaName)) {
+        const spriteUrl = resolveSpriteUrl(personaName, 'neutral');
+        if (spriteUrl) {
+            const key = normalizeName(personaName);
+            setSyncedExpressionLabel(key, 'neutral');
+            if (getSyncedExpressionPortrait(key) !== spriteUrl) {
+                setSyncedExpressionPortrait(key, spriteUrl);
+                changed = true;
             }
         }
     }
