@@ -135,6 +135,9 @@ function parseMessageIntoBubbles(mesText) {
 
     for (const block of blocks) {
         const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
+        // Mark the first segment of each paragraph so the renderer can force a
+        // bubble boundary even when the same speaker continues across paragraphs.
+        if (segs.length > 0) segs[0].isParagraphStart = true;
         allSegments.push(...segs);
     }
 
@@ -429,7 +432,7 @@ function renderDiscordBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        const isContinuation = speaker === lastSpeaker && !seg.isParagraphStart;
         lastSpeaker = speaker;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
@@ -498,7 +501,7 @@ function renderCardBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        const isContinuation = speaker === lastSpeaker && !seg.isParagraphStart;
         lastSpeaker = speaker;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
