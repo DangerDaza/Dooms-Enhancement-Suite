@@ -990,6 +990,59 @@ function unmarkCharacterPresentNow(name) {
 }
 
 /**
+ * Compresses a portrait data URL so its base64 string stays under the
+ * Claude API's 5 MB image limit. Re-encodes as JPEG and steps down quality
+ * and scale until the string length is below 4.5 MB (leaving headroom).
+ * Resolves with the original data URL if it already fits or if a canvas
+ * cannot be created.
+ */
+function compressPortraitForApi(dataUrl) {
+    const MAX_LEN = 4_500_000; // 4.5 MB string length — well under the 5 MB API cap
+    if (!dataUrl || dataUrl.length <= MAX_LEN) return Promise.resolve(dataUrl);
+
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const origW = img.naturalWidth;
+            const origH = img.naturalHeight;
+
+            // [scale, jpegQuality] pairs from least to most aggressive
+            const steps = [
+                [1.00, 0.92], [1.00, 0.80], [1.00, 0.65],
+                [0.75, 0.80], [0.75, 0.65],
+                [0.50, 0.80], [0.50, 0.65],
+                [0.35, 0.80], [0.25, 0.80], [0.20, 0.70],
+            ];
+
+            for (const [scale, quality] of steps) {
+                canvas.width  = Math.max(1, Math.round(origW * scale));
+                canvas.height = Math.max(1, Math.round(origH * scale));
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                const result = canvas.toDataURL('image/jpeg', quality);
+                if (result.length <= MAX_LEN) {
+                    console.log(`[Dooms Tracker] Workshop: portrait compressed to ${(result.length / 1_048_576).toFixed(2)} MB (scale=${scale}, q=${quality})`);
+                    resolve(result);
+                    return;
+                }
+            }
+
+            // Absolute fallback — something will always fit
+            canvas.width  = Math.max(1, Math.round(origW * 0.15));
+            canvas.height = Math.max(1, Math.round(origH * 0.15));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            console.warn('[Dooms Tracker] Workshop: portrait could not be compressed below 4.5 MB cleanly, using minimum fallback');
+            resolve(canvas.toDataURL('image/jpeg', 0.65));
+        };
+        img.onerror = () => {
+            console.warn('[Dooms Tracker] Workshop: portrait compression failed, using original');
+            resolve(dataUrl);
+        };
+        img.src = dataUrl;
+    });
+}
+
+/**
  * One-shot: when the user next sends a message, stamp the character's
  * portrait onto that message's `extra.image` so SillyTavern's Generate
  * includes the image in the outgoing request (vision-capable models).
@@ -997,6 +1050,11 @@ function unmarkCharacterPresentNow(name) {
  */
 function armPortraitAttach(name, dataUrl) {
     let consumed = false;
+
+    // Compress eagerly so the result is ready before the user can hit Send.
+    let attachUrl = null;
+    compressPortraitForApi(dataUrl).then(url => { attachUrl = url; });
+
     const disarm = () => {
         if (consumed) return;
         consumed = true;
@@ -1015,7 +1073,10 @@ function armPortraitAttach(name, dataUrl) {
             const last = chat[chat.length - 1];
             if (!last || last.is_user === false) return;
             if (!last.extra || typeof last.extra !== 'object') last.extra = {};
-            last.extra.image = dataUrl;
+            // Use the compressed URL; fall back to original if compression
+            // somehow hasn't resolved yet (race condition, should never happen
+            // in practice since canvas ops finish in milliseconds).
+            last.extra.image = attachUrl ?? dataUrl;
             last.extra.inline_image = true;
             console.log(`[Dooms Tracker] Workshop: attached "${name}" portrait to outgoing message`);
         } catch (e) {
