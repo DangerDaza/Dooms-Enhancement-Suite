@@ -203,6 +203,44 @@ async function classifyLocal(text) {
 }
 
 /**
+ * Strips reasoning/thinking blocks from a model response so downstream parsing
+ * doesn't trip on them. Thinking models (GLM-5, DeepSeek-R1, o1, Claude
+ * extended thinking, etc.) routinely wrap internal reasoning in tags like
+ * <think>, <thinking>, <reasoning>, or <reflection>. We also strip the common
+ * "Final answer:" preamble.
+ */
+function stripThinkingTags(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+        .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+        .replace(/<reflection>[\s\S]*?<\/reflection>/gi, '')
+        // Drop unclosed thinking blocks (response was cut off mid-thought)
+        .replace(/<think(?:ing)?>[\s\S]*$/gi, '')
+        .replace(/<reasoning>[\s\S]*$/gi, '')
+        .trim();
+}
+
+const REGEX_ESCAPE = /[-/\\^$*+?.()|[\]{}]/g;
+
+/**
+ * Finds the first label that appears in a response (case-insensitive,
+ * word-boundary matched). Tolerates surrounding prose, JSON, etc.
+ */
+function findLabelInResponse(response, labels) {
+    const cleaned = stripThinkingTags(response).toLowerCase();
+    if (!cleaned) return null;
+    for (const label of labels) {
+        const safe = String(label).toLowerCase().replace(REGEX_ESCAPE, '\\$&');
+        if (!safe) continue;
+        if (new RegExp(`\\b${safe}\\b`).test(cleaned)) {
+            return String(label).toLowerCase();
+        }
+    }
+    return null;
+}
+
+/**
  * Classifies emotions for multiple characters in one LLM call.
  * @param {Map<string, string>} characterTexts - Map of name → text
  * @param {Map<string, Map<string, string>>} availableSprites - Map of name → sprites map
@@ -214,9 +252,11 @@ async function classifyLlmBatch(characterTexts, availableSprites) {
 
     // Build prompt with per-character available labels
     const charEntries = [];
+    const labelsByName = new Map();
     for (const [name, text] of characterTexts) {
         const sprites = availableSprites.get(normalizeName(name));
         const labels = sprites ? [...sprites.keys()] : DEFAULT_EXPRESSIONS;
+        labelsByName.set(name, labels);
         const snippet = text.slice(0, 200);
         charEntries.push(`${name} (labels: ${labels.join(', ')}): "${snippet}"`);
     }
@@ -232,17 +272,37 @@ Return JSON like: {"Name1":"emotion1","Name2":"emotion2"}`;
             prompt: prompt,
             systemPrompt: 'You are an emotion classifier. Output only valid JSON.',
             instructOverride: false,
-            responseLength: 200,
+            // Generous budget so reasoning/thinking models have room to think
+            // and still emit the JSON answer.
+            responseLength: 4000,
         });
 
-        // Parse JSON from response
-        const jsonMatch = response.match(/\{[^{}]*\}/);
-        if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            for (const [name, label] of Object.entries(parsed)) {
-                if (typeof label === 'string') {
-                    results.set(name, label.toLowerCase().trim());
+        const cleaned = stripThinkingTags(response);
+        // Greedy match: the JSON object may itself contain quoted strings, so a
+        // non-greedy [^{}] regex falsely matches a label list. Find the first
+        // '{' and last '}' in the cleaned response.
+        const first = cleaned.indexOf('{');
+        const last = cleaned.lastIndexOf('}');
+        if (first !== -1 && last > first) {
+            try {
+                const parsed = JSON.parse(cleaned.slice(first, last + 1));
+                for (const [name, label] of Object.entries(parsed)) {
+                    if (typeof label === 'string') {
+                        results.set(name, label.toLowerCase().trim());
+                    }
                 }
+            } catch {
+                // JSON didn't parse; fall back to per-character label scan
+                for (const [name, labels] of labelsByName) {
+                    const found = findLabelInResponse(cleaned, labels);
+                    if (found) results.set(name, found);
+                }
+            }
+        } else {
+            // No JSON at all — try to recover labels per character
+            for (const [name, labels] of labelsByName) {
+                const found = findLabelInResponse(cleaned, labels);
+                if (found) results.set(name, found);
             }
         }
     } catch (err) {
@@ -267,10 +327,13 @@ async function classifyLlmSingle(text, availableLabels) {
             prompt: prompt,
             systemPrompt: 'You are an emotion classifier. Output only one emotion word.',
             instructOverride: false,
-            responseLength: 20,
+            // Generous budget so reasoning/thinking models (GLM-5, DeepSeek-R1,
+            // o1, Claude extended thinking, …) have room for their reasoning
+            // pass and still emit a final answer. Non-thinking models stop at
+            // the first newline so the extra budget costs nothing.
+            responseLength: 1500,
         });
-        const word = response.trim().toLowerCase().replace(/[^a-z]/g, '');
-        return labels.includes(word) ? word : null;
+        return findLabelInResponse(response, labels);
     } catch (err) {
         console.warn('[DES Expressions] LLM single classification failed:', err);
         return null;
