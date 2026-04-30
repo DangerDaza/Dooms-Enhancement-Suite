@@ -14449,6 +14449,7 @@ body.dooms-hide-st-topbar .openDrawer {
     content: '';
     position: absolute;
     inset: -6px;
+    transform: translateX(6px);
     background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
     clip-path: polygon(
         58% 0%,  44% 38%,  56% 38%,
