@@ -413,6 +413,30 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 23;
                 settingsChanged = true;
             }
+            // Migration to version 24: Initialize Knives feature defaults.
+            // Knives are player-authored story hooks the AI deploys with proper
+            // pacing. Off by default — must be opt-in. Templates are owner-scoped
+            // (player or character) and travel across chats; per-chat runtime
+            // state lives in chat_metadata.dooms_tracker.knives.
+            if (currentVersion < 24) {
+                if (!extensionSettings.knives || typeof extensionSettings.knives !== 'object') {
+                    extensionSettings.knives = {
+                        enabled: false,
+                        revealStatus: false,
+                        requireCharacterPresent: true,
+                        cooldownMessages: 5,
+                        seriousTensionThreshold: 5,
+                        catastrophicTensionThreshold: 8,
+                        sharpeningPromotionChance: 0.25,
+                        sharpeningMinAge: 3,
+                        drawnMaxLifetimeMessages: 4,
+                        aiSuggestionModel: '',
+                        byOwner: {},
+                    };
+                }
+                extensionSettings.settingsVersion = 24;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {
@@ -462,6 +486,7 @@ export function saveChatData() {
         syncedExpressionLabels: syncedExpressionLabels,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
         characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
+        knives: chat_metadata.dooms_tracker?.knives || null,
         timestamp: Date.now()
     };
     // Persist per-chat character tracking data when enabled
@@ -611,6 +636,11 @@ export function loadChatData() {
     // This is exported so doomCounter.js can access it on chat load
     if (savedData.doomCounterState) {
         chat_metadata.dooms_tracker.doomCounterState = savedData.doomCounterState;
+    }
+    // Restore Knives runtime state (per-chat status / cooldowns / fire history).
+    // Authoring (templates) lives in extensionSettings.knives.byOwner — not here.
+    if (savedData.knives && typeof savedData.knives === 'object') {
+        chat_metadata.dooms_tracker.knives = savedData.knives;
     }
     // Sync with the most recent assistant message's per-message swipe data.
     // This is the most reliable source since it's saved as part of the chat messages

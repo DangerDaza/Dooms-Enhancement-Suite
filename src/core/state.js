@@ -6,7 +6,7 @@
  * Extension settings - persisted to SillyTavern settings
  */
 export let extensionSettings = {
-    settingsVersion: 15, // Version number for settings migrations (v14-v15 add Name Ban + expression classifier settings)
+    settingsVersion: 24, // Version number for settings migrations (v24 adds Knives feature)
     enabled: true,
     autoUpdate: false,
     updateDepth: 4, // How many messages to include in the context
@@ -407,7 +407,25 @@ export let extensionSettings = {
     },
     systemLog: {
         maxEntries: 200,                       // Ring buffer size for captured console messages
-    }
+    },
+    // Knives — player-authored story hooks the AI holds and deploys at dramatic moments.
+    // Templates are owner-scoped (player or character) and travel across chats.
+    // Per-chat runtime state (status, cooldowns, fire history) lives in chat_metadata.dooms_tracker.knives.
+    knives: {
+        enabled: false,                        // Master toggle — defaults OFF
+        revealStatus: false,                   // When true, UI shows lifecycle badges; otherwise hidden for "DM surprise" feel
+        requireCharacterPresent: true,         // Only include a character's knives when they're on stage
+        cooldownMessages: 5,                   // Messages of breathing room after a spent knife
+        seriousTensionThreshold: 5,            // Tension floor for severity-2 knives
+        catastrophicTensionThreshold: 8,       // Tension floor for severity-3 knives (OR doom countdown active)
+        sharpeningPromotionChance: 0.25,       // Per-message probability dormant → sharpening
+        sharpeningMinAge: 3,                   // Min messages-since-create before dormant can sharpen
+        drawnMaxLifetimeMessages: 4,           // Auto-spend a drawn knife if AI ignores it for N turns
+        aiSuggestionModel: '',                 // Connection profile for AI suggestions ('' = current)
+        // Owner-keyed template store. '__user__' is the reserved key for the player's own knives.
+        // Shape: { [ownerKey]: { templates: [{ id, title, description, severity, foreshadowingHints, createdAt }] } }
+        byOwner: {},
+    },
 };
 /**
  * Last generated data from AI response
