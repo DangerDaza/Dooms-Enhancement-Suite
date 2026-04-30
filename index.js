@@ -1875,14 +1875,11 @@ async function initUI() {
         const $menuList = $('<ul class="dooms-fab-menu" role="menu"></ul>');
         $(fabEl).append($menuList);
         // Returns every possible flyout entry (without filtering). Used for
-        // both the live menu and the settings panel toggle list.
+        // both the live menu and the settings panel toggle list. Doom's
+        // Settings is appended LAST so it ends up at the bottom of the
+        // upward-opening fly-out — i.e. closest to the D button.
         const buildAllMenuItems = () => {
-            const items = [{
-                id: 'des-settings',
-                label: "Doom's Settings",
-                iconClass: 'fa-solid fa-gear',
-                action: openSettingsDirect,
-            }];
+            const items = [];
             $('#top-settings-holder .drawer-icon').each(function() {
                 const $icon = $(this);
                 const label = ($icon.attr('title') || $icon.attr('aria-label') || 'Untitled').trim();
@@ -1896,6 +1893,12 @@ async function initUI() {
                     iconClass,
                     action: () => { $icon.trigger('click'); },
                 });
+            });
+            items.push({
+                id: 'des-settings',
+                label: "Doom's Settings",
+                iconClass: 'fa-solid fa-gear',
+                action: openSettingsDirect,
             });
             return items;
         };
