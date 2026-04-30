@@ -14420,9 +14420,10 @@ body.dooms-hide-st-topbar .openDrawer {
     transition: transform 0.2s ease;
 }
 
-/* Hover color-shift: a solid theme-colored silhouette of the icon
-   (built via CSS mask) crossfades over the resting full-colour PNG.
-   The D shifts toward var(--rpg-highlight) without any glow halo. */
+/* Lightning strike on hover: the D's silhouette flashes white in
+   a multi-step strobe (mimicking a lightning flicker) and settles
+   to var(--rpg-highlight). Built via CSS mask so the flash hugs
+   the actual D shape, not a rectangle. */
 .dooms-fab-btn .doom-icon::after {
     content: '';
     position: absolute;
@@ -14441,18 +14442,77 @@ body.dooms-hide-st-topbar .openDrawer {
     pointer-events: none;
 }
 
+/* SVG lightning bolt overlay — a forked stroke that flashes across
+   the icon during the strike, then disappears. Drawn with a clip-path
+   so it appears jagged. */
+.dooms-fab-btn .doom-icon::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
+    clip-path: polygon(
+        58% 0%,  44% 38%,  56% 38%,
+        38% 70%, 50% 70%,  30% 100%,
+        46% 70%, 38% 70%,  56% 38%,
+        50% 38%, 64% 0%
+    );
+    opacity: 0;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px var(--rpg-highlight, #e94560));
+}
+
 .dooms-fab-btn:hover {
     opacity: 1;
     transform: scale(1.08);
     box-shadow: none;
+    animation: dooms-fab-shake 0.55s ease-out;
 }
 
 .dooms-fab-btn:hover .doom-icon::after {
-    opacity: 1;
+    animation: dooms-fab-lightning-tint 0.7s ease-out forwards;
+}
+
+.dooms-fab-btn:hover .doom-icon::before {
+    animation: dooms-fab-lightning-bolt 0.55s ease-out forwards;
 }
 
 .dooms-fab-btn:active {
     transform: scale(0.95);
+}
+
+/* Multi-flash strobe — white spikes during the strike, settles to
+   the theme highlight color. */
+@keyframes dooms-fab-lightning-tint {
+    0%   { opacity: 0;    background-color: #ffffff; }
+    6%   { opacity: 1;    background-color: #ffffff; }
+    14%  { opacity: 0.15; background-color: var(--rpg-highlight, #e94560); }
+    22%  { opacity: 0.95; background-color: #ffffff; }
+    30%  { opacity: 0.4;  background-color: var(--rpg-highlight, #e94560); }
+    42%  { opacity: 1;    background-color: #ffffff; }
+    55%  { opacity: 0.7;  background-color: var(--rpg-highlight, #e94560); }
+    100% { opacity: 1;    background-color: var(--rpg-highlight, #e94560); }
+}
+
+/* Bolt overlay — flicker the jagged stroke for ~0.5s then fade out. */
+@keyframes dooms-fab-lightning-bolt {
+    0%   { opacity: 0; }
+    8%   { opacity: 1; }
+    16%  { opacity: 0.2; }
+    24%  { opacity: 1; }
+    36%  { opacity: 0.4; }
+    50%  { opacity: 0.9; }
+    100% { opacity: 0; }
+}
+
+/* Tiny jitter on the button itself — reads as electrical shock. */
+@keyframes dooms-fab-shake {
+    0%, 100% { transform: scale(1.08) translate(0, 0); }
+    12%      { transform: scale(1.08) translate(-2px, 1px); }
+    24%      { transform: scale(1.08) translate(2px, -1px); }
+    38%      { transform: scale(1.08) translate(-1px, -2px); }
+    52%      { transform: scale(1.08) translate(1px, 2px); }
+    66%      { transform: scale(1.08) translate(-1px, 0); }
+    80%      { transform: scale(1.08) translate(1px, 1px); }
 }
 
 /* Move-mode: keep the silhouette tint visible and pulse its opacity
