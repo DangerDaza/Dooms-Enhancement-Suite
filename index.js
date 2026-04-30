@@ -1713,6 +1713,41 @@ async function initUI() {
     renderIgnoredNamesTags($('#rpg-nb-ignored-tags'));
     renderMappingsTable($('#rpg-nb-mappings-container'));
 
+    // ── Doom Button (FAB) ──
+    if (!extensionSettings.fab || typeof extensionSettings.fab !== 'object') {
+        extensionSettings.fab = { bypassFlyout: false, hiddenButtons: [] };
+    }
+    $('#rpg-toggle-fab-bypass').prop('checked', !!extensionSettings.fab.bypassFlyout);
+    $('#rpg-toggle-fab-bypass').off('change.fab').on('change.fab', function() {
+        extensionSettings.fab.bypassFlyout = $(this).prop('checked');
+        saveSettings();
+    });
+    // Per-button toggles populate dynamically (top bar may not exist yet
+    // on first call). Re-populate on every settings open so the list is fresh.
+    if (typeof window.__doomsFabPopulateToggles === 'function') {
+        window.__doomsFabPopulateToggles();
+    }
+    $(document).off('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]');
+    $(document).on('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]', function() {
+        const id = $(this).attr('data-fab-toggle-id');
+        const enabled = $(this).prop('checked');
+        const hidden = new Set(extensionSettings.fab.hiddenButtons || []);
+        if (enabled) hidden.delete(id); else hidden.add(id);
+        extensionSettings.fab.hiddenButtons = Array.from(hidden);
+        saveSettings();
+    });
+    $('#rpg-fab-reset-position').off('click.fab').on('click.fab', function() {
+        delete extensionSettings.fabPosition;
+        saveSettings();
+        const fab = document.getElementById('dooms-settings-fab');
+        if (fab) {
+            fab.style.left = '';
+            fab.style.top = '';
+            fab.style.right = '';
+            fab.style.bottom = '';
+        }
+    });
+
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();
@@ -1739,6 +1774,16 @@ async function initUI() {
     // Add settings button as a fixed-position element on <body> so it's
     // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
+        // Initialize FAB-specific settings shape
+        if (!extensionSettings.fab || typeof extensionSettings.fab !== 'object') {
+            extensionSettings.fab = { bypassFlyout: false, hiddenButtons: [] };
+        }
+        if (!Array.isArray(extensionSettings.fab.hiddenButtons)) {
+            extensionSettings.fab.hiddenButtons = [];
+        }
+        if (typeof extensionSettings.fab.bypassFlyout !== 'boolean') {
+            extensionSettings.fab.bypassFlyout = false;
+        }
         const fabHtml = `
             <div id="dooms-settings-fab" class="dooms-settings-fab" title="Doom's Tracker Settings (right-click to move)">
                 <button id="dooms-fab-settings" class="dooms-fab-btn" title="Settings">
@@ -1749,6 +1794,10 @@ async function initUI() {
         $('body').append(fabHtml);
         const fabEl = document.getElementById('dooms-settings-fab');
         let suppressClick = false;
+        const openSettingsDirect = () => {
+            const modal = getSettingsModal();
+            if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
+        };
         const clampPosition = (left, top) => {
             const w = fabEl.offsetWidth || 56;
             const h = fabEl.offsetHeight || 56;
@@ -1774,21 +1823,19 @@ async function initUI() {
         // Built dynamically so the menu always reflects whatever the host UI shows.
         const $menuList = $('<ul class="dooms-fab-menu" role="menu"></ul>');
         $(fabEl).append($menuList);
-        const buildMenuItems = () => {
+        // Returns every possible flyout entry (without filtering). Used for
+        // both the live menu and the settings panel toggle list.
+        const buildAllMenuItems = () => {
             const items = [{
                 id: 'des-settings',
                 label: "Doom's Settings",
                 iconClass: 'fa-solid fa-gear',
-                action: () => {
-                    const modal = getSettingsModal();
-                    if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
-                },
+                action: openSettingsDirect,
             }];
             $('#top-settings-holder .drawer-icon').each(function() {
                 const $icon = $(this);
                 const label = ($icon.attr('title') || $icon.attr('aria-label') || 'Untitled').trim();
                 const rawClass = ($icon.attr('class') || '');
-                // Keep only Font-Awesome classes; strip drawer/state/utility classes
                 const iconClass = rawClass.split(/\s+/)
                     .filter(c => c.startsWith('fa-'))
                     .join(' ') || 'fa-solid fa-square';
@@ -1796,12 +1843,37 @@ async function initUI() {
                     id: $icon.attr('id') || label.toLowerCase().replace(/\s+/g, '-'),
                     label,
                     iconClass,
-                    // Dispatch the click to the real SillyTavern button
                     action: () => { $icon.trigger('click'); },
                 });
             });
             return items;
         };
+        const buildMenuItems = () => {
+            const hidden = new Set(extensionSettings.fab.hiddenButtons || []);
+            return buildAllMenuItems().filter(i => !hidden.has(i.id));
+        };
+        // Settings panel: list every entry as an enable/disable row
+        const populateFabSettingsToggles = () => {
+            const $container = $('#rpg-fab-menu-toggles');
+            if (!$container.length) return;
+            const items = buildAllMenuItems();
+            $container.empty();
+            for (const item of items) {
+                const hidden = (extensionSettings.fab.hiddenButtons || []).includes(item.id);
+                const $row = $('<div class="rpg-setting-row"></div>');
+                const $label = $('<div class="rpg-setting-label-group"></div>')
+                    .append($('<span class="rpg-setting-label"></span>')
+                        .append($('<i></i>').attr('class', item.iconClass).css({ marginRight: '8px', opacity: 0.85 }))
+                        .append(document.createTextNode(item.label)));
+                const $toggle = $('<label class="rpg-toggle-switch"></label>')
+                    .append($('<input type="checkbox">').prop('checked', !hidden).attr('data-fab-toggle-id', item.id))
+                    .append($('<span class="rpg-toggle-slider"></span>'));
+                $row.append($label).append($toggle);
+                $container.append($row);
+            }
+        };
+        // Expose for the settings UI binder below
+        window.__doomsFabPopulateToggles = populateFabSettingsToggles;
         const renderMenuItems = () => {
             $menuList.empty();
             for (const item of buildMenuItems()) {
@@ -1861,6 +1933,11 @@ async function initUI() {
             }
             e.preventDefault();
             e.stopPropagation();
+            if (extensionSettings.fab.bypassFlyout) {
+                if ($menuList.hasClass('open')) closeFlyout();
+                openSettingsDirect();
+                return;
+            }
             if ($menuList.hasClass('open')) closeFlyout();
             else openFlyout();
         });
@@ -1986,6 +2063,11 @@ async function initUI() {
             fabEl.addEventListener('pointerdown', onPointerDown);
             document.addEventListener('keydown', onEsc);
         };
+        // Now that the FAB is built and __doomsFabPopulateToggles exists,
+        // populate the settings panel's per-button toggle list. The settings
+        // init code earlier in initUI() ran before this, so the placeholder
+        // is still showing — refresh it.
+        populateFabSettingsToggles();
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
