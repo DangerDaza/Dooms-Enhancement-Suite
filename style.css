@@ -14323,43 +14323,102 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-settings-fab {
     position: fixed;
-    bottom: 10px;
-    left: 10px;
+    bottom: 16px;
+    left: 16px;
     z-index: 10001;
+    touch-action: none;
 }
 
 .dooms-fab-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 0;
-    background: transparent;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e94560 0%, #533483 100%);
     border: none;
     color: #fff;
     font-size: 1em;
     cursor: pointer;
-    box-shadow: none;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(233, 69, 96, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    opacity: 0.85;
+    opacity: 0.95;
     overflow: visible;
     padding: 0;
 }
 
 .dooms-fab-btn .doom-icon {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 }
 
 .dooms-fab-btn:hover {
     opacity: 1;
-    transform: scale(1.1);
-    box-shadow: 0 4px 14px rgba(233, 69, 96, 0.5);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 4px 10px rgba(233, 69, 96, 0.55);
 }
 
 .dooms-fab-btn:active {
     transform: scale(0.95);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(233, 69, 96, 0.4);
+}
+
+/* Move-mode: cursor + subtle pulse to signal the button is now draggable */
+.dooms-settings-fab.dooms-fab-moving .dooms-fab-btn {
+    cursor: grab;
+    animation: dooms-fab-move-pulse 1.2s ease-in-out infinite;
+}
+
+.dooms-settings-fab.dooms-fab-moving.dooms-fab-dragging .dooms-fab-btn {
+    cursor: grabbing;
+    animation: none;
+    transform: scale(1.08);
+}
+
+@keyframes dooms-fab-move-pulse {
+    0%, 100% { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 0 0 0 rgba(233, 69, 96, 0.6); }
+    50%      { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 0 0 12px rgba(233, 69, 96, 0); }
+}
+
+/* Right-click context menu on the FAB */
+.dooms-fab-context-menu {
+    position: fixed;
+    z-index: 100002;
+    background: var(--rpg-accent, #1a1a2e);
+    border: 1px solid var(--rpg-border, rgba(74, 123, 167, 0.3));
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    padding: 4px 0;
+    min-width: 170px;
+}
+
+.dooms-fab-context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: transparent;
+    color: var(--rpg-text, #e0e0e0);
+    font-size: 0.88em;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.dooms-fab-context-item:hover {
+    background: rgba(233, 69, 96, 0.15);
+}
+
+.dooms-fab-context-item i {
+    width: 16px;
+    text-align: center;
+    opacity: 0.85;
+    color: var(--rpg-highlight, #e94560);
 }
 
 /* Pop-up menu above the button */
