@@ -20680,3 +20680,249 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-weight: 500;
     color: #ffffff;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KNIVES — settings panel + character sheet tab + AI suggestion modal
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Status / severity badges (mirrors .rpg-lb-entry-badge pattern) */
+.rpg-knife-badge {
+    font-size: 0.62em;
+    color: #555;
+    padding: 2px 6px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+}
+.rpg-knife-badge.status-dormant    { color: #6b7280; background: rgba(107,114,128,0.15); }
+.rpg-knife-badge.status-sharpening { color: #f59e0b; background: rgba(245,158,11,0.15); }
+.rpg-knife-badge.status-drawn      { color: #ef4444; background: rgba(239,68,68,0.18); font-weight: 600; }
+.rpg-knife-badge.status-spent      { color: #6b7280; background: rgba(107,114,128,0.10); text-decoration: line-through; }
+.rpg-knife-badge.status-defused    { color: #4a7ba7; background: rgba(74,123,167,0.12); }
+.rpg-knife-badge.severity-1        { color: #94a3b8; background: rgba(148,163,184,0.15); }
+.rpg-knife-badge.severity-2        { color: #f59e0b; background: rgba(245,158,11,0.15); }
+.rpg-knife-badge.severity-3        { color: #ef4444; background: rgba(239,68,68,0.15); }
+
+/* Info boxes — disclosure pattern */
+.rpg-knives-info-block {
+    margin: 4px 0 12px 0;
+}
+.rpg-knives-info-row {
+    margin-bottom: 4px;
+}
+.rpg-knives-info-btn {
+    width: 100%;
+    text-align: left;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--rpg-border, rgba(255,255,255,0.1));
+    color: var(--rpg-text, inherit);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.88em;
+    transition: background 0.15s;
+}
+.rpg-knives-info-btn:hover {
+    background: rgba(255,255,255,0.07);
+}
+.rpg-knives-info-btn i {
+    font-size: 0.8em;
+    transition: transform 0.2s;
+}
+.rpg-knives-info-btn.open i {
+    transform: rotate(180deg);
+}
+.rpg-knives-info-popup {
+    background: rgba(0,0,0,0.18);
+    border-left: 2px solid var(--rpg-highlight, #4a7ba7);
+    padding: 10px 14px;
+    margin: 4px 0 8px 0;
+    font-size: 0.85em;
+    line-height: 1.5;
+    border-radius: 0 4px 4px 0;
+}
+.rpg-knives-info-popup p { margin: 0 0 8px 0; }
+.rpg-knives-info-popup p:last-child { margin-bottom: 0; }
+.rpg-knives-info-popup ul { margin: 4px 0 0 0; padding-left: 18px; }
+.rpg-knives-info-popup li { margin: 3px 0; }
+
+/* Editor block — used for both User Knives and per-character cards */
+.rpg-knife-editor-block {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--rpg-border, rgba(255,255,255,0.08));
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.rpg-knife-editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.rpg-knife-editor-title {
+    margin: 0;
+    font-size: 0.95em;
+}
+.rpg-knife-editor-toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.rpg-knife-editor-toolbar .menu_button {
+    padding: 4px 10px;
+    font-size: 0.82em;
+}
+
+.rpg-knife-empty {
+    opacity: 0.7;
+    font-size: 0.85em;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+/* Knife row */
+.rpg-knife-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.rpg-knife-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.18);
+    border-radius: 4px;
+    border-left: 3px solid var(--rpg-highlight, #4a7ba7);
+}
+.rpg-knife-row-main {
+    flex: 1;
+    min-width: 0;
+}
+.rpg-knife-row-title {
+    font-size: 0.92em;
+    margin-bottom: 2px;
+}
+.rpg-knife-row-desc {
+    font-size: 0.82em;
+    opacity: 0.85;
+    margin: 2px 0;
+    line-height: 1.4;
+}
+.rpg-knife-hints-preview {
+    font-size: 0.76em;
+    opacity: 0.7;
+    font-style: italic;
+    margin-top: 2px;
+}
+.rpg-knife-row-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.rpg-knife-row-actions .menu_button {
+    padding: 2px 8px;
+    font-size: 0.85em;
+}
+
+/* Character cards in settings panel */
+.rpg-knife-character-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.rpg-knife-character-card {
+    /* The inner editor-block already provides framing — no extra borders. */
+}
+.rpg-knife-character-add-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+}
+.rpg-knife-character-add-row .text_pole {
+    flex: 1;
+    max-width: 220px;
+}
+
+/* Edit-form modal layout */
+.rpg-knife-editor .rpg-knife-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+.rpg-knife-editor .rpg-knife-field > span {
+    font-weight: 600;
+    font-size: 0.88em;
+}
+.rpg-knife-editor input.text_pole,
+.rpg-knife-editor textarea.text_pole,
+.rpg-knife-editor select.text_pole {
+    width: 100%;
+}
+
+/* Advanced actions modal */
+.rpg-knife-advanced-modal .rpg-knife-advanced-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+.rpg-knife-advanced-modal .menu_button {
+    text-align: left;
+    padding: 8px 12px;
+}
+
+/* AI suggestions modal */
+.rpg-knife-suggestions .rpg-knife-suggestion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.rpg-knife-suggestion-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.rpg-knife-suggestion-row:hover {
+    background: rgba(0,0,0,0.22);
+}
+.rpg-knife-suggestion-pick {
+    margin-top: 4px;
+}
+.rpg-knife-suggestion-body {
+    flex: 1;
+}
+.rpg-knife-suggestion-desc {
+    font-size: 0.85em;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+.rpg-knife-loading {
+    padding: 10px;
+    text-align: center;
+    opacity: 0.8;
+    font-style: italic;
+    background: rgba(74,123,167,0.08);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+

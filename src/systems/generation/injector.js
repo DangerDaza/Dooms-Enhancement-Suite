@@ -28,6 +28,7 @@ import {
 } from './promptBuilder.js';
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
 import { buildNameBanInstruction } from '../features/nameBan.js';
+import { promoteKnivesPreGeneration, injectKnivesPrompt, clearKnivesPrompt, KNIVES_SLOT } from '../features/knives.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Type imports
@@ -617,6 +618,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+        clearKnivesPrompt();
         return;
     }
     const context = getContext();
@@ -638,6 +640,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-example', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
+        clearKnivesPrompt();
     }
 
     // Inject new-field boost prompt (IN_PROMPT = system level, highest priority).
@@ -666,6 +669,19 @@ export async function onGenerationStarted(type, data, dryRun) {
     } else {
         // Clear twist slot if disabled
         setExtensionPrompt(DOOM_TWIST_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // ─── Knives lifecycle ─────────────────────────────────────────────────────
+    // Promote BEFORE injection so the knife being drawn this turn is the one
+    // injected this turn. Both functions early-return when knives are disabled
+    // (or when shouldSuppress) — so this is a zero-diff no-op when off.
+    try {
+        promoteKnivesPreGeneration(shouldSuppress);
+        injectKnivesPrompt(shouldSuppress);
+    } catch (e) {
+        console.warn('[Dooms Knives] pre-generation hook failed:', e);
+        clearKnivesPrompt();
     }
     // ──────────────────────────────────────────────────────────────────────────
 

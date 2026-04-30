@@ -152,6 +152,8 @@ import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
+import { initKnives } from './src/systems/features/knives.js';
+import { renderUserKnivesSection, renderCharacterKnivesSection } from './src/systems/ui/knivesPanel.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -1049,6 +1051,80 @@ async function initUI() {
         toastr.info('Doom Counter reset.', '', { timeOut: 2000 });
     });
 
+    // ── Knives ──
+    // Each handler is fault-tolerant; if knives state is missing for any
+    // reason (mid-migration corruption, etc.) we lazily seed defaults.
+    const _knSettings = () => {
+        if (!extensionSettings.knives) {
+            extensionSettings.knives = {
+                enabled: false,
+                revealStatus: false,
+                requireCharacterPresent: true,
+                cooldownMessages: 5,
+                seriousTensionThreshold: 5,
+                catastrophicTensionThreshold: 8,
+                sharpeningPromotionChance: 0.25,
+                sharpeningMinAge: 3,
+                drawnMaxLifetimeMessages: 4,
+                aiSuggestionModel: '',
+                byOwner: {},
+            };
+        }
+        return extensionSettings.knives;
+    };
+
+    const _refreshKnivesPanel = () => {
+        try {
+            renderUserKnivesSection($('#rpg-knives-user-section'));
+            renderCharacterKnivesSection($('#rpg-knives-character-section'));
+        } catch (e) {
+            console.warn('[Dooms Knives] panel refresh failed:', e);
+        }
+    };
+
+    $('#rpg-toggle-knives').on('change', function () {
+        const on = $(this).prop('checked');
+        _knSettings().enabled = on;
+        saveSettings();
+        $('#rpg-knives-badge').text(on ? 'on' : 'off');
+        $('#rpg-knives-options').toggle(on);
+        if (on) _refreshKnivesPanel();
+    });
+
+    $('#rpg-toggle-knives-reveal-status').on('change', function () {
+        _knSettings().revealStatus = $(this).prop('checked');
+        saveSettings();
+        _refreshKnivesPanel();
+    });
+
+    $('#rpg-toggle-knives-require-present').on('change', function () {
+        _knSettings().requireCharacterPresent = $(this).prop('checked');
+        saveSettings();
+    });
+
+    $('#rpg-knives-cooldown').on('change', function () {
+        const v = parseInt($(this).val(), 10);
+        if (!Number.isNaN(v) && v >= 0) { _knSettings().cooldownMessages = v; saveSettings(); }
+    });
+    $('#rpg-knives-serious-threshold').on('change', function () {
+        const v = parseInt($(this).val(), 10);
+        if (!Number.isNaN(v) && v >= 1 && v <= 10) { _knSettings().seriousTensionThreshold = v; saveSettings(); }
+    });
+    $('#rpg-knives-catastrophic-threshold').on('change', function () {
+        const v = parseInt($(this).val(), 10);
+        if (!Number.isNaN(v) && v >= 1 && v <= 10) { _knSettings().catastrophicTensionThreshold = v; saveSettings(); }
+    });
+
+    // Info-box disclosure toggles
+    $(document).on('click', '.rpg-knives-info-btn', function () {
+        const $btn = $(this);
+        const key = $btn.data('info');
+        const $popup = $btn.closest('.rpg-knives-info-block').find(`.rpg-knives-info-popup[data-info="${key}"]`);
+        const isOpen = $popup.is(':visible');
+        $popup.toggle(!isOpen);
+        $btn.toggleClass('open', !isOpen);
+    });
+
     // ── Name Ban ──
     const _nbSettings = () => {
         if (!extensionSettings.nameBan) extensionSettings.nameBan = {};
@@ -1699,6 +1775,25 @@ async function initUI() {
     // Initialize Doom Counter toast button listener
     initDoomCounterListener();
 
+    // Knives
+    const kn = extensionSettings.knives || {};
+    $('#rpg-toggle-knives').prop('checked', !!kn.enabled);
+    $('#rpg-knives-badge').text(kn.enabled ? 'on' : 'off');
+    $('#rpg-knives-options').toggle(!!kn.enabled);
+    $('#rpg-toggle-knives-reveal-status').prop('checked', !!kn.revealStatus);
+    $('#rpg-toggle-knives-require-present').prop('checked', kn.requireCharacterPresent !== false);
+    $('#rpg-knives-cooldown').val(typeof kn.cooldownMessages === 'number' ? kn.cooldownMessages : 5);
+    $('#rpg-knives-serious-threshold').val(typeof kn.seriousTensionThreshold === 'number' ? kn.seriousTensionThreshold : 5);
+    $('#rpg-knives-catastrophic-threshold').val(typeof kn.catastrophicTensionThreshold === 'number' ? kn.catastrophicTensionThreshold : 8);
+    if (kn.enabled) {
+        try {
+            renderUserKnivesSection($('#rpg-knives-user-section'));
+            renderCharacterKnivesSection($('#rpg-knives-character-section'));
+        } catch (e) {
+            console.warn('[Dooms Knives] initial panel render failed:', e);
+        }
+    }
+
     // Name Ban
     const nb = extensionSettings.nameBan || {};
     $('#rpg-toggle-name-ban').prop('checked', nb.enabled || false);
@@ -1732,6 +1827,7 @@ async function initUI() {
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
     try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
+    try { initKnives(); console.log('[Dooms Tracker] initKnives() OK'); } catch(e) { console.error('[Dooms Tracker] initKnives() FAILED:', e); }
     try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
     try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
     try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch(e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }

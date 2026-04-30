@@ -12,6 +12,7 @@ import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
 import { chat_metadata, chat, getRequestHeaders } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
+import { renderKnifeListEditor } from './knivesPanel.js';
 
 // Dynamic import to avoid circular dependency:
 // characterSheet → expressionSync → portraitBar → characterSheet
@@ -670,12 +671,17 @@ export function openCharacterSheet(characterName) {
     const $sections = $modal.find('.rpg-cs-sections');
     $sections.empty();
 
-    // Tab bar
+    // Tab bar — Knives tab is shown only when the feature is enabled, so the
+    // sheet is unchanged for users who haven't opted in.
+    const knivesTabHtml = extensionSettings.knives?.enabled
+        ? '<div class="rpg-cs-tab" data-tab="knives"><i class="fa-solid fa-khanda"></i> Knives</div>'
+        : '';
     $sections.append(`
         <div class="rpg-cs-tabs">
             <div class="rpg-cs-tab active" data-tab="sheet"><i class="fa-solid fa-scroll"></i> Sheet</div>
             <div class="rpg-cs-tab" data-tab="stats"><i class="fa-solid fa-chart-bar"></i> Stats</div>
             <div class="rpg-cs-tab" data-tab="expressions"><i class="fa-solid fa-face-smile"></i> Expressions</div>
+            ${knivesTabHtml}
         </div>
     `);
 
@@ -715,6 +721,12 @@ export function openCharacterSheet(characterName) {
 
     // Expressions tab content (lazy — fetched on first click)
     $sections.append(`<div class="rpg-cs-tab-content" data-tab="expressions" style="display: none;" data-character="${characterName}"></div>`);
+
+    // Knives tab content (lazy — rendered on first click). Only mounted when
+    // the feature is enabled so disabled state has zero DOM footprint.
+    if (extensionSettings.knives?.enabled) {
+        $sections.append(`<div class="rpg-cs-tab-content" data-tab="knives" style="display: none;" data-character="${characterName}"></div>`);
+    }
 
     $modal.css('display', 'flex');
 }
@@ -872,6 +884,14 @@ export function initCharacterSheet() {
                 const charName = $exprPanel.data('character');
                 renderExpressionsTab($exprPanel, charName);
             }
+        }
+
+        // Knives — render once, then re-render every time the tab is clicked
+        // so manual overrides done from the settings panel show up here too.
+        if (tabName === 'knives' && extensionSettings.knives?.enabled) {
+            const $knivesPanel = $modal.find('.rpg-cs-tab-content[data-tab="knives"]');
+            const charName = $knivesPanel.data('character');
+            if (charName) renderKnifeListEditor(charName, $knivesPanel);
         }
     });
 

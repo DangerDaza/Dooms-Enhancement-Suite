@@ -1269,6 +1269,143 @@
                 </div>
             </div>
 
+            <!-- ═══════ KNIVES ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="knives">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-khanda rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Knives</span>
+                    <span class="rpg-accordion-badge" id="rpg-knives-badge">off</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Enable Knives</span>
+                            <span class="rpg-setting-hint">Player-authored story hooks the AI deploys with proper pacing — debts, secrets, vows, enemies. Inspired by tabletop "knives" technique and *Blades in the Dark*.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-knives" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div id="rpg-knives-options">
+                        <!-- Info boxes -->
+                        <div class="rpg-subsection-label">About Knives</div>
+
+                        <div class="rpg-knives-info-block">
+                            <div class="rpg-knives-info-row">
+                                <button type="button" class="rpg-knives-info-btn" data-info="what">What is a Knife?<i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="rpg-knives-info-popup" data-info="what" style="display:none;">
+                                <p>In tabletop D&amp;D and *Blades in the Dark*, a "knife" is a story hook the player authors and gives to the GM — a debt, a secret, a wronged ex, a vow that demands payment. The GM holds them, sharpens them quietly, and "fires" them at dramatic moments. The player gets to *want* the consequence; the GM gets pacing tools.</p>
+                                <p>Knives differ from quests: a quest is "do X to win Y." A knife is "this thing about you will come back when it hurts most." It's a pre-authored complication, not a goal.</p>
+                            </div>
+
+                            <div class="rpg-knives-info-row">
+                                <button type="button" class="rpg-knives-info-btn" data-info="owners">Owners: User vs. Character Knives<i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="rpg-knives-info-popup" data-info="owners" style="display:none;">
+                                <p><strong>Your Knives</strong> belong to your player character — your gambling debt, your rival, your vow. They follow you into every chat.</p>
+                                <p><strong>Character Knives</strong> belong to a specific NPC by name. They only become eligible when that character is currently on stage in the scene. When the character isn't present, none of their knives can fire.</p>
+                                <p>Knife <em>templates</em> (the title, description, severity you write) travel with their owner across chats. The live story state — whether a knife has fired in <em>this</em> chat — stays per-chat. So a knife can be spent in one chat and dormant in another with the same character.</p>
+                            </div>
+
+                            <div class="rpg-knives-info-row">
+                                <button type="button" class="rpg-knives-info-btn" data-info="lifecycle">Knife Lifecycle<i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="rpg-knives-info-popup" data-info="lifecycle" style="display:none;">
+                                <p>Each knife moves through five states. <strong>Code, not the AI, decides when to promote</strong> — the AI only handles the storytelling.</p>
+                                <ul>
+                                    <li><strong>Dormant</strong> — known to the system, not yet active. Invisible to the AI.</li>
+                                    <li><strong>Sharpening</strong> — the AI is told to foreshadow this knife subtly. Hint, don't deploy.</li>
+                                    <li><strong>Drawn</strong> — the AI is told to deploy this knife <em>this turn</em>. Only one knife is drawn at a time across all owners.</li>
+                                    <li><strong>Spent</strong> — the AI fired it (detected from the response). Cooldown begins.</li>
+                                    <li><strong>Defused</strong> — manually retired without firing.</li>
+                                </ul>
+                            </div>
+
+                            <div class="rpg-knives-info-row">
+                                <button type="button" class="rpg-knives-info-btn" data-info="pacing">Pacing &amp; Doom Integration<i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="rpg-knives-info-popup" data-info="pacing" style="display:none;">
+                                <p>Severity tiers gate when a knife can be drawn:</p>
+                                <ul>
+                                    <li><strong>Minor</strong> — fires anytime.</li>
+                                    <li><strong>Serious</strong> — needs raised tension (default ≥ 5).</li>
+                                    <li><strong>Catastrophic</strong> — needs high tension (default ≥ 8) <em>or</em> the Doom Counter countdown to be active. If Doom Counter is off, only the tension floor applies.</li>
+                                </ul>
+                                <p>After a knife is spent, a cooldown of N messages prevents the next one from drawing. Sharpening promotion is randomized but capped at 3 simultaneous knives across the chat — so the AI never gets a wall of foreshadowing.</p>
+                            </div>
+
+                            <div class="rpg-knives-info-row">
+                                <button type="button" class="rpg-knives-info-btn" data-info="tips">Tips for Writing Good Knives<i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="rpg-knives-info-popup" data-info="tips" style="display:none;">
+                                <ul>
+                                    <li><strong>Be specific.</strong> "Owes 500gp to Marrick of the Black Gull" beats "owes someone money."</li>
+                                    <li><strong>Name names.</strong> Concrete NPCs, places, and numbers give the AI hooks to work with.</li>
+                                    <li><strong>One sentence of motivation.</strong> Why does it hurt? What does the antagonist want?</li>
+                                    <li><strong>Foreshadowing hints help.</strong> One-line breadcrumbs the AI can drop early.</li>
+                                    <li><strong>3–5 well-written knives beat 20 vague ones.</strong> Quality and specificity matter more than quantity.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Sub-options -->
+                        <div class="rpg-subsection-label">Behavior</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Reveal AI status</span>
+                                <span class="rpg-setting-hint">Show lifecycle badges (Dormant / Sharpening / Drawn / Spent) in the editor. Off = surprise mode — you only see your knives, not when they're being deployed.</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-toggle-knives-reveal-status" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Require character present</span>
+                                <span class="rpg-setting-hint">Only inject a character's knives when that character is on stage in the scene. Recommended on — keeps absent NPCs from haunting the prompt.</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-toggle-knives-require-present" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Cooldown (messages)</span>
+                                <span class="rpg-setting-hint">After a knife is spent, how many messages must pass before another can be drawn.</span>
+                            </div>
+                            <input type="number" id="rpg-knives-cooldown" class="text_pole" min="0" max="50" step="1" style="max-width:80px;" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Serious tension floor</span>
+                                <span class="rpg-setting-hint">Tension scale (1–10) below which severity-2 knives stay sharpened.</span>
+                            </div>
+                            <input type="number" id="rpg-knives-serious-threshold" class="text_pole" min="1" max="10" step="1" style="max-width:80px;" />
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Catastrophic tension floor</span>
+                                <span class="rpg-setting-hint">Tension floor for severity-3 knives (also fires on Doom Counter activation).</span>
+                            </div>
+                            <input type="number" id="rpg-knives-catastrophic-threshold" class="text_pole" min="1" max="10" step="1" style="max-width:80px;" />
+                        </div>
+
+                        <!-- Knife management sections -->
+                        <div class="rpg-subsection-label">Your Knives</div>
+                        <div id="rpg-knives-user-section"></div>
+
+                        <div class="rpg-subsection-label">Character Knives</div>
+                        <div id="rpg-knives-character-section"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══════ CHAT BUBBLES ═══════ -->
             <div class="rpg-accordion-section" data-accordion="chat-bubbles">
                 <div class="rpg-accordion-header">
