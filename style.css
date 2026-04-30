@@ -14346,6 +14346,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    fixed when its drawer is open in SillyTavern, so it floats
    correctly even though the parent has zero height. Toggled from
    the Doom Button settings section. */
+body.dooms-hide-st-topbar {
+    /* SillyTavern uses this var to offset #sheld and other panels
+       from the top; zeroing it lets the chat slide up. */
+    --topBarBlockSize: 0px !important;
+}
+
 body.dooms-hide-st-topbar #top-bar {
     height: 0 !important;
     min-height: 0 !important;
@@ -14367,6 +14373,13 @@ body.dooms-hide-st-topbar #top-settings-holder {
 
 body.dooms-hide-st-topbar #top-settings-holder .drawer-toggle {
     display: none !important;
+}
+
+body.dooms-hide-st-topbar #sheld,
+body.dooms-hide-st-topbar #chat {
+    top: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
 /* Make any currently-open drawer escape the collapsed bar and
