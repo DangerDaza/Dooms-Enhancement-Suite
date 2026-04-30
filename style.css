@@ -14420,15 +14420,15 @@ body.dooms-hide-st-topbar .openDrawer {
     transition: transform 0.2s ease;
 }
 
-/* Lightning strike on hover: the D's silhouette flashes white in
-   a multi-step strobe (mimicking a lightning flicker) and settles
-   to var(--rpg-highlight). Built via CSS mask so the flash hugs
-   the actual D shape, not a rectangle. */
+/* Lightning strike on hover: the D's silhouette flickers in
+   white at low opacity (peaks at ~10%) for a subtle electric
+   feel. Built via CSS mask so the flash hugs the actual D
+   shape, not a rectangle. */
 .dooms-fab-btn .doom-icon::after {
     content: '';
     position: absolute;
     inset: 0;
-    background-color: var(--rpg-highlight, #e94560);
+    background-color: #ffffff;
     -webkit-mask-image: url('./icon.png');
             mask-image: url('./icon.png');
     -webkit-mask-size: cover;
@@ -14480,28 +14480,28 @@ body.dooms-hide-st-topbar .openDrawer {
     transform: scale(0.95);
 }
 
-/* Multi-flash strobe — white spikes during the strike, settles to
-   the theme highlight color. */
+/* Multi-flash strobe — white flickers, peak ~10% opacity, settles
+   to a soft 10% rest tint while the cursor stays. */
 @keyframes dooms-fab-lightning-tint {
-    0%   { opacity: 0;    background-color: #ffffff; }
-    6%   { opacity: 1;    background-color: #ffffff; }
-    14%  { opacity: 0.15; background-color: var(--rpg-highlight, #e94560); }
-    22%  { opacity: 0.95; background-color: #ffffff; }
-    30%  { opacity: 0.4;  background-color: var(--rpg-highlight, #e94560); }
-    42%  { opacity: 1;    background-color: #ffffff; }
-    55%  { opacity: 0.7;  background-color: var(--rpg-highlight, #e94560); }
-    100% { opacity: 1;    background-color: var(--rpg-highlight, #e94560); }
+    0%   { opacity: 0;    }
+    6%   { opacity: 0.10; }
+    14%  { opacity: 0.02; }
+    22%  { opacity: 0.10; }
+    30%  { opacity: 0.04; }
+    42%  { opacity: 0.10; }
+    55%  { opacity: 0.07; }
+    100% { opacity: 0.10; }
 }
 
-/* Bolt overlay — flicker the jagged stroke for ~0.5s then fade out. */
+/* Bolt overlay — same subtle flicker, capped at 10%. */
 @keyframes dooms-fab-lightning-bolt {
-    0%   { opacity: 0; }
-    8%   { opacity: 1; }
-    16%  { opacity: 0.2; }
-    24%  { opacity: 1; }
-    36%  { opacity: 0.4; }
-    50%  { opacity: 0.9; }
-    100% { opacity: 0; }
+    0%   { opacity: 0;    }
+    8%   { opacity: 0.10; }
+    16%  { opacity: 0.02; }
+    24%  { opacity: 0.10; }
+    36%  { opacity: 0.04; }
+    50%  { opacity: 0.09; }
+    100% { opacity: 0;    }
 }
 
 /* Tiny jitter on the button itself — reads as electrical shock. */
