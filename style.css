@@ -14414,35 +14414,56 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 .dooms-fab-btn .doom-icon {
+    position: relative;
     width: 40px;
     height: 40px;
-    transition: filter 0.2s ease, transform 0.2s ease;
+    transition: transform 0.2s ease;
+}
+
+/* Hover color-shift: a solid theme-colored silhouette of the icon
+   (built via CSS mask) crossfades over the resting full-colour PNG.
+   The D shifts toward var(--rpg-highlight) without any glow halo. */
+.dooms-fab-btn .doom-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--rpg-highlight, #e94560);
+    -webkit-mask-image: url('./icon.png');
+            mask-image: url('./icon.png');
+    -webkit-mask-size: cover;
+            mask-size: cover;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
 }
 
 .dooms-fab-btn:hover {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.08);
     box-shadow: none;
 }
 
-.dooms-fab-btn:hover .doom-icon {
-    filter:
-        drop-shadow(0 0 4px var(--rpg-highlight, #e94560))
-        drop-shadow(0 0 10px var(--rpg-highlight, #e94560));
+.dooms-fab-btn:hover .doom-icon::after {
+    opacity: 1;
 }
 
 .dooms-fab-btn:active {
     transform: scale(0.95);
 }
 
-/* Move-mode: cursor + subtle pulse on the D's silhouette (not a box) */
+/* Move-mode: keep the silhouette tint visible and pulse its opacity
+   so the user sees that the button is "armed" to be moved. */
 .dooms-settings-fab.dooms-fab-moving .dooms-fab-btn {
     cursor: grab;
     box-shadow: none;
 }
 
-.dooms-settings-fab.dooms-fab-moving .dooms-fab-btn .doom-icon {
-    animation: dooms-fab-icon-pulse 1.2s ease-in-out infinite;
+.dooms-settings-fab.dooms-fab-moving .dooms-fab-btn .doom-icon::after {
+    animation: dooms-fab-tint-pulse 1.2s ease-in-out infinite;
 }
 
 .dooms-settings-fab.dooms-fab-moving.dooms-fab-dragging .dooms-fab-btn {
@@ -14450,16 +14471,14 @@ body.dooms-hide-st-topbar .openDrawer {
     transform: scale(1.08);
 }
 
-.dooms-settings-fab.dooms-fab-moving.dooms-fab-dragging .dooms-fab-btn .doom-icon {
+.dooms-settings-fab.dooms-fab-moving.dooms-fab-dragging .dooms-fab-btn .doom-icon::after {
     animation: none;
-    filter:
-        drop-shadow(0 0 6px var(--rpg-highlight, #e94560))
-        drop-shadow(0 0 14px var(--rpg-highlight, #e94560));
+    opacity: 1;
 }
 
-@keyframes dooms-fab-icon-pulse {
-    0%, 100% { filter: drop-shadow(0 0 2px var(--rpg-highlight, #e94560)); }
-    50%      { filter: drop-shadow(0 0 12px var(--rpg-highlight, #e94560)) drop-shadow(0 0 4px var(--rpg-highlight, #e94560)); }
+@keyframes dooms-fab-tint-pulse {
+    0%, 100% { opacity: 0.25; }
+    50%      { opacity: 1; }
 }
 
 /* Right-click context menu on the FAB */
