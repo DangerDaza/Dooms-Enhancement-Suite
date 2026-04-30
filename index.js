@@ -1770,6 +1770,50 @@ async function initUI() {
         applySavedPosition();
         // Re-clamp if the viewport shrinks below the saved position
         window.addEventListener('resize', applySavedPosition);
+        // Build the fly-out menu: real Settings entry + 5 placeholders
+        const fabMenuItems = [
+            { id: 'settings', label: 'Settings',     icon: 'fa-solid fa-gear',     action: () => {
+                const modal = getSettingsModal();
+                if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
+            }},
+            { id: 'slot-1',   label: 'Slot 1',       icon: 'fa-solid fa-circle-dot', action: null },
+            { id: 'slot-2',   label: 'Slot 2',       icon: 'fa-solid fa-circle-dot', action: null },
+            { id: 'slot-3',   label: 'Slot 3',       icon: 'fa-solid fa-circle-dot', action: null },
+            { id: 'slot-4',   label: 'Slot 4',       icon: 'fa-solid fa-circle-dot', action: null },
+            { id: 'slot-5',   label: 'Slot 5',       icon: 'fa-solid fa-circle-dot', action: null },
+        ];
+        const $menuList = $('<ul class="dooms-fab-menu" role="menu"></ul>');
+        for (const item of fabMenuItems) {
+            const $li = $('<li></li>');
+            const $btn = $(`<button type="button" class="dooms-fab-menu-item" data-action="${item.id}">
+                <i class="${item.icon}"></i><span>${item.label}</span>
+            </button>`);
+            $li.append($btn);
+            $menuList.append($li);
+        }
+        $(fabEl).append($menuList);
+        const closeFlyout = () => {
+            $menuList.removeClass('open');
+            fabEl.classList.remove('dooms-fab-open');
+            $(document).off('mousedown.fabflyout keydown.fabflyout');
+        };
+        const openFlyout = () => {
+            // Choose direction (up vs down) based on space available
+            const rect = fabEl.getBoundingClientRect();
+            const spaceAbove = rect.top;
+            const spaceBelow = window.innerHeight - rect.bottom;
+            $menuList.attr('data-direction', spaceAbove < 260 && spaceBelow > spaceAbove ? 'down' : 'up');
+            $menuList.addClass('open');
+            fabEl.classList.add('dooms-fab-open');
+            setTimeout(() => {
+                $(document).on('mousedown.fabflyout', function(ev) {
+                    if (!$(ev.target).closest('#dooms-settings-fab').length) closeFlyout();
+                });
+                $(document).on('keydown.fabflyout', function(ev) {
+                    if (ev.key === 'Escape') closeFlyout();
+                });
+            }, 0);
+        };
         $('#dooms-fab-settings').on('click', function(e) {
             if (suppressClick) {
                 suppressClick = false;
@@ -1777,12 +1821,17 @@ async function initUI() {
                 e.stopPropagation();
                 return;
             }
-            const modal = getSettingsModal();
-            if (modal) {
-                modal.open();
-            } else {
-                $('#rpg-settings-popup').show();
-            }
+            e.preventDefault();
+            e.stopPropagation();
+            if ($menuList.hasClass('open')) closeFlyout();
+            else openFlyout();
+        });
+        $menuList.on('click', '.dooms-fab-menu-item', function(e) {
+            e.stopPropagation();
+            const id = $(this).data('action');
+            const item = fabMenuItems.find(i => i.id === id);
+            closeFlyout();
+            if (item && typeof item.action === 'function') item.action();
         });
         // Right-click context menu: Move / Reset
         const closeContextMenu = () => {
@@ -1892,8 +1941,10 @@ async function initUI() {
                     const top = parseFloat(fabEl.style.top) || 0;
                     extensionSettings.fabPosition = { left, top };
                     saveSettings();
-                    suppressClick = true;
                 }
+                // Suppress the click that follows pointerup so move-mode
+                // never accidentally opens the flyout.
+                suppressClick = true;
             };
             const onEsc = (ev) => {
                 if (ev.key !== 'Escape') return;

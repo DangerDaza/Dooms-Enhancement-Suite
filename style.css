@@ -14352,6 +14352,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     width: 32px;
     height: 32px;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+    transition: transform 0.4s;
 }
 
 .dooms-fab-btn:hover,
@@ -14423,45 +14424,97 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     color: var(--rpg-highlight, #e94560);
 }
 
-/* Pop-up menu above the button */
+/* Fly-out menu: pill items that slide in from the FAB. Default is "open
+   upward" (button anchored at bottom of screen). When the FAB is moved
+   near the top of the viewport, JS toggles the [data-direction="down"]
+   attribute and the menu flips below the button. */
 .dooms-fab-menu {
     position: absolute;
-    bottom: 38px;
+    bottom: 70px;
     left: 0;
-    min-width: 170px;
-    background: var(--SmartThemeBlurTintColor, rgba(22, 33, 62, 0.97));
-    border: 1px solid rgba(233, 69, 96, 0.2);
-    border-radius: 10px;
-    padding: 6px 0;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(12px);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    z-index: 10001;
 }
 
+.dooms-fab-menu[data-direction="down"] {
+    bottom: auto;
+    top: 70px;
+}
+
+.dooms-fab-menu li {
+    display: block;
+    margin-bottom: 8px;
+    text-align: left;
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+
+.dooms-fab-menu[data-direction="down"] li {
+    transform: translateY(-8px) scale(0.92);
+}
+
+.dooms-fab-menu.open li {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* Staggered entry — item closest to the button appears first.
+   Default (up): last-child is bottom (closest to button). */
+.dooms-fab-menu.open li:nth-child(6) { transition-delay: 0.04s; }
+.dooms-fab-menu.open li:nth-child(5) { transition-delay: 0.08s; }
+.dooms-fab-menu.open li:nth-child(4) { transition-delay: 0.12s; }
+.dooms-fab-menu.open li:nth-child(3) { transition-delay: 0.16s; }
+.dooms-fab-menu.open li:nth-child(2) { transition-delay: 0.20s; }
+.dooms-fab-menu.open li:nth-child(1) { transition-delay: 0.24s; }
+
+/* When flipped down, first-child is at top (closest to button), so reverse */
+.dooms-fab-menu[data-direction="down"].open li:nth-child(1) { transition-delay: 0.04s; }
+.dooms-fab-menu[data-direction="down"].open li:nth-child(2) { transition-delay: 0.08s; }
+.dooms-fab-menu[data-direction="down"].open li:nth-child(3) { transition-delay: 0.12s; }
+.dooms-fab-menu[data-direction="down"].open li:nth-child(4) { transition-delay: 0.16s; }
+.dooms-fab-menu[data-direction="down"].open li:nth-child(5) { transition-delay: 0.20s; }
+.dooms-fab-menu[data-direction="down"].open li:nth-child(6) { transition-delay: 0.24s; }
+
 .dooms-fab-menu-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
-    padding: 9px 14px;
+    padding: 8px 15px;
     border: none;
-    background: transparent;
-    color: var(--rpg-text, #d0d0d0);
-    font-size: 0.88em;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.15s ease;
+    background: #ccd7f5;
+    color: #6077b0;
+    border-radius: 5px;
+    overflow: hidden;
     white-space: nowrap;
+    transition: margin 0.4s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 1px 3px 5px rgba(211, 224, 255, 0.5);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
 }
 
 .dooms-fab-menu-item:hover {
-    background: rgba(233, 69, 96, 0.12);
+    margin-left: 10px;
+    background: #b2bedc;
+    color: #3f5285;
+    box-shadow: 1px 3px 8px rgba(135, 105, 169, 0.45);
 }
 
 .dooms-fab-menu-item i {
-    color: var(--rpg-highlight, #e94560);
-    width: 16px;
+    width: 14px;
     text-align: center;
-    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+/* Rotate the doom-icon while the flyout is open */
+.dooms-settings-fab.dooms-fab-open .dooms-fab-btn .doom-icon {
+    transform: rotate(225deg);
 }
 
 /* ========================================
