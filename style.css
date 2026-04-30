@@ -14451,11 +14451,17 @@ body.dooms-hide-st-topbar .openDrawer {
     inset: -6px;
     transform: translateX(6px);
     background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
+    /* Standard Font-Awesome bolt outline, normalized — a clean
+       7-vertex non-self-intersecting polygon so the fill-rule
+       doesn't punch holes in the stroke. */
     clip-path: polygon(
-        58% 0%,  44% 38%,  56% 38%,
-        38% 70%, 50% 70%,  30% 100%,
-        46% 70%, 38% 70%,  56% 38%,
-        50% 38%, 64% 0%
+        100% 6%,
+        58% 6%,
+        25% 62%,
+        50% 62%,
+        33% 94%,
+        100% 44%,
+        75% 44%
     );
     opacity: 0;
     pointer-events: none;
