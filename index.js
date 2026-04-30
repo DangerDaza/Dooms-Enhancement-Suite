@@ -1740,14 +1740,43 @@ async function initUI() {
     // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
         const fabHtml = `
-            <div id="dooms-settings-fab" class="dooms-settings-fab" title="Doom's Tracker Settings">
+            <div id="dooms-settings-fab" class="dooms-settings-fab" title="Doom's Tracker Settings (right-click to move)">
                 <button id="dooms-fab-settings" class="dooms-fab-btn" title="Settings">
                     <span class="doom-icon"></span>
                 </button>
             </div>
         `;
         $('body').append(fabHtml);
-        $('#dooms-fab-settings').on('click', function() {
+        const fabEl = document.getElementById('dooms-settings-fab');
+        let suppressClick = false;
+        const clampPosition = (left, top) => {
+            const w = fabEl.offsetWidth || 56;
+            const h = fabEl.offsetHeight || 56;
+            return {
+                left: Math.max(0, Math.min(window.innerWidth - w, left)),
+                top: Math.max(0, Math.min(window.innerHeight - h, top)),
+            };
+        };
+        const applySavedPosition = () => {
+            const pos = extensionSettings.fabPosition;
+            if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+                const c = clampPosition(pos.left, pos.top);
+                fabEl.style.left = c.left + 'px';
+                fabEl.style.top = c.top + 'px';
+                fabEl.style.right = 'auto';
+                fabEl.style.bottom = 'auto';
+            }
+        };
+        applySavedPosition();
+        // Re-clamp if the viewport shrinks below the saved position
+        window.addEventListener('resize', applySavedPosition);
+        $('#dooms-fab-settings').on('click', function(e) {
+            if (suppressClick) {
+                suppressClick = false;
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             const modal = getSettingsModal();
             if (modal) {
                 modal.open();
@@ -1755,6 +1784,126 @@ async function initUI() {
                 $('#rpg-settings-popup').show();
             }
         });
+        // Right-click context menu: Move / Reset
+        const closeContextMenu = () => {
+            $('.dooms-fab-context-menu').remove();
+            $(document).off('mousedown.fabctx keydown.fabctx');
+        };
+        const showContextMenu = (x, y) => {
+            closeContextMenu();
+            const hasCustom = !!extensionSettings.fabPosition;
+            const $menu = $(`
+                <div class="dooms-fab-context-menu" role="menu">
+                    <button type="button" class="dooms-fab-context-item" data-action="move">
+                        <i class="fa-solid fa-arrows-up-down-left-right"></i><span>Move button</span>
+                    </button>
+                    ${hasCustom ? `
+                    <button type="button" class="dooms-fab-context-item" data-action="reset">
+                        <i class="fa-solid fa-rotate-left"></i><span>Reset to bottom-left</span>
+                    </button>` : ''}
+                </div>
+            `);
+            $('body').append($menu);
+            const m = $menu[0];
+            m.style.left = x + 'px';
+            m.style.top = y + 'px';
+            const rect = m.getBoundingClientRect();
+            if (rect.right > window.innerWidth) m.style.left = Math.max(0, window.innerWidth - rect.width - 8) + 'px';
+            if (rect.bottom > window.innerHeight) m.style.top = Math.max(0, window.innerHeight - rect.height - 8) + 'px';
+            $menu.on('click', '.dooms-fab-context-item', function(ev) {
+                ev.stopPropagation();
+                const action = $(this).data('action');
+                closeContextMenu();
+                if (action === 'move') startMoveMode();
+                else if (action === 'reset') resetPosition();
+            });
+            // Defer outside-click binding so the opening contextmenu event doesn't immediately dismiss it
+            setTimeout(() => {
+                $(document).on('mousedown.fabctx', function(ev) {
+                    if (!$(ev.target).closest('.dooms-fab-context-menu').length) closeContextMenu();
+                });
+                $(document).on('keydown.fabctx', function(ev) {
+                    if (ev.key === 'Escape') closeContextMenu();
+                });
+            }, 0);
+        };
+        $('#dooms-settings-fab').on('contextmenu', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e.clientX, e.clientY);
+        });
+        const resetPosition = () => {
+            delete extensionSettings.fabPosition;
+            saveSettings();
+            fabEl.style.left = '';
+            fabEl.style.top = '';
+            fabEl.style.right = '';
+            fabEl.style.bottom = '';
+        };
+        // Move mode: arm one drag session, persist position on release.
+        const startMoveMode = () => {
+            fabEl.classList.add('dooms-fab-moving');
+            let dragging = false, moved = false;
+            let startX = 0, startY = 0, startLeft = 0, startTop = 0, activePointerId = null;
+            const onPointerDown = (ev) => {
+                if (ev.button !== 0 && ev.pointerType === 'mouse') return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                dragging = true;
+                moved = false;
+                activePointerId = ev.pointerId;
+                try { fabEl.setPointerCapture(ev.pointerId); } catch (_) {}
+                const rect = fabEl.getBoundingClientRect();
+                startX = ev.clientX;
+                startY = ev.clientY;
+                startLeft = rect.left;
+                startTop = rect.top;
+                fabEl.style.left = startLeft + 'px';
+                fabEl.style.top = startTop + 'px';
+                fabEl.style.right = 'auto';
+                fabEl.style.bottom = 'auto';
+                fabEl.classList.add('dooms-fab-dragging');
+                fabEl.addEventListener('pointermove', onPointerMove);
+                fabEl.addEventListener('pointerup', onPointerUp);
+                fabEl.addEventListener('pointercancel', onPointerUp);
+            };
+            const onPointerMove = (ev) => {
+                if (!dragging || ev.pointerId !== activePointerId) return;
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+                const c = clampPosition(startLeft + dx, startTop + dy);
+                fabEl.style.left = c.left + 'px';
+                fabEl.style.top = c.top + 'px';
+            };
+            const onPointerUp = (ev) => {
+                if (!dragging || ev.pointerId !== activePointerId) return;
+                dragging = false;
+                try { fabEl.releasePointerCapture(ev.pointerId); } catch (_) {}
+                fabEl.removeEventListener('pointermove', onPointerMove);
+                fabEl.removeEventListener('pointerup', onPointerUp);
+                fabEl.removeEventListener('pointercancel', onPointerUp);
+                fabEl.removeEventListener('pointerdown', onPointerDown);
+                document.removeEventListener('keydown', onEsc);
+                fabEl.classList.remove('dooms-fab-moving');
+                fabEl.classList.remove('dooms-fab-dragging');
+                if (moved) {
+                    const left = parseFloat(fabEl.style.left) || 0;
+                    const top = parseFloat(fabEl.style.top) || 0;
+                    extensionSettings.fabPosition = { left, top };
+                    saveSettings();
+                    suppressClick = true;
+                }
+            };
+            const onEsc = (ev) => {
+                if (ev.key !== 'Escape') return;
+                fabEl.removeEventListener('pointerdown', onPointerDown);
+                document.removeEventListener('keydown', onEsc);
+                fabEl.classList.remove('dooms-fab-moving');
+            };
+            fabEl.addEventListener('pointerdown', onPointerDown);
+            document.addEventListener('keydown', onEsc);
+        };
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
