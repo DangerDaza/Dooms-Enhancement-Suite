@@ -1770,39 +1770,77 @@ async function initUI() {
         applySavedPosition();
         // Re-clamp if the viewport shrinks below the saved position
         window.addEventListener('resize', applySavedPosition);
-        // Build the fly-out menu: real Settings entry + 5 placeholders
-        const fabMenuItems = [
-            { id: 'settings', label: 'Settings',     icon: 'fa-solid fa-gear',     action: () => {
-                const modal = getSettingsModal();
-                if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
-            }},
-            { id: 'slot-1',   label: 'Slot 1',       icon: 'fa-solid fa-circle-dot', action: null },
-            { id: 'slot-2',   label: 'Slot 2',       icon: 'fa-solid fa-circle-dot', action: null },
-            { id: 'slot-3',   label: 'Slot 3',       icon: 'fa-solid fa-circle-dot', action: null },
-            { id: 'slot-4',   label: 'Slot 4',       icon: 'fa-solid fa-circle-dot', action: null },
-            { id: 'slot-5',   label: 'Slot 5',       icon: 'fa-solid fa-circle-dot', action: null },
-        ];
+        // Fly-out menu: DES Settings + each button from SillyTavern's top bar.
+        // Built dynamically so the menu always reflects whatever the host UI shows.
         const $menuList = $('<ul class="dooms-fab-menu" role="menu"></ul>');
-        for (const item of fabMenuItems) {
-            const $li = $('<li></li>');
-            const $btn = $(`<button type="button" class="dooms-fab-menu-item" data-action="${item.id}">
-                <i class="${item.icon}"></i><span>${item.label}</span>
-            </button>`);
-            $li.append($btn);
-            $menuList.append($li);
-        }
         $(fabEl).append($menuList);
+        const buildMenuItems = () => {
+            const items = [{
+                id: 'des-settings',
+                label: "Doom's Settings",
+                iconClass: 'fa-solid fa-gear',
+                action: () => {
+                    const modal = getSettingsModal();
+                    if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
+                },
+            }];
+            $('#top-settings-holder .drawer-icon').each(function() {
+                const $icon = $(this);
+                const label = ($icon.attr('title') || $icon.attr('aria-label') || 'Untitled').trim();
+                const rawClass = ($icon.attr('class') || '');
+                // Keep only Font-Awesome classes; strip drawer/state/utility classes
+                const iconClass = rawClass.split(/\s+/)
+                    .filter(c => c.startsWith('fa-'))
+                    .join(' ') || 'fa-solid fa-square';
+                items.push({
+                    id: $icon.attr('id') || label.toLowerCase().replace(/\s+/g, '-'),
+                    label,
+                    iconClass,
+                    // Dispatch the click to the real SillyTavern button
+                    action: () => { $icon.trigger('click'); },
+                });
+            });
+            return items;
+        };
+        const renderMenuItems = () => {
+            $menuList.empty();
+            for (const item of buildMenuItems()) {
+                const $li = $('<li></li>');
+                const $btn = $('<button type="button" class="dooms-fab-menu-item"></button>')
+                    .attr('data-action', item.id)
+                    .append($('<i></i>').attr('class', item.iconClass))
+                    .append($('<span></span>').text(item.label));
+                $btn.on('click', function(ev) {
+                    ev.stopPropagation();
+                    closeFlyout();
+                    if (typeof item.action === 'function') item.action();
+                });
+                $li.append($btn);
+                $menuList.append($li);
+            }
+        };
         const closeFlyout = () => {
             $menuList.removeClass('open');
             fabEl.classList.remove('dooms-fab-open');
             $(document).off('mousedown.fabflyout keydown.fabflyout');
         };
         const openFlyout = () => {
+            renderMenuItems();
             // Choose direction (up vs down) based on space available
             const rect = fabEl.getBoundingClientRect();
             const spaceAbove = rect.top;
             const spaceBelow = window.innerHeight - rect.bottom;
-            $menuList.attr('data-direction', spaceAbove < 260 && spaceBelow > spaceAbove ? 'down' : 'up');
+            const $items = $menuList.children('li');
+            const total = $items.length;
+            // Estimate: ~36px per item + 8px margin
+            const estimated = total * 44 + 20;
+            const direction = (spaceAbove < estimated && spaceBelow > spaceAbove) ? 'down' : 'up';
+            $menuList.attr('data-direction', direction);
+            // Stagger: item nearest the button animates first
+            $items.each(function(idx) {
+                const stagger = direction === 'up' ? (total - 1 - idx) : idx;
+                this.style.transitionDelay = (stagger * 0.04) + 's';
+            });
             $menuList.addClass('open');
             fabEl.classList.add('dooms-fab-open');
             setTimeout(() => {
@@ -1825,13 +1863,6 @@ async function initUI() {
             e.stopPropagation();
             if ($menuList.hasClass('open')) closeFlyout();
             else openFlyout();
-        });
-        $menuList.on('click', '.dooms-fab-menu-item', function(e) {
-            e.stopPropagation();
-            const id = $(this).data('action');
-            const item = fabMenuItems.find(i => i.id === id);
-            closeFlyout();
-            if (item && typeof item.action === 'function') item.action();
         });
         // Right-click context menu: Move / Reset
         const closeContextMenu = () => {

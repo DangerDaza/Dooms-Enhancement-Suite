@@ -14459,22 +14459,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     pointer-events: auto;
 }
 
-/* Staggered entry — item closest to the button appears first.
-   Default (up): last-child is bottom (closest to button). */
-.dooms-fab-menu.open li:nth-child(6) { transition-delay: 0.04s; }
-.dooms-fab-menu.open li:nth-child(5) { transition-delay: 0.08s; }
-.dooms-fab-menu.open li:nth-child(4) { transition-delay: 0.12s; }
-.dooms-fab-menu.open li:nth-child(3) { transition-delay: 0.16s; }
-.dooms-fab-menu.open li:nth-child(2) { transition-delay: 0.20s; }
-.dooms-fab-menu.open li:nth-child(1) { transition-delay: 0.24s; }
-
-/* When flipped down, first-child is at top (closest to button), so reverse */
-.dooms-fab-menu[data-direction="down"].open li:nth-child(1) { transition-delay: 0.04s; }
-.dooms-fab-menu[data-direction="down"].open li:nth-child(2) { transition-delay: 0.08s; }
-.dooms-fab-menu[data-direction="down"].open li:nth-child(3) { transition-delay: 0.12s; }
-.dooms-fab-menu[data-direction="down"].open li:nth-child(4) { transition-delay: 0.16s; }
-.dooms-fab-menu[data-direction="down"].open li:nth-child(5) { transition-delay: 0.20s; }
-.dooms-fab-menu[data-direction="down"].open li:nth-child(6) { transition-delay: 0.24s; }
+/* Staggered entry: transition-delay is set inline by JS so the count of
+   items can be dynamic (the SillyTavern top bar may have any number of
+   buttons). The item nearest the button always animates in first. */
 
 .dooms-fab-menu-item {
     display: inline-flex;
