@@ -1758,6 +1758,43 @@ async function initUI() {
         }
     });
 
+    // ── Update extension (calls SillyTavern's /api/extensions/update) ──
+    getExtensionVersion().then(v => {
+        if (v) $('#rpg-current-version').text(`Currently v${v}.`);
+    });
+    $('#rpg-update-extension').off('click.upd').on('click.upd', async function() {
+        const $btn = $(this);
+        if ($btn.prop('disabled')) return;
+        const $status = $('#rpg-update-status');
+        const originalHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Updating…');
+        $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
+        try {
+            const isUserExt = (import.meta.url || '').includes('/data/');
+            const resp = await fetch('/api/extensions/update', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName, global: !isUserExt }),
+            });
+            if (!resp.ok) {
+                const text = await resp.text().catch(() => '');
+                throw new Error(text || `HTTP ${resp.status}`);
+            }
+            const result = await resp.json().catch(() => ({}));
+            if (result.isUpToDate) {
+                $status.html('<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Already up to date.');
+            } else {
+                const sha = result.shortCommitHash ? ` (${result.shortCommitHash})` : '';
+                $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Updated${sha}. <strong>Reload SillyTavern</strong> to apply.`);
+            }
+        } catch (err) {
+            console.error('[Dooms Tracker] Update failed:', err);
+            $status.html(`<i class="fa-solid fa-triangle-exclamation" style="color:#e94560;"></i> Update failed: ${err.message || err}`);
+        } finally {
+            $btn.prop('disabled', false).html(originalHtml);
+        }
+    });
+
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();
