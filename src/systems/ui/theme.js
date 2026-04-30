@@ -70,6 +70,14 @@ export function applyTheme() {
             $thoughtPanel.attr('data-theme', theme);
         }
     }
+    const $fab = $('#dooms-settings-fab');
+    if ($fab.length) {
+        if (theme === 'default') {
+            $fab.removeAttr('data-theme');
+        } else {
+            $fab.attr('data-theme', theme);
+        }
+    }
     // Also stamp the settings and tracker editor popups so theme CSS takes effect
     // immediately on load, not only when the user opens the popup for the first time.
     const $settingsPopup = $('#rpg-settings-popup');
@@ -136,6 +144,10 @@ export function applyCustomTheme() {
     }
     if ($thoughtPanel.length) {
         $thoughtPanel.attr('data-theme', 'custom').css(customStyles);
+    }
+    const $fab = $('#dooms-settings-fab');
+    if ($fab.length) {
+        $fab.attr('data-theme', 'custom').css(customStyles);
     }
 }
 /**

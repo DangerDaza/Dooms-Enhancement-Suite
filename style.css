@@ -86,7 +86,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .rpg-panel,
 #rpg-thought-panel,
 #rpg-thought-icon,
-.rpg-mobile-toggle {
+.rpg-mobile-toggle,
+#dooms-settings-fab {
     --rpg-bg: var(--SmartThemeBlurTintColor, rgba(26, 26, 46, 0.9));
     --rpg-accent: var(--black30a, rgba(22, 33, 62, 0.9));
     --rpg-text: var(--SmartThemeBodyColor, #eaeaea);
@@ -3803,7 +3804,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply sci-fi theme to thought panel */
 #rpg-thought-panel[data-theme="sci-fi"],
 #rpg-thought-icon[data-theme="sci-fi"],
-.rpg-mobile-toggle[data-theme="sci-fi"] {
+.rpg-mobile-toggle[data-theme="sci-fi"],
+#dooms-settings-fab[data-theme="sci-fi"] {
     --rpg-bg: #0a0e27;
     --rpg-accent: #1a1f3a;
     --rpg-text: #00fff9;
@@ -3852,7 +3854,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply fantasy theme to thought panel */
 #rpg-thought-panel[data-theme="fantasy"],
 #rpg-thought-icon[data-theme="fantasy"],
-.rpg-mobile-toggle[data-theme="fantasy"] {
+.rpg-mobile-toggle[data-theme="fantasy"],
+#dooms-settings-fab[data-theme="fantasy"] {
     --rpg-bg: #2b1810;
     --rpg-accent: #3d2414;
     --rpg-text: #f4e8d0;
@@ -3911,7 +3914,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 /* Apply cyberpunk theme to thought panel */
 #rpg-thought-panel[data-theme="cyberpunk"],
 #rpg-thought-icon[data-theme="cyberpunk"],
-.rpg-mobile-toggle[data-theme="cyberpunk"] {
+.rpg-mobile-toggle[data-theme="cyberpunk"],
+#dooms-settings-fab[data-theme="cyberpunk"] {
     --rpg-bg: #000000;
     --rpg-accent: #0d0d0d;
     --rpg-text: #00ff41;
@@ -3970,7 +3974,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="midnight-rose"],
 #rpg-thought-icon[data-theme="midnight-rose"],
-.rpg-mobile-toggle[data-theme="midnight-rose"] {
+.rpg-mobile-toggle[data-theme="midnight-rose"],
+#dooms-settings-fab[data-theme="midnight-rose"] {
     --rpg-bg: #1a1025;
     --rpg-accent: #2a1838;
     --rpg-text: #e8d5e8;
@@ -4013,7 +4018,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="emerald-grove"],
 #rpg-thought-icon[data-theme="emerald-grove"],
-.rpg-mobile-toggle[data-theme="emerald-grove"] {
+.rpg-mobile-toggle[data-theme="emerald-grove"],
+#dooms-settings-fab[data-theme="emerald-grove"] {
     --rpg-bg: #0d1f12;
     --rpg-accent: #1a3320;
     --rpg-text: #d4e8c8;
@@ -4062,7 +4068,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="arctic"],
 #rpg-thought-icon[data-theme="arctic"],
-.rpg-mobile-toggle[data-theme="arctic"] {
+.rpg-mobile-toggle[data-theme="arctic"],
+#dooms-settings-fab[data-theme="arctic"] {
     --rpg-bg: #0c1929;
     --rpg-accent: #132640;
     --rpg-text: #dce8f4;
@@ -4105,7 +4112,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="volcanic"],
 #rpg-thought-icon[data-theme="volcanic"],
-.rpg-mobile-toggle[data-theme="volcanic"] {
+.rpg-mobile-toggle[data-theme="volcanic"],
+#dooms-settings-fab[data-theme="volcanic"] {
     --rpg-bg: #1a1210;
     --rpg-accent: #2b1e18;
     --rpg-text: #f0dcc8;
@@ -4148,7 +4156,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="dracula"],
 #rpg-thought-icon[data-theme="dracula"],
-.rpg-mobile-toggle[data-theme="dracula"] {
+.rpg-mobile-toggle[data-theme="dracula"],
+#dooms-settings-fab[data-theme="dracula"] {
     --rpg-bg: #282a36;
     --rpg-accent: #343746;
     --rpg-text: #f8f8f2;
@@ -4191,7 +4200,8 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 #rpg-thought-panel[data-theme="ocean-depths"],
 #rpg-thought-icon[data-theme="ocean-depths"],
-.rpg-mobile-toggle[data-theme="ocean-depths"] {
+.rpg-mobile-toggle[data-theme="ocean-depths"],
+#dooms-settings-fab[data-theme="ocean-depths"] {
     --rpg-bg: #0a1628;
     --rpg-accent: #0f2038;
     --rpg-text: #b8d8e8;
@@ -14329,6 +14339,28 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     touch-action: none;
 }
 
+/* Hides SillyTavern's native top button bar — toggled from the
+   Doom Button settings section. The FAB fly-out covers the same
+   buttons. Uses visibility + zero height instead of display:none
+   so the drawer-icon elements remain queryable / clickable, and
+   drawer-content panels can still appear when triggered from the
+   fly-out. */
+body.dooms-hide-st-topbar #top-settings-holder {
+    visibility: hidden;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    overflow: visible;
+}
+
+body.dooms-hide-st-topbar #top-settings-holder .drawer-content,
+body.dooms-hide-st-topbar #top-settings-holder .openDrawer {
+    visibility: visible;
+}
+
 .dooms-fab-btn {
     width: 40px;
     height: 40px;
@@ -14468,30 +14500,37 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     align-items: center;
     gap: 8px;
     padding: 8px 15px;
-    border: none;
-    background: #ccd7f5;
-    color: #6077b0;
+    border: 1px solid var(--rpg-border, rgba(74, 123, 167, 0.3));
+    background: var(--rpg-accent, rgba(22, 33, 62, 0.95));
+    color: var(--rpg-text, #eaeaea);
     border-radius: 5px;
     overflow: hidden;
     white-space: nowrap;
-    transition: margin 0.4s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 1px 3px 5px rgba(211, 224, 255, 0.5);
+    transition: margin 0.4s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: 1px 3px 6px var(--rpg-shadow, rgba(0, 0, 0, 0.4));
     cursor: pointer;
     font-size: 0.85em;
     font-weight: 500;
+    backdrop-filter: blur(8px);
 }
 
 .dooms-fab-menu-item:hover {
     margin-left: 10px;
-    background: #b2bedc;
-    color: #3f5285;
-    box-shadow: 1px 3px 8px rgba(135, 105, 169, 0.45);
+    background: var(--rpg-highlight, #e94560);
+    color: #fff;
+    border-color: var(--rpg-highlight, #e94560);
+    box-shadow: 1px 3px 10px var(--rpg-shadow, rgba(0, 0, 0, 0.55));
 }
 
 .dooms-fab-menu-item i {
     width: 14px;
     text-align: center;
-    opacity: 0.85;
+    color: var(--rpg-highlight, #e94560);
+    transition: color 0.2s ease;
+}
+
+.dooms-fab-menu-item:hover i {
+    color: #fff;
 }
 
 

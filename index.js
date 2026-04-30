@@ -1722,6 +1722,16 @@ async function initUI() {
         extensionSettings.fab.bypassFlyout = $(this).prop('checked');
         saveSettings();
     });
+    const applyHideStTopBar = () => {
+        document.body.classList.toggle('dooms-hide-st-topbar', !!extensionSettings.fab.hideStTopBar);
+    };
+    $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar);
+    $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function() {
+        extensionSettings.fab.hideStTopBar = $(this).prop('checked');
+        applyHideStTopBar();
+        saveSettings();
+    });
+    applyHideStTopBar();
     // Per-button toggles populate dynamically (top bar may not exist yet
     // on first call). Re-populate on every settings open so the list is fresh.
     if (typeof window.__doomsFabPopulateToggles === 'function') {
@@ -2068,6 +2078,8 @@ async function initUI() {
         // init code earlier in initUI() ran before this, so the placeholder
         // is still showing — refresh it.
         populateFabSettingsToggles();
+        // applyTheme() ran before the FAB existed, so stamp the theme now.
+        try { applyTheme(); } catch (_) {}
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
     try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
