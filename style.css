@@ -14339,26 +14339,46 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     touch-action: none;
 }
 
-/* Hides SillyTavern's native top button bar — toggled from the
-   Doom Button settings section. The FAB fly-out covers the same
-   buttons. Uses visibility + zero height instead of display:none
-   so the drawer-icon elements remain queryable / clickable, and
-   drawer-content panels can still appear when triggered from the
-   fly-out. */
-body.dooms-hide-st-topbar #top-settings-holder {
-    visibility: hidden;
+/* Hides SillyTavern's native top button bar so the chat reclaims
+   the full vertical space. We collapse #top-bar to zero height
+   and hide the drawer-toggles (the visible icon row) but keep
+   any open drawer-content visible — drawer-content is positioned
+   fixed when its drawer is open in SillyTavern, so it floats
+   correctly even though the parent has zero height. Toggled from
+   the Doom Button settings section. */
+body.dooms-hide-st-topbar #top-bar {
     height: 0 !important;
     min-height: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    overflow: visible;
+    flex: 0 0 0 !important;
+}
+
+body.dooms-hide-st-topbar #top-settings-holder {
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
     overflow: visible;
 }
 
-body.dooms-hide-st-topbar #top-settings-holder .drawer-content,
-body.dooms-hide-st-topbar #top-settings-holder .openDrawer {
-    visibility: visible;
+body.dooms-hide-st-topbar #top-settings-holder .drawer-toggle {
+    display: none !important;
+}
+
+/* Make any currently-open drawer escape the collapsed bar and
+   appear as a floating panel near the top of the viewport. */
+body.dooms-hide-st-topbar .openDrawer {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 10000;
+    max-height: 90vh;
+    overflow: auto;
 }
 
 .dooms-fab-btn {
