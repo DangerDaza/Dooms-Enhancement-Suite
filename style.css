@@ -14330,20 +14330,20 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 .dooms-fab-btn {
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #e94560 0%, #533483 100%);
-    border: none;
+    background: linear-gradient(45deg, #8769a9, #507cb3);
+    border: 5px solid #b2bedc;
     color: #fff;
     font-size: 1em;
     cursor: pointer;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(233, 69, 96, 0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    opacity: 0.95;
+    transition: all 0.4s;
+    opacity: 1;
     overflow: visible;
     padding: 0;
 }
@@ -14354,15 +14354,17 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 }
 
-.dooms-fab-btn:hover {
+.dooms-fab-btn:hover,
+.dooms-fab-btn:focus,
+.dooms-fab-btn:active {
     opacity: 1;
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 4px 10px rgba(233, 69, 96, 0.55);
+    color: #fff;
+    transform: scale(1.05);
+    box-shadow: 0 6px 18px rgba(80, 124, 179, 0.45);
 }
 
 .dooms-fab-btn:active {
-    transform: scale(0.95);
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(233, 69, 96, 0.4);
+    transform: scale(0.96);
 }
 
 /* Move-mode: cursor + subtle pulse to signal the button is now draggable */
@@ -14378,8 +14380,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 @keyframes dooms-fab-move-pulse {
-    0%, 100% { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 0 0 0 rgba(233, 69, 96, 0.6); }
-    50%      { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 0 0 12px rgba(233, 69, 96, 0); }
+    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(178, 190, 220, 0.7); }
+    50%      { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 14px rgba(178, 190, 220, 0); }
 }
 
 /* Right-click context menu on the FAB */
