@@ -14323,49 +14323,44 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-settings-fab {
     position: fixed;
-    bottom: 16px;
-    left: 16px;
+    bottom: 10px;
+    left: 10px;
     z-index: 10001;
     touch-action: none;
 }
 
 .dooms-fab-btn {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: linear-gradient(45deg, #8769a9, #507cb3);
-    border: 5px solid #b2bedc;
+    width: 40px;
+    height: 40px;
+    border-radius: 0;
+    background: transparent;
+    border: none;
     color: #fff;
     font-size: 1em;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.4s;
-    opacity: 1;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    opacity: 0.85;
     overflow: visible;
     padding: 0;
 }
 
 .dooms-fab-btn .doom-icon {
-    width: 32px;
-    height: 32px;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-    transition: transform 0.4s;
+    width: 40px;
+    height: 40px;
 }
 
-.dooms-fab-btn:hover,
-.dooms-fab-btn:focus,
-.dooms-fab-btn:active {
+.dooms-fab-btn:hover {
     opacity: 1;
-    color: #fff;
-    transform: scale(1.05);
-    box-shadow: 0 6px 18px rgba(80, 124, 179, 0.45);
+    transform: scale(1.1);
+    box-shadow: 0 4px 14px rgba(233, 69, 96, 0.5);
 }
 
 .dooms-fab-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.95);
 }
 
 /* Move-mode: cursor + subtle pulse to signal the button is now draggable */
@@ -14381,8 +14376,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 @keyframes dooms-fab-move-pulse {
-    0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(178, 190, 220, 0.7); }
-    50%      { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 14px rgba(178, 190, 220, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.6); }
+    50%      { box-shadow: 0 0 0 12px rgba(233, 69, 96, 0); }
 }
 
 /* Right-click context menu on the FAB */
@@ -14430,7 +14425,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    attribute and the menu flips below the button. */
 .dooms-fab-menu {
     position: absolute;
-    bottom: 70px;
+    bottom: 50px;
     left: 0;
     list-style: none;
     margin: 0;
@@ -14441,7 +14436,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-fab-menu[data-direction="down"] {
     bottom: auto;
-    top: 70px;
+    top: 50px;
 }
 
 .dooms-fab-menu li {
@@ -14512,10 +14507,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     opacity: 0.85;
 }
 
-/* Rotate the doom-icon while the flyout is open */
-.dooms-settings-fab.dooms-fab-open .dooms-fab-btn .doom-icon {
-    transform: rotate(225deg);
-}
 
 /* ========================================
    CHAT BUBBLES — Per-Character Message Bubbles
