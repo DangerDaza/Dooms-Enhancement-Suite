@@ -1771,10 +1771,14 @@ async function initUI() {
         $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
         try {
             const isUserExt = (import.meta.url || '').includes('/data/');
+            // SillyTavern's update endpoint adds "third-party/" itself, so
+            // strip it from extensionName before posting (otherwise the
+            // server resolves to .../third-party/third-partyFoo).
+            const bareName = extensionName.replace(/^third-party\//, '');
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify({ extensionName, global: !isUserExt }),
+                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
             });
             if (!resp.ok) {
                 const text = await resp.text().catch(() => '');
