@@ -13,6 +13,7 @@
  */
 
 import { extensionSettings, lastGeneratedData, updateLastGeneratedData } from '../../core/state.js';
+import { renderKnifeListEditor } from './knivesPanel.js';
 import {
     saveSettings,
     saveChatData,
@@ -291,6 +292,7 @@ export function openCharacterWorkshop(characterName) {
     renderIdentity();
     renderAppearance();
     renderInjection();
+    renderKnives();
     activatePane('identity');
 
     if (!listenersBound) {
@@ -604,6 +606,18 @@ function renderIdentity() {
     $modal.find('#cw-preview-name').text(draft.name);
     $modal.find('#cw-preview-card-name').text(draft.name);
     applyPreviewColor(draft.color || '#e94560');
+}
+
+function renderKnives() {
+    // The Knives pane only makes sense when the master toggle is on. Hide
+    // the nav button entirely when off so the workshop is unchanged for
+    // users who haven't opted in.
+    const enabled = !!extensionSettings.knives?.enabled;
+    $modal.find('.workshop-nav button[data-pane="knives"]').toggle(enabled);
+    if (!enabled) return;
+    const $container = $modal.find('#cw-knives-container');
+    if (!$container.length || !draft?.name) return;
+    renderKnifeListEditor(draft.name, $container);
 }
 
 function renderAppearance() {

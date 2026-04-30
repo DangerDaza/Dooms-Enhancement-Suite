@@ -153,7 +153,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
 import { initKnives } from './src/systems/features/knives.js';
-import { renderUserKnivesSection, renderCharacterKnivesSection } from './src/systems/ui/knivesPanel.js';
+import { openUserCharactersPopup } from './src/systems/ui/knivesPanel.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -1073,28 +1073,25 @@ async function initUI() {
         return extensionSettings.knives;
     };
 
-    const _refreshKnivesPanel = () => {
-        try {
-            renderUserKnivesSection($('#rpg-knives-user-section'));
-            renderCharacterKnivesSection($('#rpg-knives-character-section'));
-        } catch (e) {
-            console.warn('[Dooms Knives] panel refresh failed:', e);
-        }
-    };
-
     $('#rpg-toggle-knives').on('change', function () {
         const on = $(this).prop('checked');
         _knSettings().enabled = on;
         saveSettings();
         $('#rpg-knives-badge').text(on ? 'on' : 'off');
         $('#rpg-knives-options').toggle(on);
-        if (on) _refreshKnivesPanel();
     });
 
     $('#rpg-toggle-knives-reveal-status').on('change', function () {
         _knSettings().revealStatus = $(this).prop('checked');
         saveSettings();
-        _refreshKnivesPanel();
+    });
+
+    $('#rpg-knives-open-user-characters').on('click', () => {
+        if (!extensionSettings.knives?.enabled) {
+            toastr.info('Enable Knives first.', '', { timeOut: 2500 });
+            return;
+        }
+        openUserCharactersPopup().catch(e => console.warn('[Dooms Knives] popup failed:', e));
     });
 
     $('#rpg-toggle-knives-require-present').on('change', function () {
@@ -1785,14 +1782,8 @@ async function initUI() {
     $('#rpg-knives-cooldown').val(typeof kn.cooldownMessages === 'number' ? kn.cooldownMessages : 5);
     $('#rpg-knives-serious-threshold').val(typeof kn.seriousTensionThreshold === 'number' ? kn.seriousTensionThreshold : 5);
     $('#rpg-knives-catastrophic-threshold').val(typeof kn.catastrophicTensionThreshold === 'number' ? kn.catastrophicTensionThreshold : 8);
-    if (kn.enabled) {
-        try {
-            renderUserKnivesSection($('#rpg-knives-user-section'));
-            renderCharacterKnivesSection($('#rpg-knives-character-section'));
-        } catch (e) {
-            console.warn('[Dooms Knives] initial panel render failed:', e);
-        }
-    }
+    // Knife-list management was moved into the workshop popups — settings
+    // panel now just hosts the toggles, info boxes, and config inputs.
 
     // Name Ban
     const nb = extensionSettings.nameBan || {};

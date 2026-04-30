@@ -11,6 +11,9 @@ import { callGenericPopup, Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../.
 import { extensionSettings } from '../../core/state.js';
 import {
     USER_OWNER_KEY,
+    USER_OWNER_PREFIX,
+    getActiveUserOwnerKey,
+    isUserOwnerKey,
     listOwners,
     getTemplates,
     addTemplate,
@@ -54,7 +57,28 @@ function statusLabel(status) {
 }
 
 function ownerDisplayName(ownerKey) {
-    return ownerKey === USER_OWNER_KEY ? 'You (Player)' : ownerKey;
+    if (ownerKey === USER_OWNER_KEY) return 'You (Player)';
+    if (typeof ownerKey === 'string' && ownerKey.startsWith(USER_OWNER_PREFIX)) {
+        try {
+            const avatar = ownerKey.slice(USER_OWNER_PREFIX.length);
+            const name = window?.power_user?.personas?.[avatar];
+            return name ? `You (${name})` : `You (${avatar})`;
+        } catch { return 'You'; }
+    }
+    return ownerKey;
+}
+
+function listPersonas() {
+    try {
+        const personas = window?.power_user?.personas || {};
+        return Object.entries(personas).map(([avatar, name]) => ({
+            avatar,
+            name: name || avatar,
+            ownerKey: USER_OWNER_PREFIX + avatar,
+        }));
+    } catch {
+        return [];
+    }
 }
 
 function isStatusVisible() {
@@ -456,3 +480,88 @@ export function renderCharacterKnivesSection($container) {
         renderCharacterKnivesSection($container);
     });
 }
+
+// ─── User Characters popup ────────────────────────────────────────────────────
+
+/**
+ * Opens a popup that lists the player's SillyTavern personas and lets them
+ * author a knife list per persona. The active persona's knives are the ones
+ * the AI sees during generation.
+ *
+ * Replaces the old flat "Your Knives" section in the settings panel, and
+ * mirrors the structure of the per-character Workshop pane.
+ */
+export async function openUserCharactersPopup() {
+    const personas = listPersonas();
+    const activeKey = getActiveUserOwnerKey();
+
+    const html = `
+        <div class="rpg-uc-popup">
+            <h3 style="margin-top:0;">Your Characters</h3>
+            <p style="opacity:0.8;font-size:0.9em;">Each SillyTavern persona has its own knife list. The active persona's knives are the ones the AI deploys with proper pacing during your chats.</p>
+            <div class="rpg-uc-split">
+                <aside class="rpg-uc-rail" aria-label="Personas">
+                    <ul class="rpg-uc-list" id="rpg-uc-list"></ul>
+                </aside>
+                <main class="rpg-uc-pane" aria-label="Knives editor">
+                    <div id="rpg-uc-knives-container"></div>
+                </main>
+            </div>
+        </div>
+    `;
+    const popup = new Popup(html, POPUP_TYPE.TEXT, '', {
+        okButton: 'Close',
+        cancelButton: false,
+        wide: true,
+        large: true,
+        allowVerticalScrolling: true,
+    });
+
+    // Build the persona list and editor in the popup DOM as soon as it's
+    // mounted. Popup constructs its DOM synchronously, so popup.dlg is
+    // available before show() resolves.
+    const dlg = popup.dlg;
+    const $list = $(dlg).find('#rpg-uc-list');
+    const $pane = $(dlg).find('#rpg-uc-knives-container');
+
+    const renderList = (selectedKey) => {
+        $list.empty();
+        if (!personas.length) {
+            $list.append('<li class="rpg-uc-empty">No SillyTavern personas found. Set one up under <em>User Settings → Persona Management</em>.</li>');
+            return;
+        }
+        for (const p of personas) {
+            const isActive = p.ownerKey === activeKey;
+            const isSelected = p.ownerKey === selectedKey;
+            const count = getTemplates(p.ownerKey).length;
+            const $li = $(`
+                <li class="rpg-uc-row${isSelected ? ' selected' : ''}${isActive ? ' is-active' : ''}" data-owner="${escapeHtml(p.ownerKey)}">
+                    <div class="rpg-uc-row-name"><strong>${escapeHtml(p.name)}</strong>${isActive ? ' <span class="rpg-uc-active-tag">active</span>' : ''}</div>
+                    <div class="rpg-uc-row-meta">${count} knife${count === 1 ? '' : 's'}</div>
+                </li>
+            `);
+            $li.on('click', () => {
+                renderList(p.ownerKey);
+                renderKnifeListEditor(p.ownerKey, $pane);
+            });
+            $list.append($li);
+        }
+    };
+
+    // Initial selection: prefer the active persona if it's in the list,
+    // otherwise the first one.
+    const initialKey = personas.find(p => p.ownerKey === activeKey)?.ownerKey
+        || personas[0]?.ownerKey
+        || null;
+
+    if (initialKey) {
+        renderList(initialKey);
+        renderKnifeListEditor(initialKey, $pane);
+    } else {
+        renderList(null);
+        $pane.html('<div class="rpg-knife-empty">Add a persona in SillyTavern\'s User Settings first, then come back to author its knives.</div>');
+    }
+
+    await popup.show();
+}
+

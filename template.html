@@ -1396,12 +1396,27 @@
                             <input type="number" id="rpg-knives-catastrophic-threshold" class="text_pole" min="1" max="10" step="1" style="max-width:80px;" />
                         </div>
 
-                        <!-- Knife management sections -->
-                        <div class="rpg-subsection-label">Your Knives</div>
-                        <div id="rpg-knives-user-section"></div>
-
-                        <div class="rpg-subsection-label">Character Knives</div>
-                        <div id="rpg-knives-character-section"></div>
+                        <!-- Knife management — moved into the per-character
+                             popups. Character knives live on each character's
+                             Workshop popup (under Appearance → Knives), and
+                             your own knives live in the User Characters popup
+                             where each persona has its own bucket. -->
+                        <div class="rpg-subsection-label">Manage</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Your Characters</span>
+                                <span class="rpg-setting-hint">Author knives for each of your SillyTavern personas. The active persona's knives are the ones the AI deploys.</span>
+                            </div>
+                            <button type="button" class="menu_button" id="rpg-knives-open-user-characters">
+                                <i class="fa-solid fa-user"></i> Open
+                            </button>
+                        </div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Character Knives</span>
+                                <span class="rpg-setting-hint">Open any character's Workshop popup (right-click their portrait → Workshop) and use the new <strong>Knives</strong> tab.</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2181,6 +2196,7 @@
                 <nav class="workshop-nav" aria-label="Section">
                     <button type="button" class="active" data-pane="identity">&#128481; Identity</button>
                     <button type="button" data-pane="appearance">&#127912; Appearance</button>
+                    <button type="button" data-pane="knives">&#128481;&#65039; Knives</button>
                     <button type="button" data-pane="injection">&#128137; Injection</button>
                 </nav>
             </aside>
@@ -2241,6 +2257,15 @@
                                 <i class="fa-solid fa-folder-open"></i> Open expression folder
                             </button>
                         </div>
+                    </div>
+                </section>
+
+                <!-- KNIVES -->
+                <section class="rpg-editor-pane" data-pane="knives">
+                    <div class="rpg-editor-section">
+                        <h4>Knives</h4>
+                        <p class="helper">Story hooks tied to this character — debts, secrets, vows, enemies. The AI will deploy them with proper pacing whenever this character is on stage. Templates travel with the character across chats; only their per-chat status (drawn / spent) is local.</p>
+                        <div id="cw-knives-container"></div>
                     </div>
                 </section>
 

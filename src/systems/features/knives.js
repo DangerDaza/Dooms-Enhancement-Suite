@@ -41,8 +41,57 @@ import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 /** Prompt slot ID — kept stable so the slot can be cleared from anywhere. */
 export const KNIVES_SLOT = 'dooms-knives-state';
 
-/** Reserved owner key for the player's own knives. */
+/**
+ * Legacy owner key for the player's own knives. Pre-multi-persona builds
+ * stored everything here. We migrate it to the active persona's key the
+ * first time we see both — see migrateLegacyUserBucket().
+ */
 export const USER_OWNER_KEY = '__user__';
+
+/** Prefix used for per-persona owner keys: `user:<avatar_filename>`. */
+export const USER_OWNER_PREFIX = 'user:';
+
+/**
+ * Returns the owner key for the currently-active SillyTavern persona,
+ * or USER_OWNER_KEY if no persona is resolvable. The avatar filename is a
+ * stable unique identifier (persona names can collide; avatars don't).
+ */
+export function getActiveUserOwnerKey() {
+    try {
+        const avatar = window?.user_avatar;
+        if (typeof avatar === 'string' && avatar) return USER_OWNER_PREFIX + avatar;
+    } catch { /* fall through */ }
+    return USER_OWNER_KEY;
+}
+
+/** True for both legacy `__user__` and any `user:*` persona bucket. */
+export function isUserOwnerKey(key) {
+    return key === USER_OWNER_KEY || (typeof key === 'string' && key.startsWith(USER_OWNER_PREFIX));
+}
+
+/**
+ * One-shot migration: if there's a legacy `__user__` bucket AND we can
+ * resolve an active persona, copy the templates over to the persona bucket
+ * and drop the legacy one. Idempotent — does nothing once `__user__` is
+ * gone or no persona is active.
+ */
+export function migrateLegacyUserBucket() {
+    const byOwner = extensionSettings.knives?.byOwner;
+    if (!byOwner) return false;
+    const legacy = byOwner[USER_OWNER_KEY];
+    if (!legacy?.templates?.length) {
+        if (legacy && !legacy.templates?.length) delete byOwner[USER_OWNER_KEY];
+        return false;
+    }
+    const target = getActiveUserOwnerKey();
+    if (target === USER_OWNER_KEY) return false; // no persona to migrate to
+    if (!byOwner[target]) byOwner[target] = { templates: [] };
+    if (!Array.isArray(byOwner[target].templates)) byOwner[target].templates = [];
+    byOwner[target].templates = byOwner[target].templates.concat(legacy.templates);
+    delete byOwner[USER_OWNER_KEY];
+    saveSettings();
+    return true;
+}
 
 const VALID_STATUSES = new Set(['dormant', 'sharpening', 'drawn', 'spent', 'defused']);
 const MAX_SHARPENING_SIMULTANEOUS = 3;
@@ -312,15 +361,24 @@ export function getEligibleKnives() {
     if (!data) return [];
     const requirePresent = extensionSettings.knives.requireCharacterPresent !== false;
     const presentSet = requirePresent ? new Set(getPresentCharacterNames()) : null;
+    // Only the *active* persona's user-side bucket is eligible — other
+    // personas' knives belong to other player identities and shouldn't
+    // surface in this session.
+    const activeUserKey = getActiveUserOwnerKey();
     const out = [];
-    const validIds = new Set();
     const byOwner = extensionSettings.knives.byOwner || {};
     for (const ownerKey of Object.keys(byOwner)) {
-        if (ownerKey !== USER_OWNER_KEY && requirePresent && !presentSet.has(ownerKey)) continue;
+        if (isUserOwnerKey(ownerKey)) {
+            // Skip user-side buckets that aren't the current persona, except
+            // the legacy `__user__` bucket (which we always allow as a
+            // fallback in case migration hasn't fired yet).
+            if (ownerKey !== activeUserKey && ownerKey !== USER_OWNER_KEY) continue;
+        } else if (requirePresent && !presentSet.has(ownerKey)) {
+            continue;
+        }
         const templates = Array.isArray(byOwner[ownerKey]?.templates) ? byOwner[ownerKey].templates : [];
         for (const tpl of templates) {
             if (!tpl?.id) continue;
-            validIds.add(tpl.id);
             const runtime = getOrCreateRuntime(tpl.id, idx);
             if (!runtime) continue;
             out.push({ ownerKey, template: tpl, runtime });
@@ -501,7 +559,17 @@ export function advanceKnivesPostGeneration() {
 // ─── Prompt injection ─────────────────────────────────────────────────────────
 
 function ownerLabel(ownerKey) {
-    return ownerKey === USER_OWNER_KEY ? 'Player' : ownerKey;
+    if (ownerKey === USER_OWNER_KEY) return 'Player';
+    if (typeof ownerKey === 'string' && ownerKey.startsWith(USER_OWNER_PREFIX)) {
+        // Try to render the persona's display name when available.
+        try {
+            const avatar = ownerKey.slice(USER_OWNER_PREFIX.length);
+            const name = window?.power_user?.personas?.[avatar];
+            return name ? `Player (${name})` : 'Player';
+        } catch { /* fall through */ }
+        return 'Player';
+    }
+    return ownerKey;
 }
 
 function severityLabel(severity) {
@@ -668,6 +736,10 @@ let _initialized = false;
 export function initKnives() {
     if (_initialized) return;
     _initialized = true;
+    // Migrate the legacy `__user__` bucket to the active persona's key on
+    // first init (idempotent — does nothing once `__user__` is gone or no
+    // persona is active yet).
+    try { migrateLegacyUserBucket(); } catch (e) { console.warn('[Dooms Knives] legacy migration failed:', e); }
     eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         try {
             advanceKnivesPostGeneration();
