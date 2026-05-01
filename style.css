@@ -14427,13 +14427,13 @@ body.dooms-hide-st-topbar .openDrawer {
     z-index: -1;
     background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
     clip-path: polygon(
-        80% 6%,
-        46% 6%,
-        20% 62%,
-        40% 62%,
-        26% 94%,
-        80% 44%,
-        60% 44%
+        65% 6%,
+        48% 6%,
+        35% 62%,
+        45% 62%,
+        38% 94%,
+        65% 44%,
+        55% 44%
     );
     opacity: 0;
     pointer-events: none;
