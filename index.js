@@ -282,6 +282,79 @@ function updateGenerationModeUI() {
     }
 }
 /**
+ * Fetches the list of branches from the extension's GitHub repository and
+ * populates the Update-section <select>. Cached for the lifetime of the
+ * page so reopening the settings doesn't re-hit the GitHub API. Falls back
+ * to a static "main" option on any failure (offline, rate-limited, etc.).
+ */
+let _branchListPromise = null;
+function populateUpdateBranchDropdownOnce() {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    // Don't refetch if we've already populated the list this session.
+    if ($sel.data('populated')) return;
+    if (_branchListPromise) {
+        _branchListPromise.then((branches) => fillBranchDropdown(branches)).catch(() => {});
+        return;
+    }
+    // Pull the repo slug from manifest.homePage so this stays correct if
+    // the extension is ever forked.
+    _branchListPromise = (async () => {
+        let repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+        try {
+            const manifestResp = await fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' });
+            if (manifestResp.ok) {
+                const manifest = await manifestResp.json();
+                const home = String(manifest.homePage || '');
+                const m = home.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+                if (m) repoSlug = m[1];
+            }
+        } catch (e) { /* keep fallback */ }
+        const resp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
+            headers: { 'Accept': 'application/vnd.github+json' },
+        });
+        if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+        const data = await resp.json();
+        if (!Array.isArray(data)) throw new Error('Unexpected response shape');
+        return data.map(b => String(b?.name || '')).filter(Boolean);
+    })();
+    _branchListPromise
+        .then((branches) => fillBranchDropdown(branches))
+        .catch((err) => {
+            console.warn('[Dooms Tracker] Failed to fetch branches from GitHub:', err);
+            fillBranchDropdown(['main']);
+        });
+}
+
+function fillBranchDropdown(branches) {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    // Sort: main / master first, then alphabetical
+    const ordered = [...branches].sort((a, b) => {
+        const wa = a === 'main' ? 0 : a === 'master' ? 1 : 2;
+        const wb = b === 'main' ? 0 : b === 'master' ? 1 : 2;
+        return wa !== wb ? wa - wb : a.localeCompare(b);
+    });
+    const previous = String($sel.val() || '');
+    $sel.empty();
+    // Empty value = "use whatever branch ST currently has checked out"
+    $sel.append('<option value="">(current)</option>');
+    for (const name of ordered) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        $sel[0].appendChild(opt);
+    }
+    // Restore prior selection if it still exists, else default to (current)
+    if (previous && ordered.includes(previous)) {
+        $sel.val(previous);
+    } else {
+        $sel.val('');
+    }
+    $sel.data('populated', true);
+}
+
+/**
  * Populates all Chat Bubbles & Info Panel settings controls from saved state.
  */
 function loadChatBubbleSettingsUI() {
@@ -1762,6 +1835,9 @@ async function initUI() {
     getExtensionVersion().then(v => {
         if (v) $('#rpg-current-version').text(`Currently v${v}.`);
     });
+    // Fetch branches from GitHub and populate the dropdown. Best-effort —
+    // failures fall back to a static "main" entry.
+    populateUpdateBranchDropdownOnce();
     $('#rpg-update-extension').off('click.upd').on('click.upd', async function() {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
@@ -1775,10 +1851,13 @@ async function initUI() {
             // strip it from extensionName before posting (otherwise the
             // server resolves to .../third-party/third-partyFoo).
             const bareName = extensionName.replace(/^third-party\//, '');
+            const branch = String($('#rpg-update-branch').val() || '').trim();
+            const payload = { extensionName: bareName, global: !isUserExt };
+            if (branch) payload.branch = branch;
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+                body: JSON.stringify(payload),
             });
             if (!resp.ok) {
                 const text = await resp.text().catch(() => '');
@@ -1895,6 +1974,22 @@ async function initUI() {
                     iconClass,
                     action: () => { $icon.trigger('click'); },
                 });
+            });
+            items.push({
+                id: 'character-roster',
+                label: 'Workshop',
+                iconClass: 'fa-solid fa-users-rectangle',
+                action: () => {
+                    // Prefer the decoupled event used by other surfaces;
+                    // fall back to a click on the settings entry button if
+                    // the listener hasn't been registered yet.
+                    try {
+                        window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+                    } catch (e) {
+                        const $btn = $('#rpg-open-character-roster');
+                        if ($btn.length) $btn.trigger('click');
+                    }
+                },
             });
             items.push({
                 id: 'des-settings',
