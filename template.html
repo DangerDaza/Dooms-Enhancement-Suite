@@ -1565,13 +1565,24 @@
             <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for troubleshooting.</p>
 
             <!-- Update -->
-            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                 <button id="rpg-update-extension" class="rpg-accordion-action-btn" type="button">
                     <i class="fa-solid fa-cloud-arrow-down"></i> Update Extension
                 </button>
+                <label for="rpg-update-branch" class="muted" style="font-size: 0.85em; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+                    Branch
+                </label>
+                <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
+                    <option value="">Loading branches…</option>
+                </select>
             </div>
             <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
                 Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version" style="opacity:0.7;"></span>
+            </p>
+            <p class="rpg-note-text" style="margin-top:0; padding: 0 8px; opacity: 0.6; font-size: 0.78em;">
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                Same flow as SillyTavern's "Switch branch" button: picks a branch in-place via the install endpoint and confirms before rewriting on disk.
             </p>
 
         </div>

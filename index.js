@@ -342,6 +342,128 @@ function updateUserDialogOverrideUI() {
 }
 
 /**
+ * Populates the Update-section branch dropdown by mirroring SillyTavern's
+ * own "Switch branch" button flow:
+ *   1. POST /api/extensions/version — read current branch + remoteUrl
+ *   2. If the response includes a branches list, use it directly.
+ *      Otherwise pull branches from GitHub via the response's remoteUrl.
+ *   3. Cache for the lifetime of the page so reopening the settings doesn't
+ *      re-hit the network. Falls back to ["main"] on total failure.
+ */
+let _branchListPromise = null;
+function populateUpdateBranchDropdownOnce() {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    if ($sel.data('populated')) return;
+    if (_branchListPromise) {
+        _branchListPromise.then((info) => fillBranchDropdown(info)).catch(() => {});
+        return;
+    }
+    _branchListPromise = (async () => {
+        const isUserExt = (import.meta.url || '').includes('/data/');
+        const bareName = extensionName.replace(/^third-party\//, '');
+        let currentBranch = '';
+        let remoteUrl = '';
+        let branches = [];
+        // 1. Ask SillyTavern for its view of this extension's git state.
+        try {
+            const resp = await fetch('/api/extensions/version', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+            });
+            if (resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                currentBranch = String(data?.currentBranchName || data?.currentBranch || '').trim();
+                remoteUrl = String(data?.remoteUrl || data?.remote || '').trim();
+                if (Array.isArray(data?.branches)) {
+                    branches = data.branches.map(b => typeof b === 'string' ? b : String(b?.name || '')).filter(Boolean);
+                }
+            }
+        } catch (e) { /* fall through to manifest+GitHub */ }
+        // 2. If we don't have a branches list yet, fetch from GitHub. Pull
+        //    the repo slug from remoteUrl (preferred, matches what ST sees)
+        //    or from manifest.homePage as a fallback.
+        if (!branches.length) {
+            let repoSlug = '';
+            const fromRemote = remoteUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+            if (fromRemote) repoSlug = fromRemote[1];
+            if (!repoSlug) {
+                try {
+                    const manifestResp = await fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' });
+                    if (manifestResp.ok) {
+                        const manifest = await manifestResp.json();
+                        const m = String(manifest.homePage || '').match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+                        if (m) repoSlug = m[1];
+                        if (!remoteUrl) remoteUrl = manifest.homePage || '';
+                    }
+                } catch (e) { /* keep fallback */ }
+            }
+            if (!repoSlug) repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+            try {
+                const ghResp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
+                    headers: { 'Accept': 'application/vnd.github+json' },
+                });
+                if (ghResp.ok) {
+                    const data = await ghResp.json();
+                    if (Array.isArray(data)) {
+                        branches = data.map(b => String(b?.name || '')).filter(Boolean);
+                    }
+                }
+            } catch (e) { /* fall through to ["main"] */ }
+        }
+        if (!branches.length) branches = ['main'];
+        return { branches, currentBranch, remoteUrl };
+    })();
+    _branchListPromise
+        .then((info) => fillBranchDropdown(info))
+        .catch((err) => {
+            console.warn('[Dooms Tracker] Failed to populate branch dropdown:', err);
+            fillBranchDropdown({ branches: ['main'], currentBranch: '', remoteUrl: '' });
+        });
+}
+
+// Curated whitelist of branches the Update dropdown should expose. Anything
+// not in this list (and not the currently checked-out branch) is filtered
+// out so users only see the maintained release lines + their own branch.
+const UPDATE_BRANCH_WHITELIST = ['main', 'rabbit-hole', 'blades-in-the-dark'];
+
+function fillBranchDropdown({ branches, currentBranch, remoteUrl }) {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    const allowed = new Set([...UPDATE_BRANCH_WHITELIST, currentBranch].filter(Boolean));
+    const filtered = branches.filter(b => allowed.has(b));
+    const finalList = filtered.length ? filtered : [...branches];
+    const ordered = finalList.sort((a, b) => {
+        if (currentBranch) {
+            if (a === currentBranch) return -1;
+            if (b === currentBranch) return 1;
+        }
+        const wa = a === 'main' ? 0 : a === 'master' ? 1 : 2;
+        const wb = b === 'main' ? 0 : b === 'master' ? 1 : 2;
+        return wa !== wb ? wa - wb : a.localeCompare(b);
+    });
+    const previous = String($sel.val() || '');
+    $sel.empty();
+    for (const name of ordered) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = (currentBranch && name === currentBranch) ? `${name} (current)` : name;
+        $sel[0].appendChild(opt);
+    }
+    if (previous && ordered.includes(previous)) {
+        $sel.val(previous);
+    } else if (currentBranch && ordered.includes(currentBranch)) {
+        $sel.val(currentBranch);
+    } else {
+        $sel.val(ordered[0] || '');
+    }
+    $sel.data('populated', true);
+    $sel.data('currentBranch', currentBranch || '');
+    $sel.data('remoteUrl', remoteUrl || '');
+}
+
+/**
  * Populates all Chat Bubbles & Info Panel settings controls from saved state.
  */
 function loadChatBubbleSettingsUI() {
@@ -1834,10 +1956,14 @@ async function initUI() {
     getExtensionVersion().then(v => {
         if (v) $('#rpg-current-version').text(`Currently v${v}.`);
     });
+    // Fetch branches from GitHub and populate the dropdown. Best-effort —
+    // failures fall back to a static "main" entry.
+    populateUpdateBranchDropdownOnce();
     $('#rpg-update-extension').off('click.upd').on('click.upd', async function() {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
         const $status = $('#rpg-update-status');
+        const $sel = $('#rpg-update-branch');
         const originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Updating…');
         $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
@@ -1847,6 +1973,45 @@ async function initUI() {
             // strip it from extensionName before posting (otherwise the
             // server resolves to .../third-party/third-partyFoo).
             const bareName = extensionName.replace(/^third-party\//, '');
+            const selectedBranch = String($sel.val() || '').trim();
+            const currentBranch = String($sel.data('currentBranch') || '').trim();
+            const remoteUrl = String($sel.data('remoteUrl') || '').trim();
+            const switchingBranch = selectedBranch && currentBranch && selectedBranch !== currentBranch;
+
+            // Branch switch: use SillyTavern's install endpoint with a branch
+            // parameter — same path the Extensions panel's "Switch branch"
+            // button takes. Replaces the on-disk extension with the chosen
+            // branch's HEAD. Confirm first since this rewrites the folder.
+            if (switchingBranch) {
+                if (!remoteUrl) {
+                    throw new Error('Could not determine remote URL for branch switch.');
+                }
+                const ok = window.confirm(
+                    `Switch to branch "${selectedBranch}"?\n\n` +
+                    `This re-installs Doom's Enhancement Suite from ${remoteUrl} on the "${selectedBranch}" branch.\n` +
+                    `Settings are kept; only the on-disk files are replaced.\n\n` +
+                    `(Same flow as SillyTavern's "Switch branch" button.)`
+                );
+                if (!ok) {
+                    $status.html('<span style="opacity:0.8;">Switch cancelled.</span>');
+                    return;
+                }
+                $status.html(`<span style="opacity:0.8;">Switching to <code>${selectedBranch}</code>…</span>`);
+                const resp = await fetch('/api/extensions/install', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ url: remoteUrl, global: !isUserExt, branch: selectedBranch }),
+                });
+                if (!resp.ok) {
+                    const text = await resp.text().catch(() => '');
+                    throw new Error(text || `HTTP ${resp.status}`);
+                }
+                $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Switched to <code>${selectedBranch}</code>. <strong>Reload SillyTavern</strong> to apply.`);
+                $sel.data('currentBranch', selectedBranch);
+                return;
+            }
+
+            // Same-branch update — git pull on the currently checked-out branch.
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
@@ -1967,6 +2132,22 @@ async function initUI() {
                     iconClass,
                     action: () => { $icon.trigger('click'); },
                 });
+            });
+            items.push({
+                id: 'character-roster',
+                label: 'Workshop',
+                iconClass: 'fa-solid fa-users-rectangle',
+                action: () => {
+                    // Prefer the decoupled event used by other surfaces;
+                    // fall back to a click on the settings entry button if
+                    // the listener hasn't been registered yet.
+                    try {
+                        window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+                    } catch (e) {
+                        const $btn = $('#rpg-open-character-roster');
+                        if ($btn.length) $btn.trigger('click');
+                    }
+                },
             });
             items.push({
                 id: 'des-settings',
