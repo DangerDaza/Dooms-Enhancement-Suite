@@ -33,6 +33,7 @@ import {
     extension_prompt_types,
     eventSource,
     event_types,
+    getRequestHeaders,
 } from '../../../../../../../script.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
@@ -874,8 +875,21 @@ function activatePane(paneId) {
 function bindStaticListeners() {
     $modal.on('click.cw', '.workshop-nav button', function () {
         const pane = $(this).attr('data-pane');
-        if (pane) activatePane(pane);
+        if (!pane) return;
+        activatePane(pane);
+        if (pane === 'expressions') {
+            // Lazy-load on first activation per character — re-renders if
+            // the user already has it but the character changed.
+            const $panel = $modal.find('#cw-expressions-pane');
+            const charName = draft?.name || '';
+            if (charName && $panel.attr('data-character') !== charName) {
+                $panel.attr('data-character', charName);
+                renderExpressionsTab($panel, charName);
+            }
+        }
     });
+
+    bindExpressionHandlers();
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
     $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
@@ -1958,4 +1972,235 @@ function onGenerationStartedForInject() {
         console.log('[Dooms Tracker] Workshop: new generation starting — clearing stale inject/eject');
         clearInjectPromptIfPending();
     }
+}
+
+// ─────────────────────────────────────────────
+//  Expressions tab — sprite manager
+//  Mirrors the Character Sheet's Expressions tab. Same labels, same
+//  /api/sprites endpoints (get / upload / upload-zip / delete /
+//  open-folder), same crop-then-PNG flow. Scoped to this module so
+//  the Workshop doesn't need to import characterSheet.js.
+// ─────────────────────────────────────────────
+
+const EXPRESSION_LABELS = [
+    'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
+    'confusion', 'curiosity', 'desire', 'disappointment', 'disapproval',
+    'disgust', 'embarrassment', 'excitement', 'fear', 'gratitude', 'grief',
+    'joy', 'love', 'nervousness', 'neutral', 'optimism', 'pride',
+    'realization', 'relief', 'remorse', 'sadness', 'surprise',
+];
+
+async function _cwInvalidateSpriteCache(name) {
+    try {
+        const mod = await import('../integration/expressionSync.js');
+        if (typeof mod.invalidateSpriteCacheFor === 'function') {
+            mod.invalidateSpriteCacheFor(name);
+        }
+    } catch (e) { /* expressionSync is optional */ }
+}
+
+async function renderExpressionsTab($panel, characterName) {
+    $panel.html('<div style="padding:20px; opacity:0.5; text-align:center;">Loading sprites…</div>');
+    let existingSprites = [];
+    try {
+        const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
+            headers: getRequestHeaders(),
+        });
+        if (response.ok) existingSprites = await response.json();
+    } catch (err) {
+        console.warn('[Dooms Tracker] Workshop expressions: fetch failed', err);
+    }
+    const spriteMap = new Map();
+    for (const sprite of existingSprites) {
+        if (sprite.label && !spriteMap.has(sprite.label)) {
+            spriteMap.set(sprite.label, sprite.path);
+        }
+    }
+    const uploadedCount = spriteMap.size;
+    let html = `
+        <div class="rpg-cs-expr-header">
+            <span style="font-size:0.85em; opacity:0.7;">${uploadedCount} / ${EXPRESSION_LABELS.length} expressions uploaded</span>
+            <div class="rpg-cs-expr-actions">
+                <button class="rpg-cs-expr-upload-zip menu_button"><i class="fa-solid fa-file-zipper"></i> Upload ZIP</button>
+                <button class="rpg-cs-expr-open-folder menu_button"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+            </div>
+        </div>
+        <div class="rpg-cs-expression-grid">
+    `;
+    for (const label of EXPRESSION_LABELS) {
+        const spritePath = spriteMap.get(label);
+        const hasSprite = !!spritePath;
+        html += `
+            <div class="rpg-cs-expr-slot ${hasSprite ? 'rpg-cs-expr-has-sprite' : ''}">
+                <div class="rpg-cs-expr-thumb">
+                    ${hasSprite
+                        ? `<img src="${spritePath}" alt="${label}" loading="lazy" />`
+                        : '<div class="rpg-cs-expr-placeholder"><i class="fa-solid fa-image"></i></div>'
+                    }
+                    <div class="rpg-cs-expr-overlay">
+                        <button class="rpg-cs-expr-upload" data-label="${label}" title="Upload ${label}">
+                            <i class="fa-solid fa-upload"></i>
+                        </button>
+                        ${hasSprite ? `
+                            <button class="rpg-cs-expr-delete" data-label="${label}" title="Delete ${label}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="rpg-cs-expr-label">${label}</div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    $panel.html(html);
+}
+
+let _cwExprHandlersBound = false;
+function bindExpressionHandlers() {
+    if (_cwExprHandlersBound) return;
+    _cwExprHandlersBound = true;
+
+    // Match the character-sheet selectors so we share the existing CSS
+    // (.rpg-cs-expr-* rules already styled). Scope to the Workshop's
+    // pane so these don't double-fire when both modals are in the DOM.
+    const inWorkshop = (target) =>
+        $(target).closest('#character-workshop-popup .rpg-cs-tab-content[data-tab="expressions"]').length > 0;
+
+    // Upload single sprite
+    $(document).on('click.cwExpr', '.rpg-cs-expr-upload:not(.rpg-cs-expr-upload-zip)', function () {
+        if (!inWorkshop(this)) return;
+        const label = $(this).data('label');
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!label || !charName) return;
+        const $input = $('<input type="file" accept="image/*" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files && this.files[0];
+            if (!file) { $input.remove(); return; }
+            try {
+                const dataUrl = await getBase64Async(file);
+                const cropped = await callGenericPopup(
+                    `<h3>Crop "${label}" expression for ${charName}</h3>`,
+                    POPUP_TYPE.CROP,
+                    '',
+                    { cropAspect: 3 / 4, cropImage: dataUrl },
+                );
+                if (!cropped) return;
+                const blob = await fetch(cropped).then(r => r.blob());
+                const croppedFile = new File([blob], `${label}.png`, { type: 'image/png' });
+                const fd = new FormData();
+                fd.append('name', charName);
+                fd.append('label', label);
+                fd.append('avatar', croppedFile);
+                fd.append('spriteName', label);
+                const resp = await fetch('/api/sprites/upload', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: fd,
+                });
+                if (resp.ok) {
+                    _cwInvalidateSpriteCache(charName);
+                    renderExpressionsTab($tab, charName);
+                    if (window.toastr) window.toastr.success(`Uploaded ${label} expression for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    if (window.toastr) window.toastr.error('Upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[Dooms Tracker] Workshop expressions: upload failed', err);
+                if (window.toastr) window.toastr.error('Upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // Delete single sprite
+    $(document).on('click.cwExpr', '.rpg-cs-expr-delete', async function () {
+        if (!inWorkshop(this)) return;
+        const label = $(this).data('label');
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!label || !charName) return;
+        try {
+            const resp = await fetch('/api/sprites/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName, label }),
+            });
+            if (resp.ok) {
+                _cwInvalidateSpriteCache(charName);
+                renderExpressionsTab($tab, charName);
+                if (window.toastr) window.toastr.info(`Removed ${label} expression for ${charName}`, '', { timeOut: 2000 });
+            }
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: delete failed', err);
+        }
+    });
+
+    // ZIP upload
+    $(document).on('click.cwExpr', '.rpg-cs-expr-upload-zip', function () {
+        if (!inWorkshop(this)) return;
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        const $input = $('<input type="file" accept=".zip" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files && this.files[0];
+            if (!file) { $input.remove(); return; }
+            const fd = new FormData();
+            fd.append('name', charName);
+            fd.append('avatar', file);
+            try {
+                const resp = await fetch('/api/sprites/upload-zip', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: fd,
+                });
+                if (resp.ok) {
+                    _cwInvalidateSpriteCache(charName);
+                    renderExpressionsTab($tab, charName);
+                    if (window.toastr) window.toastr.success(`Sprite pack uploaded for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    if (window.toastr) window.toastr.error('ZIP upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[Dooms Tracker] Workshop expressions: zip upload failed', err);
+                if (window.toastr) window.toastr.error('ZIP upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // Open folder
+    $(document).on('click.cwExpr', '.rpg-cs-expr-open-folder', async function () {
+        if (!inWorkshop(this)) return;
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        try {
+            const resp = await fetch('/api/sprites/open-folder', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName }),
+            });
+            if (!resp.ok && resp.status === 404) {
+                if (window.toastr) window.toastr.info(
+                    `Expression sprites go in: data/default-user/characters/${charName}/`,
+                    'Open Folder Not Available',
+                    { timeOut: 6000 },
+                );
+            }
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: open folder failed', err);
+            if (window.toastr) window.toastr.info(
+                `Expression sprites go in: data/default-user/characters/${charName}/`,
+                'Open Folder Not Available',
+                { timeOut: 6000 },
+            );
+        }
+    });
 }

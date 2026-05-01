@@ -2118,6 +2118,7 @@
                 <nav class="workshop-nav" aria-label="Section">
                     <button type="button" class="active" data-pane="identity">&#128481; Identity</button>
                     <button type="button" data-pane="appearance">&#127912; Appearance</button>
+                    <button type="button" data-pane="expressions">&#128516; Expressions</button>
                     <button type="button" data-pane="injection">&#128137; Injection</button>
                 </nav>
             </aside>
@@ -2197,6 +2198,17 @@
                             <button class="rpg-btn" type="button" id="cw-open-expressions">
                                 <i class="fa-solid fa-folder-open"></i> Open expression folder
                             </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- EXPRESSIONS — sprite manager (mirrored from Character Sheet) -->
+                <section class="rpg-editor-pane" data-pane="expressions">
+                    <div class="rpg-editor-section">
+                        <h4>Expressions</h4>
+                        <p class="helper">Upload sprites for each expression label below. Sprites land in <code>data/default-user/characters/&lt;name&gt;/</code> and are picked up automatically by the expression sync. ZIP upload accepts a folder of correctly-named PNGs (e.g. <code>joy.png</code>, <code>sadness.png</code>).</p>
+                        <div class="rpg-cs-tab-content" data-tab="expressions" id="cw-expressions-pane">
+                            <div style="padding:20px; opacity:0.5; text-align:center;">Open this tab to load sprites…</div>
                         </div>
                     </div>
                 </section>
