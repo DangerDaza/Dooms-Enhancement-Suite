@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.10.0] - 2026-05-01
+
+### Added
+- **Doom Button (the D) got a glow-up.** Click the D to open a fly-out menu with **Doom's Settings** plus a mirrored entry for every button in SillyTavern's top bar (AI Response Config, Connections, Formatting, World Info, Persona, Backgrounds, Extensions, User Settings, Character Management — whatever the host UI exposes). Items follow the active DES theme.
+- **Right-click the D → Move button.** Drag-and-drop the FAB anywhere on screen; position is persisted via `extensionSettings.fabPosition` and re-clamped on window resize. Right-click also exposes **Reset to bottom-left** when a custom position is set.
+- **Hover the D → lightning strike.** White silhouette flicker on the D plus a jagged bolt overlay sitting *behind* the icon (z-index trick on `.dooms-fab-btn::before`). Tinted by `--rpg-highlight` so it tracks the active theme.
+- **Doom Button settings section.** New accordion with: *Open settings on click* (bypass the fly-out), *Hide SillyTavern top bar* (collapses `#top-bar` and zeroes `--topBarBlockSize` so the chat reaches the top of the viewport; drawer-content panels are repositioned with `position: fixed` so the fly-out can still open them), per-item enable toggles for every fly-out entry, and a *Reset button position* action.
+- **Update Extension button** at the bottom of the settings popup. POSTs to `/api/extensions/update` for this extension's folder, with the `global` flag inferred from whether the script loads from `/data/`. Reports already-up-to-date, the new short SHA on success, or the error message on failure.
+
+### Changed
+- Settings popup header no longer shows the version badge.
+- FAB inherits DES theme variables — added `#dooms-settings-fab` to the default-theme variable scope and to every named theme override (sci-fi, fantasy, cyberpunk, midnight-rose, emerald-grove, arctic, volcanic, dracula, ocean-depths). `applyTheme()` and `applyCustomTheme()` now stamp `data-theme` on the FAB so theme switches take effect live.
+
 ## [1.9.2] - 2026-04-24
 
 ### Fixed
