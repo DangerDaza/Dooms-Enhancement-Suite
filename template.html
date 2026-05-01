@@ -2282,13 +2282,19 @@
             <span class="spacer"></span>
             <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-cancel">Cancel</button>
             <!-- NPC-only footer actions -->
+            <button class="rpg-btn cw-npc-only" type="button" id="cw-copy-to-users" title="Copy this character into the User Characters list (creates a user character with the same color, portrait, and description). Skipped if a user character with this name already exists.">
+                <i class="fa-solid fa-user-tag"></i> Copy to Users
+            </button>
             <button class="rpg-btn cw-npc-only" type="button" id="cw-eject" title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
                 <i class="fa-solid fa-user-xmark"></i> Eject from Scene
             </button>
             <button class="rpg-btn" type="button" id="cw-inject" title="Send the description (and optionally the portrait) to the AI as one-shot context for the next response.">
                 <i class="fa-solid fa-user-plus"></i> <span id="cw-inject-label">Inject into Scene</span>
             </button>
-            <!-- User-only footer action -->
+            <!-- User-only footer actions -->
+            <button class="rpg-btn cw-user-only" type="button" id="cw-copy-to-characters" title="Copy this user character into the Characters list (creates an NPC with the same color, portrait, and description). Skipped if an NPC with this name already exists.">
+                <i class="fa-solid fa-user-tag"></i> Copy to Characters
+            </button>
             <button class="rpg-btn cw-user-only" type="button" id="cw-set-active-persona" title="Set as active: makes this user character the active DES user, switches the SillyTavern persona to its linked entry, and shows them in the Present Characters Panel">
                 <i class="fa-solid fa-user-check"></i> Set as active persona
             </button>

@@ -1134,6 +1134,20 @@ function bindStaticListeners() {
         closeCharacterWorkshop();
     });
 
+    // Copy NPC → User Characters list (NPC-only footer action)
+    $modal.on('click.cw', '#cw-copy-to-users', () => {
+        if (!draft || draft.isUser) return;
+        commitDraft();
+        copyNpcToUserCharacter(draft.name);
+    });
+
+    // Copy User Character → NPC list (user-only footer action)
+    $modal.on('click.cw', '#cw-copy-to-characters', () => {
+        if (!draft || !draft.isUser) return;
+        commitDraft();
+        copyUserToNpcCharacter(draft.name);
+    });
+
     $modal.on('click.cw', '#cw-inject', () => {
         if (!draft) return;
         commitDraft(); // persist any pending appearance edits first
@@ -1264,6 +1278,97 @@ function commitDraft() {
     } catch (e) {
         console.warn('[Dooms Tracker] Workshop: failed to refresh portrait bar after save', e);
     }
+}
+
+/**
+ * Copy an NPC into the user-character namespace. Pulls color, avatar,
+ * and description from the NPC's persisted state. Refuses if a user
+ * character with this name already exists (to avoid silent overwrites).
+ */
+function copyNpcToUserCharacter(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+    if (extensionSettings.userCharacters[trimmed]) {
+        try {
+            if (window.toastr) window.toastr.warning(
+                `A user character named "${trimmed}" already exists. Rename or delete it first.`,
+                'Copy to Users',
+                { timeOut: 4500 },
+            );
+        } catch (e) {}
+        return;
+    }
+    const color = extensionSettings.characterColors?.[trimmed] || '';
+    const avatar = extensionSettings.npcAvatars?.[trimmed] || '';
+    const avatarFullRes = extensionSettings.npcAvatarsFullRes?.[trimmed] || avatar;
+    const inj = extensionSettings.characterInjection?.[trimmed] || {};
+    extensionSettings.userCharacters[trimmed] = {
+        color,
+        avatar,
+        avatarFullRes,
+        pronouns: '',
+        linkedPersona: '',
+        injection: {
+            description: typeof inj.description === 'string' ? inj.description : '',
+            lorebook: '',
+            // Don't carry the NPC inject prompt template — user inject uses
+            // a different default flow.
+        },
+    };
+    try { saveSettings(); } catch (e) {}
+    try {
+        if (window.toastr) window.toastr.success(
+            `Copied "${trimmed}" to User Characters.`,
+            'Workshop',
+            { timeOut: 3000 },
+        );
+    } catch (e) {}
+}
+
+/**
+ * Copy a user character into the NPC namespace. Pulls color, avatar,
+ * and description from the user character. Refuses if an NPC with
+ * this name already exists.
+ */
+function copyUserToNpcCharacter(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const npcAlready =
+        extensionSettings.knownCharacters?.[trimmed] ||
+        extensionSettings.characterColors?.[trimmed] ||
+        extensionSettings.npcAvatars?.[trimmed];
+    if (npcAlready) {
+        try {
+            if (window.toastr) window.toastr.warning(
+                `A character named "${trimmed}" already exists. Rename or delete it first.`,
+                'Copy to Characters',
+                { timeOut: 4500 },
+            );
+        } catch (e) {}
+        return;
+    }
+    const u = extensionSettings.userCharacters?.[trimmed] || {};
+    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
+    if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
+    if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
+    extensionSettings.knownCharacters[trimmed] = { emoji: '👤' };
+    if (u.color) extensionSettings.characterColors[trimmed] = u.color;
+    if (u.avatar) extensionSettings.npcAvatars[trimmed] = u.avatar;
+    if (u.avatarFullRes || u.avatar) extensionSettings.npcAvatarsFullRes[trimmed] = u.avatarFullRes || u.avatar;
+    const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
+    if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
+    try { saveSettings(); } catch (e) {}
+    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    try {
+        if (window.toastr) window.toastr.success(
+            `Copied "${trimmed}" to Characters.`,
+            'Workshop',
+            { timeOut: 3000 },
+        );
+    } catch (e) {}
 }
 
 function deleteCharacter(name) {

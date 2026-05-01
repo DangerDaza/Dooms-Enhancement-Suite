@@ -19500,17 +19500,19 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 #character-workshop-popup .cw-user-badge[hidden] { display: none !important; }
 
-/* Mode-scoped visibility — JS toggles a body-level class on the modal
-   to flip these. Default state matches NPC mode. */
+/* Mode-scoped visibility — JS sets data-mode="npc"|"user" on the modal.
+   !important is needed because #character-workshop-popup .rpg-btn (later
+   in the file) declares display: inline-flex with the same specificity
+   and would otherwise win by source order. */
 #character-workshop-popup[data-mode="user"] .cw-npc-only,
 #character-workshop-popup .cw-user-only {
-    display: none;
+    display: none !important;
 }
 #character-workshop-popup[data-mode="user"] .cw-user-only {
-    display: revert;
+    display: revert !important;
 }
 #character-workshop-popup[data-mode="user"] .cw-user-only[hidden] {
-    display: none;
+    display: none !important;
 }
 
 /* Split pane body */
