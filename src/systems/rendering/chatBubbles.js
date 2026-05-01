@@ -770,6 +770,7 @@ export function applyChatBubbleSettings() {
     // Colors
     root.style.setProperty('--cb-narrator-color', s.narratorTextColor || '#999999');
     root.style.setProperty('--cb-unknown-color', s.unknownSpeakerColor || '#aaaaaa');
+    root.style.setProperty('--cb-user-color', s.userDialogColor || '#e0e0e0');
     root.style.setProperty('--cb-accent', s.accentColor || '#e94560');
     root.style.setProperty('--cb-narrator-font-style', (s.narratorItalic !== false) ? 'italic' : 'normal');
 

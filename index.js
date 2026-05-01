@@ -301,6 +301,7 @@ function loadChatBubbleSettingsUI() {
     // Bubble colors
     $('#rpg-cb-narrator-color').val(cbs.narratorTextColor || '#999999');
     $('#rpg-cb-unknown-color').val(cbs.unknownSpeakerColor || '#aaaaaa');
+    $('#rpg-cb-user-color').val(cbs.userDialogColor || '#e0e0e0');
     $('#rpg-cb-accent-color').val(cbs.accentColor || '#e94560');
     $('#rpg-cb-bg-tint').val(cbs.backgroundTint || '#1a1a2e');
 
@@ -1122,6 +1123,7 @@ async function initUI() {
     // Bubble color pickers
     $('#rpg-cb-narrator-color').on('input', function() { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });
     $('#rpg-cb-unknown-color').on('input', function() { _cbSettings().unknownSpeakerColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-user-color').on('input', function() { _cbSettings().userDialogColor = $(this).val(); _saveCb(); });
     $('#rpg-cb-accent-color').on('input', function() { _cbSettings().accentColor = $(this).val(); _saveCb(); });
     $('#rpg-cb-bg-tint').on('input', function() { _cbSettings().backgroundTint = $(this).val(); _saveCb(); });
 

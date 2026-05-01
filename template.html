@@ -1327,71 +1327,89 @@
                         </label>
                     </div>
 
-                    <div class="rpg-subsection-label">Bubble Colors</div>
-                    <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Narrator Text</span>
-                        <input type="color" id="rpg-cb-narrator-color" class="rpg-color-swatch" value="#999999" />
-                    </div>
-                    <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Unknown Speaker</span>
-                        <input type="color" id="rpg-cb-unknown-color" class="rpg-color-swatch" value="#aaaaaa" />
-                    </div>
-                    <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Accent / Border</span>
-                        <input type="color" id="rpg-cb-accent-color" class="rpg-color-swatch" value="#e94560" />
-                    </div>
-                    <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Background Tint</span>
-                        <input type="color" id="rpg-cb-bg-tint" class="rpg-color-swatch" value="#1a1a2e" />
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Background Opacity</span>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Bubble Colors</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                            <div class="rpg-setting-row">
+                                <span class="rpg-setting-label">Narrator Text</span>
+                                <input type="color" id="rpg-cb-narrator-color" class="rpg-color-swatch" value="#999999" />
+                            </div>
+                            <div class="rpg-setting-row">
+                                <span class="rpg-setting-label">Unknown Speaker</span>
+                                <input type="color" id="rpg-cb-unknown-color" class="rpg-color-swatch" value="#aaaaaa" />
+                            </div>
+                            <div class="rpg-setting-row">
+                                <span class="rpg-setting-label">User Dialog</span>
+                                <input type="color" id="rpg-cb-user-color" class="rpg-color-swatch" value="#e0e0e0" />
+                            </div>
+                            <div class="rpg-setting-row">
+                                <span class="rpg-setting-label">Accent / Border</span>
+                                <input type="color" id="rpg-cb-accent-color" class="rpg-color-swatch" value="#e94560" />
+                            </div>
+                            <div class="rpg-setting-row">
+                                <span class="rpg-setting-label">Background Tint</span>
+                                <input type="color" id="rpg-cb-bg-tint" class="rpg-color-swatch" value="#1a1a2e" />
+                            </div>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Background Opacity</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-cb-bg-opacity" class="rpg-range-slider" min="0" max="30" value="5" />
+                                    <span id="rpg-cb-bg-opacity-value" class="rpg-slider-value">5%</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-bg-opacity" class="rpg-range-slider" min="0" max="30" value="5" />
-                            <span id="rpg-cb-bg-opacity-value" class="rpg-slider-value">5%</span>
-                        </div>
-                    </div>
+                    </details>
 
-                    <div class="rpg-subsection-label">Bubble Sizing</div>
-                    <p class="rpg-note-text" style="color:#e94560; margin-top:2px; margin-bottom:6px;">Warning: Changing these settings is resource-intensive and may cause lag, especially with long chats.</p>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Font Size</span>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Bubble Sizing</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                            <p class="rpg-note-text" style="color:#e94560; margin-top:2px; margin-bottom:6px;">Warning: Changing these settings is resource-intensive and may cause lag, especially with long chats.</p>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Font Size</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-cb-font-size" class="rpg-range-slider" min="60" max="120" value="92" />
+                                    <span id="rpg-cb-font-size-value" class="rpg-slider-value">92%</span>
+                                </div>
+                            </div>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Avatar Size</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-cb-avatar-size" class="rpg-range-slider" min="24" max="120" value="40" />
+                                    <span id="rpg-cb-avatar-size-value" class="rpg-slider-value">40px</span>
+                                </div>
+                            </div>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Border Radius</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-cb-border-radius" class="rpg-range-slider" min="0" max="20" value="6" />
+                                    <span id="rpg-cb-border-radius-value" class="rpg-slider-value">6px</span>
+                                </div>
+                            </div>
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Speaker Spacing</span>
+                                </div>
+                                <div class="rpg-slider-group">
+                                    <input type="range" id="rpg-cb-spacing" class="rpg-range-slider" min="0" max="24" value="12" />
+                                    <span id="rpg-cb-spacing-value" class="rpg-slider-value">12px</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-font-size" class="rpg-range-slider" min="60" max="120" value="92" />
-                            <span id="rpg-cb-font-size-value" class="rpg-slider-value">92%</span>
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Avatar Size</span>
-                        </div>
-                        <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-avatar-size" class="rpg-range-slider" min="24" max="120" value="40" />
-                            <span id="rpg-cb-avatar-size-value" class="rpg-slider-value">40px</span>
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Border Radius</span>
-                        </div>
-                        <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-border-radius" class="rpg-range-slider" min="0" max="20" value="6" />
-                            <span id="rpg-cb-border-radius-value" class="rpg-slider-value">6px</span>
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Speaker Spacing</span>
-                        </div>
-                        <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-spacing" class="rpg-range-slider" min="0" max="24" value="12" />
-                            <span id="rpg-cb-spacing-value" class="rpg-slider-value">12px</span>
-                        </div>
-                    </div>
+                    </details>
 
                     <button id="rpg-cb-reset" class="rpg-accordion-action-btn" type="button">
                         <i class="fa-solid fa-rotate-left"></i> Restore Chat Bubbles Defaults

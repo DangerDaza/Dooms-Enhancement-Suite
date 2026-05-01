@@ -6530,6 +6530,58 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     padding-top: 0;
 }
 
+/* Collapsible subsection — native <details>/<summary> styled to look
+   like .rpg-subsection-label with a chevron that rotates on open. */
+.rpg-subsection-collapse {
+    margin: 10px 0 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.rpg-subsection-collapse:first-child {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+}
+
+.rpg-subsection-collapse-header {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    padding: 2px 0;
+    transition: color 0.15s ease;
+}
+
+.rpg-subsection-collapse-header::-webkit-details-marker {
+    display: none;
+}
+
+.rpg-subsection-collapse-header:hover {
+    color: var(--rpg-text, #aaa);
+}
+
+.rpg-subsection-chevron {
+    font-size: 0.85em;
+    transition: transform 0.2s ease;
+    opacity: 0.6;
+}
+
+.rpg-subsection-collapse[open] > .rpg-subsection-collapse-header .rpg-subsection-chevron {
+    transform: rotate(180deg);
+}
+
+.rpg-subsection-collapse-body {
+    padding-top: 6px;
+}
+
 /* Toggle switch (replaces checkboxes) */
 .rpg-toggle-switch {
     position: relative;
@@ -14939,6 +14991,10 @@ body.dooms-hide-st-topbar .openDrawer {
     border-left-color: transparent;
 }
 
+.dooms-bubble-user .dooms-bubble-text {
+    color: var(--cb-user-color, #e0e0e0);
+}
+
 /* ── Unknown speaker ── */
 .dooms-bubble-unknown {
     border-left-color: rgba(255,255,255,0.15);
@@ -15040,6 +15096,10 @@ body.dooms-hide-st-topbar .openDrawer {
     background: transparent;
     border-left-color: transparent;
     border-color: transparent;
+}
+
+.dooms-card-user .dooms-card-text {
+    color: var(--cb-user-color, #e0e0e0);
 }
 
 /* ── Unknown card ── */

@@ -281,6 +281,7 @@ export let extensionSettings = {
         // Colors
         narratorTextColor: '#999999',     // Narrator text color
         unknownSpeakerColor: '#aaaaaa',   // Unknown/undetected speaker text color
+        userDialogColor: '#e0e0e0',       // User (player) dialog text color
         accentColor: '#e94560',           // Accent / border highlight color
         backgroundTint: '#1a1a2e',        // Bubble background tint color
         backgroundOpacity: 5,             // Bubble background tint opacity (0-100)
