@@ -686,13 +686,17 @@ function namesMatch(cardName, aiName) {
 export function resolvePortrait(name) {
     if (!name) return null;
 
-    // 0. User character — check the userCharacters namespace first since
-    // active user characters appear in the PCP under the same name path
-    // and we want their stored avatar (or linked persona's avatar) to win
-    // over any NPC entry that might happen to share the name.
+    // 0. User character — only when this name IS the currently-active user
+    // character. Without the active-name guard, an NPC that happens to
+    // share a name with a user-character would be hijacked: every NPC
+    // portrait lookup matching that name would return the user's avatar
+    // instead, including in chat bubbles.
     const userEntries = extensionSettings.userCharacters;
     if (userEntries && userEntries[name] && userEntries[name].avatar) {
-        return userEntries[name].avatar;
+        const activeUserName = resolveActiveUserName();
+        if (activeUserName && name === activeUserName) {
+            return userEntries[name].avatar;
+        }
     }
 
     const syncedExpression = getExpressionAwarePortrait(name, null);
@@ -1189,42 +1193,48 @@ export function getCharacterList() {
 }
 
 /**
- * Build the PCP entry for the currently-active user character if
- * extensionSettings.showUserInPCP is on. The active user character
- * resolves in this priority:
+ * Returns the name of the currently-active user character, regardless
+ * of whether showUserInPCP is on. Resolution priority:
  *   1. Manual override: extensionSettings.activeUserCharacter (set by the
  *      Workshop's "Set as active persona" button)
  *   2. Auto-match: the user character whose linkedPersona equals the
  *      current SillyTavern user_avatar
  *   3. Single-entry fallback: if exactly one user character exists, use it
- * Returns null if the PCP toggle is off or no user character is available.
+ * Returns null if no user character is available.
+ *
+ * Used by both buildActiveUserCharacterEntry (PCP card) and
+ * resolvePortrait (avatar lookup) so the two paths can't drift apart.
+ */
+function resolveActiveUserName() {
+    const s = extensionSettings || {};
+    const userMap = s.userCharacters || {};
+    if (!userMap || typeof userMap !== 'object') return null;
+    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) return s.activeUserCharacter;
+    let currentAvatar = '';
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext)
+            ? window.SillyTavern.getContext() : null;
+        currentAvatar = (ctx && ctx.user_avatar) || (typeof window !== 'undefined' && window.user_avatar) || '';
+    } catch (e) { currentAvatar = ''; }
+    if (currentAvatar) {
+        for (const [n, entry] of Object.entries(userMap)) {
+            if (entry && entry.linkedPersona === currentAvatar) return n;
+        }
+    }
+    const allNames = Object.keys(userMap);
+    if (allNames.length === 1) return allNames[0];
+    return null;
+}
+
+/**
+ * Build the PCP entry for the currently-active user character if
+ * extensionSettings.showUserInPCP is on. Returns null if the toggle is
+ * off or no user character is available.
  */
 function buildActiveUserCharacterEntry() {
     const s = extensionSettings || {};
     if (!s.showUserInPCP) return null;
-    const userMap = s.userCharacters || {};
-    if (!userMap || typeof userMap !== 'object') return null;
-    let name = null;
-    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) {
-        name = s.activeUserCharacter;
-    } else {
-        // Auto-resolve from the current ST persona avatar
-        let currentAvatar = '';
-        try {
-            const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext)
-                ? window.SillyTavern.getContext() : null;
-            currentAvatar = (ctx && ctx.user_avatar) || (typeof window !== 'undefined' && window.user_avatar) || '';
-        } catch (e) { currentAvatar = ''; }
-        if (currentAvatar) {
-            for (const [n, entry] of Object.entries(userMap)) {
-                if (entry && entry.linkedPersona === currentAvatar) { name = n; break; }
-            }
-        }
-        if (!name) {
-            const allNames = Object.keys(userMap);
-            if (allNames.length === 1) name = allNames[0];
-        }
-    }
+    const name = resolveActiveUserName();
     if (!name) return null;
     return {
         name,

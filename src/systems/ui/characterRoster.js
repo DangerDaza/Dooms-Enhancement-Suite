@@ -315,10 +315,12 @@ function commitNewCharacter() {
         $error.prop('hidden', false).text('Name is required.');
         return;
     }
-    const existing = collectCharacterNames();
-    const clash = existing.find(n => n.toLowerCase() === trimmed.toLowerCase());
-    if (clash) {
-        $error.prop('hidden', false).text(`A character named "${clash}" already exists.`);
+    // Dedup across BOTH namespaces — preventing a user character with the
+    // same name as an existing NPC (or vice versa) is critical because
+    // resolvePortrait keys off names; collisions would confuse rendering.
+    const existing = getAllExistingCharacterNamesLower();
+    if (existing.has(trimmed.toLowerCase())) {
+        $error.prop('hidden', false).text(`A character named "${trimmed}" already exists (as user or NPC).`);
         return;
     }
     if (rosterMode === 'users') {
