@@ -14415,6 +14415,9 @@ body.dooms-hide-st-topbar .openDrawer {
 
 .dooms-fab-btn .doom-icon {
     position: relative;
+    /* Establish a stacking context so ::before can sit behind the
+       D (z-index: -1) without falling behind the button itself. */
+    isolation: isolate;
     width: 40px;
     height: 40px;
     transition: transform 0.2s ease;
@@ -14449,6 +14452,9 @@ body.dooms-hide-st-topbar .openDrawer {
     content: '';
     position: absolute;
     inset: -6px;
+    /* Sit behind the D's background-image inside the icon's
+       isolated stacking context. */
+    z-index: -1;
     background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
     /* Standard Font-Awesome bolt outline, normalized — a clean
        7-vertex non-self-intersecting polygon. Shape recentered on
