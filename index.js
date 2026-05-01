@@ -1901,22 +1901,6 @@ async function initUI() {
 
             console.log('[FAB] Found drawer icons:', items.length);
 
-            // **Always add DeepLore explicitly** — it's created dynamically and should always be available
-            const $deeploreIcon = $('#deeploreDrawerIcon');
-            console.log('[FAB] DeepLore icon exists?', $deeploreIcon.length > 0);
-
-            if ($deeploreIcon.length) {
-                console.log('[FAB] Adding DeepLore to menu');
-                items.push({
-                    id: 'deeploreDrawerIcon',
-                    label: 'DeepLore',
-                    iconClass: 'fa-solid fa-book-open',
-                    action: () => { $deeploreIcon.trigger('click'); },
-                });
-            } else {
-                console.log('[FAB] DeepLore icon NOT FOUND - checking if it exists anywhere:', !!document.getElementById('deeploreDrawerIcon'));
-            }
-
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",
