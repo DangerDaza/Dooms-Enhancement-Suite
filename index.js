@@ -282,76 +282,118 @@ function updateGenerationModeUI() {
     }
 }
 /**
- * Fetches the list of branches from the extension's GitHub repository and
- * populates the Update-section <select>. Cached for the lifetime of the
- * page so reopening the settings doesn't re-hit the GitHub API. Falls back
- * to a static "main" option on any failure (offline, rate-limited, etc.).
+ * Populates the Update-section branch dropdown by mirroring SillyTavern's
+ * own "Switch branch" button flow:
+ *   1. POST /api/extensions/version — read current branch + remoteUrl
+ *   2. If the response includes a branches list, use it directly.
+ *      Otherwise pull branches from GitHub via the response's remoteUrl.
+ *   3. Cache for the lifetime of the page so reopening the settings doesn't
+ *      re-hit the network. Falls back to ["main"] on total failure.
  */
 let _branchListPromise = null;
 function populateUpdateBranchDropdownOnce() {
     const $sel = $('#rpg-update-branch');
     if (!$sel.length) return;
-    // Don't refetch if we've already populated the list this session.
     if ($sel.data('populated')) return;
     if (_branchListPromise) {
-        _branchListPromise.then((branches) => fillBranchDropdown(branches)).catch(() => {});
+        _branchListPromise.then((info) => fillBranchDropdown(info)).catch(() => {});
         return;
     }
-    // Pull the repo slug from manifest.homePage so this stays correct if
-    // the extension is ever forked.
     _branchListPromise = (async () => {
-        let repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+        const isUserExt = (import.meta.url || '').includes('/data/');
+        const bareName = extensionName.replace(/^third-party\//, '');
+        let currentBranch = '';
+        let remoteUrl = '';
+        let branches = [];
+        // 1. Ask SillyTavern for its view of this extension's git state.
         try {
-            const manifestResp = await fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' });
-            if (manifestResp.ok) {
-                const manifest = await manifestResp.json();
-                const home = String(manifest.homePage || '');
-                const m = home.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
-                if (m) repoSlug = m[1];
+            const resp = await fetch('/api/extensions/version', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+            });
+            if (resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                currentBranch = String(data?.currentBranchName || data?.currentBranch || '').trim();
+                remoteUrl = String(data?.remoteUrl || data?.remote || '').trim();
+                if (Array.isArray(data?.branches)) {
+                    branches = data.branches.map(b => typeof b === 'string' ? b : String(b?.name || '')).filter(Boolean);
+                }
             }
-        } catch (e) { /* keep fallback */ }
-        const resp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
-            headers: { 'Accept': 'application/vnd.github+json' },
-        });
-        if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
-        const data = await resp.json();
-        if (!Array.isArray(data)) throw new Error('Unexpected response shape');
-        return data.map(b => String(b?.name || '')).filter(Boolean);
+        } catch (e) { /* fall through to manifest+GitHub */ }
+        // 2. If we don't have a branches list yet, fetch from GitHub. Pull
+        //    the repo slug from remoteUrl (preferred, matches what ST sees)
+        //    or from manifest.homePage as a fallback.
+        if (!branches.length) {
+            let repoSlug = '';
+            const fromRemote = remoteUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+            if (fromRemote) repoSlug = fromRemote[1];
+            if (!repoSlug) {
+                try {
+                    const manifestResp = await fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' });
+                    if (manifestResp.ok) {
+                        const manifest = await manifestResp.json();
+                        const m = String(manifest.homePage || '').match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+                        if (m) repoSlug = m[1];
+                        if (!remoteUrl) remoteUrl = manifest.homePage || '';
+                    }
+                } catch (e) { /* keep fallback */ }
+            }
+            if (!repoSlug) repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+            try {
+                const ghResp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
+                    headers: { 'Accept': 'application/vnd.github+json' },
+                });
+                if (ghResp.ok) {
+                    const data = await ghResp.json();
+                    if (Array.isArray(data)) {
+                        branches = data.map(b => String(b?.name || '')).filter(Boolean);
+                    }
+                }
+            } catch (e) { /* fall through to ["main"] */ }
+        }
+        if (!branches.length) branches = ['main'];
+        return { branches, currentBranch, remoteUrl };
     })();
     _branchListPromise
-        .then((branches) => fillBranchDropdown(branches))
+        .then((info) => fillBranchDropdown(info))
         .catch((err) => {
-            console.warn('[Dooms Tracker] Failed to fetch branches from GitHub:', err);
-            fillBranchDropdown(['main']);
+            console.warn('[Dooms Tracker] Failed to populate branch dropdown:', err);
+            fillBranchDropdown({ branches: ['main'], currentBranch: '', remoteUrl: '' });
         });
 }
 
-function fillBranchDropdown(branches) {
+function fillBranchDropdown({ branches, currentBranch, remoteUrl }) {
     const $sel = $('#rpg-update-branch');
     if (!$sel.length) return;
-    // Sort: main / master first, then alphabetical
     const ordered = [...branches].sort((a, b) => {
+        // Current branch always at the top, then main/master, then alphabetical
+        if (currentBranch) {
+            if (a === currentBranch) return -1;
+            if (b === currentBranch) return 1;
+        }
         const wa = a === 'main' ? 0 : a === 'master' ? 1 : 2;
         const wb = b === 'main' ? 0 : b === 'master' ? 1 : 2;
         return wa !== wb ? wa - wb : a.localeCompare(b);
     });
     const previous = String($sel.val() || '');
     $sel.empty();
-    // Empty value = "use whatever branch ST currently has checked out"
-    $sel.append('<option value="">(current)</option>');
     for (const name of ordered) {
         const opt = document.createElement('option');
         opt.value = name;
-        opt.textContent = name;
+        opt.textContent = (currentBranch && name === currentBranch) ? `${name} (current)` : name;
         $sel[0].appendChild(opt);
     }
-    // Restore prior selection if it still exists, else default to (current)
     if (previous && ordered.includes(previous)) {
         $sel.val(previous);
+    } else if (currentBranch && ordered.includes(currentBranch)) {
+        $sel.val(currentBranch);
     } else {
-        $sel.val('');
+        $sel.val(ordered[0] || '');
     }
     $sel.data('populated', true);
+    $sel.data('currentBranch', currentBranch || '');
+    $sel.data('remoteUrl', remoteUrl || '');
 }
 
 /**
@@ -1842,6 +1884,7 @@ async function initUI() {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
         const $status = $('#rpg-update-status');
+        const $sel = $('#rpg-update-branch');
         const originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Updating…');
         $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
@@ -1851,13 +1894,49 @@ async function initUI() {
             // strip it from extensionName before posting (otherwise the
             // server resolves to .../third-party/third-partyFoo).
             const bareName = extensionName.replace(/^third-party\//, '');
-            const branch = String($('#rpg-update-branch').val() || '').trim();
-            const payload = { extensionName: bareName, global: !isUserExt };
-            if (branch) payload.branch = branch;
+            const selectedBranch = String($sel.val() || '').trim();
+            const currentBranch = String($sel.data('currentBranch') || '').trim();
+            const remoteUrl = String($sel.data('remoteUrl') || '').trim();
+            const switchingBranch = selectedBranch && currentBranch && selectedBranch !== currentBranch;
+
+            // Branch switch: use SillyTavern's install endpoint with a branch
+            // parameter — same path the Extensions panel's "Switch branch"
+            // button takes. Replaces the on-disk extension with the chosen
+            // branch's HEAD. Confirm first since this rewrites the folder.
+            if (switchingBranch) {
+                if (!remoteUrl) {
+                    throw new Error('Could not determine remote URL for branch switch.');
+                }
+                const ok = window.confirm(
+                    `Switch to branch "${selectedBranch}"?\n\n` +
+                    `This re-installs Doom's Enhancement Suite from ${remoteUrl} on the "${selectedBranch}" branch.\n` +
+                    `Settings are kept; only the on-disk files are replaced.\n\n` +
+                    `(Same flow as SillyTavern's "Switch branch" button.)`
+                );
+                if (!ok) {
+                    $status.html('<span style="opacity:0.8;">Switch cancelled.</span>');
+                    return;
+                }
+                $status.html(`<span style="opacity:0.8;">Switching to <code>${selectedBranch}</code>…</span>`);
+                const resp = await fetch('/api/extensions/install', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ url: remoteUrl, global: !isUserExt, branch: selectedBranch }),
+                });
+                if (!resp.ok) {
+                    const text = await resp.text().catch(() => '');
+                    throw new Error(text || `HTTP ${resp.status}`);
+                }
+                $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Switched to <code>${selectedBranch}</code>. <strong>Reload SillyTavern</strong> to apply.`);
+                $sel.data('currentBranch', selectedBranch);
+                return;
+            }
+
+            // Same-branch update — git pull on the currently checked-out branch.
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
             });
             if (!resp.ok) {
                 const text = await resp.text().catch(() => '');
