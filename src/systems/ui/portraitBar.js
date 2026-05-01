@@ -492,14 +492,22 @@ export function updatePortraitBar() {
         const absentClass = char.present ? '' : ' dooms-pb-absent';
         const isNew = newCharNames.has(char.name);
         const entranceClass = isNew ? ' dooms-pb-entrance' : '';
+        const userClass = char.isUser ? ' dooms-pb-user' : '';
         const nameEsc = escapeHtml(char.name);
         const emoji = char.emoji || '👤';
         const absentOverlay = char.present ? '' : '<div class="dooms-pb-absent-overlay"></div>';
-        const charColor = activeColors[char.name];
+        // For user characters, prefer the color stored on userCharacters
+        // over any AI-assigned dialogue color.
+        let charColor = activeColors[char.name];
+        if (char.isUser) {
+            const uc = extensionSettings.userCharacters && extensionSettings.userCharacters[char.name];
+            if (uc && uc.color) charColor = uc.color;
+        }
         const colorDot = charColor
             ? `<span class="dooms-portrait-card-color-dot" style="background:${charColor};"></span>`
             : '';
         const newBadge = isNew ? '<span class="dooms-pb-new-badge">&#x2726; New</span>' : '';
+        const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
         let backFace = '';
         try {
@@ -523,20 +531,22 @@ export function updatePortraitBar() {
             : '';
 
         if (portraitSrc) {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
                 <img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                 <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${youBadge}
                 ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;
         } else {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
                 <div class="dooms-portrait-card-emoji">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${youBadge}
                 ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
@@ -675,6 +685,15 @@ function namesMatch(cardName, aiName) {
  */
 export function resolvePortrait(name) {
     if (!name) return null;
+
+    // 0. User character — check the userCharacters namespace first since
+    // active user characters appear in the PCP under the same name path
+    // and we want their stored avatar (or linked persona's avatar) to win
+    // over any NPC entry that might happen to share the name.
+    const userEntries = extensionSettings.userCharacters;
+    if (userEntries && userEntries[name] && userEntries[name].avatar) {
+        return userEntries[name].avatar;
+    }
 
     const syncedExpression = getExpressionAwarePortrait(name, null);
     if (syncedExpression) return syncedExpression;
@@ -1161,7 +1180,58 @@ export function getCharacterList() {
 
     // Present first, then absent (alphabetical)
     absentChars.sort((a, b) => a.name.localeCompare(b.name));
-    return [...presentChars, ...absentChars];
+    // Prepend the active user character (if the toggle is on and one exists)
+    // so the player's persona shows up alongside NPCs in the PCP.
+    const userPrefix = buildActiveUserCharacterEntry();
+    return userPrefix
+        ? [userPrefix, ...presentChars, ...absentChars]
+        : [...presentChars, ...absentChars];
+}
+
+/**
+ * Build the PCP entry for the currently-active user character if
+ * extensionSettings.showUserInPCP is on. The active user character
+ * resolves in this priority:
+ *   1. Manual override: extensionSettings.activeUserCharacter (set by the
+ *      Workshop's "Set as active persona" button)
+ *   2. Auto-match: the user character whose linkedPersona equals the
+ *      current SillyTavern user_avatar
+ *   3. Single-entry fallback: if exactly one user character exists, use it
+ * Returns null if the PCP toggle is off or no user character is available.
+ */
+function buildActiveUserCharacterEntry() {
+    const s = extensionSettings || {};
+    if (!s.showUserInPCP) return null;
+    const userMap = s.userCharacters || {};
+    if (!userMap || typeof userMap !== 'object') return null;
+    let name = null;
+    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) {
+        name = s.activeUserCharacter;
+    } else {
+        // Auto-resolve from the current ST persona avatar
+        let currentAvatar = '';
+        try {
+            const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext)
+                ? window.SillyTavern.getContext() : null;
+            currentAvatar = (ctx && ctx.user_avatar) || (typeof window !== 'undefined' && window.user_avatar) || '';
+        } catch (e) { currentAvatar = ''; }
+        if (currentAvatar) {
+            for (const [n, entry] of Object.entries(userMap)) {
+                if (entry && entry.linkedPersona === currentAvatar) { name = n; break; }
+            }
+        }
+        if (!name) {
+            const allNames = Object.keys(userMap);
+            if (allNames.length === 1) name = allNames[0];
+        }
+    }
+    if (!name) return null;
+    return {
+        name,
+        emoji: '👤',
+        present: true,
+        isUser: true,
+    };
 }
 
 // ─────────────────────────────────────────────

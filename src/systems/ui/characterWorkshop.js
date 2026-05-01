@@ -247,7 +247,8 @@ export function initCharacterWorkshop() {
     _wsInitialized = true;
     window.addEventListener('dooms:open-workshop', (e) => {
         const name = e?.detail?.characterName;
-        if (name) openCharacterWorkshop(name);
+        const isUser = !!e?.detail?.isUser;
+        if (name) openCharacterWorkshop(name, { isUser });
     });
     // Portrait-bar (or any other surface) can request a pending-inject be
     // cancelled via this event. Same decoupling pattern as open-workshop.
@@ -277,14 +278,19 @@ export function initCharacterWorkshop() {
     } catch (e) {}
 }
 
-export function openCharacterWorkshop(characterName) {
+export function openCharacterWorkshop(characterName, options = {}) {
     if (!characterName) {
         console.warn('[Dooms Tracker] openCharacterWorkshop called without a name');
         return;
     }
     if (!ensureModal()) return;
 
-    draft = buildDraft(characterName);
+    const isUser = !!options.isUser;
+    draft = buildDraft(characterName, isUser);
+
+    // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
+    // user-only sections without a JS class-toggle on every section.
+    $modal.attr('data-mode', isUser ? 'user' : 'npc');
 
     renderTitle();
     renderHiddenBanner();
@@ -507,10 +513,32 @@ function ensureModal() {
     return true;
 }
 
-function buildDraft(name) {
+function buildDraft(name, isUser = false) {
+    if (isUser) {
+        const u = extensionSettings?.userCharacters?.[name] || {};
+        const inj = u.injection || {};
+        return {
+            name,
+            isUser: true,
+            color: typeof u.color === 'string' ? u.color : '',
+            avatar: typeof u.avatar === 'string' ? u.avatar : '',
+            avatarFullRes: typeof u.avatarFullRes === 'string' ? u.avatarFullRes : '',
+            pronouns: typeof u.pronouns === 'string' ? u.pronouns : '',
+            linkedPersona: typeof u.linkedPersona === 'string' ? u.linkedPersona : '',
+            // Reuse same field names as NPC draft so render code can be shared
+            relationship: '',
+            injection: {
+                description: typeof inj.description === 'string' ? inj.description : '',
+                lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
+                promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
+            },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false },
+        };
+    }
     const inj = extensionSettings?.characterInjection?.[name] || {};
     return {
         name,
+        isUser: false,
         color: extensionSettings?.characterColors?.[name] || '',
         avatar: extensionSettings?.npcAvatars?.[name] || '',
         avatarFullRes: extensionSettings?.npcAvatarsFullRes?.[name] || '',
@@ -543,6 +571,8 @@ function resolveCurrentRelationship(name) {
 
 function renderTitle() {
     $modal.find('#cw-char-title').text(draft.name);
+    $modal.find('#cw-user-badge').prop('hidden', !draft.isUser);
+    $modal.find('#cw-modal-title').text(draft.isUser ? 'User Character Workshop' : 'Character Workshop');
 }
 
 function isHiddenFromPanel(name) {
@@ -555,6 +585,12 @@ function isHiddenFromPanel(name) {
 }
 
 function renderHiddenBanner() {
+    // The hidden-from-panel banner only applies to NPCs (user characters
+    // aren't added to the chat's removedCharacters list).
+    if (draft?.isUser) {
+        $modal.find('#cw-hidden-banner').prop('hidden', true);
+        return;
+    }
     const hidden = !!draft && isHiddenFromPanel(draft.name);
     $modal.find('#cw-hidden-banner').prop('hidden', !hidden);
 }
@@ -586,24 +622,74 @@ function restoreCharacterToPanel() {
 
 function renderIdentity() {
     $modal.find('#cw-name').val(draft.name);
-    const rel = (draft.relationship || '').toLowerCase();
-    $modal.find('.rpg-rel-chip').each(function () {
-        const $chip = $(this);
-        const matches = ($chip.attr('data-rel') || '').toLowerCase() === rel;
-        $chip.toggleClass('selected', matches);
-        $chip.attr('aria-checked', matches ? 'true' : 'false');
-    });
-    const $rel = $modal.find('#cw-preview-rel');
-    if (draft.relationship) {
-        const $match = $modal.find(`.rpg-rel-chip[data-rel="${draft.relationship}"]`);
-        const emoji = $match.attr('data-emoji') || '';
-        $rel.text(`${emoji} ${draft.relationship}`.trim());
+    if (draft.isUser) {
+        renderPronounChips();
+        renderLinkedPersonaSelect();
+        // Show pronouns in the preview slot in place of the relationship label
+        $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
     } else {
-        $rel.text('');
+        const rel = (draft.relationship || '').toLowerCase();
+        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
+            const $chip = $(this);
+            const matches = ($chip.attr('data-rel') || '').toLowerCase() === rel;
+            $chip.toggleClass('selected', matches);
+            $chip.attr('aria-checked', matches ? 'true' : 'false');
+        });
+        const $rel = $modal.find('#cw-preview-rel');
+        if (draft.relationship) {
+            const $match = $modal.find(`#cw-rel-chips .rpg-rel-chip[data-rel="${draft.relationship}"]`);
+            const emoji = $match.attr('data-emoji') || '';
+            $rel.text(`${emoji} ${draft.relationship}`.trim());
+        } else {
+            $rel.text('');
+        }
     }
     $modal.find('#cw-preview-name').text(draft.name);
     $modal.find('#cw-preview-card-name').text(draft.name);
     applyPreviewColor(draft.color || '#e94560');
+}
+
+function renderPronounChips() {
+    const current = (draft.pronouns || '').toLowerCase();
+    const presets = ['he/him', 'she/her', 'they/them'];
+    const isPreset = presets.includes(current);
+    const isCustom = !!current && !isPreset;
+    $modal.find('#cw-pronoun-chips .rpg-rel-chip').each(function () {
+        const $chip = $(this);
+        const value = ($chip.attr('data-pronouns') || '').toLowerCase();
+        const matches = value === 'custom' ? isCustom : (value === current);
+        $chip.toggleClass('selected', matches);
+        $chip.attr('aria-checked', matches ? 'true' : 'false');
+    });
+    const $custom = $modal.find('#cw-pronouns-custom');
+    if (isCustom) {
+        $custom.val(draft.pronouns).prop('hidden', false);
+    } else {
+        $custom.val('').prop('hidden', true);
+    }
+}
+
+function renderLinkedPersonaSelect() {
+    const $sel = $modal.find('#cw-linked-persona');
+    // Rebuild options from SillyTavern's persona registry. power_user.personas
+    // is { avatarFilename: personaName }. Stash the avatar filename as the
+    // value so we can sync ST persona switches to the active user character.
+    let personas = {};
+    try {
+        // power_user is provided by SillyTavern; access lazily so this
+        // module doesn't crash if power_user isn't ready yet.
+        const pu = (typeof window !== 'undefined' && window.power_user) || null;
+        personas = (pu && pu.personas) || {};
+    } catch (e) { personas = {}; }
+    $sel.empty();
+    $sel.append('<option value="">— None —</option>');
+    for (const [avatarFile, personaName] of Object.entries(personas)) {
+        const opt = document.createElement('option');
+        opt.value = avatarFile;
+        opt.textContent = personaName || avatarFile;
+        $sel[0].appendChild(opt);
+    }
+    $sel.val(draft.linkedPersona || '');
 }
 
 function renderAppearance() {
@@ -781,17 +867,16 @@ function bindStaticListeners() {
     });
 
     // Relationship chip click — set persistent override. Click again to clear.
-    $modal.on('click.cw', '.rpg-rel-chip', function () {
-        if (!draft) return;
+    // Scoped to #cw-rel-chips so the pronoun chips below don't get hit by it.
+    $modal.on('click.cw', '#cw-rel-chips .rpg-rel-chip', function () {
+        if (!draft || draft.isUser) return;
         const $chip = $(this);
         const picked = String($chip.attr('data-rel') || '');
         const current = String(draft.relationship || '');
-        // Toggle off if they clicked the already-selected chip.
         const next = (current.toLowerCase() === picked.toLowerCase()) ? '' : picked;
         draft.relationship = next;
         draft.dirty.relationship = true;
-        // Reflect immediately in the chip row and left-rail preview.
-        $modal.find('.rpg-rel-chip').each(function () {
+        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
             const match = ($(this).attr('data-rel') || '').toLowerCase() === next.toLowerCase() && !!next;
             $(this).toggleClass('selected', match);
             $(this).attr('aria-checked', match ? 'true' : 'false');
@@ -803,6 +888,88 @@ function bindStaticListeners() {
         } else {
             $rel.text('');
         }
+    });
+
+    // Pronoun chip click (user-mode) — picks one of the presets or reveals
+    // the custom input. Click the active chip again to clear.
+    $modal.on('click.cw', '#cw-pronoun-chips .rpg-rel-chip', function () {
+        if (!draft || !draft.isUser) return;
+        const $chip = $(this);
+        const value = String($chip.attr('data-pronouns') || '');
+        const current = String(draft.pronouns || '');
+        const $custom = $modal.find('#cw-pronouns-custom');
+        if (value === 'custom') {
+            // Toggle custom mode: reveal the input; pre-fill with whatever
+            // the current value is if it's already custom.
+            const presets = ['he/him', 'she/her', 'they/them'];
+            const wasCustom = current && !presets.includes(current.toLowerCase());
+            if (wasCustom) {
+                draft.pronouns = '';
+                draft.dirty.pronouns = true;
+                $custom.prop('hidden', true).val('');
+            } else {
+                $custom.prop('hidden', false).val(current && !presets.includes(current.toLowerCase()) ? current : '').trigger('focus');
+            }
+        } else {
+            const next = current.toLowerCase() === value ? '' : value;
+            draft.pronouns = next;
+            draft.dirty.pronouns = true;
+            $custom.prop('hidden', true).val('');
+        }
+        renderPronounChips();
+        $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
+    });
+
+    // Custom pronoun input — saves on every keystroke
+    $modal.on('input.cw', '#cw-pronouns-custom', function () {
+        if (!draft || !draft.isUser) return;
+        const value = String($(this).val() || '').trim();
+        draft.pronouns = value;
+        draft.dirty.pronouns = true;
+        $modal.find('#cw-preview-rel').text(value ? `(${value})` : '');
+    });
+
+    // Linked SillyTavern persona dropdown — saves the avatar filename
+    $modal.on('change.cw', '#cw-linked-persona', function () {
+        if (!draft || !draft.isUser) return;
+        draft.linkedPersona = String($(this).val() || '');
+        draft.dirty.linkedPersona = true;
+    });
+
+    // "Set as active persona" footer button — flips DES's activeUserCharacter
+    // and (if linked to a ST persona) calls SillyTavern's persona switch flow.
+    $modal.on('click.cw', '#cw-set-active-persona', function () {
+        if (!draft || !draft.isUser) return;
+        try {
+            extensionSettings.activeUserCharacter = draft.name;
+            saveSettings();
+        } catch (e) {}
+        // If the user character is linked to a persona, fire ST's persona
+        // switch. Implementations vary across ST versions, so try the
+        // common entry points and silently fall through.
+        const linked = draft.linkedPersona || '';
+        if (linked) {
+            try {
+                if (typeof window.setUserAvatar === 'function') {
+                    window.setUserAvatar(linked);
+                } else if (window.power_user && typeof window.power_user.persona_set === 'function') {
+                    window.power_user.persona_set(linked);
+                } else {
+                    // Fallback: dispatch a click on the persona's avatar in the
+                    // Personas panel so ST's own handler picks it up.
+                    const sel = `[data-pa-avatar="${linked}"], [data-avatar-file="${linked}"]`;
+                    const el = document.querySelector(sel);
+                    if (el) el.click();
+                }
+            } catch (e) {
+                console.warn('[Dooms Tracker] Failed to switch ST persona:', e);
+            }
+        }
+        try {
+            if (window.toastr) window.toastr.success(`Active user character set to "${draft.name}".`, 'Character Workshop', { timeOut: 3000 });
+        } catch (e) {}
+        // Re-render the PCP so the user-card shows up with the new active.
+        try { updatePortraitBar(); } catch (e) {}
     });
 
     // Custom-color dropper — opens the native color picker sheet.
@@ -999,6 +1166,29 @@ function commitDraft() {
     const name = draft.name;
     let changed = false;
 
+    // User-character mode: write the whole entry into a single namespace.
+    if (draft.isUser) {
+        if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+        const existing = extensionSettings.userCharacters[name] || {};
+        const tplRaw = (draft.injection.promptTemplate || '').trim();
+        const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
+        const desc = (draft.injection.description || '').trim();
+        const book = (draft.injection.lorebook || '').trim();
+        const next = {
+            ...existing,
+            color: draft.color || '',
+            avatar: draft.avatar || '',
+            avatarFullRes: draft.avatarFullRes || draft.avatar || '',
+            pronouns: draft.pronouns || '',
+            linkedPersona: draft.linkedPersona || '',
+            injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
+        };
+        extensionSettings.userCharacters[name] = next;
+        try { saveSettings(); } catch (e) {}
+        try { updatePortraitBar(); } catch (e) {}
+        return;
+    }
+
     if (draft.dirty.color) {
         if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
         if (draft.color) {
@@ -1063,6 +1253,17 @@ function commitDraft() {
 }
 
 function deleteCharacter(name) {
+    // User character delete: only touches the userCharacters namespace
+    // and clears activeUserCharacter if it was pointing at this entry.
+    if (draft?.isUser) {
+        if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
+        if (extensionSettings.activeUserCharacter === name) {
+            extensionSettings.activeUserCharacter = null;
+        }
+        try { saveSettings(); } catch (e) {}
+        try { updatePortraitBar(); } catch (e) {}
+        return;
+    }
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
     if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];

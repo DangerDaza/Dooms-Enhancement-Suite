@@ -14079,6 +14079,30 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     100% { opacity: 0; }
 }
 
+/* YOU badge — top-left of the active user character's PCP card */
+.dooms-pb-you-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 5;
+    font-size: 0.6em;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+/* Distinguish the user's card with a soft accent ring */
+.dooms-portrait-card.dooms-pb-user {
+    box-shadow: 0 0 0 2px color-mix(in srgb,
+        rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96)) 55%,
+        transparent);
+}
+
 /* Name highlight — briefly larger and glowing, then settles back */
 .dooms-portrait-card-name.dooms-pb-name-highlight {
     animation: dooms-pb-name-glow 1.8s ease-out forwards;
@@ -19458,6 +19482,37 @@ body.dooms-hide-st-topbar .openDrawer {
     opacity: 0.85;
 }
 
+/* User-character mode badge in the workshop header */
+#character-workshop-popup .cw-user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 0.5rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--rpg-highlight, #e94560) 40%, transparent);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .cw-user-badge[hidden] { display: none !important; }
+
+/* Mode-scoped visibility — JS toggles a body-level class on the modal
+   to flip these. Default state matches NPC mode. */
+#character-workshop-popup[data-mode="user"] .cw-npc-only,
+#character-workshop-popup .cw-user-only {
+    display: none;
+}
+#character-workshop-popup[data-mode="user"] .cw-user-only {
+    display: revert;
+}
+#character-workshop-popup[data-mode="user"] .cw-user-only[hidden] {
+    display: none;
+}
+
 /* Split pane body */
 #character-workshop-popup .workshop-split {
     display: grid;
@@ -20272,6 +20327,66 @@ body.dooms-hide-st-topbar .openDrawer {
 @keyframes cr-active-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.55; transform: scale(1.35); }
+}
+
+/* Character Roster mode toggle (Characters / Users) — sits above the
+   scope-filter pills. Same visual language but slightly bolder. */
+#character-roster-popup .cr-mode-strip {
+    display: flex;
+    gap: 6px;
+    padding: 0.5rem calc(var(--modal-padding) * 1.5);
+    background: rgba(0, 0, 0, 0.22);
+    border-bottom: 1px solid color-mix(in srgb, var(--rpg-border, #4a7ba7) 70%, transparent);
+    flex-shrink: 0;
+}
+#character-roster-popup .cr-mode-pill {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    color: rgba(234, 234, 234, 0.78);
+    padding: 0.4rem 1rem;
+    font: inherit;
+    font-size: var(--modal-font-small, 0.85rem);
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+#character-roster-popup .cr-mode-pill:hover {
+    color: var(--rpg-text);
+    border-color: var(--rpg-highlight, #e94560);
+}
+#character-roster-popup .cr-mode-pill.is-active {
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 22%, transparent);
+    border-color: var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+}
+
+/* "User character" tile badge in the Roster grid */
+#character-roster-popup .cr-tile-user-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 70%, #000 30%);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* In Users mode, hide the Currently-in-scene scope pill (doesn't apply
+   to the user — the user is always "present"). Hide via CSS rather
+   than mutating the DOM so the pill snaps back when switching modes. */
+#character-roster-popup[data-mode="users"] .cr-scope-pill[data-scope="active"] {
+    display: none;
 }
 
 /* Character Roster scope-filter pills */

@@ -33,6 +33,7 @@ let listenersBound = false;
 let _crInitialized = false; // guard: don't double-register document/window listeners
 let searchQuery = '';
 let scope = 'all'; // 'all' | 'chat' | 'active'
+let rosterMode = 'characters'; // 'characters' (NPCs) | 'users' (player characters)
 
 function isPinned(name) {
     const list = extensionSettings?.pinnedCharacters;
@@ -81,11 +82,19 @@ export function openCharacterRoster() {
     }
     searchQuery = '';
     scope = 'all';
+    rosterMode = 'characters';
     $modal.find('#cr-search').val('');
     $modal.find('.cr-scope-pill').each(function () {
         const isActive = $(this).attr('data-scope') === 'all';
         $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
     });
+    $modal.find('.cr-mode-pill').each(function () {
+        const isActive = $(this).attr('data-mode') === 'characters';
+        $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+    });
+    $modal.attr('data-mode', 'characters');
+    $modal.find('#cr-title').text('Character Roster');
+    $modal.find('#cr-import-personas-btn').prop('hidden', true);
     renderGrid();
     // Apply the active DES theme so the theme-specific token overrides
     // take effect (matches trackerEditor / settings popup convention).
@@ -152,10 +161,11 @@ function bindListeners() {
         const name = contextMenuTarget;
         hideContextMenu();
         if (!name) return;
+        const isUser = rosterMode === 'users';
         if (action === 'edit') {
             closeCharacterRoster();
             setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name } }));
+                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
             }, 220);
         } else if (action === 'pin') {
             togglePin(name);
@@ -183,14 +193,40 @@ function bindListeners() {
         renderGrid();
     });
 
+    // Mode pills (Characters / Users) — flips the roster's data source
+    $modal.on('click.cr', '.cr-mode-pill', function () {
+        const next = $(this).attr('data-mode') || 'characters';
+        if (next === rosterMode) return;
+        rosterMode = next;
+        $modal.find('.cr-mode-pill').each(function () {
+            const isActive = $(this).attr('data-mode') === rosterMode;
+            $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+        });
+        $modal.attr('data-mode', rosterMode);
+        // Title & footer affordances follow the mode
+        $modal.find('#cr-title').text(rosterMode === 'users' ? 'User Characters' : 'Character Roster');
+        $modal.find('#cr-import-personas-btn').prop('hidden', rosterMode !== 'users');
+        // The "active in scene" scope doesn't apply to user characters —
+        // CSS hides the pill, but if it was selected we fall back to "all".
+        if (rosterMode === 'users' && scope === 'active') {
+            scope = 'all';
+            $modal.find('.cr-scope-pill').each(function () {
+                const isActive = $(this).attr('data-scope') === scope;
+                $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+            });
+        }
+        renderGrid();
+    });
+
     // Click a character tile → open Workshop for that name
     $modal.on('click.cr', '.cr-tile[data-character]', function () {
         const name = $(this).attr('data-character');
         if (!name) return;
         closeCharacterRoster();
+        const isUser = rosterMode === 'users';
         // Defer so this modal's fade-out doesn't overlap the Workshop's fade-in
         setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name } }));
+            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
         }, 220);
     });
 
@@ -200,6 +236,11 @@ function bindListeners() {
     // Import from JSON file
     $modal.on('click.cr', '#cr-import-btn', () => {
         $modal.find('#cr-import-file').val('').trigger('click');
+    });
+
+    // Import user characters from SillyTavern personas (Users mode only)
+    $modal.on('click.cr', '#cr-import-personas-btn', () => {
+        importFromSillyTavernPersonas();
     });
     $modal.on('change.cr', '#cr-import-file', function () {
         const file = this.files && this.files[0];
@@ -271,28 +312,44 @@ function commitNewCharacter() {
         $error.prop('hidden', false).text(`A character named "${clash}" already exists.`);
         return;
     }
-    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
-    extensionSettings.knownCharacters[trimmed] = { emoji: '❓' };
-    saveSettings();
-    try {
-        clearPortraitCache();
-        updatePortraitBar();
-    } catch (e) {
-        console.warn('[Dooms Tracker] Roster: failed to refresh portrait bar after new character', e);
+    if (rosterMode === 'users') {
+        if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+        extensionSettings.userCharacters[trimmed] = {
+            color: '', avatar: '', avatarFullRes: '', pronouns: '', linkedPersona: '',
+            injection: { description: '', lorebook: '' },
+        };
+        saveSettings();
+    } else {
+        if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+        extensionSettings.knownCharacters[trimmed] = { emoji: '❓' };
+        saveSettings();
+        try {
+            clearPortraitCache();
+            updatePortraitBar();
+        } catch (e) {
+            console.warn('[Dooms Tracker] Roster: failed to refresh portrait bar after new character', e);
+        }
     }
     closeNewCharacterDialog();
     closeCharacterRoster();
+    const isUser = rosterMode === 'users';
     setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: trimmed } }));
+        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: trimmed, isUser } }));
     }, 220);
 }
 
 /**
  * Union of every character name that has any persisted state in the
  * extension. Defensive against orphans (e.g. a color set for a character
- * that was removed from knownCharacters).
+ * that was removed from knownCharacters). When the roster is in "users"
+ * mode, returns the user-character names instead.
  */
 function collectCharacterNames() {
+    if (rosterMode === 'users') {
+        const uc = extensionSettings?.userCharacters;
+        if (!uc || typeof uc !== 'object') return [];
+        return Object.keys(uc).filter(n => n && typeof n === 'string');
+    }
     const set = new Set();
     const sources = [
         extensionSettings?.knownCharacters,
@@ -397,9 +454,17 @@ function renderGrid() {
 }
 
 function buildTile(name, isActive) {
-    const avatar = extensionSettings?.npcAvatars?.[name] || '';
-    const color = extensionSettings?.characterColors?.[name] || '';
-    const relEmoji = resolveRelationshipEmoji(name);
+    // In user-character mode the data lives in a single namespace.
+    const isUserMode = rosterMode === 'users';
+    const userEntry = isUserMode ? (extensionSettings?.userCharacters?.[name] || {}) : null;
+    const avatar = isUserMode
+        ? (userEntry.avatar || '')
+        : (extensionSettings?.npcAvatars?.[name] || '');
+    const color = isUserMode
+        ? (userEntry.color || '')
+        : (extensionSettings?.characterColors?.[name] || '');
+    const relEmoji = isUserMode ? '' : resolveRelationshipEmoji(name);
+    const isActiveUser = isUserMode && extensionSettings?.activeUserCharacter === name;
     const safeName = escapeHtml(name);
     const safeNameAttr = escapeAttr(name);
     const activeSuffix = isActive ? ' (active in chat)' : '';
@@ -424,6 +489,9 @@ function buildTile(name, isActive) {
         ? `<span class="cr-tile-pin" title="Pinned"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></span>`
         : '';
     const activeClass = (isActive ? ' cr-tile-active' : '') + (pinned ? ' cr-tile-pinned' : '');
+    const userBadge = isUserMode
+        ? `<span class="cr-tile-user-badge">${isActiveUser ? '★ Active' : 'User'}</span>`
+        : '';
     return (
         `<button type="button" class="cr-tile${activeClass}" role="listitem" data-character="${safeNameAttr}" aria-label="${safeLabel}">
             ${imgHtml}
@@ -431,6 +499,7 @@ function buildTile(name, isActive) {
             ${dotHtml}
             ${pinBadge}
             ${activeBadge}
+            ${userBadge}
             <span class="cr-tile-name">${safeName}</span>
         </button>`
     );
@@ -489,6 +558,75 @@ function confirmAndDelete(name) {
     }
     try {
         if (window.toastr) window.toastr.info(`Deleted "${name}".`, 'Roster', { timeOut: 3000 });
+    } catch (e) {}
+}
+
+/**
+ * Import every SillyTavern persona as a user character. Reads from
+ * window.power_user.personas (a map of avatar filename → persona name).
+ * Skips personas whose name already exists in userCharacters.
+ */
+function importFromSillyTavernPersonas() {
+    const pu = (typeof window !== 'undefined' && window.power_user) || null;
+    const personas = (pu && pu.personas) || {};
+    const personaDescs = (pu && pu.persona_descriptions) || {};
+    const entries = Object.entries(personas).filter(([avatarFile, name]) => avatarFile && name);
+    if (!entries.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info('No SillyTavern personas found.', 'Import', { timeOut: 4000 });
+            } else {
+                window.alert('No SillyTavern personas found.');
+            }
+        } catch (e) {}
+        return;
+    }
+    if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+    const existingNames = new Set(Object.keys(extensionSettings.userCharacters).map(n => n.toLowerCase()));
+    const toImport = entries.filter(([, name]) => !existingNames.has(String(name).toLowerCase()));
+    const skipped = entries.length - toImport.length;
+    if (!toImport.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info(
+                    `All ${entries.length} persona${entries.length === 1 ? '' : 's'} already exist as user characters.`,
+                    'Import',
+                    { timeOut: 4000 },
+                );
+            }
+        } catch (e) {}
+        return;
+    }
+    const lines = toImport.map(([, name]) => `  • ${name}`).join('\n');
+    const msg = `Import ${toImport.length} persona${toImport.length === 1 ? '' : 's'} as user character${toImport.length === 1 ? '' : 's'}?\n\n${lines}` +
+        (skipped > 0 ? `\n\n(${skipped} already exist as user character${skipped === 1 ? '' : 's'} and will be skipped.)` : '');
+    if (!window.confirm(msg)) return;
+    for (const [avatarFile, name] of toImport) {
+        const description = typeof personaDescs[avatarFile] === 'object'
+            ? (personaDescs[avatarFile]?.description || '')
+            : (personaDescs[avatarFile] || '');
+        // ST serves persona avatars from /User Avatars/<filename>. The
+        // filename may contain spaces, so encode each segment.
+        const avatarUrl = '/User%20Avatars/' + encodeURIComponent(avatarFile);
+        extensionSettings.userCharacters[name] = {
+            color: '',
+            avatar: avatarUrl,
+            avatarFullRes: avatarUrl,
+            pronouns: '',
+            linkedPersona: avatarFile,
+            injection: { description: String(description || '').trim(), lorebook: '' },
+        };
+    }
+    saveSettings();
+    renderGrid();
+    try {
+        if (window.toastr) {
+            window.toastr.success(
+                `Imported ${toImport.length} persona${toImport.length === 1 ? '' : 's'}.`,
+                'Roster',
+                { timeOut: 4000 },
+            );
+        }
     } catch (e) {}
 }
 
@@ -589,6 +727,14 @@ function importCharacterPayload(payload) {
 function purgeCharacter(name) {
     const s = extensionSettings;
     if (!s) return;
+    // User-character mode purges only the userCharacters namespace and
+    // clears activeUserCharacter if it was pointing at this entry.
+    if (rosterMode === 'users') {
+        if (s.userCharacters) delete s.userCharacters[name];
+        if (s.activeUserCharacter === name) s.activeUserCharacter = null;
+        saveSettings();
+        return;
+    }
     if (s.characterColors) delete s.characterColors[name];
     if (s.npcAvatars) delete s.npcAvatars[name];
     if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];

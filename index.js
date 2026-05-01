@@ -282,10 +282,73 @@ function updateGenerationModeUI() {
     }
 }
 /**
+ * Resolve the currently-active user character name. Manual override
+ * (extensionSettings.activeUserCharacter) wins; otherwise auto-match
+ * via linkedPersona == window.user_avatar; final fallback is the only
+ * user character if exactly one exists. Returns null if none.
+ */
+function resolveActiveUserCharacterName() {
+    const s = extensionSettings;
+    if (!s || !s.userCharacters || typeof s.userCharacters !== 'object') return null;
+    if (s.activeUserCharacter && s.userCharacters[s.activeUserCharacter]) return s.activeUserCharacter;
+    let currentAvatar = '';
+    try { currentAvatar = (typeof window !== 'undefined' && window.user_avatar) || ''; } catch (e) {}
+    if (currentAvatar) {
+        for (const [n, entry] of Object.entries(s.userCharacters)) {
+            if (entry && entry.linkedPersona === currentAvatar) return n;
+        }
+    }
+    const allNames = Object.keys(s.userCharacters);
+    if (allNames.length === 1) return allNames[0];
+    return null;
+}
+
+/**
+ * If "Show User in PCP" is on AND the active user character has a color,
+ * return that color (it overrides chatBubbleSettings.userDialogColor).
+ * Returns null otherwise.
+ */
+function getOverridingUserDialogColor() {
+    const s = extensionSettings;
+    if (!s || !s.showUserInPCP) return null;
+    const name = resolveActiveUserCharacterName();
+    if (!name) return null;
+    const entry = s.userCharacters && s.userCharacters[name];
+    return (entry && entry.color) ? entry.color : null;
+}
+
+/**
+ * Toggle the User Dialog color picker between editable and "controlled
+ * by user character settings" modes. No-ops gracefully if the picker
+ * isn't present (e.g. a build that hasn't shipped the picker yet).
+ */
+function updateUserDialogOverrideUI() {
+    const $picker = $('#rpg-cb-user-color');
+    if (!$picker.length) return;
+    const $row = $picker.closest('.rpg-setting-row');
+    const overrideColor = getOverridingUserDialogColor();
+    if (overrideColor) {
+        $picker.prop('disabled', true).val(overrideColor);
+        let $note = $row.find('.rpg-cb-user-override-note');
+        if (!$note.length) {
+            $note = $('<span class="rpg-cb-user-override-note rpg-setting-hint" style="display:block; margin-top:4px; font-style: italic; color: var(--rpg-highlight, #e94560); opacity: 0.85;"><i class="fa-solid fa-link"></i> Controlled by user character settings</span>');
+            $row.append($note);
+        }
+        $note.show();
+    } else {
+        $picker.prop('disabled', false);
+        $row.find('.rpg-cb-user-override-note').hide();
+    }
+}
+
+/**
  * Populates all Chat Bubbles & Info Panel settings controls from saved state.
  */
 function loadChatBubbleSettingsUI() {
     const cbs = extensionSettings.chatBubbleSettings || {};
+    // Refresh the User Dialog override indicator (paired with the
+    // "Show User in PCP" toggle and the active user character's color).
+    try { updateUserDialogOverrideUI(); } catch (e) {}
 
     // Mode selectors
     $('#rpg-cb-bubble-mode').val(extensionSettings.chatBubbleMode || 'off');
@@ -470,6 +533,14 @@ async function initUI() {
     // Layout toggles
     $('#rpg-pb-show-header').on('change', function() { _pbSettings().showHeader = $(this).prop('checked'); _savePb(); });
     $('#rpg-pb-show-absent').on('change', function() { _pbSettings().showAbsentCharacters = $(this).prop('checked'); _savePb(); updatePortraitBar(); });
+    $('#rpg-pb-show-user').on('change', function() {
+        extensionSettings.showUserInPCP = $(this).prop('checked');
+        saveSettings();
+        try { updatePortraitBar(); } catch (e) {}
+        // Also re-paint the bubble settings indicator (toggle drives whether
+        // the user-character color overrides chatBubbleSettings.userDialogColor).
+        try { updateUserDialogOverrideUI(); } catch (e) {}
+    });
     $('#rpg-pb-show-arrows').on('change', function() { _pbSettings().showScrollArrows = $(this).prop('checked'); _savePb(); });
     $('#rpg-pb-auto-import').on('change', function() { extensionSettings.portraitAutoImport = $(this).prop('checked'); saveSettings(); });
 
@@ -1519,6 +1590,7 @@ async function initUI() {
     $('#rpg-pb-badge').text((extensionSettings.showPortraitBar ?? true) ? 'on' : 'off');
     $('#rpg-pb-show-header').prop('checked', pb.showHeader !== false);
     $('#rpg-pb-show-absent').prop('checked', pb.showAbsentCharacters !== false);
+    $('#rpg-pb-show-user').prop('checked', extensionSettings.showUserInPCP === true);
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);

@@ -370,6 +370,16 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show User in PCP</span>
+                            <span class="rpg-setting-hint">Show your active user character (player persona) as a card in the Present Characters Panel. Auto-resolves from your active SillyTavern persona — manage user characters in the Roster's Users mode.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-pb-show-user" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Show Scroll Arrows</span>
                             <span class="rpg-setting-hint">Left/right arrows on hover</span>
                         </div>
@@ -2056,9 +2066,12 @@
 
         <header class="rpg-settings-popup-header">
             <h3>
-                <span>Character Workshop</span>
+                <span id="cw-modal-title">Character Workshop</span>
                 <span class="muted" aria-hidden="true">&mdash;</span>
                 <span class="workshop-subject" id="cw-char-title"></span>
+                <span class="cw-user-badge" id="cw-user-badge" hidden title="This is a user (player) character">
+                    <i class="fa-solid fa-user" aria-hidden="true"></i> User
+                </span>
             </h3>
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
@@ -2105,12 +2118,14 @@
                 <section class="rpg-editor-pane active" data-pane="identity">
                     <div class="rpg-editor-section">
                         <h4>Identity</h4>
-                        <p class="helper">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-user" hidden>Name is read-only. Pronouns and the linked SillyTavern persona shape how the AI references this user character. Pronouns are stored on the persona; switching the active persona in SillyTavern auto-switches this user character if they're linked.</p>
                         <div class="rpg-field">
                             <label for="cw-name">Character name</label>
                             <input id="cw-name" class="rpg-input" type="text" readonly>
                         </div>
-                        <div class="rpg-field">
+                        <!-- NPC mode: relationship chips -->
+                        <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
                             <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup" aria-label="Relationship">
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Lover" data-emoji="&#10084;&#65039;"><span>&#10084;&#65039;</span> Lover</button>
@@ -2119,6 +2134,24 @@
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Enemy" data-emoji="&#9876;&#65039;"><span>&#9876;&#65039;</span> Enemy</button>
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span> Neutral</button>
                             </div>
+                        </div>
+                        <!-- User mode: pronouns chips + linked persona -->
+                        <div class="rpg-field cw-user-only" hidden>
+                            <label>Pronouns</label>
+                            <div class="rpg-rel-chips" id="cw-pronoun-chips" role="radiogroup" aria-label="Pronouns">
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="he/him">he / him</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="she/her">she / her</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="they/them">they / them</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="custom">custom&hellip;</button>
+                            </div>
+                            <input id="cw-pronouns-custom" class="rpg-input" type="text" placeholder="e.g. xe/xem" hidden style="margin-top: 0.5rem; max-width: 240px;">
+                        </div>
+                        <div class="rpg-field cw-user-only" hidden>
+                            <label for="cw-linked-persona">Linked SillyTavern persona</label>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is set as the DES active user character.</p>
+                            <select id="cw-linked-persona" class="rpg-input" style="max-width: 320px;">
+                                <option value="">— None —</option>
+                            </select>
                         </div>
                     </div>
                 </section>
@@ -2205,7 +2238,7 @@
                             <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Off by default. Setting is global, not per-character.</span>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Banish from generations</h4>
                         <p class="helper">When on, every AI generation receives a standing direction telling it that this character is <strong>not in the scene</strong> and must not appear &mdash; no dialogue, no actions, no presence. Use when a character keeps reappearing turn after turn even after Eject. Also soft-removes them from the panel. Toggle off to allow them back in.</p>
                         <div class="rpg-field rpg-field-row" style="align-items:center;">
@@ -2216,7 +2249,7 @@
                             <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Standing ban &mdash; persists across turns and reloads until you toggle it off.</span>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Stuck injection?</h4>
                         <p class="helper">Inject into Scene is a one-shot direction &mdash; it should clear after the AI's next reply. If a character keeps getting referenced every turn anyway, force-wipe Doom's injection slot here. Your stored description, lorebook attachment, and prompt template are kept; only the live pending injection is cleared.</p>
                         <div class="rpg-field rpg-field-row">
@@ -2237,11 +2270,16 @@
             </button>
             <span class="spacer"></span>
             <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-cancel">Cancel</button>
-            <button class="rpg-btn" type="button" id="cw-eject" title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
+            <!-- NPC-only footer actions -->
+            <button class="rpg-btn cw-npc-only" type="button" id="cw-eject" title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
                 <i class="fa-solid fa-user-xmark"></i> Eject from Scene
             </button>
-            <button class="rpg-btn" type="button" id="cw-inject" title="Bring this character into the scene and tell the AI to incorporate them next turn">
+            <button class="rpg-btn cw-npc-only" type="button" id="cw-inject" title="Bring this character into the scene and tell the AI to incorporate them next turn">
                 <i class="fa-solid fa-user-plus"></i> Inject into Scene
+            </button>
+            <!-- User-only footer action -->
+            <button class="rpg-btn cw-user-only" type="button" id="cw-set-active-persona" hidden title="Set this user character as the active DES user character (and switch the SillyTavern persona to its linked entry)">
+                <i class="fa-solid fa-user-check"></i> Set as active persona
             </button>
             <button class="rpg-btn rpg-btn-primary" type="button" id="cw-save">Save</button>
         </footer>
@@ -2258,10 +2296,20 @@
         <header class="rpg-settings-popup-header">
             <h3>
                 <i class="fa-solid fa-users-rectangle" aria-hidden="true"></i>
-                <span>Character Roster</span>
+                <span id="cr-title">Character Roster</span>
             </h3>
             <button class="rpg-popup-close" id="cr-close" type="button" aria-label="Close">&times;</button>
         </header>
+
+        <!-- Mode toggle: NPC characters vs user (player) characters -->
+        <div class="cr-mode-strip" role="tablist" aria-label="Roster mode">
+            <button type="button" class="cr-mode-pill is-active" data-mode="characters" role="tab" aria-selected="true">
+                <i class="fa-solid fa-people-group" aria-hidden="true"></i> Characters
+            </button>
+            <button type="button" class="cr-mode-pill" data-mode="users" role="tab" aria-selected="false">
+                <i class="fa-solid fa-user" aria-hidden="true"></i> Users
+            </button>
+        </div>
 
         <div class="cr-subheader">
             <div class="cr-search-wrap">
@@ -2291,6 +2339,9 @@
                 <i class="fa-solid fa-file-arrow-up"></i> Import&hellip;
             </button>
             <input id="cr-import-file" type="file" accept="application/json,.json" class="sr-only">
+            <button class="rpg-btn cr-users-only" type="button" id="cr-import-personas-btn" hidden title="Import user characters from your SillyTavern personas">
+                <i class="fa-solid fa-users-line"></i> Import from SillyTavern personas
+            </button>
             <span class="spacer"></span>
             <span class="cr-tip muted">
                 <i class="fa-regular fa-lightbulb" aria-hidden="true"></i>
