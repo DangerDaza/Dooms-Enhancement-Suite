@@ -21,7 +21,7 @@ import {
     getActiveBannedCharacters,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
-import { clearPortraitCache, updatePortraitBar, openExpressionFolder } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait } from './portraitBar.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -279,12 +279,26 @@ export function initCharacterWorkshop() {
     } catch (e) {}
 }
 
+// Tracks the in-flight close fade-out timeout. Cancelled on reopen so a
+// pending .hide() can't fire after we've reopened, and so the closing-
+// animation doesn't visibly overlap the new modal's content.
+let _pendingCloseTimeout = null;
+
 export function openCharacterWorkshop(characterName, options = {}) {
     if (!characterName) {
         console.warn('[Dooms Tracker] openCharacterWorkshop called without a name');
         return;
     }
     if (!ensureModal()) return;
+
+    // Kill any pending close-fade-out: prevents (a) the previous modal's
+    // content flashing during its fadeOut overlapping the new fadeIn,
+    // and (b) the close-timeout firing .hide() after we've reopened.
+    if (_pendingCloseTimeout) {
+        clearTimeout(_pendingCloseTimeout);
+        _pendingCloseTimeout = null;
+    }
+    $modal.removeClass('is-closing');
 
     const isUser = !!options.isUser;
     draft = buildDraft(characterName, isUser);
@@ -312,7 +326,11 @@ export function openCharacterWorkshop(characterName, options = {}) {
 export function closeCharacterWorkshop() {
     if (!$modal || !$modal.length) return;
     $modal.removeClass('is-open').addClass('is-closing');
-    setTimeout(() => $modal.removeClass('is-closing').hide(), 200);
+    if (_pendingCloseTimeout) clearTimeout(_pendingCloseTimeout);
+    _pendingCloseTimeout = setTimeout(() => {
+        $modal.removeClass('is-closing').hide();
+        _pendingCloseTimeout = null;
+    }, 200);
     draft = null;
 }
 
@@ -1300,8 +1318,15 @@ function copyNpcToUserCharacter(name) {
         return;
     }
     const color = extensionSettings.characterColors?.[trimmed] || '';
-    const avatar = extensionSettings.npcAvatars?.[trimmed] || '';
-    const avatarFullRes = extensionSettings.npcAvatarsFullRes?.[trimmed] || avatar;
+    let avatar = extensionSettings.npcAvatars?.[trimmed] || '';
+    let avatarFullRes = extensionSettings.npcAvatarsFullRes?.[trimmed] || '';
+    // If npcAvatars is empty (NPC's portrait comes from a SillyTavern
+    // character card or the portraits/ folder), let resolvePortrait
+    // find the canonical URL so the copy isn't blank.
+    if (!avatar) {
+        try { avatar = resolvePortrait(trimmed) || ''; } catch (e) {}
+    }
+    if (!avatarFullRes) avatarFullRes = avatar;
     const inj = extensionSettings.characterInjection?.[trimmed] || {};
     extensionSettings.userCharacters[trimmed] = {
         color,
@@ -1349,6 +1374,18 @@ function copyUserToNpcCharacter(name) {
         return;
     }
     const u = extensionSettings.userCharacters?.[trimmed] || {};
+    // Resolve the canonical avatar URL — u.avatar comes from a Workshop
+    // upload OR persona-import; if those are blank, derive it from the
+    // linkedPersona's avatar filename; if THAT's blank, ask resolvePortrait
+    // (covers SillyTavern character-card auto-import + portraits/ folder).
+    let avatar = u.avatar || '';
+    if (!avatar && u.linkedPersona) {
+        avatar = '/User%20Avatars/' + encodeURIComponent(u.linkedPersona);
+    }
+    if (!avatar) {
+        try { avatar = resolvePortrait(trimmed) || ''; } catch (e) {}
+    }
+    const avatarFullRes = u.avatarFullRes || avatar;
     if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
     if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
     if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
@@ -1356,8 +1393,8 @@ function copyUserToNpcCharacter(name) {
     if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
     extensionSettings.knownCharacters[trimmed] = { emoji: '👤' };
     if (u.color) extensionSettings.characterColors[trimmed] = u.color;
-    if (u.avatar) extensionSettings.npcAvatars[trimmed] = u.avatar;
-    if (u.avatarFullRes || u.avatar) extensionSettings.npcAvatarsFullRes[trimmed] = u.avatarFullRes || u.avatar;
+    if (avatar) extensionSettings.npcAvatars[trimmed] = avatar;
+    if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
     try { saveSettings(); } catch (e) {}
