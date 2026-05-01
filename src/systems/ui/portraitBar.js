@@ -1208,7 +1208,7 @@ export function getCharacterList() {
  * Used by both buildActiveUserCharacterEntry (PCP card) and
  * resolvePortrait (avatar lookup) so the two paths can't drift apart.
  */
-function resolveActiveUserName() {
+export function resolveActiveUserName() {
     const s = extensionSettings || {};
     const userMap = s.userCharacters || {};
     if (!userMap || typeof userMap !== 'object') return null;

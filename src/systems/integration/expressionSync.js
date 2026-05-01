@@ -21,7 +21,7 @@ import {
 } from '../../core/state.js';
 import { getActiveCharacterColors, saveChatData } from '../../core/persistence.js';
 import { renderThoughts } from '../rendering/thoughts.js';
-import { updatePortraitBar } from '../ui/portraitBar.js';
+import { updatePortraitBar, resolveActiveUserName } from '../ui/portraitBar.js';
 
 // ─────────────────────────────────────────────
 //  Constants
@@ -452,6 +452,55 @@ export async function classifyAllCharacterExpressions(messageText) {
     if (changed) {
         saveChatData();
         refreshExpressionConsumers();
+    }
+}
+
+/**
+ * Classify the user's outgoing message text and set the matching sprite
+ * on the active user character — same flow {{char}} expressions take
+ * after each AI response. Resolves the active user character via
+ * resolveActiveUserName() (manual override → linkedPersona match →
+ * single-entry fallback). Silently no-ops if there's no active user
+ * character or no sprite folder for them.
+ *
+ * Gated by extensionSettings.syncExpressionsToPresentCharacters so it
+ * shares the master toggle with the NPC classifier.
+ */
+export async function classifyActiveUserExpression(messageText) {
+    if (!extensionSettings.syncExpressionsToPresentCharacters) return;
+    const text = String(messageText || '').trim();
+    if (!text) return;
+    const name = resolveActiveUserName();
+    if (!name) return;
+    // Make sure sprites exist before classifying — if there are none,
+    // the classification result has nowhere to land.
+    const sprites = await fetchAndCacheSpriteList(name);
+    if (!sprites) return;
+
+    const api = extensionSettings.expressionClassifierApi || 'local';
+    let label = null;
+    try {
+        if (api === 'llm') {
+            const labels = Array.from(sprites.keys());
+            label = await classifyLlmSingle(text, labels);
+        } else {
+            label = await classifyLocal(text);
+        }
+    } catch (err) {
+        console.warn('[DES Expressions] User classification failed:', err);
+        return;
+    }
+    if (!label) return;
+    const spriteUrl = resolveSpriteUrl(name, label);
+    if (!spriteUrl) return;
+    const key = normalizeName(name);
+    const prev = getSyncedExpressionPortrait(key);
+    setSyncedExpressionLabel(key, label);
+    if (prev !== spriteUrl) {
+        setSyncedExpressionPortrait(key, spriteUrl);
+        try { saveChatData(); } catch (e) {}
+        refreshExpressionConsumers();
+        console.log(`[DES Expressions] (user) ${name} → ${label} (${spriteUrl})`);
     }
 }
 

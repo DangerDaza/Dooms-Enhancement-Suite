@@ -143,7 +143,8 @@ import {
     onExpressionSyncSettingChanged,
     onHideDefaultExpressionDisplaySettingChanged,
     clearExpressionSyncCache,
-    onExpressionSyncChatChanged
+    onExpressionSyncChatChanged,
+    classifyActiveUserExpression,
 } from './src/systems/integration/expressionSync.js';
 // Doom Counter
 import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag } from './src/systems/generation/doomCounter.js';
@@ -2767,10 +2768,28 @@ jQuery(async () => {
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
-                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
-                const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
-                if (messageElement) {
-                    applyChatBubbles(messageElement, extensionSettings.chatBubbleMode);
+                // Chat bubbles styling
+                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
+                    const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                    if (messageElement) {
+                        applyChatBubbles(messageElement, extensionSettings.chatBubbleMode);
+                    }
+                }
+                // User-character expression classification — same flow {{char}}
+                // gets after each AI reply, but on the user's outgoing text.
+                // Gated by syncExpressionsToPresentCharacters and a configured
+                // active user character with a sprite folder; otherwise no-op.
+                if (extensionSettings.syncExpressionsToPresentCharacters) {
+                    try {
+                        const idx = parseInt(messageId, 10);
+                        const msg = (Array.isArray(chat) && Number.isFinite(idx)) ? chat[idx] : null;
+                        const text = msg && msg.is_user ? (msg.mes || '') : '';
+                        if (text) {
+                            classifyActiveUserExpression(text)
+                                .then(() => updatePortraitBar())
+                                .catch(err => console.error('[DES] User expression classify failed:', err));
+                        }
+                    } catch (e) {}
                 }
             });
             eventSource.on(event_types.CHAT_CHANGED, () => {
