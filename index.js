@@ -1723,7 +1723,10 @@ async function initUI() {
         saveSettings();
     });
     const applyHideStTopBar = () => {
-        document.body.classList.toggle('dooms-hide-st-topbar', !!extensionSettings.fab.hideStTopBar);
+        const shouldHide = !!extensionSettings.fab.hideStTopBar;
+        document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
+        // Also hide TopInfoBar extension
+        $('#extensionTopBar').toggle(!shouldHide);
     };
     $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar);
     $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
