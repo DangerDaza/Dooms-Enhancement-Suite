@@ -14449,19 +14449,18 @@ body.dooms-hide-st-topbar .openDrawer {
     content: '';
     position: absolute;
     inset: -6px;
-    transform: translateX(6px);
     background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
     /* Standard Font-Awesome bolt outline, normalized — a clean
-       7-vertex non-self-intersecting polygon so the fill-rule
-       doesn't punch holes in the stroke. */
+       7-vertex non-self-intersecting polygon. Shape recentered on
+       the icon (was right-leaning) and scaled to 80% width. */
     clip-path: polygon(
-        100% 6%,
-        58% 6%,
-        25% 62%,
-        50% 62%,
-        33% 94%,
-        100% 44%,
-        75% 44%
+        80% 6%,
+        46% 6%,
+        20% 62%,
+        40% 62%,
+        26% 94%,
+        80% 44%,
+        60% 44%
     );
     opacity: 0;
     pointer-events: none;
