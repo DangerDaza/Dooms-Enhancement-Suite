@@ -363,10 +363,22 @@ function populateUpdateBranchDropdownOnce() {
         });
 }
 
+// Curated whitelist of branches the Update dropdown should expose. Anything
+// not in this list (and not the currently checked-out branch) is filtered
+// out so users only see the maintained release lines + their own branch.
+const UPDATE_BRANCH_WHITELIST = ['main', 'rabbit-hole', 'blades-in-the-dark'];
+
 function fillBranchDropdown({ branches, currentBranch, remoteUrl }) {
     const $sel = $('#rpg-update-branch');
     if (!$sel.length) return;
-    const ordered = [...branches].sort((a, b) => {
+    // Filter to the whitelist, but always keep the current branch so the
+    // user can see what they're on. Defensively fall back to the full
+    // list if filtering would leave the dropdown empty (shouldn't happen
+    // in practice, but better than a blank picker).
+    const allowed = new Set([...UPDATE_BRANCH_WHITELIST, currentBranch].filter(Boolean));
+    const filtered = branches.filter(b => allowed.has(b));
+    const finalList = filtered.length ? filtered : [...branches];
+    const ordered = finalList.sort((a, b) => {
         // Current branch always at the top, then main/master, then alphabetical
         if (currentBranch) {
             if (a === currentBranch) return -1;
