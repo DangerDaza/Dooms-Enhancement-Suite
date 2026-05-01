@@ -574,6 +574,7 @@ function renderTitle() {
     $modal.find('#cw-char-title').text(draft.name);
     $modal.find('#cw-user-badge').prop('hidden', !draft.isUser);
     $modal.find('#cw-modal-title').text(draft.isUser ? 'User Character Workshop' : 'Character Workshop');
+    $modal.find('#cw-inject-label').text(draft.isUser ? 'Inject persona' : 'Inject into Scene');
 }
 
 function isHiddenFromPanel(name) {
@@ -1136,7 +1137,11 @@ function bindStaticListeners() {
     $modal.on('click.cw', '#cw-inject', () => {
         if (!draft) return;
         commitDraft(); // persist any pending appearance edits first
-        injectIntoScene(draft.name);
+        if (draft.isUser) {
+            injectUserPersona(draft.name);
+        } else {
+            injectIntoScene(draft.name);
+        }
         closeCharacterWorkshop();
     });
 
@@ -1301,6 +1306,66 @@ function deleteCharacter(name) {
  *      the character in the next response. The prompt self-clears on
  *      GENERATION_ENDED (see initCharacterWorkshop listener).
  */
+/**
+ * User-character variant of injectIntoScene. Sends the player's persona
+ * description as a one-shot extension prompt for the next generation,
+ * and (if the global "attach portrait" toggle is on) attaches the user
+ * character's portrait to the next outgoing user message for vision-
+ * capable models. Skips all the NPC-only steps: roster splice, present-
+ * marking, lorebook activation, relationship lacing.
+ */
+function injectUserPersona(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const description = (draft?.injection?.description || '').trim();
+    const promptParts = [];
+    if (description) {
+        promptParts.push(`The player's persona — ${trimmed}: ${description}`);
+        promptParts.push('Address the player as this persona for the next response.');
+    }
+    const prompt = promptParts.join('\n\n');
+    if (prompt) {
+        try {
+            setExtensionPrompt(
+                INJECT_SLOT,
+                prompt,
+                extension_prompt_types.IN_PROMPT,
+                0,
+                false,
+            );
+            pendingInjectClear = true;
+            injectStartsToSkip = 1;
+            console.log(`[Dooms Tracker] Workshop: queued persona-inject for "${trimmed}"`);
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: setExtensionPrompt failed', e);
+        }
+    }
+    // Optional portrait attachment for vision-capable models — same path
+    // NPCs use, just sourced from the user-character's avatar.
+    let attached = false;
+    if (extensionSettings?.injectAttachPortrait === true && draft?.avatar) {
+        try {
+            armPortraitAttach(trimmed, draft.avatar);
+            attached = true;
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: portrait attach failed', e);
+        }
+    }
+    try {
+        if (window.toastr) {
+            const bits = [];
+            if (description) bits.push('description');
+            if (attached) bits.push('portrait');
+            const what = bits.length ? bits.join(' + ') : 'nothing';
+            window.toastr.success(
+                `Persona injected (${what}). Sends with the next reply.`,
+                'Character Workshop',
+                { timeOut: 3500 },
+            );
+        }
+    } catch (e) {}
+}
+
 function injectIntoScene(name) {
     const trimmed = String(name || '').trim();
     if (!trimmed) return;

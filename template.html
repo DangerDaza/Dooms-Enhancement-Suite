@@ -2211,7 +2211,7 @@
                             <textarea id="cw-inj-description" class="rpg-textarea" rows="6" placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Attached lorebook</h4>
                         <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is injected. Type to filter; leave blank to skip.</p>
                         <div class="rpg-field">
@@ -2225,7 +2225,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Injection prompt <span class="muted" style="font-weight: normal; font-size: 0.85em;">(advanced)</span></h4>
                         <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>, <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable is filled in.</p>
                         <div class="rpg-field">
@@ -2285,8 +2285,8 @@
             <button class="rpg-btn cw-npc-only" type="button" id="cw-eject" title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
                 <i class="fa-solid fa-user-xmark"></i> Eject from Scene
             </button>
-            <button class="rpg-btn cw-npc-only" type="button" id="cw-inject" title="Bring this character into the scene and tell the AI to incorporate them next turn">
-                <i class="fa-solid fa-user-plus"></i> Inject into Scene
+            <button class="rpg-btn" type="button" id="cw-inject" title="Send the description (and optionally the portrait) to the AI as one-shot context for the next response.">
+                <i class="fa-solid fa-user-plus"></i> <span id="cw-inject-label">Inject into Scene</span>
             </button>
             <!-- User-only footer action -->
             <button class="rpg-btn cw-user-only" type="button" id="cw-set-active-persona" title="Set as active: makes this user character the active DES user, switches the SillyTavern persona to its linked entry, and shows them in the Present Characters Panel">
