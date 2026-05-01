@@ -2207,6 +2207,19 @@
                     <div class="rpg-editor-section">
                         <h4>Expressions</h4>
                         <p class="helper">Upload sprites for each expression label below. Sprites land in <code>data/default-user/characters/&lt;name&gt;/</code> and are picked up automatically by the expression sync. ZIP upload accepts a folder of correctly-named PNGs (e.g. <code>joy.png</code>, <code>sadness.png</code>).</p>
+                        <div class="cw-expr-note cw-user-only" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid var(--rpg-highlight, #e94560); background: color-mix(in srgb, var(--rpg-highlight, #e94560) 10%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-circle-info"></i> User-character expressions</strong> work the same way as <code>{{char}}</code>: after each message you send, DES classifies your text and switches this user character's sprite to match.
+                            <br><br>
+                            <strong>To enable:</strong>
+                            <ol style="margin: 4px 0 0; padding-left: 20px;">
+                                <li>This user character must be the <em>active</em> one (use <strong>Set as active persona</strong> below, or link it to your current SillyTavern persona on the Identity tab).</li>
+                                <li>Upload sprites here (or drop PNGs into the folder above).</li>
+                                <li>In DES Settings → Present Characters Panel, turn on <strong>Sync expressions to Present Characters Panel</strong>.</li>
+                            </ol>
+                        </div>
+                        <div class="cw-expr-note cw-npc-only" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid var(--rpg-highlight, #e94560); background: color-mix(in srgb, var(--rpg-highlight, #e94560) 10%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-circle-info"></i> Auto-switching</strong> requires DES Settings → Present Characters Panel → <strong>Sync expressions to Present Characters Panel</strong> to be on. After each AI reply, DES classifies the character's text and shows the matching sprite from this folder.
+                        </div>
                         <div class="rpg-cs-tab-content" data-tab="expressions" id="cw-expressions-pane">
                             <div style="padding:20px; opacity:0.5; text-align:center;">Open this tab to load sprites…</div>
                         </div>
