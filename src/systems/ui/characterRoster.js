@@ -18,6 +18,7 @@ import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { power_user } from '../../../../../../power-user.js';
+import { characters } from '../../../../../../../script.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -96,6 +97,7 @@ export function openCharacterRoster() {
     $modal.attr('data-mode', 'characters');
     $modal.find('#cr-title').text('Character Roster');
     $modal.find('#cr-import-personas-btn').hide();
+    $modal.find('#cr-import-cards-btn').show();
     renderGrid();
     // Apply the active DES theme so the theme-specific token overrides
     // take effect (matches trackerEditor / settings popup convention).
@@ -207,6 +209,7 @@ function bindListeners() {
         // Title & footer affordances follow the mode
         $modal.find('#cr-title').text(rosterMode === 'users' ? 'User Characters' : 'Character Roster');
         $modal.find('#cr-import-personas-btn').toggle(rosterMode === 'users');
+        $modal.find('#cr-import-cards-btn').toggle(rosterMode === 'characters');
         // The "active in scene" scope doesn't apply to user characters —
         // CSS hides the pill, but if it was selected we fall back to "all".
         if (rosterMode === 'users' && scope === 'active') {
@@ -242,6 +245,11 @@ function bindListeners() {
     // Import user characters from SillyTavern personas (Users mode only)
     $modal.on('click.cr', '#cr-import-personas-btn', () => {
         importFromSillyTavernPersonas();
+    });
+
+    // Import characters from SillyTavern character cards (Characters mode only)
+    $modal.on('click.cr', '#cr-import-cards-btn', () => {
+        importFromSillyTavernCards();
     });
     $modal.on('change.cr', '#cr-import-file', function () {
         const file = this.files && this.files[0];
@@ -563,9 +571,105 @@ function confirmAndDelete(name) {
 }
 
 /**
+ * Returns a Set of every existing character name across BOTH the NPC and
+ * user-character namespaces, lowercased. Used by both import flows so a
+ * persona named the same as an existing NPC (or vice versa) is detected
+ * as a conflict and skipped.
+ */
+function getAllExistingCharacterNamesLower() {
+    const set = new Set();
+    const sources = [
+        extensionSettings?.knownCharacters,
+        extensionSettings?.characterColors,
+        extensionSettings?.npcAvatars,
+        extensionSettings?.userCharacters,
+    ];
+    for (const src of sources) {
+        if (!src || typeof src !== 'object') continue;
+        for (const name of Object.keys(src)) {
+            if (name && typeof name === 'string') set.add(name.toLowerCase());
+        }
+    }
+    return set;
+}
+
+/**
+ * Import every SillyTavern character card as an NPC. Reads the global
+ * `characters` array (imported from script.js). Skips cards whose name
+ * already exists in either the NPC or user-character namespace so we
+ * never produce a duplicate or accidental overwrite.
+ */
+function importFromSillyTavernCards() {
+    const cards = Array.isArray(characters) ? characters : [];
+    const valid = cards.filter(c => c && typeof c.name === 'string' && c.name.trim());
+    if (!valid.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info('No SillyTavern character cards found.', 'Import', { timeOut: 4000 });
+            } else {
+                window.alert('No SillyTavern character cards found.');
+            }
+        } catch (e) {}
+        return;
+    }
+    const existing = getAllExistingCharacterNamesLower();
+    const toImport = valid.filter(c => !existing.has(c.name.toLowerCase()));
+    const skipped = valid.length - toImport.length;
+    if (!toImport.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info(
+                    `All ${valid.length} card${valid.length === 1 ? '' : 's'} already exist as character${valid.length === 1 ? '' : 's'}.`,
+                    'Import',
+                    { timeOut: 4000 },
+                );
+            }
+        } catch (e) {}
+        return;
+    }
+    const lines = toImport.map(c => `  • ${c.name}`).join('\n');
+    const msg = `Import ${toImport.length} card${toImport.length === 1 ? '' : 's'} as character${toImport.length === 1 ? '' : 's'}?\n\n${lines}` +
+        (skipped > 0 ? `\n\n(${skipped} already exist and will be skipped — duplicates aren't imported.)` : '');
+    if (!window.confirm(msg)) return;
+    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
+    if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
+    for (const card of toImport) {
+        const name = card.name.trim();
+        extensionSettings.knownCharacters[name] = { emoji: '👤' };
+        if (card.avatar) {
+            // ST serves character cards from /characters/<filename>.
+            const url = '/characters/' + encodeURIComponent(card.avatar);
+            extensionSettings.npcAvatars[name] = url;
+            extensionSettings.npcAvatarsFullRes[name] = url;
+        }
+        // If the card has a description, seed the Workshop Injection field
+        // so users can Inject into Scene right away.
+        const desc = String(card.description || '').trim();
+        if (desc) {
+            extensionSettings.characterInjection[name] = { description: desc, lorebook: '' };
+        }
+    }
+    saveSettings();
+    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    renderGrid();
+    try {
+        if (window.toastr) {
+            window.toastr.success(
+                `Imported ${toImport.length} card${toImport.length === 1 ? '' : 's'}.`,
+                'Roster',
+                { timeOut: 4000 },
+            );
+        }
+    } catch (e) {}
+}
+
+/**
  * Import every SillyTavern persona as a user character. Reads from
- * window.power_user.personas (a map of avatar filename → persona name).
- * Skips personas whose name already exists in userCharacters.
+ * power_user.personas (a map of avatar filename → persona name).
+ * Skips personas whose name already exists in EITHER the user-character
+ * namespace or the NPC namespace — no duplicates across either side.
  */
 function importFromSillyTavernPersonas() {
     // power_user is imported at module top — fall through to the window
@@ -585,14 +689,16 @@ function importFromSillyTavernPersonas() {
         return;
     }
     if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
-    const existingNames = new Set(Object.keys(extensionSettings.userCharacters).map(n => n.toLowerCase()));
+    // Dedup across BOTH namespaces — a persona named the same as an NPC
+    // (or vice versa) shouldn't get a duplicate entry.
+    const existingNames = getAllExistingCharacterNamesLower();
     const toImport = entries.filter(([, name]) => !existingNames.has(String(name).toLowerCase()));
     const skipped = entries.length - toImport.length;
     if (!toImport.length) {
         try {
             if (window.toastr) {
                 window.toastr.info(
-                    `All ${entries.length} persona${entries.length === 1 ? '' : 's'} already exist as user characters.`,
+                    `All ${entries.length} persona${entries.length === 1 ? '' : 's'} already exist (as user characters or NPCs).`,
                     'Import',
                     { timeOut: 4000 },
                 );
@@ -602,7 +708,7 @@ function importFromSillyTavernPersonas() {
     }
     const lines = toImport.map(([, name]) => `  • ${name}`).join('\n');
     const msg = `Import ${toImport.length} persona${toImport.length === 1 ? '' : 's'} as user character${toImport.length === 1 ? '' : 's'}?\n\n${lines}` +
-        (skipped > 0 ? `\n\n(${skipped} already exist as user character${skipped === 1 ? '' : 's'} and will be skipped.)` : '');
+        (skipped > 0 ? `\n\n(${skipped} already exist and will be skipped — duplicates aren't imported.)` : '');
     if (!window.confirm(msg)) return;
     for (const [avatarFile, name] of toImport) {
         const description = typeof personaDescs[avatarFile] === 'object'
