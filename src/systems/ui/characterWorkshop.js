@@ -331,6 +331,10 @@ export function closeCharacterWorkshop() {
     if (!$modal || !$modal.length) return;
     $modal.removeClass('is-open').addClass('is-closing');
     if (_pendingCloseTimeout) clearTimeout(_pendingCloseTimeout);
+    // Clear the Expressions tab's lazy-load cache so the next open
+    // re-fetches sprites — protects against a stale uploaded-count
+    // display if the underlying sprite folder changed between opens.
+    $modal.find('#cw-expressions-pane').removeAttr('data-character');
     _pendingCloseTimeout = setTimeout(() => {
         $modal.removeClass('is-closing').hide();
         _pendingCloseTimeout = null;
