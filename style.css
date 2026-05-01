@@ -14665,7 +14665,12 @@ body.dooms-hide-st-topbar .openDrawer {
     gap: 8px;
     padding: 8px 15px;
     border: 1px solid var(--rpg-border, rgba(74, 123, 167, 0.3));
-    background: var(--rpg-accent, rgba(22, 33, 62, 0.95));
+    /* Two-layer background: a solid base color underneath the (possibly
+       translucent) theme accent so the final composited pixels are fully
+       opaque regardless of theme. background-color paints first, then
+       background-image (linear-gradient of the accent) paints over it. */
+    background-color: #1a1a2e;
+    background-image: linear-gradient(var(--rpg-accent, rgba(22, 33, 62, 0.95)), var(--rpg-accent, rgba(22, 33, 62, 0.95)));
     color: var(--rpg-text, #eaeaea);
     border-radius: 5px;
     overflow: hidden;
@@ -14675,12 +14680,14 @@ body.dooms-hide-st-topbar .openDrawer {
     cursor: pointer;
     font-size: 0.85em;
     font-weight: 500;
-    backdrop-filter: blur(8px);
 }
 
 .dooms-fab-menu-item:hover {
     margin-left: 10px;
-    background: var(--rpg-highlight, #e94560);
+    /* Hover uses the same layered approach so the highlight reads fully
+       solid even if --rpg-highlight is set with alpha in some theme. */
+    background-color: #1a1a2e;
+    background-image: linear-gradient(var(--rpg-highlight, #e94560), var(--rpg-highlight, #e94560));
     color: #fff;
     border-color: var(--rpg-highlight, #e94560);
     box-shadow: 1px 3px 10px var(--rpg-shadow, rgba(0, 0, 0, 0.55));
