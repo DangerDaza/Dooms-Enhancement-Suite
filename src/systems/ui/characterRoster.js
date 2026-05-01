@@ -95,7 +95,7 @@ export function openCharacterRoster() {
     });
     $modal.attr('data-mode', 'characters');
     $modal.find('#cr-title').text('Character Roster');
-    $modal.find('#cr-import-personas-btn').prop('hidden', true);
+    $modal.find('#cr-import-personas-btn').hide();
     renderGrid();
     // Apply the active DES theme so the theme-specific token overrides
     // take effect (matches trackerEditor / settings popup convention).
@@ -206,7 +206,7 @@ function bindListeners() {
         $modal.attr('data-mode', rosterMode);
         // Title & footer affordances follow the mode
         $modal.find('#cr-title').text(rosterMode === 'users' ? 'User Characters' : 'Character Roster');
-        $modal.find('#cr-import-personas-btn').prop('hidden', rosterMode !== 'users');
+        $modal.find('#cr-import-personas-btn').toggle(rosterMode === 'users');
         // The "active in scene" scope doesn't apply to user characters —
         // CSS hides the pill, but if it was selected we fall back to "all".
         if (rosterMode === 'users' && scope === 'active') {
