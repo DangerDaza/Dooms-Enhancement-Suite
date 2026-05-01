@@ -32,6 +32,7 @@ import {
     event_types,
 } from '../../../../../../../script.js';
 import { getContext } from '../../../../../../extensions.js';
+import { power_user } from '../../../../../../power-user.js';
 
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
@@ -676,9 +677,10 @@ function renderLinkedPersonaSelect() {
     // value so we can sync ST persona switches to the active user character.
     let personas = {};
     try {
-        // power_user is provided by SillyTavern; access lazily so this
-        // module doesn't crash if power_user isn't ready yet.
-        const pu = (typeof window !== 'undefined' && window.power_user) || null;
+        // power_user is imported at module top from ST's power-user.js.
+        // Fall through to the window reference in case some fork exposes
+        // it that way, then to {} so we never crash here.
+        const pu = power_user || (typeof window !== 'undefined' && window.power_user) || null;
         personas = (pu && pu.personas) || {};
     } catch (e) { personas = {}; }
     $sel.empty();
@@ -952,8 +954,8 @@ function bindStaticListeners() {
             try {
                 if (typeof window.setUserAvatar === 'function') {
                     window.setUserAvatar(linked);
-                } else if (window.power_user && typeof window.power_user.persona_set === 'function') {
-                    window.power_user.persona_set(linked);
+                } else if (power_user && typeof power_user.persona_set === 'function') {
+                    power_user.persona_set(linked);
                 } else {
                     // Fallback: dispatch a click on the persona's avatar in the
                     // Personas panel so ST's own handler picks it up.

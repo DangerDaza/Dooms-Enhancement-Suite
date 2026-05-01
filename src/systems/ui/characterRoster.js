@@ -17,6 +17,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
+import { power_user } from '../../../../../../power-user.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -567,7 +568,9 @@ function confirmAndDelete(name) {
  * Skips personas whose name already exists in userCharacters.
  */
 function importFromSillyTavernPersonas() {
-    const pu = (typeof window !== 'undefined' && window.power_user) || null;
+    // power_user is imported at module top — fall through to the window
+    // reference in case ST exposes it that way on some forks.
+    const pu = power_user || (typeof window !== 'undefined' && window.power_user) || null;
     const personas = (pu && pu.personas) || {};
     const personaDescs = (pu && pu.persona_descriptions) || {};
     const entries = Object.entries(personas).filter(([avatarFile, name]) => avatarFile && name);
