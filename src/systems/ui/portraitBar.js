@@ -280,7 +280,10 @@ export function initPortraitBar() {
     });
 
     // ── Left-click portrait card — flip to show detail sheet ──
-    $(document).on('click', '.dooms-portrait-card', function (e) {
+    // Scoped to cards INSIDE the portrait-bar shelf so the Workshop's
+    // preview card (also uses .dooms-portrait-card for shared styling)
+    // doesn't accidentally flip when clicked.
+    $(document).on('click', '#dooms-portrait-bar .dooms-portrait-card', function (e) {
         // Don't flip if clicking on context menu items or other interactive children
         if ($(e.target).closest('.dooms-pb-ctx-item, button, a, input').length) return;
         const $card = $(this);

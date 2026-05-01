@@ -19,6 +19,7 @@ import {
     getActiveKnownCharacters,
     getActiveRemovedCharacters,
     getActiveBannedCharacters,
+    getActiveCharacterColors,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
@@ -1275,12 +1276,22 @@ function commitDraft() {
     }
 
     if (draft.dirty.color) {
-        if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
+        // Use the chat-aware getter so colors land in the right store.
+        // When perChatCharacterTracking is on, characterColors live in
+        // chat_metadata.dooms_tracker, NOT extensionSettings — writing
+        // to extensionSettings here meant the PCP (which renders from
+        // the chat-scoped map) never saw the new color.
+        const colors = getActiveCharacterColors();
         if (draft.color) {
-            extensionSettings.characterColors[name] = draft.color;
+            colors[name] = draft.color;
         } else {
-            delete extensionSettings.characterColors[name];
+            delete colors[name];
         }
+        // Persist via the matching saver (saveChatData when per-chat,
+        // saveSettings otherwise) — saveCharacterRosterChange picks
+        // the right one. The trailing saveSettings() at the end of
+        // commitDraft still runs for the non-per-chat fields.
+        try { saveCharacterRosterChange(); } catch (e) {}
         changed = true;
     }
 
