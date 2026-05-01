@@ -1256,7 +1256,7 @@ export function clearPortraitCache() {
  * Redraws a data-URL image onto a canvas of the given size and returns a PNG data URL.
  * Uses high-quality bicubic-like smoothing (imageSmoothingQuality: 'high').
  */
-function upscaleImage(srcDataUrl, width, height) {
+export function upscaleImage(srcDataUrl, width, height) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {

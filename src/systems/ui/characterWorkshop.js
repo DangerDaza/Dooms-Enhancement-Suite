@@ -21,7 +21,9 @@ import {
     getActiveBannedCharacters,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
-import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
+import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
+import { getBase64Async } from '../../../../../../utils.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -1016,22 +1018,59 @@ function bindStaticListeners() {
         commitColorSelection(hex);
     });
 
-    $modal.on('change.cw', '#cw-portrait-file', function () {
+    $modal.on('change.cw', '#cw-portrait-file', async function () {
         if (!draft) return;
-        const file = this.files && this.files[0];
+        const fileInput = this;
+        const file = fileInput.files && fileInput.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const url = ev?.target?.result;
-            if (typeof url !== 'string') return;
-            draft.avatar = url;
-            draft.avatarFullRes = url;
+        try {
+            const dataUrl = await getBase64Async(file);
+
+            // Open SillyTavern's built-in crop popup so users can frame the
+            // portrait before saving. Same 3:4 aspect + upscale pipeline as
+            // the portrait-bar's right-click "Upload Portrait" path so the
+            // resulting images match in dimensions.
+            const safeName = (draft.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const titleHtml = draft.isUser
+                ? `<h3>Crop portrait for user character: ${safeName}</h3>`
+                : `<h3>Crop portrait for ${safeName}</h3>`;
+            const croppedImage = await callGenericPopup(
+                titleHtml,
+                POPUP_TYPE.CROP,
+                '',
+                { cropAspect: 3 / 4, cropImage: dataUrl },
+            );
+            if (!croppedImage) {
+                console.log('[Dooms Tracker] Workshop: portrait crop cancelled');
+                return;
+            }
+
+            // Upscale the cropped result to 660x880 PNG for crisp portrait
+            // display. The CROP popup returns a low-res JPEG at the crop
+            // pixel size; redrawing it at portrait resolution prevents
+            // softness when it's used in the bar / chat bubbles.
+            const PORTRAIT_W = 660;
+            const PORTRAIT_H = 880;
+            const hiResDataUrl = await upscaleImage(String(croppedImage), PORTRAIT_W, PORTRAIT_H);
+
+            draft.avatar = hiResDataUrl;
+            draft.avatarFullRes = hiResDataUrl;
             draft.dirty.avatar = true;
-            $modal.find('#cw-preview-img').attr('src', url).show();
+            $modal.find('#cw-preview-img').attr('src', hiResDataUrl).show();
             $modal.find('#cw-preview-placeholder').hide();
-        };
-        reader.onerror = () => console.warn('[Dooms Tracker] Failed to read portrait file');
-        reader.readAsDataURL(file);
+        } catch (err) {
+            console.warn('[Dooms Tracker] Workshop: portrait upload failed', err);
+            try {
+                if (window.toastr) window.toastr.error(
+                    String(err?.message || err || 'Upload failed.'),
+                    'Portrait upload',
+                    { timeOut: 4000 },
+                );
+            } catch (e) {}
+        } finally {
+            // Always clear so the same file can be picked again.
+            try { fileInput.value = ''; } catch (e) {}
+        }
     });
 
     $modal.on('input.cw change.cw', '#cw-inj-description', function () {
