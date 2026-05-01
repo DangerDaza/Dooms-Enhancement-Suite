@@ -14507,14 +14507,14 @@ body.dooms-hide-st-topbar .openDrawer {
     100% { opacity: 0.10; }
 }
 
-/* Bolt overlay — visible jagged stroke flickering, peaks at 75%. */
+/* Bolt overlay — visible jagged stroke flickering, peaks at 30%. */
 @keyframes dooms-fab-lightning-bolt {
     0%   { opacity: 0;    }
-    8%   { opacity: 0.75; }
-    16%  { opacity: 0.20; }
-    24%  { opacity: 0.75; }
-    36%  { opacity: 0.35; }
-    50%  { opacity: 0.70; }
+    8%   { opacity: 0.30; }
+    16%  { opacity: 0.08; }
+    24%  { opacity: 0.30; }
+    36%  { opacity: 0.14; }
+    50%  { opacity: 0.28; }
     100% { opacity: 0;    }
 }
 
