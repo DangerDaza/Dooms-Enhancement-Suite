@@ -938,13 +938,20 @@ function bindStaticListeners() {
         draft.dirty.linkedPersona = true;
     });
 
-    // "Set as active persona" footer button — flips DES's activeUserCharacter
-    // and (if linked to a ST persona) calls SillyTavern's persona switch flow.
+    // "Set as active persona" footer button — flips DES's activeUserCharacter,
+    // forces "Show User in PCP" on so the card actually appears, and (if
+    // linked to a ST persona) calls SillyTavern's persona switch flow.
     $modal.on('click.cw', '#cw-set-active-persona', function () {
         if (!draft || !draft.isUser) return;
         try {
             extensionSettings.activeUserCharacter = draft.name;
+            // Picking "Set as active" implies the user wants to see them in
+            // the panel — flip the master toggle on so the card renders even
+            // if it had been disabled in Settings.
+            extensionSettings.showUserInPCP = true;
             saveSettings();
+            // Reflect the toggle change in the settings UI if it's open.
+            try { $('#rpg-pb-show-user').prop('checked', true); } catch (e) {}
         } catch (e) {}
         // If the user character is linked to a persona, fire ST's persona
         // switch. Implementations vary across ST versions, so try the
