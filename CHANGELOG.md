@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.1] - 2026-05-01
+
+### Added
+- **Chat bubble — User Dialog color.** New "User Dialog" color picker in the Bubble Colors subsection lets the player's bubble text use a custom color (previously hard-coded to inherit body color). Stored on `chatBubbleSettings.userDialogColor` (default `#e0e0e0`), exposed via `--cb-user-color`, and applied to both Discord-style and Card-style user bubbles.
+
+### Changed
+- **Bubble Colors / Bubble Sizing are now collapsible.** Both subsections of the Chat Bubbles accordion are wrapped in native `<details>` so they can fold away. Closed by default to keep the section tidy. Reusable `.rpg-subsection-collapse*` classes match the existing uppercase-tracking subsection look with a chevron that rotates 180° on open.
+
 ## [1.10.0] - 2026-05-01
 
 ### Added
