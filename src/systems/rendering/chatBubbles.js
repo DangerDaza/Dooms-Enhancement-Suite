@@ -592,6 +592,9 @@ export function applyChatBubbles(messageElement, style) {
     const tempContainer = document.createElement('div');
     tempContainer.innerHTML = mesText.getAttribute('data-dooms-original-html');
 
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    const skipStyledDivs = cbs.skipStyledDivs !== false;
+
     const childNodes = Array.from(tempContainer.childNodes);
     const hasGfxMarkers = childNodes.some(node =>
         node.nodeType === Node.COMMENT_NODE &&
@@ -611,7 +614,6 @@ export function applyChatBubbles(messageElement, style) {
     };
 
     if (hasGfxMarkers) {
-        console.log('[Dooms Chat Bubbles] Using GFX comment markers for block detection');
 
         let inGfxBlock = false;
         let pendingNodes = [];
@@ -664,7 +666,7 @@ export function applyChatBubbles(messageElement, style) {
             flushGfx();
         }
         flushPending();
-    } else {
+    } else if (skipStyledDivs) {
         // Fallback: detect likely GFX divs by inline style patterns.
         const gfxDivs = Array.from(tempContainer.querySelectorAll('div[style*="background"], div[style*="border"], div[style*="padding"]')).filter(div => {
             const style = div.getAttribute('style') || '';
@@ -672,11 +674,8 @@ export function applyChatBubbles(messageElement, style) {
                 (style.includes('padding') || style.includes('border') || style.includes('margin'));
         });
 
-        console.log('[Dooms Chat Bubbles] Found', gfxDivs.length, 'heuristic GFX divs');
-
         // If no GFX blocks found, process normally
         if (gfxDivs.length === 0) {
-            console.log('[Dooms Chat Bubbles] No GFX blocks found, processing normally');
             const segments = parseMessageIntoBubbles(tempContainer);
 
             const bubblesHtml = style === 'discord'
@@ -712,9 +711,19 @@ export function applyChatBubbles(messageElement, style) {
             }
         }
         flushPending();
-    }
+    } else {
+        const segments = parseMessageIntoBubbles(tempContainer);
 
-    console.log('[Dooms Chat Bubbles] Split into', parts.length, 'parts');
+        const bubblesHtml = style === 'discord'
+            ? renderDiscordBubbles(segments)
+            : renderCardBubbles(segments);
+
+        const thoughts = mesText.querySelectorAll('.dooms-inline-thought');
+        const thoughtsHtml = Array.from(thoughts).map(t => t.outerHTML).join('');
+
+        mesText.innerHTML = bubblesHtml + thoughtsHtml;
+        return;
+    }
 
     // Process each part
     const finalParts = [];
@@ -722,11 +731,9 @@ export function applyChatBubbles(messageElement, style) {
     for (const part of parts) {
         if (part.type === 'gfx') {
             // GFX block: render as-is with NO bubble wrapper
-            console.log('[Dooms Chat Bubbles] Adding raw GFX block');
             finalParts.push(part.content);
         } else {
             // HTML section: apply bubbles
-            console.log('[Dooms Chat Bubbles] Processing HTML section for bubbles');
             const div = document.createElement('div');
             div.innerHTML = part.content;
             const segments = parseMessageIntoBubbles(div);
@@ -741,7 +748,6 @@ export function applyChatBubbles(messageElement, style) {
 
     // Combine all parts
     let finalHtml = finalParts.join('');
-    console.log('[Dooms Chat Bubbles] Final HTML assembled with', finalParts.length, 'parts');
 
     // Preserve inline thoughts
     const thoughts = mesText.querySelectorAll('.dooms-inline-thought');
