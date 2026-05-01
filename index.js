@@ -165,8 +165,8 @@ function updateDynamicLabels() {
  */
 async function addExtensionSettings() {
     // Initialize log captures early so they catch all init messages
-    try { initSystemLog(); } catch(e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
-    try { initNotificationLog(); } catch(e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
+    try { initSystemLog(); } catch (e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
+    try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
     // Load the HTML template for the settings
     const settingsHtml = await renderExtensionTemplateAsync(extensionName, 'settings');
@@ -174,7 +174,7 @@ async function addExtensionSettings() {
     $('#extensions_settings2').append(settingsHtml);
     console.log('[Dooms Tracker] Settings HTML appended');
     // Set up the enable/disable toggle
-    $('#rpg-extension-enabled').prop('checked', extensionSettings.enabled).on('change', async function() {
+    $('#rpg-extension-enabled').prop('checked', extensionSettings.enabled).on('change', async function () {
         const wasEnabled = extensionSettings.enabled;
         extensionSettings.enabled = $(this).prop('checked');
         saveSettings();
@@ -201,7 +201,7 @@ async function addExtensionSettings() {
     const langSelect = $('#dooms-tracker-language-select');
     if (langSelect.length) {
         langSelect.val(i18n.currentLanguage);
-        langSelect.on('change', async function() {
+        langSelect.on('change', async function () {
             const selectedLanguage = $(this).val();
             await i18n.setLanguage(selectedLanguage);
             // We need to re-apply translations to the settings panel specifically
@@ -209,7 +209,7 @@ async function addExtensionSettings() {
         });
     }
     // Set up "Open Settings" button in the extension dropdown
-    $('#dooms-open-settings-btn').on('click', function() {
+    $('#dooms-open-settings-btn').on('click', function () {
         const modal = getSettingsModal();
         if (modal) {
             modal.open();
@@ -218,7 +218,7 @@ async function addExtensionSettings() {
         }
     });
     // "Star on GitHub" button in the extension dropdown
-    $('#dooms-github-star-btn').on('click', function() {
+    $('#dooms-github-star-btn').on('click', function () {
         window.open('https://github.com/DangerDaza/Dooms-Enhancement-Suite', '_blank', 'noopener,noreferrer');
     });
     fetch('https://api.github.com/repos/DangerDaza/Dooms-Enhancement-Suite', { headers: { 'Accept': 'application/vnd.github+json' } })
@@ -228,7 +228,7 @@ async function addExtensionSettings() {
                 $('#dooms-github-star-btn .dooms-github-star-count').text(data.stargazers_count.toLocaleString());
             }
         })
-        .catch(() => {});
+        .catch(() => { });
     // Populate version from manifest.json so the dropdown always reflects the current release
     getExtensionVersion().then(v => {
         if (v) $('#dooms-version-display').text(`v${v}`);
@@ -293,6 +293,7 @@ function loadChatBubbleSettingsUI() {
 
     // Toggles
     $('#rpg-cb-show-avatars').prop('checked', cbs.showAvatars !== false);
+    $('#rpg-cb-skip-styled-divs').prop('checked', cbs.skipStyledDivs !== false);
     $('#rpg-cb-show-author-names').prop('checked', cbs.showAuthorNames !== false);
     $('#rpg-cb-show-narrator-label').prop('checked', cbs.showNarratorLabel !== false);
     $('#rpg-cb-narrator-italic').prop('checked', cbs.narratorItalic !== false);
@@ -347,33 +348,33 @@ async function initUI() {
     initThoughtsEventDelegation();
     initQuestEventDelegation();
     // Lorebook Manager init
-    try { initLorebookEventDelegation(); } catch(e) { console.error('[Dooms Tracker] initLorebookEventDelegation() FAILED:', e); }
-    try { setupLorebookModal(); } catch(e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
+    try { initLorebookEventDelegation(); } catch (e) { console.error('[Dooms Tracker] initLorebookEventDelegation() FAILED:', e); }
+    try { setupLorebookModal(); } catch (e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
     // Re-apply translations to the entire body to catch all new elements from the template
     i18n.applyTranslations(document.body);
     // ── Accordion toggle behavior ──
     // Use delegated handler so it doesn't block other delegated handlers (like prompts editor)
-    $(document).on('click', '.rpg-accordion-header', function() {
+    $(document).on('click', '.rpg-accordion-header', function () {
         const $section = $(this).closest('.rpg-accordion-section');
         $('.rpg-accordion-section').not($section).removeClass('rpg-accordion-open');
         $section.toggleClass('rpg-accordion-open');
     });
     // ── Generation settings ──
-    $('#rpg-generation-mode').on('change', function() {
+    $('#rpg-generation-mode').on('change', function () {
         extensionSettings.generationMode = String($(this).val());
         saveSettings();
         updateGenerationModeUI();
     });
-    $('#rpg-toggle-auto-update').on('change', function() {
+    $('#rpg-toggle-auto-update').on('change', function () {
         extensionSettings.autoUpdate = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-update-depth').on('change', function() {
+    $('#rpg-update-depth').on('change', function () {
         const value = $(this).val();
         extensionSettings.updateDepth = parseInt(String(value));
         saveSettings();
     });
-    $('#rpg-manual-update').on('click', async function() {
+    $('#rpg-manual-update').on('click', async function () {
         const $btn = $(this);
         const originalHtml = $btn.html();
         $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Generating...').prop('disabled', true);
@@ -387,24 +388,24 @@ async function initUI() {
         }
     });
     // ── Display settings ──
-    $('#rpg-toggle-info-box').on('change', function() {
+    $('#rpg-toggle-info-box').on('change', function () {
         extensionSettings.showInfoBox = $(this).prop('checked');
         saveSettings();
         updateChatSceneHeaders();
     });
-    $('#rpg-toggle-thoughts').on('change', function() {
+    $('#rpg-toggle-thoughts').on('change', function () {
         extensionSettings.showCharacterThoughts = $(this).prop('checked');
         saveSettings();
         updateChatSceneHeaders();
         updatePortraitBar();
     });
-    $('#rpg-toggle-quests').on('change', function() {
+    $('#rpg-toggle-quests').on('change', function () {
         extensionSettings.showQuests = $(this).prop('checked');
         saveSettings();
         updateChatSceneHeaders();
     });
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
-    $('#rpg-toggle-portrait-bar').on('change', function() {
+    $('#rpg-toggle-portrait-bar').on('change', function () {
         const on = $(this).prop('checked');
         extensionSettings.showPortraitBar = on;
         saveSettings();
@@ -414,12 +415,12 @@ async function initUI() {
         $('#rpg-open-character-roster').toggle(on);
         $('#dooms-pb-open-roster').toggle(on);
     });
-    $('#rpg-portrait-alignment').on('change', function() {
+    $('#rpg-portrait-alignment').on('change', function () {
         extensionSettings.portraitAlignment = $(this).val();
         saveSettings();
         updatePortraitBar();
     });
-    $('#rpg-portrait-position').on('change', function() {
+    $('#rpg-portrait-position').on('change', function () {
         extensionSettings.portraitPosition = $(this).val();
         saveSettings();
         repositionPortraitBar();
@@ -428,17 +429,17 @@ async function initUI() {
         $('#rpg-pb-side-options').toggle(isSide);
         relabelPortraitAlignmentOptions(isSide);
     });
-    $('#rpg-pb-side-columns').on('change', function() {
+    $('#rpg-pb-side-columns').on('change', function () {
         const cols = parseInt($(this).val(), 10);
         extensionSettings.portraitSideColumns = (cols >= 1 && cols <= 2) ? cols : 1;
         saveSettings();
-        try { applySideModeStyling(); } catch (e) {}
+        try { applySideModeStyling(); } catch (e) { }
     });
-    $('#rpg-pb-side-height').on('change', function() {
+    $('#rpg-pb-side-height').on('change', function () {
         const val = $(this).val();
         extensionSettings.portraitSideHeight = (val === 'full') ? 'full' : 'auto';
         saveSettings();
-        try { applySideModeStyling(); } catch (e) {}
+        try { applySideModeStyling(); } catch (e) { }
     });
 
     /**
@@ -468,13 +469,13 @@ async function initUI() {
     const _savePb = () => { saveSettings(); applyPortraitBarSettings(); };
 
     // Layout toggles
-    $('#rpg-pb-show-header').on('change', function() { _pbSettings().showHeader = $(this).prop('checked'); _savePb(); });
-    $('#rpg-pb-show-absent').on('change', function() { _pbSettings().showAbsentCharacters = $(this).prop('checked'); _savePb(); updatePortraitBar(); });
-    $('#rpg-pb-show-arrows').on('change', function() { _pbSettings().showScrollArrows = $(this).prop('checked'); _savePb(); });
-    $('#rpg-pb-auto-import').on('change', function() { extensionSettings.portraitAutoImport = $(this).prop('checked'); saveSettings(); });
+    $('#rpg-pb-show-header').on('change', function () { _pbSettings().showHeader = $(this).prop('checked'); _savePb(); });
+    $('#rpg-pb-show-absent').on('change', function () { _pbSettings().showAbsentCharacters = $(this).prop('checked'); _savePb(); updatePortraitBar(); });
+    $('#rpg-pb-show-arrows').on('change', function () { _pbSettings().showScrollArrows = $(this).prop('checked'); _savePb(); });
+    $('#rpg-pb-auto-import').on('change', function () { extensionSettings.portraitAutoImport = $(this).prop('checked'); saveSettings(); });
 
     // Export portraits as individual image downloads
-    $('#rpg-export-portraits').on('click', async function() {
+    $('#rpg-export-portraits').on('click', async function () {
         const avatars = extensionSettings.npcAvatars || {};
         const fullRes = extensionSettings.npcAvatarsFullRes || {};
         const names = Object.keys({ ...avatars, ...fullRes });
@@ -516,27 +517,27 @@ async function initUI() {
         toastr.success(`Exported ${exported} portrait${exported !== 1 ? 's' : ''}.`, '', { timeOut: 3000 });
     });
 
-    $('#rpg-pb-sync-expressions').on('change', function() {
+    $('#rpg-pb-sync-expressions').on('change', function () {
         extensionSettings.syncExpressionsToPresentCharacters = $(this).prop('checked');
         saveSettings();
         onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters);
         $('#rpg-expression-options').toggle($(this).prop('checked'));
     });
-    $('#rpg-expression-classifier-api').on('change', function() {
+    $('#rpg-expression-classifier-api').on('change', function () {
         extensionSettings.expressionClassifierApi = $(this).val();
         saveSettings();
         $('#rpg-expression-batch-row').toggle($(this).val() === 'llm');
     });
-    $('#rpg-expression-batch-mode').on('change', function() {
+    $('#rpg-expression-batch-mode').on('change', function () {
         extensionSettings.expressionBatchMode = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-pb-hide-default-expressions').on('change', function() {
+    $('#rpg-pb-hide-default-expressions').on('change', function () {
         extensionSettings.hideDefaultExpressionDisplay = $(this).prop('checked');
         saveSettings();
         onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
     });
-    $('#rpg-pb-show-expression-in-tooltip').on('change', function() {
+    $('#rpg-pb-show-expression-in-tooltip').on('change', function () {
         extensionSettings.showExpressionInTooltip = $(this).prop('checked');
         saveSettings();
         // Rebuild cards so the new title attr takes effect immediately.
@@ -565,7 +566,7 @@ async function initUI() {
         $popup.prop('hidden', true);
         $('#rpg-expressions-info-btn').attr('aria-expanded', 'false');
     });
-    $('#rpg-pb-per-chat-tracking').on('change', function() {
+    $('#rpg-pb-per-chat-tracking').on('change', function () {
         extensionSettings.perChatCharacterTracking = $(this).prop('checked');
         saveSettings();
         loadChatData();
@@ -573,25 +574,25 @@ async function initUI() {
     });
 
     // Card size sliders
-    $('#rpg-pb-card-width').on('input', function() {
+    $('#rpg-pb-card-width').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().cardWidth = v;
         $('#rpg-pb-card-width-value').text(v + 'px');
         _savePb();
     });
-    $('#rpg-pb-card-height').on('input', function() {
+    $('#rpg-pb-card-height').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().cardHeight = v;
         $('#rpg-pb-card-height-value').text(v + 'px');
         _savePb();
     });
-    $('#rpg-pb-card-gap').on('input', function() {
+    $('#rpg-pb-card-gap').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().cardGap = v;
         $('#rpg-pb-card-gap-value').text(v + 'px');
         _savePb();
     });
-    $('#rpg-pb-card-radius').on('input', function() {
+    $('#rpg-pb-card-radius').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().cardBorderRadius = v;
         $('#rpg-pb-card-radius-value').text(v + 'px');
@@ -599,7 +600,7 @@ async function initUI() {
     });
 
     // Restore card size defaults
-    $('#rpg-pb-reset-card-size').on('click', function() {
+    $('#rpg-pb-reset-card-size').on('click', function () {
         const s = _pbSettings();
         s.cardWidth = 110;
         s.cardHeight = 150;
@@ -617,48 +618,48 @@ async function initUI() {
     });
 
     // Color pickers
-    $('#rpg-pb-bar-bg-color').on('input', function() { _pbSettings().barBackground = $(this).val(); _savePb(); });
-    $('#rpg-pb-header-color').on('input', function() { _pbSettings().headerColor = $(this).val(); _savePb(); });
-    $('#rpg-pb-card-border-color').on('input', function() { _pbSettings().cardBorderColor = $(this).val(); _savePb(); });
-    $('#rpg-pb-hover-glow-color').on('input', function() { _pbSettings().hoverGlowColor = $(this).val(); _savePb(); });
-    $('#rpg-pb-speaking-color').on('input', function() { _pbSettings().speakingPulseColor = $(this).val(); _savePb(); });
+    $('#rpg-pb-bar-bg-color').on('input', function () { _pbSettings().barBackground = $(this).val(); _savePb(); });
+    $('#rpg-pb-header-color').on('input', function () { _pbSettings().headerColor = $(this).val(); _savePb(); });
+    $('#rpg-pb-card-border-color').on('input', function () { _pbSettings().cardBorderColor = $(this).val(); _savePb(); });
+    $('#rpg-pb-hover-glow-color').on('input', function () { _pbSettings().hoverGlowColor = $(this).val(); _savePb(); });
+    $('#rpg-pb-speaking-color').on('input', function () { _pbSettings().speakingPulseColor = $(this).val(); _savePb(); });
 
     // Opacity/intensity sliders
-    $('#rpg-pb-bar-bg-opacity').on('input', function() {
+    $('#rpg-pb-bar-bg-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().barBackgroundOpacity = v;
         $('#rpg-pb-bar-bg-opacity-value').text(v + '%');
         _savePb();
     });
-    $('#rpg-pb-card-border-opacity').on('input', function() {
+    $('#rpg-pb-card-border-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().cardBorderOpacity = v;
         $('#rpg-pb-card-border-opacity-value').text(v + '%');
         _savePb();
     });
-    $('#rpg-pb-hover-glow-intensity').on('input', function() {
+    $('#rpg-pb-hover-glow-intensity').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().hoverGlowIntensity = v;
         $('#rpg-pb-hover-glow-intensity-value').text(v + 'px');
         _savePb();
     });
-    $('#rpg-pb-name-opacity').on('input', function() {
+    $('#rpg-pb-name-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().nameOverlayOpacity = v;
         $('#rpg-pb-name-opacity-value').text(v + '%');
         _savePb();
     });
-    $('#rpg-pb-absent-opacity').on('input', function() {
+    $('#rpg-pb-absent-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _pbSettings().absentOpacity = v;
         $('#rpg-pb-absent-opacity-value').text(v + '%');
         _savePb();
     });
-    $('#rpg-loading-intro-mode').on('change', function() {
+    $('#rpg-loading-intro-mode').on('change', function () {
         extensionSettings.loadingIntroMode = $(this).val();
         saveSettings();
     });
-    $('#rpg-tts-highlight-mode').on('change', function() {
+    $('#rpg-tts-highlight-mode').on('change', function () {
         const oldMode = extensionSettings.ttsHighlightMode;
         extensionSettings.ttsHighlightMode = $(this).val();
         saveSettings();
@@ -672,46 +673,46 @@ async function initUI() {
     };
     const _saveTts = () => { saveSettings(); applyTtsHighlightSettings(); };
 
-    $('#rpg-tts-color-left').on('input', function() { _ttsSettings().gradientColorLeft = $(this).val(); _saveTts(); });
-    $('#rpg-tts-color-right').on('input', function() { _ttsSettings().gradientColorRight = $(this).val(); _saveTts(); });
-    $('#rpg-tts-override-text-color').on('change', function() {
+    $('#rpg-tts-color-left').on('input', function () { _ttsSettings().gradientColorLeft = $(this).val(); _saveTts(); });
+    $('#rpg-tts-color-right').on('input', function () { _ttsSettings().gradientColorRight = $(this).val(); _saveTts(); });
+    $('#rpg-tts-override-text-color').on('change', function () {
         const on = $(this).prop('checked');
         _ttsSettings().overrideTextColor = on;
         $('#rpg-tts-text-color-row').toggle(on);
         _saveTts();
     });
-    $('#rpg-tts-active-text-color').on('input', function() { _ttsSettings().activeTextColor = $(this).val(); _saveTts(); });
-    $('#rpg-tts-gradient-opacity').on('input', function() {
+    $('#rpg-tts-active-text-color').on('input', function () { _ttsSettings().activeTextColor = $(this).val(); _saveTts(); });
+    $('#rpg-tts-gradient-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _ttsSettings().gradientOpacity = v;
         $('#rpg-tts-gradient-opacity-value').text(v + '%');
         _saveTts();
     });
-    $('#rpg-tts-glow-intensity').on('input', function() {
+    $('#rpg-tts-glow-intensity').on('input', function () {
         const v = parseInt($(this).val());
         _ttsSettings().glowIntensity = v;
         $('#rpg-tts-glow-intensity-value').text(v + 'px');
         _saveTts();
     });
-    $('#rpg-tts-border-radius').on('input', function() {
+    $('#rpg-tts-border-radius').on('input', function () {
         const v = parseInt($(this).val());
         _ttsSettings().borderRadius = v;
         $('#rpg-tts-border-radius-value').text(v + 'px');
         _saveTts();
     });
-    $('#rpg-tts-read-opacity').on('input', function() {
+    $('#rpg-tts-read-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _ttsSettings().readOpacity = v;
         $('#rpg-tts-read-opacity-value').text(v + '%');
         _saveTts();
     });
-    $('#rpg-tts-unread-opacity').on('input', function() {
+    $('#rpg-tts-unread-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _ttsSettings().unreadOpacity = v;
         $('#rpg-tts-unread-opacity-value').text(v + '%');
         _saveTts();
     });
-    $('#rpg-tts-transition-speed').on('change', function() {
+    $('#rpg-tts-transition-speed').on('change', function () {
         _ttsSettings().transitionSpeed = parseInt($(this).val());
         _saveTts();
     });
@@ -737,12 +738,12 @@ async function initUI() {
     }
 
     // Visibility toggles
-    $('#rpg-st-show-time').on('change', function() { _stSettings().showTime = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-date').on('change', function() { _stSettings().showDate = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-location').on('change', function() { _stSettings().showLocation = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-characters').on('change', function() { _stSettings().showCharacters = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-quest').on('change', function() { _stSettings().showQuest = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-events').on('change', function() { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-time').on('change', function () { _stSettings().showTime = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-date').on('change', function () { _stSettings().showDate = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-location').on('change', function () { _stSettings().showLocation = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-characters').on('change', function () { _stSettings().showCharacters = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-quest').on('change', function () { _stSettings().showQuest = $(this).prop('checked'); _saveSt(); });
+    $('#rpg-st-show-events').on('change', function () { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
     // Optional fields: Scene Tracker toggle and infoBox widget enabled flag are the same concept.
     // Syncing both ensures the AI generates the field AND the tracker bar displays it.
     const _syncOptionalField = (widgetKey, checked) => {
@@ -752,44 +753,44 @@ async function initUI() {
             widgets[widgetKey].enabled = checked;
         }
     };
-    $('#rpg-st-show-moonphase').on('change', function() {
+    $('#rpg-st-show-moonphase').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showMoonPhase = v;
         _syncOptionalField('moonPhase', v);
         _saveSt();
     });
-    $('#rpg-st-show-tension').on('change', function() {
+    $('#rpg-st-show-tension').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showTension = v;
         _syncOptionalField('tension', v);
         _saveSt();
     });
-    $('#rpg-st-show-timesincerest').on('change', function() {
+    $('#rpg-st-show-timesincerest').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showTimeSinceRest = v;
         _syncOptionalField('timeSinceRest', v);
         _saveSt();
     });
-    $('#rpg-st-show-conditions').on('change', function() {
+    $('#rpg-st-show-conditions').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showConditions = v;
         _syncOptionalField('conditions', v);
         _saveSt();
     });
-    $('#rpg-st-show-terrain').on('change', function() {
+    $('#rpg-st-show-terrain').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showTerrain = v;
         _syncOptionalField('terrain', v);
         _saveSt();
     });
-    $('#rpg-st-show-weather').on('change', function() {
+    $('#rpg-st-show-weather').on('change', function () {
         const v = $(this).prop('checked');
         _stSettings().showWeather = v;
         _syncOptionalField('weather', v);
         _saveSt();
     });
     // Layout
-    $('#rpg-st-layout').on('change', function() {
+    $('#rpg-st-layout').on('change', function () {
         _stSettings().layout = $(this).val();
         _saveSt();
         // Layout change requires full DOM rebuild (different HTML structures)
@@ -798,25 +799,25 @@ async function initUI() {
     });
 
     // Sizing sliders
-    $('#rpg-st-font-size').on('input', function() {
+    $('#rpg-st-font-size').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().fontSize = v;
         $('#rpg-st-font-size-value').text(v + '%');
         _saveSt();
     });
-    $('#rpg-st-border-radius').on('input', function() {
+    $('#rpg-st-border-radius').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().borderRadius = v;
         $('#rpg-st-border-radius-value').text(v + 'px');
         _saveSt();
     });
-    $('#rpg-st-padding').on('input', function() {
+    $('#rpg-st-padding').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().padding = v;
         $('#rpg-st-padding-value').text(v + 'px');
         _saveSt();
     });
-    $('#rpg-st-border-width').on('input', function() {
+    $('#rpg-st-border-width').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().borderWidth = v;
         $('#rpg-st-border-width-value').text(v + 'px');
@@ -824,30 +825,30 @@ async function initUI() {
     });
 
     // Color pickers
-    $('#rpg-st-bg-color').on('input', function() { _stSettings().bgColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-border-color').on('input', function() { _stSettings().borderColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-accent-color').on('input', function() { _stSettings().accentColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-label-color').on('input', function() { _stSettings().labelColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-text-color').on('input', function() { _stSettings().textColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-badge-color').on('input', function() { _stSettings().charBadgeBg = $(this).val(); _saveSt(); });
-    $('#rpg-st-quest-color').on('input', function() { _stSettings().questIconColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-quest-text-color').on('input', function() { _stSettings().questTextColor = $(this).val(); _saveSt(); });
-    $('#rpg-st-events-color').on('input', function() { _stSettings().eventsTextColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-bg-color').on('input', function () { _stSettings().bgColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-border-color').on('input', function () { _stSettings().borderColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-accent-color').on('input', function () { _stSettings().accentColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-label-color').on('input', function () { _stSettings().labelColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-text-color').on('input', function () { _stSettings().textColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-badge-color').on('input', function () { _stSettings().charBadgeBg = $(this).val(); _saveSt(); });
+    $('#rpg-st-quest-color').on('input', function () { _stSettings().questIconColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-quest-text-color').on('input', function () { _stSettings().questTextColor = $(this).val(); _saveSt(); });
+    $('#rpg-st-events-color').on('input', function () { _stSettings().eventsTextColor = $(this).val(); _saveSt(); });
 
     // Opacity sliders
-    $('#rpg-st-bg-opacity').on('input', function() {
+    $('#rpg-st-bg-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().bgOpacity = v;
         $('#rpg-st-bg-opacity-value').text(v + '%');
         _saveSt();
     });
-    $('#rpg-st-border-opacity').on('input', function() {
+    $('#rpg-st-border-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().borderOpacity = v;
         $('#rpg-st-border-opacity-value').text(v + '%');
         _saveSt();
     });
-    $('#rpg-st-badge-opacity').on('input', function() {
+    $('#rpg-st-badge-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _stSettings().charBadgeOpacity = v;
         $('#rpg-st-badge-opacity-value').text(v + '%');
@@ -855,7 +856,7 @@ async function initUI() {
     });
 
     // Reset defaults
-    $('#rpg-st-reset').on('click', function() {
+    $('#rpg-st-reset').on('click', function () {
         const defaults = {
             showTime: true, showDate: true, showLocation: true,
             showCharacters: true, showQuest: true, showRecentEvents: true,
@@ -1093,7 +1094,7 @@ async function initUI() {
     const _saveCbRerender = () => { _saveCb(); revertAllChatBubbles(); applyAllChatBubbles(); };
 
     // Bubble mode selector
-    $('#rpg-cb-bubble-mode').on('change', function() {
+    $('#rpg-cb-bubble-mode').on('change', function () {
         const oldMode = extensionSettings.chatBubbleMode;
         extensionSettings.chatBubbleMode = $(this).val();
         saveSettings();
@@ -1102,7 +1103,7 @@ async function initUI() {
     });
 
     // Bubble appearance toggles
-    $('#rpg-cb-show-avatars').on('change', function() {
+    $('#rpg-cb-show-avatars').on('change', function () {
         _cbSettings().showAvatars = $(this).prop('checked');
         _saveCb();
         const show = $(this).prop('checked');
@@ -1110,47 +1111,51 @@ async function initUI() {
             el.classList.toggle('dooms-bubbles--no-avatars', !show);
         });
     });
-    $('#rpg-cb-show-author-names').on('change', function() { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
-    $('#rpg-cb-show-narrator-label').on('change', function() { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
-    $('#rpg-cb-narrator-italic').on('change', function() { _cbSettings().narratorItalic = $(this).prop('checked'); _saveCb(); });
-    $('#rpg-cb-hide-st-avatar').on('change', function() {
+    $('#rpg-cb-skip-styled-divs').on('change', function () {
+        _cbSettings().skipStyledDivs = $(this).prop('checked');
+        _saveCbRerender();
+    });
+    $('#rpg-cb-show-author-names').on('change', function () { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-show-narrator-label').on('change', function () { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
+    $('#rpg-cb-narrator-italic').on('change', function () { _cbSettings().narratorItalic = $(this).prop('checked'); _saveCb(); });
+    $('#rpg-cb-hide-st-avatar').on('change', function () {
         _cbSettings().hideStAvatar = $(this).prop('checked');
         _saveCb();
         document.body.classList.toggle('dooms-hide-st-avatar', $(this).prop('checked'));
     });
 
     // Bubble color pickers
-    $('#rpg-cb-narrator-color').on('input', function() { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });
-    $('#rpg-cb-unknown-color').on('input', function() { _cbSettings().unknownSpeakerColor = $(this).val(); _saveCb(); });
-    $('#rpg-cb-accent-color').on('input', function() { _cbSettings().accentColor = $(this).val(); _saveCb(); });
-    $('#rpg-cb-bg-tint').on('input', function() { _cbSettings().backgroundTint = $(this).val(); _saveCb(); });
+    $('#rpg-cb-narrator-color').on('input', function () { _cbSettings().narratorTextColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-unknown-color').on('input', function () { _cbSettings().unknownSpeakerColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-accent-color').on('input', function () { _cbSettings().accentColor = $(this).val(); _saveCb(); });
+    $('#rpg-cb-bg-tint').on('input', function () { _cbSettings().backgroundTint = $(this).val(); _saveCb(); });
 
     // Bubble opacity/sizing sliders
-    $('#rpg-cb-bg-opacity').on('input', function() {
+    $('#rpg-cb-bg-opacity').on('input', function () {
         const v = parseInt($(this).val());
         _cbSettings().backgroundOpacity = v;
         $('#rpg-cb-bg-opacity-value').text(v + '%');
         _saveCb();
     });
-    $('#rpg-cb-font-size').on('input', function() {
+    $('#rpg-cb-font-size').on('input', function () {
         const v = parseInt($(this).val());
         _cbSettings().fontSize = v;
         $('#rpg-cb-font-size-value').text(v + '%');
         _saveCb();
     });
-    $('#rpg-cb-avatar-size').on('input', function() {
+    $('#rpg-cb-avatar-size').on('input', function () {
         const v = parseInt($(this).val());
         _cbSettings().avatarSize = v;
         $('#rpg-cb-avatar-size-value').text(v + 'px');
         _saveCb();
     });
-    $('#rpg-cb-border-radius').on('input', function() {
+    $('#rpg-cb-border-radius').on('input', function () {
         const v = parseInt($(this).val());
         _cbSettings().borderRadius = v;
         $('#rpg-cb-border-radius-value').text(v + 'px');
         _saveCb();
     });
-    $('#rpg-cb-spacing').on('input', function() {
+    $('#rpg-cb-spacing').on('input', function () {
         const v = parseInt($(this).val());
         _cbSettings().spacing = v;
         $('#rpg-cb-spacing-value').text(v + 'px');
@@ -1158,7 +1163,7 @@ async function initUI() {
     });
 
     // Reset defaults button (Chat Bubbles only)
-    $('#rpg-cb-reset').on('click', function() {
+    $('#rpg-cb-reset').on('click', function () {
         extensionSettings.chatBubbleSettings = {
             narratorTextColor: '#999999',
             unknownSpeakerColor: '#aaaaaa',
@@ -1170,6 +1175,7 @@ async function initUI() {
             borderRadius: 6,
             spacing: 12,
             showAvatars: true,
+            skipStyledDivs: true,
             showAuthorNames: true,
             showNarratorLabel: true,
             narratorItalic: true,
@@ -1185,69 +1191,69 @@ async function initUI() {
 
     // Ticker click delegation — expand/collapse
     // Uses $(document) delegation since the ticker is appended to <body> (position:fixed)
-    $(document).on('click', '.dooms-info-ticker', function() {
+    $(document).on('click', '.dooms-info-ticker', function () {
         $(this).closest('.dooms-info-ticker-wrapper').toggleClass('expanded');
     });
 
-    $('#rpg-toggle-thoughts-in-chat').on('change', function() {
+    $('#rpg-toggle-thoughts-in-chat').on('change', function () {
         extensionSettings.showThoughtsInChat = $(this).prop('checked');
         saveSettings();
         updateChatThoughts();
     });
     // ── Feature pill toggles ──
-    $('#rpg-toggle-html-prompt').on('change', function() {
+    $('#rpg-toggle-html-prompt').on('change', function () {
         extensionSettings.enableHtmlPrompt = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-toggle-dialogue-coloring').on('change', function() {
+    $('#rpg-toggle-dialogue-coloring').on('change', function () {
         extensionSettings.enableDialogueColoring = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-toggle-dynamic-weather').on('change', function() {
+    $('#rpg-toggle-dynamic-weather').on('change', function () {
         extensionSettings.enableDynamicWeather = $(this).prop('checked');
         saveSettings();
         toggleDynamicWeather(extensionSettings.enableDynamicWeather);
     });
-    $('#rpg-toggle-auto-avatars').on('change', function() {
+    $('#rpg-toggle-auto-avatars').on('change', function () {
         extensionSettings.autoGenerateAvatars = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-toggle-narrator').on('change', function() {
+    $('#rpg-toggle-narrator').on('change', function () {
         extensionSettings.narratorMode = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-skip-guided-mode').on('change', function() {
+    $('#rpg-skip-guided-mode').on('change', function () {
         extensionSettings.skipInjectionsForGuided = String($(this).val());
         saveSettings();
     });
     // Connection Profile dropdown
-    $('#rpg-connection-profile').on('change', function() {
+    $('#rpg-connection-profile').on('change', function () {
         extensionSettings.connectionProfile = String($(this).val());
         saveSettings();
     });
     // ── History Persistence settings ──
-    $('#rpg-toggle-history-persistence').on('change', function() {
+    $('#rpg-toggle-history-persistence').on('change', function () {
         if (!extensionSettings.historyPersistence) {
             extensionSettings.historyPersistence = { enabled: false, messageCount: 5, injectionPosition: 'assistant_message_end', sendAllEnabledOnRefresh: false };
         }
         extensionSettings.historyPersistence.enabled = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-history-message-count').on('change', function() {
+    $('#rpg-history-message-count').on('change', function () {
         if (!extensionSettings.historyPersistence) {
             extensionSettings.historyPersistence = { enabled: false, messageCount: 5, injectionPosition: 'assistant_message_end', sendAllEnabledOnRefresh: false };
         }
         extensionSettings.historyPersistence.messageCount = parseInt(String($(this).val()));
         saveSettings();
     });
-    $('#rpg-history-injection-position').on('change', function() {
+    $('#rpg-history-injection-position').on('change', function () {
         if (!extensionSettings.historyPersistence) {
             extensionSettings.historyPersistence = { enabled: false, messageCount: 5, injectionPosition: 'assistant_message_end', sendAllEnabledOnRefresh: false };
         }
         extensionSettings.historyPersistence.injectionPosition = String($(this).val());
         saveSettings();
     });
-    $('#rpg-toggle-send-all-on-refresh').on('change', function() {
+    $('#rpg-toggle-send-all-on-refresh').on('change', function () {
         if (!extensionSettings.historyPersistence) {
             extensionSettings.historyPersistence = { enabled: false, messageCount: 5, injectionPosition: 'assistant_message_end', sendAllEnabledOnRefresh: false };
         }
@@ -1255,7 +1261,7 @@ async function initUI() {
         saveSettings();
     });
     // ── Lorebook Manager settings ──
-    $('#rpg-toggle-lorebook').on('change', function() {
+    $('#rpg-toggle-lorebook').on('change', function () {
         if (!extensionSettings.lorebook) {
             extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], collapsedCampaigns: [], expandedBooks: [], lastActiveTab: 'all', lastFilter: 'all', lastSearch: '' };
         }
@@ -1263,12 +1269,12 @@ async function initUI() {
         $('#rpg-lb-badge').text($(this).prop('checked') ? 'on' : 'off');
         saveSettings();
     });
-    $('#rpg-open-lorebook').on('click', function() {
+    $('#rpg-open-lorebook').on('click', function () {
         const modal = getLorebookModal();
         if (modal) modal.open();
     });
     // ── Intercept ST's native World Info button ──
-    $('#WI-SP-button .drawer-toggle').on('click.rpgLorebook', function(e) {
+    $('#WI-SP-button .drawer-toggle').on('click.rpgLorebook', function (e) {
         // Only intercept if lorebook manager is enabled
         if (!extensionSettings.lorebook?.enabled) return; // let ST handle it normally
 
@@ -1289,7 +1295,7 @@ async function initUI() {
         if (modal) modal.open();
     });
     // ── Theme selection ──
-    $('#rpg-theme-select').on('change', function() {
+    $('#rpg-theme-select').on('change', function () {
         const theme = String($(this).val());
         extensionSettings.theme = theme;
         saveSettings();
@@ -1306,13 +1312,13 @@ async function initUI() {
         }
     });
     // ── Animations toggle ──
-    $('#rpg-toggle-animations').on('change', function() {
+    $('#rpg-toggle-animations').on('change', function () {
         extensionSettings.enableAnimations = $(this).prop('checked');
         saveSettings();
         toggleAnimations();
     });
     // ── Theme Controls Scene Tracker toggle ──
-    $('#rpg-st-theme-controlled').on('change', function() {
+    $('#rpg-st-theme-controlled').on('change', function () {
         const controlled = $(this).prop('checked');
         extensionSettings.sceneTracker.themeControlled = controlled;
         saveSettings();
@@ -1321,7 +1327,7 @@ async function initUI() {
         updateChatSceneHeaders();
     });
     // Custom color pickers
-    $('#rpg-custom-bg').on('change', function() {
+    $('#rpg-custom-bg').on('change', function () {
         extensionSettings.customColors.bg = String($(this).val());
         saveSettings();
         if (extensionSettings.theme === 'custom') {
@@ -1330,7 +1336,7 @@ async function initUI() {
             updateChatThoughts(); // Update thought bubbles
         }
     });
-    $('#rpg-custom-bg-opacity').on('input', function() {
+    $('#rpg-custom-bg-opacity').on('input', function () {
         const opacity = Number($(this).val());
         extensionSettings.customColors.bgOpacity = opacity;
         $('#rpg-custom-bg-opacity-value').text(opacity + '%');
@@ -1339,10 +1345,10 @@ async function initUI() {
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
-    }).on('change', function() {
+    }).on('change', function () {
         saveSettings();
     });
-    $('#rpg-custom-accent').on('change', function() {
+    $('#rpg-custom-accent').on('change', function () {
         extensionSettings.customColors.accent = String($(this).val());
         saveSettings();
         if (extensionSettings.theme === 'custom') {
@@ -1351,7 +1357,7 @@ async function initUI() {
             updateChatThoughts(); // Update thought bubbles
         }
     });
-    $('#rpg-custom-accent-opacity').on('input', function() {
+    $('#rpg-custom-accent-opacity').on('input', function () {
         const opacity = Number($(this).val());
         extensionSettings.customColors.accentOpacity = opacity;
         $('#rpg-custom-accent-opacity-value').text(opacity + '%');
@@ -1360,10 +1366,10 @@ async function initUI() {
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
-    }).on('change', function() {
+    }).on('change', function () {
         saveSettings();
     });
-    $('#rpg-custom-text').on('change', function() {
+    $('#rpg-custom-text').on('change', function () {
         extensionSettings.customColors.text = String($(this).val());
         saveSettings();
         if (extensionSettings.theme === 'custom') {
@@ -1372,7 +1378,7 @@ async function initUI() {
             updateChatThoughts(); // Update thought bubbles
         }
     });
-    $('#rpg-custom-text-opacity').on('input', function() {
+    $('#rpg-custom-text-opacity').on('input', function () {
         const opacity = Number($(this).val());
         extensionSettings.customColors.textOpacity = opacity;
         $('#rpg-custom-text-opacity-value').text(opacity + '%');
@@ -1381,10 +1387,10 @@ async function initUI() {
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
-    }).on('change', function() {
+    }).on('change', function () {
         saveSettings();
     });
-    $('#rpg-custom-highlight').on('change', function() {
+    $('#rpg-custom-highlight').on('change', function () {
         extensionSettings.customColors.highlight = String($(this).val());
         saveSettings();
         if (extensionSettings.theme === 'custom') {
@@ -1393,7 +1399,7 @@ async function initUI() {
             updateChatThoughts(); // Update thought bubbles
         }
     });
-    $('#rpg-custom-highlight-opacity').on('input', function() {
+    $('#rpg-custom-highlight-opacity').on('input', function () {
         const opacity = Number($(this).val());
         extensionSettings.customColors.highlightOpacity = opacity;
         $('#rpg-custom-highlight-opacity-value').text(opacity + '%');
@@ -1402,11 +1408,11 @@ async function initUI() {
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
-    }).on('change', function() {
+    }).on('change', function () {
         saveSettings();
     });
     // External API settings event handlers
-    $('#rpg-external-base-url').on('change', function() {
+    $('#rpg-external-base-url').on('change', function () {
         if (!extensionSettings.externalApiSettings) {
             extensionSettings.externalApiSettings = {
                 baseUrl: '', apiKey: '', model: '', maxTokens: 8192, temperature: 0.7
@@ -1415,7 +1421,7 @@ async function initUI() {
         extensionSettings.externalApiSettings.baseUrl = String($(this).val()).trim();
         saveSettings();
     });
-    $('#rpg-external-api-key').on('change', function() {
+    $('#rpg-external-api-key').on('change', function () {
         // Securely store API key in localStorage instead of shared extension settings
         const apiKey = String($(this).val()).trim();
         localStorage.setItem('dooms_tracker_external_api_key', apiKey);
@@ -1427,7 +1433,7 @@ async function initUI() {
             saveSettings();
         }
     });
-    $('#rpg-external-model').on('change', function() {
+    $('#rpg-external-model').on('change', function () {
         if (!extensionSettings.externalApiSettings) {
             extensionSettings.externalApiSettings = {
                 baseUrl: '', apiKey: '', model: '', maxTokens: 8192, temperature: 0.7
@@ -1436,7 +1442,7 @@ async function initUI() {
         extensionSettings.externalApiSettings.model = String($(this).val()).trim();
         saveSettings();
     });
-    $('#rpg-external-max-tokens').on('change', function() {
+    $('#rpg-external-max-tokens').on('change', function () {
         if (!extensionSettings.externalApiSettings) {
             extensionSettings.externalApiSettings = {
                 baseUrl: '', apiKey: '', model: '', maxTokens: 8192, temperature: 0.7
@@ -1445,7 +1451,7 @@ async function initUI() {
         extensionSettings.externalApiSettings.maxTokens = parseInt(String($(this).val()));
         saveSettings();
     });
-    $('#rpg-external-temperature').on('change', function() {
+    $('#rpg-external-temperature').on('change', function () {
         if (!extensionSettings.externalApiSettings) {
             extensionSettings.externalApiSettings = {
                 baseUrl: '', apiKey: '', model: '', maxTokens: 8192, temperature: 0.7
@@ -1454,13 +1460,13 @@ async function initUI() {
         extensionSettings.externalApiSettings.temperature = parseFloat(String($(this).val()));
         saveSettings();
     });
-    $('#rpg-toggle-api-key-visibility').on('click', function() {
+    $('#rpg-toggle-api-key-visibility').on('click', function () {
         const $input = $('#rpg-external-api-key');
         const type = $input.attr('type') === 'password' ? 'text' : 'password';
         $input.attr('type', type);
         $(this).find('i').toggleClass('fa-eye fa-eye-slash');
     });
-    $('#rpg-test-external-api').on('click', async function() {
+    $('#rpg-test-external-api').on('click', async function () {
         const $result = $('#rpg-external-api-test-result');
         const $btn = $(this);
         const originalText = $btn.html();
@@ -1510,9 +1516,9 @@ async function initUI() {
     {
         const sideOpen = extensionSettings.portraitPosition === 'left' || extensionSettings.portraitPosition === 'right';
         $('#rpg-pb-side-options').toggle(sideOpen);
-        try { applySideModeStyling(); } catch (e) {}
+        try { applySideModeStyling(); } catch (e) { }
         // Relabel the alignment dropdown so side mode shows Top/Bottom.
-        try { (window.__doomsRelabelAlignment || (()=>{}))(sideOpen); } catch (e) {}
+        try { (window.__doomsRelabelAlignment || (() => { }))(sideOpen); } catch (e) { }
     }
     // Portrait Bar customization
     const pb = extensionSettings.portraitBarSettings || {};
@@ -1718,15 +1724,18 @@ async function initUI() {
         extensionSettings.fab = { bypassFlyout: false, hiddenButtons: [] };
     }
     $('#rpg-toggle-fab-bypass').prop('checked', !!extensionSettings.fab.bypassFlyout);
-    $('#rpg-toggle-fab-bypass').off('change.fab').on('change.fab', function() {
+    $('#rpg-toggle-fab-bypass').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.bypassFlyout = $(this).prop('checked');
         saveSettings();
     });
     const applyHideStTopBar = () => {
-        document.body.classList.toggle('dooms-hide-st-topbar', !!extensionSettings.fab.hideStTopBar);
+        const shouldHide = !!extensionSettings.fab.hideStTopBar;
+        document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
+        // Also hide TopInfoBar extension
+        $('#extensionTopBar').toggle(!shouldHide);
     };
     $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar);
-    $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function() {
+    $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.hideStTopBar = $(this).prop('checked');
         applyHideStTopBar();
         saveSettings();
@@ -1738,7 +1747,7 @@ async function initUI() {
         window.__doomsFabPopulateToggles();
     }
     $(document).off('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]');
-    $(document).on('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]', function() {
+    $(document).on('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]', function () {
         const id = $(this).attr('data-fab-toggle-id');
         const enabled = $(this).prop('checked');
         const hidden = new Set(extensionSettings.fab.hiddenButtons || []);
@@ -1746,7 +1755,7 @@ async function initUI() {
         extensionSettings.fab.hiddenButtons = Array.from(hidden);
         saveSettings();
     });
-    $('#rpg-fab-reset-position').off('click.fab').on('click.fab', function() {
+    $('#rpg-fab-reset-position').off('click.fab').on('click.fab', function () {
         delete extensionSettings.fabPosition;
         saveSettings();
         const fab = document.getElementById('dooms-settings-fab');
@@ -1762,7 +1771,7 @@ async function initUI() {
     getExtensionVersion().then(v => {
         if (v) $('#rpg-current-version').text(`Currently v${v}.`);
     });
-    $('#rpg-update-extension').off('click.upd').on('click.upd', async function() {
+    $('#rpg-update-extension').off('click.upd').on('click.upd', async function () {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
         const $status = $('#rpg-update-status');
@@ -1811,17 +1820,17 @@ async function initUI() {
     toggleAnimations();
     // Render initial data if available (still needed to populate state for scene headers)
     console.log('[Dooms Tracker] About to render initial data...');
-    try { renderInfoBox(); console.log('[Dooms Tracker] renderInfoBox() OK'); } catch(e) { console.error('[Dooms Tracker] renderInfoBox() FAILED:', e); }
-    try { renderThoughts(); console.log('[Dooms Tracker] renderThoughts() OK'); } catch(e) { console.error('[Dooms Tracker] renderThoughts() FAILED:', e); }
-    try { renderQuests(); console.log('[Dooms Tracker] renderQuests() OK'); } catch(e) { console.error('[Dooms Tracker] renderQuests() FAILED:', e); }
-    try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
+    try { renderInfoBox(); console.log('[Dooms Tracker] renderInfoBox() OK'); } catch (e) { console.error('[Dooms Tracker] renderInfoBox() FAILED:', e); }
+    try { renderThoughts(); console.log('[Dooms Tracker] renderThoughts() OK'); } catch (e) { console.error('[Dooms Tracker] renderThoughts() FAILED:', e); }
+    try { renderQuests(); console.log('[Dooms Tracker] renderQuests() OK'); } catch (e) { console.error('[Dooms Tracker] renderQuests() FAILED:', e); }
+    try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch (e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
-    try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
-    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
-    try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
-    try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch(e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
-    try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch(e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
-    try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch(e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
+    try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch (e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
+    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
+    try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
+    try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
+    try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch (e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
+    try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch (e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
     // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
@@ -1882,7 +1891,7 @@ async function initUI() {
         // upward-opening fly-out — i.e. closest to the D button.
         const buildAllMenuItems = () => {
             const items = [];
-            $('#top-settings-holder .drawer-icon').each(function() {
+            $('#top-settings-holder .drawer-icon').each(function () {
                 const $icon = $(this);
                 const label = ($icon.attr('title') || $icon.attr('aria-label') || 'Untitled').trim();
                 const rawClass = ($icon.attr('class') || '');
@@ -1896,12 +1905,14 @@ async function initUI() {
                     action: () => { $icon.trigger('click'); },
                 });
             });
+
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",
                 iconClass: 'fa-solid fa-gear',
                 action: openSettingsDirect,
             });
+
             return items;
         };
         const buildMenuItems = () => {
@@ -1938,7 +1949,7 @@ async function initUI() {
                     .attr('data-action', item.id)
                     .append($('<i></i>').attr('class', item.iconClass))
                     .append($('<span></span>').text(item.label));
-                $btn.on('click', function(ev) {
+                $btn.on('click', function (ev) {
                     ev.stopPropagation();
                     closeFlyout();
                     if (typeof item.action === 'function') item.action();
@@ -1965,22 +1976,22 @@ async function initUI() {
             const direction = (spaceAbove < estimated && spaceBelow > spaceAbove) ? 'down' : 'up';
             $menuList.attr('data-direction', direction);
             // Stagger: item nearest the button animates first
-            $items.each(function(idx) {
+            $items.each(function (idx) {
                 const stagger = direction === 'up' ? (total - 1 - idx) : idx;
                 this.style.transitionDelay = (stagger * 0.04) + 's';
             });
             $menuList.addClass('open');
             fabEl.classList.add('dooms-fab-open');
             setTimeout(() => {
-                $(document).on('mousedown.fabflyout', function(ev) {
+                $(document).on('mousedown.fabflyout', function (ev) {
                     if (!$(ev.target).closest('#dooms-settings-fab').length) closeFlyout();
                 });
-                $(document).on('keydown.fabflyout', function(ev) {
+                $(document).on('keydown.fabflyout', function (ev) {
                     if (ev.key === 'Escape') closeFlyout();
                 });
             }, 0);
         };
-        $('#dooms-fab-settings').on('click', function(e) {
+        $('#dooms-fab-settings').on('click', function (e) {
             if (suppressClick) {
                 suppressClick = false;
                 e.preventDefault();
@@ -2023,7 +2034,7 @@ async function initUI() {
             const rect = m.getBoundingClientRect();
             if (rect.right > window.innerWidth) m.style.left = Math.max(0, window.innerWidth - rect.width - 8) + 'px';
             if (rect.bottom > window.innerHeight) m.style.top = Math.max(0, window.innerHeight - rect.height - 8) + 'px';
-            $menu.on('click', '.dooms-fab-context-item', function(ev) {
+            $menu.on('click', '.dooms-fab-context-item', function (ev) {
                 ev.stopPropagation();
                 const action = $(this).data('action');
                 closeContextMenu();
@@ -2032,15 +2043,15 @@ async function initUI() {
             });
             // Defer outside-click binding so the opening contextmenu event doesn't immediately dismiss it
             setTimeout(() => {
-                $(document).on('mousedown.fabctx', function(ev) {
+                $(document).on('mousedown.fabctx', function (ev) {
                     if (!$(ev.target).closest('.dooms-fab-context-menu').length) closeContextMenu();
                 });
-                $(document).on('keydown.fabctx', function(ev) {
+                $(document).on('keydown.fabctx', function (ev) {
                     if (ev.key === 'Escape') closeContextMenu();
                 });
             }, 0);
         };
-        $('#dooms-settings-fab').on('contextmenu', function(e) {
+        $('#dooms-settings-fab').on('contextmenu', function (e) {
             e.preventDefault();
             e.stopPropagation();
             showContextMenu(e.clientX, e.clientY);
@@ -2068,7 +2079,7 @@ async function initUI() {
                 dragging = true;
                 moved = false;
                 activePointerId = ev.pointerId;
-                try { fabEl.setPointerCapture(ev.pointerId); } catch (_) {}
+                try { fabEl.setPointerCapture(ev.pointerId); } catch (_) { }
                 const rect = fabEl.getBoundingClientRect();
                 startX = ev.clientX;
                 startY = ev.clientY;
@@ -2095,7 +2106,7 @@ async function initUI() {
             const onPointerUp = (ev) => {
                 if (!dragging || ev.pointerId !== activePointerId) return;
                 dragging = false;
-                try { fabEl.releasePointerCapture(ev.pointerId); } catch (_) {}
+                try { fabEl.releasePointerCapture(ev.pointerId); } catch (_) { }
                 fabEl.removeEventListener('pointermove', onPointerMove);
                 fabEl.removeEventListener('pointerup', onPointerUp);
                 fabEl.removeEventListener('pointercancel', onPointerUp);
@@ -2128,14 +2139,14 @@ async function initUI() {
         // is still showing — refresh it.
         populateFabSettingsToggles();
         // applyTheme() ran before the FAB existed, so stamp the theme now.
-        try { applyTheme(); } catch (_) {}
+        try { applyTheme(); } catch (_) { }
     }
     // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
-    try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch(e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
-    try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch(e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
-    try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch(e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
-    try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch(e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
-    try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch(e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
+    try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch (e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
+    try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch (e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
+    try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
+    try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
+    try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
     console.log('[Dooms Tracker] initUI() rendering complete');
 }
 /**
@@ -2252,7 +2263,7 @@ jQuery(async () => {
         // so the keyboard is dismissed on any non-input tap.
         try {
             if (window.innerWidth <= 1000) {
-                document.addEventListener('touchend', function(e) {
+                document.addEventListener('touchend', function (e) {
                     const target = e.target;
                     // Don't blur if the user tapped an editable element (they want to type)
                     if (target.isContentEditable ||
@@ -2279,10 +2290,10 @@ jQuery(async () => {
         try {
             loadChatData();
             // Re-render sidebar panels immediately (don't depend on #chat DOM)
-            try { renderInfoBox(); } catch(e) { console.error('[Dooms Tracker] Post-load renderInfoBox() FAILED:', e); }
-            try { renderThoughts(); } catch(e) { console.error('[Dooms Tracker] Post-load renderThoughts() FAILED:', e); }
-            try { renderQuests(); } catch(e) { console.error('[Dooms Tracker] Post-load renderQuests() FAILED:', e); }
-            try { updatePortraitBar(); } catch(e) { console.error('[Dooms Tracker] Post-load updatePortraitBar() FAILED:', e); }
+            try { renderInfoBox(); } catch (e) { console.error('[Dooms Tracker] Post-load renderInfoBox() FAILED:', e); }
+            try { renderThoughts(); } catch (e) { console.error('[Dooms Tracker] Post-load renderThoughts() FAILED:', e); }
+            try { renderQuests(); } catch (e) { console.error('[Dooms Tracker] Post-load renderQuests() FAILED:', e); }
+            try { updatePortraitBar(); } catch (e) { console.error('[Dooms Tracker] Post-load updatePortraitBar() FAILED:', e); }
             console.log('[Dooms Tracker] Post-loadChatData sidebar re-render complete');
             // Note: DOM-dependent renders (scene headers, info panel, thoughts in chat)
             // will be handled by the CHAT_CHANGED event handler when SillyTavern finishes
