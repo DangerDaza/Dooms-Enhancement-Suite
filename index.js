@@ -1906,8 +1906,6 @@ async function initUI() {
                 });
             });
 
-            console.log('[FAB] Found drawer icons:', items.length);
-
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",
@@ -1915,7 +1913,6 @@ async function initUI() {
                 action: openSettingsDirect,
             });
 
-            console.log('[FAB] Final menu items:', items.map(i => i.label));
             return items;
         };
         const buildMenuItems = () => {
