@@ -14395,6 +14395,10 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 .dooms-fab-btn {
+    position: relative;
+    /* Stacking context so the bolt's z-index: -1 stays inside
+       the button without falling behind anything else. */
+    isolation: isolate;
     width: 40px;
     height: 40px;
     border-radius: 0;
@@ -14411,6 +14415,33 @@ body.dooms-hide-st-topbar .openDrawer {
     opacity: 0.85;
     overflow: visible;
     padding: 0;
+}
+
+/* Lightning bolt — lives on the button (not the icon) so it can
+   sit at z-index: -1 and paint behind the D's PNG, which is the
+   background-image of the .doom-icon child. */
+.dooms-fab-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    z-index: -1;
+    background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
+    clip-path: polygon(
+        80% 6%,
+        46% 6%,
+        20% 62%,
+        40% 62%,
+        26% 94%,
+        80% 44%,
+        60% 44%
+    );
+    opacity: 0;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px var(--rpg-highlight, #e94560));
+}
+
+.dooms-fab-btn:hover::before {
+    animation: dooms-fab-lightning-bolt 0.55s ease-out forwards;
 }
 
 .dooms-fab-btn .doom-icon {
@@ -14445,33 +14476,8 @@ body.dooms-hide-st-topbar .openDrawer {
     pointer-events: none;
 }
 
-/* SVG lightning bolt overlay — a forked stroke that flashes across
-   the icon during the strike, then disappears. Drawn with a clip-path
-   so it appears jagged. */
-.dooms-fab-btn .doom-icon::before {
-    content: '';
-    position: absolute;
-    inset: -6px;
-    /* Sit behind the D's background-image inside the icon's
-       isolated stacking context. */
-    z-index: -1;
-    background: linear-gradient(120deg, transparent 0%, transparent 38%, #fff 46%, #fffbe0 50%, #fff 54%, transparent 62%, transparent 100%);
-    /* Standard Font-Awesome bolt outline, normalized — a clean
-       7-vertex non-self-intersecting polygon. Shape recentered on
-       the icon (was right-leaning) and scaled to 80% width. */
-    clip-path: polygon(
-        80% 6%,
-        46% 6%,
-        20% 62%,
-        40% 62%,
-        26% 94%,
-        80% 44%,
-        60% 44%
-    );
-    opacity: 0;
-    pointer-events: none;
-    filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px var(--rpg-highlight, #e94560));
-}
+/* (Lightning bolt moved to .dooms-fab-btn::before so it can sit
+   behind the D's background-image — see above.) */
 
 .dooms-fab-btn:hover {
     opacity: 1;
@@ -14482,10 +14488,6 @@ body.dooms-hide-st-topbar .openDrawer {
 
 .dooms-fab-btn:hover .doom-icon::after {
     animation: dooms-fab-lightning-tint 0.7s ease-out forwards;
-}
-
-.dooms-fab-btn:hover .doom-icon::before {
-    animation: dooms-fab-lightning-bolt 0.55s ease-out forwards;
 }
 
 .dooms-fab-btn:active {
