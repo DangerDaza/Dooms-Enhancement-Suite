@@ -1850,8 +1850,10 @@ async function initUI() {
             if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
         };
         const clampPosition = (left, top) => {
-            const w = fabEl.offsetWidth || 56;
-            const h = fabEl.offsetHeight || 56;
+            // Fall back to 40px (the FAB's CSS size) only if offsetWidth
+            // is 0 — happens if called before layout.
+            const w = fabEl.offsetWidth || 40;
+            const h = fabEl.offsetHeight || 40;
             return {
                 left: Math.max(0, Math.min(window.innerWidth - w, left)),
                 top: Math.max(0, Math.min(window.innerHeight - h, top)),
@@ -2053,6 +2055,9 @@ async function initUI() {
         };
         // Move mode: arm one drag session, persist position on release.
         const startMoveMode = () => {
+            // Re-entry guard — bail if move mode is already armed so the
+            // pointerdown / keydown listeners don't accumulate.
+            if (fabEl.classList.contains('dooms-fab-moving')) return;
             fabEl.classList.add('dooms-fab-moving');
             let dragging = false, moved = false;
             let startX = 0, startY = 0, startLeft = 0, startTop = 0, activePointerId = null;

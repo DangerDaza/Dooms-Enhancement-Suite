@@ -14360,7 +14360,7 @@ body.dooms-hide-st-topbar #top-bar {
     margin: 0 !important;
     border: 0 !important;
     overflow: visible;
-    flex: 0 0 0 !important;
+    flex: 0 0 0px !important;
 }
 
 body.dooms-hide-st-topbar #top-settings-holder {
@@ -14446,9 +14446,6 @@ body.dooms-hide-st-topbar .openDrawer {
 
 .dooms-fab-btn .doom-icon {
     position: relative;
-    /* Establish a stacking context so ::before can sit behind the
-       D (z-index: -1) without falling behind the button itself. */
-    isolation: isolate;
     width: 40px;
     height: 40px;
     transition: transform 0.2s ease;
