@@ -743,6 +743,24 @@ async function initUI() {
         e.preventDefault(); e.stopPropagation();
         const $popup = $('#rpg-expressions-info-popup');
         const open = $popup.prop('hidden');
+        if (open) {
+            // Switch to position:fixed anchored to the button so the popup
+            // escapes any clipping by the accordion-body or other ancestor
+            // overflow rules. Right-align under the button; clamp to viewport.
+            const rect = this.getBoundingClientRect();
+            const popupWidth = Math.min(420, window.innerWidth - 16);
+            const rightOffset = Math.max(8, window.innerWidth - rect.right);
+            $popup.css({
+                position: 'fixed',
+                top: (rect.bottom + 6) + 'px',
+                right: rightOffset + 'px',
+                left: 'auto',
+                width: popupWidth + 'px',
+                'max-height': 'calc(100vh - ' + (rect.bottom + 24) + 'px)',
+                'overflow-y': 'auto',
+                'z-index': 1000,
+            });
+        }
         $popup.prop('hidden', !open);
         $(this).attr('aria-expanded', open ? 'true' : 'false');
     });
