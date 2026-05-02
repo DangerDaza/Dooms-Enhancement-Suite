@@ -521,15 +521,12 @@
 
                     </div>
                 </details>
-                    <details class="rpg-subsection-collapse">
-                        <summary class="rpg-subsection-collapse-header">
-                            <span>Roster</span>
-                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
-                        </summary>
-                        <div class="rpg-subsection-collapse-body">
                     <!-- Per-Chat Character Tracking is always on now; row hidden but
                          the input stays in the DOM so existing JS handlers don't
-                         break. Default value is forced true on settings load. -->
+                         break. Default value is forced true on settings load.
+                         The Roster subsection used to wrap this row, but with
+                         nothing else in it the drop-down was empty — section
+                         removed entirely. -->
                     <div class="rpg-setting-row" style="display:none;" aria-hidden="true">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Chat Character Tracking</span>
@@ -541,9 +538,6 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-
-                    </div>
-                </details>
                     <details class="rpg-subsection-collapse">
                         <summary class="rpg-subsection-collapse-header">
                             <span>Portraits</span>
