@@ -746,6 +746,12 @@ async function initUI() {
         $popup.prop('hidden', !open);
         $(this).attr('aria-expanded', open ? 'true' : 'false');
     });
+    // Popup body clicks shouldn't bubble — when the info popup is rendered
+    // inside a <summary> (collapsible subsection header), the click would
+    // otherwise toggle the surrounding <details>.
+    $(document).on('click', '#rpg-expressions-info-popup', function (e) {
+        e.stopPropagation();
+    });
     $(document).on('click', function (e) {
         const $popup = $('#rpg-expressions-info-popup');
         if (!$popup.length || $popup.prop('hidden')) return;
@@ -1732,7 +1738,14 @@ async function initUI() {
     // Hide the 'Open Character Roster' settings button when PCP is off —
     // the Workshop is part of the Present Characters Panel feature set.
     $('#rpg-open-character-roster').toggle(extensionSettings.showPortraitBar !== false);
-    $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
+    // Per-chat character tracking is always on now; force the setting
+    // and the (hidden) toggle to true so legacy users with it off are
+    // migrated and any code reading the toggle still gets a truthy value.
+    if (extensionSettings.perChatCharacterTracking !== true) {
+        extensionSettings.perChatCharacterTracking = true;
+        try { saveSettings(); } catch (e) {}
+    }
+    $('#rpg-pb-per-chat-tracking').prop('checked', true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');
     $('#rpg-pb-card-height').val(pb.cardHeight ?? 150);

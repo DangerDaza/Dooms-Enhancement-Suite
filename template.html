@@ -308,7 +308,12 @@
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
-                    <div class="rpg-subsection-label">Workshop</div>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Workshop</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <button id="rpg-open-character-roster" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-users-rectangle"></i> Open Character Roster
@@ -317,7 +322,14 @@
                     <p class="rpg-note-text" style="margin-top:4px;">Browse every character, edit one, or add a new one.
                         Opens the Character Workshop on click.</p>
 
-                    <div class="rpg-subsection-label">Layout</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Layout</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Position</span>
@@ -415,7 +427,10 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-subsection-label rpg-subsection-with-info">
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header rpg-subsection-with-info">
                         <span>Expressions</span>
                         <button type="button" class="rpg-section-info-btn" id="rpg-expressions-info-btn"
                             aria-label="Help: Expressions" aria-expanded="false">
@@ -445,7 +460,9 @@
                                     Expression in Tooltip</strong> below to see which label was picked when you hover a
                                 portrait.</p>
                         </div>
-                    </div>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Character Expressions</span>
@@ -502,8 +519,18 @@
                         </label>
                     </div>
 
-                    <div class="rpg-subsection-label">Roster</div>
-                    <div class="rpg-setting-row">
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Roster</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                    <!-- Per-Chat Character Tracking is always on now; row hidden but
+                         the input stays in the DOM so existing JS handlers don't
+                         break. Default value is forced true on settings load. -->
+                    <div class="rpg-setting-row" style="display:none;" aria-hidden="true">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Chat Character Tracking</span>
                             <span class="rpg-setting-hint">Characters and removed list are tracked per-chat instead of
@@ -515,7 +542,14 @@
                         </label>
                     </div>
 
-                    <div class="rpg-subsection-label">Portraits</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Portraits</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Export Portraits</span>
@@ -528,7 +562,14 @@
                         </button>
                     </div>
 
-                    <div class="rpg-subsection-label">Card Size</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Card Size</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Card Width</span>
@@ -573,7 +614,14 @@
                         <i class="fa-solid fa-rotate-left"></i> Restore Card Defaults
                     </button>
 
-                    <div class="rpg-subsection-label">Colors</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Colors</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Bar Background</span>
                         <input type="color" id="rpg-pb-bar-bg-color" class="rpg-color-swatch" value="#000000" />
@@ -646,6 +694,8 @@
                             <span id="rpg-pb-absent-opacity-value" class="rpg-slider-value">45%</span>
                         </div>
                     </div>
+                    </div>
+                </details>
                 </div>
             </div>
 

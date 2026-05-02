@@ -6530,6 +6530,56 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     padding-top: 0;
 }
 
+/* Collapsible subsection — wraps a <details>/<summary> so any subsection
+   can fold away. Same uppercase-tracking look as .rpg-subsection-label
+   but the chevron rotates 180° on open. Use:
+     <details class="rpg-subsection-collapse">
+       <summary class="rpg-subsection-collapse-header">
+         <span>Layout</span>
+         <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+       </summary>
+       <div class="rpg-subsection-collapse-body"> ... rows ... </div>
+     </details> */
+.rpg-subsection-collapse {
+    margin: 10px 0 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.rpg-subsection-collapse:first-child,
+.rpg-subsection-collapse[data-first="true"] {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+}
+.rpg-subsection-collapse-header {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    padding: 2px 0;
+    transition: color 0.15s ease;
+}
+.rpg-subsection-collapse-header::-webkit-details-marker { display: none; }
+.rpg-subsection-collapse-header:hover { color: var(--rpg-text, #aaa); }
+.rpg-subsection-chevron {
+    font-size: 0.85em;
+    transition: transform 0.2s ease;
+    opacity: 0.6;
+}
+.rpg-subsection-collapse[open] > .rpg-subsection-collapse-header .rpg-subsection-chevron {
+    transform: rotate(180deg);
+}
+.rpg-subsection-collapse-body {
+    padding-top: 6px;
+}
+
 /* Toggle switch (replaces checkboxes) */
 .rpg-toggle-switch {
     position: relative;
