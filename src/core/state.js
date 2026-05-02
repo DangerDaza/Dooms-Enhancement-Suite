@@ -301,6 +301,7 @@ export let extensionSettings = {
         showAvatars: true,                // Show character portrait avatars
         showAuthorNames: true,            // Show character name headers
         showNarratorLabel: true,          // Show "Narrator" label for narration blocks
+        skipStyledDivs: true,             // Use style-based fallback to skip likely GFX blocks when comment markers are absent
         narratorItalic: true,             // Italicize narrator text
         hideStAvatar: false,              // Hide SillyTavern's default character avatar when bubbles active
     },

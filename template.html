@@ -1,4 +1,3 @@
-
 <!-- Settings Modal -->
 <div id="rpg-settings-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
     aria-labelledby="rpg-settings-title">
@@ -41,7 +40,8 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <button id="rpg-manual-update" class="rpg-accordion-action-btn" type="button" style="display:none; margin-bottom:8px;">
+                    <button id="rpg-manual-update" class="rpg-accordion-action-btn" type="button"
+                        style="display:none; margin-bottom:8px;">
                         <i class="fa-solid fa-arrows-rotate"></i> Refresh Tracker Data
                     </button>
                     <div class="rpg-setting-row">
@@ -95,33 +95,42 @@
                         <div class="rpg-subsection-label">External API</div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Base URL</span>
-                            <input type="text" id="rpg-external-base-url" class="rpg-accordion-input" placeholder="https://api.openai.com/v1" />
+                            <input type="text" id="rpg-external-base-url" class="rpg-accordion-input"
+                                placeholder="https://api.openai.com/v1" />
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">API Key</span>
                             <div style="display: flex; gap: 6px; align-items: center;">
-                                <input type="password" id="rpg-external-api-key" class="rpg-accordion-input" placeholder="sk-..." style="flex:1;" />
-                                <button id="rpg-toggle-api-key-visibility" class="rpg-accordion-mini-btn" type="button" title="Show/Hide">
+                                <input type="password" id="rpg-external-api-key" class="rpg-accordion-input"
+                                    placeholder="sk-..." style="flex:1;" />
+                                <button id="rpg-toggle-api-key-visibility" class="rpg-accordion-mini-btn" type="button"
+                                    title="Show/Hide">
                                     <i class="fa-solid fa-eye"></i>
                                 </button>
                             </div>
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Model</span>
-                            <input type="text" id="rpg-external-model" class="rpg-accordion-input" placeholder="gpt-4o-mini" />
+                            <input type="text" id="rpg-external-model" class="rpg-accordion-input"
+                                placeholder="gpt-4o-mini" />
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Max Tokens</span>
-                            <input type="number" id="rpg-external-max-tokens" class="rpg-accordion-input" value="8192" style="width:80px;" />
+                            <input type="number" id="rpg-external-max-tokens" class="rpg-accordion-input" value="8192"
+                                style="width:80px;" />
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Temperature</span>
-                            <input type="number" id="rpg-external-temperature" class="rpg-accordion-input" value="0.7" step="0.1" style="width:80px;" />
+                            <input type="number" id="rpg-external-temperature" class="rpg-accordion-input" value="0.7"
+                                step="0.1" style="width:80px;" />
                         </div>
-                        <button id="rpg-test-external-api" class="rpg-accordion-action-btn" type="button" style="margin-top:8px;">
+                        <button id="rpg-test-external-api" class="rpg-accordion-action-btn" type="button"
+                            style="margin-top:8px;">
                             <i class="fa-solid fa-plug"></i> Test Connection
                         </button>
-                        <div id="rpg-external-api-test-result" style="margin-top:6px; padding:6px; border-radius:4px; display:none; font-size:0.82em;"></div>
+                        <div id="rpg-external-api-test-result"
+                            style="margin-top:6px; padding:6px; border-radius:4px; display:none; font-size:0.82em;">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -259,25 +268,30 @@
                             <div class="rpg-color-chip">
                                 <input type="color" id="rpg-custom-bg" class="rpg-color-swatch" value="#1a1a2e" />
                                 <span>BG</span>
-                                <input type="range" id="rpg-custom-bg-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <input type="range" id="rpg-custom-bg-opacity" class="rpg-color-opacity" min="0"
+                                    max="100" value="100" />
                                 <span id="rpg-custom-bg-opacity-value" class="rpg-opacity-value">100%</span>
                             </div>
                             <div class="rpg-color-chip">
                                 <input type="color" id="rpg-custom-accent" class="rpg-color-swatch" value="#16213e" />
                                 <span>Accent</span>
-                                <input type="range" id="rpg-custom-accent-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <input type="range" id="rpg-custom-accent-opacity" class="rpg-color-opacity" min="0"
+                                    max="100" value="100" />
                                 <span id="rpg-custom-accent-opacity-value" class="rpg-opacity-value">100%</span>
                             </div>
                             <div class="rpg-color-chip">
                                 <input type="color" id="rpg-custom-text" class="rpg-color-swatch" value="#eaeaea" />
                                 <span>Text</span>
-                                <input type="range" id="rpg-custom-text-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <input type="range" id="rpg-custom-text-opacity" class="rpg-color-opacity" min="0"
+                                    max="100" value="100" />
                                 <span id="rpg-custom-text-opacity-value" class="rpg-opacity-value">100%</span>
                             </div>
                             <div class="rpg-color-chip">
-                                <input type="color" id="rpg-custom-highlight" class="rpg-color-swatch" value="#e94560" />
+                                <input type="color" id="rpg-custom-highlight" class="rpg-color-swatch"
+                                    value="#e94560" />
                                 <span>Highlight</span>
-                                <input type="range" id="rpg-custom-highlight-opacity" class="rpg-color-opacity" min="0" max="100" value="100" />
+                                <input type="range" id="rpg-custom-highlight-opacity" class="rpg-color-opacity" min="0"
+                                    max="100" value="100" />
                                 <span id="rpg-custom-highlight-opacity-value" class="rpg-opacity-value">100%</span>
                             </div>
                         </div>
@@ -300,7 +314,8 @@
                             <i class="fa-solid fa-users-rectangle"></i> Open Character Roster
                         </button>
                     </div>
-                    <p class="rpg-note-text" style="margin-top:4px;">Browse every character, edit one, or add a new one. Opens the Character Workshop on click.</p>
+                    <p class="rpg-note-text" style="margin-top:4px;">Browse every character, edit one, or add a new one.
+                        Opens the Character Workshop on click.</p>
 
                     <div class="rpg-subsection-label">Layout</div>
                     <div class="rpg-setting-row">
@@ -320,7 +335,8 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Columns</span>
-                                <span class="rpg-setting-hint">Card grid width — 1 keeps the bar narrow, 2 fits more characters per row.</span>
+                                <span class="rpg-setting-hint">Card grid width — 1 keeps the bar narrow, 2 fits more
+                                    characters per row.</span>
                             </div>
                             <select id="rpg-pb-side-columns" class="rpg-accordion-select">
                                 <option value="1">1 wide</option>
@@ -330,7 +346,8 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Panel Height</span>
-                                <span class="rpg-setting-hint">Auto fits the bar to the number of characters and centers it vertically; Full stretches it top to bottom.</span>
+                                <span class="rpg-setting-hint">Auto fits the bar to the number of characters and centers
+                                    it vertically; Full stretches it top to bottom.</span>
                             </div>
                             <select id="rpg-pb-side-height" class="rpg-accordion-select">
                                 <option value="auto">Auto (fit content)</option>
@@ -400,26 +417,40 @@
                     </div>
                     <div class="rpg-subsection-label rpg-subsection-with-info">
                         <span>Expressions</span>
-                        <button type="button" class="rpg-section-info-btn" id="rpg-expressions-info-btn" aria-label="Help: Expressions" aria-expanded="false">
+                        <button type="button" class="rpg-section-info-btn" id="rpg-expressions-info-btn"
+                            aria-label="Help: Expressions" aria-expanded="false">
                             <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                         </button>
                         <div class="rpg-section-info-popup" id="rpg-expressions-info-popup" hidden>
                             <h5>DES handles expressions</h5>
-                            <p>You do <strong>not</strong> need SillyTavern's separate <em>Expressions</em> extension. With <strong>Per-Character Expressions</strong> on, DES classifies each character's mood every turn and swaps the matching sprite onto their portrait card.</p>
+                            <p>You do <strong>not</strong> need SillyTavern's separate <em>Expressions</em> extension.
+                                With <strong>Per-Character Expressions</strong> on, DES classifies each character's mood
+                                every turn and swaps the matching sprite onto their portrait card.</p>
                             <h5>How to add sprites for a character</h5>
                             <ol>
-                                <li>Open the character in <strong>Character Workshop</strong> &rarr; <strong>Appearance</strong> tab.</li>
+                                <li>Open the character in <strong>Character Workshop</strong> &rarr;
+                                    <strong>Appearance</strong> tab.</li>
                                 <li>Click <strong>Open expression folder</strong>.</li>
-                                <li>Drop image files <strong>directly into that folder</strong> (not into a sub-folder). <code>.png</code> and <code>.webp</code> both work. Name them after the emotion the classifier outputs: <code>joy</code>, <code>sadness</code>, <code>annoyance</code>, <code>optimism</code>, <code>neutral</code>, <code>love</code>, <code>nervousness</code>, <code>relief</code>, <code>remorse</code>, <code>realization</code>, <code>surprise</code>, etc. &mdash; e.g. <code>joy.webp</code>, <code>sadness.png</code>.</li>
-                                <li>Reload SillyTavern. The next AI message will start swapping sprites automatically.</li>
+                                <li>Drop image files <strong>directly into that folder</strong> (not into a sub-folder).
+                                    <code>.png</code> and <code>.webp</code> both work. Name them after the emotion the
+                                    classifier outputs: <code>joy</code>, <code>sadness</code>, <code>annoyance</code>,
+                                    <code>optimism</code>, <code>neutral</code>, <code>love</code>,
+                                    <code>nervousness</code>, <code>relief</code>, <code>remorse</code>,
+                                    <code>realization</code>, <code>surprise</code>, etc. &mdash; e.g.
+                                    <code>joy.webp</code>, <code>sadness.png</code>.</li>
+                                <li>Reload SillyTavern. The next AI message will start swapping sprites automatically.
+                                </li>
                             </ol>
-                            <p class="rpg-section-info-tip"><i class="fa-solid fa-lightbulb"></i> Turn on <strong>Show Expression in Tooltip</strong> below to see which label was picked when you hover a portrait.</p>
+                            <p class="rpg-section-info-tip"><i class="fa-solid fa-lightbulb"></i> Turn on <strong>Show
+                                    Expression in Tooltip</strong> below to see which label was picked when you hover a
+                                portrait.</p>
                         </div>
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Character Expressions</span>
-                            <span class="rpg-setting-hint">Classify emotions per character and display expression sprites on portrait cards</span>
+                            <span class="rpg-setting-hint">Classify emotions per character and display expression
+                                sprites on portrait cards</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-sync-expressions" />
@@ -440,7 +471,8 @@
                         <div id="rpg-expression-batch-row" class="rpg-setting-row" style="display:none;">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Batch Classification</span>
-                                <span class="rpg-setting-hint">Classify all characters in one LLM call (saves tokens)</span>
+                                <span class="rpg-setting-hint">Classify all characters in one LLM call (saves
+                                    tokens)</span>
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="rpg-expression-batch-mode" />
@@ -461,7 +493,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Show Expression in Tooltip</span>
-                            <span class="rpg-setting-hint">Hovering a portrait card shows "Name — expression" when a sprite is active</span>
+                            <span class="rpg-setting-hint">Hovering a portrait card shows "Name — expression" when a
+                                sprite is active</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-show-expression-in-tooltip" />
@@ -473,7 +506,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Chat Character Tracking</span>
-                            <span class="rpg-setting-hint">Characters and removed list are tracked per-chat instead of globally</span>
+                            <span class="rpg-setting-hint">Characters and removed list are tracked per-chat instead of
+                                globally</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-per-chat-tracking" />
@@ -485,9 +519,11 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Export Portraits</span>
-                            <span class="rpg-setting-hint">Download all uploaded character portraits as individual image files in a zip</span>
+                            <span class="rpg-setting-hint">Download all uploaded character portraits as individual image
+                                files in a zip</span>
                         </div>
-                        <button id="rpg-export-portraits" class="rpg-accordion-action-btn" type="button" style="width:auto; flex-shrink:0;">
+                        <button id="rpg-export-portraits" class="rpg-accordion-action-btn" type="button"
+                            style="width:auto; flex-shrink:0;">
                             <i class="fa-solid fa-download"></i> Export
                         </button>
                     </div>
@@ -498,7 +534,8 @@
                             <span class="rpg-setting-label">Card Width</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-card-width" class="rpg-range-slider" min="60" max="200" value="110" />
+                            <input type="range" id="rpg-pb-card-width" class="rpg-range-slider" min="60" max="200"
+                                value="110" />
                             <span id="rpg-pb-card-width-value" class="rpg-slider-value">110px</span>
                         </div>
                     </div>
@@ -507,7 +544,8 @@
                             <span class="rpg-setting-label">Card Height</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-card-height" class="rpg-range-slider" min="60" max="260" value="150" />
+                            <input type="range" id="rpg-pb-card-height" class="rpg-range-slider" min="60" max="260"
+                                value="150" />
                             <span id="rpg-pb-card-height-value" class="rpg-slider-value">150px</span>
                         </div>
                     </div>
@@ -516,7 +554,8 @@
                             <span class="rpg-setting-label">Card Spacing</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-card-gap" class="rpg-range-slider" min="0" max="24" value="8" />
+                            <input type="range" id="rpg-pb-card-gap" class="rpg-range-slider" min="0" max="24"
+                                value="8" />
                             <span id="rpg-pb-card-gap-value" class="rpg-slider-value">8px</span>
                         </div>
                     </div>
@@ -525,7 +564,8 @@
                             <span class="rpg-setting-label">Card Roundness</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-card-radius" class="rpg-range-slider" min="0" max="30" value="8" />
+                            <input type="range" id="rpg-pb-card-radius" class="rpg-range-slider" min="0" max="30"
+                                value="8" />
                             <span id="rpg-pb-card-radius-value" class="rpg-slider-value">8px</span>
                         </div>
                     </div>
@@ -543,7 +583,8 @@
                             <span class="rpg-setting-label">Bar Background Opacity</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-bar-bg-opacity" class="rpg-range-slider" min="0" max="100" value="20" />
+                            <input type="range" id="rpg-pb-bar-bg-opacity" class="rpg-range-slider" min="0" max="100"
+                                value="20" />
                             <span id="rpg-pb-bar-bg-opacity-value" class="rpg-slider-value">20%</span>
                         </div>
                     </div>
@@ -560,7 +601,8 @@
                             <span class="rpg-setting-label">Card Border Opacity</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-card-border-opacity" class="rpg-range-slider" min="0" max="100" value="6" />
+                            <input type="range" id="rpg-pb-card-border-opacity" class="rpg-range-slider" min="0"
+                                max="100" value="6" />
                             <span id="rpg-pb-card-border-opacity-value" class="rpg-slider-value">6%</span>
                         </div>
                     </div>
@@ -573,7 +615,8 @@
                             <span class="rpg-setting-label">Hover Glow Intensity</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-hover-glow-intensity" class="rpg-range-slider" min="0" max="30" value="12" />
+                            <input type="range" id="rpg-pb-hover-glow-intensity" class="rpg-range-slider" min="0"
+                                max="30" value="12" />
                             <span id="rpg-pb-hover-glow-intensity-value" class="rpg-slider-value">12px</span>
                         </div>
                     </div>
@@ -587,7 +630,8 @@
                             <span class="rpg-setting-hint">Darkness of name gradient</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-name-opacity" class="rpg-range-slider" min="0" max="100" value="85" />
+                            <input type="range" id="rpg-pb-name-opacity" class="rpg-range-slider" min="0" max="100"
+                                value="85" />
                             <span id="rpg-pb-name-opacity-value" class="rpg-slider-value">85%</span>
                         </div>
                     </div>
@@ -597,7 +641,8 @@
                             <span class="rpg-setting-hint">How faded absent characters look</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-pb-absent-opacity" class="rpg-range-slider" min="10" max="100" value="45" />
+                            <input type="range" id="rpg-pb-absent-opacity" class="rpg-range-slider" min="10" max="100"
+                                value="45" />
                             <span id="rpg-pb-absent-opacity-value" class="rpg-slider-value">45%</span>
                         </div>
                     </div>
@@ -667,33 +712,47 @@
                             </label>
                         </div>
                         <div class="rpg-subsection-label">Approved Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that are allowed and won't trigger the modal</div>
+                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that are allowed and won't
+                            trigger the modal</div>
                         <div id="rpg-nb-approved-tags" class="dooms-nb-tag-list"></div>
                         <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-approved" class="rpg-accordion-input" placeholder="Add approved name..." style="flex:1;" />
-                            <button id="rpg-nb-add-approved-btn" class="menu_button" style="margin-left:6px;">Add</button>
+                            <input type="text" id="rpg-nb-add-approved" class="rpg-accordion-input"
+                                placeholder="Add approved name..." style="flex:1;" />
+                            <button id="rpg-nb-add-approved-btn" class="menu_button"
+                                style="margin-left:6px;">Add</button>
                         </div>
                         <div class="rpg-subsection-label">Name Mappings</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Automatically replace banned names with approved alternatives</div>
+                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Automatically replace banned names with
+                            approved alternatives</div>
                         <div id="rpg-nb-mappings-container"></div>
                         <div class="rpg-setting-row" style="margin-top:6px; gap:6px;">
-                            <input type="text" id="rpg-nb-add-mapping-from" class="rpg-accordion-input" placeholder="Banned name..." style="flex:1;" />
+                            <input type="text" id="rpg-nb-add-mapping-from" class="rpg-accordion-input"
+                                placeholder="Banned name..." style="flex:1;" />
                             <span style="opacity:0.5;">&rarr;</span>
-                            <input type="text" id="rpg-nb-add-mapping-to" class="rpg-accordion-input" placeholder="Replacement..." style="flex:1;" />
-                            <button id="rpg-nb-add-mapping-btn" class="menu_button" style="margin-left:6px;">Add</button>
+                            <input type="text" id="rpg-nb-add-mapping-to" class="rpg-accordion-input"
+                                placeholder="Replacement..." style="flex:1;" />
+                            <button id="rpg-nb-add-mapping-btn" class="menu_button"
+                                style="margin-left:6px;">Add</button>
                         </div>
                         <div class="rpg-subsection-label">Ignored Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that will never be flagged, even if unrecognized</div>
+                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that will never be flagged, even
+                            if unrecognized</div>
                         <div id="rpg-nb-ignored-tags" class="dooms-nb-tag-list"></div>
                         <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-ignored" class="rpg-accordion-input" placeholder="Add ignored name..." style="flex:1;" />
-                            <button id="rpg-nb-add-ignored-btn" class="menu_button" style="margin-left:6px;">Add</button>
+                            <input type="text" id="rpg-nb-add-ignored" class="rpg-accordion-input"
+                                placeholder="Add ignored name..." style="flex:1;" />
+                            <button id="rpg-nb-add-ignored-btn" class="menu_button"
+                                style="margin-left:6px;">Add</button>
                         </div>
                         <div class="rpg-subsection-label">Custom Excluded Words</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Common words that should never be treated as character names (one per line)</div>
-                        <textarea id="rpg-nb-excluded-words" class="rpg-accordion-input" rows="3" placeholder="e.g., Tavern&#10;Guild&#10;Dragon" style="width:100%;resize:vertical;"></textarea>
+                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Common words that should never be
+                            treated as character names (one per line)</div>
+                        <textarea id="rpg-nb-excluded-words" class="rpg-accordion-input" rows="3"
+                            placeholder="e.g., Tavern&#10;Guild&#10;Dragon"
+                            style="width:100%;resize:vertical;"></textarea>
                         <div style="margin-top:12px;">
-                            <button id="rpg-nb-clear-all" class="menu_button" style="color:#e94560;">Clear All Name Ban Data</button>
+                            <button id="rpg-nb-clear-all" class="menu_button" style="color:#e94560;">Clear All Name Ban
+                                Data</button>
                         </div>
                     </div>
                 </div>
@@ -710,7 +769,8 @@
                 <div class="rpg-accordion-body">
                     <div class="rpg-dc-api-warning" style="margin-bottom: 10px;">
                         <i class="fa-solid fa-triangle-exclamation"></i>
-                        <strong>Deprecated.</strong> This feature is no longer being actively developed. It remains available in case someone would like to pick up where development left off.
+                        <strong>Deprecated.</strong> This feature is no longer being actively developed. It remains
+                        available in case someone would like to pick up where development left off.
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
@@ -739,7 +799,8 @@
                                 <span class="rpg-setting-hint">Background intensity of the active pill</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-gradient-opacity" class="rpg-range-slider" min="5" max="80" value="30" />
+                                <input type="range" id="rpg-tts-gradient-opacity" class="rpg-range-slider" min="5"
+                                    max="80" value="30" />
                                 <span id="rpg-tts-gradient-opacity-value" class="rpg-slider-value">30%</span>
                             </div>
                         </div>
@@ -749,7 +810,8 @@
                                 <span class="rpg-setting-hint">Box shadow blur (0 = no glow)</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-glow-intensity" class="rpg-range-slider" min="0" max="40" value="16" />
+                                <input type="range" id="rpg-tts-glow-intensity" class="rpg-range-slider" min="0"
+                                    max="40" value="16" />
                                 <span id="rpg-tts-glow-intensity-value" class="rpg-slider-value">16px</span>
                             </div>
                         </div>
@@ -765,7 +827,8 @@
                         </div>
                         <div class="rpg-setting-row" id="rpg-tts-text-color-row" style="display: none;">
                             <span class="rpg-setting-label">Text Color</span>
-                            <input type="color" id="rpg-tts-active-text-color" class="rpg-color-swatch" value="#ffffff" />
+                            <input type="color" id="rpg-tts-active-text-color" class="rpg-color-swatch"
+                                value="#ffffff" />
                         </div>
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
@@ -773,7 +836,8 @@
                                 <span class="rpg-setting-hint">Roundness of the pill</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-border-radius" class="rpg-range-slider" min="0" max="20" value="4" />
+                                <input type="range" id="rpg-tts-border-radius" class="rpg-range-slider" min="0" max="20"
+                                    value="4" />
                                 <span id="rpg-tts-border-radius-value" class="rpg-slider-value">4px</span>
                             </div>
                         </div>
@@ -785,7 +849,8 @@
                                 <span class="rpg-setting-hint">Already-spoken sentences</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-read-opacity" class="rpg-range-slider" min="10" max="100" value="35" />
+                                <input type="range" id="rpg-tts-read-opacity" class="rpg-range-slider" min="10"
+                                    max="100" value="35" />
                                 <span id="rpg-tts-read-opacity-value" class="rpg-slider-value">35%</span>
                             </div>
                         </div>
@@ -795,7 +860,8 @@
                                 <span class="rpg-setting-hint">Not-yet-spoken sentences</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-unread-opacity" class="rpg-range-slider" min="10" max="100" value="55" />
+                                <input type="range" id="rpg-tts-unread-opacity" class="rpg-range-slider" min="10"
+                                    max="100" value="55" />
                                 <span id="rpg-tts-unread-opacity-value" class="rpg-slider-value">55%</span>
                             </div>
                         </div>
@@ -870,7 +936,8 @@
                         </label>
                     </div>
                     <div class="rpg-subsection-label" style="margin-top: 8px;">Optional Fields</div>
-                    <div class="rpg-setting-hint" style="margin-bottom: 6px;">⚠️ Enabling too many optional fields may reduce your AI's tracking reliability. Only enable what your roleplay needs.</div>
+                    <div class="rpg-setting-hint" style="margin-bottom: 6px;">⚠️ Enabling too many optional fields may
+                        reduce your AI's tracking reliability. Only enable what your roleplay needs.</div>
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Moon Phase</span>
                         <label class="rpg-toggle-switch">
@@ -937,7 +1004,8 @@
                             <span class="rpg-setting-label">Font Size</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-st-font-size" class="rpg-range-slider" min="60" max="120" value="82" />
+                            <input type="range" id="rpg-st-font-size" class="rpg-range-slider" min="60" max="120"
+                                value="82" />
                             <span id="rpg-st-font-size-value" class="rpg-slider-value">82%</span>
                         </div>
                     </div>
@@ -946,7 +1014,8 @@
                             <span class="rpg-setting-label">Border Radius</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-st-border-radius" class="rpg-range-slider" min="0" max="20" value="8" />
+                            <input type="range" id="rpg-st-border-radius" class="rpg-range-slider" min="0" max="20"
+                                value="8" />
                             <span id="rpg-st-border-radius-value" class="rpg-slider-value">8px</span>
                         </div>
                     </div>
@@ -955,7 +1024,8 @@
                             <span class="rpg-setting-label">Padding</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-st-padding" class="rpg-range-slider" min="4" max="24" value="10" />
+                            <input type="range" id="rpg-st-padding" class="rpg-range-slider" min="4" max="24"
+                                value="10" />
                             <span id="rpg-st-padding-value" class="rpg-slider-value">10px</span>
                         </div>
                     </div>
@@ -964,7 +1034,8 @@
                             <span class="rpg-setting-label">Accent Border Width</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-st-border-width" class="rpg-range-slider" min="0" max="8" value="3" />
+                            <input type="range" id="rpg-st-border-width" class="rpg-range-slider" min="0" max="8"
+                                value="3" />
                             <span id="rpg-st-border-width-value" class="rpg-slider-value">3px</span>
                         </div>
                     </div>
@@ -972,7 +1043,8 @@
                     <div class="rpg-subsection-label">Colors</div>
 
                     <!-- Message shown when theme-controlled is ON -->
-                    <div id="rpg-st-theme-msg" style="display:none; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--rpg-text, #aaa); font-size: 0.82em; font-style: italic; text-align: center;">
+                    <div id="rpg-st-theme-msg"
+                        style="display:none; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--rpg-text, #aaa); font-size: 0.82em; font-style: italic; text-align: center;">
                         🎨 Controlled by theme — untoggle to edit colors
                     </div>
 
@@ -987,7 +1059,8 @@
                                 <span class="rpg-setting-label">Background Opacity</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-bg-opacity" class="rpg-range-slider" min="0" max="40" value="8" />
+                                <input type="range" id="rpg-st-bg-opacity" class="rpg-range-slider" min="0" max="40"
+                                    value="8" />
                                 <span id="rpg-st-bg-opacity-value" class="rpg-slider-value">8%</span>
                             </div>
                         </div>
@@ -1000,7 +1073,8 @@
                                 <span class="rpg-setting-label">Border Opacity</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-border-opacity" class="rpg-range-slider" min="0" max="50" value="15" />
+                                <input type="range" id="rpg-st-border-opacity" class="rpg-range-slider" min="0" max="50"
+                                    value="15" />
                                 <span id="rpg-st-border-opacity-value" class="rpg-slider-value">15%</span>
                             </div>
                         </div>
@@ -1009,7 +1083,8 @@
                             <input type="color" id="rpg-st-accent-color" class="rpg-color-swatch" value="#e94560" />
                         </div>
                         <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Field Label Color <small style="opacity:0.6">(Time:, Location:…)</small></span>
+                            <span class="rpg-setting-label">Field Label Color <small style="opacity:0.6">(Time:,
+                                    Location:…)</small></span>
                             <input type="color" id="rpg-st-label-color" class="rpg-color-swatch" value="#888888" />
                         </div>
                         <div class="rpg-setting-row">
@@ -1025,7 +1100,8 @@
                                 <span class="rpg-setting-label">Character Badge Opacity</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-st-badge-opacity" class="rpg-range-slider" min="0" max="40" value="12" />
+                                <input type="range" id="rpg-st-badge-opacity" class="rpg-range-slider" min="0" max="40"
+                                    value="12" />
                                 <span id="rpg-st-badge-opacity-value" class="rpg-slider-value">12%</span>
                             </div>
                         </div>
@@ -1062,7 +1138,9 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Enable Bunny Mo Integration</span>
-                            <span class="rpg-setting-hint">Adds Character Sheet support to Present Characters. Use Bunny Mo's !fullsheet command to generate a sheet, then import it via the scroll button on the message.</span>
+                            <span class="rpg-setting-hint">Adds Character Sheet support to Present Characters. Use Bunny
+                                Mo's !fullsheet command to generate a sheet, then import it via the scroll button on the
+                                message.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-bunny-mo" />
@@ -1084,7 +1162,9 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Enable Inline Banners</span>
-                            <span class="rpg-setting-hint">Show cinematic transition cards in the chat when the story moves to a new location or makes a time jump between messages. No API calls — reads existing tracker data.</span>
+                            <span class="rpg-setting-hint">Show cinematic transition cards in the chat when the story
+                                moves to a new location or makes a time jump between messages. No API calls — reads
+                                existing tracker data.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-ib-toggle" />
@@ -1121,7 +1201,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Enable Doom Counter</span>
-                            <span class="rpg-setting-hint">Monitors tension and forces plot twists when the story stays too calm</span>
+                            <span class="rpg-setting-hint">Monitors tension and forces plot twists when the story stays
+                                too calm</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-doom-counter" />
@@ -1131,7 +1212,8 @@
 
                     <div class="rpg-dc-api-warning">
                         <i class="fa-solid fa-triangle-exclamation"></i>
-                        When the Doom Counter triggers, it will send a separate API request to generate twist options. This uses your active API / model and will consume tokens.
+                        When the Doom Counter triggers, it will send a separate API request to generate twist options.
+                        This uses your active API / model and will consume tokens.
                     </div>
 
                     <div id="rpg-dc-options">
@@ -1139,20 +1221,26 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Low Tension Ceiling</span>
-                                <span class="rpg-setting-hint">What counts as "low" tension. Tension values at or below this number will increment the streak counter. Higher = more sensitive (triggers more often). Lower = only truly calm moments count.</span>
+                                <span class="rpg-setting-hint">What counts as "low" tension. Tension values at or below
+                                    this number will increment the streak counter. Higher = more sensitive (triggers
+                                    more often). Lower = only truly calm moments count.</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-dc-ceiling" class="rpg-range-slider" min="2" max="6" value="4" />
+                                <input type="range" id="rpg-dc-ceiling" class="rpg-range-slider" min="2" max="6"
+                                    value="4" />
                                 <span id="rpg-dc-ceiling-value" class="rpg-slider-value">1-4</span>
                             </div>
                         </div>
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Low Tension Threshold</span>
-                                <span class="rpg-setting-hint">How many consecutive low-tension AI responses are needed before the visible countdown begins. Higher = more patience before intervening. The streak resets if tension rises above the ceiling.</span>
+                                <span class="rpg-setting-hint">How many consecutive low-tension AI responses are needed
+                                    before the visible countdown begins. Higher = more patience before intervening. The
+                                    streak resets if tension rises above the ceiling.</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-dc-threshold" class="rpg-range-slider" min="3" max="10" value="5" />
+                                <input type="range" id="rpg-dc-threshold" class="rpg-range-slider" min="3" max="10"
+                                    value="5" />
                                 <span id="rpg-dc-threshold-value" class="rpg-slider-value">5</span>
                             </div>
                         </div>
@@ -1161,17 +1249,21 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Countdown Length</span>
-                                <span class="rpg-setting-hint">Once the threshold is reached, a visible countdown begins at this number. Each low-tension response ticks it down (very low tension ticks faster). When it hits zero, you'll be prompted to pick a plot twist.</span>
+                                <span class="rpg-setting-hint">Once the threshold is reached, a visible countdown begins
+                                    at this number. Each low-tension response ticks it down (very low tension ticks
+                                    faster). When it hits zero, you'll be prompted to pick a plot twist.</span>
                             </div>
                             <div class="rpg-slider-group">
-                                <input type="range" id="rpg-dc-countdown" class="rpg-range-slider" min="1" max="8" value="3" />
+                                <input type="range" id="rpg-dc-countdown" class="rpg-range-slider" min="1" max="8"
+                                    value="3" />
                                 <span id="rpg-dc-countdown-value" class="rpg-slider-value">3</span>
                             </div>
                         </div>
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Twist Choices</span>
-                                <span class="rpg-setting-hint">How many twist options the AI generates for you to pick from. More choices = more variety but slightly longer API call.</span>
+                                <span class="rpg-setting-hint">How many twist options the AI generates for you to pick
+                                    from. More choices = more variety but slightly longer API call.</span>
                             </div>
                             <select id="rpg-dc-choices" class="rpg-accordion-select">
                                 <option value="2">2 choices</option>
@@ -1185,7 +1277,9 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Trap Mode</span>
-                                <span class="rpg-setting-hint">Silent mode — hides the countdown and debug badge from view. When the counter triggers, it generates one twist and injects it without showing you what it picked. You won't know it's coming.</span>
+                                <span class="rpg-setting-hint">Silent mode — hides the countdown and debug badge from
+                                    view. When the counter triggers, it generates one twist and injects it without
+                                    showing you what it picked. You won't know it's coming.</span>
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="rpg-dc-trap-mode" />
@@ -1211,44 +1305,58 @@
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Low Tension Streak</span>
-                            <span class="rpg-setting-hint"><span id="rpg-dc-streak">0</span> / <span id="rpg-dc-streak-max">5</span></span>
+                            <span class="rpg-setting-hint"><span id="rpg-dc-streak">0</span> / <span
+                                    id="rpg-dc-streak-max">5</span></span>
                         </div>
                         <div class="rpg-setting-row" id="rpg-dc-countdown-display" style="display:none;">
                             <span class="rpg-setting-label">Countdown</span>
                             <span class="rpg-setting-hint" id="rpg-dc-countdown-current">3</span>
                         </div>
 
-                        <div class="rpg-subsection-label rpg-dc-advanced-toggle" style="cursor: pointer; user-select: none;">
-                            Advanced <i class="fa-solid fa-chevron-down rpg-dc-advanced-chevron" style="font-size: 0.7em; margin-left: 4px; transition: transform 0.2s;"></i>
+                        <div class="rpg-subsection-label rpg-dc-advanced-toggle"
+                            style="cursor: pointer; user-select: none;">
+                            Advanced <i class="fa-solid fa-chevron-down rpg-dc-advanced-chevron"
+                                style="font-size: 0.7em; margin-left: 4px; transition: transform 0.2s;"></i>
                         </div>
                         <div class="rpg-dc-advanced-body" style="display: none;">
                             <div class="rpg-setting-row">
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">Context Messages</span>
-                                    <span class="rpg-setting-hint">How many recent chat messages are sent to the AI when generating twist options. More messages = better context awareness but higher token cost. Increase this if twists don't reflect recent events.</span>
+                                    <span class="rpg-setting-hint">How many recent chat messages are sent to the AI when
+                                        generating twist options. More messages = better context awareness but higher
+                                        token cost. Increase this if twists don't reflect recent events.</span>
                                 </div>
                                 <div class="rpg-slider-group">
-                                    <input type="range" id="rpg-dc-context-messages" class="rpg-range-slider" min="5" max="30" value="15" />
+                                    <input type="range" id="rpg-dc-context-messages" class="rpg-range-slider" min="5"
+                                        max="30" value="15" />
                                     <span id="rpg-dc-context-messages-value" class="rpg-slider-value">15</span>
                                 </div>
                             </div>
                             <div class="rpg-setting-row">
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">Message Truncation</span>
-                                    <span class="rpg-setting-hint">Maximum characters kept from each message in the twist prompt. Higher = the AI sees more of each message (important for long prose). Lower = saves tokens. If twists ignore recent physical actions or dialogue, increase this.</span>
+                                    <span class="rpg-setting-hint">Maximum characters kept from each message in the
+                                        twist prompt. Higher = the AI sees more of each message (important for long
+                                        prose). Lower = saves tokens. If twists ignore recent physical actions or
+                                        dialogue, increase this.</span>
                                 </div>
                                 <div class="rpg-slider-group">
-                                    <input type="range" id="rpg-dc-msg-truncation" class="rpg-range-slider" min="200" max="3000" step="100" value="1200" />
+                                    <input type="range" id="rpg-dc-msg-truncation" class="rpg-range-slider" min="200"
+                                        max="3000" step="100" value="1200" />
                                     <span id="rpg-dc-msg-truncation-value" class="rpg-slider-value">1200</span>
                                 </div>
                             </div>
                             <div class="rpg-setting-row">
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">Twist Injection Depth</span>
-                                    <span class="rpg-setting-hint">Where the chosen twist is inserted into the prompt context. 0 = at the very bottom (closest to the AI's next response). Higher values push it further back in the conversation history. Increase if the AI ignores the twist or treats it as old context.</span>
+                                    <span class="rpg-setting-hint">Where the chosen twist is inserted into the prompt
+                                        context. 0 = at the very bottom (closest to the AI's next response). Higher
+                                        values push it further back in the conversation history. Increase if the AI
+                                        ignores the twist or treats it as old context.</span>
                                 </div>
                                 <div class="rpg-slider-group">
-                                    <input type="range" id="rpg-dc-injection-depth" class="rpg-range-slider" min="0" max="10" value="0" />
+                                    <input type="range" id="rpg-dc-injection-depth" class="rpg-range-slider" min="0"
+                                        max="10" value="0" />
                                     <span id="rpg-dc-injection-depth-value" class="rpg-slider-value">0</span>
                                 </div>
                             </div>
@@ -1258,7 +1366,9 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Show in Scene Tracker</span>
-                                <span class="rpg-setting-hint">Adds a live debug badge to scene headers showing the current tension reading, streak count, and countdown status. Useful for verifying the system is working.</span>
+                                <span class="rpg-setting-hint">Adds a live debug badge to scene headers showing the
+                                    current tension reading, streak count, and countdown status. Useful for verifying
+                                    the system is working.</span>
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="rpg-dc-debug-display" />
@@ -1270,7 +1380,8 @@
                             <button id="rpg-dc-trigger-now" class="rpg-accordion-action-btn" type="button">
                                 <i class="fa-solid fa-bolt"></i> Trigger Now
                             </button>
-                            <button id="rpg-dc-reset" class="rpg-accordion-action-btn rpg-dc-reset-btn" type="button" title="Clear all counter state — use if stuck">
+                            <button id="rpg-dc-reset" class="rpg-accordion-action-btn rpg-dc-reset-btn" type="button"
+                                title="Clear all counter state — use if stuck">
                                 <i class="fa-solid fa-rotate-left"></i> Reset
                             </button>
                         </div>
@@ -1304,6 +1415,17 @@
                         <span class="rpg-setting-label">Show Avatars</span>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-cb-show-avatars" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Skip Styled GFX Blocks</span>
+                            <span class="rpg-setting-hint">Fallback for presets without GFX markers; disable if styled
+                                narration gets skipped</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-cb-skip-styled-divs" />
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
@@ -1358,19 +1480,22 @@
                             <span class="rpg-setting-label">Background Opacity</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-bg-opacity" class="rpg-range-slider" min="0" max="30" value="5" />
+                            <input type="range" id="rpg-cb-bg-opacity" class="rpg-range-slider" min="0" max="30"
+                                value="5" />
                             <span id="rpg-cb-bg-opacity-value" class="rpg-slider-value">5%</span>
                         </div>
                     </div>
 
                     <div class="rpg-subsection-label">Bubble Sizing</div>
-                    <p class="rpg-note-text" style="color:#e94560; margin-top:2px; margin-bottom:6px;">Warning: Changing these settings is resource-intensive and may cause lag, especially with long chats.</p>
+                    <p class="rpg-note-text" style="color:#e94560; margin-top:2px; margin-bottom:6px;">Warning: Changing
+                        these settings is resource-intensive and may cause lag, especially with long chats.</p>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Font Size</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-font-size" class="rpg-range-slider" min="60" max="120" value="92" />
+                            <input type="range" id="rpg-cb-font-size" class="rpg-range-slider" min="60" max="120"
+                                value="92" />
                             <span id="rpg-cb-font-size-value" class="rpg-slider-value">92%</span>
                         </div>
                     </div>
@@ -1379,7 +1504,8 @@
                             <span class="rpg-setting-label">Avatar Size</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-avatar-size" class="rpg-range-slider" min="24" max="120" value="40" />
+                            <input type="range" id="rpg-cb-avatar-size" class="rpg-range-slider" min="24" max="120"
+                                value="40" />
                             <span id="rpg-cb-avatar-size-value" class="rpg-slider-value">40px</span>
                         </div>
                     </div>
@@ -1388,7 +1514,8 @@
                             <span class="rpg-setting-label">Border Radius</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-border-radius" class="rpg-range-slider" min="0" max="20" value="6" />
+                            <input type="range" id="rpg-cb-border-radius" class="rpg-range-slider" min="0" max="20"
+                                value="6" />
                             <span id="rpg-cb-border-radius-value" class="rpg-slider-value">6px</span>
                         </div>
                     </div>
@@ -1397,7 +1524,8 @@
                             <span class="rpg-setting-label">Speaker Spacing</span>
                         </div>
                         <div class="rpg-slider-group">
-                            <input type="range" id="rpg-cb-spacing" class="rpg-range-slider" min="0" max="24" value="12" />
+                            <input type="range" id="rpg-cb-spacing" class="rpg-range-slider" min="0" max="24"
+                                value="12" />
                             <span id="rpg-cb-spacing-value" class="rpg-slider-value">12px</span>
                         </div>
                     </div>
@@ -1416,7 +1544,8 @@
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
-                    <p class="rpg-note-text">Inject tracker data into historical messages so the AI remembers past states.</p>
+                    <p class="rpg-note-text">Inject tracker data into historical messages so the AI remembers past
+                        states.</p>
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Enable</span>
                         <label class="rpg-toggle-switch">
@@ -1479,7 +1608,8 @@
                             <i class="fa-solid fa-book-atlas"></i> Open Lore Library
                         </button>
                     </div>
-                    <p class="rpg-note-text" style="margin-top:4px;">Manage lorebooks with lore libraries, bulk actions, and full entry editing.</p>
+                    <p class="rpg-note-text" style="margin-top:4px;">Manage lorebooks with lore libraries, bulk actions,
+                        and full entry editing.</p>
                 </div>
             </div>
 
@@ -1494,7 +1624,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Open settings on click</span>
-                            <span class="rpg-setting-hint">Bypass the fly-out menu — clicking the D opens Doom's Settings directly.</span>
+                            <span class="rpg-setting-hint">Bypass the fly-out menu — clicking the D opens Doom's
+                                Settings directly.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-fab-bypass" />
@@ -1504,7 +1635,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Hide SillyTavern top bar</span>
-                            <span class="rpg-setting-hint">Reclaim screen space — access the same buttons through the D's fly-out instead.</span>
+                            <span class="rpg-setting-hint">Reclaim screen space — access the same buttons through the
+                                D's fly-out instead.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-hide-st-topbar" />
@@ -1512,7 +1644,8 @@
                         </label>
                     </div>
                     <div class="rpg-subsection-label" style="margin-top:12px;">Fly-out menu items</div>
-                    <p class="rpg-note-text" style="margin-bottom:6px;">Toggle which buttons show up in the D's fly-out menu. Top-bar entries mirror SillyTavern's navigation.</p>
+                    <p class="rpg-note-text" style="margin-bottom:6px;">Toggle which buttons show up in the D's fly-out
+                        menu. Top-bar entries mirror SillyTavern's navigation.</p>
                     <div id="rpg-fab-menu-toggles" class="rpg-fab-menu-toggles">
                         <p class="rpg-note-text" style="opacity:0.6;">Open the menu once to populate this list.</p>
                     </div>
@@ -1541,14 +1674,16 @@
                         <button id="rpg-edit-character-thoughts" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-user-pen"></i> Edit Character Data
                         </button>
-                        <p class="rpg-note-text" style="margin-top:4px;">Directly edit the raw character thoughts/present characters JSON data.</p>
+                        <p class="rpg-note-text" style="margin-top:4px;">Directly edit the raw character
+                            thoughts/present characters JSON data.</p>
                     </div>
 
                     <div style="margin-top:12px;">
                         <button id="rpg-clear-cache" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
                             <i class="fa-solid fa-trash"></i> Clear Extension Cache
                         </button>
-                        <p class="rpg-note-text" style="margin-top:4px;">Clears committed and displayed tracker data for your currently active chat.</p>
+                        <p class="rpg-note-text" style="margin-top:4px;">Clears committed and displayed tracker data for
+                            your currently active chat.</p>
                     </div>
                 </div>
             </div>
@@ -1562,7 +1697,8 @@
                     <i class="fa-solid fa-bell"></i> Notification Log
                 </button>
             </div>
-            <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for troubleshooting.</p>
+            <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for
+                troubleshooting.</p>
 
             <!-- Update -->
             <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -1578,7 +1714,8 @@
                 </select>
             </div>
             <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
-                Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version" style="opacity:0.7;"></span>
+                Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version"
+                    style="opacity:0.7;"></span>
             </p>
             <p class="rpg-note-text" style="margin-top:0; padding: 0 8px; opacity: 0.6; font-size: 0.78em;">
                 <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
@@ -1740,7 +1877,8 @@
                 </div>
                 <div class="rpg-editor-footer-row">
                     <button id="rpg-editor-save" class="rpg-btn-primary" type="button">
-                        <i class="fa-solid fa-save"></i> <span data-i18n-key="template.trackerEditorModal.buttons.save">Save & Apply</span>
+                        <i class="fa-solid fa-save"></i> <span
+                            data-i18n-key="template.trackerEditorModal.buttons.save">Save & Apply</span>
                     </button>
                 </div>
             </div>
@@ -1766,9 +1904,12 @@
             </small>
 
             <!-- ═══════ INJECTABLE PROMPTS ═══════ -->
-            <div class="rpg-subsection-label" style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
+            <div class="rpg-subsection-label"
+                style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
                 <i class="fa-solid fa-syringe"></i> Injectable Prompts
-                <small style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These prompts are injected directly into the chat at a configurable depth and role.</small>
+                <small
+                    style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These
+                    prompts are injected directly into the chat at a configurable depth and role.</small>
             </div>
 
             <!-- HTML Prompt -->
@@ -1780,22 +1921,30 @@
                     Injected when "Enable Immersive HTML" is enabled. Affects all generation modes.
                 </small>
                 <textarea id="rpg-prompt-html" class="rpg-prompt-textarea" rows="4"></textarea>
-                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <div class="rpg-prompt-injection-controls"
+                    style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
                     <button class="menu_button rpg-restore-prompt-btn" data-prompt="html">
                         <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                     </button>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Depth:
-                        <select class="rpg-prompt-depth-select" data-prompt-key="html" style="width: 60px; padding: 2px 4px; font-size: 11px;">
-                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
+                        <select class="rpg-prompt-depth-select" data-prompt-key="html"
+                            style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
                         </select>
                     </label>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Role:
-                        <select class="rpg-prompt-role-select" data-prompt-key="html" style="width: 80px; padding: 2px 4px; font-size: 11px;">
-                            <option value="">Default</option><option value="user">User</option>
-                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        <select class="rpg-prompt-role-select" data-prompt-key="html"
+                            style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option>
+                            <option value="user">User</option>
+                            <option value="assistant">Assistant</option>
+                            <option value="system">System</option>
                         </select>
                     </label>
                 </div>
@@ -1810,22 +1959,30 @@
                     Injected when "Enable Dialogue Coloring" is enabled. Affects all generation modes.
                 </small>
                 <textarea id="rpg-prompt-dialogue-coloring" class="rpg-prompt-textarea" rows="4"></textarea>
-                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <div class="rpg-prompt-injection-controls"
+                    style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
                     <button class="menu_button rpg-restore-prompt-btn" data-prompt="dialogueColoring">
                         <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                     </button>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Depth:
-                        <select class="rpg-prompt-depth-select" data-prompt-key="dialogueColoring" style="width: 60px; padding: 2px 4px; font-size: 11px;">
-                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
+                        <select class="rpg-prompt-depth-select" data-prompt-key="dialogueColoring"
+                            style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
                         </select>
                     </label>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Role:
-                        <select class="rpg-prompt-role-select" data-prompt-key="dialogueColoring" style="width: 80px; padding: 2px 4px; font-size: 11px;">
-                            <option value="">Default</option><option value="user">User</option>
-                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        <select class="rpg-prompt-role-select" data-prompt-key="dialogueColoring"
+                            style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option>
+                            <option value="user">User</option>
+                            <option value="assistant">Assistant</option>
+                            <option value="system">System</option>
                         </select>
                     </label>
                 </div>
@@ -1833,29 +1990,38 @@
 
             <!-- Context Instructions Prompt -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-context-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-context-instructions"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-comment-dots"></i> Context Instructions Prompt
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
                     Injected in Separate/External mode after the context summary. Tells the AI how to use the context.
                 </small>
                 <textarea id="rpg-prompt-context-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
-                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <div class="rpg-prompt-injection-controls"
+                    style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
                     <button class="menu_button rpg-restore-prompt-btn" data-prompt="contextInstructions">
                         <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                     </button>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Depth:
-                        <select class="rpg-prompt-depth-select" data-prompt-key="contextInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
-                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
+                        <select class="rpg-prompt-depth-select" data-prompt-key="contextInstructions"
+                            style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
                         </select>
                     </label>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Role:
-                        <select class="rpg-prompt-role-select" data-prompt-key="contextInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
-                            <option value="">Default</option><option value="user">User</option>
-                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        <select class="rpg-prompt-role-select" data-prompt-key="contextInstructions"
+                            style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option>
+                            <option value="user">User</option>
+                            <option value="assistant">Assistant</option>
+                            <option value="system">System</option>
                         </select>
                     </label>
                 </div>
@@ -1863,38 +2029,51 @@
 
             <!-- Tracker Instructions -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-tracker-instructions" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-tracker-instructions"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-list-check"></i> Tracker Instructions
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Instruction portion only (format specification is hardcoded). {userName} will be replaced with the user's name.
+                    Instruction portion only (format specification is hardcoded). {userName} will be replaced with the
+                    user's name.
                 </small>
                 <textarea id="rpg-prompt-tracker-instructions" class="rpg-prompt-textarea" rows="4"></textarea>
-                <div class="rpg-prompt-injection-controls" style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
+                <div class="rpg-prompt-injection-controls"
+                    style="display: flex; gap: 12px; margin-top: 8px; align-items: center;">
                     <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerInstructions">
                         <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                     </button>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Depth:
-                        <select class="rpg-prompt-depth-select" data-prompt-key="trackerInstructions" style="width: 60px; padding: 2px 4px; font-size: 11px;">
-                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                            <option value="3">3</option><option value="4">4</option>
+                        <select class="rpg-prompt-depth-select" data-prompt-key="trackerInstructions"
+                            style="width: 60px; padding: 2px 4px; font-size: 11px;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
                         </select>
                     </label>
                     <label style="font-size: 11px; color: #888; display: flex; align-items: center; gap: 4px;">
                         Role:
-                        <select class="rpg-prompt-role-select" data-prompt-key="trackerInstructions" style="width: 80px; padding: 2px 4px; font-size: 11px;">
-                            <option value="">Default</option><option value="user">User</option>
-                            <option value="assistant">Assistant</option><option value="system">System</option>
+                        <select class="rpg-prompt-role-select" data-prompt-key="trackerInstructions"
+                            style="width: 80px; padding: 2px 4px; font-size: 11px;">
+                            <option value="">Default</option>
+                            <option value="user">User</option>
+                            <option value="assistant">Assistant</option>
+                            <option value="system">System</option>
                         </select>
                     </label>
                 </div>
             </div>
 
             <!-- ═══════ TEMPLATE PROMPTS ═══════ -->
-            <div class="rpg-subsection-label" style="margin-top: 20px; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
+            <div class="rpg-subsection-label"
+                style="margin-top: 20px; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
                 <i class="fa-solid fa-file-lines"></i> Template Prompts
-                <small style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These prompts are embedded within other prompts or used as templates. Depth/role does not apply.</small>
+                <small
+                    style="display: block; font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 2px;">These
+                    prompts are embedded within other prompts or used as templates. Depth/role does not apply.</small>
             </div>
 
             <!-- Narrator Mode Prompt -->
@@ -1913,14 +2092,17 @@
 
             <!-- Plot Twist Template -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-plot-twist-template" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-plot-twist-template"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-bolt"></i> Plot Twist Injection Template
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Wrapper text injected around user-selected twists from the Doom Counter. <code>{twist}</code> is replaced with the chosen twist description.
+                    Wrapper text injected around user-selected twists from the Doom Counter. <code>{twist}</code> is
+                    replaced with the chosen twist description.
                 </small>
                 <textarea id="rpg-prompt-plot-twist-template" class="rpg-prompt-textarea" rows="3"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="plotTwistTemplate" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="plotTwistTemplate"
+                    style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
@@ -1931,52 +2113,63 @@
                     <i class="fa-solid fa-plus-circle"></i> New Fields Boost Template
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Injected when new tracker fields are enabled, reminding the AI to include them. <code>{fieldList}</code> is replaced with the field descriptions.
+                    Injected when new tracker fields are enabled, reminding the AI to include them.
+                    <code>{fieldList}</code> is replaced with the field descriptions.
                 </small>
                 <textarea id="rpg-prompt-new-fields-boost" class="rpg-prompt-textarea" rows="3"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="newFieldsBoost" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="newFieldsBoost"
+                    style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
 
             <!-- Twist Generator Rules -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-twist-generator-rules" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-twist-generator-rules"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Twist Generator Rules
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Creative guidance appended to the Doom Counter's twist generation prompt. Controls tone, variety, and style of generated twist options.
+                    Creative guidance appended to the Doom Counter's twist generation prompt. Controls tone, variety,
+                    and style of generated twist options.
                 </small>
                 <textarea id="rpg-prompt-twist-generator-rules" class="rpg-prompt-textarea" rows="6"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="twistGeneratorRules" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="twistGeneratorRules"
+                    style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
 
             <!-- Tracker Continuation Instruction -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-tracker-continuation" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-tracker-continuation"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-arrow-right"></i> Tracker Continuation Instruction
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Instructions added after tracker format specifications, telling the AI how to continue the narrative.
+                    Instructions added after tracker format specifications, telling the AI how to continue the
+                    narrative.
                 </small>
                 <textarea id="rpg-prompt-tracker-continuation" class="rpg-prompt-textarea" rows="4"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerContinuation" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerContinuation"
+                    style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
 
             <!-- Character Thoughts Prompt -->
             <div class="rpg-prompt-editor-section">
-                <label for="rpg-prompt-character-thoughts" style="display: block; margin-bottom: 8px; font-weight: 600;">
+                <label for="rpg-prompt-character-thoughts"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
                     <i class="fa-solid fa-brain"></i> Character Thoughts Prompt
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Controls what the AI generates for each character's thought bubbles. This text appears as the placeholder in the JSON format spec (e.g., "thoughts": {"content": "your prompt here"}).
+                    Controls what the AI generates for each character's thought bubbles. This text appears as the
+                    placeholder in the JSON format spec (e.g., "thoughts": {"content": "your prompt here"}).
                 </small>
                 <textarea id="rpg-prompt-character-thoughts" class="rpg-prompt-textarea" rows="3"></textarea>
-                <button class="menu_button rpg-restore-prompt-btn" data-prompt="characterThoughts" style="margin-top: 8px;">
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="characterThoughts"
+                    style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
             </div>
@@ -1987,7 +2180,9 @@
                     <i class="fa-solid fa-cloud-sun"></i> Weather Forecast Instruction
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Controls how the AI generates the weather forecast field in the Info Box. By default, the AI is instructed to use a single keyword from a predefined list (for weather effects). Customize this to allow richer weather descriptions.
+                    Controls how the AI generates the weather forecast field in the Info Box. By default, the AI is
+                    instructed to use a single keyword from a predefined list (for weather effects). Customize this to
+                    allow richer weather descriptions.
                 </small>
                 <textarea id="rpg-prompt-weather" class="rpg-prompt-textarea" rows="3"></textarea>
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="weather" style="margin-top: 8px;">
@@ -2027,10 +2222,13 @@
         </header>
         <div class="rpg-settings-popup-body">
             <small class="notes" style="display: block; margin-bottom: 16px;">
-                Edit the raw JSON data for present characters. Changes are applied to committed tracker data and will be used in the next generation.
+                Edit the raw JSON data for present characters. Changes are applied to committed tracker data and will be
+                used in the next generation.
             </small>
-            <textarea id="rpg-character-data-textarea" class="rpg-prompt-textarea" rows="20" style="font-family: monospace; font-size: 12px; white-space: pre;"></textarea>
-            <div id="rpg-character-data-error" style="color: #e94560; margin-top: 8px; font-size: 12px; display: none;"></div>
+            <textarea id="rpg-character-data-textarea" class="rpg-prompt-textarea" rows="20"
+                style="font-family: monospace; font-size: 12px; white-space: pre;"></textarea>
+            <div id="rpg-character-data-error" style="color: #e94560; margin-top: 8px; font-size: 12px; display: none;">
+            </div>
         </div>
         <footer class="rpg-settings-popup-footer">
             <div class="rpg-footer-left">
@@ -2072,7 +2270,8 @@
 <!-- Character Workshop Modal (per-character editor)                                -->
 <!-- Populated dynamically by characterWorkshop.js; hidden until .is-open is added. -->
 <!-- ============================================================================ -->
-<div id="character-workshop-popup" class="rpg-settings-popup" role="dialog" aria-modal="true" aria-label="Character Workshop">
+<div id="character-workshop-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-label="Character Workshop">
     <section class="rpg-settings-popup-content">
 
         <header class="rpg-settings-popup-header">
@@ -2092,7 +2291,8 @@
              lift the blacklist. -->
         <div id="cw-hidden-banner" class="cw-hidden-banner" hidden>
             <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
-            <span>Hidden from this chat's Present Characters panel. Manage here, or restore the portrait card below.</span>
+            <span>Hidden from this chat's Present Characters panel. Manage here, or restore the portrait card
+                below.</span>
             <button type="button" class="rpg-btn" id="cw-hidden-restore">
                 <i class="fa-solid fa-rotate-left"></i> Return to panel
             </button>
@@ -2104,7 +2304,8 @@
             <aside class="workshop-rail" aria-label="Preview and navigation">
                 <div class="workshop-preview">
                     <div class="dooms-portrait-card" id="cw-preview-card" aria-label="Live portrait preview">
-                        <div class="dooms-portrait-placeholder" id="cw-preview-placeholder" aria-hidden="true">&#128100;</div>
+                        <div class="dooms-portrait-placeholder" id="cw-preview-placeholder" aria-hidden="true">&#128100;
+                        </div>
                         <img id="cw-preview-img" alt="" style="display:none;">
                         <div class="dooms-portrait-card-name" id="cw-preview-card-name"></div>
                     </div>
@@ -2140,11 +2341,19 @@
                         <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
                             <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup" aria-label="Relationship">
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Lover" data-emoji="&#10084;&#65039;"><span>&#10084;&#65039;</span> Lover</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Friend" data-emoji="&#11088;"><span>&#11088;</span> Friend</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Ally" data-emoji="&#129309;"><span>&#129309;</span> Ally</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Enemy" data-emoji="&#9876;&#65039;"><span>&#9876;&#65039;</span> Enemy</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span> Neutral</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                                    data-rel="Lover" data-emoji="&#10084;&#65039;"><span>&#10084;&#65039;</span>
+                                    Lover</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                                    data-rel="Friend" data-emoji="&#11088;"><span>&#11088;</span> Friend</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                                    data-rel="Ally" data-emoji="&#129309;"><span>&#129309;</span> Ally</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                                    data-rel="Enemy" data-emoji="&#9876;&#65039;"><span>&#9876;&#65039;</span>
+                                    Enemy</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                                    data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span>
+                                    Neutral</button>
                             </div>
                         </div>
                         <!-- User mode: pronouns chips + linked persona -->
@@ -2172,28 +2381,41 @@
                 <section class="rpg-editor-pane" data-pane="appearance">
                     <div class="rpg-editor-section">
                         <h4>Portrait</h4>
-                        <p class="helper">Shown on the portrait bar. The preview at left updates as soon as you pick a file.</p>
+                        <p class="helper">Shown on the portrait bar. The preview at left updates as soon as you pick a
+                            file.</p>
                         <div class="stack" style="max-width: 320px;">
                             <label class="rpg-btn" for="cw-portrait-file">Upload portrait&hellip;</label>
                             <input id="cw-portrait-file" type="file" accept="image/*" class="sr-only">
-                            <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-portrait-clear">Remove portrait</button>
+                            <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-portrait-clear">Remove
+                                portrait</button>
                         </div>
                     </div>
                     <div class="rpg-editor-section">
                         <h4>Dialogue color</h4>
-                        <p class="helper">Used for this character's dialogue in chat and the name label on the portrait card. Pick from the palette or click <strong>Custom&hellip;</strong> for a precise color.</p>
-                        <div class="rpg-color-palette" id="cw-palette" role="radiogroup" aria-label="Dialogue color"></div>
+                        <p class="helper">Used for this character's dialogue in chat and the name label on the portrait
+                            card. Pick from the palette or click <strong>Custom&hellip;</strong> for a precise color.
+                        </p>
+                        <div class="rpg-color-palette" id="cw-palette" role="radiogroup" aria-label="Dialogue color">
+                        </div>
                         <div class="stack" style="max-width: 320px; margin-top: 0.6rem;">
                             <button type="button" class="rpg-btn" id="cw-color-custom-btn">
                                 <i class="fa-solid fa-eye-dropper"></i> Custom&hellip;
-                                <span class="cw-color-custom-preview" id="cw-color-custom-preview" aria-hidden="true"></span>
+                                <span class="cw-color-custom-preview" id="cw-color-custom-preview"
+                                    aria-hidden="true"></span>
                             </button>
-                            <input type="color" id="cw-color-custom-input" class="sr-only" value="#e94560" aria-label="Custom dialogue color">
+                            <input type="color" id="cw-color-custom-input" class="sr-only" value="#e94560"
+                                aria-label="Custom dialogue color">
                         </div>
                     </div>
                     <div class="rpg-editor-section">
                         <h4>Expressions</h4>
-                        <p class="helper">Expression sprites live in <code>data/default-user/characters/&lt;name&gt;/</code>. Open the folder to add images named after the classifier's emotion labels &mdash; e.g. <code>joy.webp</code>, <code>sadness.png</code>, <code>annoyance.webp</code>, <code>optimism.png</code>, <code>neutral.webp</code>, <code>realization.png</code>, <code>surprise.webp</code>, etc. Both <code>.png</code> and <code>.webp</code> are supported. DES's expression sync will pick them up automatically.</p>
+                        <p class="helper">Expression sprites live in
+                            <code>data/default-user/characters/&lt;name&gt;/</code>. Open the folder to add images named
+                            after the classifier's emotion labels &mdash; e.g. <code>joy.webp</code>,
+                            <code>sadness.png</code>, <code>annoyance.webp</code>, <code>optimism.png</code>,
+                            <code>neutral.webp</code>, <code>realization.png</code>, <code>surprise.webp</code>, etc.
+                            Both <code>.png</code> and <code>.webp</code> are supported. DES's expression sync will pick
+                            them up automatically.</p>
                         <div class="stack" style="max-width: 320px;">
                             <button class="rpg-btn" type="button" id="cw-open-expressions">
                                 <i class="fa-solid fa-folder-open"></i> Open expression folder
@@ -2230,20 +2452,28 @@
                 <section class="rpg-editor-pane" data-pane="injection">
                     <div class="rpg-editor-section">
                         <h4>Description (bio + appearance)</h4>
-                        <p class="helper">Optional context the AI sees when you click <strong>Inject into Scene</strong>. Cover physical appearance, role, manner of speaking, anything that helps the AI portray them consistently. Plain text — be specific about what they look like since most models won't actually see the portrait image.</p>
+                        <p class="helper">Optional context the AI sees when you click <strong>Inject into
+                                Scene</strong>. Cover physical appearance, role, manner of speaking, anything that helps
+                            the AI portray them consistently. Plain text — be specific about what they look like since
+                            most models won't actually see the portrait image.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-description" class="sr-only">Description (bio and appearance)</label>
-                            <textarea id="cw-inj-description" class="rpg-textarea" rows="6" placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
+                            <textarea id="cw-inj-description" class="rpg-textarea" rows="6"
+                                placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
                         </div>
                     </div>
                     <div class="rpg-editor-section cw-npc-only">
                         <h4>Attached lorebook</h4>
-                        <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is injected. Type to filter; leave blank to skip.</p>
+                        <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is
+                            injected. Type to filter; leave blank to skip.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-lorebook" class="sr-only">Attached lorebook</label>
                             <div class="cw-combobox" id="cw-inj-lorebook-combo">
-                                <input id="cw-inj-lorebook" class="rpg-input" type="text" autocomplete="off" placeholder="— None —" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cw-inj-lorebook-list">
-                                <button type="button" class="cw-combobox-toggle" id="cw-inj-lorebook-toggle" aria-label="Toggle lorebook list" tabindex="-1">
+                                <input id="cw-inj-lorebook" class="rpg-input" type="text" autocomplete="off"
+                                    placeholder="— None —" role="combobox" aria-autocomplete="list"
+                                    aria-expanded="false" aria-controls="cw-inj-lorebook-list">
+                                <button type="button" class="cw-combobox-toggle" id="cw-inj-lorebook-toggle"
+                                    aria-label="Toggle lorebook list" tabindex="-1">
                                     <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                                 </button>
                                 <ul class="cw-combobox-list" id="cw-inj-lorebook-list" role="listbox" hidden></ul>
@@ -2255,41 +2485,55 @@
                         <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>, <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable is filled in.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-prompt" class="sr-only">Injection prompt template</label>
-                            <textarea id="cw-inj-prompt" class="rpg-textarea" rows="10" spellcheck="false" placeholder="(Default scene-direction prompt will be used. Click Reset to default to load it here and customize.)"></textarea>
+                            <textarea id="cw-inj-prompt" class="rpg-textarea" rows="10" spellcheck="false"
+                                placeholder="(Default scene-direction prompt will be used. Click Reset to default to load it here and customize.)"></textarea>
                         </div>
                         <div class="rpg-field rpg-field-row" style="justify-content: flex-end; gap: 0.5em;">
-                            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-inj-prompt-reset" title="Load the default template into the editor">
+                            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-inj-prompt-reset"
+                                title="Load the default template into the editor">
                                 <i class="fa-solid fa-rotate-left"></i> Reset to default
                             </button>
                         </div>
                     </div>
                     <div class="rpg-editor-section">
                         <h4>Attach portrait to message</h4>
-                        <p class="helper">When on, clicking <strong>Inject into Scene</strong> also attaches this character's portrait to your next user message so vision-capable models (Claude 3.x, GPT-4o, Gemini, etc.) can actually see them. Silently no-ops on text-only models &mdash; the description above is your reliable channel either way.</p>
+                        <p class="helper">When on, clicking <strong>Inject into Scene</strong> also attaches this
+                            character's portrait to your next user message so vision-capable models (Claude 3.x, GPT-4o,
+                            Gemini, etc.) can actually see them. Silently no-ops on text-only models &mdash; the
+                            description above is your reliable channel either way.</p>
                         <div class="rpg-field rpg-field-row" style="align-items:center;">
                             <label class="rpg-switch">
                                 <input type="checkbox" id="cw-inj-attach-portrait">
                                 <span class="rpg-switch-track"></span>
                             </label>
-                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Off by default. Setting is global, not per-character.</span>
+                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Off by default.
+                                Setting is global, not per-character.</span>
                         </div>
                     </div>
                     <div class="rpg-editor-section cw-npc-only">
                         <h4>Banish from generations</h4>
-                        <p class="helper">When on, every AI generation receives a standing direction telling it that this character is <strong>not in the scene</strong> and must not appear &mdash; no dialogue, no actions, no presence. Use when a character keeps reappearing turn after turn even after Eject. Also soft-removes them from the panel. Toggle off to allow them back in.</p>
+                        <p class="helper">When on, every AI generation receives a standing direction telling it that
+                            this character is <strong>not in the scene</strong> and must not appear &mdash; no dialogue,
+                            no actions, no presence. Use when a character keeps reappearing turn after turn even after
+                            Eject. Also soft-removes them from the panel. Toggle off to allow them back in.</p>
                         <div class="rpg-field rpg-field-row" style="align-items:center;">
                             <label class="rpg-switch">
                                 <input type="checkbox" id="cw-banish">
                                 <span class="rpg-switch-track"></span>
                             </label>
-                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Standing ban &mdash; persists across turns and reloads until you toggle it off.</span>
+                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Standing ban &mdash;
+                                persists across turns and reloads until you toggle it off.</span>
                         </div>
                     </div>
                     <div class="rpg-editor-section cw-npc-only">
                         <h4>Stuck injection?</h4>
-                        <p class="helper">Inject into Scene is a one-shot direction &mdash; it should clear after the AI's next reply. If a character keeps getting referenced every turn anyway, force-wipe Doom's injection slot here. Your stored description, lorebook attachment, and prompt template are kept; only the live pending injection is cleared.</p>
+                        <p class="helper">Inject into Scene is a one-shot direction &mdash; it should clear after the
+                            AI's next reply. If a character keeps getting referenced every turn anyway, force-wipe
+                            Doom's injection slot here. Your stored description, lorebook attachment, and prompt
+                            template are kept; only the live pending injection is cleared.</p>
                         <div class="rpg-field rpg-field-row">
-                            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-clear-all-injects" title="Clear Doom's extension-prompt slot and drop all pending inject overlays">
+                            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-clear-all-injects"
+                                title="Clear Doom's extension-prompt slot and drop all pending inject overlays">
                                 <i class="fa-solid fa-broom"></i> Clear all pending injections
                             </button>
                         </div>
@@ -2301,7 +2545,8 @@
 
         <footer class="rpg-settings-popup-footer">
             <button class="rpg-btn rpg-btn-danger" type="button" id="cw-delete">Delete character</button>
-            <button class="rpg-btn" type="button" id="cw-export" title="Download this character's portrait, color, description, and lorebook attachment as a JSON file">
+            <button class="rpg-btn" type="button" id="cw-export"
+                title="Download this character's portrait, color, description, and lorebook attachment as a JSON file">
                 <i class="fa-solid fa-file-arrow-down"></i> Export&hellip;
             </button>
             <span class="spacer"></span>
@@ -2333,7 +2578,8 @@
 <!-- Character Roster Modal (list view of all known characters)                    -->
 <!-- Populated dynamically by characterRoster.js; hidden until .is-open is added.  -->
 <!-- ============================================================================ -->
-<div id="character-roster-popup" class="rpg-settings-popup" role="dialog" aria-modal="true" aria-label="Character Roster">
+<div id="character-roster-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-label="Character Roster">
     <section class="rpg-settings-popup-content cr-content">
         <header class="rpg-settings-popup-header">
             <h3>
@@ -2356,15 +2602,19 @@
         <div class="cr-subheader">
             <div class="cr-search-wrap">
                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                <input id="cr-search" class="rpg-input cr-search-input" type="search" placeholder="Search characters&hellip;" autocomplete="off">
+                <input id="cr-search" class="rpg-input cr-search-input" type="search"
+                    placeholder="Search characters&hellip;" autocomplete="off">
             </div>
             <span class="cr-count" id="cr-count" aria-live="polite"></span>
         </div>
 
         <div class="cr-scope-strip" role="tablist" aria-label="Filter roster">
-            <button type="button" class="cr-scope-pill is-active" data-scope="all" role="tab" aria-selected="true">All characters</button>
-            <button type="button" class="cr-scope-pill" data-scope="chat" role="tab" aria-selected="false">This chat</button>
-            <button type="button" class="cr-scope-pill" data-scope="active" role="tab" aria-selected="false">Currently in scene</button>
+            <button type="button" class="cr-scope-pill is-active" data-scope="all" role="tab" aria-selected="true">All
+                characters</button>
+            <button type="button" class="cr-scope-pill" data-scope="chat" role="tab" aria-selected="false">This
+                chat</button>
+            <button type="button" class="cr-scope-pill" data-scope="active" role="tab" aria-selected="false">Currently
+                in scene</button>
         </div>
 
         <div class="rpg-settings-popup-body cr-body">
@@ -2377,7 +2627,8 @@
 
         <footer class="rpg-settings-popup-footer">
             <button class="rpg-btn rpg-btn-ghost" type="button" id="cr-footer-close">Close</button>
-            <button class="rpg-btn" type="button" id="cr-import-btn" title="Import a character from a JSON file (exported from another chat or install)">
+            <button class="rpg-btn" type="button" id="cr-import-btn"
+                title="Import a character from a JSON file (exported from another chat or install)">
                 <i class="fa-solid fa-file-arrow-up"></i> Import&hellip;
             </button>
             <input id="cr-import-file" type="file" accept="application/json,.json" class="sr-only">
@@ -2400,7 +2651,8 @@
                 <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Open in Workshop
             </li>
             <li class="cr-context-item" data-action="pin" role="menuitem">
-                <i class="fa-solid fa-thumbtack" aria-hidden="true"></i> <span class="cr-context-pin-label">Pin to top</span>
+                <i class="fa-solid fa-thumbtack" aria-hidden="true"></i> <span class="cr-context-pin-label">Pin to
+                    top</span>
             </li>
             <li class="cr-context-item cr-context-danger" data-action="delete" role="menuitem">
                 <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete character
@@ -2408,11 +2660,13 @@
         </ul>
 
         <!-- Inline "+ New Character" dialog -->
-        <div class="cr-newchar-overlay" id="cr-newchar-overlay" hidden role="dialog" aria-modal="true" aria-label="New character">
+        <div class="cr-newchar-overlay" id="cr-newchar-overlay" hidden role="dialog" aria-modal="true"
+            aria-label="New character">
             <div class="cr-newchar-card">
                 <h4>New character</h4>
                 <p class="helper">Name this character. You can edit everything else in the Workshop.</p>
-                <input id="cr-newchar-input" class="rpg-input" type="text" placeholder="e.g. Aria Vex" autocomplete="off" maxlength="120">
+                <input id="cr-newchar-input" class="rpg-input" type="text" placeholder="e.g. Aria Vex"
+                    autocomplete="off" maxlength="120">
                 <div class="cr-newchar-error" id="cr-newchar-error" hidden></div>
                 <div class="cr-newchar-actions">
                     <button type="button" class="rpg-btn rpg-btn-ghost" id="cr-newchar-cancel">Cancel</button>
@@ -2422,4 +2676,3 @@
         </div>
     </section>
 </div>
-
