@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.10.2] - 2026-05-02
+
+### Added
+- **User Characters** — parallel namespace for player personas. New Workshop user mode (pronouns + linked SillyTavern persona instead of relationship chips, "Set as active persona" / "Inject persona" / "Copy to Characters" footer actions, "User Character Workshop" badge), Roster Characters/Users mode toggle, "Import from SillyTavern personas" + "Import from Cards" buttons with cross-namespace dedup so an NPC and a user character can never collide on name. Stored on `extensionSettings.userCharacters[name]` with `{ color, avatar, avatarFullRes, pronouns, linkedPersona, injection: { description, lorebook, promptTemplate } }`. New `activeUserCharacter` (manual override) and `showUserInPCP` (master toggle).
+- **PCP integration for user characters** — when "Show User in PCP" is on, the active user character renders as the first card with a **YOU** badge and accent ring. Active resolves: manual override → `linkedPersona` match against `window.user_avatar` → single-entry fallback. `resolvePortrait` only returns the user-character avatar when the name matches the active user, so NPCs sharing a name aren't hijacked.
+- **User-character expressions** — `{{char}}`-style sprite swapping for user characters. After every `USER_MESSAGE_RENDERED`, the same classifier the NPC pipeline uses runs against the user's outgoing text and swaps the active user character's sprite to match. Gated by `syncExpressionsToPresentCharacters`.
+- **Workshop Expressions tab** — sprite manager mirrored from the Character Sheet. Same `/api/sprites/get|upload|delete|upload-zip|open-folder` endpoints, EXPRESSION_LABELS, crop-then-PNG flow. Lazy-loaded; cache invalidated on close. Inline note explaining how `{{char}}`-style sprite swapping works for both NPCs and user characters.
+- **Workshop portrait upload through SillyTavern's crop popup** — `getBase64Async` → `POPUP_TYPE.CROP` at 3:4 aspect → `upscaleImage` to 660×880 PNG. Same pipeline as the portrait-bar's right-click "Upload Portrait" path.
+- **FAB flyout: Workshop entry + branch dropdown** — "Workshop" entry sits just above Doom's Settings. Update Extension button gets a branch dropdown that mirrors SillyTavern's own Switch-branch flow (`POST /api/extensions/version` + `/api/extensions/install` with `branch` parameter). Whitelist filters to `main`, `rabbit-hole`, `blades-in-the-dark`, plus whatever branch is currently checked out.
+- **Copy to Characters / Copy to Users** — Workshop footer actions copy color, avatar (with `linkedPersona` / `resolvePortrait` fallback for absent uploads), and description across the NPC↔user boundary; refuse if a name conflict exists on the destination side.
+- **PCP settings: collapsible subsections** — Workshop, Layout, Expressions, Portraits, Card Size, and Colors each fold away via reusable `.rpg-subsection-collapse` styles. Closed by default.
+
+### Changed
+- **Per-Chat Character Tracking is now always on** — default flipped to `true`, the (now-hidden) toggle row force-migrates legacy `false` values to `true` on settings load.
+- **FAB flyout buttons render fully opaque** — two-layer background (solid `#1a1a2e` base + theme accent gradient) so 0.95-alpha theme variables can't make them see-through. Backdrop-blur removed.
+- **Expressions info popup uses `position: fixed`** when shown so the help card escapes accordion overflow / clipping.
+
+### Fixed
+- Modal flash when reopening the Workshop within the 200 ms close-fade — close-timeout is now cancelled and `is-closing` stripped on reopen.
+- "Set as active persona" + "Copy to Users" buttons were leaking into NPC mode because `#character-workshop-popup .rpg-btn { display: inline-flex }` was beating `.cw-user-only { display: none }` by source order; visibility rules now use `!important`.
+- Dialogue color picked in the Workshop didn't apply to the PCP under per-chat tracking — `commitDraft` now writes through `getActiveCharacterColors()` so the color lands in whichever store the PCP reads from.
+- Persona import "No SillyTavern personas found" — now imports `power_user` instead of reading `window.power_user`.
+- "Import from SillyTavern personas" button visible in Characters tab — switched to jQuery `.toggle()` so the `[hidden]` attribute isn't beaten by `.rpg-btn` display rules.
+- Cross-namespace dedup on "+ New Character" so a user character can't shadow an NPC of the same name (or vice versa).
+- Expressions panel cache cleared on Workshop close so a stale uploaded-count doesn't display when the underlying sprite folder changes between opens.
+
 ## [1.10.1] - 2026-05-01
 
 ### Added
