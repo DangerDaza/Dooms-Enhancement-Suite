@@ -17,6 +17,8 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
+import { power_user } from '../../../../../../power-user.js';
+import { characters } from '../../../../../../../script.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -33,6 +35,7 @@ let listenersBound = false;
 let _crInitialized = false; // guard: don't double-register document/window listeners
 let searchQuery = '';
 let scope = 'all'; // 'all' | 'chat' | 'active'
+let rosterMode = 'characters'; // 'characters' (NPCs) | 'users' (player characters)
 
 function isPinned(name) {
     const list = extensionSettings?.pinnedCharacters;
@@ -81,11 +84,20 @@ export function openCharacterRoster() {
     }
     searchQuery = '';
     scope = 'all';
+    rosterMode = 'characters';
     $modal.find('#cr-search').val('');
     $modal.find('.cr-scope-pill').each(function () {
         const isActive = $(this).attr('data-scope') === 'all';
         $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
     });
+    $modal.find('.cr-mode-pill').each(function () {
+        const isActive = $(this).attr('data-mode') === 'characters';
+        $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+    });
+    $modal.attr('data-mode', 'characters');
+    $modal.find('#cr-title').text('Character Roster');
+    $modal.find('#cr-import-personas-btn').hide();
+    $modal.find('#cr-import-cards-btn').show();
     renderGrid();
     // Apply the active DES theme so the theme-specific token overrides
     // take effect (matches trackerEditor / settings popup convention).
@@ -152,10 +164,11 @@ function bindListeners() {
         const name = contextMenuTarget;
         hideContextMenu();
         if (!name) return;
+        const isUser = rosterMode === 'users';
         if (action === 'edit') {
             closeCharacterRoster();
             setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name } }));
+                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
             }, 220);
         } else if (action === 'pin') {
             togglePin(name);
@@ -183,14 +196,41 @@ function bindListeners() {
         renderGrid();
     });
 
+    // Mode pills (Characters / Users) — flips the roster's data source
+    $modal.on('click.cr', '.cr-mode-pill', function () {
+        const next = $(this).attr('data-mode') || 'characters';
+        if (next === rosterMode) return;
+        rosterMode = next;
+        $modal.find('.cr-mode-pill').each(function () {
+            const isActive = $(this).attr('data-mode') === rosterMode;
+            $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+        });
+        $modal.attr('data-mode', rosterMode);
+        // Title & footer affordances follow the mode
+        $modal.find('#cr-title').text(rosterMode === 'users' ? 'User Characters' : 'Character Roster');
+        $modal.find('#cr-import-personas-btn').toggle(rosterMode === 'users');
+        $modal.find('#cr-import-cards-btn').toggle(rosterMode === 'characters');
+        // The "active in scene" scope doesn't apply to user characters —
+        // CSS hides the pill, but if it was selected we fall back to "all".
+        if (rosterMode === 'users' && scope === 'active') {
+            scope = 'all';
+            $modal.find('.cr-scope-pill').each(function () {
+                const isActive = $(this).attr('data-scope') === scope;
+                $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+            });
+        }
+        renderGrid();
+    });
+
     // Click a character tile → open Workshop for that name
     $modal.on('click.cr', '.cr-tile[data-character]', function () {
         const name = $(this).attr('data-character');
         if (!name) return;
         closeCharacterRoster();
+        const isUser = rosterMode === 'users';
         // Defer so this modal's fade-out doesn't overlap the Workshop's fade-in
         setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name } }));
+            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
         }, 220);
     });
 
@@ -200,6 +240,16 @@ function bindListeners() {
     // Import from JSON file
     $modal.on('click.cr', '#cr-import-btn', () => {
         $modal.find('#cr-import-file').val('').trigger('click');
+    });
+
+    // Import user characters from SillyTavern personas (Users mode only)
+    $modal.on('click.cr', '#cr-import-personas-btn', () => {
+        importFromSillyTavernPersonas();
+    });
+
+    // Import characters from SillyTavern character cards (Characters mode only)
+    $modal.on('click.cr', '#cr-import-cards-btn', () => {
+        importFromSillyTavernCards();
     });
     $modal.on('change.cr', '#cr-import-file', function () {
         const file = this.files && this.files[0];
@@ -265,34 +315,52 @@ function commitNewCharacter() {
         $error.prop('hidden', false).text('Name is required.');
         return;
     }
-    const existing = collectCharacterNames();
-    const clash = existing.find(n => n.toLowerCase() === trimmed.toLowerCase());
-    if (clash) {
-        $error.prop('hidden', false).text(`A character named "${clash}" already exists.`);
+    // Dedup across BOTH namespaces — preventing a user character with the
+    // same name as an existing NPC (or vice versa) is critical because
+    // resolvePortrait keys off names; collisions would confuse rendering.
+    const existing = getAllExistingCharacterNamesLower();
+    if (existing.has(trimmed.toLowerCase())) {
+        $error.prop('hidden', false).text(`A character named "${trimmed}" already exists (as user or NPC).`);
         return;
     }
-    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
-    extensionSettings.knownCharacters[trimmed] = { emoji: '❓' };
-    saveSettings();
-    try {
-        clearPortraitCache();
-        updatePortraitBar();
-    } catch (e) {
-        console.warn('[Dooms Tracker] Roster: failed to refresh portrait bar after new character', e);
+    if (rosterMode === 'users') {
+        if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+        extensionSettings.userCharacters[trimmed] = {
+            color: '', avatar: '', avatarFullRes: '', pronouns: '', linkedPersona: '',
+            injection: { description: '', lorebook: '' },
+        };
+        saveSettings();
+    } else {
+        if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+        extensionSettings.knownCharacters[trimmed] = { emoji: '❓' };
+        saveSettings();
+        try {
+            clearPortraitCache();
+            updatePortraitBar();
+        } catch (e) {
+            console.warn('[Dooms Tracker] Roster: failed to refresh portrait bar after new character', e);
+        }
     }
     closeNewCharacterDialog();
     closeCharacterRoster();
+    const isUser = rosterMode === 'users';
     setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: trimmed } }));
+        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: trimmed, isUser } }));
     }, 220);
 }
 
 /**
  * Union of every character name that has any persisted state in the
  * extension. Defensive against orphans (e.g. a color set for a character
- * that was removed from knownCharacters).
+ * that was removed from knownCharacters). When the roster is in "users"
+ * mode, returns the user-character names instead.
  */
 function collectCharacterNames() {
+    if (rosterMode === 'users') {
+        const uc = extensionSettings?.userCharacters;
+        if (!uc || typeof uc !== 'object') return [];
+        return Object.keys(uc).filter(n => n && typeof n === 'string');
+    }
     const set = new Set();
     const sources = [
         extensionSettings?.knownCharacters,
@@ -397,9 +465,17 @@ function renderGrid() {
 }
 
 function buildTile(name, isActive) {
-    const avatar = extensionSettings?.npcAvatars?.[name] || '';
-    const color = extensionSettings?.characterColors?.[name] || '';
-    const relEmoji = resolveRelationshipEmoji(name);
+    // In user-character mode the data lives in a single namespace.
+    const isUserMode = rosterMode === 'users';
+    const userEntry = isUserMode ? (extensionSettings?.userCharacters?.[name] || {}) : null;
+    const avatar = isUserMode
+        ? (userEntry.avatar || '')
+        : (extensionSettings?.npcAvatars?.[name] || '');
+    const color = isUserMode
+        ? (userEntry.color || '')
+        : (extensionSettings?.characterColors?.[name] || '');
+    const relEmoji = isUserMode ? '' : resolveRelationshipEmoji(name);
+    const isActiveUser = isUserMode && extensionSettings?.activeUserCharacter === name;
     const safeName = escapeHtml(name);
     const safeNameAttr = escapeAttr(name);
     const activeSuffix = isActive ? ' (active in chat)' : '';
@@ -424,6 +500,9 @@ function buildTile(name, isActive) {
         ? `<span class="cr-tile-pin" title="Pinned"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></span>`
         : '';
     const activeClass = (isActive ? ' cr-tile-active' : '') + (pinned ? ' cr-tile-pinned' : '');
+    const userBadge = isUserMode
+        ? `<span class="cr-tile-user-badge">${isActiveUser ? '★ Active' : 'User'}</span>`
+        : '';
     return (
         `<button type="button" class="cr-tile${activeClass}" role="listitem" data-character="${safeNameAttr}" aria-label="${safeLabel}">
             ${imgHtml}
@@ -431,6 +510,7 @@ function buildTile(name, isActive) {
             ${dotHtml}
             ${pinBadge}
             ${activeBadge}
+            ${userBadge}
             <span class="cr-tile-name">${safeName}</span>
         </button>`
     );
@@ -489,6 +569,175 @@ function confirmAndDelete(name) {
     }
     try {
         if (window.toastr) window.toastr.info(`Deleted "${name}".`, 'Roster', { timeOut: 3000 });
+    } catch (e) {}
+}
+
+/**
+ * Returns a Set of every existing character name across BOTH the NPC and
+ * user-character namespaces, lowercased. Used by both import flows so a
+ * persona named the same as an existing NPC (or vice versa) is detected
+ * as a conflict and skipped.
+ */
+function getAllExistingCharacterNamesLower() {
+    const set = new Set();
+    const sources = [
+        extensionSettings?.knownCharacters,
+        extensionSettings?.characterColors,
+        extensionSettings?.npcAvatars,
+        extensionSettings?.userCharacters,
+    ];
+    for (const src of sources) {
+        if (!src || typeof src !== 'object') continue;
+        for (const name of Object.keys(src)) {
+            if (name && typeof name === 'string') set.add(name.toLowerCase());
+        }
+    }
+    return set;
+}
+
+/**
+ * Import every SillyTavern character card as an NPC. Reads the global
+ * `characters` array (imported from script.js). Skips cards whose name
+ * already exists in either the NPC or user-character namespace so we
+ * never produce a duplicate or accidental overwrite.
+ */
+function importFromSillyTavernCards() {
+    const cards = Array.isArray(characters) ? characters : [];
+    const valid = cards.filter(c => c && typeof c.name === 'string' && c.name.trim());
+    if (!valid.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info('No SillyTavern character cards found.', 'Import', { timeOut: 4000 });
+            } else {
+                window.alert('No SillyTavern character cards found.');
+            }
+        } catch (e) {}
+        return;
+    }
+    const existing = getAllExistingCharacterNamesLower();
+    const toImport = valid.filter(c => !existing.has(c.name.toLowerCase()));
+    const skipped = valid.length - toImport.length;
+    if (!toImport.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info(
+                    `All ${valid.length} card${valid.length === 1 ? '' : 's'} already exist as character${valid.length === 1 ? '' : 's'}.`,
+                    'Import',
+                    { timeOut: 4000 },
+                );
+            }
+        } catch (e) {}
+        return;
+    }
+    const lines = toImport.map(c => `  • ${c.name}`).join('\n');
+    const msg = `Import ${toImport.length} card${toImport.length === 1 ? '' : 's'} as character${toImport.length === 1 ? '' : 's'}?\n\n${lines}` +
+        (skipped > 0 ? `\n\n(${skipped} already exist and will be skipped — duplicates aren't imported.)` : '');
+    if (!window.confirm(msg)) return;
+    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
+    if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
+    for (const card of toImport) {
+        const name = card.name.trim();
+        extensionSettings.knownCharacters[name] = { emoji: '👤' };
+        if (card.avatar) {
+            // ST serves character cards from /characters/<filename>.
+            const url = '/characters/' + encodeURIComponent(card.avatar);
+            extensionSettings.npcAvatars[name] = url;
+            extensionSettings.npcAvatarsFullRes[name] = url;
+        }
+        // If the card has a description, seed the Workshop Injection field
+        // so users can Inject into Scene right away.
+        const desc = String(card.description || '').trim();
+        if (desc) {
+            extensionSettings.characterInjection[name] = { description: desc, lorebook: '' };
+        }
+    }
+    saveSettings();
+    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    renderGrid();
+    try {
+        if (window.toastr) {
+            window.toastr.success(
+                `Imported ${toImport.length} card${toImport.length === 1 ? '' : 's'}.`,
+                'Roster',
+                { timeOut: 4000 },
+            );
+        }
+    } catch (e) {}
+}
+
+/**
+ * Import every SillyTavern persona as a user character. Reads from
+ * power_user.personas (a map of avatar filename → persona name).
+ * Skips personas whose name already exists in EITHER the user-character
+ * namespace or the NPC namespace — no duplicates across either side.
+ */
+function importFromSillyTavernPersonas() {
+    // power_user is imported at module top — fall through to the window
+    // reference in case ST exposes it that way on some forks.
+    const pu = power_user || (typeof window !== 'undefined' && window.power_user) || null;
+    const personas = (pu && pu.personas) || {};
+    const personaDescs = (pu && pu.persona_descriptions) || {};
+    const entries = Object.entries(personas).filter(([avatarFile, name]) => avatarFile && name);
+    if (!entries.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info('No SillyTavern personas found.', 'Import', { timeOut: 4000 });
+            } else {
+                window.alert('No SillyTavern personas found.');
+            }
+        } catch (e) {}
+        return;
+    }
+    if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+    // Dedup across BOTH namespaces — a persona named the same as an NPC
+    // (or vice versa) shouldn't get a duplicate entry.
+    const existingNames = getAllExistingCharacterNamesLower();
+    const toImport = entries.filter(([, name]) => !existingNames.has(String(name).toLowerCase()));
+    const skipped = entries.length - toImport.length;
+    if (!toImport.length) {
+        try {
+            if (window.toastr) {
+                window.toastr.info(
+                    `All ${entries.length} persona${entries.length === 1 ? '' : 's'} already exist (as user characters or NPCs).`,
+                    'Import',
+                    { timeOut: 4000 },
+                );
+            }
+        } catch (e) {}
+        return;
+    }
+    const lines = toImport.map(([, name]) => `  • ${name}`).join('\n');
+    const msg = `Import ${toImport.length} persona${toImport.length === 1 ? '' : 's'} as user character${toImport.length === 1 ? '' : 's'}?\n\n${lines}` +
+        (skipped > 0 ? `\n\n(${skipped} already exist and will be skipped — duplicates aren't imported.)` : '');
+    if (!window.confirm(msg)) return;
+    for (const [avatarFile, name] of toImport) {
+        const description = typeof personaDescs[avatarFile] === 'object'
+            ? (personaDescs[avatarFile]?.description || '')
+            : (personaDescs[avatarFile] || '');
+        // ST serves persona avatars from /User Avatars/<filename>. The
+        // filename may contain spaces, so encode each segment.
+        const avatarUrl = '/User%20Avatars/' + encodeURIComponent(avatarFile);
+        extensionSettings.userCharacters[name] = {
+            color: '',
+            avatar: avatarUrl,
+            avatarFullRes: avatarUrl,
+            pronouns: '',
+            linkedPersona: avatarFile,
+            injection: { description: String(description || '').trim(), lorebook: '' },
+        };
+    }
+    saveSettings();
+    renderGrid();
+    try {
+        if (window.toastr) {
+            window.toastr.success(
+                `Imported ${toImport.length} persona${toImport.length === 1 ? '' : 's'}.`,
+                'Roster',
+                { timeOut: 4000 },
+            );
+        }
     } catch (e) {}
 }
 
@@ -589,6 +838,14 @@ function importCharacterPayload(payload) {
 function purgeCharacter(name) {
     const s = extensionSettings;
     if (!s) return;
+    // User-character mode purges only the userCharacters namespace and
+    // clears activeUserCharacter if it was pointing at this entry.
+    if (rosterMode === 'users') {
+        if (s.userCharacters) delete s.userCharacters[name];
+        if (s.activeUserCharacter === name) s.activeUserCharacter = null;
+        saveSettings();
+        return;
+    }
     if (s.characterColors) delete s.characterColors[name];
     if (s.npcAvatars) delete s.npcAvatars[name];
     if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];

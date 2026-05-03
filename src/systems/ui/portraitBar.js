@@ -280,7 +280,10 @@ export function initPortraitBar() {
     });
 
     // ── Left-click portrait card — flip to show detail sheet ──
-    $(document).on('click', '.dooms-portrait-card', function (e) {
+    // Scoped to cards INSIDE the portrait-bar shelf so the Workshop's
+    // preview card (also uses .dooms-portrait-card for shared styling)
+    // doesn't accidentally flip when clicked.
+    $(document).on('click', '#dooms-portrait-bar .dooms-portrait-card', function (e) {
         // Don't flip if clicking on context menu items or other interactive children
         if ($(e.target).closest('.dooms-pb-ctx-item, button, a, input').length) return;
         const $card = $(this);
@@ -492,14 +495,22 @@ export function updatePortraitBar() {
         const absentClass = char.present ? '' : ' dooms-pb-absent';
         const isNew = newCharNames.has(char.name);
         const entranceClass = isNew ? ' dooms-pb-entrance' : '';
+        const userClass = char.isUser ? ' dooms-pb-user' : '';
         const nameEsc = escapeHtml(char.name);
         const emoji = char.emoji || '👤';
         const absentOverlay = char.present ? '' : '<div class="dooms-pb-absent-overlay"></div>';
-        const charColor = activeColors[char.name];
+        // For user characters, prefer the color stored on userCharacters
+        // over any AI-assigned dialogue color.
+        let charColor = activeColors[char.name];
+        if (char.isUser) {
+            const uc = extensionSettings.userCharacters && extensionSettings.userCharacters[char.name];
+            if (uc && uc.color) charColor = uc.color;
+        }
         const colorDot = charColor
             ? `<span class="dooms-portrait-card-color-dot" style="background:${charColor};"></span>`
             : '';
         const newBadge = isNew ? '<span class="dooms-pb-new-badge">&#x2726; New</span>' : '';
+        const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
         let backFace = '';
         try {
@@ -523,20 +534,22 @@ export function updatePortraitBar() {
             : '';
 
         if (portraitSrc) {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
                 <img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                 <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${youBadge}
                 ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;
         } else {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}" title="${cardTitle}" data-char="${nameEsc}">
+            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
                 <div class="dooms-portrait-card-emoji">${emoji}</div>
                 ${absentOverlay}
                 ${newBadge}
+                ${youBadge}
                 ${injectingOverlay}
                 <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
                 ${backFace}
@@ -675,6 +688,19 @@ function namesMatch(cardName, aiName) {
  */
 export function resolvePortrait(name) {
     if (!name) return null;
+
+    // 0. User character — only when this name IS the currently-active user
+    // character. Without the active-name guard, an NPC that happens to
+    // share a name with a user-character would be hijacked: every NPC
+    // portrait lookup matching that name would return the user's avatar
+    // instead, including in chat bubbles.
+    const userEntries = extensionSettings.userCharacters;
+    if (userEntries && userEntries[name] && userEntries[name].avatar) {
+        const activeUserName = resolveActiveUserName();
+        if (activeUserName && name === activeUserName) {
+            return userEntries[name].avatar;
+        }
+    }
 
     const syncedExpression = getExpressionAwarePortrait(name, null);
     if (syncedExpression) return syncedExpression;
@@ -1161,7 +1187,64 @@ export function getCharacterList() {
 
     // Present first, then absent (alphabetical)
     absentChars.sort((a, b) => a.name.localeCompare(b.name));
-    return [...presentChars, ...absentChars];
+    // Prepend the active user character (if the toggle is on and one exists)
+    // so the player's persona shows up alongside NPCs in the PCP.
+    const userPrefix = buildActiveUserCharacterEntry();
+    return userPrefix
+        ? [userPrefix, ...presentChars, ...absentChars]
+        : [...presentChars, ...absentChars];
+}
+
+/**
+ * Returns the name of the currently-active user character, regardless
+ * of whether showUserInPCP is on. Resolution priority:
+ *   1. Manual override: extensionSettings.activeUserCharacter (set by the
+ *      Workshop's "Set as active persona" button)
+ *   2. Auto-match: the user character whose linkedPersona equals the
+ *      current SillyTavern user_avatar
+ *   3. Single-entry fallback: if exactly one user character exists, use it
+ * Returns null if no user character is available.
+ *
+ * Used by both buildActiveUserCharacterEntry (PCP card) and
+ * resolvePortrait (avatar lookup) so the two paths can't drift apart.
+ */
+export function resolveActiveUserName() {
+    const s = extensionSettings || {};
+    const userMap = s.userCharacters || {};
+    if (!userMap || typeof userMap !== 'object') return null;
+    if (s.activeUserCharacter && userMap[s.activeUserCharacter]) return s.activeUserCharacter;
+    let currentAvatar = '';
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext)
+            ? window.SillyTavern.getContext() : null;
+        currentAvatar = (ctx && ctx.user_avatar) || (typeof window !== 'undefined' && window.user_avatar) || '';
+    } catch (e) { currentAvatar = ''; }
+    if (currentAvatar) {
+        for (const [n, entry] of Object.entries(userMap)) {
+            if (entry && entry.linkedPersona === currentAvatar) return n;
+        }
+    }
+    const allNames = Object.keys(userMap);
+    if (allNames.length === 1) return allNames[0];
+    return null;
+}
+
+/**
+ * Build the PCP entry for the currently-active user character if
+ * extensionSettings.showUserInPCP is on. Returns null if the toggle is
+ * off or no user character is available.
+ */
+function buildActiveUserCharacterEntry() {
+    const s = extensionSettings || {};
+    if (!s.showUserInPCP) return null;
+    const name = resolveActiveUserName();
+    if (!name) return null;
+    return {
+        name,
+        emoji: '👤',
+        present: true,
+        isUser: true,
+    };
 }
 
 // ─────────────────────────────────────────────
@@ -1176,7 +1259,7 @@ export function clearPortraitCache() {
  * Redraws a data-URL image onto a canvas of the given size and returns a PNG data URL.
  * Uses high-quality bicubic-like smoothing (imageSmoothingQuality: 'high').
  */
-function upscaleImage(srcDataUrl, width, height) {
+export function upscaleImage(srcDataUrl, width, height) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {

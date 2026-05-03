@@ -6530,6 +6530,56 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     padding-top: 0;
 }
 
+/* Collapsible subsection — wraps a <details>/<summary> so any subsection
+   can fold away. Same uppercase-tracking look as .rpg-subsection-label
+   but the chevron rotates 180° on open. Use:
+     <details class="rpg-subsection-collapse">
+       <summary class="rpg-subsection-collapse-header">
+         <span>Layout</span>
+         <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+       </summary>
+       <div class="rpg-subsection-collapse-body"> ... rows ... </div>
+     </details> */
+.rpg-subsection-collapse {
+    margin: 10px 0 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.rpg-subsection-collapse:first-child,
+.rpg-subsection-collapse[data-first="true"] {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+}
+.rpg-subsection-collapse-header {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    padding: 2px 0;
+    transition: color 0.15s ease;
+}
+.rpg-subsection-collapse-header::-webkit-details-marker { display: none; }
+.rpg-subsection-collapse-header:hover { color: var(--rpg-text, #aaa); }
+.rpg-subsection-chevron {
+    font-size: 0.85em;
+    transition: transform 0.2s ease;
+    opacity: 0.6;
+}
+.rpg-subsection-collapse[open] > .rpg-subsection-collapse-header .rpg-subsection-chevron {
+    transform: rotate(180deg);
+}
+.rpg-subsection-collapse-body {
+    padding-top: 6px;
+}
+
 /* Toggle switch (replaces checkboxes) */
 .rpg-toggle-switch {
     position: relative;
@@ -14079,6 +14129,30 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     100% { opacity: 0; }
 }
 
+/* YOU badge — top-left of the active user character's PCP card */
+.dooms-pb-you-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 5;
+    font-size: 0.6em;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+/* Distinguish the user's card with a soft accent ring */
+.dooms-portrait-card.dooms-pb-user {
+    box-shadow: 0 0 0 2px color-mix(in srgb,
+        rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96)) 55%,
+        transparent);
+}
+
 /* Name highlight — briefly larger and glowing, then settles back */
 .dooms-portrait-card-name.dooms-pb-name-highlight {
     animation: dooms-pb-name-glow 1.8s ease-out forwards;
@@ -14641,7 +14715,12 @@ body.dooms-hide-st-topbar .openDrawer {
     gap: 8px;
     padding: 8px 15px;
     border: 1px solid var(--rpg-border, rgba(74, 123, 167, 0.3));
-    background: var(--rpg-accent, rgba(22, 33, 62, 0.95));
+    /* Two-layer background: a solid base color underneath the (possibly
+       translucent) theme accent so the final composited pixels are fully
+       opaque regardless of theme. background-color paints first, then
+       background-image (linear-gradient of the accent) paints over it. */
+    background-color: #1a1a2e;
+    background-image: linear-gradient(var(--rpg-accent, rgba(22, 33, 62, 0.95)), var(--rpg-accent, rgba(22, 33, 62, 0.95)));
     color: var(--rpg-text, #eaeaea);
     border-radius: 5px;
     overflow: hidden;
@@ -14651,12 +14730,14 @@ body.dooms-hide-st-topbar .openDrawer {
     cursor: pointer;
     font-size: 0.85em;
     font-weight: 500;
-    backdrop-filter: blur(8px);
 }
 
 .dooms-fab-menu-item:hover {
     margin-left: 10px;
-    background: var(--rpg-highlight, #e94560);
+    /* Hover uses the same layered approach so the highlight reads fully
+       solid even if --rpg-highlight is set with alpha in some theme. */
+    background-color: #1a1a2e;
+    background-image: linear-gradient(var(--rpg-highlight, #e94560), var(--rpg-highlight, #e94560));
     color: #fff;
     border-color: var(--rpg-highlight, #e94560);
     box-shadow: 1px 3px 10px var(--rpg-shadow, rgba(0, 0, 0, 0.55));
@@ -19458,6 +19539,39 @@ body.dooms-hide-st-topbar .openDrawer {
     opacity: 0.85;
 }
 
+/* User-character mode badge in the workshop header */
+#character-workshop-popup .cw-user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 0.5rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--rpg-highlight, #e94560) 40%, transparent);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .cw-user-badge[hidden] { display: none !important; }
+
+/* Mode-scoped visibility — JS sets data-mode="npc"|"user" on the modal.
+   !important is needed because #character-workshop-popup .rpg-btn (later
+   in the file) declares display: inline-flex with the same specificity
+   and would otherwise win by source order. */
+#character-workshop-popup[data-mode="user"] .cw-npc-only,
+#character-workshop-popup .cw-user-only {
+    display: none !important;
+}
+#character-workshop-popup[data-mode="user"] .cw-user-only {
+    display: revert !important;
+}
+#character-workshop-popup[data-mode="user"] .cw-user-only[hidden] {
+    display: none !important;
+}
+
 /* Split pane body */
 #character-workshop-popup .workshop-split {
     display: grid;
@@ -20274,6 +20388,66 @@ body.dooms-hide-st-topbar .openDrawer {
     50% { opacity: 0.55; transform: scale(1.35); }
 }
 
+/* Character Roster mode toggle (Characters / Users) — sits above the
+   scope-filter pills. Same visual language but slightly bolder. */
+#character-roster-popup .cr-mode-strip {
+    display: flex;
+    gap: 6px;
+    padding: 0.5rem calc(var(--modal-padding) * 1.5);
+    background: rgba(0, 0, 0, 0.22);
+    border-bottom: 1px solid color-mix(in srgb, var(--rpg-border, #4a7ba7) 70%, transparent);
+    flex-shrink: 0;
+}
+#character-roster-popup .cr-mode-pill {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    color: rgba(234, 234, 234, 0.78);
+    padding: 0.4rem 1rem;
+    font: inherit;
+    font-size: var(--modal-font-small, 0.85rem);
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+#character-roster-popup .cr-mode-pill:hover {
+    color: var(--rpg-text);
+    border-color: var(--rpg-highlight, #e94560);
+}
+#character-roster-popup .cr-mode-pill.is-active {
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 22%, transparent);
+    border-color: var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+}
+
+/* "User character" tile badge in the Roster grid */
+#character-roster-popup .cr-tile-user-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 70%, #000 30%);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* In Users mode, hide the Currently-in-scene scope pill (doesn't apply
+   to the user — the user is always "present"). Hide via CSS rather
+   than mutating the DOM so the pill snaps back when switching modes. */
+#character-roster-popup[data-mode="users"] .cr-scope-pill[data-scope="active"] {
+    display: none;
+}
+
 /* Character Roster scope-filter pills */
 #character-roster-popup .cr-scope-strip {
     display: flex;
@@ -20350,11 +20524,14 @@ body.dooms-hide-st-topbar .openDrawer {
 .rpg-section-info-btn i { font-size: 1rem; line-height: 1; }
 
 .rpg-section-info-popup {
+    /* Default placement (kept for legacy). At runtime the popup is
+       switched to position:fixed by JS when shown so it escapes any
+       parent overflow/clipping that would otherwise cut it off. */
     position: absolute;
     top: 100%;
     right: 0;
     margin-top: 6px;
-    z-index: 25;
+    z-index: 1000;
     width: min(420px, calc(100vw - 2rem));
     background: var(--rpg-bg, rgba(30, 30, 30, 0.98));
     border: 1px solid var(--rpg-border, #4a7ba7);

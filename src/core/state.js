@@ -250,7 +250,15 @@ export let extensionSettings = {
     knownCharacters: {}, // Persistent roster of all characters ever seen (key: name, value: { emoji })
     removedCharacters: [], // Blacklist of character names explicitly removed by the user
     characterColors: {}, // Per-character dialogue colors (key: character name, value: hex color string e.g. "#C71585")
-    perChatCharacterTracking: false, // When true, knownCharacters/removedCharacters/characterColors are per-chat instead of global
+    perChatCharacterTracking: true, // Always on — characters/removed/colors are tracked per-chat (no longer user-toggleable)
+    // ─── User Characters (player personas managed in DES) ───
+    // Parallel namespace to NPCs above. Same data shape (color, avatar,
+    // injection.description/lorebook/promptTemplate) plus user-specific
+    // pronouns and a linkedPersona field tying the user character to a
+    // SillyTavern persona (power_user.personas key = avatar filename).
+    userCharacters: {},          // { name: { color, avatar, avatarFullRes, pronouns, linkedPersona, injection: {...} } }
+    activeUserCharacter: null,   // Name of the currently-active user character (auto-syncs to ST persona switches)
+    showUserInPCP: false,        // Toggle: show the active user character in the Present Characters Panel
     portraitAlignment: 'left', // Portrait bar alignment: 'left' (inline) or 'center'
     portraitPosition: 'above', // Portrait bar position: 'above', 'below', 'top', 'left', or 'right'
     portraitSideColumns: 1,     // Side mode: number of card columns (1 or 2)

@@ -19,9 +19,12 @@ import {
     getActiveKnownCharacters,
     getActiveRemovedCharacters,
     getActiveBannedCharacters,
+    getActiveCharacterColors,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
-import { clearPortraitCache, updatePortraitBar, openExpressionFolder } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
+import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
+import { getBase64Async } from '../../../../../../utils.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -30,8 +33,10 @@ import {
     extension_prompt_types,
     eventSource,
     event_types,
+    getRequestHeaders,
 } from '../../../../../../../script.js';
 import { getContext } from '../../../../../../extensions.js';
+import { power_user } from '../../../../../../power-user.js';
 
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
@@ -247,7 +252,8 @@ export function initCharacterWorkshop() {
     _wsInitialized = true;
     window.addEventListener('dooms:open-workshop', (e) => {
         const name = e?.detail?.characterName;
-        if (name) openCharacterWorkshop(name);
+        const isUser = !!e?.detail?.isUser;
+        if (name) openCharacterWorkshop(name, { isUser });
     });
     // Portrait-bar (or any other surface) can request a pending-inject be
     // cancelled via this event. Same decoupling pattern as open-workshop.
@@ -277,14 +283,33 @@ export function initCharacterWorkshop() {
     } catch (e) {}
 }
 
-export function openCharacterWorkshop(characterName) {
+// Tracks the in-flight close fade-out timeout. Cancelled on reopen so a
+// pending .hide() can't fire after we've reopened, and so the closing-
+// animation doesn't visibly overlap the new modal's content.
+let _pendingCloseTimeout = null;
+
+export function openCharacterWorkshop(characterName, options = {}) {
     if (!characterName) {
         console.warn('[Dooms Tracker] openCharacterWorkshop called without a name');
         return;
     }
     if (!ensureModal()) return;
 
-    draft = buildDraft(characterName);
+    // Kill any pending close-fade-out: prevents (a) the previous modal's
+    // content flashing during its fadeOut overlapping the new fadeIn,
+    // and (b) the close-timeout firing .hide() after we've reopened.
+    if (_pendingCloseTimeout) {
+        clearTimeout(_pendingCloseTimeout);
+        _pendingCloseTimeout = null;
+    }
+    $modal.removeClass('is-closing');
+
+    const isUser = !!options.isUser;
+    draft = buildDraft(characterName, isUser);
+
+    // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
+    // user-only sections without a JS class-toggle on every section.
+    $modal.attr('data-mode', isUser ? 'user' : 'npc');
 
     renderTitle();
     renderHiddenBanner();
@@ -305,7 +330,15 @@ export function openCharacterWorkshop(characterName) {
 export function closeCharacterWorkshop() {
     if (!$modal || !$modal.length) return;
     $modal.removeClass('is-open').addClass('is-closing');
-    setTimeout(() => $modal.removeClass('is-closing').hide(), 200);
+    if (_pendingCloseTimeout) clearTimeout(_pendingCloseTimeout);
+    // Clear the Expressions tab's lazy-load cache so the next open
+    // re-fetches sprites — protects against a stale uploaded-count
+    // display if the underlying sprite folder changed between opens.
+    $modal.find('#cw-expressions-pane').removeAttr('data-character');
+    _pendingCloseTimeout = setTimeout(() => {
+        $modal.removeClass('is-closing').hide();
+        _pendingCloseTimeout = null;
+    }, 200);
     draft = null;
 }
 
@@ -507,10 +540,32 @@ function ensureModal() {
     return true;
 }
 
-function buildDraft(name) {
+function buildDraft(name, isUser = false) {
+    if (isUser) {
+        const u = extensionSettings?.userCharacters?.[name] || {};
+        const inj = u.injection || {};
+        return {
+            name,
+            isUser: true,
+            color: typeof u.color === 'string' ? u.color : '',
+            avatar: typeof u.avatar === 'string' ? u.avatar : '',
+            avatarFullRes: typeof u.avatarFullRes === 'string' ? u.avatarFullRes : '',
+            pronouns: typeof u.pronouns === 'string' ? u.pronouns : '',
+            linkedPersona: typeof u.linkedPersona === 'string' ? u.linkedPersona : '',
+            // Reuse same field names as NPC draft so render code can be shared
+            relationship: '',
+            injection: {
+                description: typeof inj.description === 'string' ? inj.description : '',
+                lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
+                promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
+            },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false },
+        };
+    }
     const inj = extensionSettings?.characterInjection?.[name] || {};
     return {
         name,
+        isUser: false,
         color: extensionSettings?.characterColors?.[name] || '',
         avatar: extensionSettings?.npcAvatars?.[name] || '',
         avatarFullRes: extensionSettings?.npcAvatarsFullRes?.[name] || '',
@@ -543,6 +598,9 @@ function resolveCurrentRelationship(name) {
 
 function renderTitle() {
     $modal.find('#cw-char-title').text(draft.name);
+    $modal.find('#cw-user-badge').prop('hidden', !draft.isUser);
+    $modal.find('#cw-modal-title').text(draft.isUser ? 'User Character Workshop' : 'Character Workshop');
+    $modal.find('#cw-inject-label').text(draft.isUser ? 'Inject persona' : 'Inject into Scene');
 }
 
 function isHiddenFromPanel(name) {
@@ -555,6 +613,12 @@ function isHiddenFromPanel(name) {
 }
 
 function renderHiddenBanner() {
+    // The hidden-from-panel banner only applies to NPCs (user characters
+    // aren't added to the chat's removedCharacters list).
+    if (draft?.isUser) {
+        $modal.find('#cw-hidden-banner').prop('hidden', true);
+        return;
+    }
     const hidden = !!draft && isHiddenFromPanel(draft.name);
     $modal.find('#cw-hidden-banner').prop('hidden', !hidden);
 }
@@ -586,24 +650,75 @@ function restoreCharacterToPanel() {
 
 function renderIdentity() {
     $modal.find('#cw-name').val(draft.name);
-    const rel = (draft.relationship || '').toLowerCase();
-    $modal.find('.rpg-rel-chip').each(function () {
-        const $chip = $(this);
-        const matches = ($chip.attr('data-rel') || '').toLowerCase() === rel;
-        $chip.toggleClass('selected', matches);
-        $chip.attr('aria-checked', matches ? 'true' : 'false');
-    });
-    const $rel = $modal.find('#cw-preview-rel');
-    if (draft.relationship) {
-        const $match = $modal.find(`.rpg-rel-chip[data-rel="${draft.relationship}"]`);
-        const emoji = $match.attr('data-emoji') || '';
-        $rel.text(`${emoji} ${draft.relationship}`.trim());
+    if (draft.isUser) {
+        renderPronounChips();
+        renderLinkedPersonaSelect();
+        // Show pronouns in the preview slot in place of the relationship label
+        $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
     } else {
-        $rel.text('');
+        const rel = (draft.relationship || '').toLowerCase();
+        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
+            const $chip = $(this);
+            const matches = ($chip.attr('data-rel') || '').toLowerCase() === rel;
+            $chip.toggleClass('selected', matches);
+            $chip.attr('aria-checked', matches ? 'true' : 'false');
+        });
+        const $rel = $modal.find('#cw-preview-rel');
+        if (draft.relationship) {
+            const $match = $modal.find(`#cw-rel-chips .rpg-rel-chip[data-rel="${draft.relationship}"]`);
+            const emoji = $match.attr('data-emoji') || '';
+            $rel.text(`${emoji} ${draft.relationship}`.trim());
+        } else {
+            $rel.text('');
+        }
     }
     $modal.find('#cw-preview-name').text(draft.name);
     $modal.find('#cw-preview-card-name').text(draft.name);
     applyPreviewColor(draft.color || '#e94560');
+}
+
+function renderPronounChips() {
+    const current = (draft.pronouns || '').toLowerCase();
+    const presets = ['he/him', 'she/her', 'they/them'];
+    const isPreset = presets.includes(current);
+    const isCustom = !!current && !isPreset;
+    $modal.find('#cw-pronoun-chips .rpg-rel-chip').each(function () {
+        const $chip = $(this);
+        const value = ($chip.attr('data-pronouns') || '').toLowerCase();
+        const matches = value === 'custom' ? isCustom : (value === current);
+        $chip.toggleClass('selected', matches);
+        $chip.attr('aria-checked', matches ? 'true' : 'false');
+    });
+    const $custom = $modal.find('#cw-pronouns-custom');
+    if (isCustom) {
+        $custom.val(draft.pronouns).prop('hidden', false);
+    } else {
+        $custom.val('').prop('hidden', true);
+    }
+}
+
+function renderLinkedPersonaSelect() {
+    const $sel = $modal.find('#cw-linked-persona');
+    // Rebuild options from SillyTavern's persona registry. power_user.personas
+    // is { avatarFilename: personaName }. Stash the avatar filename as the
+    // value so we can sync ST persona switches to the active user character.
+    let personas = {};
+    try {
+        // power_user is imported at module top from ST's power-user.js.
+        // Fall through to the window reference in case some fork exposes
+        // it that way, then to {} so we never crash here.
+        const pu = power_user || (typeof window !== 'undefined' && window.power_user) || null;
+        personas = (pu && pu.personas) || {};
+    } catch (e) { personas = {}; }
+    $sel.empty();
+    $sel.append('<option value="">— None —</option>');
+    for (const [avatarFile, personaName] of Object.entries(personas)) {
+        const opt = document.createElement('option');
+        opt.value = avatarFile;
+        opt.textContent = personaName || avatarFile;
+        $sel[0].appendChild(opt);
+    }
+    $sel.val(draft.linkedPersona || '');
 }
 
 function renderAppearance() {
@@ -764,8 +879,21 @@ function activatePane(paneId) {
 function bindStaticListeners() {
     $modal.on('click.cw', '.workshop-nav button', function () {
         const pane = $(this).attr('data-pane');
-        if (pane) activatePane(pane);
+        if (!pane) return;
+        activatePane(pane);
+        if (pane === 'expressions') {
+            // Lazy-load on first activation per character — re-renders if
+            // the user already has it but the character changed.
+            const $panel = $modal.find('#cw-expressions-pane');
+            const charName = draft?.name || '';
+            if (charName && $panel.attr('data-character') !== charName) {
+                $panel.attr('data-character', charName);
+                renderExpressionsTab($panel, charName);
+            }
+        }
     });
+
+    bindExpressionHandlers();
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
     $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
@@ -781,17 +909,16 @@ function bindStaticListeners() {
     });
 
     // Relationship chip click — set persistent override. Click again to clear.
-    $modal.on('click.cw', '.rpg-rel-chip', function () {
-        if (!draft) return;
+    // Scoped to #cw-rel-chips so the pronoun chips below don't get hit by it.
+    $modal.on('click.cw', '#cw-rel-chips .rpg-rel-chip', function () {
+        if (!draft || draft.isUser) return;
         const $chip = $(this);
         const picked = String($chip.attr('data-rel') || '');
         const current = String(draft.relationship || '');
-        // Toggle off if they clicked the already-selected chip.
         const next = (current.toLowerCase() === picked.toLowerCase()) ? '' : picked;
         draft.relationship = next;
         draft.dirty.relationship = true;
-        // Reflect immediately in the chip row and left-rail preview.
-        $modal.find('.rpg-rel-chip').each(function () {
+        $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
             const match = ($(this).attr('data-rel') || '').toLowerCase() === next.toLowerCase() && !!next;
             $(this).toggleClass('selected', match);
             $(this).attr('aria-checked', match ? 'true' : 'false');
@@ -803,6 +930,95 @@ function bindStaticListeners() {
         } else {
             $rel.text('');
         }
+    });
+
+    // Pronoun chip click (user-mode) — picks one of the presets or reveals
+    // the custom input. Click the active chip again to clear.
+    $modal.on('click.cw', '#cw-pronoun-chips .rpg-rel-chip', function () {
+        if (!draft || !draft.isUser) return;
+        const $chip = $(this);
+        const value = String($chip.attr('data-pronouns') || '');
+        const current = String(draft.pronouns || '');
+        const $custom = $modal.find('#cw-pronouns-custom');
+        if (value === 'custom') {
+            // Toggle custom mode: reveal the input; pre-fill with whatever
+            // the current value is if it's already custom.
+            const presets = ['he/him', 'she/her', 'they/them'];
+            const wasCustom = current && !presets.includes(current.toLowerCase());
+            if (wasCustom) {
+                draft.pronouns = '';
+                draft.dirty.pronouns = true;
+                $custom.prop('hidden', true).val('');
+            } else {
+                $custom.prop('hidden', false).val(current && !presets.includes(current.toLowerCase()) ? current : '').trigger('focus');
+            }
+        } else {
+            const next = current.toLowerCase() === value ? '' : value;
+            draft.pronouns = next;
+            draft.dirty.pronouns = true;
+            $custom.prop('hidden', true).val('');
+        }
+        renderPronounChips();
+        $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
+    });
+
+    // Custom pronoun input — saves on every keystroke
+    $modal.on('input.cw', '#cw-pronouns-custom', function () {
+        if (!draft || !draft.isUser) return;
+        const value = String($(this).val() || '').trim();
+        draft.pronouns = value;
+        draft.dirty.pronouns = true;
+        $modal.find('#cw-preview-rel').text(value ? `(${value})` : '');
+    });
+
+    // Linked SillyTavern persona dropdown — saves the avatar filename
+    $modal.on('change.cw', '#cw-linked-persona', function () {
+        if (!draft || !draft.isUser) return;
+        draft.linkedPersona = String($(this).val() || '');
+        draft.dirty.linkedPersona = true;
+    });
+
+    // "Set as active persona" footer button — flips DES's activeUserCharacter,
+    // forces "Show User in PCP" on so the card actually appears, and (if
+    // linked to a ST persona) calls SillyTavern's persona switch flow.
+    $modal.on('click.cw', '#cw-set-active-persona', function () {
+        if (!draft || !draft.isUser) return;
+        try {
+            extensionSettings.activeUserCharacter = draft.name;
+            // Picking "Set as active" implies the user wants to see them in
+            // the panel — flip the master toggle on so the card renders even
+            // if it had been disabled in Settings.
+            extensionSettings.showUserInPCP = true;
+            saveSettings();
+            // Reflect the toggle change in the settings UI if it's open.
+            try { $('#rpg-pb-show-user').prop('checked', true); } catch (e) {}
+        } catch (e) {}
+        // If the user character is linked to a persona, fire ST's persona
+        // switch. Implementations vary across ST versions, so try the
+        // common entry points and silently fall through.
+        const linked = draft.linkedPersona || '';
+        if (linked) {
+            try {
+                if (typeof window.setUserAvatar === 'function') {
+                    window.setUserAvatar(linked);
+                } else if (power_user && typeof power_user.persona_set === 'function') {
+                    power_user.persona_set(linked);
+                } else {
+                    // Fallback: dispatch a click on the persona's avatar in the
+                    // Personas panel so ST's own handler picks it up.
+                    const sel = `[data-pa-avatar="${linked}"], [data-avatar-file="${linked}"]`;
+                    const el = document.querySelector(sel);
+                    if (el) el.click();
+                }
+            } catch (e) {
+                console.warn('[Dooms Tracker] Failed to switch ST persona:', e);
+            }
+        }
+        try {
+            if (window.toastr) window.toastr.success(`Active user character set to "${draft.name}".`, 'Character Workshop', { timeOut: 3000 });
+        } catch (e) {}
+        // Re-render the PCP so the user-card shows up with the new active.
+        try { updatePortraitBar(); } catch (e) {}
     });
 
     // Custom-color dropper — opens the native color picker sheet.
@@ -821,22 +1037,59 @@ function bindStaticListeners() {
         commitColorSelection(hex);
     });
 
-    $modal.on('change.cw', '#cw-portrait-file', function () {
+    $modal.on('change.cw', '#cw-portrait-file', async function () {
         if (!draft) return;
-        const file = this.files && this.files[0];
+        const fileInput = this;
+        const file = fileInput.files && fileInput.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const url = ev?.target?.result;
-            if (typeof url !== 'string') return;
-            draft.avatar = url;
-            draft.avatarFullRes = url;
+        try {
+            const dataUrl = await getBase64Async(file);
+
+            // Open SillyTavern's built-in crop popup so users can frame the
+            // portrait before saving. Same 3:4 aspect + upscale pipeline as
+            // the portrait-bar's right-click "Upload Portrait" path so the
+            // resulting images match in dimensions.
+            const safeName = (draft.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const titleHtml = draft.isUser
+                ? `<h3>Crop portrait for user character: ${safeName}</h3>`
+                : `<h3>Crop portrait for ${safeName}</h3>`;
+            const croppedImage = await callGenericPopup(
+                titleHtml,
+                POPUP_TYPE.CROP,
+                '',
+                { cropAspect: 3 / 4, cropImage: dataUrl },
+            );
+            if (!croppedImage) {
+                console.log('[Dooms Tracker] Workshop: portrait crop cancelled');
+                return;
+            }
+
+            // Upscale the cropped result to 660x880 PNG for crisp portrait
+            // display. The CROP popup returns a low-res JPEG at the crop
+            // pixel size; redrawing it at portrait resolution prevents
+            // softness when it's used in the bar / chat bubbles.
+            const PORTRAIT_W = 660;
+            const PORTRAIT_H = 880;
+            const hiResDataUrl = await upscaleImage(String(croppedImage), PORTRAIT_W, PORTRAIT_H);
+
+            draft.avatar = hiResDataUrl;
+            draft.avatarFullRes = hiResDataUrl;
             draft.dirty.avatar = true;
-            $modal.find('#cw-preview-img').attr('src', url).show();
+            $modal.find('#cw-preview-img').attr('src', hiResDataUrl).show();
             $modal.find('#cw-preview-placeholder').hide();
-        };
-        reader.onerror = () => console.warn('[Dooms Tracker] Failed to read portrait file');
-        reader.readAsDataURL(file);
+        } catch (err) {
+            console.warn('[Dooms Tracker] Workshop: portrait upload failed', err);
+            try {
+                if (window.toastr) window.toastr.error(
+                    String(err?.message || err || 'Upload failed.'),
+                    'Portrait upload',
+                    { timeOut: 4000 },
+                );
+            } catch (e) {}
+        } finally {
+            // Always clear so the same file can be picked again.
+            try { fileInput.value = ''; } catch (e) {}
+        }
     });
 
     $modal.on('input.cw change.cw', '#cw-inj-description', function () {
@@ -957,10 +1210,28 @@ function bindStaticListeners() {
         closeCharacterWorkshop();
     });
 
+    // Copy NPC → User Characters list (NPC-only footer action)
+    $modal.on('click.cw', '#cw-copy-to-users', () => {
+        if (!draft || draft.isUser) return;
+        commitDraft();
+        copyNpcToUserCharacter(draft.name);
+    });
+
+    // Copy User Character → NPC list (user-only footer action)
+    $modal.on('click.cw', '#cw-copy-to-characters', () => {
+        if (!draft || !draft.isUser) return;
+        commitDraft();
+        copyUserToNpcCharacter(draft.name);
+    });
+
     $modal.on('click.cw', '#cw-inject', () => {
         if (!draft) return;
         commitDraft(); // persist any pending appearance edits first
-        injectIntoScene(draft.name);
+        if (draft.isUser) {
+            injectUserPersona(draft.name);
+        } else {
+            injectIntoScene(draft.name);
+        }
         closeCharacterWorkshop();
     });
 
@@ -999,13 +1270,46 @@ function commitDraft() {
     const name = draft.name;
     let changed = false;
 
+    // User-character mode: write the whole entry into a single namespace.
+    if (draft.isUser) {
+        if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+        const existing = extensionSettings.userCharacters[name] || {};
+        const tplRaw = (draft.injection.promptTemplate || '').trim();
+        const tpl = (tplRaw && tplRaw !== DEFAULT_INJECT_PROMPT.trim()) ? tplRaw : '';
+        const desc = (draft.injection.description || '').trim();
+        const book = (draft.injection.lorebook || '').trim();
+        const next = {
+            ...existing,
+            color: draft.color || '',
+            avatar: draft.avatar || '',
+            avatarFullRes: draft.avatarFullRes || draft.avatar || '',
+            pronouns: draft.pronouns || '',
+            linkedPersona: draft.linkedPersona || '',
+            injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
+        };
+        extensionSettings.userCharacters[name] = next;
+        try { saveSettings(); } catch (e) {}
+        try { updatePortraitBar(); } catch (e) {}
+        return;
+    }
+
     if (draft.dirty.color) {
-        if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
+        // Use the chat-aware getter so colors land in the right store.
+        // When perChatCharacterTracking is on, characterColors live in
+        // chat_metadata.dooms_tracker, NOT extensionSettings — writing
+        // to extensionSettings here meant the PCP (which renders from
+        // the chat-scoped map) never saw the new color.
+        const colors = getActiveCharacterColors();
         if (draft.color) {
-            extensionSettings.characterColors[name] = draft.color;
+            colors[name] = draft.color;
         } else {
-            delete extensionSettings.characterColors[name];
+            delete colors[name];
         }
+        // Persist via the matching saver (saveChatData when per-chat,
+        // saveSettings otherwise) — saveCharacterRosterChange picks
+        // the right one. The trailing saveSettings() at the end of
+        // commitDraft still runs for the non-per-chat fields.
+        try { saveCharacterRosterChange(); } catch (e) {}
         changed = true;
     }
 
@@ -1062,7 +1366,128 @@ function commitDraft() {
     }
 }
 
+/**
+ * Copy an NPC into the user-character namespace. Pulls color, avatar,
+ * and description from the NPC's persisted state. Refuses if a user
+ * character with this name already exists (to avoid silent overwrites).
+ */
+function copyNpcToUserCharacter(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+    if (extensionSettings.userCharacters[trimmed]) {
+        try {
+            if (window.toastr) window.toastr.warning(
+                `A user character named "${trimmed}" already exists. Rename or delete it first.`,
+                'Copy to Users',
+                { timeOut: 4500 },
+            );
+        } catch (e) {}
+        return;
+    }
+    const color = extensionSettings.characterColors?.[trimmed] || '';
+    let avatar = extensionSettings.npcAvatars?.[trimmed] || '';
+    let avatarFullRes = extensionSettings.npcAvatarsFullRes?.[trimmed] || '';
+    // If npcAvatars is empty (NPC's portrait comes from a SillyTavern
+    // character card or the portraits/ folder), let resolvePortrait
+    // find the canonical URL so the copy isn't blank.
+    if (!avatar) {
+        try { avatar = resolvePortrait(trimmed) || ''; } catch (e) {}
+    }
+    if (!avatarFullRes) avatarFullRes = avatar;
+    const inj = extensionSettings.characterInjection?.[trimmed] || {};
+    extensionSettings.userCharacters[trimmed] = {
+        color,
+        avatar,
+        avatarFullRes,
+        pronouns: '',
+        linkedPersona: '',
+        injection: {
+            description: typeof inj.description === 'string' ? inj.description : '',
+            lorebook: '',
+            // Don't carry the NPC inject prompt template — user inject uses
+            // a different default flow.
+        },
+    };
+    try { saveSettings(); } catch (e) {}
+    try {
+        if (window.toastr) window.toastr.success(
+            `Copied "${trimmed}" to User Characters.`,
+            'Workshop',
+            { timeOut: 3000 },
+        );
+    } catch (e) {}
+}
+
+/**
+ * Copy a user character into the NPC namespace. Pulls color, avatar,
+ * and description from the user character. Refuses if an NPC with
+ * this name already exists.
+ */
+function copyUserToNpcCharacter(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const npcAlready =
+        extensionSettings.knownCharacters?.[trimmed] ||
+        extensionSettings.characterColors?.[trimmed] ||
+        extensionSettings.npcAvatars?.[trimmed];
+    if (npcAlready) {
+        try {
+            if (window.toastr) window.toastr.warning(
+                `A character named "${trimmed}" already exists. Rename or delete it first.`,
+                'Copy to Characters',
+                { timeOut: 4500 },
+            );
+        } catch (e) {}
+        return;
+    }
+    const u = extensionSettings.userCharacters?.[trimmed] || {};
+    // Resolve the canonical avatar URL — u.avatar comes from a Workshop
+    // upload OR persona-import; if those are blank, derive it from the
+    // linkedPersona's avatar filename; if THAT's blank, ask resolvePortrait
+    // (covers SillyTavern character-card auto-import + portraits/ folder).
+    let avatar = u.avatar || '';
+    if (!avatar && u.linkedPersona) {
+        avatar = '/User%20Avatars/' + encodeURIComponent(u.linkedPersona);
+    }
+    if (!avatar) {
+        try { avatar = resolvePortrait(trimmed) || ''; } catch (e) {}
+    }
+    const avatarFullRes = u.avatarFullRes || avatar;
+    if (!extensionSettings.knownCharacters) extensionSettings.knownCharacters = {};
+    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
+    if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
+    if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
+    extensionSettings.knownCharacters[trimmed] = { emoji: '👤' };
+    if (u.color) extensionSettings.characterColors[trimmed] = u.color;
+    if (avatar) extensionSettings.npcAvatars[trimmed] = avatar;
+    if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
+    const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
+    if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
+    try { saveSettings(); } catch (e) {}
+    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    try {
+        if (window.toastr) window.toastr.success(
+            `Copied "${trimmed}" to Characters.`,
+            'Workshop',
+            { timeOut: 3000 },
+        );
+    } catch (e) {}
+}
+
 function deleteCharacter(name) {
+    // User character delete: only touches the userCharacters namespace
+    // and clears activeUserCharacter if it was pointing at this entry.
+    if (draft?.isUser) {
+        if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
+        if (extensionSettings.activeUserCharacter === name) {
+            extensionSettings.activeUserCharacter = null;
+        }
+        try { saveSettings(); } catch (e) {}
+        try { updatePortraitBar(); } catch (e) {}
+        return;
+    }
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
     if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
@@ -1091,6 +1516,66 @@ function deleteCharacter(name) {
  *      the character in the next response. The prompt self-clears on
  *      GENERATION_ENDED (see initCharacterWorkshop listener).
  */
+/**
+ * User-character variant of injectIntoScene. Sends the player's persona
+ * description as a one-shot extension prompt for the next generation,
+ * and (if the global "attach portrait" toggle is on) attaches the user
+ * character's portrait to the next outgoing user message for vision-
+ * capable models. Skips all the NPC-only steps: roster splice, present-
+ * marking, lorebook activation, relationship lacing.
+ */
+function injectUserPersona(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const description = (draft?.injection?.description || '').trim();
+    const promptParts = [];
+    if (description) {
+        promptParts.push(`The player's persona — ${trimmed}: ${description}`);
+        promptParts.push('Address the player as this persona for the next response.');
+    }
+    const prompt = promptParts.join('\n\n');
+    if (prompt) {
+        try {
+            setExtensionPrompt(
+                INJECT_SLOT,
+                prompt,
+                extension_prompt_types.IN_PROMPT,
+                0,
+                false,
+            );
+            pendingInjectClear = true;
+            injectStartsToSkip = 1;
+            console.log(`[Dooms Tracker] Workshop: queued persona-inject for "${trimmed}"`);
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: setExtensionPrompt failed', e);
+        }
+    }
+    // Optional portrait attachment for vision-capable models — same path
+    // NPCs use, just sourced from the user-character's avatar.
+    let attached = false;
+    if (extensionSettings?.injectAttachPortrait === true && draft?.avatar) {
+        try {
+            armPortraitAttach(trimmed, draft.avatar);
+            attached = true;
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: portrait attach failed', e);
+        }
+    }
+    try {
+        if (window.toastr) {
+            const bits = [];
+            if (description) bits.push('description');
+            if (attached) bits.push('portrait');
+            const what = bits.length ? bits.join(' + ') : 'nothing';
+            window.toastr.success(
+                `Persona injected (${what}). Sends with the next reply.`,
+                'Character Workshop',
+                { timeOut: 3500 },
+            );
+        }
+    } catch (e) {}
+}
+
 function injectIntoScene(name) {
     const trimmed = String(name || '').trim();
     if (!trimmed) return;
@@ -1491,4 +1976,235 @@ function onGenerationStartedForInject() {
         console.log('[Dooms Tracker] Workshop: new generation starting — clearing stale inject/eject');
         clearInjectPromptIfPending();
     }
+}
+
+// ─────────────────────────────────────────────
+//  Expressions tab — sprite manager
+//  Mirrors the Character Sheet's Expressions tab. Same labels, same
+//  /api/sprites endpoints (get / upload / upload-zip / delete /
+//  open-folder), same crop-then-PNG flow. Scoped to this module so
+//  the Workshop doesn't need to import characterSheet.js.
+// ─────────────────────────────────────────────
+
+const EXPRESSION_LABELS = [
+    'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
+    'confusion', 'curiosity', 'desire', 'disappointment', 'disapproval',
+    'disgust', 'embarrassment', 'excitement', 'fear', 'gratitude', 'grief',
+    'joy', 'love', 'nervousness', 'neutral', 'optimism', 'pride',
+    'realization', 'relief', 'remorse', 'sadness', 'surprise',
+];
+
+async function _cwInvalidateSpriteCache(name) {
+    try {
+        const mod = await import('../integration/expressionSync.js');
+        if (typeof mod.invalidateSpriteCacheFor === 'function') {
+            mod.invalidateSpriteCacheFor(name);
+        }
+    } catch (e) { /* expressionSync is optional */ }
+}
+
+async function renderExpressionsTab($panel, characterName) {
+    $panel.html('<div style="padding:20px; opacity:0.5; text-align:center;">Loading sprites…</div>');
+    let existingSprites = [];
+    try {
+        const response = await fetch(`/api/sprites/get?name=${encodeURIComponent(characterName)}`, {
+            headers: getRequestHeaders(),
+        });
+        if (response.ok) existingSprites = await response.json();
+    } catch (err) {
+        console.warn('[Dooms Tracker] Workshop expressions: fetch failed', err);
+    }
+    const spriteMap = new Map();
+    for (const sprite of existingSprites) {
+        if (sprite.label && !spriteMap.has(sprite.label)) {
+            spriteMap.set(sprite.label, sprite.path);
+        }
+    }
+    const uploadedCount = spriteMap.size;
+    let html = `
+        <div class="rpg-cs-expr-header">
+            <span style="font-size:0.85em; opacity:0.7;">${uploadedCount} / ${EXPRESSION_LABELS.length} expressions uploaded</span>
+            <div class="rpg-cs-expr-actions">
+                <button class="rpg-cs-expr-upload-zip menu_button"><i class="fa-solid fa-file-zipper"></i> Upload ZIP</button>
+                <button class="rpg-cs-expr-open-folder menu_button"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+            </div>
+        </div>
+        <div class="rpg-cs-expression-grid">
+    `;
+    for (const label of EXPRESSION_LABELS) {
+        const spritePath = spriteMap.get(label);
+        const hasSprite = !!spritePath;
+        html += `
+            <div class="rpg-cs-expr-slot ${hasSprite ? 'rpg-cs-expr-has-sprite' : ''}">
+                <div class="rpg-cs-expr-thumb">
+                    ${hasSprite
+                        ? `<img src="${spritePath}" alt="${label}" loading="lazy" />`
+                        : '<div class="rpg-cs-expr-placeholder"><i class="fa-solid fa-image"></i></div>'
+                    }
+                    <div class="rpg-cs-expr-overlay">
+                        <button class="rpg-cs-expr-upload" data-label="${label}" title="Upload ${label}">
+                            <i class="fa-solid fa-upload"></i>
+                        </button>
+                        ${hasSprite ? `
+                            <button class="rpg-cs-expr-delete" data-label="${label}" title="Delete ${label}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="rpg-cs-expr-label">${label}</div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    $panel.html(html);
+}
+
+let _cwExprHandlersBound = false;
+function bindExpressionHandlers() {
+    if (_cwExprHandlersBound) return;
+    _cwExprHandlersBound = true;
+
+    // Match the character-sheet selectors so we share the existing CSS
+    // (.rpg-cs-expr-* rules already styled). Scope to the Workshop's
+    // pane so these don't double-fire when both modals are in the DOM.
+    const inWorkshop = (target) =>
+        $(target).closest('#character-workshop-popup .rpg-cs-tab-content[data-tab="expressions"]').length > 0;
+
+    // Upload single sprite
+    $(document).on('click.cwExpr', '.rpg-cs-expr-upload:not(.rpg-cs-expr-upload-zip)', function () {
+        if (!inWorkshop(this)) return;
+        const label = $(this).data('label');
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!label || !charName) return;
+        const $input = $('<input type="file" accept="image/*" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files && this.files[0];
+            if (!file) { $input.remove(); return; }
+            try {
+                const dataUrl = await getBase64Async(file);
+                const cropped = await callGenericPopup(
+                    `<h3>Crop "${label}" expression for ${charName}</h3>`,
+                    POPUP_TYPE.CROP,
+                    '',
+                    { cropAspect: 3 / 4, cropImage: dataUrl },
+                );
+                if (!cropped) return;
+                const blob = await fetch(cropped).then(r => r.blob());
+                const croppedFile = new File([blob], `${label}.png`, { type: 'image/png' });
+                const fd = new FormData();
+                fd.append('name', charName);
+                fd.append('label', label);
+                fd.append('avatar', croppedFile);
+                fd.append('spriteName', label);
+                const resp = await fetch('/api/sprites/upload', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: fd,
+                });
+                if (resp.ok) {
+                    _cwInvalidateSpriteCache(charName);
+                    renderExpressionsTab($tab, charName);
+                    if (window.toastr) window.toastr.success(`Uploaded ${label} expression for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    if (window.toastr) window.toastr.error('Upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[Dooms Tracker] Workshop expressions: upload failed', err);
+                if (window.toastr) window.toastr.error('Upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // Delete single sprite
+    $(document).on('click.cwExpr', '.rpg-cs-expr-delete', async function () {
+        if (!inWorkshop(this)) return;
+        const label = $(this).data('label');
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!label || !charName) return;
+        try {
+            const resp = await fetch('/api/sprites/delete', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName, label }),
+            });
+            if (resp.ok) {
+                _cwInvalidateSpriteCache(charName);
+                renderExpressionsTab($tab, charName);
+                if (window.toastr) window.toastr.info(`Removed ${label} expression for ${charName}`, '', { timeOut: 2000 });
+            }
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: delete failed', err);
+        }
+    });
+
+    // ZIP upload
+    $(document).on('click.cwExpr', '.rpg-cs-expr-upload-zip', function () {
+        if (!inWorkshop(this)) return;
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        const $input = $('<input type="file" accept=".zip" style="display:none">');
+        $input.on('change', async function () {
+            const file = this.files && this.files[0];
+            if (!file) { $input.remove(); return; }
+            const fd = new FormData();
+            fd.append('name', charName);
+            fd.append('avatar', file);
+            try {
+                const resp = await fetch('/api/sprites/upload-zip', {
+                    method: 'POST',
+                    headers: getRequestHeaders({ omitContentType: true }),
+                    body: fd,
+                });
+                if (resp.ok) {
+                    _cwInvalidateSpriteCache(charName);
+                    renderExpressionsTab($tab, charName);
+                    if (window.toastr) window.toastr.success(`Sprite pack uploaded for ${charName}`, '', { timeOut: 2000 });
+                } else {
+                    if (window.toastr) window.toastr.error('ZIP upload failed.', 'Error');
+                }
+            } catch (err) {
+                console.error('[Dooms Tracker] Workshop expressions: zip upload failed', err);
+                if (window.toastr) window.toastr.error('ZIP upload failed.', 'Error');
+            }
+            $input.remove();
+        });
+        $('body').append($input);
+        $input.trigger('click');
+    });
+
+    // Open folder
+    $(document).on('click.cwExpr', '.rpg-cs-expr-open-folder', async function () {
+        if (!inWorkshop(this)) return;
+        const $tab = $(this).closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        try {
+            const resp = await fetch('/api/sprites/open-folder', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ name: charName }),
+            });
+            if (!resp.ok && resp.status === 404) {
+                if (window.toastr) window.toastr.info(
+                    `Expression sprites go in: data/default-user/characters/${charName}/`,
+                    'Open Folder Not Available',
+                    { timeOut: 6000 },
+                );
+            }
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: open folder failed', err);
+            if (window.toastr) window.toastr.info(
+                `Expression sprites go in: data/default-user/characters/${charName}/`,
+                'Open Folder Not Available',
+                { timeOut: 6000 },
+            );
+        }
+    });
 }

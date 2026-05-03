@@ -143,7 +143,8 @@ import {
     onExpressionSyncSettingChanged,
     onHideDefaultExpressionDisplaySettingChanged,
     clearExpressionSyncCache,
-    onExpressionSyncChatChanged
+    onExpressionSyncChatChanged,
+    classifyActiveUserExpression,
 } from './src/systems/integration/expressionSync.js';
 // Doom Counter
 import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag } from './src/systems/generation/doomCounter.js';
@@ -282,10 +283,195 @@ function updateGenerationModeUI() {
     }
 }
 /**
+ * Resolve the currently-active user character name. Manual override
+ * (extensionSettings.activeUserCharacter) wins; otherwise auto-match
+ * via linkedPersona == window.user_avatar; final fallback is the only
+ * user character if exactly one exists. Returns null if none.
+ */
+function resolveActiveUserCharacterName() {
+    const s = extensionSettings;
+    if (!s || !s.userCharacters || typeof s.userCharacters !== 'object') return null;
+    if (s.activeUserCharacter && s.userCharacters[s.activeUserCharacter]) return s.activeUserCharacter;
+    let currentAvatar = '';
+    try { currentAvatar = (typeof window !== 'undefined' && window.user_avatar) || ''; } catch (e) {}
+    if (currentAvatar) {
+        for (const [n, entry] of Object.entries(s.userCharacters)) {
+            if (entry && entry.linkedPersona === currentAvatar) return n;
+        }
+    }
+    const allNames = Object.keys(s.userCharacters);
+    if (allNames.length === 1) return allNames[0];
+    return null;
+}
+
+/**
+ * If "Show User in PCP" is on AND the active user character has a color,
+ * return that color (it overrides chatBubbleSettings.userDialogColor).
+ * Returns null otherwise.
+ */
+function getOverridingUserDialogColor() {
+    const s = extensionSettings;
+    if (!s || !s.showUserInPCP) return null;
+    const name = resolveActiveUserCharacterName();
+    if (!name) return null;
+    const entry = s.userCharacters && s.userCharacters[name];
+    return (entry && entry.color) ? entry.color : null;
+}
+
+/**
+ * Toggle the User Dialog color picker between editable and "controlled
+ * by user character settings" modes. No-ops gracefully if the picker
+ * isn't present (e.g. a build that hasn't shipped the picker yet).
+ */
+function updateUserDialogOverrideUI() {
+    const $picker = $('#rpg-cb-user-color');
+    if (!$picker.length) return;
+    const $row = $picker.closest('.rpg-setting-row');
+    const overrideColor = getOverridingUserDialogColor();
+    if (overrideColor) {
+        $picker.prop('disabled', true).val(overrideColor);
+        let $note = $row.find('.rpg-cb-user-override-note');
+        if (!$note.length) {
+            $note = $('<span class="rpg-cb-user-override-note rpg-setting-hint" style="display:block; margin-top:4px; font-style: italic; color: var(--rpg-highlight, #e94560); opacity: 0.85;"><i class="fa-solid fa-link"></i> Controlled by user character settings</span>');
+            $row.append($note);
+        }
+        $note.show();
+    } else {
+        $picker.prop('disabled', false);
+        $row.find('.rpg-cb-user-override-note').hide();
+    }
+}
+
+/**
+ * Populates the Update-section branch dropdown by mirroring SillyTavern's
+ * own "Switch branch" button flow:
+ *   1. POST /api/extensions/version — read current branch + remoteUrl
+ *   2. If the response includes a branches list, use it directly.
+ *      Otherwise pull branches from GitHub via the response's remoteUrl.
+ *   3. Cache for the lifetime of the page so reopening the settings doesn't
+ *      re-hit the network. Falls back to ["main"] on total failure.
+ */
+let _branchListPromise = null;
+function populateUpdateBranchDropdownOnce() {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    if ($sel.data('populated')) return;
+    if (_branchListPromise) {
+        _branchListPromise.then((info) => fillBranchDropdown(info)).catch(() => {});
+        return;
+    }
+    _branchListPromise = (async () => {
+        const isUserExt = (import.meta.url || '').includes('/data/');
+        const bareName = extensionName.replace(/^third-party\//, '');
+        let currentBranch = '';
+        let remoteUrl = '';
+        let branches = [];
+        // 1. Ask SillyTavern for its view of this extension's git state.
+        try {
+            const resp = await fetch('/api/extensions/version', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+            });
+            if (resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                currentBranch = String(data?.currentBranchName || data?.currentBranch || '').trim();
+                remoteUrl = String(data?.remoteUrl || data?.remote || '').trim();
+                if (Array.isArray(data?.branches)) {
+                    branches = data.branches.map(b => typeof b === 'string' ? b : String(b?.name || '')).filter(Boolean);
+                }
+            }
+        } catch (e) { /* fall through to manifest+GitHub */ }
+        // 2. If we don't have a branches list yet, fetch from GitHub. Pull
+        //    the repo slug from remoteUrl (preferred, matches what ST sees)
+        //    or from manifest.homePage as a fallback.
+        if (!branches.length) {
+            let repoSlug = '';
+            const fromRemote = remoteUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+            if (fromRemote) repoSlug = fromRemote[1];
+            if (!repoSlug) {
+                try {
+                    const manifestResp = await fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' });
+                    if (manifestResp.ok) {
+                        const manifest = await manifestResp.json();
+                        const m = String(manifest.homePage || '').match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+                        if (m) repoSlug = m[1];
+                        if (!remoteUrl) remoteUrl = manifest.homePage || '';
+                    }
+                } catch (e) { /* keep fallback */ }
+            }
+            if (!repoSlug) repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+            try {
+                const ghResp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
+                    headers: { 'Accept': 'application/vnd.github+json' },
+                });
+                if (ghResp.ok) {
+                    const data = await ghResp.json();
+                    if (Array.isArray(data)) {
+                        branches = data.map(b => String(b?.name || '')).filter(Boolean);
+                    }
+                }
+            } catch (e) { /* fall through to ["main"] */ }
+        }
+        if (!branches.length) branches = ['main'];
+        return { branches, currentBranch, remoteUrl };
+    })();
+    _branchListPromise
+        .then((info) => fillBranchDropdown(info))
+        .catch((err) => {
+            console.warn('[Dooms Tracker] Failed to populate branch dropdown:', err);
+            fillBranchDropdown({ branches: ['main'], currentBranch: '', remoteUrl: '' });
+        });
+}
+
+// Curated whitelist of branches the Update dropdown should expose. Anything
+// not in this list (and not the currently checked-out branch) is filtered
+// out so users only see the maintained release lines + their own branch.
+const UPDATE_BRANCH_WHITELIST = ['main', 'rabbit-hole', 'blades-in-the-dark'];
+
+function fillBranchDropdown({ branches, currentBranch, remoteUrl }) {
+    const $sel = $('#rpg-update-branch');
+    if (!$sel.length) return;
+    const allowed = new Set([...UPDATE_BRANCH_WHITELIST, currentBranch].filter(Boolean));
+    const filtered = branches.filter(b => allowed.has(b));
+    const finalList = filtered.length ? filtered : [...branches];
+    const ordered = finalList.sort((a, b) => {
+        if (currentBranch) {
+            if (a === currentBranch) return -1;
+            if (b === currentBranch) return 1;
+        }
+        const wa = a === 'main' ? 0 : a === 'master' ? 1 : 2;
+        const wb = b === 'main' ? 0 : b === 'master' ? 1 : 2;
+        return wa !== wb ? wa - wb : a.localeCompare(b);
+    });
+    const previous = String($sel.val() || '');
+    $sel.empty();
+    for (const name of ordered) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = (currentBranch && name === currentBranch) ? `${name} (current)` : name;
+        $sel[0].appendChild(opt);
+    }
+    if (previous && ordered.includes(previous)) {
+        $sel.val(previous);
+    } else if (currentBranch && ordered.includes(currentBranch)) {
+        $sel.val(currentBranch);
+    } else {
+        $sel.val(ordered[0] || '');
+    }
+    $sel.data('populated', true);
+    $sel.data('currentBranch', currentBranch || '');
+    $sel.data('remoteUrl', remoteUrl || '');
+}
+
+/**
  * Populates all Chat Bubbles & Info Panel settings controls from saved state.
  */
 function loadChatBubbleSettingsUI() {
     const cbs = extensionSettings.chatBubbleSettings || {};
+    // Refresh the User Dialog override indicator (paired with the
+    // "Show User in PCP" toggle and the active user character's color).
+    try { updateUserDialogOverrideUI(); } catch (e) {}
 
     // Mode selectors
     $('#rpg-cb-bubble-mode').val(extensionSettings.chatBubbleMode || 'off');
@@ -471,6 +657,14 @@ async function initUI() {
     // Layout toggles
     $('#rpg-pb-show-header').on('change', function () { _pbSettings().showHeader = $(this).prop('checked'); _savePb(); });
     $('#rpg-pb-show-absent').on('change', function () { _pbSettings().showAbsentCharacters = $(this).prop('checked'); _savePb(); updatePortraitBar(); });
+    $('#rpg-pb-show-user').on('change', function () {
+        extensionSettings.showUserInPCP = $(this).prop('checked');
+        saveSettings();
+        try { updatePortraitBar(); } catch (e) {}
+        // Also re-paint the bubble settings indicator (toggle drives whether
+        // the user-character color overrides chatBubbleSettings.userDialogColor).
+        try { updateUserDialogOverrideUI(); } catch (e) {}
+    });
     $('#rpg-pb-show-arrows').on('change', function () { _pbSettings().showScrollArrows = $(this).prop('checked'); _savePb(); });
     $('#rpg-pb-auto-import').on('change', function () { extensionSettings.portraitAutoImport = $(this).prop('checked'); saveSettings(); });
 
@@ -549,8 +743,32 @@ async function initUI() {
         e.preventDefault(); e.stopPropagation();
         const $popup = $('#rpg-expressions-info-popup');
         const open = $popup.prop('hidden');
+        if (open) {
+            // Switch to position:fixed anchored to the button so the popup
+            // escapes any clipping by the accordion-body or other ancestor
+            // overflow rules. Right-align under the button; clamp to viewport.
+            const rect = this.getBoundingClientRect();
+            const popupWidth = Math.min(420, window.innerWidth - 16);
+            const rightOffset = Math.max(8, window.innerWidth - rect.right);
+            $popup.css({
+                position: 'fixed',
+                top: (rect.bottom + 6) + 'px',
+                right: rightOffset + 'px',
+                left: 'auto',
+                width: popupWidth + 'px',
+                'max-height': 'calc(100vh - ' + (rect.bottom + 24) + 'px)',
+                'overflow-y': 'auto',
+                'z-index': 1000,
+            });
+        }
         $popup.prop('hidden', !open);
         $(this).attr('aria-expanded', open ? 'true' : 'false');
+    });
+    // Popup body clicks shouldn't bubble — when the info popup is rendered
+    // inside a <summary> (collapsible subsection header), the click would
+    // otherwise toggle the surrounding <details>.
+    $(document).on('click', '#rpg-expressions-info-popup', function (e) {
+        e.stopPropagation();
     });
     $(document).on('click', function (e) {
         const $popup = $('#rpg-expressions-info-popup');
@@ -1525,6 +1743,7 @@ async function initUI() {
     $('#rpg-pb-badge').text((extensionSettings.showPortraitBar ?? true) ? 'on' : 'off');
     $('#rpg-pb-show-header').prop('checked', pb.showHeader !== false);
     $('#rpg-pb-show-absent').prop('checked', pb.showAbsentCharacters !== false);
+    $('#rpg-pb-show-user').prop('checked', extensionSettings.showUserInPCP === true);
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
@@ -1537,7 +1756,14 @@ async function initUI() {
     // Hide the 'Open Character Roster' settings button when PCP is off —
     // the Workshop is part of the Present Characters Panel feature set.
     $('#rpg-open-character-roster').toggle(extensionSettings.showPortraitBar !== false);
-    $('#rpg-pb-per-chat-tracking').prop('checked', extensionSettings.perChatCharacterTracking === true);
+    // Per-chat character tracking is always on now; force the setting
+    // and the (hidden) toggle to true so legacy users with it off are
+    // migrated and any code reading the toggle still gets a truthy value.
+    if (extensionSettings.perChatCharacterTracking !== true) {
+        extensionSettings.perChatCharacterTracking = true;
+        try { saveSettings(); } catch (e) {}
+    }
+    $('#rpg-pb-per-chat-tracking').prop('checked', true);
     $('#rpg-pb-card-width').val(pb.cardWidth ?? 110);
     $('#rpg-pb-card-width-value').text((pb.cardWidth ?? 110) + 'px');
     $('#rpg-pb-card-height').val(pb.cardHeight ?? 150);
@@ -1771,10 +1997,14 @@ async function initUI() {
     getExtensionVersion().then(v => {
         if (v) $('#rpg-current-version').text(`Currently v${v}.`);
     });
+    // Fetch branches from GitHub and populate the dropdown. Best-effort —
+    // failures fall back to a static "main" entry.
+    populateUpdateBranchDropdownOnce();
     $('#rpg-update-extension').off('click.upd').on('click.upd', async function () {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
         const $status = $('#rpg-update-status');
+        const $sel = $('#rpg-update-branch');
         const originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Updating…');
         $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
@@ -1784,6 +2014,45 @@ async function initUI() {
             // strip it from extensionName before posting (otherwise the
             // server resolves to .../third-party/third-partyFoo).
             const bareName = extensionName.replace(/^third-party\//, '');
+            const selectedBranch = String($sel.val() || '').trim();
+            const currentBranch = String($sel.data('currentBranch') || '').trim();
+            const remoteUrl = String($sel.data('remoteUrl') || '').trim();
+            const switchingBranch = selectedBranch && currentBranch && selectedBranch !== currentBranch;
+
+            // Branch switch: use SillyTavern's install endpoint with a branch
+            // parameter — same path the Extensions panel's "Switch branch"
+            // button takes. Replaces the on-disk extension with the chosen
+            // branch's HEAD. Confirm first since this rewrites the folder.
+            if (switchingBranch) {
+                if (!remoteUrl) {
+                    throw new Error('Could not determine remote URL for branch switch.');
+                }
+                const ok = window.confirm(
+                    `Switch to branch "${selectedBranch}"?\n\n` +
+                    `This re-installs Doom's Enhancement Suite from ${remoteUrl} on the "${selectedBranch}" branch.\n` +
+                    `Settings are kept; only the on-disk files are replaced.\n\n` +
+                    `(Same flow as SillyTavern's "Switch branch" button.)`
+                );
+                if (!ok) {
+                    $status.html('<span style="opacity:0.8;">Switch cancelled.</span>');
+                    return;
+                }
+                $status.html(`<span style="opacity:0.8;">Switching to <code>${selectedBranch}</code>…</span>`);
+                const resp = await fetch('/api/extensions/install', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ url: remoteUrl, global: !isUserExt, branch: selectedBranch }),
+                });
+                if (!resp.ok) {
+                    const text = await resp.text().catch(() => '');
+                    throw new Error(text || `HTTP ${resp.status}`);
+                }
+                $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Switched to <code>${selectedBranch}</code>. <strong>Reload SillyTavern</strong> to apply.`);
+                $sel.data('currentBranch', selectedBranch);
+                return;
+            }
+
+            // Same-branch update — git pull on the currently checked-out branch.
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
@@ -1906,6 +2175,22 @@ async function initUI() {
                 });
             });
 
+            items.push({
+                id: 'character-roster',
+                label: 'Workshop',
+                iconClass: 'fa-solid fa-users-rectangle',
+                action: () => {
+                    // Prefer the decoupled event used by other surfaces;
+                    // fall back to a click on the settings entry button if
+                    // the listener hasn't been registered yet.
+                    try {
+                        window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+                    } catch (e) {
+                        const $btn = $('#rpg-open-character-roster');
+                        if ($btn.length) $btn.trigger('click');
+                    }
+                },
+            });
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",
@@ -2525,10 +2810,28 @@ jQuery(async () => {
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
-                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
-                const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
-                if (messageElement) {
-                    applyChatBubbles(messageElement, extensionSettings.chatBubbleMode);
+                // Chat bubbles styling
+                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
+                    const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                    if (messageElement) {
+                        applyChatBubbles(messageElement, extensionSettings.chatBubbleMode);
+                    }
+                }
+                // User-character expression classification — same flow {{char}}
+                // gets after each AI reply, but on the user's outgoing text.
+                // Gated by syncExpressionsToPresentCharacters and a configured
+                // active user character with a sprite folder; otherwise no-op.
+                if (extensionSettings.syncExpressionsToPresentCharacters) {
+                    try {
+                        const idx = parseInt(messageId, 10);
+                        const msg = (Array.isArray(chat) && Number.isFinite(idx)) ? chat[idx] : null;
+                        const text = msg && msg.is_user ? (msg.mes || '') : '';
+                        if (text) {
+                            classifyActiveUserExpression(text)
+                                .then(() => updatePortraitBar())
+                                .catch(err => console.error('[DES] User expression classify failed:', err));
+                        }
+                    } catch (e) {}
                 }
             });
             eventSource.on(event_types.CHAT_CHANGED, () => {

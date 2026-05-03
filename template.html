@@ -308,7 +308,12 @@
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
-                    <div class="rpg-subsection-label">Workshop</div>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Workshop</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <button id="rpg-open-character-roster" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-users-rectangle"></i> Open Character Roster
@@ -317,7 +322,14 @@
                     <p class="rpg-note-text" style="margin-top:4px;">Browse every character, edit one, or add a new one.
                         Opens the Character Workshop on click.</p>
 
-                    <div class="rpg-subsection-label">Layout</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Layout</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Position</span>
@@ -387,6 +399,16 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show User in PCP</span>
+                            <span class="rpg-setting-hint">Show your active user character (player persona) as a card in the Present Characters Panel. Auto-resolves from your active SillyTavern persona — manage user characters in the Roster's Users mode.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-pb-show-user" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Show Scroll Arrows</span>
                             <span class="rpg-setting-hint">Left/right arrows on hover</span>
                         </div>
@@ -405,7 +427,10 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-subsection-label rpg-subsection-with-info">
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header rpg-subsection-with-info">
                         <span>Expressions</span>
                         <button type="button" class="rpg-section-info-btn" id="rpg-expressions-info-btn"
                             aria-label="Help: Expressions" aria-expanded="false">
@@ -435,7 +460,9 @@
                                     Expression in Tooltip</strong> below to see which label was picked when you hover a
                                 portrait.</p>
                         </div>
-                    </div>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Character Expressions</span>
@@ -492,8 +519,15 @@
                         </label>
                     </div>
 
-                    <div class="rpg-subsection-label">Roster</div>
-                    <div class="rpg-setting-row">
+                    </div>
+                </details>
+                    <!-- Per-Chat Character Tracking is always on now; row hidden but
+                         the input stays in the DOM so existing JS handlers don't
+                         break. Default value is forced true on settings load.
+                         The Roster subsection used to wrap this row, but with
+                         nothing else in it the drop-down was empty — section
+                         removed entirely. -->
+                    <div class="rpg-setting-row" style="display:none;" aria-hidden="true">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Chat Character Tracking</span>
                             <span class="rpg-setting-hint">Characters and removed list are tracked per-chat instead of
@@ -504,8 +538,12 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-
-                    <div class="rpg-subsection-label">Portraits</div>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Portraits</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Export Portraits</span>
@@ -518,7 +556,14 @@
                         </button>
                     </div>
 
-                    <div class="rpg-subsection-label">Card Size</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Card Size</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Card Width</span>
@@ -563,7 +608,14 @@
                         <i class="fa-solid fa-rotate-left"></i> Restore Card Defaults
                     </button>
 
-                    <div class="rpg-subsection-label">Colors</div>
+                    </div>
+                </details>
+                    <details class="rpg-subsection-collapse">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span>Colors</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Bar Background</span>
                         <input type="color" id="rpg-pb-bar-bg-color" class="rpg-color-swatch" value="#000000" />
@@ -636,6 +688,8 @@
                             <span id="rpg-pb-absent-opacity-value" class="rpg-slider-value">45%</span>
                         </div>
                     </div>
+                    </div>
+                </details>
                 </div>
             </div>
 
@@ -1691,14 +1745,25 @@
                 troubleshooting.</p>
 
             <!-- Update -->
-            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                 <button id="rpg-update-extension" class="rpg-accordion-action-btn" type="button">
                     <i class="fa-solid fa-cloud-arrow-down"></i> Update Extension
                 </button>
+                <label for="rpg-update-branch" class="muted" style="font-size: 0.85em; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+                    Branch
+                </label>
+                <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
+                    <option value="">Loading branches…</option>
+                </select>
             </div>
             <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
                 Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version"
                     style="opacity:0.7;"></span>
+            </p>
+            <p class="rpg-note-text" style="margin-top:0; padding: 0 8px; opacity: 0.6; font-size: 0.78em;">
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                Same flow as SillyTavern's "Switch branch" button: picks a branch in-place via the install endpoint and confirms before rewriting on disk.
             </p>
 
         </div>
@@ -2255,9 +2320,12 @@
 
         <header class="rpg-settings-popup-header">
             <h3>
-                <span>Character Workshop</span>
+                <span id="cw-modal-title">Character Workshop</span>
                 <span class="muted" aria-hidden="true">&mdash;</span>
                 <span class="workshop-subject" id="cw-char-title"></span>
+                <span class="cw-user-badge" id="cw-user-badge" hidden title="This is a user (player) character">
+                    <i class="fa-solid fa-user" aria-hidden="true"></i> User
+                </span>
             </h3>
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
@@ -2295,6 +2363,7 @@
                 <nav class="workshop-nav" aria-label="Section">
                     <button type="button" class="active" data-pane="identity">&#128481; Identity</button>
                     <button type="button" data-pane="appearance">&#127912; Appearance</button>
+                    <button type="button" data-pane="expressions">&#128516; Expressions</button>
                     <button type="button" data-pane="injection">&#128137; Injection</button>
                 </nav>
             </aside>
@@ -2306,14 +2375,14 @@
                 <section class="rpg-editor-pane active" data-pane="identity">
                     <div class="rpg-editor-section">
                         <h4>Identity</h4>
-                        <p class="helper">Name is read-only. Click a relationship chip to set an override &mdash; it
-                            wins over the AI's per-turn classification and is included when you Inject into Scene. Click
-                            the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-npc">Name is read-only. Click a relationship chip to set an override &mdash; it wins over the AI's per-turn classification and is included when you Inject into Scene. Click the selected chip again to clear.</p>
+                        <p class="helper" id="cw-identity-helper-user" hidden>Name is read-only. Pronouns and the linked SillyTavern persona shape how the AI references this user character. Pronouns are stored on the persona; switching the active persona in SillyTavern auto-switches this user character if they're linked.</p>
                         <div class="rpg-field">
                             <label for="cw-name">Character name</label>
                             <input id="cw-name" class="rpg-input" type="text" readonly>
                         </div>
-                        <div class="rpg-field">
+                        <!-- NPC mode: relationship chips -->
+                        <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
                             <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup" aria-label="Relationship">
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
@@ -2330,6 +2399,24 @@
                                     data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span>
                                     Neutral</button>
                             </div>
+                        </div>
+                        <!-- User mode: pronouns chips + linked persona -->
+                        <div class="rpg-field cw-user-only" hidden>
+                            <label>Pronouns</label>
+                            <div class="rpg-rel-chips" id="cw-pronoun-chips" role="radiogroup" aria-label="Pronouns">
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="he/him">he / him</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="she/her">she / her</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="they/them">they / them</button>
+                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="custom">custom&hellip;</button>
+                            </div>
+                            <input id="cw-pronouns-custom" class="rpg-input" type="text" placeholder="e.g. xe/xem" hidden style="margin-top: 0.5rem; max-width: 240px;">
+                        </div>
+                        <div class="rpg-field cw-user-only" hidden>
+                            <label for="cw-linked-persona">Linked SillyTavern persona</label>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is set as the DES active user character.</p>
+                            <select id="cw-linked-persona" class="rpg-input" style="max-width: 320px;">
+                                <option value="">— None —</option>
+                            </select>
                         </div>
                     </div>
                 </section>
@@ -2381,6 +2468,30 @@
                     </div>
                 </section>
 
+                <!-- EXPRESSIONS — sprite manager (mirrored from Character Sheet) -->
+                <section class="rpg-editor-pane" data-pane="expressions">
+                    <div class="rpg-editor-section">
+                        <h4>Expressions</h4>
+                        <p class="helper">Upload sprites for each expression label below. Sprites land in <code>data/default-user/characters/&lt;name&gt;/</code> and are picked up automatically by the expression sync. ZIP upload accepts a folder of correctly-named PNGs (e.g. <code>joy.png</code>, <code>sadness.png</code>).</p>
+                        <div class="cw-expr-note cw-user-only" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid var(--rpg-highlight, #e94560); background: color-mix(in srgb, var(--rpg-highlight, #e94560) 10%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-circle-info"></i> User-character expressions</strong> work the same way as <code>{{char}}</code>: after each message you send, DES classifies your text and switches this user character's sprite to match.
+                            <br><br>
+                            <strong>To enable:</strong>
+                            <ol style="margin: 4px 0 0; padding-left: 20px;">
+                                <li>This user character must be the <em>active</em> one (use <strong>Set as active persona</strong> below, or link it to your current SillyTavern persona on the Identity tab).</li>
+                                <li>Upload sprites here (or drop PNGs into the folder above).</li>
+                                <li>In DES Settings → Present Characters Panel, turn on <strong>Sync expressions to Present Characters Panel</strong>.</li>
+                            </ol>
+                        </div>
+                        <div class="cw-expr-note cw-npc-only" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid var(--rpg-highlight, #e94560); background: color-mix(in srgb, var(--rpg-highlight, #e94560) 10%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-circle-info"></i> Auto-switching</strong> requires DES Settings → Present Characters Panel → <strong>Sync expressions to Present Characters Panel</strong> to be on. After each AI reply, DES classifies the character's text and shows the matching sprite from this folder.
+                        </div>
+                        <div class="rpg-cs-tab-content" data-tab="expressions" id="cw-expressions-pane">
+                            <div style="padding:20px; opacity:0.5; text-align:center;">Open this tab to load sprites…</div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- INJECTION -->
                 <section class="rpg-editor-pane" data-pane="injection">
                     <div class="rpg-editor-section">
@@ -2395,7 +2506,7 @@
                                 placeholder="e.g. A wiry 60-year-old archivist with silver-streaked hair tied back, rectangular glasses, and a rumpled charcoal wool coat. Soft-spoken, always carrying a sealed brass scroll case&hellip;"></textarea>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Attached lorebook</h4>
                         <p class="helper">Pick a SillyTavern lorebook (World Info) to activate when this character is
                             injected. Type to filter; leave blank to skip.</p>
@@ -2413,14 +2524,9 @@
                             </div>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
-                        <h4>Injection prompt <span class="muted"
-                                style="font-weight: normal; font-size: 0.85em;">(advanced)</span></h4>
-                        <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into
-                                Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>,
-                            <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and
-                            optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable
-                            is filled in.</p>
+                    <div class="rpg-editor-section cw-npc-only">
+                        <h4>Injection prompt <span class="muted" style="font-weight: normal; font-size: 0.85em;">(advanced)</span></h4>
+                        <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>, <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable is filled in.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-prompt" class="sr-only">Injection prompt template</label>
                             <textarea id="cw-inj-prompt" class="rpg-textarea" rows="10" spellcheck="false"
@@ -2448,7 +2554,7 @@
                                 Setting is global, not per-character.</span>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Banish from generations</h4>
                         <p class="helper">When on, every AI generation receives a standing direction telling it that
                             this character is <strong>not in the scene</strong> and must not appear &mdash; no dialogue,
@@ -2463,7 +2569,7 @@
                                 persists across turns and reloads until you toggle it off.</span>
                         </div>
                     </div>
-                    <div class="rpg-editor-section">
+                    <div class="rpg-editor-section cw-npc-only">
                         <h4>Stuck injection?</h4>
                         <p class="helper">Inject into Scene is a one-shot direction &mdash; it should clear after the
                             AI's next reply. If a character keeps getting referenced every turn anyway, force-wipe
@@ -2489,13 +2595,22 @@
             </button>
             <span class="spacer"></span>
             <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-cancel">Cancel</button>
-            <button class="rpg-btn" type="button" id="cw-eject"
-                title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
+            <!-- NPC-only footer actions -->
+            <button class="rpg-btn cw-npc-only" type="button" id="cw-copy-to-users" title="Copy this character into the User Characters list (creates a user character with the same color, portrait, and description). Skipped if a user character with this name already exists.">
+                <i class="fa-solid fa-user-tag"></i> Copy to Users
+            </button>
+            <button class="rpg-btn cw-npc-only" type="button" id="cw-eject" title="Tell the AI to drop this character from the next response. Use when they keep showing up even after the inject cleared.">
                 <i class="fa-solid fa-user-xmark"></i> Eject from Scene
             </button>
-            <button class="rpg-btn" type="button" id="cw-inject"
-                title="Bring this character into the scene and tell the AI to incorporate them next turn">
-                <i class="fa-solid fa-user-plus"></i> Inject into Scene
+            <button class="rpg-btn" type="button" id="cw-inject" title="Send the description (and optionally the portrait) to the AI as one-shot context for the next response.">
+                <i class="fa-solid fa-user-plus"></i> <span id="cw-inject-label">Inject into Scene</span>
+            </button>
+            <!-- User-only footer actions -->
+            <button class="rpg-btn cw-user-only" type="button" id="cw-copy-to-characters" title="Copy this user character into the Characters list (creates an NPC with the same color, portrait, and description). Skipped if an NPC with this name already exists.">
+                <i class="fa-solid fa-user-tag"></i> Copy to Characters
+            </button>
+            <button class="rpg-btn cw-user-only" type="button" id="cw-set-active-persona" title="Set as active: makes this user character the active DES user, switches the SillyTavern persona to its linked entry, and shows them in the Present Characters Panel">
+                <i class="fa-solid fa-user-check"></i> Set as active persona
             </button>
             <button class="rpg-btn rpg-btn-primary" type="button" id="cw-save">Save</button>
         </footer>
@@ -2513,10 +2628,20 @@
         <header class="rpg-settings-popup-header">
             <h3>
                 <i class="fa-solid fa-users-rectangle" aria-hidden="true"></i>
-                <span>Character Roster</span>
+                <span id="cr-title">Character Roster</span>
             </h3>
             <button class="rpg-popup-close" id="cr-close" type="button" aria-label="Close">&times;</button>
         </header>
+
+        <!-- Mode toggle: NPC characters vs user (player) characters -->
+        <div class="cr-mode-strip" role="tablist" aria-label="Roster mode">
+            <button type="button" class="cr-mode-pill is-active" data-mode="characters" role="tab" aria-selected="true">
+                <i class="fa-solid fa-people-group" aria-hidden="true"></i> Characters
+            </button>
+            <button type="button" class="cr-mode-pill" data-mode="users" role="tab" aria-selected="false">
+                <i class="fa-solid fa-user" aria-hidden="true"></i> Users
+            </button>
+        </div>
 
         <div class="cr-subheader">
             <div class="cr-search-wrap">
@@ -2551,6 +2676,12 @@
                 <i class="fa-solid fa-file-arrow-up"></i> Import&hellip;
             </button>
             <input id="cr-import-file" type="file" accept="application/json,.json" class="sr-only">
+            <button class="rpg-btn cr-characters-only" type="button" id="cr-import-cards-btn" style="display:none;" title="Import characters from your SillyTavern character cards">
+                <i class="fa-solid fa-id-card"></i> Import from Cards
+            </button>
+            <button class="rpg-btn cr-users-only" type="button" id="cr-import-personas-btn" style="display:none;" title="Import user characters from your SillyTavern personas">
+                <i class="fa-solid fa-users-line"></i> Import from SillyTavern personas
+            </button>
             <span class="spacer"></span>
             <span class="cr-tip muted">
                 <i class="fa-regular fa-lightbulb" aria-hidden="true"></i>
