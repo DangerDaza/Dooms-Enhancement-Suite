@@ -507,6 +507,13 @@ function onGenerateBeforeCombinePrompts(eventData) {
     if (!eventData || !Array.isArray(eventData.finalMesSend)) {
         return;
     }
+    // Defense in depth: if the user has DES disabled, never inject —
+    // even if pendingContextMap somehow has stale data from before the
+    // toggle. onGenerationStarted's disabled branch is supposed to clear
+    // the map, but a regression there must not silently leak content.
+    if (!extensionSettings.enabled) {
+        return;
+    }
     // Skip when the tracker itself is generating (separate/external mode) —
     // generateSeparateUpdatePrompt() builds its own context; injecting here
     // would double-inject and corrupt the tracker prompt.
@@ -538,6 +545,10 @@ function onGenerateAfterCombinePrompts(eventData) {
     if (!eventData || typeof eventData.prompt !== 'string') {
         return;
     }
+    // Defense in depth — see onGenerateBeforeCombinePrompts.
+    if (!extensionSettings.enabled) {
+        return;
+    }
     if (eventData.dryRun) {
         return;
     }
@@ -566,6 +577,13 @@ function onGenerateAfterCombinePrompts(eventData) {
  */
 function onChatCompletionPromptReady(eventData) {
     if (!eventData || !Array.isArray(eventData.chat)) {
+        return;
+    }
+    // Defense in depth — see onGenerateBeforeCombinePrompts. This is the
+    // listener that actually leaked yu's `[Characters are currently
+    // thinking: …]` system messages: every chat-completion call shipped
+    // the stale pendingContextMap until ST was reloaded.
+    if (!extensionSettings.enabled) {
         return;
     }
     if (eventData.dryRun) {
@@ -617,6 +635,13 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+        // Also drop any historical-context payload queued from a prior
+        // generation while the extension was enabled. Without this, the
+        // persistent listeners (CHAT_COMPLETION_PROMPT_READY etc.) keep
+        // injecting the stale tracker JSON into every outgoing prompt
+        // even after the user toggles the extension off.
+        pendingContextMap = new Map();
+        historyInjectionDone = false;
         return;
     }
     const context = getContext();
