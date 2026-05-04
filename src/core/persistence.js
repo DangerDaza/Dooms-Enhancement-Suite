@@ -413,6 +413,24 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 23;
                 settingsChanged = true;
             }
+            // Migration to version 24: Initialize Auto Portrait settings.
+            if (currentVersion < 24) {
+                if (extensionSettings.autoPortraitMode === undefined) {
+                    extensionSettings.autoPortraitMode = 'off';
+                }
+                if (extensionSettings.autoPortraitPromptSource === undefined) {
+                    extensionSettings.autoPortraitPromptSource = 'main_reply_tag';
+                }
+                if (!extensionSettings.generatedPortraits || typeof extensionSettings.generatedPortraits !== 'object') {
+                    extensionSettings.generatedPortraits = {};
+                }
+                if (extensionSettings.customAutoPortraitPrompt === undefined) {
+                    extensionSettings.customAutoPortraitPrompt = '';
+                }
+                extensionSettings.syncExpressionsToPresentCharacters = extensionSettings.autoPortraitMode !== 'off';
+                extensionSettings.settingsVersion = 24;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {

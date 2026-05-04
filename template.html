@@ -1,4 +1,4 @@
-<!-- Settings Modal -->
+﻿<!-- Settings Modal -->
 <div id="rpg-settings-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
     aria-labelledby="rpg-settings-title">
     <div class="rpg-settings-popup-content">
@@ -14,7 +14,7 @@
         </header>
         <div class="rpg-settings-popup-body">
 
-            <!-- ═══════ GENERATION ═══════ -->
+            <!-- â•â•â•â•â•â•â• GENERATION â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="generation">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-gears rpg-accordion-icon"></i>
@@ -135,7 +135,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ DISPLAY & FEATURES ═══════ -->
+            <!-- â•â•â•â•â•â•â• DISPLAY & FEATURES â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="display">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-eye rpg-accordion-icon"></i>
@@ -172,7 +172,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <!-- Lock Icons toggle removed — lock UI is disabled until
+                    <!-- Lock Icons toggle removed â€” lock UI is disabled until
                          it can be wired into the scene tracker. Backend (lockManager.js)
                          is preserved for future use. -->
                     <div class="rpg-setting-row">
@@ -222,7 +222,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ THEME ═══════ -->
+            <!-- â•â•â•â•â•â•â• THEME â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="theme">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-palette rpg-accordion-icon"></i>
@@ -299,7 +299,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ PRESENT CHARACTERS PANEL ═══════ -->
+            <!-- â•â•â•â•â•â•â• PRESENT CHARACTERS PANEL â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="portrait-bar">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-users rpg-accordion-icon"></i>
@@ -347,7 +347,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Columns</span>
-                                <span class="rpg-setting-hint">Card grid width — 1 keeps the bar narrow, 2 fits more
+                                <span class="rpg-setting-hint">Card grid width â€” 1 keeps the bar narrow, 2 fits more
                                     characters per row.</span>
                             </div>
                             <select id="rpg-pb-side-columns" class="rpg-accordion-select">
@@ -400,7 +400,7 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Show User in PCP</span>
-                            <span class="rpg-setting-hint">Show your active user character (player persona) as a card in the Present Characters Panel. Auto-resolves from your active SillyTavern persona — manage user characters in the Roster's Users mode.</span>
+                            <span class="rpg-setting-hint">Show your active user character (player persona) as a card in the Present Characters Panel. Auto-resolves from your active SillyTavern persona â€” manage user characters in the Roster's Users mode.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-show-user" />
@@ -431,72 +431,54 @@
                 </details>
                     <details class="rpg-subsection-collapse">
                         <summary class="rpg-subsection-collapse-header rpg-subsection-with-info">
-                        <span>Expressions</span>
+                        <span>Auto Portraits</span>
                         <button type="button" class="rpg-section-info-btn" id="rpg-expressions-info-btn"
-                            aria-label="Help: Expressions" aria-expanded="false">
+                            aria-label="Help: Auto Portraits" aria-expanded="false">
                             <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                         </button>
                         <div class="rpg-section-info-popup" id="rpg-expressions-info-popup" hidden>
-                            <h5>DES handles expressions</h5>
-                            <p>You do <strong>not</strong> need SillyTavern's separate <em>Expressions</em> extension.
-                                With <strong>Per-Character Expressions</strong> on, DES classifies each character's mood
-                                every turn and swaps the matching sprite onto their portrait card.</p>
-                            <h5>How to add sprites for a character</h5>
-                            <ol>
-                                <li>Open the character in <strong>Character Workshop</strong> &rarr;
-                                    <strong>Appearance</strong> tab.</li>
-                                <li>Click <strong>Open expression folder</strong>.</li>
-                                <li>Drop image files <strong>directly into that folder</strong> (not into a sub-folder).
-                                    <code>.png</code> and <code>.webp</code> both work. Name them after the emotion the
-                                    classifier outputs: <code>joy</code>, <code>sadness</code>, <code>annoyance</code>,
-                                    <code>optimism</code>, <code>neutral</code>, <code>love</code>,
-                                    <code>nervousness</code>, <code>relief</code>, <code>remorse</code>,
-                                    <code>realization</code>, <code>surprise</code>, etc. &mdash; e.g.
-                                    <code>joy.webp</code>, <code>sadness.png</code>.</li>
-                                <li>Reload SillyTavern. The next AI message will start swapping sprites automatically.
-                                </li>
-                            </ol>
-                            <p class="rpg-section-info-tip"><i class="fa-solid fa-lightbulb"></i> Turn on <strong>Show
-                                    Expression in Tooltip</strong> below to see which label was picked when you hover a
-                                portrait.</p>
+                            <h5>DES can generate portrait cards</h5>
+                            <p>Auto Portraits can ask for private present-character portrait prompts, generate them
+                                through SillyTavern's native <code>/sd</code>, and show them in the existing portrait
+                                cards.</p>
+                            <h5>Compatibility</h5>
+                            <p>DES only reads its private <code>&lt;des_portraits&gt;</code> block. Normal
+                                <code>[pic prompt="..."]</code> text is left alone so separate scene-image extensions
+                                can keep working.</p>
+                            <p class="rpg-section-info-tip"><i class="fa-solid fa-lightbulb"></i> Use
+                                <strong>Customize Prompts</strong> to tune the Auto Portrait prompt for your image
+                                model.</p>
                         </div>
                             <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
                         </summary>
                         <div class="rpg-subsection-collapse-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Per-Character Expressions</span>
-                            <span class="rpg-setting-hint">Classify emotions per character and display expression
-                                sprites on portrait cards</span>
+                            <span class="rpg-setting-label">Auto Portraits</span>
+                            <span class="rpg-setting-hint">Generate portrait-card images for present characters</span>
                         </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-pb-sync-expressions" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
+                        <select id="rpg-auto-portrait-mode" class="rpg-accordion-select">
+                            <option value="off">Off</option>
+                            <option value="only_missing">Only missing</option>
+                            <option value="state_changed">State changed</option>
+                            <option value="every_reply">Every reply</option>
+                        </select>
                     </div>
-                    <div id="rpg-expression-options" style="display:none;">
+                    <div id="rpg-auto-portrait-options" style="display:none;">
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Classifier API</span>
-                                <span class="rpg-setting-hint">How to classify character emotions</span>
+                                <span class="rpg-setting-label">Prompt Source</span>
+                                <span class="rpg-setting-hint">How DES gets the natural-language portrait prompt</span>
                             </div>
-                            <select id="rpg-expression-classifier-api" class="rpg-accordion-select">
-                                <option value="local">Local (BERT) — Free, offline</option>
-                                <option value="llm">LLM (Main API) — More accurate</option>
+                            <select id="rpg-auto-portrait-prompt-source" class="rpg-accordion-select">
+                                <option value="main_reply_tag">Main reply tag</option>
+                                <option value="separate_hidden_call">Separate hidden call</option>
+                                <option value="tracker_fields_only">Tracker fields only</option>
                             </select>
                         </div>
-                        <div id="rpg-expression-batch-row" class="rpg-setting-row" style="display:none;">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Batch Classification</span>
-                                <span class="rpg-setting-hint">Classify all characters in one LLM call (saves
-                                    tokens)</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-expression-batch-mode" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
                     </div>
+                    <div id="rpg-expression-options" style="display:none;"></div>
+                    <input type="checkbox" id="rpg-pb-sync-expressions" style="display:none;" aria-hidden="true" />
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Hide Default Expression Display</span>
@@ -509,9 +491,9 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Show Expression in Tooltip</span>
-                            <span class="rpg-setting-hint">Hovering a portrait card shows "Name — expression" when a
-                                sprite is active</span>
+                            <span class="rpg-setting-label">Show Portrait Status in Tooltip</span>
+                            <span class="rpg-setting-hint">Hovering a portrait card can show when a portrait is being
+                                generated</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-show-expression-in-tooltip" />
@@ -525,7 +507,7 @@
                          the input stays in the DOM so existing JS handlers don't
                          break. Default value is forced true on settings load.
                          The Roster subsection used to wrap this row, but with
-                         nothing else in it the drop-down was empty — section
+                         nothing else in it the drop-down was empty â€” section
                          removed entirely. -->
                     <div class="rpg-setting-row" style="display:none;" aria-hidden="true">
                         <div class="rpg-setting-label-group">
@@ -693,7 +675,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ NAME BAN (hidden — not yet released) ═══════ -->
+            <!-- â•â•â•â•â•â•â• NAME BAN (hidden â€” not yet released) â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="name-ban" style="display:none !important;">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-ban rpg-accordion-icon"></i>
@@ -720,9 +702,9 @@
                                 <span class="rpg-setting-hint">How aggressively to flag new character names</span>
                             </div>
                             <select id="rpg-nb-sensitivity" class="rpg-accordion-select">
-                                <option value="strict">Strict — Dialogue attribution only</option>
-                                <option value="normal">Normal — Dialogue + action patterns</option>
-                                <option value="aggressive">Aggressive — All unknown capitalized words</option>
+                                <option value="strict">Strict â€” Dialogue attribution only</option>
+                                <option value="normal">Normal â€” Dialogue + action patterns</option>
+                                <option value="aggressive">Aggressive â€” All unknown capitalized words</option>
                             </select>
                         </div>
                         <div class="rpg-setting-row">
@@ -802,7 +784,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ TTS HIGHLIGHT ═══════ -->
+            <!-- â•â•â•â•â•â•â• TTS HIGHLIGHT â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="tts-highlight">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-volume-high rpg-accordion-icon"></i>
@@ -928,7 +910,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ SCENE TRACKER ═══════ -->
+            <!-- â•â•â•â•â•â•â• SCENE TRACKER â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="scene-tracker">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-clapperboard rpg-accordion-icon"></i>
@@ -980,7 +962,7 @@
                         </label>
                     </div>
                     <div class="rpg-subsection-label" style="margin-top: 8px;">Optional Fields</div>
-                    <div class="rpg-setting-hint" style="margin-bottom: 6px;">⚠️ Enabling too many optional fields may
+                    <div class="rpg-setting-hint" style="margin-bottom: 6px;">âš ï¸ Enabling too many optional fields may
                         reduce your AI's tracking reliability. Only enable what your roleplay needs.</div>
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Moon Phase</span>
@@ -1089,7 +1071,7 @@
                     <!-- Message shown when theme-controlled is ON -->
                     <div id="rpg-st-theme-msg"
                         style="display:none; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--rpg-text, #aaa); font-size: 0.82em; font-style: italic; text-align: center;">
-                        🎨 Controlled by theme — untoggle to edit colors
+                        ðŸŽ¨ Controlled by theme â€” untoggle to edit colors
                     </div>
 
                     <!-- Color pickers group (hidden when theme-controlled is ON) -->
@@ -1128,7 +1110,7 @@
                         </div>
                         <div class="rpg-setting-row">
                             <span class="rpg-setting-label">Field Label Color <small style="opacity:0.6">(Time:,
-                                    Location:…)</small></span>
+                                    Location:â€¦)</small></span>
                             <input type="color" id="rpg-st-label-color" class="rpg-color-swatch" value="#888888" />
                         </div>
                         <div class="rpg-setting-row">
@@ -1170,7 +1152,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ BUNNY MO INTEGRATION ═══════ -->
+            <!-- â•â•â•â•â•â•â• BUNNY MO INTEGRATION â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="bunny-mo">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-carrot rpg-accordion-icon"></i>
@@ -1194,7 +1176,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ INLINE BANNERS ═══════ -->
+            <!-- â•â•â•â•â•â•â• INLINE BANNERS â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="inline-banners">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-film rpg-accordion-icon"></i>
@@ -1207,7 +1189,7 @@
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Enable Inline Banners</span>
                             <span class="rpg-setting-hint">Show cinematic transition cards in the chat when the story
-                                moves to a new location or makes a time jump between messages. No API calls — reads
+                                moves to a new location or makes a time jump between messages. No API calls â€” reads
                                 existing tracker data.</span>
                         </div>
                         <label class="rpg-toggle-switch">
@@ -1233,7 +1215,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ DOOM COUNTER ═══════ -->
+            <!-- â•â•â•â•â•â•â• DOOM COUNTER â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="doom-counter">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-skull rpg-accordion-icon"></i>
@@ -1321,7 +1303,7 @@
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Trap Mode</span>
-                                <span class="rpg-setting-hint">Silent mode — hides the countdown and debug badge from
+                                <span class="rpg-setting-hint">Silent mode â€” hides the countdown and debug badge from
                                     view. When the counter triggers, it generates one twist and injects it without
                                     showing you what it picked. You won't know it's coming.</span>
                             </div>
@@ -1335,10 +1317,10 @@
                         <div class="rpg-setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                             <span class="rpg-setting-hint" style="font-size: 0.78em; opacity: 0.7;">
                                 The countdown ticks faster when tension is very low:<br>
-                                Tension 1 → countdown ticks by 3<br>
-                                Tension 2 → countdown ticks by 2<br>
-                                Tension 3-4 → countdown ticks by 1<br>
-                                Tension 5+ → resets streak (story is tense enough)
+                                Tension 1 â†’ countdown ticks by 3<br>
+                                Tension 2 â†’ countdown ticks by 2<br>
+                                Tension 3-4 â†’ countdown ticks by 1<br>
+                                Tension 5+ â†’ resets streak (story is tense enough)
                             </span>
                         </div>
 
@@ -1425,7 +1407,7 @@
                                 <i class="fa-solid fa-bolt"></i> Trigger Now
                             </button>
                             <button id="rpg-dc-reset" class="rpg-accordion-action-btn rpg-dc-reset-btn" type="button"
-                                title="Clear all counter state — use if stuck">
+                                title="Clear all counter state â€” use if stuck">
                                 <i class="fa-solid fa-rotate-left"></i> Reset
                             </button>
                         </div>
@@ -1433,7 +1415,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ CHAT BUBBLES ═══════ -->
+            <!-- â•â•â•â•â•â•â• CHAT BUBBLES â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="chat-bubbles">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-comments rpg-accordion-icon"></i>
@@ -1580,7 +1562,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ HISTORY PERSISTENCE ═══════ -->
+            <!-- â•â•â•â•â•â•â• HISTORY PERSISTENCE â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="history">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-clock-rotate-left rpg-accordion-icon"></i>
@@ -1628,7 +1610,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ LOREBOOK MANAGER ═══════ -->
+            <!-- â•â•â•â•â•â•â• LOREBOOK MANAGER â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="lorebook">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-book-atlas rpg-accordion-icon"></i>
@@ -1657,7 +1639,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ DOOM BUTTON ═══════ -->
+            <!-- â•â•â•â•â•â•â• DOOM BUTTON â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="doom-button">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-d rpg-accordion-icon"></i>
@@ -1668,7 +1650,7 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Open settings on click</span>
-                            <span class="rpg-setting-hint">Bypass the fly-out menu — clicking the D opens Doom's
+                            <span class="rpg-setting-hint">Bypass the fly-out menu â€” clicking the D opens Doom's
                                 Settings directly.</span>
                         </div>
                         <label class="rpg-toggle-switch">
@@ -1679,7 +1661,7 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Hide SillyTavern top bar</span>
-                            <span class="rpg-setting-hint">Reclaim screen space — access the same buttons through the
+                            <span class="rpg-setting-hint">Reclaim screen space â€” access the same buttons through the
                                 D's fly-out instead.</span>
                         </div>
                         <label class="rpg-toggle-switch">
@@ -1701,7 +1683,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ ADVANCED ═══════ -->
+            <!-- â•â•â•â•â•â•â• ADVANCED â•â•â•â•â•â•â• -->
             <div class="rpg-accordion-section" data-accordion="advanced">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-wrench rpg-accordion-icon"></i>
@@ -1754,7 +1736,7 @@
                     Branch
                 </label>
                 <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
-                    <option value="">Loading branches…</option>
+                    <option value="">Loading branchesâ€¦</option>
                 </select>
             </div>
             <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
@@ -1881,7 +1863,7 @@
 
         <!-- Tabs -->
         <div class="rpg-editor-tabs">
-            <!-- NOTE: User Stats tab removed — system archived -->
+            <!-- NOTE: User Stats tab removed â€” system archived -->
             <button class="rpg-editor-tab active" data-tab="infoBox">
                 <i class="fa-solid fa-info-circle"></i> <span
                     data-i18n-key="template.trackerEditorModal.tabs.infoBox">Info Box</span>
@@ -1947,7 +1929,7 @@
                 Customize the AI prompts used throughout the extension. Leave fields empty to use defaults.
             </small>
 
-            <!-- ═══════ INJECTABLE PROMPTS ═══════ -->
+            <!-- â•â•â•â•â•â•â• INJECTABLE PROMPTS â•â•â•â•â•â•â• -->
             <div class="rpg-subsection-label"
                 style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
                 <i class="fa-solid fa-syringe"></i> Injectable Prompts
@@ -2111,7 +2093,7 @@
                 </div>
             </div>
 
-            <!-- ═══════ TEMPLATE PROMPTS ═══════ -->
+            <!-- â•â•â•â•â•â•â• TEMPLATE PROMPTS â•â•â•â•â•â•â• -->
             <div class="rpg-subsection-label"
                 style="margin-top: 20px; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7;">
                 <i class="fa-solid fa-file-lines"></i> Template Prompts
@@ -2179,6 +2161,24 @@
                 </small>
                 <textarea id="rpg-prompt-twist-generator-rules" class="rpg-prompt-textarea" rows="6"></textarea>
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="twistGeneratorRules"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Auto Portrait Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-auto-portrait"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-image-portrait"></i> Auto Portrait Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Private prompt used for present-character portrait cards. Placeholders:
+                    <code>{characterNames}</code>, <code>{characterList}</code>, <code>{sceneInfo}</code>,
+                    <code>{portraitTag}</code>.
+                </small>
+                <textarea id="rpg-prompt-auto-portrait" class="rpg-prompt-textarea" rows="7"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="autoPortrait"
                     style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>
@@ -2415,7 +2415,7 @@
                             <label for="cw-linked-persona">Linked SillyTavern persona</label>
                             <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is set as the DES active user character.</p>
                             <select id="cw-linked-persona" class="rpg-input" style="max-width: 320px;">
-                                <option value="">— None —</option>
+                                <option value="">â€” None â€”</option>
                             </select>
                         </div>
                     </div>
@@ -2468,7 +2468,7 @@
                     </div>
                 </section>
 
-                <!-- EXPRESSIONS — sprite manager (mirrored from Character Sheet) -->
+                <!-- EXPRESSIONS â€” sprite manager (mirrored from Character Sheet) -->
                 <section class="rpg-editor-pane" data-pane="expressions">
                     <div class="rpg-editor-section">
                         <h4>Expressions</h4>
@@ -2480,14 +2480,14 @@
                             <ol style="margin: 4px 0 0; padding-left: 20px;">
                                 <li>This user character must be the <em>active</em> one (use <strong>Set as active persona</strong> below, or link it to your current SillyTavern persona on the Identity tab).</li>
                                 <li>Upload sprites here (or drop PNGs into the folder above).</li>
-                                <li>In DES Settings → Present Characters Panel, turn on <strong>Sync expressions to Present Characters Panel</strong>.</li>
+                                <li>In DES Settings â†’ Present Characters Panel, turn on <strong>Sync expressions to Present Characters Panel</strong>.</li>
                             </ol>
                         </div>
                         <div class="cw-expr-note cw-npc-only" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid var(--rpg-highlight, #e94560); background: color-mix(in srgb, var(--rpg-highlight, #e94560) 10%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
-                            <strong><i class="fa-solid fa-circle-info"></i> Auto-switching</strong> requires DES Settings → Present Characters Panel → <strong>Sync expressions to Present Characters Panel</strong> to be on. After each AI reply, DES classifies the character's text and shows the matching sprite from this folder.
+                            <strong><i class="fa-solid fa-circle-info"></i> Auto-switching</strong> requires DES Settings â†’ Present Characters Panel â†’ <strong>Sync expressions to Present Characters Panel</strong> to be on. After each AI reply, DES classifies the character's text and shows the matching sprite from this folder.
                         </div>
                         <div class="rpg-cs-tab-content" data-tab="expressions" id="cw-expressions-pane">
-                            <div style="padding:20px; opacity:0.5; text-align:center;">Open this tab to load sprites…</div>
+                            <div style="padding:20px; opacity:0.5; text-align:center;">Open this tab to load spritesâ€¦</div>
                         </div>
                     </div>
                 </section>
@@ -2498,7 +2498,7 @@
                         <h4>Description (bio + appearance)</h4>
                         <p class="helper">Optional context the AI sees when you click <strong>Inject into
                                 Scene</strong>. Cover physical appearance, role, manner of speaking, anything that helps
-                            the AI portray them consistently. Plain text — be specific about what they look like since
+                            the AI portray them consistently. Plain text â€” be specific about what they look like since
                             most models won't actually see the portrait image.</p>
                         <div class="rpg-field">
                             <label for="cw-inj-description" class="sr-only">Description (bio and appearance)</label>
@@ -2514,7 +2514,7 @@
                             <label for="cw-inj-lorebook" class="sr-only">Attached lorebook</label>
                             <div class="cw-combobox" id="cw-inj-lorebook-combo">
                                 <input id="cw-inj-lorebook" class="rpg-input" type="text" autocomplete="off"
-                                    placeholder="— None —" role="combobox" aria-autocomplete="list"
+                                    placeholder="â€” None â€”" role="combobox" aria-autocomplete="list"
                                     aria-expanded="false" aria-controls="cw-inj-lorebook-list">
                                 <button type="button" class="cw-combobox-toggle" id="cw-inj-lorebook-toggle"
                                     aria-label="Toggle lorebook list" tabindex="-1">

@@ -682,6 +682,42 @@ function namesMatch(cardName, aiName) {
     return new RegExp(`\\b${escapedCardCore}\\b`).test(aiCore);
 }
 
+function isGeneratedAutoPortrait(name) {
+    const meta = extensionSettings.generatedPortraits?.[name]
+        || extensionSettings.generatedPortraits?.[String(name || '').trim().toLowerCase()];
+    return meta?.source === 'dooms-enhancement-suite.auto-portraits';
+}
+
+function resolveImportedPortrait(name) {
+    try {
+        if (selected_group) {
+            const groupMembers = getGroupMembers(selected_group);
+            if (groupMembers?.length) {
+                const match = groupMembers.find(m => m?.name && namesMatch(m.name, name));
+                if (match?.avatar && match.avatar !== 'none') {
+                    const url = getSafeThumbnailUrl('avatar', match.avatar);
+                    if (url) return url;
+                }
+            }
+        }
+        if (characters?.length) {
+            const match = characters.find(c => c?.name && namesMatch(c.name, name));
+            if (match?.avatar && match.avatar !== 'none') {
+                const url = getSafeThumbnailUrl('avatar', match.avatar);
+                if (url) return url;
+            }
+        }
+        if (this_chid !== undefined && characters[this_chid]?.name &&
+            namesMatch(characters[this_chid].name, name)) {
+            const url = getSafeThumbnailUrl('avatar', characters[this_chid].avatar);
+            if (url) return url;
+        }
+    } catch (e) {
+        console.warn('[Dooms Portrait Bar] Character card avatar lookup failed:', e.message);
+    }
+    return null;
+}
+
 /**
  * Returns the best available portrait source for a character.
  * Priority: npcAvatars base64 → ST character card avatar → portraits/ folder → null
@@ -704,6 +740,11 @@ export function resolvePortrait(name) {
 
     const syncedExpression = getExpressionAwarePortrait(name, null);
     if (syncedExpression) return syncedExpression;
+
+    if (isGeneratedAutoPortrait(name) && extensionSettings.portraitAutoImport !== false) {
+        const imported = resolveImportedPortrait(name);
+        if (imported) return imported;
+    }
 
     // 1. Custom uploaded avatars (npcAvatars)
     const avatars = extensionSettings.npcAvatars;
@@ -941,6 +982,10 @@ function triggerPortraitUpload(characterName) {
                 extensionSettings.npcAvatarsFullRes = {};
             }
             extensionSettings.npcAvatarsFullRes[characterName] = dataUrl;
+            if (extensionSettings.generatedPortraits) {
+                delete extensionSettings.generatedPortraits[characterName];
+                delete extensionSettings.generatedPortraits[String(characterName || '').trim().toLowerCase()];
+            }
 
             saveSettings();
 
@@ -975,6 +1020,10 @@ function removePortrait(characterName) {
         // Also remove the full-res original if stored
         if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {
             delete extensionSettings.npcAvatarsFullRes[characterName];
+        }
+        if (extensionSettings.generatedPortraits) {
+            delete extensionSettings.generatedPortraits[characterName];
+            delete extensionSettings.generatedPortraits[String(characterName || '').trim().toLowerCase()];
         }
         saveSettings();
         portraitFileCache.delete(characterName);
