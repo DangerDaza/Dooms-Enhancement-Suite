@@ -402,6 +402,71 @@ export function onMessageSwiped(messageIndex) {
     updateChatThoughts();
 }
 /**
+ * Event handler for when a message is deleted.
+ * Rolls the tracker state back to whatever was attached to the new last
+ * assistant message — so the panels (Quests / Info Box / Thoughts /
+ * portrait bar / weather / scene header) match the chat the user is now
+ * looking at, instead of showing data that referenced a turn that no
+ * longer exists. If no assistant messages remain, panels are cleared.
+ *
+ * Resets BOTH lastGeneratedData (display) AND committedTrackerData
+ * (the source for the next generation) — unlike a swipe, a deletion is
+ * permanent, so the next generation should also see the rolled-back
+ * context, not the orphan tracker that was attached to the removed turn.
+ */
+export function onMessageDeleted() {
+    if (!extensionSettings.enabled) return;
+    // Find the new tail assistant message after the deletion.
+    let tail = null;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const m = chat[i];
+        if (m && !m.is_user && !m.is_system) {
+            tail = m;
+            break;
+        }
+    }
+    // Resolve tracker payload for the tail's current swipe — same fallback
+    // chain the historical-context builder uses (extra → swipe_info).
+    let payload = null;
+    if (tail) {
+        const swipeId = tail.swipe_id || 0;
+        payload = tail.extra?.dooms_tracker_swipes?.[swipeId] || null;
+        if (!payload && tail.swipe_info && tail.swipe_info[swipeId]) {
+            payload = tail.swipe_info[swipeId].extra?.dooms_tracker_swipes?.[swipeId] || null;
+        }
+    }
+    if (payload) {
+        const ct = payload.characterThoughts;
+        const normalizedThoughts = (ct && typeof ct === 'object')
+            ? JSON.stringify(ct, null, 2)
+            : (ct || null);
+        lastGeneratedData.quests = payload.quests || null;
+        lastGeneratedData.infoBox = payload.infoBox || null;
+        lastGeneratedData.characterThoughts = normalizedThoughts;
+        committedTrackerData.quests = lastGeneratedData.quests;
+        committedTrackerData.infoBox = lastGeneratedData.infoBox;
+        committedTrackerData.characterThoughts = lastGeneratedData.characterThoughts;
+    } else {
+        // No tail or tail has no tracker data — clear panels rather than
+        // leaving stale content from the deleted message on screen.
+        lastGeneratedData.quests = null;
+        lastGeneratedData.infoBox = null;
+        lastGeneratedData.characterThoughts = null;
+        committedTrackerData.quests = null;
+        committedTrackerData.infoBox = null;
+        committedTrackerData.characterThoughts = null;
+    }
+    // Re-render every panel that reads from those two stores.
+    renderInfoBox();
+    renderThoughts();
+    renderQuests();
+    resetSceneHeaderCache();
+    updateChatSceneHeaders();
+    updatePortraitBar();
+    updateWeatherEffect();
+    updateChatThoughts();
+}
+/**
  * Update the persona avatar image when user switches personas
  */
 export function updatePersonaAvatar() {

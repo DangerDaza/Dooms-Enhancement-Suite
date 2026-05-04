@@ -130,6 +130,7 @@ import {
     onMessageReceived,
     onCharacterChanged,
     onMessageSwiped,
+    onMessageDeleted,
     updatePersonaAvatar,
     clearExtensionPrompts,
     onGenerationEnded,
@@ -2883,10 +2884,20 @@ jQuery(async () => {
                 }
             });
             // MESSAGE_DELETED does not fire the same render/update hooks as swipes or edits.
-            // Reset Doom's transient expression-sync state so the observer doesn't keep
-            // attributing later ST expression changes to the speaker of the deleted message.
+            // Two things to do when a message is removed:
+            //   1. Roll the tracker panels (quests / info / thoughts / portrait /
+            //      weather / scene header) back to the new last assistant message's
+            //      stored swipe data, so DES isn't showing context that referred to
+            //      a turn the user just deleted. Also resets committedTrackerData so
+            //      the next generation runs with the correct prior state.
+            //   2. Reset transient expression-sync state so the observer doesn't keep
+            //      attributing later ST expression changes to the speaker of the
+            //      deleted message.
             eventSource.on(event_types.MESSAGE_DELETED, () => {
                 if (!extensionSettings.enabled) return;
+                try { onMessageDeleted(); } catch (e) {
+                    console.warn('[Dooms Tracker] onMessageDeleted failed:', e);
+                }
                 clearExpressionSyncCache();
                 setTimeout(() => onExpressionSyncChatChanged(), 0);
             });
