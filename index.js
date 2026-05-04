@@ -427,7 +427,7 @@ function populateUpdateBranchDropdownOnce() {
 // Curated whitelist of branches the Update dropdown should expose. Anything
 // not in this list (and not the currently checked-out branch) is filtered
 // out so users only see the maintained release lines + their own branch.
-const UPDATE_BRANCH_WHITELIST = ['main', 'rabbit-hole', 'blades-in-the-dark'];
+const UPDATE_BRANCH_WHITELIST = ['main', 'rabbit-hole', 'blades-in-the-dark', 'multi-character-fix'];
 
 function fillBranchDropdown({ branches, currentBranch, remoteUrl }) {
     const $sel = $('#rpg-update-branch');
