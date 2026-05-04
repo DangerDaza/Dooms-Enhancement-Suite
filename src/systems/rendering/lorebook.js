@@ -876,12 +876,34 @@ export function initLorebookEventDelegation() {
     $modal.on('contextmenu', '.rpg-lb-campaign-header', function (e) {
         const campaignId = $(this).data('campaign');
         if (campaignId === '__unfiled__') return; // Can't rename Unfiled
+        const $header = $(this);
         showContextMenu(e, [
+            {
+                icon: 'fa-solid fa-icons',
+                label: 'Change Icon',
+                action: () => {
+                    // Open the existing icon picker by simulating a click on
+                    // the campaign's icon — same path as left-clicking the
+                    // glyph directly, so we don't duplicate the picker logic.
+                    if (campaignId === 'unfiled') return;
+                    $modal.find('.rpg-lb-icon-picker').remove();
+                    const campaign = (extensionSettings.lorebook?.campaigns || {})[campaignId];
+                    if (!campaign) return;
+                    const pickerHtml = buildIconPickerHtml(
+                        campaignId,
+                        campaign.icon || 'fa-folder',
+                        campaign.color || '',
+                    );
+                    const $picker = $(pickerHtml);
+                    $header.append($picker);
+                    $picker.hide().fadeIn(150);
+                },
+            },
             {
                 icon: 'fa-solid fa-pen',
                 label: 'Rename',
                 action: () => {
-                    const currentName = $(this).find('.rpg-lb-campaign-name').text();
+                    const currentName = $header.find('.rpg-lb-campaign-name').text();
                     const newName = prompt('Rename campaign:', currentName);
                     if (newName && newName.trim() && newName.trim() !== currentName) {
                         campaignManager.renameCampaign(campaignId, newName.trim());

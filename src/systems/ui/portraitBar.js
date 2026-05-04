@@ -490,7 +490,7 @@ export function updatePortraitBar() {
     if (colorsAssigned) saveCharacterRosterChange();
 
     const cards = characters.map((char, idx) => {
-        const portraitSrc = resolvePortrait(char.name);
+        const portraitSrc = resolvePortrait(char.name, { isUser: char.isUser === true });
         const speakingClass = (char.present && idx === 0) ? ' dooms-pb-speaking' : '';
         const absentClass = char.present ? '' : ' dooms-pb-absent';
         const isNew = newCharNames.has(char.name);
@@ -686,19 +686,23 @@ function namesMatch(cardName, aiName) {
  * Returns the best available portrait source for a character.
  * Priority: npcAvatars base64 → ST character card avatar → portraits/ folder → null
  */
-export function resolvePortrait(name) {
+export function resolvePortrait(name, opts) {
     if (!name) return null;
 
-    // 0. User character — only when this name IS the currently-active user
-    // character. Without the active-name guard, an NPC that happens to
-    // share a name with a user-character would be hijacked: every NPC
-    // portrait lookup matching that name would return the user's avatar
-    // instead, including in chat bubbles.
-    const userEntries = extensionSettings.userCharacters;
-    if (userEntries && userEntries[name] && userEntries[name].avatar) {
-        const activeUserName = resolveActiveUserName();
-        if (activeUserName && name === activeUserName) {
-            return userEntries[name].avatar;
+    // 0. User character — only when the caller explicitly says this is a
+    // user-card lookup (opts.isUser === true), OR opts.isUser is undefined
+    // AND the name matches the currently-active user (legacy fallback for
+    // call sites that don't pass opts). Skipped when opts.isUser === false
+    // so a group-chat member sharing a name with the active user character
+    // isn't hijacked.
+    const wantUserAvatar = opts ? opts.isUser : undefined;
+    if (wantUserAvatar !== false) {
+        const userEntries = extensionSettings.userCharacters;
+        if (userEntries && userEntries[name] && userEntries[name].avatar) {
+            const activeUserName = resolveActiveUserName();
+            if (wantUserAvatar === true || (activeUserName && name === activeUserName)) {
+                return userEntries[name].avatar;
+            }
         }
     }
 

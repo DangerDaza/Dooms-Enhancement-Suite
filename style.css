@@ -17546,10 +17546,13 @@ body.dooms-hide-st-topbar .openDrawer {
     padding: 3px 8px;
     font-size: 0.7em;
     cursor: pointer;
-    color: var(--rpg-text, #666);
+    /* Muted glyph — was reading var(--rpg-text) which renders bright
+       white in the default theme. Stick to a subtle grey so the New
+       Library "+" sits next to the search row instead of blaring out. */
+    color: #888;
     transition: color 0.2s;
 }
-.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #4a7ba7); }
+.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #e94560); }
 
 /* ── Tree Book List (left panel) ──────────────────────────────────────── */
 .rpg-lb-tree-list {
