@@ -1323,6 +1323,7 @@ function commitDraft() {
             delete extensionSettings.npcAvatars[name];
             delete extensionSettings.npcAvatarsFullRes[name];
         }
+        if (extensionSettings.generatedPortraits) delete extensionSettings.generatedPortraits[name];
         changed = true;
     }
 
@@ -1463,6 +1464,7 @@ function copyUserToNpcCharacter(name) {
     if (u.color) extensionSettings.characterColors[trimmed] = u.color;
     if (avatar) extensionSettings.npcAvatars[trimmed] = avatar;
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
+    if (extensionSettings.generatedPortraits && avatar) delete extensionSettings.generatedPortraits[trimmed];
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
     try { saveSettings(); } catch (e) {}

@@ -55,6 +55,30 @@ Draw from these narrative directions when generating options — pick what fits 
 - An environmental disruption that forces a change of setting or circumstances (stranded, sudden weather, forced relocation)
 </twist_categories>`;
 
+export const DEFAULT_AUTO_PORTRAIT_PROMPT = `Some present characters need private portrait-card prompts for Doom's Enhancement Suite.
+
+Return your normal roleplay response as usual. Also append exactly one private block at the very end:
+<{portraitTag}>
+[{"name":"Full Character Name","prompt":"Full Character Name ..."}]
+</{portraitTag}>
+
+Rules for the private portrait prompts:
+- Include only these characters, one prompt each: {characterNames}.
+- The prompt must be natural cinematic prose, not tag shorthand.
+- The first sentence of every prompt must include the character's full name exactly.
+- Describe the character's current story state: appearance, demeanor, clothing state, body state, injuries, transformations, equipment, effects, and scene context.
+- Do not describe art style. Do not use quality tags.
+- Default to one named character per portrait-card image.
+- Never show Carter as a visible man; use male pov/viewer framing only if the current state truly requires interaction.
+- Do not use [pic prompt] for DES portraits.
+- Output valid JSON inside <{portraitTag}>, with no markdown fences.
+
+Current scene:
+{sceneInfo}
+
+Current eligible characters:
+{characterList}`;
+
 // Default prompts
 // Weather default is lazily computed since it depends on getWeatherKeywordsAsPromptString
 function getDefaultWeatherPrompt() {
@@ -70,6 +94,7 @@ const DEFAULT_PROMPTS = {
     plotTwistTemplate: DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
     newFieldsBoost: DEFAULT_NEW_FIELDS_BOOST_PROMPT,
     twistGeneratorRules: DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
+    autoPortrait: DEFAULT_AUTO_PORTRAIT_PROMPT,
     trackerInstructions: 'Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that {userName} perceives about the current scene and the present characters. For example: "Location" becomes Forest Clearing, "Mood Emoji" becomes "\u{1F60A}". DO NOT include {userName} in the characters section, only NPCs. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user\'s actions, the passage of time, and logical consequences (0% if the time progressed only by a few minutes, 1-5% normally, and above 5% only if a major time-skip/event occurs).',
     trackerContinuation: 'After updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting the protagonist\'s performance, low hygiene influencing their social interactions, environmental factors shaping the scene, a character\'s emotional state coloring their responses, and so on. Remember, all placeholders (e.g., "Location", "Mood Emoji") MUST be replaced with actual content.',
     characterThoughts: "Internal Monologue (in first person from character's POV, up to three sentences long)",
@@ -133,6 +158,7 @@ function openPromptsEditor() {
         plotTwistTemplate: extensionSettings.customPlotTwistTemplatePrompt || '',
         newFieldsBoost: extensionSettings.customNewFieldsBoostPrompt || '',
         twistGeneratorRules: extensionSettings.customTwistGeneratorRulesPrompt || '',
+        autoPortrait: extensionSettings.customAutoPortraitPrompt || '',
         trackerInstructions: extensionSettings.customTrackerInstructionsPrompt || '',
         trackerContinuation: extensionSettings.customTrackerContinuationPrompt || '',
         weather: extensionSettings.customWeatherPrompt || '',
@@ -146,6 +172,7 @@ function openPromptsEditor() {
     $('#rpg-prompt-plot-twist-template').val(extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PROMPTS.plotTwistTemplate);
     $('#rpg-prompt-new-fields-boost').val(extensionSettings.customNewFieldsBoostPrompt || DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(extensionSettings.customTwistGeneratorRulesPrompt || DEFAULT_PROMPTS.twistGeneratorRules);
+    $('#rpg-prompt-auto-portrait').val(extensionSettings.customAutoPortraitPrompt || DEFAULT_PROMPTS.autoPortrait);
     $('#rpg-prompt-tracker-instructions').val(extensionSettings.customTrackerInstructionsPrompt || DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(extensionSettings.customTrackerContinuationPrompt || DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(extensionSettings.customWeatherPrompt || DEFAULT_PROMPTS.weather);
@@ -206,6 +233,7 @@ function savePrompts() {
     extensionSettings.customPlotTwistTemplatePrompt = $('#rpg-prompt-plot-twist-template').val().trim();
     extensionSettings.customNewFieldsBoostPrompt = $('#rpg-prompt-new-fields-boost').val().trim();
     extensionSettings.customTwistGeneratorRulesPrompt = $('#rpg-prompt-twist-generator-rules').val().trim();
+    extensionSettings.customAutoPortraitPrompt = $('#rpg-prompt-auto-portrait').val().trim();
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
@@ -252,6 +280,9 @@ function restorePromptToDefault(promptType) {
         case 'twistGeneratorRules':
             extensionSettings.customTwistGeneratorRulesPrompt = '';
             break;
+        case 'autoPortrait':
+            extensionSettings.customAutoPortraitPrompt = '';
+            break;
         case 'trackerInstructions':
             extensionSettings.customTrackerInstructionsPrompt = '';
             break;
@@ -279,6 +310,7 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-plot-twist-template').val(DEFAULT_PROMPTS.plotTwistTemplate);
     $('#rpg-prompt-new-fields-boost').val(DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(DEFAULT_PROMPTS.twistGeneratorRules);
+    $('#rpg-prompt-auto-portrait').val(DEFAULT_PROMPTS.autoPortrait);
     $('#rpg-prompt-tracker-instructions').val(DEFAULT_PROMPTS.trackerInstructions);
     $('#rpg-prompt-tracker-continuation').val(DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(DEFAULT_PROMPTS.weather);
@@ -305,6 +337,7 @@ function restoreAllToDefaults() {
     extensionSettings.customPlotTwistTemplatePrompt = '';
     extensionSettings.customNewFieldsBoostPrompt = '';
     extensionSettings.customTwistGeneratorRulesPrompt = '';
+    extensionSettings.customAutoPortraitPrompt = '';
     extensionSettings.customTrackerInstructionsPrompt = '';
     extensionSettings.customTrackerContinuationPrompt = '';
     extensionSettings.customWeatherPrompt = '';

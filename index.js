@@ -192,7 +192,7 @@ async function addExtensionSettings() {
             loadChatData(); // Load chat data for current chat
             updateChatThoughts(); // Create thought bubbles if data exists
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
-            if (extensionSettings.syncExpressionsToPresentCharacters) {
+            if (extensionSettings.autoPortraitMode && extensionSettings.autoPortraitMode !== 'off') {
                 initExpressionSync();
                 syncExpressionFromLatestMessage();
             }
@@ -711,11 +711,18 @@ async function initUI() {
         toastr.success(`Exported ${exported} portrait${exported !== 1 ? 's' : ''}.`, '', { timeOut: 3000 });
     });
 
-    $('#rpg-pb-sync-expressions').on('change', function () {
-        extensionSettings.syncExpressionsToPresentCharacters = $(this).prop('checked');
+    $('#rpg-auto-portrait-mode').on('change', function () {
+        extensionSettings.autoPortraitMode = $(this).val() || 'off';
+        extensionSettings.syncExpressionsToPresentCharacters = extensionSettings.autoPortraitMode !== 'off';
+        $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters);
         saveSettings();
-        onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters);
-        $('#rpg-expression-options').toggle($(this).prop('checked'));
+        onExpressionSyncSettingChanged();
+        $('#rpg-auto-portrait-options').toggle(extensionSettings.autoPortraitMode !== 'off');
+    });
+    $('#rpg-auto-portrait-prompt-source').on('change', function () {
+        extensionSettings.autoPortraitPromptSource = $(this).val() || 'main_reply_tag';
+        saveSettings();
+        onExpressionSyncSettingChanged();
     });
     $('#rpg-expression-classifier-api').on('change', function () {
         extensionSettings.expressionClassifierApi = $(this).val();
@@ -1746,6 +1753,9 @@ async function initUI() {
     $('#rpg-pb-show-user').prop('checked', extensionSettings.showUserInPCP === true);
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
+    $('#rpg-auto-portrait-mode').val(extensionSettings.autoPortraitMode || 'off');
+    $('#rpg-auto-portrait-options').toggle((extensionSettings.autoPortraitMode || 'off') !== 'off');
+    $('#rpg-auto-portrait-prompt-source').val(extensionSettings.autoPortraitPromptSource || 'main_reply_tag');
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
     $('#rpg-expression-options').toggle(extensionSettings.syncExpressionsToPresentCharacters === true);
     $('#rpg-expression-classifier-api').val(extensionSettings.expressionClassifierApi || 'local');
