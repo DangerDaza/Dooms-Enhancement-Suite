@@ -102,6 +102,13 @@ let $modal = null;
 let listenersBound = false;
 let _wsInitialized = false; // guard: don't double-register window/eventSource listeners
 let pendingInjectClear = false; // true while an inject prompt is queued
+// True only between a real (non-quiet, non-dryRun) GENERATION_STARTED and its
+// matching ENDED. Quiet generations from autotrigger extensions
+// (GuidedGenerations thinking/state/clothes guides) and ST's tokenizer dryRuns
+// are invisible to the inject lifecycle — without this guard, the very first
+// quiet gen consumes injectStartsToSkip and its ENDED clears INJECT_SLOT
+// before the user's actual reply runs.
+let inRealGeneration = false;
 // Number of GENERATION_STARTED fires to let pass before clearing. Set to 1
 // at inject time; the generation the inject was for passes without clearing,
 // any subsequent START triggers a clear in case GENERATION_ENDED never fired.
@@ -266,8 +273,8 @@ export function initCharacterWorkshop() {
     // the START of any *subsequent* generation (covers streaming paths or
     // aborts where ENDED never fires).
     try {
-        eventSource.on(event_types.GENERATION_ENDED, clearInjectPromptIfPending);
-        eventSource.on(event_types.GENERATION_STOPPED, clearInjectPromptIfPending);
+        eventSource.on(event_types.GENERATION_ENDED, onGenerationEndedForInject);
+        eventSource.on(event_types.GENERATION_STOPPED, onGenerationEndedForInject);
         eventSource.on(event_types.GENERATION_STARTED, onGenerationStartedForInject);
     } catch (e) {
         console.warn('[Dooms Tracker] Workshop: failed to register GENERATION_ENDED listener', e);
@@ -1528,10 +1535,14 @@ function injectUserPersona(name) {
     const trimmed = String(name || '').trim();
     if (!trimmed) return;
     const description = (draft?.injection?.description || '').trim();
+    // OOC-framed system note. The previous "${name}: ${description}" form
+    // looked structurally identical to a chat line, so group-chat models
+    // could misread it as a hidden message from the user character and have
+    // other characters respond to it. The bracketed [System: …] wrapper and
+    // explicit "not a message" disclaimer prevent that misreading.
     const promptParts = [];
     if (description) {
-        promptParts.push(`The player's persona — ${trimmed}: ${description}`);
-        promptParts.push('Address the player as this persona for the next response.');
+        promptParts.push(`[System note — out-of-character. Not a chat message. Do not quote or reference these brackets.]\nThe user is currently roleplaying as "${trimmed}".\nPersona: ${description}\nFor the next response, address the user as "${trimmed}".`);
     }
     const prompt = promptParts.join('\n\n');
     if (prompt) {
@@ -1958,7 +1969,18 @@ function clearInjectPromptIfPending() {
     }
 }
 
-function onGenerationStartedForInject() {
+function onGenerationStartedForInject(type, data, dryRun) {
+    // Quiet generations (autotrigger guides like GuidedGenerations thinking /
+    // state / clothes), image-gen quiet calls, and ST's tokenizer dryRuns
+    // must not affect the inject lifecycle — only the user's actual
+    // generation should consume injectStartsToSkip or trigger a stale-inject
+    // clear. Without this guard the first autotrigger's START decrements the
+    // skip counter and its matching ENDED clears INJECT_SLOT before the real
+    // reply runs. Mirrors injector.js:onGenerationStarted's filter.
+    if (dryRun === true) return;
+    if (typeof type === 'string' && type === 'quiet') return;
+    if (data?.quietImage || data?.quiet_image || data?.isImageGeneration) return;
+    inRealGeneration = true;
     // The generation the inject/eject is intended for should pass. After
     // that, any START means a NEW generation is happening (swipe /
     // regenerate / new turn) and we must not re-apply the old direction.
@@ -1976,6 +1998,16 @@ function onGenerationStartedForInject() {
         console.log('[Dooms Tracker] Workshop: new generation starting — clearing stale inject/eject');
         clearInjectPromptIfPending();
     }
+}
+
+function onGenerationEndedForInject() {
+    // Mirror the START guard: only clear when the matching START was a real
+    // generation. Quiet/dryRun generations bypass us entirely so their ENDED
+    // must too — otherwise an autotrigger's ENDED wipes an inject queued for
+    // the user's upcoming reply.
+    if (!inRealGeneration) return;
+    inRealGeneration = false;
+    clearInjectPromptIfPending();
 }
 
 // ─────────────────────────────────────────────
