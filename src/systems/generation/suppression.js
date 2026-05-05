@@ -51,7 +51,15 @@ export function evaluateSuppression(extensionSettings, context, data, type) {
     // guide id, not just `instruct` — auto-trigger guides (thinking / state /
     // clothes) and custom guides write to their own ids and would otherwise
     // bypass our guided-generation detection.
-    const injects = context?.chatMetadata?.script_injects || {};
+    //
+    // ST's getContext() exposes the chat metadata as `chat_metadata`
+    // (snake_case). Older code here read `chatMetadata` (camelCase) which is
+    // undefined on every modern ST build, so the injects map silently
+    // collapsed to {} and suppression never fired for /inject-driven flows
+    // like GG's guidedSwipe. Try both names for safety.
+    const injects = context?.chat_metadata?.script_injects
+        || context?.chatMetadata?.script_injects
+        || {};
     const instructObj = injects.instruct;
     let isGuidedGeneration = false;
     let activeInjectIds = [];

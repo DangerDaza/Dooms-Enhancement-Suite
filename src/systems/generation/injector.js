@@ -675,7 +675,9 @@ export async function onGenerationStarted(type, data, dryRun) {
     // settled in production.
     let _allInjectKeys = [];
     try {
-        const _injects = context?.chatMetadata?.script_injects || {};
+        const _injects = context?.chat_metadata?.script_injects
+            || context?.chatMetadata?.script_injects
+            || {};
         _allInjectKeys = Object.keys(_injects);
     } catch (e) { _allInjectKeys = ['(threw)']; }
     console.log(`[DES Suppression] type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
@@ -991,7 +993,9 @@ function onGenerationAfterCommands() {
     // race fix is settled in production.
     let _allInjectKeys = [];
     try {
-        const _injects = context?.chatMetadata?.script_injects || {};
+        const _injects = context?.chat_metadata?.script_injects
+            || context?.chatMetadata?.script_injects
+            || {};
         _allInjectKeys = Object.keys(_injects);
     } catch (e) { _allInjectKeys = ['(threw)']; }
     console.log(`[DES Suppression] (after-commands) type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
