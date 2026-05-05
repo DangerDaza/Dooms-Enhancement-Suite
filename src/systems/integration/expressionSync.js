@@ -496,11 +496,6 @@ export async function classifyActiveUserExpression(messageText) {
     const key = normalizeName(name);
     const prev = getSyncedExpressionPortrait(key);
     setSyncedExpressionLabel(key, label);
-    // ── DIAGNOSTIC (1.10.7-debug): trace what classifyActiveUserExpression
-    // produced. Remove once the user-expression-display bug is settled.
-    console.log('[DES Expressions] (user-debug) classifier ran', {
-        name, key, label, spriteUrl, prev, willStorePortrait: prev !== spriteUrl,
-    });
     if (prev !== spriteUrl) {
         setSyncedExpressionPortrait(key, spriteUrl);
         try { saveChatData(); } catch (e) {}

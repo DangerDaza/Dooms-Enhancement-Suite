@@ -699,21 +699,6 @@ export function resolvePortrait(name) {
     //    resolveFullPortrait below already has this ordering;
     //    resolvePortrait now matches.
     const syncedExpression = getExpressionAwarePortrait(name, null);
-    // ── DIAGNOSTIC (1.10.7-debug): trace user-character portrait
-    // resolution. Remove once the user-expression-display bug is settled.
-    try {
-        const _activeUser = resolveActiveUserName();
-        if (_activeUser && name === _activeUser) {
-            const _userAvatar = extensionSettings.userCharacters?.[name]?.avatar;
-            console.log('[DES Expressions] (debug) resolvePortrait', {
-                name,
-                syncedExpression: syncedExpression || null,
-                userAvatarSet: !!_userAvatar,
-                userAvatarPreview: _userAvatar ? String(_userAvatar).slice(0, 60) + '…' : null,
-                syncToggle: extensionSettings.syncExpressionsToPresentCharacters,
-            });
-        }
-    } catch (e) {}
     if (syncedExpression) return syncedExpression;
 
     // 1. User character — only when this name IS the currently-active user
