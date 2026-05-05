@@ -656,7 +656,13 @@ export async function onGenerationStarted(type, data, dryRun) {
     // even when the prompt language doesn't match the GG-flavored regex
     // patterns inside evaluateSuppression.
     const suppression = evaluateSuppression(extensionSettings, context, data, type);
-    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, instructContent, quietPromptRaw, matchedPattern } = suppression;
+    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, instructContent, quietPromptRaw, matchedPattern, activeInjectIds } = suppression;
+    // ── DIAGNOSTIC (1.10.7-debug): show the suppression decision for every
+    // real generation so users reporting "Skip Injections didn't suppress"
+    // can attach a System Log bundle that pins down which gate closed.
+    // Remove once the impersonation/guided-swipe suppression behavior is
+    // settled in production.
+    console.log(`[DES Suppression] type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] → shouldSuppress=${shouldSuppress}`);
     if (shouldSuppress) {
         // Debugging: indicate active suppression and which source triggered it
         console.debug(`[Dooms Tracker] Suppression active (mode=${skipMode}). isGuided=${isGuidedGeneration}, isImpersonation=${isImpersonationGeneration}, hasQuietPrompt=${hasQuietPrompt} - skipping RPG tracker injections for this generation.`);
