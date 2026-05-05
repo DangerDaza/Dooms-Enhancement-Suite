@@ -2144,6 +2144,9 @@ async function renderExpressionsTab($panel, characterName) {
             <div class="rpg-cs-expr-actions">
                 <button class="rpg-cs-expr-upload-zip menu_button"><i class="fa-solid fa-file-zipper"></i> Upload ZIP</button>
                 <button class="rpg-cs-expr-open-folder menu_button"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+                ${uploadedCount > 0
+                    ? `<button class="rpg-cs-expr-remove-all menu_button" title="Delete every uploaded expression sprite for this character"><i class="fa-solid fa-trash-can"></i> Remove All</button>`
+                    : ''}
             </div>
         </div>
         <div class="rpg-cs-expression-grid">
@@ -2257,6 +2260,59 @@ function bindExpressionHandlers() {
             }
         } catch (err) {
             console.error('[Dooms Tracker] Workshop expressions: delete failed', err);
+        }
+    });
+
+    // Remove all sprites
+    $(document).on('click.cwExpr', '.rpg-cs-expr-remove-all', async function () {
+        if (!inWorkshop(this)) return;
+        const $btn = $(this);
+        const $tab = $btn.closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        // Re-fetch the sprite list as the truth source — DOM might be stale
+        // and we don't want to ask ST to delete labels that no longer exist.
+        let sprites = [];
+        try {
+            const resp = await fetch(`/api/sprites/get?name=${encodeURIComponent(charName)}`, {
+                headers: getRequestHeaders(),
+            });
+            if (resp.ok) sprites = await resp.json();
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: remove-all fetch failed', err);
+            if (window.toastr) window.toastr.error('Could not read existing sprites.', 'Remove All');
+            return;
+        }
+        const labels = sprites.map(s => s.label).filter(Boolean);
+        if (labels.length === 0) {
+            if (window.toastr) window.toastr.info('No sprites to remove.', '', { timeOut: 1500 });
+            return;
+        }
+        const ok = window.confirm(
+            `Remove all ${labels.length} expression sprite${labels.length === 1 ? '' : 's'} for "${charName}"?\n\nThis cannot be undone.`,
+        );
+        if (!ok) return;
+        $btn.prop('disabled', true);
+        const results = await Promise.allSettled(labels.map(label => fetch('/api/sprites/delete', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ name: charName, label }),
+        }).then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status} for ${label}`);
+            return label;
+        })));
+        const failed = results.filter(r => r.status === 'rejected');
+        _cwInvalidateSpriteCache(charName);
+        renderExpressionsTab($tab, charName);
+        if (failed.length === 0) {
+            if (window.toastr) window.toastr.success(`Removed ${labels.length} expression${labels.length === 1 ? '' : 's'} for ${charName}`, '', { timeOut: 2000 });
+        } else {
+            console.error('[Dooms Tracker] Workshop expressions: remove-all partial failure', failed.map(f => f.reason));
+            if (window.toastr) window.toastr.warning(
+                `Removed ${labels.length - failed.length}/${labels.length} expressions; ${failed.length} failed.`,
+                'Remove All',
+                { timeOut: 4000 },
+            );
         }
     });
 
