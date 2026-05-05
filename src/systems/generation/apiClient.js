@@ -28,6 +28,7 @@ import { removeLocks } from './lockManager.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
+import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { generateAvatarsForCharacters } from '../features/avatarGenerator.js';
 // Store the original preset name to restore after tracker generation
 let originalPresetName = null;
@@ -331,8 +332,12 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             if (parsedData.characterThoughts) {
                 lastGeneratedData.characterThoughts = parsedData.characterThoughts;
             }
-            // Also store on assistant message if present (existing behavior)
-            if (lastMessage && !lastMessage.is_user) {
+            // Also store on assistant message if present (existing behavior).
+            // Skip GuidedGenerations' synthetic tracker/note messages — they
+            // look like assistant turns (is_user=false) but contain GG's
+            // <details> HTML, not real model output, so we'd be writing
+            // tracker swipe data to a non-real message.
+            if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
                 if (!lastMessage.extra) {
                     lastMessage.extra = {};
                 }

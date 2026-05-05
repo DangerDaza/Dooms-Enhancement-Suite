@@ -45,6 +45,7 @@ import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfile
 import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
 import { getSafeThumbnailUrl } from './src/utils/avatars.js';
+import { isSyntheticTrackerMessage } from './src/utils/messageGuards.js';
 import { renderInfoBox, updateInfoBoxField, initInfoBoxEventDelegation } from './src/systems/rendering/infoBox.js';
 import {
     renderThoughts,
@@ -2814,6 +2815,13 @@ jQuery(async () => {
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
+                // Skip GG's synthetic tracker/note messages — they get
+                // is_user=false but their .mes is HTML, not real model
+                // output. Bubble styling on the <details> markup mangles
+                // GG's tracker UI.
+                const guardIdx = parseInt(messageId, 10);
+                const guardMsg = (Array.isArray(chat) && Number.isFinite(guardIdx)) ? chat[guardIdx] : null;
+                if (isSyntheticTrackerMessage(guardMsg)) return;
                 const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
 
                 // Inject reasoning TTS button into the thinking panel
@@ -2874,6 +2882,15 @@ jQuery(async () => {
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
+                // Skip synthetic tracker/note messages other extensions inject
+                // into chat (currently GuidedGenerations). They re-emit
+                // USER_MESSAGE_RENDERED but the message body is HTML/tracker
+                // markup — running chat-bubble styling or the user-expression
+                // classifier on it produces garbage and a sprite swap to
+                // whatever the classifier guesses from GG's <details> tags.
+                const guardIdx = parseInt(messageId, 10);
+                const guardMsg = (Array.isArray(chat) && Number.isFinite(guardIdx)) ? chat[guardIdx] : null;
+                if (isSyntheticTrackerMessage(guardMsg)) return;
                 // Chat bubbles styling
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
                     const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
@@ -2887,9 +2904,7 @@ jQuery(async () => {
                 // active user character with a sprite folder; otherwise no-op.
                 if (extensionSettings.syncExpressionsToPresentCharacters) {
                     try {
-                        const idx = parseInt(messageId, 10);
-                        const msg = (Array.isArray(chat) && Number.isFinite(idx)) ? chat[idx] : null;
-                        const text = msg && msg.is_user ? (msg.mes || '') : '';
+                        const text = guardMsg && guardMsg.is_user ? (guardMsg.mes || '') : '';
                         if (text) {
                             classifyActiveUserExpression(text)
                                 .then(() => updatePortraitBar())

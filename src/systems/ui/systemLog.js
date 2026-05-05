@@ -32,6 +32,32 @@ function isBranded(text) {
 }
 
 /**
+ * Other extensions whose normal logging would otherwise flood DES's
+ * System Log ring buffer. GuidedGenerations alone emits dozens of
+ * `[AUTOTRIGGER-DEBUG]` lines per send (each with a full stack trace),
+ * which can rotate older real-DES errors out of the 500-entry buffer
+ * before users have a chance to copy them. We drop these at capture
+ * time. Errors and warnings still go through the underlying console —
+ * we just don't store them in our diagnostic bundle.
+ */
+const NOISY_PREFIXES = [
+    '[GuidedGenerations]',
+    '[AUTOTRIGGER-DEBUG]',
+    'GuidedGenerations-Extension:',
+    '[QR2]',                      // Quick Replies 2 — also chatty per turn
+    '[TunnelVision]',             // Tool preflight log per generation
+    'STMemoryBooks:',             // Per-message processing chatter
+];
+
+function isNoisyExternal(text) {
+    if (typeof text !== 'string') return false;
+    for (const p of NOISY_PREFIXES) {
+        if (text.startsWith(p)) return true;
+    }
+    return false;
+}
+
+/**
  * Formats a Date as a compact timestamp string.
  */
 function formatTimestamp(date) {
@@ -72,6 +98,11 @@ function capture(level, args) {
     try {
         const first = args[0];
         const branded = isBranded(first);
+        // Drop logs from other chatty extensions (GuidedGenerations'
+        // autotrigger debug, QR2 hooks, STMemoryBooks per-message chatter,
+        // TunnelVision tool preflight). Dropping at capture time only —
+        // the underlying console still gets them so devtools is unaffected.
+        if (!branded && isNoisyExternal(first)) return;
         // For log level, only capture branded lines — otherwise we'd flood
         // the buffer with normal ST chatter (rendered N messages, etc.).
         if (level === 'log' && !branded) return;

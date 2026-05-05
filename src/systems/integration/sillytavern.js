@@ -39,6 +39,7 @@ import { enforceNameBan } from '../features/nameBan.js';
 import { classifyAllCharacterExpressions } from './expressionSync.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 /**
  * Commits the tracker data from the last assistant message to be used as source for next generation.
  * This should be called when the user has replied to a message, ensuring all swipes of the next
@@ -115,7 +116,10 @@ export async function onMessageReceived(data) {
         // In together mode, parse the response to extract RPG data
         // Commit happens in onMessageSent (when user sends message, before generation)
         const lastMessage = chat[chat.length - 1];
-        if (lastMessage && !lastMessage.is_user) {
+        // Skip GG's synthetic tracker/note messages — running parseResponse on
+        // their <details> HTML would surface bogus tracker JSON and clobber
+        // the real lastGeneratedData state.
+        if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
             const responseText = lastMessage.mes;
             const parsedData = parseResponse(responseText);
             // Note: Don't show parsing error here - this event fires when loading chat history too
@@ -229,7 +233,7 @@ export async function onMessageReceived(data) {
                 // ── Name Ban: enforce in separate/external mode ──
                 if (extensionSettings.nameBan?.enabled) {
                     const lastMsg = chat[chat.length - 1];
-                    if (lastMsg && !lastMsg.is_user) {
+                    if (lastMsg && !lastMsg.is_user && !isSyntheticTrackerMessage(lastMsg)) {
                         const nbResult = await enforceNameBan(lastMsg.mes, lastGeneratedData.characterThoughts);
                         if (nbResult.text !== lastMsg.mes) {
                             lastMsg.mes = nbResult.text;
@@ -249,7 +253,7 @@ export async function onMessageReceived(data) {
                 // ── Expression classification (separate/external mode) ──
                 if (extensionSettings.syncExpressionsToPresentCharacters) {
                     const sepMsg = chat[chat.length - 1];
-                    if (sepMsg && !sepMsg.is_user) {
+                    if (sepMsg && !sepMsg.is_user && !isSyntheticTrackerMessage(sepMsg)) {
                         classifyAllCharacterExpressions(sepMsg.mes)
                             .then(() => updatePortraitBar())
                             .catch(err => console.error('[DES] Expression classification failed:', err));
