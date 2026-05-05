@@ -1756,6 +1756,9 @@
                 <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
                     <option value="">Loading branches…</option>
                 </select>
+                <button id="rpg-switch-branch" class="rpg-accordion-action-btn" type="button" title="Check out the selected branch and reload SillyTavern">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i> Switch &amp; Reload
+                </button>
             </div>
             <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
                 Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version"
@@ -1763,7 +1766,8 @@
             </p>
             <p class="rpg-note-text" style="margin-top:0; padding: 0 8px; opacity: 0.6; font-size: 0.78em;">
                 <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-                Same flow as SillyTavern's "Switch branch" button: picks a branch in-place via the install endpoint and confirms before rewriting on disk.
+                <strong>Update Extension</strong> pulls the latest commit on the branch you're already on.
+                <strong>Switch &amp; Reload</strong> checks out the branch picked in the dropdown and reloads SillyTavern automatically. Settings are kept; only on-disk files change.
             </p>
 
         </div>

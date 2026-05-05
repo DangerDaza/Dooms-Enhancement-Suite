@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.10.4] - 2026-05-05
+
+### Fixed
+- **Branch selector wasn't actually switching.** Picking a branch in the dropdown and reloading left users on `main` because (a) selecting a value in the `<select>` is just UI state — nothing fires until a button is clicked — and (b) the existing **Update Extension** button only triggered the switch flow as a hidden side-effect when the dropdown's value differed from the current branch, which wasn't discoverable.
+
+### Added
+- **Switch & Reload button.** New dedicated button next to the branch dropdown that fires the full `/api/extensions/update` → `/api/extensions/switch` → `/api/extensions/update` flow on the selected branch and then **automatically reloads SillyTavern** so the freshly-checked-out JS actually executes (without the auto-reload, the on-disk files are on the new branch but the running browser code is still the old branch's JS, leading to "I switched and it says I'm still on main"). Confirms before switching, refuses if you're already on the selected branch.
+
+### Changed
+- **Update Extension button is now pull-only.** Always runs `git pull` on the currently checked-out branch, regardless of what's selected in the dropdown. Branch switching is exclusively the Switch & Reload button's job — clearer separation, no more hidden behavior.
+
 ## [1.10.3] - 2026-05-05
 
 ### Fixed

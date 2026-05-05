@@ -1997,11 +1997,17 @@ async function initUI() {
     // Fetch branches from GitHub and populate the dropdown. Best-effort —
     // failures fall back to a static "main" entry.
     populateUpdateBranchDropdownOnce();
+    // Update Extension button — git pull on the currently checked-out
+    // branch only. Branch switching is handled by the separate Switch &
+    // Reload button below; mixing the two into one button left users
+    // confused about whether picking a different branch in the dropdown
+    // before clicking Update would actually switch (it used to, but
+    // hiding that behavior behind the same button as "pull current"
+    // wasn't discoverable).
     $('#rpg-update-extension').off('click.upd').on('click.upd', async function () {
         const $btn = $(this);
         if ($btn.prop('disabled')) return;
         const $status = $('#rpg-update-status');
-        const $sel = $('#rpg-update-branch');
         const originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Updating…');
         $status.html('<span style="opacity:0.8;">Contacting SillyTavern…</span>');
@@ -2011,65 +2017,6 @@ async function initUI() {
             // strip it from extensionName before posting (otherwise the
             // server resolves to .../third-party/third-partyFoo).
             const bareName = extensionName.replace(/^third-party\//, '');
-            const selectedBranch = String($sel.val() || '').trim();
-            const currentBranch = String($sel.data('currentBranch') || '').trim();
-            const switchingBranch = selectedBranch && currentBranch && selectedBranch !== currentBranch;
-
-            // Branch switch: use SillyTavern's /api/extensions/switch endpoint
-            // — same path the Extensions panel's "Switch branch" button takes.
-            // /install hard-rejects with 409 "Directory already exists" when
-            // the folder is present (no force flag exists). /switch does a
-            // git checkout on the existing clone, creating a local tracking
-            // branch from origin/<branch> if needed. We bracket it with
-            // /update calls so the remote refs are fetched first (otherwise
-            // a freshly-pushed branch isn't visible to git checkout) and so
-            // the user lands on the latest commit of the new branch.
-            if (switchingBranch) {
-                const ok = window.confirm(
-                    `Switch to branch "${selectedBranch}"?\n\n` +
-                    `This checks out the "${selectedBranch}" branch on your existing Doom's Enhancement Suite install.\n` +
-                    `Settings are kept; only the on-disk files change.\n\n` +
-                    `(Same flow as SillyTavern's "Switch branch" button.)`
-                );
-                if (!ok) {
-                    $status.html('<span style="opacity:0.8;">Switch cancelled.</span>');
-                    return;
-                }
-                // Step 1: pull on the current branch so any newly-pushed
-                // remote branches are fetched into local refs.
-                $status.html('<span style="opacity:0.8;">Fetching latest refs…</span>');
-                try {
-                    await fetch('/api/extensions/update', {
-                        method: 'POST',
-                        headers: getRequestHeaders(),
-                        body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
-                    });
-                } catch (e) { /* best-effort fetch — don't abort if upstream pull fails */ }
-                // Step 2: checkout the target branch.
-                $status.html(`<span style="opacity:0.8;">Switching to <code>${selectedBranch}</code>…</span>`);
-                const switchResp = await fetch('/api/extensions/switch', {
-                    method: 'POST',
-                    headers: getRequestHeaders(),
-                    body: JSON.stringify({ extensionName: bareName, branch: selectedBranch, global: !isUserExt }),
-                });
-                if (!switchResp.ok) {
-                    const text = await switchResp.text().catch(() => '');
-                    throw new Error(text || `HTTP ${switchResp.status}`);
-                }
-                // Step 3: pull on the new branch to land on its HEAD.
-                try {
-                    await fetch('/api/extensions/update', {
-                        method: 'POST',
-                        headers: getRequestHeaders(),
-                        body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
-                    });
-                } catch (e) { /* best-effort */ }
-                $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Switched to <code>${selectedBranch}</code>. <strong>Reload SillyTavern</strong> to apply.`);
-                $sel.data('currentBranch', selectedBranch);
-                return;
-            }
-
-            // Same-branch update — git pull on the currently checked-out branch.
             const resp = await fetch('/api/extensions/update', {
                 method: 'POST',
                 headers: getRequestHeaders(),
@@ -2090,6 +2037,88 @@ async function initUI() {
             console.error('[Dooms Tracker] Update failed:', err);
             $status.html(`<i class="fa-solid fa-triangle-exclamation" style="color:#e94560;"></i> Update failed: ${err.message || err}`);
         } finally {
+            $btn.prop('disabled', false).html(originalHtml);
+        }
+    });
+
+    // Switch & Reload button — checks out whatever branch is selected in
+    // the dropdown via /api/extensions/switch (the same endpoint ST's
+    // own "Switch branch" button uses), then reloads the page so the
+    // freshly-checked-out JS actually executes. Without the auto-reload
+    // users were ending up on the new branch on disk but still running
+    // the old extension code in the browser — leading to "I switched
+    // and it says I'm still on main" reports.
+    $('#rpg-switch-branch').off('click.swb').on('click.swb', async function () {
+        const $btn = $(this);
+        if ($btn.prop('disabled')) return;
+        const $status = $('#rpg-update-status');
+        const $sel = $('#rpg-update-branch');
+        const originalHtml = $btn.html();
+        const selectedBranch = String($sel.val() || '').trim();
+        const currentBranch = String($sel.data('currentBranch') || '').trim();
+        if (!selectedBranch) {
+            $status.html('<span style="opacity:0.8;">Pick a branch first.</span>');
+            return;
+        }
+        if (currentBranch && selectedBranch === currentBranch) {
+            $status.html(`<span style="opacity:0.8;">Already on <code>${selectedBranch}</code>. Use Update Extension to pull the latest commit.</span>`);
+            return;
+        }
+        const ok = window.confirm(
+            `Switch to branch "${selectedBranch}" and reload?\n\n` +
+            `This checks out the "${selectedBranch}" branch on your existing Doom's Enhancement Suite install, then reloads SillyTavern so the new code runs.\n\n` +
+            `Settings are kept; only on-disk files change.`
+        );
+        if (!ok) {
+            $status.html('<span style="opacity:0.8;">Switch cancelled.</span>');
+            return;
+        }
+        $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Switching…');
+        try {
+            const isUserExt = (import.meta.url || '').includes('/data/');
+            const bareName = extensionName.replace(/^third-party\//, '');
+            // Step 1: pull on the current branch so freshly-pushed
+            // remote branches are fetched into local refs (best-effort —
+            // a stale upstream shouldn't block the user from switching).
+            $status.html('<span style="opacity:0.8;">Fetching latest refs…</span>');
+            try {
+                await fetch('/api/extensions/update', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+                });
+            } catch (e) { /* best-effort */ }
+            // Step 2: checkout the target branch via /api/extensions/switch.
+            $status.html(`<span style="opacity:0.8;">Switching to <code>${selectedBranch}</code>…</span>`);
+            const switchResp = await fetch('/api/extensions/switch', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({ extensionName: bareName, branch: selectedBranch, global: !isUserExt }),
+            });
+            if (!switchResp.ok) {
+                const text = await switchResp.text().catch(() => '');
+                throw new Error(text || `HTTP ${switchResp.status}`);
+            }
+            // Step 3: pull on the new branch to land on its HEAD.
+            try {
+                await fetch('/api/extensions/update', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ extensionName: bareName, global: !isUserExt }),
+                });
+            } catch (e) { /* best-effort */ }
+            $sel.data('currentBranch', selectedBranch);
+            $status.html(`<i class="fa-solid fa-check" style="color:var(--rpg-highlight,#e94560);"></i> Switched to <code>${selectedBranch}</code>. Reloading…`);
+            $btn.html('<i class="fa-solid fa-rotate fa-spin"></i> Reloading…');
+            // Brief delay so the success state is visible before the
+            // page disappears, then hard-reload to bring up the new
+            // branch's JS. location.reload(true) is deprecated; the
+            // bare reload() in modern browsers does a normal reload
+            // which is enough since switch wrote new files to disk.
+            setTimeout(() => { try { window.location.reload(); } catch (e) { /* fallback */ } }, 1200);
+        } catch (err) {
+            console.error('[Dooms Tracker] Branch switch failed:', err);
+            $status.html(`<i class="fa-solid fa-triangle-exclamation" style="color:#e94560;"></i> Switch failed: ${err.message || err}`);
             $btn.prop('disabled', false).html(originalHtml);
         }
     });
