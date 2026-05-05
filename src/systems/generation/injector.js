@@ -30,6 +30,14 @@ import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } f
 import { buildNameBanInstruction } from '../features/nameBan.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
+// Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
+// GENERATION_AFTER_COMMANDS handler can re-evaluate suppression with the same
+// inputs. Needed because GG's `/inject` slash command writes to
+// chat_metadata.script_injects asynchronously — at GENERATION_STARTED time
+// the injects map is still empty, so our first suppression check misses.
+// AFTER_COMMANDS fires once the slash queue drains but before the prompt
+// builds, giving us a second window to clear extension prompts.
+let lastGenerationArgs = null;
 // Type imports
 /** @typedef {import('../../types/inventory.js').InventoryV2} InventoryV2 */
 // Track last chat length we committed at to prevent duplicate commits from streaming
@@ -622,6 +630,9 @@ export async function onGenerationStarted(type, data, dryRun) {
     if (dryRun) {
         return;
     }
+    // Cache args for the AFTER_COMMANDS late-suppression check below.
+    // Cleared on GENERATION_ENDED/STOPPED via the same listener wiring.
+    lastGenerationArgs = { type, data, dryRun };
     // Skip tracker injection for image generation requests
     if (data?.quietImage || data?.quiet_image || data?.isImageGeneration) {
         return;
@@ -954,6 +965,66 @@ ${contextInstructionsText}
     prepareHistoricalContextInjection();
 }
 /**
+ * Late-suppression handler. Fires after ST has drained the slash-command queue
+ * (so GG's async `/inject id=instruct ephemeral=true` has finally written to
+ * chat_metadata.script_injects), but before the prompt is built. Re-runs
+ * evaluateSuppression and, if suppression should now apply, clears every DES
+ * extension prompt slot plus the historical-context map.
+ *
+ * Without this, the GG → ST swipe race wins: GENERATION_STARTED fires while
+ * script_injects is still empty, DES sees no guided guides, sets all of its
+ * extension prompts, and they survive into the final prompt alongside GG's
+ * injection. End result: tracker JSON stamped onto a guided swipe.
+ */
+function onGenerationAfterCommands() {
+    if (!extensionSettings.enabled) return;
+    if (!lastGenerationArgs) return;
+    const { type, data, dryRun } = lastGenerationArgs;
+    if (dryRun) return;
+
+    const context = getContext();
+    const suppression = evaluateSuppression(extensionSettings, context, data, type);
+    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, matchedPattern, activeInjectIds } = suppression;
+
+    // Diagnostic mirror of the GENERATION_STARTED log so testers can confirm
+    // the late check fired. Remove alongside the STARTED diagnostic once the
+    // race fix is settled in production.
+    let _allInjectKeys = [];
+    try {
+        const _injects = context?.chatMetadata?.script_injects || {};
+        _allInjectKeys = Object.keys(_injects);
+    } catch (e) { _allInjectKeys = ['(threw)']; }
+    console.log(`[DES Suppression] (after-commands) type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
+
+    if (!shouldSuppress) return;
+    // Already suppressed at GENERATION_STARTED — nothing left to clear.
+    if (currentSuppressionState) return;
+
+    console.log(`[DES Suppression] late-suppress fired (mode=${skipMode}, matched=${matchedPattern || '(none)'}) — clearing tracker prompts after slash queue drained.`);
+    setExtensionPrompt('dooms-tracker-inject', '', extension_prompt_types.IN_CHAT, 0, false);
+    setExtensionPrompt('dooms-tracker-example', '', extension_prompt_types.IN_CHAT, 0, false);
+    setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
+    setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
+    setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
+    setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
+    setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
+    // Drop queued historical-context payload so the persistent prompt-ready
+    // listeners (CHAT_COMPLETION_PROMPT_READY etc.) don't smuggle tracker
+    // JSON in via context injection on this generation.
+    pendingContextMap = new Map();
+    historyInjectionDone = false;
+    currentSuppressionState = true;
+}
+
+/**
+ * Drop the cached args once the generation is finished so a stale type/data
+ * pair from a prior run can't leak into the next AFTER_COMMANDS check.
+ */
+function onGenerationFinishedForSuppression() {
+    lastGenerationArgs = null;
+}
+
+/**
  * Initialize the history injection event listeners.
  * These are persistent listeners that inject context into ALL generations
  * while pendingContextMap has data. Should be called once at extension init.
@@ -967,5 +1038,14 @@ export function initHistoryInjectionListeners() {
     eventSource.on(event_types.GENERATE_AFTER_COMBINE_PROMPTS, onGenerateAfterCombinePrompts);
     // Chat completion (OpenAI, etc.)
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onChatCompletionPromptReady);
+    // Late-suppression: re-check after slash-command queue drains (catches
+    // GG's async /inject that misses the GENERATION_STARTED check).
+    if (event_types.GENERATION_AFTER_COMMANDS) {
+        eventSource.on(event_types.GENERATION_AFTER_COMMANDS, onGenerationAfterCommands);
+    } else {
+        console.warn('[Dooms Tracker] event_types.GENERATION_AFTER_COMMANDS is undefined on this ST build — late suppression unavailable.');
+    }
+    eventSource.on(event_types.GENERATION_ENDED, onGenerationFinishedForSuppression);
+    eventSource.on(event_types.GENERATION_STOPPED, onGenerationFinishedForSuppression);
     console.log('[Dooms Tracker] History injection listeners initialized');
 }
