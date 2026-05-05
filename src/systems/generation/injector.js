@@ -662,7 +662,12 @@ export async function onGenerationStarted(type, data, dryRun) {
     // can attach a System Log bundle that pins down which gate closed.
     // Remove once the impersonation/guided-swipe suppression behavior is
     // settled in production.
-    console.log(`[DES Suppression] type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] → shouldSuppress=${shouldSuppress}`);
+    let _allInjectKeys = [];
+    try {
+        const _injects = context?.chatMetadata?.script_injects || {};
+        _allInjectKeys = Object.keys(_injects);
+    } catch (e) { _allInjectKeys = ['(threw)']; }
+    console.log(`[DES Suppression] type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
     if (shouldSuppress) {
         // Debugging: indicate active suppression and which source triggered it
         console.debug(`[Dooms Tracker] Suppression active (mode=${skipMode}). isGuided=${isGuidedGeneration}, isImpersonation=${isImpersonationGeneration}, hasQuietPrompt=${hasQuietPrompt} - skipping RPG tracker injections for this generation.`);
