@@ -25,6 +25,7 @@ import {
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
+import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -1272,6 +1273,79 @@ function bindStaticListeners() {
     });
 }
 
+/**
+ * Mirror a freshly-uploaded user-character portrait into ST's persona
+ * avatar file so the persona panel and {{user}} avatars in chat stay in
+ * sync with the image the user just picked in the Workshop. Without
+ * this, the Workshop saved the cropped portrait only into DES's local
+ * extensionSettings.userCharacters[name].avatar (a base64 data URL) and
+ * never touched the persona file on disk — so the persona manager kept
+ * showing the original avatar.
+ *
+ * Mirrors what ST's own persona panel does on upload:
+ *   1. POST /api/avatars/upload — multipart with `avatar` file +
+ *      `overwrite_name` set to the persona filename (matches the key
+ *      in power_user.personas).
+ *   2. Cache-bust the avatar URL + thumbnail URL so any <img> tags
+ *      already mounted will pick up the new bytes on next render.
+ *
+ * Best-effort: a failure here just leaves ST's persona file untouched —
+ * the DES local copy was already saved by the caller. We log and toast
+ * a warning but never throw.
+ *
+ * @param {string} personaFilename - exact ST persona filename (the key
+ *   in power_user.personas, e.g. "Yashiro.png")
+ * @param {string} dataUrl - PNG data URL produced by upscaleImage
+ */
+async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
+    if (!personaFilename || !dataUrl) return;
+    // Refuse to write if the user's linkedPersona points at a filename
+    // that ST doesn't actually have registered. Otherwise we'd create
+    // an orphaned avatar file with no corresponding persona entry.
+    const personas = (power_user && power_user.personas) || {};
+    if (!personas[personaFilename]) {
+        console.warn(`[Dooms Tracker] Workshop: linkedPersona "${personaFilename}" not in power_user.personas — skipping mirror`);
+        return;
+    }
+    try {
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], personaFilename, { type: blob.type || 'image/png' });
+        const fd = new FormData();
+        // ST's persona client uses field name `avatar` (not `file`).
+        fd.append('avatar', file);
+        fd.append('overwrite_name', personaFilename);
+        const resp = await fetch('/api/avatars/upload', {
+            method: 'POST',
+            headers: getRequestHeaders({ omitContentType: true }),
+            body: fd,
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(text || `HTTP ${resp.status}`);
+        }
+        // Cache-bust both the full and thumbnail URLs so any <img> tags
+        // showing the old avatar (persona panel preview, chat user
+        // bubbles) reload the new bytes on next paint. Best-effort.
+        try {
+            await fetch(`/User Avatars/${encodeURIComponent(personaFilename)}`, { cache: 'reload' });
+        } catch (e) {}
+        try {
+            const thumbUrl = getSafeThumbnailUrl('persona', personaFilename);
+            if (thumbUrl) await fetch(thumbUrl, { cache: 'reload' });
+        } catch (e) {}
+        console.log(`[Dooms Tracker] Workshop: mirrored portrait to ST persona "${personaFilename}"`);
+    } catch (err) {
+        console.warn(`[Dooms Tracker] Workshop: failed to mirror portrait to ST persona "${personaFilename}":`, err);
+        try {
+            if (window.toastr) window.toastr.warning(
+                `Saved locally but couldn't update the linked SillyTavern persona avatar: ${String(err?.message || err)}`,
+                'Persona avatar sync',
+                { timeOut: 4000 },
+            );
+        } catch (e) {}
+    }
+}
+
 function commitDraft() {
     if (!draft) return;
     const name = draft.name;
@@ -1297,6 +1371,17 @@ function commitDraft() {
         extensionSettings.userCharacters[name] = next;
         try { saveSettings(); } catch (e) {}
         try { updatePortraitBar(); } catch (e) {}
+        // If the user uploaded a fresh portrait this session AND has a
+        // linked SillyTavern persona, also write the new image into ST's
+        // persona avatar file. Without this, the Workshop's portrait
+        // upload is invisible to the persona panel and {{user}} avatars
+        // in chat — DES would have its own avatar while ST kept showing
+        // the original one. Fire-and-forget: local DES save above already
+        // succeeded, so a network failure here just means out-of-sync UI
+        // which the helper already toasts about.
+        if (draft.dirty.avatar && draft.linkedPersona && draft.avatar) {
+            mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
+        }
         return;
     }
 
