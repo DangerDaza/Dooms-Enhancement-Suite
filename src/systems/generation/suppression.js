@@ -6,6 +6,7 @@
  * given generation request, based on runtime settings, extended context, and
  * generation data (quiet prompt flags, etc.).
  */
+import { chat_metadata } from '../../../../../../../script.js';
 /**
  * Inject ids GuidedGenerations writes into chat_metadata.script_injects.
  * Watching only `instruct` (the original detection key) misses every other
@@ -52,12 +53,16 @@ export function evaluateSuppression(extensionSettings, context, data, type) {
     // clothes) and custom guides write to their own ids and would otherwise
     // bypass our guided-generation detection.
     //
-    // ST's getContext() exposes the chat metadata as `chat_metadata`
-    // (snake_case). Older code here read `chatMetadata` (camelCase) which is
-    // undefined on every modern ST build, so the injects map silently
-    // collapsed to {} and suppression never fired for /inject-driven flows
-    // like GG's guidedSwipe. Try both names for safety.
-    const injects = context?.chat_metadata?.script_injects
+    // We read `chat_metadata.script_injects` from the live ES-module export
+    // in script.js (same pattern used by portraitBar.js, nameBan.js,
+    // characterSheet.js). Earlier revisions tried `getContext().chatMetadata`
+    // and `getContext().chat_metadata`, but neither shape is reliably
+    // populated by every ST build — diagnostic logs on a confirmed guided
+    // swipe (GG's guidedSwipe.js awaits and verifies the inject before
+    // calling swipe_right) showed `allScriptInjectKeys=[]` on both. Reading
+    // the global directly bypasses the wrapper.
+    const injects = chat_metadata?.script_injects
+        || context?.chat_metadata?.script_injects
         || context?.chatMetadata?.script_injects
         || {};
     const instructObj = injects.instruct;

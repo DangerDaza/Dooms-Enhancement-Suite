@@ -3,7 +3,7 @@
  * Handles injection of RPG tracker prompts into the generation context
  */
 import { getContext } from '../../../../../../extensions.js';
-import { extension_prompt_types, extension_prompt_roles, setExtensionPrompt, eventSource, event_types } from '../../../../../../../script.js';
+import { extension_prompt_types, extension_prompt_roles, setExtensionPrompt, eventSource, event_types, chat_metadata } from '../../../../../../../script.js';
 import {
     extensionSettings,
     committedTrackerData,
@@ -675,7 +675,8 @@ export async function onGenerationStarted(type, data, dryRun) {
     // settled in production.
     let _allInjectKeys = [];
     try {
-        const _injects = context?.chat_metadata?.script_injects
+        const _injects = chat_metadata?.script_injects
+            || context?.chat_metadata?.script_injects
             || context?.chatMetadata?.script_injects
             || {};
         _allInjectKeys = Object.keys(_injects);
@@ -993,7 +994,8 @@ function onGenerationAfterCommands() {
     // race fix is settled in production.
     let _allInjectKeys = [];
     try {
-        const _injects = context?.chat_metadata?.script_injects
+        const _injects = chat_metadata?.script_injects
+            || context?.chat_metadata?.script_injects
             || context?.chatMetadata?.script_injects
             || {};
         _allInjectKeys = Object.keys(_injects);
