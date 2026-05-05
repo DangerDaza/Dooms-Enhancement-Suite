@@ -39,9 +39,14 @@ function normalizeInjectContent(obj) {
  * @param {any} extensionSettings - extension settings object (may contain skipInjectionsForGuided)
  * @param {any} context - SillyTavern context object (used to find chatMetadata.script_injects.<id>)
  * @param {any} data - Generation data (contains quiet_prompt/quietPrompt flags)
+ * @param {string} [type] - Generation type from ST's GENERATION_STARTED event
+ *   ('normal' | 'impersonate' | 'continue' | 'swipe' | 'regenerate' | 'quiet').
+ *   When `type === 'impersonate'` we treat it as an impersonation regardless of
+ *   regex match — ST's native Impersonate button doesn't always inject
+ *   GG-flavored prompt language, so the regex alone misses native flows.
  * @returns {Object} - An object describing the suppression decision.
  */
-export function evaluateSuppression(extensionSettings, context, data) {
+export function evaluateSuppression(extensionSettings, context, data, type) {
     // Detect presence of any GG-style script injection. We check every known
     // guide id, not just `instruct` — auto-trigger guides (thinking / state /
     // clothes) and custom guides write to their own ids and would otherwise
@@ -87,7 +92,19 @@ export function evaluateSuppression(extensionSettings, context, data) {
     const combinedTextForDetection = [allInjectContent, quietPromptRaw].filter(Boolean).join('\n');
     let matchedPattern = '';
     let isImpersonationGeneration = false;
-    if (combinedTextForDetection.length) {
+    // Primary signal: ST's GENERATION_STARTED event passes type === 'impersonate'
+    // for the native Impersonate button. This is the most reliable detection
+    // since ST's prompt language varies by instruct preset and won't always
+    // match the GG-flavored regex patterns below.
+    if (typeof type === 'string' && type === 'impersonate') {
+        isImpersonationGeneration = true;
+        matchedPattern = 'event-type-impersonate';
+    }
+    // Secondary signal: regex-match injected prompt content. Catches GG's
+    // impersonation flows (which fire type === 'normal' but inject prompt
+    // text matching one of the patterns) and any other extensions that route
+    // impersonation through script_injects rather than the native button.
+    if (!isImpersonationGeneration && combinedTextForDetection.length) {
         for (const pat of IMPERSONATION_PATTERNS) {
             if (pat.re.test(combinedTextForDetection)) {
                 matchedPattern = pat.id;

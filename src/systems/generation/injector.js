@@ -651,8 +651,11 @@ export async function onGenerationStarted(type, data, dryRun) {
     // If present, we should avoid injecting RPG tracker instructions that ask
     // the model to include stats/etc. This prevents conflicts when guided prompts
     // are used (e.g., GuidedGenerations Extension).
-    // Evaluate suppression using the shared helper
-    const suppression = evaluateSuppression(extensionSettings, context, data);
+    // Evaluate suppression using the shared helper. `type` is forwarded so
+    // ST's native Impersonate button (type === 'impersonate') is detected
+    // even when the prompt language doesn't match the GG-flavored regex
+    // patterns inside evaluateSuppression.
+    const suppression = evaluateSuppression(extensionSettings, context, data, type);
     const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, instructContent, quietPromptRaw, matchedPattern } = suppression;
     if (shouldSuppress) {
         // Debugging: indicate active suppression and which source triggered it
