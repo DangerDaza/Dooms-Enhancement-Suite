@@ -55,6 +55,10 @@ export const defaultSettings = {
     showQuests: true,
     showLockIcons: false, // Disabled — lock UI not yet wired into scene tracker
     showThoughtsInChat: true,
+    autoPortraitMode: 'off',
+    autoPortraitPromptSource: 'main_reply_tag',
+    generatedPortraits: {},
+    customAutoPortraitPrompt: '',
     syncExpressionsToPresentCharacters: false,
     hideDefaultExpressionDisplay: false,
     enableHtmlPrompt: false,

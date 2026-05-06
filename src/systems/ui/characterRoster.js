@@ -645,6 +645,7 @@ function importFromSillyTavernCards() {
             const url = '/characters/' + encodeURIComponent(card.avatar);
             extensionSettings.npcAvatars[name] = url;
             extensionSettings.npcAvatarsFullRes[name] = url;
+            if (extensionSettings.generatedPortraits) delete extensionSettings.generatedPortraits[name];
         }
         // If the card has a description, seed the Workshop Injection field
         // so users can Inject into Scene right away.
@@ -799,6 +800,7 @@ function importCharacterPayload(payload) {
         if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
         extensionSettings.npcAvatars[targetName] = avatar;
         extensionSettings.npcAvatarsFullRes[targetName] = avatarFull || avatar;
+        if (extensionSettings.generatedPortraits) delete extensionSettings.generatedPortraits[targetName];
     }
 
     const rel = typeof payload.relationship === 'string' ? payload.relationship.trim() : '';
