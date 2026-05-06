@@ -1323,9 +1323,38 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
             const text = await resp.text().catch(() => '');
             throw new Error(text || `HTTP ${resp.status}`);
         }
-        // Cache-bust both the full and thumbnail URLs so any <img> tags
-        // showing the old avatar (persona panel preview, chat user
-        // bubbles) reload the new bytes on next paint. Best-effort.
+        // Force already-rendered <img> tags to reload. A plain
+        // fetch(url, {cache:'reload'}) only refreshes the browser's HTTP
+        // cache for that URL — img elements already on the page (persona
+        // panel preview, message-header user avatar, persona dropdown
+        // thumbnails) won't repaint until their `src` is rewritten. So
+        // walk the DOM and append a timestamp query string to every
+        // matching src.
+        try {
+            const ts = Date.now();
+            const escFilename = personaFilename.replace(/"/g, '\\"');
+            const matchers = [
+                `img[src*="User Avatars/${escFilename}"]`,
+                `img[src*="thumbnail"][src*="${escFilename}"]`,
+                // ST renders persona thumbs encoded too
+                `img[src*="${encodeURIComponent(personaFilename)}"]`,
+            ];
+            const seen = new WeakSet();
+            for (const sel of matchers) {
+                document.querySelectorAll(sel).forEach((img) => {
+                    if (seen.has(img)) return;
+                    seen.add(img);
+                    const src = img.getAttribute('src') || '';
+                    if (!src) return;
+                    const sep = src.includes('?') ? '&' : '?';
+                    img.setAttribute('src', `${src}${sep}t=${ts}`);
+                });
+            }
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: persona avatar img refresh failed', e);
+        }
+        // Best-effort HTTP cache reload too, so any future render reads
+        // the new bytes.
         try {
             await fetch(`/User Avatars/${encodeURIComponent(personaFilename)}`, { cache: 'reload' });
         } catch (e) {}
@@ -1334,6 +1363,13 @@ async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
             if (thumbUrl) await fetch(thumbUrl, { cache: 'reload' });
         } catch (e) {}
         console.log(`[Dooms Tracker] Workshop: mirrored portrait to ST persona "${personaFilename}"`);
+        try {
+            if (window.toastr) window.toastr.success(
+                `Saved and synced "${personaFilename}" in the Persona Manager.`,
+                'Persona avatar sync',
+                { timeOut: 2500 },
+            );
+        } catch (e) {}
     } catch (err) {
         console.warn(`[Dooms Tracker] Workshop: failed to mirror portrait to ST persona "${personaFilename}":`, err);
         try {
@@ -1371,15 +1407,19 @@ function commitDraft() {
         extensionSettings.userCharacters[name] = next;
         try { saveSettings(); } catch (e) {}
         try { updatePortraitBar(); } catch (e) {}
-        // If the user uploaded a fresh portrait this session AND has a
-        // linked SillyTavern persona, also write the new image into ST's
-        // persona avatar file. Without this, the Workshop's portrait
-        // upload is invisible to the persona panel and {{user}} avatars
-        // in chat — DES would have its own avatar while ST kept showing
-        // the original one. Fire-and-forget: local DES save above already
-        // succeeded, so a network failure here just means out-of-sync UI
-        // which the helper already toasts about.
-        if (draft.dirty.avatar && draft.linkedPersona && draft.avatar) {
+        // Mirror the user-character portrait into ST's persona avatar file
+        // any time the user has a linked persona AND a portrait staged. We
+        // can't gate this on dirty.avatar alone — the most common path now
+        // is "user just linked the persona for the first time" where the
+        // existing DES-stored avatar is fine but needs to be pushed into
+        // ST's persona file once. Fire whenever either field is dirty and
+        // both end up populated. Local DES save above already succeeded,
+        // so a network failure here just means out-of-sync UI which the
+        // helper already toasts about.
+        const shouldMirrorPersona = (draft.dirty.avatar || draft.dirty.linkedPersona)
+            && draft.linkedPersona
+            && draft.avatar;
+        if (shouldMirrorPersona) {
             mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
         }
         return;
