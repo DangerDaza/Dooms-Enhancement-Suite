@@ -45,6 +45,7 @@ import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfile
 import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
 import { getSafeThumbnailUrl } from './src/utils/avatars.js';
+import { isSyntheticTrackerMessage } from './src/utils/messageGuards.js';
 import { renderInfoBox, updateInfoBoxField, initInfoBoxEventDelegation } from './src/systems/rendering/infoBox.js';
 import {
     renderThoughts,
@@ -106,12 +107,6 @@ import {
     injectReasoningTtsButtons
 } from './src/systems/rendering/chatBubbles.js';
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
-import {
-    initTtsHighlight,
-    destroyTtsHighlight,
-    onTtsHighlightModeChanged,
-    applyTtsHighlightSettings
-} from './src/systems/rendering/ttsHighlight.js';
 import { playLoadingIntro } from './src/systems/ui/loadingIntro.js';
 // Lorebook Manager modules
 import { setupLorebookModal, getLorebookModal } from './src/systems/ui/lorebookModal.js';
@@ -873,63 +868,6 @@ async function initUI() {
     $('#rpg-loading-intro-mode').on('change', function () {
         extensionSettings.loadingIntroMode = $(this).val();
         saveSettings();
-    });
-    $('#rpg-tts-highlight-mode').on('change', function () {
-        const oldMode = extensionSettings.ttsHighlightMode;
-        extensionSettings.ttsHighlightMode = $(this).val();
-        saveSettings();
-        onTtsHighlightModeChanged(oldMode, extensionSettings.ttsHighlightMode);
-        $('#rpg-tts-badge').text(extensionSettings.ttsHighlightMode === 'off' ? 'off' : 'on');
-    });
-    // ── TTS Highlight customization ──
-    const _ttsSettings = () => {
-        if (!extensionSettings.ttsHighlightSettings) extensionSettings.ttsHighlightSettings = {};
-        return extensionSettings.ttsHighlightSettings;
-    };
-    const _saveTts = () => { saveSettings(); applyTtsHighlightSettings(); };
-
-    $('#rpg-tts-color-left').on('input', function () { _ttsSettings().gradientColorLeft = $(this).val(); _saveTts(); });
-    $('#rpg-tts-color-right').on('input', function () { _ttsSettings().gradientColorRight = $(this).val(); _saveTts(); });
-    $('#rpg-tts-override-text-color').on('change', function () {
-        const on = $(this).prop('checked');
-        _ttsSettings().overrideTextColor = on;
-        $('#rpg-tts-text-color-row').toggle(on);
-        _saveTts();
-    });
-    $('#rpg-tts-active-text-color').on('input', function () { _ttsSettings().activeTextColor = $(this).val(); _saveTts(); });
-    $('#rpg-tts-gradient-opacity').on('input', function () {
-        const v = parseInt($(this).val());
-        _ttsSettings().gradientOpacity = v;
-        $('#rpg-tts-gradient-opacity-value').text(v + '%');
-        _saveTts();
-    });
-    $('#rpg-tts-glow-intensity').on('input', function () {
-        const v = parseInt($(this).val());
-        _ttsSettings().glowIntensity = v;
-        $('#rpg-tts-glow-intensity-value').text(v + 'px');
-        _saveTts();
-    });
-    $('#rpg-tts-border-radius').on('input', function () {
-        const v = parseInt($(this).val());
-        _ttsSettings().borderRadius = v;
-        $('#rpg-tts-border-radius-value').text(v + 'px');
-        _saveTts();
-    });
-    $('#rpg-tts-read-opacity').on('input', function () {
-        const v = parseInt($(this).val());
-        _ttsSettings().readOpacity = v;
-        $('#rpg-tts-read-opacity-value').text(v + '%');
-        _saveTts();
-    });
-    $('#rpg-tts-unread-opacity').on('input', function () {
-        const v = parseInt($(this).val());
-        _ttsSettings().unreadOpacity = v;
-        $('#rpg-tts-unread-opacity-value').text(v + '%');
-        _saveTts();
-    });
-    $('#rpg-tts-transition-speed').on('change', function () {
-        _ttsSettings().transitionSpeed = parseInt($(this).val());
-        _saveTts();
     });
     // ── Scene Tracker customization ──
     const _stSettings = () => {
@@ -1785,7 +1723,6 @@ async function initUI() {
     $('#rpg-pb-absent-opacity').val(pb.absentOpacity ?? 45);
     $('#rpg-pb-absent-opacity-value').text((pb.absentOpacity ?? 45) + '%');
     applyPortraitBarSettings();
-    $('#rpg-tts-highlight-mode').val(extensionSettings.ttsHighlightMode || 'off');
     $('#rpg-loading-intro-mode').val(extensionSettings.loadingIntroMode || 'off');
     $('#rpg-toggle-thoughts-in-chat').prop('checked', extensionSettings.showThoughtsInChat);
     // Scene Tracker customization
@@ -1872,26 +1809,6 @@ async function initUI() {
     const lbEnabled = extensionSettings.lorebook?.enabled ?? true;
     $('#rpg-toggle-lorebook').prop('checked', lbEnabled);
     $('#rpg-lb-badge').text(lbEnabled ? 'on' : 'off');
-    // TTS Highlight
-    const tts = extensionSettings.ttsHighlightSettings || {};
-    $('#rpg-tts-badge').text(extensionSettings.ttsHighlightMode === 'off' ? 'off' : 'on');
-    $('#rpg-tts-color-left').val(tts.gradientColorLeft || '#e94560');
-    $('#rpg-tts-color-right').val(tts.gradientColorRight || '#9333ea');
-    $('#rpg-tts-override-text-color').prop('checked', tts.overrideTextColor ?? false);
-    $('#rpg-tts-text-color-row').toggle(tts.overrideTextColor ?? false);
-    $('#rpg-tts-active-text-color').val(tts.activeTextColor || '#ffffff');
-    $('#rpg-tts-gradient-opacity').val(tts.gradientOpacity ?? 30);
-    $('#rpg-tts-gradient-opacity-value').text((tts.gradientOpacity ?? 30) + '%');
-    $('#rpg-tts-glow-intensity').val(tts.glowIntensity ?? 16);
-    $('#rpg-tts-glow-intensity-value').text((tts.glowIntensity ?? 16) + 'px');
-    $('#rpg-tts-border-radius').val(tts.borderRadius ?? 4);
-    $('#rpg-tts-border-radius-value').text((tts.borderRadius ?? 4) + 'px');
-    $('#rpg-tts-read-opacity').val(tts.readOpacity ?? 35);
-    $('#rpg-tts-read-opacity-value').text((tts.readOpacity ?? 35) + '%');
-    $('#rpg-tts-unread-opacity').val(tts.unreadOpacity ?? 55);
-    $('#rpg-tts-unread-opacity-value').text((tts.unreadOpacity ?? 55) + '%');
-    $('#rpg-tts-transition-speed').val(tts.transitionSpeed ?? 300);
-    applyTtsHighlightSettings();
     // Bunny Mo Integration
     $('#rpg-toggle-bunny-mo').prop('checked', extensionSettings.bunnyMoIntegration || false);
     $('#rpg-bm-badge').text(extensionSettings.bunnyMoIntegration ? 'on' : 'off');
@@ -2490,8 +2407,6 @@ async function initUI() {
         // applyTheme() ran before the FAB existed, so stamp the theme now.
         try { applyTheme(); } catch (_) { }
     }
-    // Initialize TTS sentence highlight — Gradient Glow Pill (monkey-patches speechSynthesis.speak)
-    try { initTtsHighlight(); console.log('[Dooms Tracker] initTtsHighlight() OK'); } catch (e) { console.error('[Dooms Tracker] initTtsHighlight() FAILED:', e); }
     try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch (e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
     try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
     try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
@@ -2814,6 +2729,13 @@ jQuery(async () => {
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
+                // Skip GG's synthetic tracker/note messages — they get
+                // is_user=false but their .mes is HTML, not real model
+                // output. Bubble styling on the <details> markup mangles
+                // GG's tracker UI.
+                const guardIdx = parseInt(messageId, 10);
+                const guardMsg = (Array.isArray(chat) && Number.isFinite(guardIdx)) ? chat[guardIdx] : null;
+                if (isSyntheticTrackerMessage(guardMsg)) return;
                 const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
 
                 // Inject reasoning TTS button into the thinking panel
@@ -2874,6 +2796,15 @@ jQuery(async () => {
             });
             eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;
+                // Skip synthetic tracker/note messages other extensions inject
+                // into chat (currently GuidedGenerations). They re-emit
+                // USER_MESSAGE_RENDERED but the message body is HTML/tracker
+                // markup — running chat-bubble styling or the user-expression
+                // classifier on it produces garbage and a sprite swap to
+                // whatever the classifier guesses from GG's <details> tags.
+                const guardIdx = parseInt(messageId, 10);
+                const guardMsg = (Array.isArray(chat) && Number.isFinite(guardIdx)) ? chat[guardIdx] : null;
+                if (isSyntheticTrackerMessage(guardMsg)) return;
                 // Chat bubbles styling
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
                     const messageElement = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
@@ -2887,9 +2818,7 @@ jQuery(async () => {
                 // active user character with a sprite folder; otherwise no-op.
                 if (extensionSettings.syncExpressionsToPresentCharacters) {
                     try {
-                        const idx = parseInt(messageId, 10);
-                        const msg = (Array.isArray(chat) && Number.isFinite(idx)) ? chat[idx] : null;
-                        const text = msg && msg.is_user ? (msg.mes || '') : '';
+                        const text = guardMsg && guardMsg.is_user ? (guardMsg.mes || '') : '';
                         if (text) {
                             classifyActiveUserExpression(text)
                                 .then(() => updatePortraitBar())
@@ -2911,10 +2840,6 @@ jQuery(async () => {
                 setTimeout(() => onExpressionSyncChatChanged(), 0);
                 // Inject fullsheet import buttons on existing messages
                 setTimeout(() => injectFullSheetButtons(), 200);
-            });
-            // TTS Highlight: clear all highlights when switching chats
-            eventSource.on(event_types.CHAT_CHANGED, () => {
-                onTtsHighlightModeChanged('_reset', extensionSettings.ttsHighlightMode || 'off');
             });
             // MESSAGE_UPDATED fires after the DOM is re-rendered with the edited content.
             // CHARACTER_MESSAGE_RENDERED does NOT fire on edits.

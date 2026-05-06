@@ -12,6 +12,8 @@ import { getActiveCharacterColors, getActiveKnownCharacters } from '../../core/p
 import { resolvePortrait, resolveFullPortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
+import { chat } from '../../../../../../../script.js';
+import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -558,6 +560,18 @@ function renderCardUserBubble(html) {
 // ─────────────────────────────────────────────
 export function applyChatBubbles(messageElement, style) {
     if (!style || style === 'off') return;
+
+    // Skip GuidedGenerations' synthetic tracker/note messages — bubble
+    // styling on their <details> markup garbles GG's tracker UI.
+    // Belt-and-suspenders: callers also guard, but applyAllChatBubbles
+    // iterates the whole DOM and could hit one without checking.
+    const mesIdAttr = messageElement.getAttribute && messageElement.getAttribute('mesid');
+    if (mesIdAttr) {
+        const idx = parseInt(mesIdAttr, 10);
+        if (Number.isFinite(idx) && Array.isArray(chat)) {
+            if (isSyntheticTrackerMessage(chat[idx])) return;
+        }
+    }
 
     const mesText = messageElement.querySelector('.mes_text');
     if (!mesText) return;

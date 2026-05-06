@@ -325,19 +325,6 @@ export let extensionSettings = {
         hudOpacity: 85,                   // HUD background opacity (0-100)
         hudPosition: null,                // Saved drag position { left, top } in px, null = default top-right
     },
-    ttsHighlightMode: 'off', // TTS sentence highlight: 'off' or 'highlight' (Gradient Glow Pill)
-    ttsHighlightSettings: {
-        gradientColorLeft: '#e94560',    // Left color of gradient pill
-        gradientColorRight: '#9333ea',   // Right color of gradient pill
-        gradientOpacity: 30,             // Gradient background opacity (0–100)
-        glowIntensity: 16,               // Box-shadow blur radius in px (0 = no glow)
-        readOpacity: 35,                 // Already-read text opacity (0–100)
-        unreadOpacity: 55,               // Not-yet-read text opacity (0–100)
-        overrideTextColor: false,        // Whether to override text color on active sentence
-        activeTextColor: '#ffffff',      // Active sentence text color (only if overrideTextColor is true)
-        borderRadius: 4,                 // Pill border radius in px
-        transitionSpeed: 300,            // Transition duration in ms
-    },
     // Portrait auto-import: match NPC names to SillyTavern character card avatars
     portraitAutoImport: true,
     syncExpressionsToPresentCharacters: false, // Classify and display per-character expressions on portrait bar

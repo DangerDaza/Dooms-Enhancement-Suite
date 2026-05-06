@@ -15721,59 +15721,7 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   TTS SENTENCE HIGHLIGHT — "Gradient Glow Pill" style
-   DOM-based sentence wrapping with gradient background glow
-   All visual properties driven by CSS custom properties
-   ═══════════════════════════════════════════════════════ */
-
-/* Base sentence span — inline so text wraps naturally */
-.dooms-tts-sentence {
-    transition: background var(--dooms-tts-transition, 0.3s) ease, color var(--dooms-tts-transition, 0.3s) ease, opacity var(--dooms-tts-transition, 0.3s) ease, box-shadow var(--dooms-tts-transition, 0.3s) ease;
-}
-
-/* Already-read sentences — dimmed (uses opacity to preserve dialogue colors) */
-.dooms-tts-read {
-    opacity: var(--dooms-tts-read-opacity, 0.35);
-    transition: opacity var(--dooms-tts-transition, 0.3s) ease;
-}
-
-/* Active sentence — gradient glow pill */
-.dooms-tts-active-sentence {
-    background: linear-gradient(
-        135deg,
-        rgba(var(--dooms-tts-left-r, 233), var(--dooms-tts-left-g, 69), var(--dooms-tts-left-b, 96), var(--dooms-tts-gradient-opacity, 0.3)),
-        rgba(var(--dooms-tts-right-r, 147), var(--dooms-tts-right-g, 51), var(--dooms-tts-right-b, 234), var(--dooms-tts-gradient-opacity, 0.3))
-    );
-    color: var(--dooms-tts-active-color, inherit) !important;
-    padding: 2px 6px;
-    margin: -2px -6px;
-    border-radius: var(--dooms-tts-radius, 4px);
-    box-shadow:
-        0 0 var(--dooms-tts-glow, 16px) rgba(var(--dooms-tts-left-r, 233), var(--dooms-tts-left-g, 69), var(--dooms-tts-left-b, 96), 0.2),
-        0 0 4px rgba(var(--dooms-tts-right-r, 147), var(--dooms-tts-right-g, 51), var(--dooms-tts-right-b, 234), 0.15);
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    transition: background var(--dooms-tts-transition, 0.3s) ease, color var(--dooms-tts-transition, 0.3s) ease, opacity var(--dooms-tts-transition, 0.3s) ease, box-shadow var(--dooms-tts-transition, 0.3s) ease;
-}
-
-/* Unread sentences — slightly dimmed (uses opacity to preserve dialogue colors) */
-.dooms-tts-unread {
-    opacity: var(--dooms-tts-unread-opacity, 0.55);
-    transition: opacity var(--dooms-tts-transition, 0.3s) ease;
-}
-
-/* Active message gets subtle border accent */
-#chat .mes.dooms-tts-active {
-    border-color: rgba(var(--dooms-tts-left-r, 233), var(--dooms-tts-left-g, 69), var(--dooms-tts-left-b, 96), 0.15) !important;
-}
-
-/* Override TTS-Fix extension highlighting when our highlight is active */
-.dooms-tts-active .tts-highlight {
-    background-color: transparent !important;
-}
-
-/* ─── TTS Settings panel: slider group ─── */
+/* ─── Slider control group (used by portrait bar settings) ─── */
 .rpg-slider-group {
     display: flex;
     align-items: center;
@@ -15813,10 +15761,6 @@ body.dooms-hide-st-topbar .openDrawer {
     color: rgba(255, 255, 255, 0.7);
 }
 
-/* TTS customization sub-section */
-.rpg-tts-customization-section {
-    margin-top: 8px;
-}
 /* Prevent color swatches from squishing in flex rows */
 .rpg-accordion-body .rpg-color-swatch {
     flex-shrink: 0;
@@ -19568,9 +19512,12 @@ body.dooms-hide-st-topbar .openDrawer {
 #character-workshop-popup[data-mode="user"] .cw-user-only {
     display: revert !important;
 }
-#character-workshop-popup[data-mode="user"] .cw-user-only[hidden] {
-    display: none !important;
-}
+/* Note: do NOT add a `.cw-user-only[hidden]` override here — it would
+   override the `display: revert` above and re-hide every user-only field
+   even in user mode. We hit that exact trap on the linked-persona
+   dropdown; the fix was removing `hidden` from those elements in
+   template.html. If a user-only field needs JS-toggled visibility, use
+   a class (.is-hidden) instead so this CSS doesn't fight the toggle. */
 
 /* Split pane body */
 #character-workshop-popup .workshop-split {

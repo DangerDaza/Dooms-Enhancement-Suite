@@ -689,7 +689,19 @@ function namesMatch(cardName, aiName) {
 export function resolvePortrait(name) {
     if (!name) return null;
 
-    // 0. User character — only when this name IS the currently-active user
+    // 0. Synced expression sprite wins over everything else when the user
+    //    has expressions sync enabled. The classifier writes per-character
+    //    sprite URLs into syncedExpressionPortraits after every reply; we
+    //    surface them here so the portrait bar reflects the current
+    //    emotion. Used to come AFTER the user-character branch — that
+    //    meant the active user character never got expression swaps
+    //    because the static avatar shortcut returned first.
+    //    resolveFullPortrait below already has this ordering;
+    //    resolvePortrait now matches.
+    const syncedExpression = getExpressionAwarePortrait(name, null);
+    if (syncedExpression) return syncedExpression;
+
+    // 1. User character — only when this name IS the currently-active user
     // character. Without the active-name guard, an NPC that happens to
     // share a name with a user-character would be hijacked: every NPC
     // portrait lookup matching that name would return the user's avatar
@@ -702,10 +714,7 @@ export function resolvePortrait(name) {
         }
     }
 
-    const syncedExpression = getExpressionAwarePortrait(name, null);
-    if (syncedExpression) return syncedExpression;
-
-    // 1. Custom uploaded avatars (npcAvatars)
+    // 2. Custom uploaded avatars (npcAvatars)
     const avatars = extensionSettings.npcAvatars;
     if (avatars) {
         // Exact match

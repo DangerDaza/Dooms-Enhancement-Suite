@@ -36,9 +36,31 @@ import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { enforceNameBan } from '../features/nameBan.js';
 // Expression classification
-import { classifyAllCharacterExpressions } from './expressionSync.js';
+import { classifyAllCharacterExpressions, classifyActiveUserExpression } from './expressionSync.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+/**
+ * Walks chat[] backwards to find the most recent real user message and
+ * returns its text. Skips system entries and synthetic tracker messages
+ * other extensions inject. Returns null if no user message exists.
+ *
+ * Used by onMessageReceived to re-run the user-character expression
+ * classifier on every AI reply (so swipes and regens update the user's
+ * portrait too — without this, the user classifier only fires when the
+ * user types a fresh message via USER_MESSAGE_RENDERED).
+ */
+function findLastUserMessageText() {
+    if (!Array.isArray(chat)) return null;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const m = chat[i];
+        if (!m || !m.is_user) continue;
+        if (isSyntheticTrackerMessage(m)) continue;
+        const text = String(m.mes || '').trim();
+        if (text) return text;
+    }
+    return null;
+}
 /**
  * Commits the tracker data from the last assistant message to be used as source for next generation.
  * This should be called when the user has replied to a message, ensuring all swipes of the next
@@ -115,7 +137,10 @@ export async function onMessageReceived(data) {
         // In together mode, parse the response to extract RPG data
         // Commit happens in onMessageSent (when user sends message, before generation)
         const lastMessage = chat[chat.length - 1];
-        if (lastMessage && !lastMessage.is_user) {
+        // Skip GG's synthetic tracker/note messages — running parseResponse on
+        // their <details> HTML would surface bogus tracker JSON and clobber
+        // the real lastGeneratedData state.
+        if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
             const responseText = lastMessage.mes;
             const parsedData = parseResponse(responseText);
             // Note: Don't show parsing error here - this event fires when loading chat history too
@@ -192,6 +217,21 @@ export async function onMessageReceived(data) {
                     .then(() => updatePortraitBar())
                     .catch(err => console.error('[DES] Expression classification failed:', err));
             }
+            // ── Active user character expression refresh ──
+            // Without this, the user-character classifier only fires on
+            // USER_MESSAGE_RENDERED (a fresh typed message). Swipes and
+            // regenerations of the AI reply leave the user's portrait
+            // stuck on whatever was set the last time the user typed.
+            // Re-classify the user's last message text so the user's
+            // portrait reflects the current scene on every AI reply.
+            if (extensionSettings.syncExpressionsToPresentCharacters && isAwaitingNewMessage) {
+                const lastUserText = findLastUserMessageText();
+                if (lastUserText) {
+                    classifyActiveUserExpression(lastUserText)
+                        .then(() => updatePortraitBar())
+                        .catch(err => console.error('[DES] User expression classification failed:', err));
+                }
+            }
             // Insert inline thought dropdowns into the chat message
             // (CHARACTER_MESSAGE_RENDERED fires after addOneMessage, so thoughts go in then)
             if (parsedData.characterThoughts) {
@@ -229,7 +269,7 @@ export async function onMessageReceived(data) {
                 // ── Name Ban: enforce in separate/external mode ──
                 if (extensionSettings.nameBan?.enabled) {
                     const lastMsg = chat[chat.length - 1];
-                    if (lastMsg && !lastMsg.is_user) {
+                    if (lastMsg && !lastMsg.is_user && !isSyntheticTrackerMessage(lastMsg)) {
                         const nbResult = await enforceNameBan(lastMsg.mes, lastGeneratedData.characterThoughts);
                         if (nbResult.text !== lastMsg.mes) {
                             lastMsg.mes = nbResult.text;
@@ -249,10 +289,20 @@ export async function onMessageReceived(data) {
                 // ── Expression classification (separate/external mode) ──
                 if (extensionSettings.syncExpressionsToPresentCharacters) {
                     const sepMsg = chat[chat.length - 1];
-                    if (sepMsg && !sepMsg.is_user) {
+                    if (sepMsg && !sepMsg.is_user && !isSyntheticTrackerMessage(sepMsg)) {
                         classifyAllCharacterExpressions(sepMsg.mes)
                             .then(() => updatePortraitBar())
                             .catch(err => console.error('[DES] Expression classification failed:', err));
+                    }
+                    // Re-classify the user's last message so the active
+                    // user character's portrait refreshes alongside the AI
+                    // side. See onMessageReceived (together mode) for the
+                    // rationale — same fix, mirrored to separate/external.
+                    const lastUserText = findLastUserMessageText();
+                    if (lastUserText) {
+                        classifyActiveUserExpression(lastUserText)
+                            .then(() => updatePortraitBar())
+                            .catch(err => console.error('[DES] User expression classification failed:', err));
                     }
                 }
                 // Doom Counter: evaluate tension after separate mode update

@@ -61,7 +61,10 @@
                     </div>
 
                     <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Narrator Mode</span>
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Narrator Mode</span>
+                            <span class="rpg-setting-hint">Infer characters from scene context instead of using fixed character references — useful for narrator-style cards that describe the world rather than play a single role.</span>
+                        </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-narrator" />
                             <span class="rpg-toggle-slider"></span>
@@ -797,132 +800,6 @@
                         <div style="margin-top:12px;">
                             <button id="rpg-nb-clear-all" class="menu_button" style="color:#e94560;">Clear All Name Ban
                                 Data</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════ TTS HIGHLIGHT ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="tts-highlight">
-                <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-volume-high rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title">TTS Highlight</span>
-                    <span class="rpg-accordion-badge" id="rpg-tts-badge">off</span>
-                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
-                </div>
-                <div class="rpg-accordion-body">
-                    <div class="rpg-dc-api-warning" style="margin-bottom: 10px;">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <strong>Deprecated.</strong> This feature is no longer being actively developed. It remains
-                        available in case someone would like to pick up where development left off.
-                    </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Mode</span>
-                            <span class="rpg-setting-hint">Highlight sentences as they are read aloud by TTS</span>
-                        </div>
-                        <select id="rpg-tts-highlight-mode" class="rpg-accordion-select">
-                            <option value="off">Off</option>
-                            <option value="highlight">Gradient Glow</option>
-                        </select>
-                    </div>
-
-                    <div id="rpg-tts-customization" class="rpg-tts-customization-section">
-                        <div class="rpg-subsection-label">Gradient Colors</div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Left Color</span>
-                            <input type="color" id="rpg-tts-color-left" class="rpg-color-swatch" value="#e94560" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <span class="rpg-setting-label">Right Color</span>
-                            <input type="color" id="rpg-tts-color-right" class="rpg-color-swatch" value="#9333ea" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Gradient Opacity</span>
-                                <span class="rpg-setting-hint">Background intensity of the active pill</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-gradient-opacity" class="rpg-range-slider" min="5"
-                                    max="80" value="30" />
-                                <span id="rpg-tts-gradient-opacity-value" class="rpg-slider-value">30%</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Glow Intensity</span>
-                                <span class="rpg-setting-hint">Box shadow blur (0 = no glow)</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-glow-intensity" class="rpg-range-slider" min="0"
-                                    max="40" value="16" />
-                                <span id="rpg-tts-glow-intensity-value" class="rpg-slider-value">16px</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Override Text Color</span>
-                                <span class="rpg-setting-hint">Off = keep original dialogue colors</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-tts-override-text-color" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-setting-row" id="rpg-tts-text-color-row" style="display: none;">
-                            <span class="rpg-setting-label">Text Color</span>
-                            <input type="color" id="rpg-tts-active-text-color" class="rpg-color-swatch"
-                                value="#ffffff" />
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Border Radius</span>
-                                <span class="rpg-setting-hint">Roundness of the pill</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-border-radius" class="rpg-range-slider" min="0" max="20"
-                                    value="4" />
-                                <span id="rpg-tts-border-radius-value" class="rpg-slider-value">4px</span>
-                            </div>
-                        </div>
-
-                        <div class="rpg-subsection-label">Text Dimming</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Read Text Opacity</span>
-                                <span class="rpg-setting-hint">Already-spoken sentences</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-read-opacity" class="rpg-range-slider" min="10"
-                                    max="100" value="35" />
-                                <span id="rpg-tts-read-opacity-value" class="rpg-slider-value">35%</span>
-                            </div>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Unread Text Opacity</span>
-                                <span class="rpg-setting-hint">Not-yet-spoken sentences</span>
-                            </div>
-                            <div class="rpg-slider-group">
-                                <input type="range" id="rpg-tts-unread-opacity" class="rpg-range-slider" min="10"
-                                    max="100" value="55" />
-                                <span id="rpg-tts-unread-opacity-value" class="rpg-slider-value">55%</span>
-                            </div>
-                        </div>
-
-                        <div class="rpg-subsection-label">Behavior</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Transition Speed</span>
-                                <span class="rpg-setting-hint">Animation smoothness</span>
-                            </div>
-                            <select id="rpg-tts-transition-speed" class="rpg-accordion-select">
-                                <option value="0">Instant</option>
-                                <option value="150">Fast</option>
-                                <option value="300">Normal</option>
-                                <option value="500">Smooth</option>
-                                <option value="800">Slow</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -2405,7 +2282,7 @@
                             </div>
                         </div>
                         <!-- User mode: pronouns chips + linked persona -->
-                        <div class="rpg-field cw-user-only" hidden>
+                        <div class="rpg-field cw-user-only">
                             <label>Pronouns</label>
                             <div class="rpg-rel-chips" id="cw-pronoun-chips" role="radiogroup" aria-label="Pronouns">
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false" data-pronouns="he/him">he / him</button>
@@ -2415,7 +2292,7 @@
                             </div>
                             <input id="cw-pronouns-custom" class="rpg-input" type="text" placeholder="e.g. xe/xem" hidden style="margin-top: 0.5rem; max-width: 240px;">
                         </div>
-                        <div class="rpg-field cw-user-only" hidden>
+                        <div class="rpg-field cw-user-only">
                             <label for="cw-linked-persona">Linked SillyTavern persona</label>
                             <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">When this persona is active in SillyTavern, this user character is set as the DES active user character.</p>
                             <select id="cw-linked-persona" class="rpg-input" style="max-width: 320px;">

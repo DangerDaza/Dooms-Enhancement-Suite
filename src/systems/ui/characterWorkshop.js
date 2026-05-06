@@ -25,6 +25,7 @@ import {
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
+import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -1272,6 +1273,115 @@ function bindStaticListeners() {
     });
 }
 
+/**
+ * Mirror a freshly-uploaded user-character portrait into ST's persona
+ * avatar file so the persona panel and {{user}} avatars in chat stay in
+ * sync with the image the user just picked in the Workshop. Without
+ * this, the Workshop saved the cropped portrait only into DES's local
+ * extensionSettings.userCharacters[name].avatar (a base64 data URL) and
+ * never touched the persona file on disk — so the persona manager kept
+ * showing the original avatar.
+ *
+ * Mirrors what ST's own persona panel does on upload:
+ *   1. POST /api/avatars/upload — multipart with `avatar` file +
+ *      `overwrite_name` set to the persona filename (matches the key
+ *      in power_user.personas).
+ *   2. Cache-bust the avatar URL + thumbnail URL so any <img> tags
+ *      already mounted will pick up the new bytes on next render.
+ *
+ * Best-effort: a failure here just leaves ST's persona file untouched —
+ * the DES local copy was already saved by the caller. We log and toast
+ * a warning but never throw.
+ *
+ * @param {string} personaFilename - exact ST persona filename (the key
+ *   in power_user.personas, e.g. "Yashiro.png")
+ * @param {string} dataUrl - PNG data URL produced by upscaleImage
+ */
+async function mirrorAvatarToPersonaFile(personaFilename, dataUrl) {
+    if (!personaFilename || !dataUrl) return;
+    // Refuse to write if the user's linkedPersona points at a filename
+    // that ST doesn't actually have registered. Otherwise we'd create
+    // an orphaned avatar file with no corresponding persona entry.
+    const personas = (power_user && power_user.personas) || {};
+    if (!personas[personaFilename]) {
+        console.warn(`[Dooms Tracker] Workshop: linkedPersona "${personaFilename}" not in power_user.personas — skipping mirror`);
+        return;
+    }
+    try {
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], personaFilename, { type: blob.type || 'image/png' });
+        const fd = new FormData();
+        // ST's persona client uses field name `avatar` (not `file`).
+        fd.append('avatar', file);
+        fd.append('overwrite_name', personaFilename);
+        const resp = await fetch('/api/avatars/upload', {
+            method: 'POST',
+            headers: getRequestHeaders({ omitContentType: true }),
+            body: fd,
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(text || `HTTP ${resp.status}`);
+        }
+        // Force already-rendered <img> tags to reload. A plain
+        // fetch(url, {cache:'reload'}) only refreshes the browser's HTTP
+        // cache for that URL — img elements already on the page (persona
+        // panel preview, message-header user avatar, persona dropdown
+        // thumbnails) won't repaint until their `src` is rewritten. So
+        // walk the DOM and append a timestamp query string to every
+        // matching src.
+        try {
+            const ts = Date.now();
+            const escFilename = personaFilename.replace(/"/g, '\\"');
+            const matchers = [
+                `img[src*="User Avatars/${escFilename}"]`,
+                `img[src*="thumbnail"][src*="${escFilename}"]`,
+                // ST renders persona thumbs encoded too
+                `img[src*="${encodeURIComponent(personaFilename)}"]`,
+            ];
+            const seen = new WeakSet();
+            for (const sel of matchers) {
+                document.querySelectorAll(sel).forEach((img) => {
+                    if (seen.has(img)) return;
+                    seen.add(img);
+                    const src = img.getAttribute('src') || '';
+                    if (!src) return;
+                    const sep = src.includes('?') ? '&' : '?';
+                    img.setAttribute('src', `${src}${sep}t=${ts}`);
+                });
+            }
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: persona avatar img refresh failed', e);
+        }
+        // Best-effort HTTP cache reload too, so any future render reads
+        // the new bytes.
+        try {
+            await fetch(`/User Avatars/${encodeURIComponent(personaFilename)}`, { cache: 'reload' });
+        } catch (e) {}
+        try {
+            const thumbUrl = getSafeThumbnailUrl('persona', personaFilename);
+            if (thumbUrl) await fetch(thumbUrl, { cache: 'reload' });
+        } catch (e) {}
+        console.log(`[Dooms Tracker] Workshop: mirrored portrait to ST persona "${personaFilename}"`);
+        try {
+            if (window.toastr) window.toastr.success(
+                `Saved and synced "${personaFilename}" in the Persona Manager.`,
+                'Persona avatar sync',
+                { timeOut: 2500 },
+            );
+        } catch (e) {}
+    } catch (err) {
+        console.warn(`[Dooms Tracker] Workshop: failed to mirror portrait to ST persona "${personaFilename}":`, err);
+        try {
+            if (window.toastr) window.toastr.warning(
+                `Saved locally but couldn't update the linked SillyTavern persona avatar: ${String(err?.message || err)}`,
+                'Persona avatar sync',
+                { timeOut: 4000 },
+            );
+        } catch (e) {}
+    }
+}
+
 function commitDraft() {
     if (!draft) return;
     const name = draft.name;
@@ -1297,6 +1407,33 @@ function commitDraft() {
         extensionSettings.userCharacters[name] = next;
         try { saveSettings(); } catch (e) {}
         try { updatePortraitBar(); } catch (e) {}
+        // Mirror the user-character portrait into ST's persona avatar file
+        // on every save when both fields are populated. We previously gated
+        // this on dirty.avatar / dirty.linkedPersona, but that misses the
+        // common path of "user opened the Workshop, dropdown already
+        // showed the right persona from a prior save, user clicked Save
+        // without changing anything" — neither flag is dirty so nothing
+        // gets pushed to ST, and the persona file stays out of date if it
+        // was ever written by anything other than DES. Mirror is idempotent
+        // (writes the same bytes), so just always run it. If the network
+        // call fails, mirrorAvatarToPersonaFile already toasts a warning.
+        if (draft.linkedPersona && draft.avatar) {
+            mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
+        } else {
+            // Surface why the mirror skipped so the user knows whether to
+            // upload a portrait, link a persona, or both.
+            const reasons = [];
+            if (!draft.linkedPersona) reasons.push('no linked SillyTavern persona');
+            if (!draft.avatar) reasons.push('no portrait uploaded');
+            console.log(`[Dooms Tracker] Workshop: persona mirror skipped (${reasons.join(', ')})`);
+            try {
+                if (window.toastr) window.toastr.info(
+                    `Saved locally. Persona file not updated: ${reasons.join(', ')}.`,
+                    'Persona avatar sync',
+                    { timeOut: 4000 },
+                );
+            } catch (e) {}
+        }
         return;
     }
 
@@ -2059,6 +2196,9 @@ async function renderExpressionsTab($panel, characterName) {
             <div class="rpg-cs-expr-actions">
                 <button class="rpg-cs-expr-upload-zip menu_button"><i class="fa-solid fa-file-zipper"></i> Upload ZIP</button>
                 <button class="rpg-cs-expr-open-folder menu_button"><i class="fa-solid fa-folder-open"></i> Open Folder</button>
+                ${uploadedCount > 0
+                    ? `<button class="rpg-cs-expr-remove-all menu_button" title="Delete every uploaded expression sprite for this character"><i class="fa-solid fa-trash-can"></i> Remove All</button>`
+                    : ''}
             </div>
         </div>
         <div class="rpg-cs-expression-grid">
@@ -2172,6 +2312,59 @@ function bindExpressionHandlers() {
             }
         } catch (err) {
             console.error('[Dooms Tracker] Workshop expressions: delete failed', err);
+        }
+    });
+
+    // Remove all sprites
+    $(document).on('click.cwExpr', '.rpg-cs-expr-remove-all', async function () {
+        if (!inWorkshop(this)) return;
+        const $btn = $(this);
+        const $tab = $btn.closest('.rpg-cs-tab-content');
+        const charName = $tab.data('character');
+        if (!charName) return;
+        // Re-fetch the sprite list as the truth source — DOM might be stale
+        // and we don't want to ask ST to delete labels that no longer exist.
+        let sprites = [];
+        try {
+            const resp = await fetch(`/api/sprites/get?name=${encodeURIComponent(charName)}`, {
+                headers: getRequestHeaders(),
+            });
+            if (resp.ok) sprites = await resp.json();
+        } catch (err) {
+            console.error('[Dooms Tracker] Workshop expressions: remove-all fetch failed', err);
+            if (window.toastr) window.toastr.error('Could not read existing sprites.', 'Remove All');
+            return;
+        }
+        const labels = sprites.map(s => s.label).filter(Boolean);
+        if (labels.length === 0) {
+            if (window.toastr) window.toastr.info('No sprites to remove.', '', { timeOut: 1500 });
+            return;
+        }
+        const ok = window.confirm(
+            `Remove all ${labels.length} expression sprite${labels.length === 1 ? '' : 's'} for "${charName}"?\n\nThis cannot be undone.`,
+        );
+        if (!ok) return;
+        $btn.prop('disabled', true);
+        const results = await Promise.allSettled(labels.map(label => fetch('/api/sprites/delete', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ name: charName, label }),
+        }).then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status} for ${label}`);
+            return label;
+        })));
+        const failed = results.filter(r => r.status === 'rejected');
+        _cwInvalidateSpriteCache(charName);
+        renderExpressionsTab($tab, charName);
+        if (failed.length === 0) {
+            if (window.toastr) window.toastr.success(`Removed ${labels.length} expression${labels.length === 1 ? '' : 's'} for ${charName}`, '', { timeOut: 2000 });
+        } else {
+            console.error('[Dooms Tracker] Workshop expressions: remove-all partial failure', failed.map(f => f.reason));
+            if (window.toastr) window.toastr.warning(
+                `Removed ${labels.length - failed.length}/${labels.length} expressions; ${failed.length} failed.`,
+                'Remove All',
+                { timeOut: 4000 },
+            );
         }
     });
 
