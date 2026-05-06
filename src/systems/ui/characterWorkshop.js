@@ -1408,19 +1408,31 @@ function commitDraft() {
         try { saveSettings(); } catch (e) {}
         try { updatePortraitBar(); } catch (e) {}
         // Mirror the user-character portrait into ST's persona avatar file
-        // any time the user has a linked persona AND a portrait staged. We
-        // can't gate this on dirty.avatar alone — the most common path now
-        // is "user just linked the persona for the first time" where the
-        // existing DES-stored avatar is fine but needs to be pushed into
-        // ST's persona file once. Fire whenever either field is dirty and
-        // both end up populated. Local DES save above already succeeded,
-        // so a network failure here just means out-of-sync UI which the
-        // helper already toasts about.
-        const shouldMirrorPersona = (draft.dirty.avatar || draft.dirty.linkedPersona)
-            && draft.linkedPersona
-            && draft.avatar;
-        if (shouldMirrorPersona) {
+        // on every save when both fields are populated. We previously gated
+        // this on dirty.avatar / dirty.linkedPersona, but that misses the
+        // common path of "user opened the Workshop, dropdown already
+        // showed the right persona from a prior save, user clicked Save
+        // without changing anything" — neither flag is dirty so nothing
+        // gets pushed to ST, and the persona file stays out of date if it
+        // was ever written by anything other than DES. Mirror is idempotent
+        // (writes the same bytes), so just always run it. If the network
+        // call fails, mirrorAvatarToPersonaFile already toasts a warning.
+        if (draft.linkedPersona && draft.avatar) {
             mirrorAvatarToPersonaFile(draft.linkedPersona, draft.avatar).catch(() => {});
+        } else {
+            // Surface why the mirror skipped so the user knows whether to
+            // upload a portrait, link a persona, or both.
+            const reasons = [];
+            if (!draft.linkedPersona) reasons.push('no linked SillyTavern persona');
+            if (!draft.avatar) reasons.push('no portrait uploaded');
+            console.log(`[Dooms Tracker] Workshop: persona mirror skipped (${reasons.join(', ')})`);
+            try {
+                if (window.toastr) window.toastr.info(
+                    `Saved locally. Persona file not updated: ${reasons.join(', ')}.`,
+                    'Persona avatar sync',
+                    { timeOut: 4000 },
+                );
+            } catch (e) {}
         }
         return;
     }
