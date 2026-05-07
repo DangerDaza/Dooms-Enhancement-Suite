@@ -316,8 +316,10 @@ export function initPortraitBar() {
         const hasCustomAvatar = extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName];
         $menu.find('[data-action="remove"]').toggle(!!hasCustomAvatar);
 
-        // Show "Character Sheet" only when Bunny Mo integration is enabled
-        $menu.find('[data-action="character-sheet"]').toggle(!!extensionSettings.bunnyMoIntegration);
+        // "Character Sheet" is always shown — Bunny Mo integration is
+        // always on as of v1.11. Old gate retained as a no-op below in
+        // case any in-flight chats need a re-render.
+        $menu.find('[data-action="character-sheet"]').show();
         // Show "Open in Workshop" unless explicitly disabled via feature flag.
         // Workshop tracks the PCP toggle; if PCP is off the menu item
         // wouldn't be reachable anyway, but keep the gate for defensiveness.
