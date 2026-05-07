@@ -153,85 +153,81 @@ function parseMessageIntoBubbles(mesText) {
 }
 
 /**
- * Split a container into top-level blocks (paragraphs, or text-runs separated by <br>).
+ * Split a container into top-level blocks. A "block" is the unit that becomes
+ * one chat bubble.
  *
- * Some presets/themes wrap chat content in a styled <div>, putting all the
- * <p> paragraphs one level deeper than the .mes_text root. The simple
- * direct-children walk would collapse the whole wrapped block into a single
- * "block" and the user gets one giant bubble. To handle that, when the
- * container has multiple <p> descendants (at any depth) we use those as the
- * blocks. This also covers the markdown-rendered case (each \n\n becomes a
- * <p>) cleanly. Text-only content with <br> separators still works via the
- * legacy branch below.
+ * Block boundaries we recognize:
+ *   - <p>             — markdown's standard paragraph element
+ *   - <br>            — both at the top level AND nested inside a <p> (the
+ *                       common case when ST renders with simpleLineBreaks:
+ *                       true, where every \n in the AI's reply becomes <br>
+ *                       inside one giant <p>)
+ *   - <div>           — block-level wrapper (we recurse so styled wrappers
+ *                       don't swallow paragraphs)
+ *   - \n\n in text    — unwrapped multi-paragraph plain text
+ *
+ * The walk descends into elements other than P/BR so nested paragraphs
+ * inside a styled wrapper or inside a single <p> with <br>-separated lines
+ * each become their own block.
  */
 function getTopLevelBlocks(container) {
-    // Fast path: many <p> descendants at any depth → use them as the blocks.
-    // This handles preset-wrapped content where the paragraphs are nested.
-    const allParagraphs = container.querySelectorAll('p');
-    if (allParagraphs.length >= 2) {
-        return Array.from(allParagraphs);
-    }
-
     const blocks = [];
-    let currentHtml = '';
+    let pendingHtml = '';
 
-    for (const child of container.childNodes) {
-        if (child.nodeType === Node.ELEMENT_NODE &&
-            (child.tagName === 'P' || child.tagName === 'DIV')) {
-            // Flush accumulated inline content
-            if (currentHtml.trim()) {
-                const wrapper = document.createElement('span');
-                wrapper.innerHTML = currentHtml;
-                blocks.push(wrapper);
-                currentHtml = '';
-            }
-            // If this DIV/P contains multiple <p> descendants, expand to those
-            // so wrapped paragraphs each become their own block.
-            const nested = child.querySelectorAll(':scope p, :scope > div p');
-            if (nested.length >= 2) {
-                for (const p of nested) blocks.push(p);
-            } else {
-                blocks.push(child);
-            }
-        } else if (child.nodeType === Node.ELEMENT_NODE && child.tagName === 'BR') {
-            // BR acts as a block separator
-            if (currentHtml.trim()) {
-                const wrapper = document.createElement('span');
-                wrapper.innerHTML = currentHtml;
-                blocks.push(wrapper);
-                currentHtml = '';
-            }
-        } else {
-            // Text node or inline element — accumulate, but split on \n\n in
-            // text content so unwrapped multi-paragraph plain text still
-            // gets per-paragraph bubbles.
-            if (child.nodeType === Node.TEXT_NODE) {
-                const parts = child.textContent.split(/\n\s*\n/);
-                if (parts.length > 1) {
-                    for (let i = 0; i < parts.length; i++) {
-                        currentHtml += parts[i];
-                        if (i < parts.length - 1 && currentHtml.trim()) {
-                            const wrapper = document.createElement('span');
-                            wrapper.innerHTML = currentHtml;
-                            blocks.push(wrapper);
-                            currentHtml = '';
-                        }
+    const flushPending = () => {
+        const trimmed = pendingHtml.trim();
+        if (trimmed && stripHtml(trimmed).trim()) {
+            const span = document.createElement('span');
+            span.innerHTML = pendingHtml;
+            blocks.push(span);
+        }
+        pendingHtml = '';
+    };
+
+    const walkNode = (node) => {
+        for (const child of node.childNodes) {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+                const tag = child.tagName;
+                if (tag === 'BR') {
+                    flushPending();
+                } else if (tag === 'P') {
+                    // Flush whatever was accumulating, then descend into the P
+                    // so any <br> inside also creates block boundaries. If the
+                    // P has no <br> descendants, the whole P becomes one block.
+                    flushPending();
+                    if (child.querySelector('br')) {
+                        walkNode(child);
+                        flushPending();
+                    } else {
+                        blocks.push(child);
                     }
+                } else if (tag === 'DIV') {
+                    // Recurse into divs (style wrappers etc) so nested
+                    // paragraphs surface at this level.
+                    flushPending();
+                    walkNode(child);
+                    flushPending();
                 } else {
-                    currentHtml += child.textContent;
+                    // Inline element — keep its outerHTML as part of the
+                    // current accumulating block.
+                    pendingHtml += child.outerHTML || child.textContent || '';
                 }
-            } else {
-                currentHtml += child.outerHTML || child.textContent || '';
+            } else if (child.nodeType === Node.TEXT_NODE) {
+                // Text content — split on \n\n (and treat single \n in unwrapped
+                // text as a soft break too, since AI replies often use one
+                // newline per paragraph).
+                const text = child.textContent;
+                const parts = text.split(/\n+/);
+                for (let i = 0; i < parts.length; i++) {
+                    pendingHtml += parts[i];
+                    if (i < parts.length - 1) flushPending();
+                }
             }
         }
-    }
+    };
 
-    if (currentHtml.trim()) {
-        const wrapper = document.createElement('span');
-        wrapper.innerHTML = currentHtml;
-        blocks.push(wrapper);
-    }
-
+    walkNode(container);
+    flushPending();
     return blocks;
 }
 
