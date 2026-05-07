@@ -135,9 +135,18 @@ function parseMessageIntoBubbles(mesText) {
     const allSegments = [];
     const blocks = getTopLevelBlocks(clone);
 
+    // Track block (paragraph) index on each segment so the renderer can
+    // distinguish "consecutive same-speaker within one paragraph" (continuation,
+    // visually merged) from "consecutive same-speaker across paragraphs" (new
+    // bubble, visible border). Without this, a multi-paragraph narrator passage
+    // collapses into a single visual bubble even though the parser emits one
+    // segment per paragraph.
+    let blockIdx = 0;
     for (const block of blocks) {
         const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
+        for (const s of segs) s._block = blockIdx;
         allSegments.push(...segs);
+        blockIdx++;
     }
 
     return mergeConsecutiveNarration(allSegments);
@@ -421,6 +430,7 @@ function getAvatarHtml(speakerName, prefix) {
 function renderDiscordBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
+    let lastBlock = -1;
     const cbs = extensionSettings.chatBubbleSettings || {};
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
@@ -431,8 +441,12 @@ function renderDiscordBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        // Continuation only if same speaker AND same paragraph block. A
+        // paragraph boundary always promotes the next segment to new-speaker
+        // styling so the user sees a visible bubble break.
+        const isContinuation = speaker === lastSpeaker && seg._block === lastBlock;
         lastSpeaker = speaker;
+        lastBlock = seg._block;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
@@ -490,6 +504,7 @@ function renderDiscordUserBubble(html) {
 function renderCardBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
+    let lastBlock = -1;
     const cbs = extensionSettings.chatBubbleSettings || {};
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
@@ -500,8 +515,10 @@ function renderCardBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        // Continuation only if same speaker AND same paragraph block.
+        const isContinuation = speaker === lastSpeaker && seg._block === lastBlock;
         lastSpeaker = speaker;
+        lastBlock = seg._block;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
