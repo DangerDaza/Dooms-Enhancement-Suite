@@ -154,8 +154,24 @@ function parseMessageIntoBubbles(mesText) {
 
 /**
  * Split a container into top-level blocks (paragraphs, or text-runs separated by <br>).
+ *
+ * Some presets/themes wrap chat content in a styled <div>, putting all the
+ * <p> paragraphs one level deeper than the .mes_text root. The simple
+ * direct-children walk would collapse the whole wrapped block into a single
+ * "block" and the user gets one giant bubble. To handle that, when the
+ * container has multiple <p> descendants (at any depth) we use those as the
+ * blocks. This also covers the markdown-rendered case (each \n\n becomes a
+ * <p>) cleanly. Text-only content with <br> separators still works via the
+ * legacy branch below.
  */
 function getTopLevelBlocks(container) {
+    // Fast path: many <p> descendants at any depth → use them as the blocks.
+    // This handles preset-wrapped content where the paragraphs are nested.
+    const allParagraphs = container.querySelectorAll('p');
+    if (allParagraphs.length >= 2) {
+        return Array.from(allParagraphs);
+    }
+
     const blocks = [];
     let currentHtml = '';
 
@@ -169,7 +185,14 @@ function getTopLevelBlocks(container) {
                 blocks.push(wrapper);
                 currentHtml = '';
             }
-            blocks.push(child);
+            // If this DIV/P contains multiple <p> descendants, expand to those
+            // so wrapped paragraphs each become their own block.
+            const nested = child.querySelectorAll(':scope p, :scope > div p');
+            if (nested.length >= 2) {
+                for (const p of nested) blocks.push(p);
+            } else {
+                blocks.push(child);
+            }
         } else if (child.nodeType === Node.ELEMENT_NODE && child.tagName === 'BR') {
             // BR acts as a block separator
             if (currentHtml.trim()) {
@@ -179,9 +202,24 @@ function getTopLevelBlocks(container) {
                 currentHtml = '';
             }
         } else {
-            // Text node or inline element — accumulate
+            // Text node or inline element — accumulate, but split on \n\n in
+            // text content so unwrapped multi-paragraph plain text still
+            // gets per-paragraph bubbles.
             if (child.nodeType === Node.TEXT_NODE) {
-                currentHtml += child.textContent;
+                const parts = child.textContent.split(/\n\s*\n/);
+                if (parts.length > 1) {
+                    for (let i = 0; i < parts.length; i++) {
+                        currentHtml += parts[i];
+                        if (i < parts.length - 1 && currentHtml.trim()) {
+                            const wrapper = document.createElement('span');
+                            wrapper.innerHTML = currentHtml;
+                            blocks.push(wrapper);
+                            currentHtml = '';
+                        }
+                    }
+                } else {
+                    currentHtml += child.textContent;
+                }
             } else {
                 currentHtml += child.outerHTML || child.textContent || '';
             }
