@@ -572,10 +572,16 @@ function buildDraft(name, isUser = false) {
         };
     }
     const inj = extensionSettings?.characterInjection?.[name] || {};
+    // Read color from the chat-aware getter so we see the same value
+    // commitDraft writes (and that the PCP renders). When
+    // perChatCharacterTracking is on, the global characterColors is
+    // typically empty for this character — the real value lives in
+    // chat_metadata.dooms_tracker.characterColors.
+    const activeColors = getActiveCharacterColors() || {};
     return {
         name,
         isUser: false,
-        color: extensionSettings?.characterColors?.[name] || '',
+        color: activeColors[name] || '',
         avatar: extensionSettings?.npcAvatars?.[name] || '',
         avatarFullRes: extensionSettings?.npcAvatarsFullRes?.[name] || '',
         relationship: resolveCurrentRelationship(name),
