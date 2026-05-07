@@ -19,7 +19,8 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
-import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { openCharacterSheet } from './characterSheet.js';
 
 /** Supported image extensions to probe for, in priority order */
@@ -953,6 +954,18 @@ function triggerPortraitUpload(characterName) {
 
             saveSettings();
 
+            // Pass-2 perf: migrate the just-saved data:URL to an on-disk file
+            // (same flow as the boot-time migration). Idempotent + locked.
+            Promise.resolve()
+                .then(() => migrateAvatarsToFiles(saveSettings))
+                .then((res) => {
+                    if (res?.migrated) {
+                        portraitFileCache.delete(characterName);
+                        try { updatePortraitBar(); } catch (e) {}
+                    }
+                })
+                .catch(() => {});
+
             // Clear file cache so resolvePortrait picks up the new npcAvatar
             portraitFileCache.delete(characterName);
             // Remove from no-portrait localStorage cache so future file probing can resume
@@ -980,6 +993,8 @@ function triggerPortraitUpload(characterName) {
  */
 function removePortrait(characterName) {
     if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[characterName]); } catch (e) {}
         delete extensionSettings.npcAvatars[characterName];
         // Also remove the full-res original if stored
         if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {

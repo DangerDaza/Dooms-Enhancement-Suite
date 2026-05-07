@@ -16,6 +16,7 @@
 
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
+import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
@@ -847,6 +848,10 @@ function purgeCharacter(name) {
         return;
     }
     if (s.characterColors) delete s.characterColors[name];
+    // Clean up the on-disk PNG before clearing the settings reference.
+    // Best-effort — failure leaves an orphan but settings stays correct.
+    try { deletePortraitFromDiskByValue(s.npcAvatars?.[name]); } catch (e) {}
+    try { deletePortraitFromDiskByValue(s.npcAvatarsFullRes?.[name]); } catch (e) {}
     if (s.npcAvatars) delete s.npcAvatars[name];
     if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];
     if (s.knownCharacters) delete s.knownCharacters[name];

@@ -25,7 +25,8 @@ import {
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
-import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
@@ -1407,6 +1408,16 @@ function commitDraft() {
         extensionSettings.userCharacters[name] = next;
         try { saveSettings(); } catch (e) {}
         try { updatePortraitBar(); } catch (e) {}
+        // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
+        // the on-disk URL in the background. Idempotent + locked.
+        Promise.resolve()
+            .then(() => migrateAvatarsToFiles(saveSettings))
+            .then((res) => {
+                if (res?.migrated) {
+                    try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+                }
+            })
+            .catch(() => {});
         // Mirror the user-character portrait into ST's persona avatar file
         // on every save when both fields are populated. We previously gated
         // this on dirty.avatar / dirty.linkedPersona, but that misses the
@@ -1464,6 +1475,9 @@ function commitDraft() {
             extensionSettings.npcAvatars[name] = draft.avatar;
             extensionSettings.npcAvatarsFullRes[name] = draft.avatarFullRes || draft.avatar;
         } else {
+            // Best-effort on-disk cleanup before clearing the settings ref.
+            try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[name]); } catch (e) {}
+            try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes[name]); } catch (e) {}
             delete extensionSettings.npcAvatars[name];
             delete extensionSettings.npcAvatarsFullRes[name];
         }
@@ -1508,6 +1522,19 @@ function commitDraft() {
     } catch (e) {
         console.warn('[Dooms Tracker] Workshop: failed to refresh portrait bar after save', e);
     }
+    // Pass-2 perf: if the user just saved a data:URL portrait, the
+    // boot migration's idempotent helper also handles per-save uploads.
+    // Walks the four legacy maps, finds any data URL (just-saved one
+    // included), uploads via /api/images/upload, and replaces with a
+    // /user/images/des-portraits/... URL. No-op when nothing's pending.
+    Promise.resolve()
+        .then(() => migrateAvatarsToFiles(saveSettings))
+        .then((res) => {
+            if (res?.migrated) {
+                try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+            }
+        })
+        .catch(() => {});
 }
 
 /**
@@ -1624,6 +1651,11 @@ function deleteCharacter(name) {
     // User character delete: only touches the userCharacters namespace
     // and clears activeUserCharacter if it was pointing at this entry.
     if (draft?.isUser) {
+        const userEntry = extensionSettings.userCharacters?.[name];
+        if (userEntry) {
+            try { deletePortraitFromDiskByValue(userEntry.avatar); } catch (e) {}
+            try { deletePortraitFromDiskByValue(userEntry.avatarFullRes); } catch (e) {}
+        }
         if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
         if (extensionSettings.activeUserCharacter === name) {
             extensionSettings.activeUserCharacter = null;
@@ -1633,6 +1665,8 @@ function deleteCharacter(name) {
         return;
     }
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
+    try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars?.[name]); } catch (e) {}
+    try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[name]); } catch (e) {}
     if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
     if (extensionSettings.knownCharacters) delete extensionSettings.knownCharacters[name];

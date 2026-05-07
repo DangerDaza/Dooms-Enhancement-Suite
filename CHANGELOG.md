@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0] - 2026-05-06 — Pass 2 perf: avatar storage migration
+
+> **⚠️ Branch `1.11.0-CAUTION-DO-NOT-USE-THIS-BRANCH`** — verification candidate. Do not pull onto a daily-driver install until upgrade-from-1.10.7 and downgrade tests pass.
+
+### Changed
+- **Cropped portraits now live on disk, not in `extensionSettings`.** Pass 2 of the perf refactor moves base64 PNG data URLs out of the JSON settings file and onto disk under `data/default-user/user/images/des-portraits/<filename>`. A 660×880 PNG is ~250–500 KB of base64; with `*FullRes` siblings that's ~500–900 KB per character. For a 20-character user, settings shrinks by ~10–18 MB, and `saveSettingsDebounced()` no longer re-serializes that mass on every tick.
+  - **Zero user disruption.** No folders to move, no portraits to re-apply, no config to change. Migration runs silently in the background on first 1.11.0 boot.
+  - **Downgrade-safe.** Migrated entries hold absolute URL strings (e.g. `/user/images/des-portraits/aria-a3f1b2c8.png?t=...`) in the same legacy fields. v1.10.7's `<img>.src = npcAvatars[name]` continues to render fine — same shape as imported `/characters/<file>` URLs.
+  - **Failure-safe.** If the upload endpoint is unreachable or rejects a single PNG, that entry stays as a data URL and renders unchanged. Migration retries on next boot. Per-entry try/catch — one bad PNG never aborts the batch. A `__avatarBackupV1` snapshot lives inside settings as belt-and-suspenders against corruption (retired in v1.12).
+  - **Cache-busting baked in.** The `?t=<mtime>` query string updates on re-upload, so any mounted `<img>` tags pick up new bytes naturally without DOM walking.
+  - Write target: `POST /api/images/upload` with `ch_name='des-portraits'`. Filename format: `<sanitizedName>-<8charHex>.png`; the hex suffix is generated once and persisted in the URL, so re-saving the same character overwrites the same on-disk file.
+  - Settings `version` bumps from 23 → 24 only after every entry is URL-shaped, so a partially-completed run resumes on next boot.
+  - Touched: `src/utils/avatars.js` (new helpers `uploadPortraitToDisk` / `persistPortrait` / `extractDesPortraitFilename` / `deletePortraitFromDiskByValue`), `src/utils/avatarMigration.js` (new module), `src/core/persistence.js` (v24 migration block), `src/systems/ui/characterWorkshop.js` (commitDraft + delete paths), `src/systems/ui/portraitBar.js` (drop handler + removePortrait), `src/systems/ui/characterRoster.js` (purgeCharacter), `src/systems/features/avatarGenerator.js`, `src/systems/rendering/thoughts.js`, `src/core/state.js` (comment).
+
 ## [1.10.7] - 2026-05-05
 
 ### Removed
