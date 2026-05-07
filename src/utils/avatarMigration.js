@@ -11,8 +11,8 @@
  *   - On per-character failure: legacy data URL is left in place. Portrait
  *     still renders.
  *   - On server-unreachable or first-upload failure: whole batch aborts,
- *     settingsVersion stays at 1, retried on next boot.
- *   - settingsVersion only bumps to 2 after every entry is URL-shaped, so
+ *     settingsVersion stays at 23, retried on next boot.
+ *   - settingsVersion only bumps to 24 after every entry is URL-shaped, so
  *     a partially-completed run will resume on next boot.
  *   - URL strings work as <img>.src in v1.10.7 too — downgrade safe.
  *   - __avatarBackupV1 snapshot kept inside settings as belt-and-suspenders
@@ -130,7 +130,7 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
 }
 
 // Returns a count of remaining data:-URL entries across all four maps.
-// settingsVersion may only bump to 2 when this is zero.
+// settingsVersion may only bump to 24 when this is zero.
 function countRemainingDataUrls() {
     let n = 0;
     const npc = extensionSettings.npcAvatars || {};
@@ -169,8 +169,8 @@ export async function migrateAvatarsToFiles(saveSettings) {
 
         if (before === 0 && countRemainingDataUrls() === 0) {
             // Nothing to do — already migrated. Bump version idempotently.
-            if ((extensionSettings.settingsVersion ?? 1) < 2) {
-                extensionSettings.settingsVersion = 2;
+            if ((extensionSettings.settingsVersion ?? 1) < 24) {
+                extensionSettings.settingsVersion = 24;
                 if (typeof saveSettings === 'function') saveSettings();
             }
             return out;
@@ -197,7 +197,7 @@ export async function migrateAvatarsToFiles(saveSettings) {
 
         const remaining = countRemainingDataUrls();
         if (remaining === 0) {
-            extensionSettings.settingsVersion = 2;
+            extensionSettings.settingsVersion = 24;
         }
         if (typeof saveSettings === 'function') saveSettings();
 
