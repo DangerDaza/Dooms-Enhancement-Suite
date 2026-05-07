@@ -194,50 +194,98 @@ function getTopLevelBlocks(container) {
  * <q>, <span>, etc. (from markdown rendering) are still found and extracted.
  */
 function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, previousSegments) {
-    // Paragraph-level bubbles: emit ONE segment per block, regardless of how
-    // many speaker transitions live inside. Splitting at every <font color>
-    // boundary fragmented narration like
-    //   "Hi," she said. "How are you?"
-    // into three bubbles (dialogue / narrator / dialogue) when users want it
-    // as a single paragraph bubble. The full block.innerHTML — including all
-    // <font color> tags — is preserved so inline colors render in place; the
-    // renderer's stripFontColors call then yields plain text with the bubble
-    // accent coming from the first detected dialogue color.
-    const blockHtml = block.innerHTML.trim();
-    if (!blockHtml || !stripHtml(blockHtml).trim()) return [];
-
+    const segments = [];
     const fontElements = block.querySelectorAll('font[color]');
 
-    // No font tags at all → pure narrator paragraph.
+    // No font tags at all → pure narrator block
     if (fontElements.length === 0) {
-        return [{ type: 'narrator', speaker: null, color: null, html: blockHtml }];
+        const text = block.innerHTML.trim();
+        if (text && stripHtml(text).trim()) {
+            segments.push({ type: 'narrator', speaker: null, color: null, html: text });
+        }
+        return segments;
     }
 
-    // Has dialogue → attribute the bubble to the first detected speaker, but
-    // keep the full block HTML so multi-speaker exchanges inside one paragraph
-    // remain a single bubble. Any subsequent <font color> tags in the same
-    // paragraph still render with their own colors via the inline tags.
-    const firstFont = fontElements[0];
-    const fontColor = firstFont.getAttribute('color');
-    const allPrior = previousSegments ? [...previousSegments] : [];
-    const speaker = detectSpeaker(fontColor, '', block, colorMap, nameLookup, resolvedColors, allPrior);
-
-    // Remember the resolved color→speaker map for later blocks. Walk every
-    // font[color] in this block so cross-paragraph attribution still works
-    // for secondary speakers — even though they share this paragraph's bubble.
-    for (const fontEl of fontElements) {
-        const c = (fontEl.getAttribute('color') || '').toLowerCase();
-        if (!c || resolvedColors.has(c)) continue;
-        const sp = detectSpeaker(c, '', block, colorMap, nameLookup, resolvedColors, allPrior);
-        if (sp) resolvedColors.set(c, sp);
+    // Pre-build a Set of elements that contain font[color] descendants.
+    // This avoids calling child.querySelector('font[color]') inside the recursive
+    // walk (O(n²) → O(n) by doing one upfront pass instead of per-child queries).
+    const fontAncestors = new Set();
+    for (const font of fontElements) {
+        let el = font.parentElement;
+        while (el && el !== block) {
+            fontAncestors.add(el);
+            el = el.parentElement;
+        }
     }
 
-    return [{
-        type: 'dialogue',
-        speaker: speaker,
-        color: fontColor,
-        html: blockHtml,
-    }];
+    // Recursively walk the DOM tree to find <font color> elements at any depth.
+    // Elements that DON'T contain a <font color> descendant are kept as opaque
+    // narration HTML.  Elements that DO contain one are descended into so we
+    // can split around the <font> boundaries.
+    const parts = []; // { type: 'font', node } | { type: 'text', html }
+
+    function walkNodes(parent) {
+        for (const child of parent.childNodes) {
+            if (child.nodeType === Node.ELEMENT_NODE &&
+                child.tagName === 'FONT' && child.getAttribute('color')) {
+                parts.push({ type: 'font', node: child });
+            } else if (child.nodeType === Node.TEXT_NODE) {
+                const text = child.textContent;
+                if (text) parts.push({ type: 'text', html: text });
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+                if (fontAncestors.has(child)) {
+                    walkNodes(child);
+                } else {
+                    parts.push({ type: 'text', html: child.outerHTML });
+                }
+            }
+        }
+    }
+
+    walkNodes(block);
+
+    // Convert the flat parts list into narrator / dialogue segments
+    let currentNarrationHtml = '';
+
+    for (const part of parts) {
+        if (part.type === 'font') {
+            // Flush accumulated narration
+            const narrationText = currentNarrationHtml.trim();
+            if (narrationText && stripHtml(narrationText).trim()) {
+                segments.push({ type: 'narrator', speaker: null, color: null, html: narrationText });
+            }
+            currentNarrationHtml = '';
+
+            // Extract dialogue segment
+            const fontColor = part.node.getAttribute('color');
+            const dialogueHtml = part.node.innerHTML;
+            // Combine previous message segments + segments from this block for cross-block search
+            const allPrior = previousSegments ? [...previousSegments, ...segments] : segments;
+            const speaker = detectSpeaker(fontColor, narrationText, block, colorMap, nameLookup, resolvedColors, allPrior);
+
+            // Remember this colour→speaker mapping for later blocks in the same message
+            if (speaker && fontColor) {
+                resolvedColors.set(fontColor.toLowerCase(), speaker);
+            }
+
+            segments.push({
+                type: 'dialogue',
+                speaker: speaker,
+                color: fontColor,
+                html: dialogueHtml
+            });
+        } else {
+            currentNarrationHtml += part.html;
+        }
+    }
+
+    // Flush remaining narration
+    const finalNarration = currentNarrationHtml.trim();
+    if (finalNarration && stripHtml(finalNarration).trim()) {
+        segments.push({ type: 'narrator', speaker: null, color: null, html: finalNarration });
+    }
+
+    return segments;
 }
 
 /**
