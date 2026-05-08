@@ -667,7 +667,7 @@ export async function onGenerationStarted(type, data, dryRun) {
     // even when the prompt language doesn't match the GG-flavored regex
     // patterns inside evaluateSuppression.
     const suppression = evaluateSuppression(extensionSettings, context, data, type);
-    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, instructContent, quietPromptRaw, matchedPattern, activeInjectIds } = suppression;
+    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt } = suppression;
     if (shouldSuppress) {
         // Debugging: indicate active suppression and which source triggered it
         console.debug(`[Dooms Tracker] Suppression active (mode=${skipMode}). isGuided=${isGuidedGeneration}, isImpersonation=${isImpersonationGeneration}, hasQuietPrompt=${hasQuietPrompt} - skipping RPG tracker injections for this generation.`);

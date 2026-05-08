@@ -19529,9 +19529,12 @@ body.dooms-hide-st-topbar .openDrawer {
 #character-workshop-popup[data-mode="user"] .cw-user-only {
     display: revert !important;
 }
-#character-workshop-popup[data-mode="user"] .cw-user-only[hidden] {
-    display: none !important;
-}
+/* Note: do NOT add a `.cw-user-only[hidden]` override here — it would
+   override the `display: revert` above and re-hide every user-only field
+   even in user mode. We hit that exact trap on the linked-persona
+   dropdown; the fix was removing `hidden` from those elements in
+   template.html. If a user-only field needs JS-toggled visibility, use
+   a class (.is-hidden) instead so this CSS doesn't fight the toggle. */
 
 /* Split pane body */
 #character-workshop-popup .workshop-split {
