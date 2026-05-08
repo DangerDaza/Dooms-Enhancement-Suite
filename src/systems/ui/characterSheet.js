@@ -773,7 +773,7 @@ export function messageHasFullSheet(messageText) {
  * on any that contain fullsheet data. Called on CHAT_CHANGED.
  */
 export function injectFullSheetButtons() {
-    if (!extensionSettings.enabled || !extensionSettings.bunnyMoIntegration) return;
+    if (!extensionSettings.enabled) return;
     const context = SillyTavern.getContext();
     const chat = context.chat || [];
 

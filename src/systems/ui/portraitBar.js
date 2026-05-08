@@ -9,8 +9,9 @@
  *   3. Local `portraits/` folder (e.g. portraits/Lyra.png)
  *   4. Character emoji fallback
  *
- * Right-clicking a portrait card opens a context menu with "Upload Portrait"
- * and "Remove Portrait" options.
+ * Right-clicking a portrait card opens a context menu with workshop /
+ * roster actions; portrait upload + dialogue color editing live in the
+ * Workshop now.
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel } from '../../core/state.js';
 import { extensionFolderPath } from '../../core/config.js';
@@ -19,7 +20,8 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
-import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { openCharacterSheet } from './characterSheet.js';
 
 /** Supported image extensions to probe for, in priority order */
@@ -192,19 +194,8 @@ export function initPortraitBar() {
                 <i class="fa-solid fa-ban"></i> Cancel Injection
             </div>
             <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item" data-action="upload">
-                <i class="fa-solid fa-image"></i> Upload Portrait
-            </div>
             <div class="dooms-pb-ctx-item" data-action="remove">
                 <i class="fa-solid fa-trash-can"></i> Remove Portrait
-            </div>
-            <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item dooms-pb-ctx-color" data-action="set-color">
-                <i class="fa-solid fa-palette"></i> Set Dialogue Color
-                <input type="color" id="dooms-pb-color-input" class="dooms-pb-color-input" />
-            </div>
-            <div class="dooms-pb-ctx-item" data-action="clear-color">
-                <i class="fa-solid fa-eraser"></i> Clear Dialogue Color
             </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
@@ -325,14 +316,10 @@ export function initPortraitBar() {
         const hasCustomAvatar = extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName];
         $menu.find('[data-action="remove"]').toggle(!!hasCustomAvatar);
 
-        // Set color picker to current character color (or default white)
-        const ctxColors = getActiveCharacterColors();
-        const currentColor = ctxColors[characterName] || '#ffffff';
-        $menu.find('#dooms-pb-color-input').val(currentColor);
-        // Show or hide "Clear Dialogue Color" based on whether one is set
-        $menu.find('[data-action="clear-color"]').toggle(!!ctxColors[characterName]);
-        // Show "Character Sheet" only when Bunny Mo integration is enabled
-        $menu.find('[data-action="character-sheet"]').toggle(!!extensionSettings.bunnyMoIntegration);
+        // "Character Sheet" is always shown — Bunny Mo integration is
+        // always on as of v1.11. Old gate retained as a no-op below in
+        // case any in-flight chats need a re-render.
+        $menu.find('[data-action="character-sheet"]').show();
         // Show "Open in Workshop" unless explicitly disabled via feature flag.
         // Workshop tracks the PCP toggle; if PCP is off the menu item
         // wouldn't be reachable anyway, but keep the gate for defensiveness.
@@ -366,24 +353,13 @@ export function initPortraitBar() {
         const action = $(this).data('action');
         const characterName = $('#dooms-pb-context-menu').data('character');
 
-        // "Set Dialogue Color" — open the native color picker, don't close menu yet
-        if (action === 'set-color') {
-            e.stopPropagation();
-            $('#dooms-pb-color-input')[0].click();
-            return;
-        }
-
         hideContextMenu();
         if (!characterName) return;
 
-        if (action === 'upload') {
-            triggerPortraitUpload(characterName);
-        } else if (action === 'remove') {
+        if (action === 'remove') {
             removePortrait(characterName);
         } else if (action === 'remove-character') {
             removeCharacter(characterName);
-        } else if (action === 'clear-color') {
-            clearCharacterColor(characterName);
         } else if (action === 'character-sheet') {
             openCharacterSheet(characterName);
         } else if (action === 'open-expressions') {
@@ -393,15 +369,6 @@ export function initPortraitBar() {
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         }
-    });
-
-    // ── Color picker change handler ──
-    $(document).on('change', '#dooms-pb-color-input', function () {
-        const characterName = $('#dooms-pb-context-menu').data('character');
-        if (!characterName) return;
-        const color = $(this).val();
-        setCharacterColor(characterName, color);
-        hideContextMenu();
     });
 
     // ── Open Character Roster button ──
@@ -953,6 +920,18 @@ function triggerPortraitUpload(characterName) {
 
             saveSettings();
 
+            // Pass-2 perf: migrate the just-saved data:URL to an on-disk file
+            // (same flow as the boot-time migration). Idempotent + locked.
+            Promise.resolve()
+                .then(() => migrateAvatarsToFiles(saveSettings))
+                .then((res) => {
+                    if (res?.migrated) {
+                        portraitFileCache.delete(characterName);
+                        try { updatePortraitBar(); } catch (e) {}
+                    }
+                })
+                .catch(() => {});
+
             // Clear file cache so resolvePortrait picks up the new npcAvatar
             portraitFileCache.delete(characterName);
             // Remove from no-portrait localStorage cache so future file probing can resume
@@ -980,6 +959,8 @@ function triggerPortraitUpload(characterName) {
  */
 function removePortrait(characterName) {
     if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[characterName]); } catch (e) {}
         delete extensionSettings.npcAvatars[characterName];
         // Also remove the full-res original if stored
         if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {

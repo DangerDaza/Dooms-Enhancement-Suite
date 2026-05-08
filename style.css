@@ -16053,8 +16053,16 @@ body.dooms-hide-st-topbar .openDrawer {
     transition: color 0.2s;
     flex-shrink: 0;
     font-size: 0.82em;
+    /* Override generic <button> styling (ST core / browser default) which
+       paints this filled orange in some themes. Keep it ghost-like. */
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
 }
-.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #e94560); }
+.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #e94560); background: transparent; }
 
 /* ── Search + filters row ── */
 .rpg-lb-filter-row {
@@ -17490,10 +17498,19 @@ body.dooms-hide-st-topbar .openDrawer {
     padding: 3px 8px;
     font-size: 0.7em;
     cursor: pointer;
-    color: var(--rpg-text, #666);
+    /* Was reading var(--rpg-text) which renders bright white in the default
+       theme — locked to a subtle grey. Background/border explicit so generic
+       <button> styling can't paint a filled box behind the +. */
+    color: #888;
     transition: color 0.2s;
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
 }
-.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #4a7ba7); }
+.rpg-lb-tab-add:hover { color: var(--rpg-highlight, #4a7ba7); background: transparent; }
 
 /* ── Tree Book List (left panel) ──────────────────────────────────────── */
 .rpg-lb-tree-list {

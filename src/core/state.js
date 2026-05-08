@@ -42,7 +42,7 @@ export let extensionSettings = {
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic
     // and their custom prompt fields have been archived to src/archived-features.js
-    bunnyMoIntegration: false, // Enable Bunny Mo integration (character sheets from !fullsheet)
+    bunnyMoIntegration: true, // DEPRECATED in v1.11 — Bunny Mo integration is always on. Field kept for back-compat with any code paths that still read it; default flipped to true so stale reads return the right answer.
     heroPositions: {},         // Per-character hero art positioning { characterName: { x, y } }
     enableDynamicWeather: false, // Enable dynamic weather effects based on Info Box weather field
     weatherBackground: true, // Show weather effects in background (behind chat)
@@ -245,8 +245,12 @@ export let extensionSettings = {
     }, null, 2),
     // NOTE: level, classicStats, lastDiceRoll, showDiceDisplay, collapsedInventoryLocations,
     // inventoryViewModes archived to src/archived/archived-features-userstats.js
-    npcAvatars: {}, // Store custom avatar images for NPCs (key: character name, value: base64 data URI, cropped to 660x880)
-    npcAvatarsFullRes: {}, // Store original full-resolution avatar images (key: character name, value: base64 data URI)
+    // npcAvatars / npcAvatarsFullRes — value is one of:
+    //   - "/user/images/des-portraits/<file>?t=<mtime>" (post v1.11 migration; on-disk PNG)
+    //   - "/characters/<file>" (ST card import — already file-backed)
+    //   - "data:image/png;base64,..." (legacy v1.10.x — auto-migrates on next boot)
+    npcAvatars: {},
+    npcAvatarsFullRes: {},
     knownCharacters: {}, // Persistent roster of all characters ever seen (key: name, value: { emoji })
     removedCharacters: [], // Blacklist of character names explicitly removed by the user
     characterColors: {}, // Per-character dialogue colors (key: character name, value: hex color string e.g. "#C71585")

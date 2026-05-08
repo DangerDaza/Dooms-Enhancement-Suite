@@ -20,6 +20,7 @@ import {
     clearSyncedExpressionLabels,
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
+import { scheduleAvatarMigration } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
 import { extensionName } from './config.js';
 /**
@@ -412,6 +413,18 @@ export function loadSettings() {
                 }
                 extensionSettings.settingsVersion = 23;
                 settingsChanged = true;
+            }
+
+            // Migration to version 24: Move cropped portrait base64 data URLs
+            // out of extensionSettings (npcAvatars, npcAvatarsFullRes, and
+            // userCharacters[*].avatar/avatarFullRes) and onto disk under
+            // data/default-user/user/images/des-portraits/. The legacy fields
+            // are reused — they hold absolute /user/images/... URLs after
+            // migration, which renders identically via <img>.src in v1.10.7
+            // and earlier. Async; schedule from idle and let the migration
+            // bump settingsVersion to 24 only after every upload succeeds.
+            if (currentVersion < 24) {
+                scheduleAvatarMigration(saveSettings);
             }
 
             // Save migrated settings

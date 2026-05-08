@@ -135,56 +135,99 @@ function parseMessageIntoBubbles(mesText) {
     const allSegments = [];
     const blocks = getTopLevelBlocks(clone);
 
+    // Track block (paragraph) index on each segment so the renderer can
+    // distinguish "consecutive same-speaker within one paragraph" (continuation,
+    // visually merged) from "consecutive same-speaker across paragraphs" (new
+    // bubble, visible border). Without this, a multi-paragraph narrator passage
+    // collapses into a single visual bubble even though the parser emits one
+    // segment per paragraph.
+    let blockIdx = 0;
     for (const block of blocks) {
         const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
+        for (const s of segs) s._block = blockIdx;
         allSegments.push(...segs);
+        blockIdx++;
     }
 
     return mergeConsecutiveNarration(allSegments);
 }
 
 /**
- * Split a container into top-level blocks (paragraphs, or text-runs separated by <br>).
+ * Split a container into top-level blocks. A "block" is the unit that becomes
+ * one chat bubble.
+ *
+ * Block boundaries we recognize:
+ *   - <p>             — markdown's standard paragraph element
+ *   - <br>            — both at the top level AND nested inside a <p> (the
+ *                       common case when ST renders with simpleLineBreaks:
+ *                       true, where every \n in the AI's reply becomes <br>
+ *                       inside one giant <p>)
+ *   - <div>           — block-level wrapper (we recurse so styled wrappers
+ *                       don't swallow paragraphs)
+ *   - \n\n in text    — unwrapped multi-paragraph plain text
+ *
+ * The walk descends into elements other than P/BR so nested paragraphs
+ * inside a styled wrapper or inside a single <p> with <br>-separated lines
+ * each become their own block.
  */
 function getTopLevelBlocks(container) {
     const blocks = [];
-    let currentHtml = '';
+    let pendingHtml = '';
 
-    for (const child of container.childNodes) {
-        if (child.nodeType === Node.ELEMENT_NODE &&
-            (child.tagName === 'P' || child.tagName === 'DIV')) {
-            // Flush accumulated inline content
-            if (currentHtml.trim()) {
-                const wrapper = document.createElement('span');
-                wrapper.innerHTML = currentHtml;
-                blocks.push(wrapper);
-                currentHtml = '';
-            }
-            blocks.push(child);
-        } else if (child.nodeType === Node.ELEMENT_NODE && child.tagName === 'BR') {
-            // BR acts as a block separator
-            if (currentHtml.trim()) {
-                const wrapper = document.createElement('span');
-                wrapper.innerHTML = currentHtml;
-                blocks.push(wrapper);
-                currentHtml = '';
-            }
-        } else {
-            // Text node or inline element — accumulate
-            if (child.nodeType === Node.TEXT_NODE) {
-                currentHtml += child.textContent;
-            } else {
-                currentHtml += child.outerHTML || child.textContent || '';
+    const flushPending = () => {
+        const trimmed = pendingHtml.trim();
+        if (trimmed && stripHtml(trimmed).trim()) {
+            const span = document.createElement('span');
+            span.innerHTML = pendingHtml;
+            blocks.push(span);
+        }
+        pendingHtml = '';
+    };
+
+    const walkNode = (node) => {
+        for (const child of node.childNodes) {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+                const tag = child.tagName;
+                if (tag === 'BR') {
+                    flushPending();
+                } else if (tag === 'P') {
+                    // Flush whatever was accumulating, then descend into the P
+                    // so any <br> inside also creates block boundaries. If the
+                    // P has no <br> descendants, the whole P becomes one block.
+                    flushPending();
+                    if (child.querySelector('br')) {
+                        walkNode(child);
+                        flushPending();
+                    } else {
+                        blocks.push(child);
+                    }
+                } else if (tag === 'DIV') {
+                    // Recurse into divs (style wrappers etc) so nested
+                    // paragraphs surface at this level.
+                    flushPending();
+                    walkNode(child);
+                    flushPending();
+                } else {
+                    // Inline element — keep its outerHTML as part of the
+                    // current accumulating block.
+                    pendingHtml += child.outerHTML || child.textContent || '';
+                }
+            } else if (child.nodeType === Node.TEXT_NODE) {
+                // Text content — split on \n\n (and treat single \n in unwrapped
+                // text as a soft break too, since AI replies often use one
+                // newline per paragraph).
+                const text = child.textContent;
+                const parts = text.split(/\n+/);
+                for (let i = 0; i < parts.length; i++) {
+                    pendingHtml += parts[i];
+                    if (i < parts.length - 1) flushPending();
+                }
             }
         }
-    }
+    };
 
-    if (currentHtml.trim()) {
-        const wrapper = document.createElement('span');
-        wrapper.innerHTML = currentHtml;
-        blocks.push(wrapper);
-    }
-
+    walkNode(container);
+    flushPending();
     return blocks;
 }
 
@@ -421,6 +464,7 @@ function getAvatarHtml(speakerName, prefix) {
 function renderDiscordBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
+    let lastBlock = -1;
     const cbs = extensionSettings.chatBubbleSettings || {};
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
@@ -431,8 +475,12 @@ function renderDiscordBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        // Continuation only if same speaker AND same paragraph block. A
+        // paragraph boundary always promotes the next segment to new-speaker
+        // styling so the user sees a visible bubble break.
+        const isContinuation = speaker === lastSpeaker && seg._block === lastBlock;
         lastSpeaker = speaker;
+        lastBlock = seg._block;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
@@ -490,6 +538,7 @@ function renderDiscordUserBubble(html) {
 function renderCardBubbles(segments) {
     if (!segments.length) return '';
     let lastSpeaker = null;
+    let lastBlock = -1;
     const cbs = extensionSettings.chatBubbleSettings || {};
     const showAvatars = cbs.showAvatars !== false;
     const showAuthorNames = cbs.showAuthorNames !== false;
@@ -500,8 +549,10 @@ function renderCardBubbles(segments) {
         const isNarrator = seg.type === 'narrator';
         const speaker = isNarrator ? '__narrator__' : (seg.speaker || '__unknown__');
         const displayName = isNarrator ? 'Narrator' : (seg.speaker || 'Unknown');
-        const isContinuation = speaker === lastSpeaker;
+        // Continuation only if same speaker AND same paragraph block.
+        const isContinuation = speaker === lastSpeaker && seg._block === lastBlock;
         lastSpeaker = speaker;
+        lastBlock = seg._block;
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';

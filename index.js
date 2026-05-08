@@ -1059,14 +1059,10 @@ async function initUI() {
     });
 
     // ── Bunny Mo Integration ──
-    $('#rpg-toggle-bunny-mo').on('change', function () {
-        extensionSettings.bunnyMoIntegration = $(this).prop('checked');
-        $('#rpg-bm-badge').text(extensionSettings.bunnyMoIntegration ? 'on' : 'off');
-        saveSettings();
-        if (extensionSettings.bunnyMoIntegration) {
-            setTimeout(() => injectFullSheetButtons(), 100);
-        }
-    });
+    // No toggle — integration is always on. injectFullSheetButtons fires
+    // per-message in the CHARACTER_MESSAGE_RENDERED handler, plus once at
+    // boot below to catch existing chat messages on first load.
+    setTimeout(() => injectFullSheetButtons(), 100);
 
     // ── Doom Counter customization ──
     // ── Inline Banners ──
@@ -1809,9 +1805,7 @@ async function initUI() {
     const lbEnabled = extensionSettings.lorebook?.enabled ?? true;
     $('#rpg-toggle-lorebook').prop('checked', lbEnabled);
     $('#rpg-lb-badge').text(lbEnabled ? 'on' : 'off');
-    // Bunny Mo Integration
-    $('#rpg-toggle-bunny-mo').prop('checked', extensionSettings.bunnyMoIntegration || false);
-    $('#rpg-bm-badge').text(extensionSettings.bunnyMoIntegration ? 'on' : 'off');
+    // Bunny Mo Integration — always on, no toggle/badge to initialize.
 
     // Inline Banners
     const ib = extensionSettings.inlineBanners || {};
@@ -2777,8 +2771,8 @@ jQuery(async () => {
                 const renderedMessage = chat[messageId];
                 if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
-                    // Add fullsheet import button if message contains fullsheet data and character sheet integration is on
-                    if (extensionSettings.bunnyMoIntegration && messageHasFullSheet(renderedMessage.mes) && messageElement) {
+                    // Add fullsheet import button if message contains fullsheet data
+                    if (messageHasFullSheet(renderedMessage.mes) && messageElement) {
                         const $extraBtns = $(messageElement).find('.mes_buttons .extraMesButtons');
                         if ($extraBtns.length && !$extraBtns.find('.dooms-import-fullsheet-btn').length) {
                             $extraBtns.prepend(`<div class="dooms-import-fullsheet-btn mes_button fa-solid fa-scroll" title="Import Character Sheet"></div>`);

@@ -15,6 +15,7 @@ import {
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
+import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 /**
  * Tracks which character cards are currently flipped (showing the back face).
@@ -211,6 +212,16 @@ export function initThoughtsEventDelegation() {
                 const $avatar = $thoughtsContainer.find(`.rpg-character-avatar[data-character="${characterName}"] img`);
                 $avatar.attr('src', imageUrl);
                 if (extensionSettings.debugMode) console.log(`[Dooms Tracker] Avatar uploaded for ${characterName}`);
+                // Pass-2 perf: replace just-saved data: URL with on-disk URL.
+                Promise.resolve()
+                    .then(() => migrateAvatarsToFiles(saveSettings))
+                    .then((res) => {
+                        if (res?.migrated) {
+                            const url = extensionSettings.npcAvatars?.[characterName];
+                            if (url && url !== imageUrl) $avatar.attr('src', url);
+                        }
+                    })
+                    .catch(() => {});
             };
             reader.readAsDataURL(file);
         });

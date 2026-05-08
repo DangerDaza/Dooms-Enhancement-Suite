@@ -15,7 +15,8 @@
  */
 
 import { extensionSettings } from '../../core/state.js';
-import { saveSettings } from '../../core/persistence.js';
+import { saveSettings, getActiveKnownCharacters, getActiveCharacterColors } from '../../core/persistence.js';
+import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
@@ -362,9 +363,14 @@ function collectCharacterNames() {
         return Object.keys(uc).filter(n => n && typeof n === 'string');
     }
     const set = new Set();
+    // knownCharacters and characterColors flip stores based on
+    // perChatCharacterTracking — read via the chat-aware getters so
+    // characters auto-discovered in this chat (e.g. new arrivals from
+    // the AI's character list) actually surface in the Roster. npcAvatars
+    // is always global; read it directly.
     const sources = [
-        extensionSettings?.knownCharacters,
-        extensionSettings?.characterColors,
+        getActiveKnownCharacters(),
+        getActiveCharacterColors(),
         extensionSettings?.npcAvatars,
     ];
     for (const src of sources) {
@@ -847,6 +853,10 @@ function purgeCharacter(name) {
         return;
     }
     if (s.characterColors) delete s.characterColors[name];
+    // Clean up the on-disk PNG before clearing the settings reference.
+    // Best-effort — failure leaves an orphan but settings stays correct.
+    try { deletePortraitFromDiskByValue(s.npcAvatars?.[name]); } catch (e) {}
+    try { deletePortraitFromDiskByValue(s.npcAvatarsFullRes?.[name]); } catch (e) {}
     if (s.npcAvatars) delete s.npcAvatars[name];
     if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];
     if (s.knownCharacters) delete s.knownCharacters[name];

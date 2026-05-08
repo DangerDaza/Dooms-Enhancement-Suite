@@ -15,6 +15,8 @@ import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
+import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
+import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { generateAvatarPromptGenerationPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 // Generation state - tracks characters currently being generated
@@ -183,6 +185,7 @@ export async function regenerateAvatar(characterName) {
     pendingGenerations.add(characterName);
     // Clear existing avatar
     if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
         delete extensionSettings.npcAvatars[characterName];
         saveSettings();
     }
@@ -291,6 +294,12 @@ async function generateSingleAvatar(characterName, prompt = null) {
             }
             extensionSettings.npcAvatars[characterName] = imageUrl;
             saveSettings();
+            // Pass-2 perf: if the SD result is a data: URL (some providers
+            // return base64), migrate it to disk in the background. No-op
+            // when imageUrl is already an http(s)/relative URL.
+            Promise.resolve()
+                .then(() => migrateAvatarsToFiles(saveSettings))
+                .catch(() => {});
             return imageUrl;
         } else {
             console.warn(`[RPG Avatar] Failed to extract image URL for ${characterName}:`, result);

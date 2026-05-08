@@ -1052,21 +1052,23 @@
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-carrot rpg-accordion-icon"></i>
                     <span class="rpg-accordion-title">Bunny Mo Integration</span>
-                    <span class="rpg-accordion-badge" id="rpg-bm-badge">off</span>
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Enable Bunny Mo Integration</span>
-                            <span class="rpg-setting-hint">Adds Character Sheet support to Present Characters. Use Bunny
-                                Mo's !fullsheet command to generate a sheet, then import it via the scroll button on the
-                                message.</span>
+                            <span class="rpg-setting-hint">
+                                Character sheets from Bunny Mo's <code>!fullsheet</code> and <code>!quicksheet</code> commands import directly into Doom's Enhancement Suite. Always on — no toggle needed.
+                                <br><br>
+                                <strong>How it works:</strong>
+                                <ol style="margin: 6px 0 0 20px; padding: 0;">
+                                    <li>Run <code>!fullsheet &lt;character&gt;</code> (or <code>!quicksheet</code>) in chat. Bunny Mo replies with the generated sheet.</li>
+                                    <li>Click the scroll icon (<i class="fa-solid fa-scroll"></i>) that DES adds to that message's button row. The sheet is parsed and stored against the character.</li>
+                                    <li>Right-click the character in the Present Characters Panel and choose <strong>Character Sheet</strong> to view the imported data alongside the character's portrait.</li>
+                                </ol>
+                                Sheet data is per-chat and persists with the chat file.
+                            </span>
                         </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-toggle-bunny-mo" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
                     </div>
                 </div>
             </div>
