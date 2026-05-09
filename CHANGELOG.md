@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.3] - 2026-05-09 — User-persona/NPC duplicates + delete-does-nothing
+
+### Fixed
+- **User personas got duplicated as NPCs, and the Workshop's Delete button silently no-op'd on the persona tile.** Three intertwined bugs:
+  - **`removeCharacter` (Send to Workshop) seeded a `knownCharacters` NPC entry unconditionally.** That guard was added so AI-discovered characters with no roster record aren't stranded — but firing it on a portrait-bar click against the user-persona tile created an NPC stub for the persona's name. The persona then appeared in both the Roster Users and Characters tabs and rendered as two PCP tiles. Skip the seed when `userCharacters[name]` already exists.
+  - **The v23 settings migration and the per-chat orphan-adopt routine in `persistence.js` promoted any `removedCharacters` orphan into `knownCharacters`, including persona names.** Users on pre-1.9.2 who soft-removed their persona from the PCP had a `removedCharacters` entry with no matching `knownCharacters` record; on next upgrade the migration created the NPC twin even though the same name was a user persona. Both the global migration and the per-chat orphan-adopt now skip names that are already in `userCharacters`.
+  - **`buildActiveUserCharacterEntry` ignored `removedCharacters`.** Clicking "Send to Workshop" on the persona tile added the name to `removedCharacters` and saved, but the persona prefix re-rendered next frame regardless — making the soft-remove look like a no-op for personas. Now filters by the active removed list, mirroring how `getCharacterList` filters NPCs.
+  - **PCP right-click → Open in Workshop dispatched `{ characterName }` only — no `isUser` flag.** Workshop always opened in NPC mode regardless of which tile was clicked, so deleting from the persona tile wiped the (possibly empty) NPC stores and left `userCharacters[name]` untouched. The persona kept rendering and the user saw "delete did nothing." Right-click handler now reads the tile's `data-user="1"` stamp and forwards `isUser` so the Workshop opens in the correct mode.
+  - **`deleteCharacter` now detects a same-named entry in the other namespace and asks whether to clean up both.** Provides a recovery path for existing duplicates (Naoko-style): users who already have the NPC twin from before this release can delete both copies in one confirm. Refactored the function into `deleteUserCharacterEntries` / `deleteNpcCharacterEntries` helpers so the twin-cleanup runs the same code as a normal delete.
+
 ## [1.11.2] - 2026-05-09 — Deleted characters resurrected on reload
 
 ### Fixed
