@@ -892,6 +892,10 @@ function activatePane(paneId) {
 }
 
 function bindStaticListeners() {
+    // Same defense as bindExpressionHandlers — if a prior module instance
+    // attached `.cw` handlers to this same DOM node, drop them before we
+    // re-bind so we don't run two copies (with two different `draft`s).
+    $modal.off('.cw');
     $modal.on('click.cw', '.workshop-nav button', function () {
         const pane = $(this).attr('data-pane');
         if (!pane) return;
@@ -1682,7 +1686,20 @@ function deleteCharacter(name) {
     // delete-from-Workshop and delete-from-Roster are symmetric.
     if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     if (extensionSettings.characterRelationships) delete extensionSettings.characterRelationships[name];
+    // When perChatCharacterTracking is on, knownCharacters/characterColors
+    // live on chat_metadata. Without wiping those, the Roster grid (which
+    // reads via the active getters) shows the character right back after
+    // the toast.
+    if (extensionSettings.perChatCharacterTracking) {
+        const activeKnown = getActiveKnownCharacters();
+        if (activeKnown) delete activeKnown[name];
+        const activeColors = getActiveCharacterColors();
+        if (activeColors) delete activeColors[name];
+    }
     saveSettings();
+    if (extensionSettings.perChatCharacterTracking) {
+        try { saveChatData(); } catch (e) {}
+    }
     try {
         clearPortraitCache();
         updatePortraitBar();
@@ -2276,6 +2293,12 @@ let _cwExprHandlersBound = false;
 function bindExpressionHandlers() {
     if (_cwExprHandlersBound) return;
     _cwExprHandlersBound = true;
+    // Defensive: if a prior module instance bound handlers in this same
+    // namespace (extension hot-reload, dev refresh of the JS bundle), they
+    // would still be on `document` and run alongside ours — and they
+    // closure-captured the previous module's `draft`, so they'd report the
+    // wrong character. Clear the namespace before re-binding.
+    $(document).off('.cwExpr');
 
     // Match the character-sheet selectors so we share the existing CSS
     // (.rpg-cs-expr-* rules already styled). Scope to the Workshop's
@@ -2284,11 +2307,16 @@ function bindExpressionHandlers() {
         $(target).closest('#character-workshop-popup .rpg-cs-tab-content[data-tab="expressions"]').length > 0;
 
     // Upload single sprite
+    // All expression handlers below source the character name from `draft`
+    // rather than the pane's data-character attribute. The pane is reused
+    // across opens and the attribute is only refreshed when the user clicks
+    // the Expressions tab — uploads/deletes triggered from a still-active
+    // tab after a character switch would otherwise hit the previous one.
     $(document).on('click.cwExpr', '.rpg-cs-expr-upload:not(.rpg-cs-expr-upload-zip)', function () {
         if (!inWorkshop(this)) return;
         const label = $(this).data('label');
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.data('character');
+        const charName = draft?.name || '';
         if (!label || !charName) return;
         const $input = $('<input type="file" accept="image/*" style="display:none">');
         $input.on('change', async function () {
@@ -2337,7 +2365,7 @@ function bindExpressionHandlers() {
         if (!inWorkshop(this)) return;
         const label = $(this).data('label');
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.data('character');
+        const charName = draft?.name || '';
         if (!label || !charName) return;
         try {
             const resp = await fetch('/api/sprites/delete', {
@@ -2360,7 +2388,7 @@ function bindExpressionHandlers() {
         if (!inWorkshop(this)) return;
         const $btn = $(this);
         const $tab = $btn.closest('.rpg-cs-tab-content');
-        const charName = $tab.data('character');
+        const charName = draft?.name || '';
         if (!charName) return;
         // Re-fetch the sprite list as the truth source — DOM might be stale
         // and we don't want to ask ST to delete labels that no longer exist.
@@ -2412,7 +2440,7 @@ function bindExpressionHandlers() {
     $(document).on('click.cwExpr', '.rpg-cs-expr-upload-zip', function () {
         if (!inWorkshop(this)) return;
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.data('character');
+        const charName = draft?.name || '';
         if (!charName) return;
         const $input = $('<input type="file" accept=".zip" style="display:none">');
         $input.on('change', async function () {
@@ -2448,7 +2476,7 @@ function bindExpressionHandlers() {
     $(document).on('click.cwExpr', '.rpg-cs-expr-open-folder', async function () {
         if (!inWorkshop(this)) return;
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.data('character');
+        const charName = draft?.name || '';
         if (!charName) return;
         try {
             const resp = await fetch('/api/sprites/open-folder', {
