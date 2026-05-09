@@ -343,7 +343,7 @@ export function closeCharacterWorkshop() {
     // Clear the Expressions tab's lazy-load cache so the next open
     // re-fetches sprites — protects against a stale uploaded-count
     // display if the underlying sprite folder changed between opens.
-    $modal.find('#cw-expressions-pane').removeAttr('data-character').removeData('character');
+    $modal.find('#cw-expressions-pane').removeAttr('data-character');
     _pendingCloseTimeout = setTimeout(() => {
         $modal.removeClass('is-closing').hide();
         _pendingCloseTimeout = null;
@@ -903,10 +903,6 @@ function bindStaticListeners() {
             const charName = draft?.name || '';
             if (charName && $panel.attr('data-character') !== charName) {
                 $panel.attr('data-character', charName);
-                // jQuery's .data() caches the data-* value on first read and
-                // never refreshes from the attribute; keep the cache in sync
-                // so reads via either path see the current character.
-                $panel.data('character', charName);
                 renderExpressionsTab($panel, charName);
             }
         }
@@ -2301,11 +2297,16 @@ function bindExpressionHandlers() {
         $(target).closest('#character-workshop-popup .rpg-cs-tab-content[data-tab="expressions"]').length > 0;
 
     // Upload single sprite
+    // All expression handlers below source the character name from `draft`
+    // rather than the pane's data-character attribute. The pane is reused
+    // across opens and the attribute is only refreshed when the user clicks
+    // the Expressions tab — uploads/deletes triggered from a still-active
+    // tab after a character switch would otherwise hit the previous one.
     $(document).on('click.cwExpr', '.rpg-cs-expr-upload:not(.rpg-cs-expr-upload-zip)', function () {
         if (!inWorkshop(this)) return;
         const label = $(this).data('label');
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.attr('data-character');
+        const charName = draft?.name || '';
         if (!label || !charName) return;
         const $input = $('<input type="file" accept="image/*" style="display:none">');
         $input.on('change', async function () {
@@ -2354,7 +2355,7 @@ function bindExpressionHandlers() {
         if (!inWorkshop(this)) return;
         const label = $(this).data('label');
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.attr('data-character');
+        const charName = draft?.name || '';
         if (!label || !charName) return;
         try {
             const resp = await fetch('/api/sprites/delete', {
@@ -2377,7 +2378,7 @@ function bindExpressionHandlers() {
         if (!inWorkshop(this)) return;
         const $btn = $(this);
         const $tab = $btn.closest('.rpg-cs-tab-content');
-        const charName = $tab.attr('data-character');
+        const charName = draft?.name || '';
         if (!charName) return;
         // Re-fetch the sprite list as the truth source — DOM might be stale
         // and we don't want to ask ST to delete labels that no longer exist.
@@ -2429,7 +2430,7 @@ function bindExpressionHandlers() {
     $(document).on('click.cwExpr', '.rpg-cs-expr-upload-zip', function () {
         if (!inWorkshop(this)) return;
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.attr('data-character');
+        const charName = draft?.name || '';
         if (!charName) return;
         const $input = $('<input type="file" accept=".zip" style="display:none">');
         $input.on('change', async function () {
@@ -2465,7 +2466,7 @@ function bindExpressionHandlers() {
     $(document).on('click.cwExpr', '.rpg-cs-expr-open-folder', async function () {
         if (!inWorkshop(this)) return;
         const $tab = $(this).closest('.rpg-cs-tab-content');
-        const charName = $tab.attr('data-character');
+        const charName = draft?.name || '';
         if (!charName) return;
         try {
             const resp = await fetch('/api/sprites/open-folder', {
