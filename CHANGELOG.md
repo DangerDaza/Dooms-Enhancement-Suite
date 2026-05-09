@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.11.2] - 2026-05-09 — Deleted characters resurrected on reload
+
+### Fixed
+- **Deleting a character only made them disappear until the next reload.** The chat-load init in `persistence.js` runs an "orphan-adopt" routine: for every name in `removedCharacters` that has no `knownCharacters` entry, it creates one with a default `👤` emoji (the v23 settings migration does the same thing globally on extension load). This was added in 1.9.2 to recover characters stranded by an old "Send to Workshop" bug, and it's correct for that case — but `purgeCharacter` (Roster) and `deleteCharacter` (Workshop) only wiped `knownCharacters` and left the matching `removedCharacters` entry intact. Any character who had previously been ejected from the scene therefore satisfied the orphan condition (`in removedCharacters && !in knownCharacters`) on next reload, got re-adopted, and reappeared in the Roster with a placeholder portrait. Both delete paths now also strip the name from `removedCharacters` (and from `bannedCharacters`, so a deleted character's standing "do not include" prompt no longer pins) in both the global and chat-scoped stores.
+
 ## [1.11.1] - 2026-05-09 — Roster + Workshop deletion fixes
 
 ### Fixed
