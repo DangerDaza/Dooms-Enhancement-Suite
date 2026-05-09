@@ -1657,19 +1657,23 @@ function copyUserToNpcCharacter(name) {
     } catch (e) {}
 }
 
-function deleteUserCharacterEntries(name) {
-    const userEntry = extensionSettings.userCharacters?.[name];
-    if (userEntry) {
-        try { deletePortraitFromDiskByValue(userEntry.avatar); } catch (e) {}
-        try { deletePortraitFromDiskByValue(userEntry.avatarFullRes); } catch (e) {}
+function deleteCharacter(name) {
+    // User character delete: only touches the userCharacters namespace
+    // and clears activeUserCharacter if it was pointing at this entry.
+    if (draft?.isUser) {
+        const userEntry = extensionSettings.userCharacters?.[name];
+        if (userEntry) {
+            try { deletePortraitFromDiskByValue(userEntry.avatar); } catch (e) {}
+            try { deletePortraitFromDiskByValue(userEntry.avatarFullRes); } catch (e) {}
+        }
+        if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
+        if (extensionSettings.activeUserCharacter === name) {
+            extensionSettings.activeUserCharacter = null;
+        }
+        try { saveSettings(); } catch (e) {}
+        try { updatePortraitBar(); } catch (e) {}
+        return;
     }
-    if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
-    if (extensionSettings.activeUserCharacter === name) {
-        extensionSettings.activeUserCharacter = null;
-    }
-}
-
-function deleteNpcCharacterEntries(name) {
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
     try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars?.[name]); } catch (e) {}
     try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[name]); } catch (e) {}
@@ -1677,14 +1681,27 @@ function deleteNpcCharacterEntries(name) {
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
     if (extensionSettings.knownCharacters) delete extensionSettings.knownCharacters[name];
     if (extensionSettings.heroPositions) delete extensionSettings.heroPositions[name];
+    // Match characterRoster.purgeCharacter — wipe Workshop-specific
+    // injection extras too (description / lorebook attachment) so
+    // delete-from-Workshop and delete-from-Roster are symmetric.
     if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     if (extensionSettings.characterRelationships) delete extensionSettings.characterRelationships[name];
+    // When perChatCharacterTracking is on, knownCharacters/characterColors
+    // live on chat_metadata. Without wiping those, the Roster grid (which
+    // reads via the active getters) shows the character right back after
+    // the toast.
     if (extensionSettings.perChatCharacterTracking) {
         const activeKnown = getActiveKnownCharacters();
         if (activeKnown) delete activeKnown[name];
         const activeColors = getActiveCharacterColors();
         if (activeColors) delete activeColors[name];
     }
+    // Drop from removedCharacters (both stores). The chat-load orphan-adopt
+    // routine in persistence.js re-creates a knownCharacters entry for any
+    // name still in removedCharacters, which would resurrect a character
+    // that had previously been ejected from the scene on next reload.
+    // Also drop from bannedCharacters so the standing prompt doesn't keep
+    // telling the AI to exclude a name that no longer exists.
     const lowerName = String(name || '').toLowerCase();
     const stripFromList = (list) => list.filter(n =>
         typeof n !== 'string' || n.toLowerCase() !== lowerName
@@ -1709,41 +1726,7 @@ function deleteNpcCharacterEntries(name) {
             activeBanned.push(...filtered);
         }
     }
-}
-
-function deleteCharacter(name) {
-    const isUserMode = !!draft?.isUser;
-    // Detect a same-named entry in the OTHER namespace. This usually means
-    // the user persona got duplicated as an NPC (or vice-versa) — historically
-    // via Send-to-Workshop seeding knownCharacters or the v23 orphan-adopt
-    // promoting a removed-persona name. Without this prompt, deleting in one
-    // mode silently leaves the twin behind and the user sees "delete did
-    // nothing" when the persona tile keeps re-rendering in the PCP.
-    const npcExists = !!(
-        extensionSettings.knownCharacters?.[name] ||
-        extensionSettings.npcAvatars?.[name] ||
-        extensionSettings.characterColors?.[name]
-    );
-    const userExists = !!extensionSettings.userCharacters?.[name];
-    const twinExists = isUserMode ? npcExists : userExists;
-    let alsoDeleteTwin = false;
-    if (twinExists) {
-        const otherKind = isUserMode ? 'a Character (NPC)' : 'a User persona';
-        alsoDeleteTwin = window.confirm(
-            `"${name}" also exists as ${otherKind}.\n\n` +
-            `OK = delete both. Cancel = leave the ${otherKind} entry alone.`
-        );
-    }
-
-    if (isUserMode) {
-        deleteUserCharacterEntries(name);
-        if (alsoDeleteTwin) deleteNpcCharacterEntries(name);
-    } else {
-        deleteNpcCharacterEntries(name);
-        if (alsoDeleteTwin) deleteUserCharacterEntries(name);
-    }
-
-    try { saveSettings(); } catch (e) {}
+    saveSettings();
     if (extensionSettings.perChatCharacterTracking) {
         try { saveChatData(); } catch (e) {}
     }
