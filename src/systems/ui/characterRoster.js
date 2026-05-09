@@ -15,7 +15,7 @@
  */
 
 import { extensionSettings } from '../../core/state.js';
-import { saveSettings, getActiveKnownCharacters, getActiveCharacterColors } from '../../core/persistence.js';
+import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors } from '../../core/persistence.js';
 import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { power_user } from '../../../../../../power-user.js';
@@ -863,6 +863,16 @@ function purgeCharacter(name) {
     if (s.heroPositions) delete s.heroPositions[name];
     if (s.characterInjection) delete s.characterInjection[name];
     if (s.characterRelationships) delete s.characterRelationships[name];
+    // When perChatCharacterTracking is on, knownCharacters/characterColors
+    // live on chat_metadata, not extensionSettings. Wipe those too or the
+    // tile reappears on the next renderGrid (which reads via the active
+    // getters).
+    if (s.perChatCharacterTracking) {
+        const activeKnown = getActiveKnownCharacters();
+        if (activeKnown) delete activeKnown[name];
+        const activeColors = getActiveCharacterColors();
+        if (activeColors) delete activeColors[name];
+    }
     // Also drop the pin entry so the name doesn't linger as a ghost
     // at the top of the roster.
     if (Array.isArray(s.pinnedCharacters)) {
@@ -872,4 +882,5 @@ function purgeCharacter(name) {
         );
     }
     saveSettings();
+    if (s.perChatCharacterTracking) saveChatData();
 }

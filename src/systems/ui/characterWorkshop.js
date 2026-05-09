@@ -1682,7 +1682,20 @@ function deleteCharacter(name) {
     // delete-from-Workshop and delete-from-Roster are symmetric.
     if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     if (extensionSettings.characterRelationships) delete extensionSettings.characterRelationships[name];
+    // When perChatCharacterTracking is on, knownCharacters/characterColors
+    // live on chat_metadata. Without wiping those, the Roster grid (which
+    // reads via the active getters) shows the character right back after
+    // the toast.
+    if (extensionSettings.perChatCharacterTracking) {
+        const activeKnown = getActiveKnownCharacters();
+        if (activeKnown) delete activeKnown[name];
+        const activeColors = getActiveCharacterColors();
+        if (activeColors) delete activeColors[name];
+    }
     saveSettings();
+    if (extensionSettings.perChatCharacterTracking) {
+        try { saveChatData(); } catch (e) {}
+    }
     try {
         clearPortraitCache();
         updatePortraitBar();
