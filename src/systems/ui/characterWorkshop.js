@@ -1696,6 +1696,36 @@ function deleteCharacter(name) {
         const activeColors = getActiveCharacterColors();
         if (activeColors) delete activeColors[name];
     }
+    // Drop from removedCharacters (both stores). The chat-load orphan-adopt
+    // routine in persistence.js re-creates a knownCharacters entry for any
+    // name still in removedCharacters, which would resurrect a character
+    // that had previously been ejected from the scene on next reload.
+    // Also drop from bannedCharacters so the standing prompt doesn't keep
+    // telling the AI to exclude a name that no longer exists.
+    const lowerName = String(name || '').toLowerCase();
+    const stripFromList = (list) => list.filter(n =>
+        typeof n !== 'string' || n.toLowerCase() !== lowerName
+    );
+    if (Array.isArray(extensionSettings.removedCharacters)) {
+        extensionSettings.removedCharacters = stripFromList(extensionSettings.removedCharacters);
+    }
+    if (Array.isArray(extensionSettings.bannedCharacters)) {
+        extensionSettings.bannedCharacters = stripFromList(extensionSettings.bannedCharacters);
+    }
+    if (extensionSettings.perChatCharacterTracking) {
+        const activeRemoved = getActiveRemovedCharacters();
+        if (Array.isArray(activeRemoved)) {
+            const filtered = stripFromList(activeRemoved);
+            activeRemoved.length = 0;
+            activeRemoved.push(...filtered);
+        }
+        const activeBanned = getActiveBannedCharacters();
+        if (Array.isArray(activeBanned)) {
+            const filtered = stripFromList(activeBanned);
+            activeBanned.length = 0;
+            activeBanned.push(...filtered);
+        }
+    }
     saveSettings();
     if (extensionSettings.perChatCharacterTracking) {
         try { saveChatData(); } catch (e) {}

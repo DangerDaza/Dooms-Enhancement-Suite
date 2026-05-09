@@ -15,7 +15,7 @@
  */
 
 import { extensionSettings } from '../../core/state.js';
-import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors } from '../../core/persistence.js';
+import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters } from '../../core/persistence.js';
 import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { power_user } from '../../../../../../power-user.js';
@@ -873,13 +873,40 @@ function purgeCharacter(name) {
         const activeColors = getActiveCharacterColors();
         if (activeColors) delete activeColors[name];
     }
+    // Drop from removedCharacters (both stores). The chat-load orphan-adopt
+    // routine in persistence.js re-creates a knownCharacters entry for any
+    // name still in removedCharacters — without this, a deleted character
+    // that had previously been ejected from the scene resurrects on reload.
+    // Also drop from bannedCharacters so the standing "do not include"
+    // prompt isn't pinned for a character that no longer exists.
+    const lowerName = String(name || '').toLowerCase();
+    const stripFromList = (list) => list.filter(n =>
+        typeof n !== 'string' || n.toLowerCase() !== lowerName
+    );
+    if (Array.isArray(s.removedCharacters)) {
+        s.removedCharacters = stripFromList(s.removedCharacters);
+    }
+    if (Array.isArray(s.bannedCharacters)) {
+        s.bannedCharacters = stripFromList(s.bannedCharacters);
+    }
+    if (s.perChatCharacterTracking) {
+        const activeRemoved = getActiveRemovedCharacters();
+        if (Array.isArray(activeRemoved)) {
+            const filtered = stripFromList(activeRemoved);
+            activeRemoved.length = 0;
+            activeRemoved.push(...filtered);
+        }
+        const activeBanned = getActiveBannedCharacters();
+        if (Array.isArray(activeBanned)) {
+            const filtered = stripFromList(activeBanned);
+            activeBanned.length = 0;
+            activeBanned.push(...filtered);
+        }
+    }
     // Also drop the pin entry so the name doesn't linger as a ghost
     // at the top of the roster.
     if (Array.isArray(s.pinnedCharacters)) {
-        const lower = String(name || '').toLowerCase();
-        s.pinnedCharacters = s.pinnedCharacters.filter(n =>
-            typeof n !== 'string' || n.toLowerCase() !== lower
-        );
+        s.pinnedCharacters = stripFromList(s.pinnedCharacters);
     }
     saveSettings();
     if (s.perChatCharacterTracking) saveChatData();
