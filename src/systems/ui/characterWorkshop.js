@@ -892,6 +892,10 @@ function activatePane(paneId) {
 }
 
 function bindStaticListeners() {
+    // Same defense as bindExpressionHandlers — if a prior module instance
+    // attached `.cw` handlers to this same DOM node, drop them before we
+    // re-bind so we don't run two copies (with two different `draft`s).
+    $modal.off('.cw');
     $modal.on('click.cw', '.workshop-nav button', function () {
         const pane = $(this).attr('data-pane');
         if (!pane) return;
@@ -2289,6 +2293,12 @@ let _cwExprHandlersBound = false;
 function bindExpressionHandlers() {
     if (_cwExprHandlersBound) return;
     _cwExprHandlersBound = true;
+    // Defensive: if a prior module instance bound handlers in this same
+    // namespace (extension hot-reload, dev refresh of the JS bundle), they
+    // would still be on `document` and run alongside ours — and they
+    // closure-captured the previous module's `draft`, so they'd report the
+    // wrong character. Clear the namespace before re-binding.
+    $(document).off('.cwExpr');
 
     // Match the character-sheet selectors so we share the existing CSS
     // (.rpg-cs-expr-* rules already styled). Scope to the Workshop's
