@@ -400,9 +400,13 @@ export function loadSettings() {
                         extensionSettings.knownCharacters = {};
                     }
                     const known = extensionSettings.knownCharacters;
+                    const userChars = extensionSettings.userCharacters || {};
                     let adopted = 0;
                     for (const name of removed) {
-                        if (typeof name === 'string' && name && !known[name]) {
+                        // Don't adopt names that are already user personas —
+                        // doing so creates an NPC twin and the Roster shows
+                        // the same name in both Characters and Users tabs.
+                        if (typeof name === 'string' && name && !known[name] && !userChars[name]) {
                             known[name] = { emoji: '👤' };
                             adopted++;
                         }
@@ -696,9 +700,12 @@ export function loadChatData() {
         try {
             const meta = chat_metadata.dooms_tracker;
             if (Array.isArray(meta.removedCharacters) && meta.removedCharacters.length) {
+                const userChars = extensionSettings.userCharacters || {};
                 let adopted = 0;
                 for (const name of meta.removedCharacters) {
-                    if (typeof name === 'string' && name && !meta.knownCharacters[name]) {
+                    // Skip user-persona names — adopting them as NPCs creates
+                    // a duplicate that shows in both Roster tabs and the PCP.
+                    if (typeof name === 'string' && name && !meta.knownCharacters[name] && !userChars[name]) {
                         meta.knownCharacters[name] = { emoji: '👤' };
                         adopted++;
                     }

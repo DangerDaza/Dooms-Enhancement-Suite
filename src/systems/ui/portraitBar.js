@@ -308,9 +308,11 @@ export function initPortraitBar() {
         // part of the name.
         const characterName = $(this).attr('data-char') || $(this).attr('title');
         if (!characterName) return;
+        const isUser = $(this).attr('data-user') === '1';
 
         const $menu = $('#dooms-pb-context-menu');
         $menu.data('character', characterName);
+        $menu.data('isUser', isUser);
 
         // Show or hide "Remove Portrait" based on whether one exists
         const hasCustomAvatar = extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName];
@@ -352,6 +354,7 @@ export function initPortraitBar() {
     $(document).on('click', '.dooms-pb-ctx-item', function (e) {
         const action = $(this).data('action');
         const characterName = $('#dooms-pb-context-menu').data('character');
+        const isUser = !!$('#dooms-pb-context-menu').data('isUser');
 
         hideContextMenu();
         if (!characterName) return;
@@ -365,7 +368,7 @@ export function initPortraitBar() {
         } else if (action === 'open-expressions') {
             openExpressionFolder(characterName);
         } else if (action === 'open-workshop') {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName } }));
+            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         }
@@ -1051,15 +1054,23 @@ function removeCharacter(characterName) {
     // happens AFTER the removed-filter, so a first-time soft-hide on an
     // AI-only character would otherwise evaporate the roster entry and
     // strand them with no Workshop/Roster surface to reach from.
+    //
+    // Skip the seed if the name belongs to a user persona — seeding here
+    // for a persona name would create an NPC twin that shows up in the
+    // Roster Characters tab AND the PCP via getCharacterList, on top of
+    // the existing user persona entry. That's the duplicate-Naoko bug.
     try {
-        const knownChars = getActiveKnownCharacters();
-        if (!knownChars[characterName]) {
-            let emoji = '👤';
-            try {
-                const hit = getCharacterList().find(c => c && c.name === characterName);
-                if (hit?.emoji) emoji = hit.emoji;
-            } catch (e) { /* best-effort */ }
-            knownChars[characterName] = { emoji };
+        const isUserPersona = !!extensionSettings?.userCharacters?.[characterName];
+        if (!isUserPersona) {
+            const knownChars = getActiveKnownCharacters();
+            if (!knownChars[characterName]) {
+                let emoji = '👤';
+                try {
+                    const hit = getCharacterList().find(c => c && c.name === characterName);
+                    if (hit?.emoji) emoji = hit.emoji;
+                } catch (e) { /* best-effort */ }
+                knownChars[characterName] = { emoji };
+            }
         }
     } catch (e) {
         console.warn('[Dooms Tracker] Send to Workshop: failed to seed knownCharacters entry', e);
@@ -1229,6 +1240,16 @@ function buildActiveUserCharacterEntry() {
     if (!s.showUserInPCP) return null;
     const name = resolveActiveUserName();
     if (!name) return null;
+    // Honor removedCharacters for the persona too — without this, clicking
+    // "Send to Workshop" on the persona tile silently no-ops (the tile
+    // re-renders even though the name is on the soft-remove list).
+    try {
+        const removed = getActiveRemovedCharacters();
+        const lowerName = name.toLowerCase();
+        if (Array.isArray(removed) && removed.some(n => typeof n === 'string' && n.toLowerCase() === lowerName)) {
+            return null;
+        }
+    } catch (e) { /* best-effort */ }
     return {
         name,
         emoji: '👤',
