@@ -331,15 +331,38 @@ export function initPortraitBar() {
         const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
         $menu.find('[data-action="cancel-inject"]').toggle(isPending);
 
-        // Position near the cursor, clamped to viewport
-        $menu.css({ display: 'block', top: 0, left: 0 });
+        // Position near the cursor, clamped to viewport. When the PCP is
+        // pinned to a side, push the menu out past the bar's edge so it
+        // never overlaps the cards visually — z-index alone isn't enough
+        // because the wrapper's parent (e.g., #sheld with transforms) can
+        // create a stacking context that traps siblings.
+        // Re-parent to <body> so the menu always escapes that context.
+        if ($menu.parent()[0] !== document.body) {
+            $menu.appendTo(document.body);
+        }
+        // Measure off-screen so we can clamp without a flash.
+        $menu.css({ display: 'block', top: '-9999px', left: '-9999px' });
         const menuW = $menu.outerWidth();
         const menuH = $menu.outerHeight();
         const viewW = window.innerWidth;
         const viewH = window.innerHeight;
-        const top = Math.max(0, Math.min(e.clientY, viewH - menuH));
-        const left = Math.max(0, Math.min(e.clientX, viewW - menuW));
-        $menu.css({ top: top + 'px', left: left + 'px' });
+
+        const $wrapper = $('#dooms-portrait-bar-wrapper');
+        const wrapperRect = $wrapper[0]?.getBoundingClientRect?.();
+        const pcpPos = $wrapper.hasClass('dooms-pb-position-left') ? 'left'
+            : $wrapper.hasClass('dooms-pb-position-right') ? 'right'
+            : null;
+
+        let leftPx;
+        let topPx = Math.max(0, Math.min(e.clientY, viewH - menuH));
+        if (pcpPos === 'left' && wrapperRect) {
+            leftPx = Math.max(0, Math.min(wrapperRect.right + 4, viewW - menuW));
+        } else if (pcpPos === 'right' && wrapperRect) {
+            leftPx = Math.max(0, wrapperRect.left - menuW - 4);
+        } else {
+            leftPx = Math.max(0, Math.min(e.clientX, viewW - menuW));
+        }
+        $menu.css({ top: topPx + 'px', left: leftPx + 'px' });
 
         // Register a one-time click handler to dismiss the menu when clicking elsewhere
         // Using setTimeout(0) so this click event doesn't immediately trigger dismissal

@@ -15,6 +15,9 @@ For users who already have an NPC/persona duplicate created before this release:
 
 A deeper refactor — giving every character a stable ID with a user/NPC variant prefix, decoupling identity from display name — is tracked in [#28](https://github.com/DangerDaza/Dooms-Enhancement-Suite/issues/28). The fixes above remove the user-visible symptoms; the ID refactor will eliminate the entire failure class and unlock multiple characters sharing a display name.
 
+### Also fixed
+- **Right-click context menu opened underneath the PCP when the bar was pinned left or right.** The wrapper's `backdrop-filter: blur(6px)` creates its own stacking context, so a menu that happened to land inside the wrapper's parent stacking context (or rendered with too-low a z-index) got buried under the cards. Menu is now re-parented to `<body>` on every show (escapes any ancestor stacking context), z-index bumped from 10000 → 100000 to outrun ST popups, and placement is PCP-aware: side-mode pushes the menu past the bar's outer edge instead of opening at the cursor inside the bar.
+
 ## [1.11.2] - 2026-05-09 — Deleted characters resurrected on reload
 
 ### Fixed
