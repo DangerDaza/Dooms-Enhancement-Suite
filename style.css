@@ -14166,7 +14166,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* Right-click context menu */
 .dooms-pb-context-menu {
     position: fixed;
-    z-index: 10000;
+    /* Defensive: outrun ST popups (~9999) and any extension overlays.
+       The portrait bar wrapper sits at z-index 900; for side mode the
+       menu must clearly outrank it AND any backdrop-filter stacking
+       context that the wrapper's parent might create. */
+    z-index: 100000;
     min-width: 160px;
     background: rgba(20, 20, 30, 0.95);
     border: 1px solid rgba(233, 69, 96, 0.25);
