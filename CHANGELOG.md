@@ -13,7 +13,7 @@
 
 For users who already have an NPC/persona duplicate created before this release: open the unwanted side via the Roster (Characters tab for the NPC twin, Users tab for a persona twin) and Delete from the Workshop. The other side stays intact.
 
-A deeper refactor — giving every character a stable ID with a user/NPC variant prefix, decoupling identity from display name — is tracked separately. The fixes above remove the user-visible symptoms; the ID refactor will eliminate the entire failure class.
+A deeper refactor — giving every character a stable ID with a user/NPC variant prefix, decoupling identity from display name — is tracked in [#28](https://github.com/DangerDaza/Dooms-Enhancement-Suite/issues/28). The fixes above remove the user-visible symptoms; the ID refactor will eliminate the entire failure class and unlock multiple characters sharing a display name.
 
 ## [1.11.2] - 2026-05-09 — Deleted characters resurrected on reload
 
