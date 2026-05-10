@@ -401,15 +401,22 @@ export function loadSettings() {
                     }
                     const known = extensionSettings.knownCharacters;
                     const userChars = extensionSettings.userCharacters || {};
+                    // Case-insensitive set of user-persona names for the
+                    // collision guard — removedCharacters entries can carry
+                    // whatever casing the original soft-remove pushed.
+                    const userLower = new Set(Object.keys(userChars).map(k => k.toLowerCase()));
+                    const knownLower = new Set(Object.keys(known).map(k => k.toLowerCase()));
                     let adopted = 0;
                     for (const name of removed) {
                         // Don't adopt names that are already user personas —
                         // doing so creates an NPC twin and the Roster shows
                         // the same name in both Characters and Users tabs.
-                        if (typeof name === 'string' && name && !known[name] && !userChars[name]) {
-                            known[name] = { emoji: '👤' };
-                            adopted++;
-                        }
+                        if (typeof name !== 'string' || !name) continue;
+                        const lower = name.toLowerCase();
+                        if (knownLower.has(lower) || userLower.has(lower)) continue;
+                        known[name] = { emoji: '👤' };
+                        knownLower.add(lower);
+                        adopted++;
                     }
                     if (adopted) {
                         console.log(`[Dooms Tracker] Migration v23: adopted ${adopted} orphaned removed-characters into Workshop`);
@@ -701,14 +708,18 @@ export function loadChatData() {
             const meta = chat_metadata.dooms_tracker;
             if (Array.isArray(meta.removedCharacters) && meta.removedCharacters.length) {
                 const userChars = extensionSettings.userCharacters || {};
+                const userLower = new Set(Object.keys(userChars).map(k => k.toLowerCase()));
+                const knownLower = new Set(Object.keys(meta.knownCharacters).map(k => k.toLowerCase()));
                 let adopted = 0;
                 for (const name of meta.removedCharacters) {
                     // Skip user-persona names — adopting them as NPCs creates
                     // a duplicate that shows in both Roster tabs and the PCP.
-                    if (typeof name === 'string' && name && !meta.knownCharacters[name] && !userChars[name]) {
-                        meta.knownCharacters[name] = { emoji: '👤' };
-                        adopted++;
-                    }
+                    if (typeof name !== 'string' || !name) continue;
+                    const lower = name.toLowerCase();
+                    if (knownLower.has(lower) || userLower.has(lower)) continue;
+                    meta.knownCharacters[name] = { emoji: '👤' };
+                    knownLower.add(lower);
+                    adopted++;
                 }
                 if (adopted) {
                     console.log(`[Dooms Tracker] Per-chat orphan-adopt: moved ${adopted} removed-characters into Workshop`);

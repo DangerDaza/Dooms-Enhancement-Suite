@@ -358,7 +358,9 @@ export function initPortraitBar() {
         if (pcpPos === 'left' && wrapperRect) {
             leftPx = Math.max(0, Math.min(wrapperRect.right + 4, viewW - menuW));
         } else if (pcpPos === 'right' && wrapperRect) {
-            leftPx = Math.max(0, wrapperRect.left - menuW - 4);
+            // Clamp on both ends — without the upper bound a wide menu next
+            // to a near-rightmost wrapper could still overflow the viewport.
+            leftPx = Math.max(0, Math.min(wrapperRect.left - menuW - 4, viewW - menuW));
         } else {
             leftPx = Math.max(0, Math.min(e.clientX, viewW - menuW));
         }
@@ -1083,7 +1085,14 @@ function removeCharacter(characterName) {
     // Roster Characters tab AND the PCP via getCharacterList, on top of
     // the existing user persona entry. That's the duplicate-Naoko bug.
     try {
-        const isUserPersona = !!extensionSettings?.userCharacters?.[characterName];
+        // Case-insensitive: AI casing of the name on the tile may differ
+        // from the userCharacters key casing. An exact-key lookup misses
+        // 'yashiro' vs 'Yashiro' and lets the duplicate seed run.
+        const lowerCharacterName = String(characterName).toLowerCase();
+        const userCharsObj = extensionSettings?.userCharacters;
+        const isUserPersona = !!(userCharsObj && Object.keys(userCharsObj).some(
+            k => k.toLowerCase() === lowerCharacterName
+        ));
         if (!isUserPersona) {
             const knownChars = getActiveKnownCharacters();
             if (!knownChars[characterName]) {

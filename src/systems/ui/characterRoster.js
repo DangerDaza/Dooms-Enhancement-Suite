@@ -18,6 +18,7 @@ import { extensionSettings } from '../../core/state.js';
 import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters } from '../../core/persistence.js';
 import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
+import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
 
@@ -903,6 +904,10 @@ function purgeCharacter(name) {
             activeBanned.push(...filtered);
         }
     }
+    // Re-emit BAN_SLOT extension prompt so the AI stops being told to
+    // exclude a name we just deleted; without this the standing ban
+    // prompt holds the stale list until CHAT_CHANGED.
+    try { refreshBanPrompt(); } catch (e) {}
     // Also drop the pin entry so the name doesn't linger as a ghost
     // at the top of the roster.
     if (Array.isArray(s.pinnedCharacters)) {
