@@ -331,12 +331,12 @@ export function initPortraitBar() {
         const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
         $menu.find('[data-action="cancel-inject"]').toggle(isPending);
 
-        // Position near the cursor, clamped to viewport. When the PCP is
-        // pinned to a side, push the menu out past the bar's edge so it
-        // never overlaps the cards visually — z-index alone isn't enough
-        // because the wrapper's parent (e.g., #sheld with transforms) can
-        // create a stacking context that traps siblings.
-        // Re-parent to <body> so the menu always escapes that context.
+        // Position near the cursor, clamped to viewport. Re-parent to
+        // <body> first so the menu escapes any ancestor stacking context
+        // the wrapper's parent might create (the side-mode wrapper has
+        // backdrop-filter: blur, which traps siblings inside it). The
+        // z-index bump on the .dooms-pb-context-menu rule keeps it above
+        // the cards even when the cursor lands inside the bar.
         if ($menu.parent()[0] !== document.body) {
             $menu.appendTo(document.body);
         }
@@ -346,24 +346,8 @@ export function initPortraitBar() {
         const menuH = $menu.outerHeight();
         const viewW = window.innerWidth;
         const viewH = window.innerHeight;
-
-        const $wrapper = $('#dooms-portrait-bar-wrapper');
-        const wrapperRect = $wrapper[0]?.getBoundingClientRect?.();
-        const pcpPos = $wrapper.hasClass('dooms-pb-position-left') ? 'left'
-            : $wrapper.hasClass('dooms-pb-position-right') ? 'right'
-            : null;
-
-        let leftPx;
-        let topPx = Math.max(0, Math.min(e.clientY, viewH - menuH));
-        if (pcpPos === 'left' && wrapperRect) {
-            leftPx = Math.max(0, Math.min(wrapperRect.right + 4, viewW - menuW));
-        } else if (pcpPos === 'right' && wrapperRect) {
-            // Clamp on both ends — without the upper bound a wide menu next
-            // to a near-rightmost wrapper could still overflow the viewport.
-            leftPx = Math.max(0, Math.min(wrapperRect.left - menuW - 4, viewW - menuW));
-        } else {
-            leftPx = Math.max(0, Math.min(e.clientX, viewW - menuW));
-        }
+        const topPx = Math.max(0, Math.min(e.clientY, viewH - menuH));
+        const leftPx = Math.max(0, Math.min(e.clientX, viewW - menuW));
         $menu.css({ top: topPx + 'px', left: leftPx + 'px' });
 
         // Register a one-time click handler to dismiss the menu when clicking elsewhere
