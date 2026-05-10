@@ -1191,6 +1191,24 @@ export function getCharacterList() {
     // Prepend the active user character (if the toggle is on and one exists)
     // so the player's persona shows up alongside NPCs in the PCP.
     const userPrefix = buildActiveUserCharacterEntry();
+    if (userPrefix) {
+        // Dedupe: a name in both userCharacters and knownCharacters/AI
+        // thoughts would otherwise render TWO tiles — one with the user
+        // flag (data-user="1", "YOU" badge) and one without. Right-click
+        // on the second tile opens Workshop in NPC mode because that
+        // tile genuinely is an NPC entry from the data's perspective.
+        // Drop the NPC-side tile when its name matches the active user
+        // persona so there's only one tile per name and the right-click
+        // route is unambiguous.
+        const userLower = userPrefix.name.toLowerCase();
+        presentChars = presentChars.filter(c => c.name.toLowerCase() !== userLower);
+        // absentChars is mutated below; do the filter on the final output
+        for (let i = absentChars.length - 1; i >= 0; i--) {
+            if (absentChars[i].name.toLowerCase() === userLower) {
+                absentChars.splice(i, 1);
+            }
+        }
+    }
     return userPrefix
         ? [userPrefix, ...presentChars, ...absentChars]
         : [...presentChars, ...absentChars];
