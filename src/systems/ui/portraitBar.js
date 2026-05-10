@@ -1214,20 +1214,26 @@ export function getCharacterList() {
     // Prepend the active user character (if the toggle is on and one exists)
     // so the player's persona shows up alongside NPCs in the PCP.
     const userPrefix = buildActiveUserCharacterEntry();
-    if (userPrefix) {
-        // Dedupe: a name in both userCharacters and knownCharacters/AI
-        // thoughts would otherwise render TWO tiles — one with the user
-        // flag (data-user="1", "YOU" badge) and one without. Right-click
-        // on the second tile opens Workshop in NPC mode because that
-        // tile genuinely is an NPC entry from the data's perspective.
-        // Drop the NPC-side tile when its name matches the active user
-        // persona so there's only one tile per name and the right-click
-        // route is unambiguous.
-        const userLower = userPrefix.name.toLowerCase();
-        presentChars = presentChars.filter(c => c.name.toLowerCase() !== userLower);
-        // absentChars is mutated below; do the filter on the final output
+    // Invariant: a name that exists as a user persona never appears as an
+    // NPC tile in the PCP. The active persona renders via userPrefix
+    // (with the YOU badge / data-user="1"); any other userCharacter name
+    // is suppressed from the NPC lists entirely so we never double-render
+    // and never let a stale NPC stub for a persona name leak into the
+    // bar. Without this, a persona name that the AI mentioned in
+    // characterThoughts (presentChars), or a leftover knownCharacters
+    // entry (absentChars), would render an NPC-flavored tile that opens
+    // the wrong Workshop mode.
+    const userPersonaNames = new Set();
+    if (extensionSettings.userCharacters && typeof extensionSettings.userCharacters === 'object') {
+        for (const name of Object.keys(extensionSettings.userCharacters)) {
+            if (typeof name === 'string' && name) userPersonaNames.add(name.toLowerCase());
+        }
+    }
+    if (userPrefix) userPersonaNames.add(userPrefix.name.toLowerCase());
+    if (userPersonaNames.size) {
+        presentChars = presentChars.filter(c => !userPersonaNames.has(c.name.toLowerCase()));
         for (let i = absentChars.length - 1; i >= 0; i--) {
-            if (absentChars[i].name.toLowerCase() === userLower) {
+            if (userPersonaNames.has(absentChars[i].name.toLowerCase())) {
                 absentChars.splice(i, 1);
             }
         }

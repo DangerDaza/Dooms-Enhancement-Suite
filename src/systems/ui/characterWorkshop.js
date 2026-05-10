@@ -313,28 +313,32 @@ export function openCharacterWorkshop(characterName, options = {}) {
     }
     $modal.removeClass('is-closing');
 
-    // Infer user vs NPC mode from the data first, falling back to the
-    // dispatch hint only when both namespaces hold the name (genuine
-    // collision) or neither does (brand-new character). The dispatch
-    // hint tells us which tile the user clicked — useful for collisions —
-    // but isn't trustworthy as the sole source: PCP can render an
-    // NPC-flavored tile for a name that's actually a user persona (e.g.,
-    // when the AI mentions the persona by name, presentChars carries no
-    // isUser flag), and historical data leaks have left persona names
-    // sitting in NPC stores. Trust the data when it's unambiguous.
-    const userExists = !!extensionSettings.userCharacters?.[characterName];
-    const npcExists = !!(
-        extensionSettings.knownCharacters?.[characterName] ||
-        extensionSettings.npcAvatars?.[characterName] ||
-        extensionSettings.characterColors?.[characterName]
-    );
+    // Mode resolution. The YOU-tagged tile is the source of truth for
+    // user intent: if the dispatch says isUser=true the user clicked the
+    // YOU badge (or the Roster Users tab), and that's authoritative —
+    // open user mode regardless of what other stores hold. The earlier
+    // version of this routine ignored the dispatch flag whenever an NPC
+    // entry existed without a matching userCharacters[name] key, which
+    // meant clicking the YOU tile for an active persona that lacked a
+    // formal Workshop entry still opened NPC mode.
+    //
+    // When the dispatch flag is false/missing (Roster Characters tab
+    // click, programmatic open), fall back to data inference so a stale
+    // NPC stub for a persona name doesn't force NPC mode either.
     let isUser;
-    if (userExists && !npcExists) {
+    if (options.isUser) {
         isUser = true;
-    } else if (npcExists && !userExists) {
-        isUser = false;
     } else {
-        isUser = !!options.isUser;
+        const userExists = !!(
+            extensionSettings.userCharacters?.[characterName] ||
+            extensionSettings.activeUserCharacter === characterName
+        );
+        const npcExists = !!(
+            extensionSettings.knownCharacters?.[characterName] ||
+            extensionSettings.npcAvatars?.[characterName] ||
+            extensionSettings.characterColors?.[characterName]
+        );
+        isUser = userExists && !npcExists;
     }
     draft = buildDraft(characterName, isUser);
 
