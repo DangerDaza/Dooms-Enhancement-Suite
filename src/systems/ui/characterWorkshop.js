@@ -313,7 +313,29 @@ export function openCharacterWorkshop(characterName, options = {}) {
     }
     $modal.removeClass('is-closing');
 
-    const isUser = !!options.isUser;
+    // Infer user vs NPC mode from the data first, falling back to the
+    // dispatch hint only when both namespaces hold the name (genuine
+    // collision) or neither does (brand-new character). The dispatch
+    // hint tells us which tile the user clicked — useful for collisions —
+    // but isn't trustworthy as the sole source: PCP can render an
+    // NPC-flavored tile for a name that's actually a user persona (e.g.,
+    // when the AI mentions the persona by name, presentChars carries no
+    // isUser flag), and historical data leaks have left persona names
+    // sitting in NPC stores. Trust the data when it's unambiguous.
+    const userExists = !!extensionSettings.userCharacters?.[characterName];
+    const npcExists = !!(
+        extensionSettings.knownCharacters?.[characterName] ||
+        extensionSettings.npcAvatars?.[characterName] ||
+        extensionSettings.characterColors?.[characterName]
+    );
+    let isUser;
+    if (userExists && !npcExists) {
+        isUser = true;
+    } else if (npcExists && !userExists) {
+        isUser = false;
+    } else {
+        isUser = !!options.isUser;
+    }
     draft = buildDraft(characterName, isUser);
 
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
