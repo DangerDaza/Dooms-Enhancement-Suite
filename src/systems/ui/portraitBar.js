@@ -194,15 +194,8 @@ export function initPortraitBar() {
                 <i class="fa-solid fa-ban"></i> Cancel Injection
             </div>
             <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item" data-action="remove">
-                <i class="fa-solid fa-trash-can"></i> Remove Portrait
-            </div>
-            <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
                 <i class="fa-solid fa-scroll"></i> Character Sheet
-            </div>
-            <div class="dooms-pb-ctx-item" data-action="open-expressions">
-                <i class="fa-solid fa-face-smile"></i> Open Expression Folder
             </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="remove-character" title="Hide from this chat's Present Characters panel — character stays in the Workshop where you can Return them later">
@@ -314,10 +307,6 @@ export function initPortraitBar() {
         $menu.data('character', characterName);
         $menu.data('isUser', isUser);
 
-        // Show or hide "Remove Portrait" based on whether one exists
-        const hasCustomAvatar = extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName];
-        $menu.find('[data-action="remove"]').toggle(!!hasCustomAvatar);
-
         // "Character Sheet" is always shown — Bunny Mo integration is
         // always on as of v1.11. Old gate retained as a no-op below in
         // case any in-flight chats need a re-render.
@@ -368,14 +357,10 @@ export function initPortraitBar() {
         hideContextMenu();
         if (!characterName) return;
 
-        if (action === 'remove') {
-            removePortrait(characterName);
-        } else if (action === 'remove-character') {
+        if (action === 'remove-character') {
             removeCharacter(characterName);
         } else if (action === 'character-sheet') {
             openCharacterSheet(characterName);
-        } else if (action === 'open-expressions') {
-            openExpressionFolder(characterName);
         } else if (action === 'open-workshop') {
             window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
         } else if (action === 'cancel-inject') {
