@@ -132,7 +132,7 @@ let ejectStartsToSkip = 0;
  * banished. Called whenever bannedCharacters changes and once at init so
  * the slot is repopulated on extension load.
  */
-function refreshBanPrompt() {
+export function refreshBanPrompt() {
     let banned = [];
     try { banned = getActiveBannedCharacters() || []; } catch (e) {}
     if (!Array.isArray(banned) || banned.length === 0) {
@@ -329,15 +329,25 @@ export function openCharacterWorkshop(characterName, options = {}) {
     if (options.isUser) {
         isUser = true;
     } else {
-        const userExists = !!(
-            extensionSettings.userCharacters?.[characterName] ||
-            extensionSettings.activeUserCharacter === characterName
-        );
-        const npcExists = !!(
-            extensionSettings.knownCharacters?.[characterName] ||
-            extensionSettings.npcAvatars?.[characterName] ||
-            extensionSettings.characterColors?.[characterName]
-        );
+        // Case-insensitive lookup so AI-cased names (e.g., "yashiro" coming
+        // off a PCP tile) match the canonical persona key ("Yashiro"). And
+        // use active getters for the NPC stores so per-chat tracking sees
+        // chat_metadata.dooms_tracker.knownCharacters / characterColors —
+        // the global properties are stale when perChatCharacterTracking is
+        // on, which would mislabel a real per-chat NPC as a user persona.
+        const lowerName = String(characterName).toLowerCase();
+        const userChars = extensionSettings.userCharacters || {};
+        const activeUser = extensionSettings.activeUserCharacter;
+        const userExists = Object.keys(userChars).some(k => k.toLowerCase() === lowerName)
+            || (typeof activeUser === 'string' && activeUser.toLowerCase() === lowerName);
+        let activeKnown = {};
+        let activeColors = {};
+        try { activeKnown = getActiveKnownCharacters() || {}; } catch (e) {}
+        try { activeColors = getActiveCharacterColors() || {}; } catch (e) {}
+        const npcAvatars = extensionSettings.npcAvatars || {};
+        const npcExists = Object.keys(activeKnown).some(k => k.toLowerCase() === lowerName)
+            || Object.keys(activeColors).some(k => k.toLowerCase() === lowerName)
+            || Object.keys(npcAvatars).some(k => k.toLowerCase() === lowerName);
         isUser = userExists && !npcExists;
     }
     draft = buildDraft(characterName, isUser);
@@ -1756,6 +1766,10 @@ function deleteCharacter(name) {
     if (extensionSettings.perChatCharacterTracking) {
         try { saveChatData(); } catch (e) {}
     }
+    // Re-emit the standing ban-list extension prompt so the AI stops
+    // being told to exclude a name we just deleted. Without this the
+    // BAN_SLOT prompt holds the stale list until CHAT_CHANGED fires.
+    try { refreshBanPrompt(); } catch (e) {}
     try {
         clearPortraitCache();
         updatePortraitBar();
