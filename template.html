@@ -444,6 +444,9 @@
                             <p>You do <strong>not</strong> need SillyTavern's separate <em>Expressions</em> extension.
                                 With <strong>Per-Character Expressions</strong> on, DES classifies each character's mood
                                 every turn and swaps the matching sprite onto their portrait card.</p>
+                            <p>If you choose <strong>Auto-generated portraits</strong> as the portrait source, DES skips
+                                sprite classification and instead asks the model for a private portrait prompt, then
+                                sends it through SillyTavern's native <code>/sd</code> image generation.</p>
                             <h5>How to add sprites for a character</h5>
                             <ol>
                                 <li>Open the character in <strong>Character Workshop</strong> &rarr;
@@ -469,8 +472,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Character Expressions</span>
-                            <span class="rpg-setting-hint">Classify emotions per character and display expression
-                                sprites on portrait cards</span>
+                            <span class="rpg-setting-hint">Enable dynamic portrait updates, using either expression
+                                sprites or auto-generated portraits</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-sync-expressions" />
@@ -478,6 +481,30 @@
                         </label>
                     </div>
                     <div id="rpg-expression-options" style="display:none;">
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Portrait Source</span>
+                                <span class="rpg-setting-hint">Use expression sprites or generate portraits through SillyTavern's native /sd command</span>
+                            </div>
+                            <select id="rpg-portrait-enhancement-mode" class="rpg-accordion-select">
+                                <option value="expressions">Expression sprites</option>
+                                <option value="autoPortraits">Auto-generated portraits</option>
+                            </select>
+                        </div>
+                        <div id="rpg-auto-portrait-options" style="display:none;">
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Auto Portrait Mode</span>
+                                    <span class="rpg-setting-hint">When DES should generate or refresh present-character portraits</span>
+                                </div>
+                                <select id="rpg-auto-portrait-mode" class="rpg-accordion-select">
+                                    <option value="only_missing">Only missing</option>
+                                    <option value="state_changed">State changed</option>
+                                    <option value="every_reply">Every reply</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="rpg-expression-sprite-options">
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Classifier API</span>
@@ -498,6 +525,7 @@
                                 <input type="checkbox" id="rpg-expression-batch-mode" />
                                 <span class="rpg-toggle-slider"></span>
                             </label>
+                        </div>
                         </div>
                     </div>
                     <div class="rpg-setting-row">
@@ -2079,6 +2107,24 @@
                 </small>
                 <textarea id="rpg-prompt-tracker-continuation" class="rpg-prompt-textarea" rows="4"></textarea>
                 <button class="menu_button rpg-restore-prompt-btn" data-prompt="trackerContinuation"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Auto Portrait Prompt -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-auto-portrait"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-image-portrait"></i> Auto Portrait Prompt
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Instructions used when DES asks the model to write a portrait prompt for a present character before
+                    sending it to SillyTavern's native /sd image generation. Supports {characterName}, {characterJson},
+                    {sceneJson}, and {lastMessage}.
+                </small>
+                <textarea id="rpg-prompt-auto-portrait" class="rpg-prompt-textarea" rows="7"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="autoPortrait"
                     style="margin-top: 8px;">
                     <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
                 </button>

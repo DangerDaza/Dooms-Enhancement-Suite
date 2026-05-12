@@ -4,7 +4,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { DEFAULT_HTML_PROMPT, DEFAULT_DIALOGUE_COLORING_PROMPT, DEFAULT_NARRATOR_PROMPT, DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT } from '../generation/promptBuilder.js';
+import { DEFAULT_HTML_PROMPT, DEFAULT_DIALOGUE_COLORING_PROMPT, DEFAULT_NARRATOR_PROMPT, DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT, DEFAULT_AUTO_PORTRAIT_PROMPT } from '../generation/promptBuilder.js';
 import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
 let $editorModal = null;
 let tempPrompts = null; // Temporary prompts for cancel functionality
@@ -73,6 +73,7 @@ const DEFAULT_PROMPTS = {
     trackerInstructions: 'Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that {userName} perceives about the current scene and the present characters. For example: "Location" becomes Forest Clearing, "Mood Emoji" becomes "\u{1F60A}". DO NOT include {userName} in the characters section, only NPCs. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user\'s actions, the passage of time, and logical consequences (0% if the time progressed only by a few minutes, 1-5% normally, and above 5% only if a major time-skip/event occurs).',
     trackerContinuation: 'After updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting the protagonist\'s performance, low hygiene influencing their social interactions, environmental factors shaping the scene, a character\'s emotional state coloring their responses, and so on. Remember, all placeholders (e.g., "Location", "Mood Emoji") MUST be replaced with actual content.',
     characterThoughts: "Internal Monologue (in first person from character's POV, up to three sentences long)",
+    autoPortrait: DEFAULT_AUTO_PORTRAIT_PROMPT,
     get weather() { return getDefaultWeatherPrompt(); },
 };
 /**
@@ -137,6 +138,7 @@ function openPromptsEditor() {
         trackerContinuation: extensionSettings.customTrackerContinuationPrompt || '',
         weather: extensionSettings.customWeatherPrompt || '',
         characterThoughts: extensionSettings.customCharacterThoughtsPrompt || '',
+        autoPortrait: extensionSettings.customAutoPortraitPrompt || '',
     };
     // Load current values or defaults
     $('#rpg-prompt-html').val(extensionSettings.customHtmlPrompt || DEFAULT_PROMPTS.html);
@@ -150,6 +152,7 @@ function openPromptsEditor() {
     $('#rpg-prompt-tracker-continuation').val(extensionSettings.customTrackerContinuationPrompt || DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(extensionSettings.customWeatherPrompt || DEFAULT_PROMPTS.weather);
     $('#rpg-prompt-character-thoughts').val(extensionSettings.customCharacterThoughtsPrompt || DEFAULT_PROMPTS.characterThoughts);
+    $('#rpg-prompt-auto-portrait').val(extensionSettings.customAutoPortraitPrompt || DEFAULT_PROMPTS.autoPortrait);
     // Load per-prompt injection depth & role settings
     const pInjection = extensionSettings.promptInjection || {};
     const defaultDepths = { html: 0, dialogueColoring: 0, trackerInstructions: 0, contextInstructions: 1 };
@@ -210,6 +213,7 @@ function savePrompts() {
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
     extensionSettings.customCharacterThoughtsPrompt = $('#rpg-prompt-character-thoughts').val().trim();
+    extensionSettings.customAutoPortraitPrompt = $('#rpg-prompt-auto-portrait').val().trim();
     // Save per-prompt injection depth & role settings
     if (!extensionSettings.promptInjection) extensionSettings.promptInjection = {};
     for (const key of ['html', 'dialogueColoring', 'trackerInstructions', 'contextInstructions']) {
@@ -264,6 +268,9 @@ function restorePromptToDefault(promptType) {
         case 'characterThoughts':
             extensionSettings.customCharacterThoughtsPrompt = '';
             break;
+        case 'autoPortrait':
+            extensionSettings.customAutoPortraitPrompt = '';
+            break;
     }
     saveSettings();
 }
@@ -283,6 +290,7 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-tracker-continuation').val(DEFAULT_PROMPTS.trackerContinuation);
     $('#rpg-prompt-weather').val(DEFAULT_PROMPTS.weather);
     $('#rpg-prompt-character-thoughts').val(DEFAULT_PROMPTS.characterThoughts);
+    $('#rpg-prompt-auto-portrait').val(DEFAULT_PROMPTS.autoPortrait);
     // Reset per-prompt injection depth & role to defaults
     const defaultDepths = { html: 0, dialogueColoring: 0, trackerInstructions: 0, contextInstructions: 1 };
     const defaultRoles = { html: '', dialogueColoring: '', trackerInstructions: 'user', contextInstructions: '' };
@@ -309,6 +317,7 @@ function restoreAllToDefaults() {
     extensionSettings.customTrackerContinuationPrompt = '';
     extensionSettings.customWeatherPrompt = '';
     extensionSettings.customCharacterThoughtsPrompt = '';
+    extensionSettings.customAutoPortraitPrompt = '';
     saveSettings();
 }
 /**

@@ -29,7 +29,7 @@ import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
-import { generateAvatarsForCharacters } from '../features/avatarGenerator.js';
+import { generateAvatarsForCharacters, generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
 // Store the original preset name to restore after tracker generation
 let originalPresetName = null;
 /**
@@ -370,9 +370,18 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             updateChatThoughts();
             // Save to chat metadata
             saveChatData();
+            if (isAutoPortraitModeEnabled()) {
+                const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
+                if (charactersForPortraits.length > 0) {
+                    await generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
+                        renderThoughts();
+                    });
+                    renderThoughts();
+                }
+            }
             // Generate avatars if auto-generate is enabled (runs within this workflow)
             // This uses the Doom's Character Tracker Trackers preset and keeps the button spinning
-            if (extensionSettings.autoGenerateAvatars) {
+            if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
                 const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
                 if (charactersNeedingAvatars.length > 0) {
                     // Generate avatars - this awaits completion
@@ -441,7 +450,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
  * @param {string} characterThoughtsData - Raw character thoughts data
  * @returns {Array<string>} Array of character names found
  */
-function parseCharactersFromThoughts(characterThoughtsData) {
+export function parseCharacterEntriesFromThoughts(characterThoughtsData) {
     if (!characterThoughtsData) return [];
     // Try parsing as JSON first (current format)
     try {
@@ -451,10 +460,8 @@ function parseCharactersFromThoughts(characterThoughtsData) {
         // Handle both {characters: [...]} and direct array formats
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
-            // Extract names from JSON character objects
             return charactersArray
-                .map(char => char.name)
-                .filter(name => name && name.toLowerCase() !== 'unavailable');
+                .filter(char => char && char.name && char.name.toLowerCase() !== 'unavailable');
         }
     } catch (e) {
         // Not JSON, fall back to text parsing
@@ -466,9 +473,13 @@ function parseCharactersFromThoughts(characterThoughtsData) {
         if (line.trim().startsWith('- ')) {
             const name = line.trim().substring(2).trim();
             if (name && name.toLowerCase() !== 'unavailable') {
-                characters.push(name);
+                characters.push({ name });
             }
         }
     }
     return characters;
+}
+
+function parseCharactersFromThoughts(characterThoughtsData) {
+    return parseCharacterEntriesFromThoughts(characterThoughtsData).map(char => char.name).filter(Boolean);
 }

@@ -157,6 +157,15 @@ console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body 
 function updateDynamicLabels() {
     // Currently no dynamic labels to update
 }
+
+function updatePortraitEnhancementSettingsVisibility() {
+    const enabled = extensionSettings.syncExpressionsToPresentCharacters === true;
+    const source = extensionSettings.portraitEnhancementMode || 'expressions';
+    $('#rpg-expression-options').toggle(enabled);
+    $('#rpg-expression-sprite-options').toggle(enabled && source === 'expressions');
+    $('#rpg-auto-portrait-options').toggle(enabled && source === 'autoPortraits');
+    $('#rpg-expression-batch-row').toggle(enabled && source === 'expressions' && (extensionSettings.expressionClassifierApi || 'local') === 'llm');
+}
 /**
  * Adds the extension settings to the Extensions tab.
  */
@@ -188,7 +197,7 @@ async function addExtensionSettings() {
             loadChatData(); // Load chat data for current chat
             updateChatThoughts(); // Create thought bubbles if data exists
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
-            if (extensionSettings.syncExpressionsToPresentCharacters) {
+            if (extensionSettings.syncExpressionsToPresentCharacters && (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions') {
                 initExpressionSync();
                 syncExpressionFromLatestMessage();
             }
@@ -706,13 +715,24 @@ async function initUI() {
     $('#rpg-pb-sync-expressions').on('change', function () {
         extensionSettings.syncExpressionsToPresentCharacters = $(this).prop('checked');
         saveSettings();
-        onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters);
-        $('#rpg-expression-options').toggle($(this).prop('checked'));
+        onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters && (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions');
+        updatePortraitEnhancementSettingsVisibility();
+    });
+    $('#rpg-portrait-enhancement-mode').on('change', function () {
+        extensionSettings.portraitEnhancementMode = String($(this).val() || 'expressions');
+        saveSettings();
+        onExpressionSyncSettingChanged(extensionSettings.syncExpressionsToPresentCharacters && extensionSettings.portraitEnhancementMode === 'expressions');
+        updatePortraitEnhancementSettingsVisibility();
+        try { updatePortraitBar(); } catch (e) { console.warn('[Dooms Tracker] updatePortraitBar() after portrait source change failed:', e); }
+    });
+    $('#rpg-auto-portrait-mode').on('change', function () {
+        extensionSettings.autoPortraitMode = String($(this).val() || 'only_missing');
+        saveSettings();
     });
     $('#rpg-expression-classifier-api').on('change', function () {
         extensionSettings.expressionClassifierApi = $(this).val();
         saveSettings();
-        $('#rpg-expression-batch-row').toggle($(this).val() === 'llm');
+        updatePortraitEnhancementSettingsVisibility();
     });
     $('#rpg-expression-batch-mode').on('change', function () {
         extensionSettings.expressionBatchMode = $(this).prop('checked');
@@ -1678,10 +1698,11 @@ async function initUI() {
     $('#rpg-pb-show-arrows').prop('checked', pb.showScrollArrows !== false);
     $('#rpg-pb-auto-import').prop('checked', extensionSettings.portraitAutoImport !== false);
     $('#rpg-pb-sync-expressions').prop('checked', extensionSettings.syncExpressionsToPresentCharacters === true);
-    $('#rpg-expression-options').toggle(extensionSettings.syncExpressionsToPresentCharacters === true);
+    $('#rpg-portrait-enhancement-mode').val(extensionSettings.portraitEnhancementMode || 'expressions');
+    $('#rpg-auto-portrait-mode').val(extensionSettings.autoPortraitMode || 'only_missing');
     $('#rpg-expression-classifier-api').val(extensionSettings.expressionClassifierApi || 'local');
     $('#rpg-expression-batch-mode').prop('checked', extensionSettings.expressionBatchMode !== false);
-    $('#rpg-expression-batch-row').toggle((extensionSettings.expressionClassifierApi || 'local') === 'llm');
+    updatePortraitEnhancementSettingsVisibility();
     $('#rpg-pb-hide-default-expressions').prop('checked', extensionSettings.hideDefaultExpressionDisplay === true);
     $('#rpg-pb-show-expression-in-tooltip').prop('checked', extensionSettings.showExpressionInTooltip === true);
     // Hide the 'Open Character Roster' settings button when PCP is off —
