@@ -2109,7 +2109,9 @@ function unmarkCharacterPresentNow(name) {
 /**
  * One-shot: when the user next sends a message, stamp the character's
  * portrait onto that message's `extra.image` so SillyTavern's Generate
- * includes the image in the outgoing request (vision-capable models).
+ * includes the image in the outgoing request (vision-capable models),
+ * AND insert an inline <img> into the message's rendered DOM so the
+ * portrait shows in chat in the same spot ST puts user-attached images.
  * Falls back silently if anything in the chain is missing.
  */
 function armPortraitAttach(name, dataUrl) {
@@ -2119,6 +2121,33 @@ function armPortraitAttach(name, dataUrl) {
         consumed = true;
         try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
         try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+    };
+    // Insert the portrait into the user's just-sent message DOM, matching
+    // ST's `img.img_extra` markup so existing CSS lays it out exactly like
+    // an attached image. The `dooms-injected-portrait` marker class makes
+    // this idempotent — if ST's own renderer already painted the image
+    // (or this runs twice from the immediate + deferred pair below), the
+    // second pass is a no-op.
+    const stampImageToDom = () => {
+        try {
+            const ctx = (typeof getContext === 'function') ? getContext() : null;
+            const chat = ctx?.chat;
+            if (!Array.isArray(chat) || chat.length === 0) return;
+            const lastMesId = chat.length - 1;
+            const mesEl = document.querySelector(`#chat .mes[mesid="${lastMesId}"]`)
+                       || document.querySelector('#chat .mes.last_mes[is_user="true"]');
+            const textEl = mesEl?.querySelector('.mes_text');
+            if (!textEl) return;
+            if (textEl.querySelector('img.img_extra')) return;
+            const img = document.createElement('img');
+            img.className = 'img_extra dooms-injected-portrait';
+            img.src = dataUrl;
+            img.alt = name;
+            img.title = name;
+            textEl.appendChild(img);
+        } catch (e) {
+            console.warn('[Dooms Tracker] Workshop: portrait DOM insert failed', e);
+        }
     };
     const onSent = () => {
         if (consumed) return;
@@ -2138,6 +2167,11 @@ function armPortraitAttach(name, dataUrl) {
         } catch (e) {
             console.warn('[Dooms Tracker] Workshop: portrait attach failed', e);
         }
+        // Try immediately (in case MESSAGE_SENT fires after addOneMessage),
+        // and again on the next tick (in case the render is queued behind
+        // this handler). The marker class de-duplicates either way.
+        stampImageToDom();
+        setTimeout(stampImageToDom, 50);
     };
     try {
         eventSource.on(event_types.MESSAGE_SENT, onSent);
