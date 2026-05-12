@@ -407,14 +407,12 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         }
     }
 
-    // Strategy 6: Only one character is in the scene — it must be them
-    // (falls through to null if multiple characters or none)
-    if (nameLookup.size === 1) {
-        const [, name] = nameLookup.entries().next().value;
-        return name;
-    }
-
-    return null; // Unknown speaker
+    // No reliable signal — leave the bubble unattributed rather than guessing.
+    // Previously a "only one character in scene → must be them" fallback fired
+    // here, but that routinely misattributed an unknown second speaker's
+    // colour-tagged dialogue to whoever happened to be tracked (e.g. Kell's
+    // lines being labelled as Morgana when only Morgana was in the roster).
+    return null;
 }
 
 /**
