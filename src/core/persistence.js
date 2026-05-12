@@ -438,6 +438,25 @@ export function loadSettings() {
                 scheduleAvatarMigration(saveSettings);
             }
 
+            // Auto Portraits were added after the expression system. They are
+            // intentionally opt-in and default back to the existing sprite flow.
+            if (extensionSettings.portraitEnhancementMode === undefined) {
+                extensionSettings.portraitEnhancementMode = 'expressions';
+                settingsChanged = true;
+            }
+            if (extensionSettings.autoPortraitMode === undefined) {
+                extensionSettings.autoPortraitMode = 'only_missing';
+                settingsChanged = true;
+            }
+            if (!extensionSettings.generatedPortraits || typeof extensionSettings.generatedPortraits !== 'object') {
+                extensionSettings.generatedPortraits = {};
+                settingsChanged = true;
+            }
+            if (extensionSettings.customAutoPortraitPrompt === undefined) {
+                extensionSettings.customAutoPortraitPrompt = '';
+                settingsChanged = true;
+            }
+
             // Save migrated settings
             if (settingsChanged) {
                 saveSettings();

@@ -174,6 +174,8 @@ function buildDiagnosticHeader() {
         lines.push(`autoUpdate: ${s.autoUpdate}`);
         lines.push(`updateDepth: ${s.updateDepth}`);
         lines.push(`syncExpressionsToPresentCharacters: ${s.syncExpressionsToPresentCharacters}`);
+        lines.push(`portraitEnhancementMode: ${s.portraitEnhancementMode || 'expressions'}`);
+        lines.push(`autoPortraitMode: ${s.autoPortraitMode || 'only_missing'}`);
         lines.push(`hideDefaultExpressionDisplay: ${s.hideDefaultExpressionDisplay}`);
         lines.push(`enableHtmlPrompt: ${s.enableHtmlPrompt}`);
         lines.push(`enableDialogueColoring: ${s.enableDialogueColoring}`);
