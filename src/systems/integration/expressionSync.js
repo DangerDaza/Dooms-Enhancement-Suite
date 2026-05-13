@@ -42,7 +42,7 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 /** Hidden style element for hiding ST's native expression display */
 let hiddenExpressionStyleElement = null;
 
-function isExpressionSpritesModeEnabled() {
+export function isExpressionSpritesModeEnabled() {
     return Boolean(
         extensionSettings.enabled &&
         extensionSettings.syncExpressionsToPresentCharacters &&

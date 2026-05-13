@@ -373,10 +373,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             if (isAutoPortraitModeEnabled()) {
                 const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
                 if (charactersForPortraits.length > 0) {
-                    await generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
+                    generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
                         renderThoughts();
-                    });
-                    renderThoughts();
+                    })
+                        .then(() => renderThoughts())
+                        .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
                 }
             }
             // Generate avatars if auto-generate is enabled (runs within this workflow)

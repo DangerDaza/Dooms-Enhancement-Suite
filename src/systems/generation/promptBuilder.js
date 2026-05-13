@@ -880,7 +880,7 @@ Rules:
 - Reflect the current tracker state: appearance, demeanor, equipment, effects, injuries, transformations, clothing state, body state, and scene context.
 - Default to one named character in the image.
 - Do not describe art style, medium, renderer, model quality, resolution, or "masterpiece" style quality tags.
-- Do not include Carter or the user as a visible character. If interaction with the viewer is truly necessary, frame it as male POV or viewer perspective without naming the user.
+- Do not include {userName} or the user as a visible character. If interaction with the viewer is truly necessary, frame it as viewer perspective without naming the user.
 - Output only the final image prompt.`;
 
 function stringifyForPrompt(value) {
@@ -896,9 +896,11 @@ function stringifyForPrompt(value) {
 function applyAutoPortraitTemplate(template, characterName, characterData, sceneData, messageText) {
     const characterJson = stringifyForPrompt(characterData);
     const sceneJson = stringifyForPrompt(sceneData);
+    const userName = getContext().name1 || 'the user';
     return String(template || DEFAULT_AUTO_PORTRAIT_PROMPT)
         .replace(/\{characterName\}/g, characterName)
         .replace(/\{name\}/g, characterName)
+        .replace(/\{userName\}/g, userName)
         .replace(/\{characterJson\}/g, characterJson)
         .replace(/\{character\}/g, characterJson)
         .replace(/\{sceneJson\}/g, sceneJson)

@@ -191,7 +191,7 @@ function normalizeCharacterEntries(characterEntries) {
         .filter(entry => entry && entry.name && String(entry.name).toLowerCase() !== 'unavailable');
 }
 
-function shouldGenerateAutoPortrait(characterData) {
+function reserveAutoPortraitGeneration(characterData) {
     const name = characterData.name;
     const mode = extensionSettings.autoPortraitMode || 'only_missing';
     const existing = extensionSettings.npcAvatars?.[name];
@@ -199,21 +199,27 @@ function shouldGenerateAutoPortrait(characterData) {
     const stateHash = buildPortraitStateHash(characterData);
 
     if (pendingGenerations.has(name)) {
-        return { eligible: false, stateHash };
+        return { reserved: false, stateHash };
     }
     if (hasProtectedAvatar(name)) {
-        return { eligible: false, stateHash };
+        return { reserved: false, stateHash };
     }
+
+    let eligible = false;
     if (mode === 'only_missing') {
-        return { eligible: !existing, stateHash };
+        eligible = !existing;
+    } else if (mode === 'state_changed') {
+        eligible = !existing || !meta || meta.stateHash !== stateHash;
+    } else if (mode === 'every_reply') {
+        eligible = true;
     }
-    if (mode === 'state_changed') {
-        return { eligible: !existing || !meta || meta.stateHash !== stateHash, stateHash };
+
+    if (!eligible) {
+        return { reserved: false, stateHash };
     }
-    if (mode === 'every_reply') {
-        return { eligible: true, stateHash };
-    }
-    return { eligible: false, stateHash };
+
+    pendingGenerations.add(name);
+    return { reserved: true, stateHash };
 }
 
 export async function generateAutoPortraitsForCharacters(characterEntries, messageText = '', onStarted = null) {
@@ -223,16 +229,13 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
     const entries = normalizeCharacterEntries(characterEntries);
     const queue = [];
     for (const characterData of entries) {
-        const { eligible, stateHash } = shouldGenerateAutoPortrait(characterData);
-        if (eligible) {
+        const { reserved, stateHash } = reserveAutoPortraitGeneration(characterData);
+        if (reserved) {
             queue.push({ characterData, stateHash });
         }
     }
     if (queue.length === 0) {
         return;
-    }
-    for (const { characterData } of queue) {
-        pendingGenerations.add(characterData.name);
     }
     if (onStarted) {
         try {
@@ -241,25 +244,19 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
             console.error('[DES Auto Portraits] Error in onStarted callback:', e);
         }
     }
-    try {
-        for (let i = 0; i < queue.length; i++) {
-            const { characterData, stateHash } = queue[i];
-            const name = characterData.name;
-            try {
-                const prompt = await generateAutoPortraitPrompt(characterData, messageText);
-                await generateSingleAutoPortrait(name, prompt, stateHash);
-            } catch (error) {
-                console.error(`[DES Auto Portraits] Failed for ${name}:`, error);
-            } finally {
-                pendingGenerations.delete(name);
-            }
-            if (i < queue.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
+    for (let i = 0; i < queue.length; i++) {
+        const { characterData, stateHash } = queue[i];
+        const name = characterData.name;
+        try {
+            const prompt = await generateAutoPortraitPrompt(characterData, messageText);
+            await generateSingleAutoPortrait(name, prompt, stateHash);
+        } catch (error) {
+            console.error(`[DES Auto Portraits] Failed for ${name}:`, error);
+        } finally {
+            pendingGenerations.delete(name);
         }
-    } finally {
-        for (const { characterData } of queue) {
-            pendingGenerations.delete(characterData.name);
+        if (i < queue.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
 }
@@ -328,11 +325,11 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
         if (!extensionSettings.npcAvatars) {
             extensionSettings.npcAvatars = {};
         }
-        if (previous && getGeneratedPortraitMeta(characterName)) {
-            try { deletePortraitFromDiskByValue(previous); } catch (e) {}
-        }
+        const previousMeta = getGeneratedPortraitMeta(characterName);
         if (isDataUrl(imageUrl)) {
             imageUrl = await persistPortrait(previous, characterName, imageUrl);
+        } else if (previous && previousMeta) {
+            try { await deletePortraitFromDiskByValue(previous); } catch (e) {}
         }
         extensionSettings.npcAvatars[characterName] = imageUrl;
         setGeneratedPortraitMeta(characterName, prompt, stateHash, imageUrl);
