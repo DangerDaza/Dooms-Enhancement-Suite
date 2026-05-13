@@ -36,7 +36,7 @@ import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { enforceNameBan } from '../features/nameBan.js';
 // Expression classification
-import { classifyAllCharacterExpressions, classifyActiveUserExpression } from './expressionSync.js';
+import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
@@ -213,8 +213,7 @@ export async function onMessageReceived(data) {
                 updateWeatherEffect();
             }
             // ── Expression classification: classify per-character after portrait bar renders ──
-            const expressionSpritesEnabled = extensionSettings.syncExpressionsToPresentCharacters &&
-                (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions';
+            const expressionSpritesEnabled = isExpressionSpritesModeEnabled();
             if (expressionSpritesEnabled && parsedData.characterThoughts && isAwaitingNewMessage) {
                 classifyAllCharacterExpressions(lastMessage.mes)
                     .then(() => updatePortraitBar())
@@ -296,8 +295,7 @@ export async function onMessageReceived(data) {
                 updateWeatherEffect();
                 updateChatThoughts();
                 // ── Expression classification (separate/external mode) ──
-                const expressionSpritesEnabled = extensionSettings.syncExpressionsToPresentCharacters &&
-                    (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions';
+                const expressionSpritesEnabled = isExpressionSpritesModeEnabled();
                 if (expressionSpritesEnabled) {
                     const sepMsg = chat[chat.length - 1];
                     if (sepMsg && !sepMsg.is_user && !isSyntheticTrackerMessage(sepMsg)) {
