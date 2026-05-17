@@ -147,6 +147,9 @@ import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPend
 // System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
+// Context Inspector — see what DES is injecting into the prompt
+import { initInspector } from './src/systems/generation/inspector.js';
+import { initInspectorModal } from './src/systems/ui/inspectorModal.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -164,6 +167,11 @@ async function addExtensionSettings() {
     // Initialize log captures early so they catch all init messages
     try { initSystemLog(); } catch (e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
+    // Context Inspector — must register its GENERATION_STARTED handler before
+    // any other DES generation listener so per-gen records bracket every
+    // slot write that follows.
+    try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
+    try { initInspectorModal(); } catch (e) { console.error('[Dooms Tracker] initInspectorModal() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
     // Load the HTML template for the settings
     const settingsHtml = await renderExtensionTemplateAsync(extensionName, 'settings');

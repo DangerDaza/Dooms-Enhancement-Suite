@@ -3,7 +3,8 @@
  * Handles injection of RPG tracker prompts into the generation context
  */
 import { getContext } from '../../../../../../extensions.js';
-import { extension_prompt_types, extension_prompt_roles, setExtensionPrompt, eventSource, event_types } from '../../../../../../../script.js';
+import { extension_prompt_types, extension_prompt_roles, eventSource, event_types } from '../../../../../../../script.js';
+import { desSetExtensionPrompt as setExtensionPrompt, recordEventMutation } from './inspector.js';
 import {
     extensionSettings,
     committedTrackerData,
@@ -362,10 +363,14 @@ function injectContextIntoTextPrompt(prompt) {
         if (!position) {
             // Message not found in prompt (might be truncated or not included)
             console.debug(`[Dooms Tracker] Could not find message ${msgIdx} in prompt for context injection`);
+            recordEventMutation('GENERATE_AFTER_COMBINE_PROMPTS', msgIdx, 'fallback injection skipped (message not found in assembled prompt)', message.mes || '', '');
             continue;
         }
         // Insert the context after the message content
+        const before = modifiedPrompt.slice(Math.max(0, position.start - 60), position.end);
         modifiedPrompt = modifiedPrompt.slice(0, position.end) + ctxContent + modifiedPrompt.slice(position.end);
+        const after = modifiedPrompt.slice(Math.max(0, position.start - 60), position.end + ctxContent.length);
+        recordEventMutation('GENERATE_AFTER_COMBINE_PROMPTS', msgIdx, 'appended historical tracker context (string fallback)', before, after);
         injectedCount++;
     }
     if (injectedCount > 0) {
@@ -403,7 +408,9 @@ function injectContextIntoChatPrompt(chatMessages) {
             }
             // Try full content match
             if (promptMsg.content.includes(messageContent)) {
+                const before = promptMsg.content;
                 promptMsg.content = promptMsg.content + ctxContent;
+                recordEventMutation('CHAT_COMPLETION_PROMPT_READY', msgIdx, 'appended historical tracker context to message body', before, promptMsg.content);
                 injectedCount++;
                 found = true;
                 break;
@@ -416,7 +423,9 @@ function injectContextIntoChatPrompt(chatMessages) {
                 }
                 const searchContent = messageContent.slice(-len);
                 if (promptMsg.content.includes(searchContent)) {
+                    const before = promptMsg.content;
                     promptMsg.content = promptMsg.content + ctxContent;
+                    recordEventMutation('CHAT_COMPLETION_PROMPT_READY', msgIdx, `appended historical tracker context (matched on last ${len} chars of message)`, before, promptMsg.content);
                     injectedCount++;
                     found = true;
                     break;
@@ -498,7 +507,9 @@ function injectContextIntoFinalMesSend(finalMesSend) {
             continue;
         }
         // Append context to this message
+        const before = mesSendObj.message;
         mesSendObj.message = mesSendObj.message + ctxContent;
+        recordEventMutation('GENERATE_BEFORE_COMBINE_PROMPTS', chatIdx, `appended historical tracker context to finalMesSend[${targetMesSendIdx}]`, before, mesSendObj.message);
         injectedCount++;
         console.debug(`[Dooms Tracker] Injected context for chat[${chatIdx}] into finalMesSend[${targetMesSendIdx}]`);
     }
@@ -573,8 +584,14 @@ function onGenerateAfterCombinePrompts(eventData) {
         didInjectHistory = true;
     }
     // Always fix newlines around context tags (whether we just injected or not)
-    eventData.prompt = eventData.prompt.replace(/<context>/g, '\n<context>');
-    eventData.prompt = eventData.prompt.replace(/<\/context>/g, '</context>\n');
+    if (eventData.prompt.includes('<context>') || eventData.prompt.includes('</context>')) {
+        const before = eventData.prompt;
+        eventData.prompt = eventData.prompt.replace(/<context>/g, '\n<context>');
+        eventData.prompt = eventData.prompt.replace(/<\/context>/g, '</context>\n');
+        if (before !== eventData.prompt) {
+            recordEventMutation('GENERATE_AFTER_COMBINE_PROMPTS', null, '<context>/</context> newline fixup on assembled prompt', before, eventData.prompt);
+        }
+    }
 }
 /**
  * Event handler for CHAT_COMPLETION_PROMPT_READY.
@@ -610,10 +627,16 @@ function onChatCompletionPromptReady(eventData) {
         // (e.g., prewarm extensions). It will be cleared on GENERATION_ENDED.
     }
     // Fix newlines around context tags for all messages
-    for (const message of eventData.chat) {
-        if (message.content && typeof message.content === 'string') {
+    for (let i = 0; i < eventData.chat.length; i++) {
+        const message = eventData.chat[i];
+        if (message.content && typeof message.content === 'string'
+            && (message.content.includes('<context>') || message.content.includes('</context>'))) {
+            const before = message.content;
             message.content = message.content.replace(/<context>/g, '\n<context>');
             message.content = message.content.replace(/<\/context>/g, '</context>\n');
+            if (before !== message.content) {
+                recordEventMutation('CHAT_COMPLETION_PROMPT_READY', i, `<context>/</context> newline fixup on chat[${i}] (role=${message.role || 'unknown'})`, before, message.content);
+            }
         }
     }
 }

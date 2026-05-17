@@ -1619,9 +1619,13 @@
                 <button id="rpg-open-notification-log" class="rpg-accordion-action-btn" type="button">
                     <i class="fa-solid fa-bell"></i> Notification Log
                 </button>
+                <button id="rpg-open-inspector" class="rpg-accordion-action-btn" type="button"
+                    title="See verbatim what DES is queueing into the model's context, and a per-generation history of every injection, edit, and clear.">
+                    <i class="fa-solid fa-magnifying-glass"></i> Context Inspector
+                </button>
             </div>
             <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for
-                troubleshooting.</p>
+                troubleshooting. <strong>Context Inspector</strong> shows exactly what DES is injecting into the model's context.</p>
 
             <!-- Update -->
             <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -1698,6 +1702,43 @@
             </button>
             <button id="rpg-notification-log-clear" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
                 <i class="fa-solid fa-trash"></i> Clear
+            </button>
+        </footer>
+    </div>
+</div>
+
+<!-- Context Inspector Modal -->
+<div id="rpg-inspector-popup" class="rpg-settings-popup" role="dialog" aria-modal="true"
+    aria-labelledby="rpg-inspector-title" style="display: none;">
+    <div class="rpg-settings-popup-content" style="max-width: 980px;">
+        <header class="rpg-settings-popup-header">
+            <h3 id="rpg-inspector-title">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <span>Context Inspector</span>
+                <span class="rpg-inspector-subtitle">— exactly what DES is putting in the model's context</span>
+            </h3>
+            <button id="rpg-close-inspector" class="rpg-popup-close" type="button">&times;</button>
+        </header>
+        <div class="rpg-inspector-tabs">
+            <button class="rpg-inspector-tab active" data-tab="live" type="button">
+                <i class="fa-solid fa-bolt"></i> Live Snapshot
+            </button>
+            <button class="rpg-inspector-tab" data-tab="history" type="button">
+                <i class="fa-solid fa-clock-rotate-left"></i> History
+            </button>
+        </div>
+        <div class="rpg-settings-popup-body rpg-inspector-body-wrap">
+            <div class="rpg-inspector-body"></div>
+        </div>
+        <footer class="rpg-settings-popup-footer">
+            <button id="rpg-inspector-refresh" class="rpg-accordion-action-btn" type="button">
+                <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+            <button id="rpg-inspector-copy-all" class="rpg-accordion-action-btn" type="button">
+                <i class="fa-solid fa-copy"></i> Copy All as JSON
+            </button>
+            <button id="rpg-inspector-clear-log" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
+                <i class="fa-solid fa-trash"></i> Clear History
             </button>
         </footer>
     </div>

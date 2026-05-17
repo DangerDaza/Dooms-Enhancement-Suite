@@ -31,12 +31,12 @@ import { renderThoughts } from '../rendering/thoughts.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 import {
-    setExtensionPrompt,
     extension_prompt_types,
     eventSource,
     event_types,
     getRequestHeaders,
 } from '../../../../../../../script.js';
+import { desSetExtensionPrompt as setExtensionPrompt } from '../generation/inspector.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 

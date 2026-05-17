@@ -23,6 +23,7 @@ import {
     generateSeparateUpdatePrompt
 } from './promptBuilder.js';
 import { parseResponse, parseQuests } from './parser.js';
+import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
@@ -291,6 +292,17 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             }
         }
         const prompt = await generateSeparateUpdatePrompt();
+        // Capture for the Context Inspector — this is the second API call
+        // DES makes per turn and is invisible to ST's Prompt Inspector. For
+        // chat-completion (external) mode `prompt` is a messages array; for
+        // raw mode it's a string.
+        try {
+            recordSeparateTrackerPrompt(
+                typeof prompt === 'string' ? prompt : JSON.stringify(prompt, null, 2)
+            );
+        } catch (e) {
+            console.warn('[Dooms Tracker] Inspector: recordSeparateTrackerPrompt failed', e);
+        }
         // Generate response based on mode
         let response;
         if (isExternalMode) {
