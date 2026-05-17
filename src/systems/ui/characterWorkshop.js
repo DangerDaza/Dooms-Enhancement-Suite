@@ -823,6 +823,10 @@ function renderInjection() {
 
     // Sync the per-character Banish toggle.
     $modal.find('#cw-banish').prop('checked', isCharacterBanished(draft.name));
+
+    // Surface the live warning on first paint so users with a previously
+    // customized template see it without having to retype anything.
+    refreshInjectionWarning();
 }
 
 function renderLorebookComboList(filter) {
@@ -888,6 +892,50 @@ function commitLorebookSelection(value) {
     draft.dirty.injection = true;
     $modal.find('#cw-inj-lorebook').val(draft.injection.lorebook);
     closeLorebookCombo();
+    refreshInjectionWarning();
+}
+
+/**
+ * Refreshes the "filled but not in template" warning shown under the
+ * Injection prompt textarea. Fires whenever the user edits description,
+ * lorebook, relationship, or the template itself. The default template
+ * already references every variable so this warning only surfaces when
+ * the user has customized the template and removed a placeholder.
+ *
+ * Triggered the bug report "the description doesn't get injected" — a
+ * customized template that didn't reference {description} was silently
+ * dropping the typed description, and there was no UI feedback for it.
+ */
+function refreshInjectionWarning() {
+    if (!draft || draft.isUser) {
+        // The advanced template editor is NPC-only (cw-npc-only). Skip
+        // the check entirely in user-persona mode where the textarea
+        // isn't even visible.
+        $modal.find('#cw-inj-prompt-live-warn').hide();
+        return;
+    }
+    const tplRaw = String(draft.injection?.promptTemplate || '').trim();
+    if (!tplRaw) {
+        // Empty template = default will be used = every variable is
+        // referenced. Nothing to warn about.
+        $modal.find('#cw-inj-prompt-live-warn').hide();
+        return;
+    }
+    const checks = [
+        { key: 'description', label: 'Description', value: String(draft.injection?.description || '').trim() },
+        { key: 'lorebook',    label: 'Lorebook',    value: String(draft.injection?.lorebook || '').trim() },
+        { key: 'relationship',label: 'Relationship',value: String(draft.relationship || '').trim() },
+    ];
+    const missing = checks
+        .filter(c => c.value && !tplRaw.includes(`{${c.key}}`))
+        .map(c => `${c.label} (<code>{${c.key}}</code>)`);
+    const $warn = $modal.find('#cw-inj-prompt-live-warn');
+    if (missing.length === 0) {
+        $warn.hide();
+    } else {
+        $warn.find('.cw-inj-warning-live-fields').html(missing.join(', '));
+        $warn.show();
+    }
 }
 
 function applyPreviewColor(hex) {
@@ -1151,12 +1199,14 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.injection.description = String($(this).val() || '');
         draft.dirty.injection = true;
+        refreshInjectionWarning();
     });
 
     $modal.on('input.cw change.cw', '#cw-inj-prompt', function () {
         if (!draft) return;
         draft.injection.promptTemplate = String($(this).val() || '');
         draft.dirty.injection = true;
+        refreshInjectionWarning();
     });
     $modal.on('click.cw', '#cw-inj-prompt-reset', function (e) {
         e.preventDefault();
@@ -1164,6 +1214,7 @@ function bindStaticListeners() {
         draft.injection.promptTemplate = DEFAULT_INJECT_PROMPT;
         draft.dirty.injection = true;
         $modal.find('#cw-inj-prompt').val(DEFAULT_INJECT_PROMPT).trigger('focus');
+        refreshInjectionWarning();
     });
 
     $modal.on('click.cw', '#cw-clear-all-injects', function (e) {

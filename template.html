@@ -2451,6 +2451,15 @@
                     <div class="rpg-editor-section cw-npc-only">
                         <h4>Injection prompt <span class="muted" style="font-weight: normal; font-size: 0.85em;">(advanced)</span></h4>
                         <p class="helper">The scene-direction text sent to the AI when you click <strong>Inject into Scene</strong>. Leave blank to use the default. Supports variables <code>{name}</code>, <code>{description}</code>, <code>{lorebook}</code>, <code>{relationship}</code>, and optional blocks <code>{?var}&hellip;{/var}</code> that are only included when the variable is filled in.</p>
+                        <div class="cw-inj-warning" style="margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid #f0c040; background: color-mix(in srgb, #f0c040 12%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-triangle-exclamation"></i> Heads up:</strong>
+                            once you edit this textarea, <strong>this template IS the prompt</strong> that gets sent — there is no second pass that bolts on the Description, Lorebook, or Relationship from the fields above. If you remove a variable like <code>{description}</code>, the text you typed in the Description box <em>will not be injected</em> even though it's still saved. Keep <code>{description}</code> / <code>{lorebook}</code> / <code>{relationship}</code> (and their <code>{?var}…{/var}</code> blocks) in the template if you want those fields included.
+                        </div>
+                        <div id="cw-inj-prompt-live-warn" class="cw-inj-warning-live" style="display: none; margin: 4px 0 10px; padding: 8px 12px; border-left: 3px solid #e94560; background: color-mix(in srgb, #e94560 12%, transparent); border-radius: 4px; font-size: 0.85em; line-height: 1.5;">
+                            <strong><i class="fa-solid fa-circle-exclamation"></i> Filled but not in template:</strong>
+                            <span class="cw-inj-warning-live-fields"></span>
+                            — these fields have content but your custom template doesn't reference them, so they won't be sent. Add the variable back to the template or clear the field above to silence this warning.
+                        </div>
                         <div class="rpg-field">
                             <label for="cw-inj-prompt" class="sr-only">Injection prompt template</label>
                             <textarea id="cw-inj-prompt" class="rpg-textarea" rows="10" spellcheck="false"
