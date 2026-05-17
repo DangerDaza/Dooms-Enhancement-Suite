@@ -17,6 +17,7 @@
 import {
     getCurrentSlots,
     getGenerationLog,
+    getPendingPortraitAttachments,
     clearGenerationLog,
     snapshot,
 } from '../generation/inspector.js';
@@ -114,6 +115,7 @@ function renderModalBody() {
 
 function renderLiveSnapshot() {
     const slots = getCurrentSlots();
+    const portraits = getPendingPortraitAttachments();
     // Sort: populated first, then empty
     slots.sort((a, b) => {
         const aPop = (a.content || '').length > 0 ? 0 : 1;
@@ -128,14 +130,25 @@ function renderLiveSnapshot() {
     let html = `
         <div class="rpg-inspector-summary">
             <strong>${populated.length}</strong> slot${populated.length === 1 ? '' : 's'} queued,
-            <strong>${empty.length}</strong> empty.
+            <strong>${empty.length}</strong> empty,
+            <strong>${portraits.length}</strong> portrait attachment${portraits.length === 1 ? '' : 's'} armed.
             Opens between turns reflect what will go out on the next send.
             Live event-hook mutations (historical context append, &lt;context&gt; newline fixup)
             are computed mid-generation — see the <a href="#" class="rpg-inspector-tab-link" data-tab="history">History</a> tab after sending.
         </div>
     `;
 
-    if (populated.length === 0) {
+    // Portrait attachments queued for the next send (multimodal image
+    // injection from the Workshop's "Attach Portrait" toggle). Shown first
+    // because they're invisible to ST's prompt inspector.
+    if (portraits.length > 0) {
+        html += `<div class="rpg-inspector-divider">Portrait attachments — armed for next send (${portraits.length})</div>`;
+        for (const p of portraits) {
+            html += renderPortraitCard(p, /*pending*/ true);
+        }
+    }
+
+    if (populated.length === 0 && portraits.length === 0) {
         html += `<div class="rpg-inspector-empty">No DES slots currently populated. Send a message, or use the Workshop "Inject into Scene" action, to queue content.</div>`;
     }
 
@@ -150,6 +163,53 @@ function renderLiveSnapshot() {
         }
     }
     return html;
+}
+
+function renderPortraitCard(p, pending) {
+    const sizeKB = (p.byteLength / 1024).toFixed(1);
+    const ts = pending
+        ? `armed ${new Date(p.armedAt).toLocaleTimeString()}`
+        : `fired ${new Date(p.timestamp).toLocaleTimeString()}`;
+    const isDataUrl = typeof p.dataUrl === 'string' && p.dataUrl.startsWith('data:');
+    const isImageUrl = typeof p.dataUrl === 'string' && p.dataUrl.length > 0;
+    const stateBadge = pending
+        ? `<span class="rpg-inspector-badge rpg-inspector-badge-pending">ARMED · ${sizeKB} KB</span>`
+        : `<span class="rpg-inspector-badge rpg-inspector-badge-fired">FIRED · ${sizeKB} KB${p.msgIdx != null ? ` · chat[${p.msgIdx}]` : ''}</span>`;
+    const sourceBadge = `<span class="rpg-inspector-badge rpg-inspector-badge-source-workshop">workshop</span>`;
+    const typeBadge = isDataUrl
+        ? `<span class="rpg-inspector-badge">data URL (multimodal payload)</span>`
+        : `<span class="rpg-inspector-badge">URL reference</span>`;
+    const previewHtml = isImageUrl
+        ? `<div class="rpg-inspector-portrait-preview"><img src="${escapeAttr(p.dataUrl)}" alt="${escapeAttr(p.name)}" /></div>`
+        : `<div class="rpg-inspector-content-empty">(no avatar data — attach would no-op)</div>`;
+    const copyPayload = encodeURIComponent(p.dataUrl || '');
+    const copyBtn = isImageUrl
+        ? `<button class="rpg-inspector-copy-btn" data-payload="${copyPayload}" type="button" title="Copy raw URL/data-URL"><i class="fa-solid fa-copy"></i> Copy URL/data-URL</button>`
+        : '';
+    return `
+        <div class="rpg-inspector-card">
+            <div class="rpg-inspector-card-head rpg-inspector-card-toggle">
+                <div class="rpg-inspector-card-title">
+                    <i class="fa-solid fa-chevron-right rpg-inspector-chevron"></i>
+                    <i class="fa-solid fa-image" style="color:#f0c040;margin-right:4px;"></i>
+                    <strong>Portrait: ${escapeHtml(p.name)}</strong>
+                    ${sourceBadge}
+                    ${stateBadge}
+                    ${typeBadge}
+                </div>
+                <div class="rpg-inspector-card-meta">
+                    ${ts}
+                    · injected as <code>chat[N].extra.image</code> + <code>extra.inline_image</code>
+                    · only sent to vision-capable models
+                </div>
+            </div>
+            <div class="rpg-inspector-card-body">
+                <div class="rpg-inspector-feature">Feature: Character Workshop · "Attach Portrait" toggle</div>
+                ${previewHtml}
+                ${copyBtn}
+            </div>
+        </div>
+    `;
 }
 
 function renderSlotCard(slot, defaultCollapsed) {
@@ -223,14 +283,23 @@ function renderGenerationCard(rec, isMostRecent) {
     const slotWriteCount = rec.slotWrites.length;
     const mutationCount = rec.eventMutations.length;
     const hasSeparate = !!rec.separateTrackerPrompt;
+    const portraits = rec.portraitAttachments || [];
+    const portraitCount = portraits.length;
     const summaryBits = [
         `${slotWriteCount} slot write${slotWriteCount === 1 ? '' : 's'}`,
         `${mutationCount} event mutation${mutationCount === 1 ? '' : 's'}`,
     ];
+    if (portraitCount > 0) summaryBits.push(`${portraitCount} portrait attached`);
     if (hasSeparate) summaryBits.push('+ separate tracker prompt');
 
     let body = '';
 
+    if (portraitCount > 0) {
+        body += `<h4 class="rpg-inspector-section-title">Portrait attachments (multimodal)</h4>`;
+        for (const p of portraits) {
+            body += renderPortraitCard(p, /*pending*/ false);
+        }
+    }
     if (slotWriteCount > 0) {
         body += `<h4 class="rpg-inspector-section-title">Slot writes</h4>`;
         for (const sw of rec.slotWrites) {
@@ -382,6 +451,14 @@ function escapeHtml(s) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+// data URLs and file paths go straight into an attribute, so escape only
+// the chars that break the attribute (quote + ampersand). NOT general
+// HTML escaping — that would mangle base64 content.
+function escapeAttr(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
 // Quick tab-link hook (used in the empty-snapshot blurb)

@@ -19026,6 +19026,30 @@ body.dooms-hide-st-topbar .openDrawer {
     background: rgba(240, 192, 64, 0.2);
     color: #f0c040;
 }
+.rpg-inspector-badge-pending {
+    background: rgba(240, 192, 64, 0.22);
+    color: #f0c040;
+}
+.rpg-inspector-badge-fired {
+    background: rgba(155, 89, 182, 0.22);
+    color: #c39bd3;
+}
+
+.rpg-inspector-portrait-preview {
+    margin: 8px 0;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 4px;
+    border-left: 3px solid #f0c040;
+    text-align: center;
+}
+.rpg-inspector-portrait-preview img {
+    max-width: 220px;
+    max-height: 290px;
+    border-radius: 3px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+}
 
 .rpg-inspector-section-title {
     margin: 14px 0 6px;

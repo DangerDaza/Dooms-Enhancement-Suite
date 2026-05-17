@@ -59,7 +59,8 @@ for (const [key, meta] of Object.entries(SLOT_REGISTRY)) {
 
 /** @typedef {{event: string, msgIdx: number|null, reason: string, beforeSnippet: string, afterSnippet: string, fullBefore?: string, fullAfter?: string, timestamp: number}} EventMutation */
 /** @typedef {{slot: string, label: string, content: string, previousContent: string, position: number, depth: number, role: number|undefined, source: string, feature: string, timestamp: number}} SlotWriteEntry */
-/** @typedef {{id: number, startedAt: number, endedAt: number|null, type: string|null, dryRun: boolean, slotWrites: SlotWriteEntry[], eventMutations: EventMutation[], separateTrackerPrompt: string|null}} GenerationRecord */
+/** @typedef {{name: string, dataUrl: string, byteLength: number, msgIdx: number|null, timestamp: number}} PortraitAttachment */
+/** @typedef {{id: number, startedAt: number, endedAt: number|null, type: string|null, dryRun: boolean, slotWrites: SlotWriteEntry[], eventMutations: EventMutation[], separateTrackerPrompt: string|null, portraitAttachments: PortraitAttachment[]}} GenerationRecord */
 
 /** @type {GenerationRecord[]} */
 const generationLog = [];
@@ -68,6 +69,37 @@ const MAX_LOG_ENTRIES = 25;
 /** @type {GenerationRecord|null} */
 let activeGeneration = null;
 let _generationCounter = 0;
+
+// ─── Portrait attachment tracking ──────────────────────────────────────────
+// The Character Workshop's "Attach Portrait" toggle stamps an avatar image
+// onto chat[last].extra.image on the next MESSAGE_SENT — multimodal image
+// injection that bypasses every text path. We track it in three states:
+//   armed   = queued, waiting for the user to send a message
+//   fired   = stamped onto a chat message; ready to ride along with the
+//             next generation request to a vision-capable model
+//   cleared = the armed entry was cancelled or timed out without firing
+//
+// pendingPortraitAttachments holds armed-but-not-yet-fired entries (drives
+// the "what's queued for the next send?" view in Live Snapshot).
+// _queuedFiredAttachments holds fired entries waiting to be attached to
+// the next generation record — MESSAGE_SENT fires just before
+// GENERATION_STARTED so we'd otherwise have no active record yet.
+/** @type {Map<string, {name: string, dataUrl: string, byteLength: number, armedAt: number}>} */
+const pendingPortraitAttachments = new Map();
+/** @type {Array<{name: string, dataUrl: string, byteLength: number, msgIdx: number|null, firedAt: number}>} */
+const _queuedFiredAttachments = [];
+
+function dataUrlByteLength(url) {
+    if (typeof url !== 'string') return 0;
+    // data URLs encode their payload after the comma; for non-data URLs
+    // (file paths) we just report the URL length as a proxy.
+    const comma = url.indexOf(',');
+    if (url.startsWith('data:') && comma !== -1) {
+        // Approximate decoded size: base64 expands 3:4, so multiply 0.75
+        return Math.floor((url.length - comma - 1) * 0.75);
+    }
+    return url.length;
+}
 
 // ─── Recording API ─────────────────────────────────────────────────────────
 
@@ -194,6 +226,10 @@ function beginGeneration({ type, dryRun }) {
         slotWrites: [],
         eventMutations: [],
         separateTrackerPrompt: null,
+        // Drain any portrait attachments that fired during the preceding
+        // MESSAGE_SENT — they belong with this generation since they ride
+        // along on the chat message that prompted it.
+        portraitAttachments: _queuedFiredAttachments.splice(0),
     };
 }
 
@@ -203,7 +239,8 @@ function endGeneration() {
     // Only keep records that captured something — skip empty dry-runs.
     const hasContent = activeGeneration.slotWrites.length > 0
         || activeGeneration.eventMutations.length > 0
-        || activeGeneration.separateTrackerPrompt;
+        || activeGeneration.separateTrackerPrompt
+        || (activeGeneration.portraitAttachments && activeGeneration.portraitAttachments.length > 0);
     if (hasContent) {
         generationLog.push(activeGeneration);
         while (generationLog.length > MAX_LOG_ENTRIES) {
@@ -211,6 +248,60 @@ function endGeneration() {
         }
     }
     activeGeneration = null;
+}
+
+// ─── Portrait-attachment recording API ─────────────────────────────────────
+
+/**
+ * Called when the Workshop's "Inject into Scene" arms a portrait attach.
+ * Adds (or replaces) an entry in pendingPortraitAttachments so Live
+ * Snapshot can show "this avatar will be stamped onto your next message."
+ */
+export function recordPortraitArm(name, dataUrl) {
+    const safeName = String(name || '').trim();
+    if (!safeName) return;
+    const url = typeof dataUrl === 'string' ? dataUrl : '';
+    pendingPortraitAttachments.set(safeName.toLowerCase(), {
+        name: safeName,
+        dataUrl: url,
+        byteLength: dataUrlByteLength(url),
+        armedAt: Date.now(),
+    });
+}
+
+/**
+ * Called when an armed portrait attach is cancelled (Workshop cancel,
+ * 2-minute timeout, or a suppression decision). Drops it from the live
+ * snapshot. Idempotent — safe to call for entries that never armed.
+ */
+export function recordPortraitDisarm(name) {
+    const safeName = String(name || '').trim();
+    if (!safeName) return;
+    pendingPortraitAttachments.delete(safeName.toLowerCase());
+}
+
+/**
+ * Called the moment the avatar is actually stamped onto the outgoing user
+ * message (chat[msgIdx].extra.image = dataUrl). Moves the entry from
+ * "pending" to a fire-queue that the next beginGeneration() will drain
+ * into that generation's record — that's the API call the image rides on.
+ */
+export function recordPortraitFire(name, dataUrl, msgIdx) {
+    const safeName = String(name || '').trim();
+    if (!safeName) return;
+    const url = typeof dataUrl === 'string' ? dataUrl : '';
+    pendingPortraitAttachments.delete(safeName.toLowerCase());
+    _queuedFiredAttachments.push({
+        name: safeName,
+        dataUrl: url,
+        byteLength: dataUrlByteLength(url),
+        msgIdx: typeof msgIdx === 'number' ? msgIdx : null,
+        timestamp: Date.now(),
+    });
+}
+
+export function getPendingPortraitAttachments() {
+    return Array.from(pendingPortraitAttachments.values());
 }
 
 // ─── Public query API ──────────────────────────────────────────────────────
@@ -229,12 +320,14 @@ export function getGenerationLog() {
         ...rec,
         slotWrites: rec.slotWrites.slice(),
         eventMutations: rec.eventMutations.slice(),
+        portraitAttachments: rec.portraitAttachments ? rec.portraitAttachments.slice() : [],
     }));
 }
 
 export function clearGenerationLog() {
     generationLog.length = 0;
     activeGeneration = null;
+    _queuedFiredAttachments.length = 0;
 }
 
 export function getActiveGenerationId() {
@@ -245,6 +338,7 @@ export function getActiveGenerationId() {
 export function snapshot() {
     return {
         currentSlots: getCurrentSlots(),
+        pendingPortraitAttachments: getPendingPortraitAttachments(),
         log: getGenerationLog(),
         activeGenerationId: getActiveGenerationId(),
     };

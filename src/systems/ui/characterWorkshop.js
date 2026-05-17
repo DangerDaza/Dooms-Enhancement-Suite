@@ -36,7 +36,7 @@ import {
     event_types,
     getRequestHeaders,
 } from '../../../../../../../script.js';
-import { desSetExtensionPrompt as setExtensionPrompt } from '../generation/inspector.js';
+import { desSetExtensionPrompt as setExtensionPrompt, recordPortraitArm, recordPortraitDisarm, recordPortraitFire } from '../generation/inspector.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 
@@ -2114,11 +2114,16 @@ function unmarkCharacterPresentNow(name) {
  */
 function armPortraitAttach(name, dataUrl) {
     let consumed = false;
+    // Surface the queued attach in the Context Inspector — multimodal
+    // image injection bypasses every text path so this is otherwise
+    // invisible to the user.
+    try { recordPortraitArm(name, dataUrl); } catch (e) {}
     const disarm = () => {
         if (consumed) return;
         consumed = true;
         try { eventSource.removeListener?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
         try { eventSource.off?.(event_types.MESSAGE_SENT, onSent); } catch (e) {}
+        try { recordPortraitDisarm(name); } catch (e) {}
     };
     const onSent = () => {
         if (consumed) return;
@@ -2128,15 +2133,23 @@ function armPortraitAttach(name, dataUrl) {
         try {
             const ctx = (typeof getContext === 'function') ? getContext() : null;
             const chat = ctx?.chat;
-            if (!Array.isArray(chat) || chat.length === 0) return;
+            if (!Array.isArray(chat) || chat.length === 0) {
+                try { recordPortraitDisarm(name); } catch (e) {}
+                return;
+            }
             const last = chat[chat.length - 1];
-            if (!last || last.is_user === false) return;
+            if (!last || last.is_user === false) {
+                try { recordPortraitDisarm(name); } catch (e) {}
+                return;
+            }
             if (!last.extra || typeof last.extra !== 'object') last.extra = {};
             last.extra.image = dataUrl;
             last.extra.inline_image = true;
+            try { recordPortraitFire(name, dataUrl, chat.length - 1); } catch (e) {}
             console.log(`[Dooms Tracker] Workshop: attached "${name}" portrait to outgoing message`);
         } catch (e) {
             console.warn('[Dooms Tracker] Workshop: portrait attach failed', e);
+            try { recordPortraitDisarm(name); } catch (err) {}
         }
     };
     try {
