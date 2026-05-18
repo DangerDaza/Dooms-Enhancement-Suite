@@ -5,7 +5,7 @@
 import { getContext } from '../../../../../../extensions.js';
 import { chat, getCurrentChatDetails, characters, this_chid } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers, getGroupChat, groups } from '../../../../../../group-chats.js';
-import { extensionSettings, committedTrackerData } from '../../core/state.js';
+import { extensionSettings, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import {
     buildQuestsJSONInstruction,
     buildInfoBoxJSONInstruction,
@@ -865,6 +865,91 @@ Next, detail the facial specifics. Describe the character's current expression, 
 Finally, infuse with aesthetics. Define the artistic style, medium (e.g., digital art, oil painting), and visual tone (e.g., cinematic lighting, ethereal atmosphere).
 Your final description must be objective and concrete, and the use of metaphors and emotional rhetoric is strictly prohibited. It must also not contain meta tags or drawing instructions such as "8K" or "masterpiece".
 Output only the final, modified prompt; do not output anything else.`;
+
+/**
+ * Default Auto Portrait instruction.
+ *
+ * This is separate from the legacy Auto Avatars prompt so users can tune
+ * present-character card portraits without changing the older avatar workflow.
+ */
+export const DEFAULT_AUTO_PORTRAIT_PROMPT = `Generate one natural-language image prompt for the present-character portrait card.
+
+Rules:
+- Start the first sentence with the character's full name: {characterName}.
+- Write cinematic natural prose, not comma-separated tag lists.
+- Reflect the current tracker state: appearance, demeanor, equipment, effects, injuries, transformations, clothing state, body state, and scene context.
+- Default to one named character in the image.
+- Do not describe art style, medium, renderer, model quality, resolution, or "masterpiece" style quality tags.
+- Do not include {userName} or the user as a visible character. If interaction with the viewer is truly necessary, frame it as viewer perspective without naming the user.
+- Output only the final image prompt.`;
+
+function stringifyForPrompt(value) {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
+function applyAutoPortraitTemplate(template, characterName, characterData, sceneData, messageText) {
+    const characterJson = stringifyForPrompt(characterData);
+    const sceneJson = stringifyForPrompt(sceneData);
+    const userName = getContext().name1 || 'the user';
+    return String(template || DEFAULT_AUTO_PORTRAIT_PROMPT)
+        .replace(/\{characterName\}/g, characterName)
+        .replace(/\{name\}/g, characterName)
+        .replace(/\{userName\}/g, userName)
+        .replace(/\{characterJson\}/g, characterJson)
+        .replace(/\{character\}/g, characterJson)
+        .replace(/\{sceneJson\}/g, sceneJson)
+        .replace(/\{scene\}/g, sceneJson)
+        .replace(/\{lastMessage\}/g, String(messageText || ''));
+}
+
+/**
+ * Builds messages for Auto Portrait prompt generation. The resulting response
+ * is an image prompt, then the image itself is generated through SillyTavern's
+ * native /sd command by the caller.
+ *
+ * @param {object|string} characterData - Parsed present-character object or name
+ * @param {string} [messageText] - Latest assistant message text for immediate scene context
+ * @returns {Promise<Array<{role: string, content: string}>>}
+ */
+export async function generateAutoPortraitPromptGenerationPrompt(characterData, messageText = '') {
+    const characterName = typeof characterData === 'string'
+        ? characterData
+        : (characterData?.name || 'Unknown Character');
+    const sceneData = {
+        infoBox: lastGeneratedData.infoBox || committedTrackerData.infoBox || extensionSettings.infoBox || '',
+        characterThoughts: lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts || extensionSettings.characterThoughts || '',
+    };
+    const instruction = applyAutoPortraitTemplate(
+        extensionSettings.customAutoPortraitPrompt || DEFAULT_AUTO_PORTRAIT_PROMPT,
+        characterName,
+        characterData,
+        sceneData,
+        messageText,
+    );
+    const messages = [];
+    let systemMessage = 'You create concise, directly usable image prompts for character portrait cards.\n\n';
+    const characterInfo = await getCharacterCardsInfo();
+    if (characterInfo) {
+        systemMessage += `Character card context:\n${characterInfo}\n\n`;
+    }
+    systemMessage += `Current tracker context:\n${stringifyForPrompt(sceneData)}\n\n`;
+    systemMessage += `Target character tracker data:\n${stringifyForPrompt(characterData)}\n`;
+    messages.push({ role: 'system', content: systemMessage });
+    if (messageText) {
+        messages.push({ role: 'assistant', content: String(messageText) });
+    }
+    messages.push({
+        role: 'user',
+        content: `${instruction}\n\nGenerate the portrait prompt for: ${characterName}.`,
+    });
+    return messages;
+}
 /**
  * Generates the prompt for LLM-based avatar prompt generation
  * Uses the same context as RPG generation (character cards, tracker data, chat history)

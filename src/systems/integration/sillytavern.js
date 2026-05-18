@@ -21,7 +21,7 @@ import { saveChatData, loadChatData, autoSwitchPresetForEntity } from '../../cor
 import { i18n } from '../../core/i18n.js';
 // Generation & Parsing
 import { parseResponse, parseQuests } from '../generation/parser.js';
-import { updateRPGData } from '../generation/apiClient.js';
+import { updateRPGData, parseCharacterEntriesFromThoughts } from '../generation/apiClient.js';
 import { removeLocks } from '../generation/lockManager.js';
 import { onGenerationStarted, initHistoryInjectionListeners, clearBoostForAppearedFields } from '../generation/injector.js';
 // Doom Counter
@@ -36,7 +36,8 @@ import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { enforceNameBan } from '../features/nameBan.js';
 // Expression classification
-import { classifyAllCharacterExpressions, classifyActiveUserExpression } from './expressionSync.js';
+import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
+import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
@@ -212,10 +213,17 @@ export async function onMessageReceived(data) {
                 updateWeatherEffect();
             }
             // ── Expression classification: classify per-character after portrait bar renders ──
-            if (extensionSettings.syncExpressionsToPresentCharacters && parsedData.characterThoughts && isAwaitingNewMessage) {
+            const expressionSpritesEnabled = isExpressionSpritesModeEnabled();
+            if (expressionSpritesEnabled && parsedData.characterThoughts && isAwaitingNewMessage) {
                 classifyAllCharacterExpressions(lastMessage.mes)
                     .then(() => updatePortraitBar())
                     .catch(err => console.error('[DES] Expression classification failed:', err));
+            }
+            if (isAutoPortraitModeEnabled() && parsedData.characterThoughts && isAwaitingNewMessage) {
+                const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
+                generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage.mes)
+                    .then(() => updatePortraitBar())
+                    .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
             }
             // ── Active user character expression refresh ──
             // Without this, the user-character classifier only fires on
@@ -224,7 +232,7 @@ export async function onMessageReceived(data) {
             // stuck on whatever was set the last time the user typed.
             // Re-classify the user's last message text so the user's
             // portrait reflects the current scene on every AI reply.
-            if (extensionSettings.syncExpressionsToPresentCharacters && isAwaitingNewMessage) {
+            if (expressionSpritesEnabled && isAwaitingNewMessage) {
                 const lastUserText = findLastUserMessageText();
                 if (lastUserText) {
                     classifyActiveUserExpression(lastUserText)
@@ -287,7 +295,8 @@ export async function onMessageReceived(data) {
                 updateWeatherEffect();
                 updateChatThoughts();
                 // ── Expression classification (separate/external mode) ──
-                if (extensionSettings.syncExpressionsToPresentCharacters) {
+                const expressionSpritesEnabled = isExpressionSpritesModeEnabled();
+                if (expressionSpritesEnabled) {
                     const sepMsg = chat[chat.length - 1];
                     if (sepMsg && !sepMsg.is_user && !isSyntheticTrackerMessage(sepMsg)) {
                         classifyAllCharacterExpressions(sepMsg.mes)

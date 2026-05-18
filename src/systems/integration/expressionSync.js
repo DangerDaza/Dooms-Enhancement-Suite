@@ -42,6 +42,14 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 /** Hidden style element for hiding ST's native expression display */
 let hiddenExpressionStyleElement = null;
 
+export function isExpressionSpritesModeEnabled() {
+    return Boolean(
+        extensionSettings.enabled &&
+        extensionSettings.syncExpressionsToPresentCharacters &&
+        (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions'
+    );
+}
+
 // ─────────────────────────────────────────────
 //  Sprite cache
 // ─────────────────────────────────────────────
@@ -350,7 +358,7 @@ async function classifyLlmSingle(text, availableLabels) {
  * @param {string} messageText - The raw message text (chat[].mes)
  */
 export async function classifyAllCharacterExpressions(messageText) {
-    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
+    if (!isExpressionSpritesModeEnabled()) return;
 
     // Get character list from parsed thoughts
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
@@ -467,7 +475,7 @@ export async function classifyAllCharacterExpressions(messageText) {
  * shares the master toggle with the NPC classifier.
  */
 export async function classifyActiveUserExpression(messageText) {
-    if (!extensionSettings.syncExpressionsToPresentCharacters) return;
+    if (!isExpressionSpritesModeEnabled()) return;
     const text = String(messageText || '').trim();
     if (!text) return;
     const name = resolveActiveUserName();
@@ -531,7 +539,7 @@ function refreshExpressionConsumers() {
  * @returns {string|null}
  */
 export function getExpressionPortraitForCharacter(characterName) {
-    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return null;
+    if (!isExpressionSpritesModeEnabled()) return null;
 
     const target = normalizeName(characterName);
     if (!target) return null;
@@ -613,7 +621,7 @@ function syncNativeExpressionDisplayVisibility() {
  * Called when a specific character speaks.
  */
 export function queueExpressionCaptureForSpeaker(speakerName) {
-    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
+    if (!isExpressionSpritesModeEnabled()) return;
     // The orchestrator handles all characters at once, so this is a no-op
     // in the new system. Classification happens in onMessageReceived.
 }
@@ -622,7 +630,7 @@ export function queueExpressionCaptureForSpeaker(speakerName) {
  * Syncs expression from latest message (manual trigger).
  */
 export function syncExpressionFromLatestMessage() {
-    if (!extensionSettings.enabled || !extensionSettings.syncExpressionsToPresentCharacters) return;
+    if (!isExpressionSpritesModeEnabled()) return;
     const lastMessage = chat[chat.length - 1];
     if (lastMessage && !lastMessage.is_user) {
         classifyAllCharacterExpressions(lastMessage.mes);

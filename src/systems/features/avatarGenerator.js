@@ -16,11 +16,79 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
-import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
-import { generateAvatarPromptGenerationPrompt } from '../generation/promptBuilder.js';
+import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait } from '../../utils/avatars.js';
+import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 // Generation state - tracks characters currently being generated
 const pendingGenerations = new Set();
+const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
+
+export function isAutoPortraitModeEnabled() {
+    return Boolean(
+        extensionSettings.enabled &&
+        extensionSettings.syncExpressionsToPresentCharacters &&
+        extensionSettings.portraitEnhancementMode === 'autoPortraits' &&
+        (extensionSettings.autoPortraitMode || 'only_missing') !== 'off'
+    );
+}
+
+function getGeneratedPortraitMeta(characterName) {
+    const meta = extensionSettings.generatedPortraits?.[characterName];
+    if (meta?.source !== AUTO_PORTRAIT_SOURCE) return null;
+    const currentUrl = extensionSettings.npcAvatars?.[characterName];
+    if (meta.url && currentUrl && meta.url !== currentUrl) return null;
+    return meta;
+}
+
+function setGeneratedPortraitMeta(characterName, prompt, stateHash, url) {
+    if (!extensionSettings.generatedPortraits || typeof extensionSettings.generatedPortraits !== 'object') {
+        extensionSettings.generatedPortraits = {};
+    }
+    extensionSettings.generatedPortraits[characterName] = {
+        source: AUTO_PORTRAIT_SOURCE,
+        prompt,
+        stateHash,
+        url,
+        createdAt: Date.now(),
+    };
+}
+
+function stableStringify(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value !== 'object') return String(value);
+    if (Array.isArray(value)) {
+        return `[${value.map(stableStringify).join(',')}]`;
+    }
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
+function hashString(text) {
+    let hash = 5381;
+    const str = String(text || '');
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+}
+
+function buildPortraitStateHash(characterData) {
+    return hashString(stableStringify(characterData));
+}
+
+function stripReasoning(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+        .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+        .replace(/<reflection>[\s\S]*?<\/reflection>/gi, '')
+        .replace(/<\|start\|>assistant<\|channel\|>(?:analysis|thought)[\s\S]*?(?=<\|start\|>assistant<\|channel\|>final<\|message\|>|$)/gi, '')
+        .replace(/<\|channel\|>(?:analysis|thought)<\|message\|>[\s\S]*?(?=<\|channel\|>final<\|message\|>|$)/gi, '')
+        .replace(/<channel\|>(?:analysis|thought)[\s\S]*?(?=<channel\|>final|$)/gi, '')
+        .replace(/<\|start\|>assistant<\|channel\|>final<\|message\|>/gi, '')
+        .replace(/<\|channel\|>final<\|message\|>/gi, '')
+        .replace(/<channel\|>final/gi, '')
+        .trim();
+}
 /**
  * Checks if a character is pending generation (waiting or actively generating)
  * @param {string} characterName - Name of character to check
@@ -107,6 +175,170 @@ export function hasExistingAvatar(characterName) {
         }
     }
     return false;
+}
+
+function hasProtectedAvatar(characterName) {
+    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
+        return !getGeneratedPortraitMeta(characterName);
+    }
+    return hasExistingAvatar(characterName);
+}
+
+function normalizeCharacterEntries(characterEntries) {
+    if (!Array.isArray(characterEntries)) return [];
+    return characterEntries
+        .map(entry => typeof entry === 'string' ? { name: entry } : entry)
+        .filter(entry => entry && entry.name && String(entry.name).toLowerCase() !== 'unavailable');
+}
+
+function reserveAutoPortraitGeneration(characterData) {
+    const name = characterData.name;
+    const mode = extensionSettings.autoPortraitMode || 'only_missing';
+    const existing = extensionSettings.npcAvatars?.[name];
+    const meta = getGeneratedPortraitMeta(name);
+    const stateHash = buildPortraitStateHash(characterData);
+
+    if (pendingGenerations.has(name)) {
+        return { reserved: false, stateHash };
+    }
+    if (hasProtectedAvatar(name)) {
+        return { reserved: false, stateHash };
+    }
+
+    let eligible = false;
+    if (mode === 'only_missing') {
+        eligible = !existing;
+    } else if (mode === 'state_changed') {
+        eligible = !existing || !meta || meta.stateHash !== stateHash;
+    } else if (mode === 'every_reply') {
+        eligible = true;
+    }
+
+    if (!eligible) {
+        return { reserved: false, stateHash };
+    }
+
+    pendingGenerations.add(name);
+    return { reserved: true, stateHash };
+}
+
+export async function generateAutoPortraitsForCharacters(characterEntries, messageText = '', onStarted = null) {
+    if (!isAutoPortraitModeEnabled()) {
+        return;
+    }
+    const entries = normalizeCharacterEntries(characterEntries);
+    const queue = [];
+    for (const characterData of entries) {
+        const { reserved, stateHash } = reserveAutoPortraitGeneration(characterData);
+        if (reserved) {
+            queue.push({ characterData, stateHash });
+        }
+    }
+    if (queue.length === 0) {
+        return;
+    }
+    if (onStarted) {
+        try {
+            onStarted(queue.map(item => item.characterData.name));
+        } catch (e) {
+            console.error('[DES Auto Portraits] Error in onStarted callback:', e);
+        }
+    }
+    for (let i = 0; i < queue.length; i++) {
+        const { characterData, stateHash } = queue[i];
+        const name = characterData.name;
+        try {
+            const prompt = await generateAutoPortraitPrompt(characterData, messageText);
+            await generateSingleAutoPortrait(name, prompt, stateHash);
+        } catch (error) {
+            console.error(`[DES Auto Portraits] Failed for ${name}:`, error);
+        } finally {
+            pendingGenerations.delete(name);
+        }
+        if (i < queue.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+}
+
+async function generateAutoPortraitPrompt(characterData, messageText = '') {
+    const name = characterData?.name || 'Unknown Character';
+    try {
+        const promptMessages = await generateAutoPortraitPromptGenerationPrompt(characterData, messageText);
+        let response;
+        if (extensionSettings.generationMode === 'external') {
+            response = await generateWithExternalAPI(promptMessages);
+        } else {
+            response = await safeGenerateRaw({
+                prompt: promptMessages,
+                quietToLoud: false,
+            });
+        }
+        const prompt = stripReasoning(response)
+            .replace(/^["']|["']$/g, '')
+            .replace(/^prompt\s*:\s*/i, '')
+            .trim();
+        if (prompt) return prompt;
+    } catch (error) {
+        console.error(`[DES Auto Portraits] Prompt generation failed for ${name}:`, error);
+    }
+    return buildAutoPortraitFallbackPrompt(characterData);
+}
+
+function buildAutoPortraitFallbackPrompt(characterData) {
+    const name = characterData?.name || String(characterData || 'Unknown Character');
+    const details = [];
+    const relationship = characterData?.relationship || characterData?.role;
+    const appearance = characterData?.details?.appearance || characterData?.appearance;
+    const demeanor = characterData?.details?.demeanor || characterData?.demeanor;
+    const equipment = characterData?.details?.equipment || characterData?.details?.equipement || characterData?.equipment || characterData?.equipement;
+    const effects = characterData?.details?.effects || characterData?.effects || characterData?.status;
+    for (const value of [relationship, appearance, demeanor, equipment, effects]) {
+        if (value) details.push(String(value));
+    }
+    const body = details.length ? ` ${details.join(' ')}` : '';
+    return `${name} stands alone in a cinematic character portrait, framed from the waist up with the current scene shaping their posture and expression.${body}`;
+}
+
+async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
+    if (!prompt) {
+        prompt = buildAutoPortraitFallbackPrompt({ name: characterName });
+    }
+    if (!SlashCommandParser.commands['sd']) {
+        console.warn(`[DES Auto Portraits] /sd command not available. Skipping portrait generation for ${characterName}.`);
+        if (typeof toastr !== 'undefined') {
+            toastr.warning('/sd command is not available. Enable SillyTavern image generation first.', 'DES Auto Portraits', { timeOut: 4000 });
+        }
+        return null;
+    }
+    const previous = extensionSettings.npcAvatars?.[characterName];
+    try {
+        const result = await executeSlashCommandsOnChatInput(
+            `/sd quiet=true ${prompt}`,
+            { clearChatInput: false }
+        );
+        let imageUrl = extractImageUrl(result);
+        if (!imageUrl) {
+            console.warn(`[DES Auto Portraits] Failed to extract image URL for ${characterName}:`, result);
+            return null;
+        }
+        if (!extensionSettings.npcAvatars) {
+            extensionSettings.npcAvatars = {};
+        }
+        const previousMeta = getGeneratedPortraitMeta(characterName);
+        if (isDataUrl(imageUrl)) {
+            imageUrl = await persistPortrait(previous, characterName, imageUrl);
+        } else if (previous && previousMeta) {
+            try { await deletePortraitFromDiskByValue(previous); } catch (e) {}
+        }
+        extensionSettings.npcAvatars[characterName] = imageUrl;
+        setGeneratedPortraitMeta(characterName, prompt, stateHash, imageUrl);
+        saveSettings();
+        return imageUrl;
+    } catch (error) {
+        console.error(`[DES Auto Portraits] /sd generation failed for ${characterName}:`, error);
+        return null;
+    }
 }
 /**
  * Generates avatars for multiple characters and waits for all to complete.
