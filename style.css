@@ -38,6 +38,20 @@ body.dooms-vk-resizing #chat {
     #chat {
         min-height: 0;
     }
+    /* Ensure html/body/#sheld always claim the full dynamic viewport
+       height. Without an explicit min-height rule the browser is free
+       to leave the document smaller than the visible viewport when the
+       soft keyboard dismisses, producing the "input stuck mid-screen
+       with empty void below" state. 100dvh is the dynamic viewport
+       unit that grows when the keyboard hides, so anchoring the page
+       to it gives the layout a target to fill into. */
+    html,
+    body {
+        min-height: 100dvh;
+    }
+    #sheld {
+        min-height: 100dvh;
+    }
 }
 
 /* Doom icon - full color logo */

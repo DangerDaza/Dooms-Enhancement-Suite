@@ -50,6 +50,51 @@ function ts() {
 
 let _bound = false;
 
+/**
+ * Sample viewport / chat / sheld heights every 200ms for 5 seconds after
+ * a keyboard-triggering input loses focus. Helps diagnose the "UI sits
+ * mid-screen for 10 seconds after keyboard dismisses" issue by showing
+ * whether the browser updates visualViewport.height promptly and
+ * whether #sheld / #chat actually grow back to fill it.
+ *
+ * Output format:
+ *   [DES kbd-close] T+0ms  vv.h=520  win.h=520  sheld.h=520  chat.h=240
+ *   [DES kbd-close] T+200ms vv.h=720 win.h=720  sheld.h=520  chat.h=240   <-- viewport grew but sheld stuck
+ *   ...
+ *
+ * Drop together with the rest of this file once we've identified the
+ * culprit.
+ */
+function startCloseSampling(triggerEl) {
+    const start = performance.now();
+    const sheld = document.getElementById('sheld');
+    const chat = document.getElementById('chat');
+    const sendForm = document.getElementById('send_form');
+    const sample = () => {
+        const t = Math.round(performance.now() - start);
+        const vv = window.visualViewport;
+        console.log(
+            `[DES kbd-close] T+${t}ms ` +
+            `vv.h=${vv ? Math.round(vv.height) : '?'} ` +
+            `win.h=${window.innerHeight} ` +
+            `sheld.h=${sheld ? Math.round(sheld.getBoundingClientRect().height) : '?'} ` +
+            `chat.h=${chat ? Math.round(chat.getBoundingClientRect().height) : '?'} ` +
+            `form.h=${sendForm ? Math.round(sendForm.getBoundingClientRect().height) : '?'} ` +
+            `body.h=${Math.round(document.body.getBoundingClientRect().height)} ` +
+            `scrollY=${Math.round(window.scrollY)}`
+        );
+    };
+    sample();
+    // Five seconds of 200ms samples = 26 lines. Long enough to capture
+    // a 10-second stuck state's first half — the second half is just
+    // more of the same and not worth the console spam.
+    let count = 0;
+    const interval = setInterval(() => {
+        sample();
+        if (++count >= 24) clearInterval(interval);
+    }, 200);
+}
+
 export function initMobileFocusLogger() {
     if (_bound) return;
     _bound = true;
@@ -70,5 +115,12 @@ export function initMobileFocusLogger() {
             `  stack:\n${trimmedStack}`
         );
     }, /*useCapture*/ true);
-    console.log('[Dooms Tracker] MobileFocusLogger initialized — watching keyboard-triggering focus events.');
+    // Sample post-close viewport heights so we can see whether the
+    // browser updates them promptly.
+    document.addEventListener('focusout', (e) => {
+        if (window.innerWidth > 1000) return;
+        if (!isKeyboardTriggering(e.target)) return;
+        startCloseSampling(e.target);
+    }, /*useCapture*/ true);
+    console.log('[Dooms Tracker] MobileFocusLogger initialized — watching focus events and post-close viewport reflow.');
 }
