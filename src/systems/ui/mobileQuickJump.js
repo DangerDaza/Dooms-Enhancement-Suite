@@ -44,7 +44,7 @@ const SCROLL_UP_THRESHOLD_PX = 12;
 //     `body.dooms-debug-quick-jump` rules)
 // Console will log "DEBUG_FORCE_VISIBLE on" once at init so you can confirm
 // the module loaded.
-const DEBUG_FORCE_VISIBLE = true;
+const DEBUG_FORCE_VISIBLE = false;
 // ────────────────────────────────────────────────────────────────────────────
 
 let _btn = null;
