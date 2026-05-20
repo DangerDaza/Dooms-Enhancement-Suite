@@ -21443,6 +21443,37 @@ body.dooms-hide-st-topbar .openDrawer {
     background: rgba(233, 69, 96, 0.85);
 }
 
+/* DEBUG MODE: when DEBUG_FORCE_VISIBLE is on the JS adds body.dooms-debug-quick-jump.
+   We use that as a hook to make the button visually impossible to miss
+   so we can verify it's actually painting, even on mobile where small
+   subdued buttons get lost in a busy UI. Bright red, double-sized,
+   labelled. Strip these styles together with the body class once
+   debugging is done. */
+body.dooms-debug-quick-jump .dooms-mobile-quick-jump.visible {
+    width: 72px;
+    height: 72px;
+    background: #e94560;
+    border: 2px solid #ffeaa7;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.4), 0 8px 24px rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 22px;
+    z-index: 99999;
+}
+body.dooms-debug-quick-jump .dooms-mobile-quick-jump.visible::after {
+    content: 'DEBUG';
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffeaa7;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
 /* Mobile breakpoint matches the JS check in mobileQuickJump.js
    (window.innerWidth <= 1000). On desktop we force-hide so the button
    can never appear even if the visible class is somehow added.

@@ -95,15 +95,21 @@ function showButton() {
  *
  * Falls back to fixed defaults if the ST elements aren't in the DOM yet.
  */
+// Vertical gap between the button's bottom edge and the top of #send_form.
+// Set high enough that the button sits clearly above the per-message
+// swipe `>` arrow (which is rendered inside the last message bubble,
+// typically just above the send form). 60px clears the swipe arrow
+// without floating into the middle of the chat content.
+const GAP_ABOVE_SEND_FORM_PX = 60;
+
 function repositionButton() {
     if (!_btn) return;
     const sheld = document.getElementById('sheld');
     const sendForm = document.getElementById('send_form');
     if (!sheld) {
-        // Pre-init or fallback: just clear inline overrides and let the
-        // CSS default (right:14px; bottom:110px) handle it.
         _btn.style.right = '';
         _btn.style.bottom = '';
+        if (DEBUG_FORCE_VISIBLE) console.log('[Dooms Tracker] MobileQuickJump: #sheld not found — falling back to CSS defaults');
         return;
     }
     const sheldRect = sheld.getBoundingClientRect();
@@ -111,12 +117,21 @@ function repositionButton() {
     let bottomOffset = 110;
     if (sendForm) {
         const formRect = sendForm.getBoundingClientRect();
-        // 8px gap above the input form. clamp to >= 12 so the button
-        // never hugs the very bottom if the form rect is somehow zero.
-        bottomOffset = Math.max(12, window.innerHeight - formRect.top + 8);
+        // Clamp >= 60 so the button never hugs the very bottom if the
+        // form rect is somehow zero.
+        bottomOffset = Math.max(60, window.innerHeight - formRect.top + GAP_ABOVE_SEND_FORM_PX);
     }
     _btn.style.right = rightOffset + 'px';
     _btn.style.bottom = bottomOffset + 'px';
+    if (DEBUG_FORCE_VISIBLE) {
+        console.log('[Dooms Tracker] MobileQuickJump positioned at', {
+            right: rightOffset + 'px',
+            bottom: bottomOffset + 'px',
+            viewport: { w: window.innerWidth, h: window.innerHeight },
+            sheld: { right: sheldRect.right, width: sheldRect.width },
+            sendForm: sendForm ? sendForm.getBoundingClientRect() : null,
+        });
+    }
 }
 
 function hideButton() {
