@@ -151,6 +151,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 import { initInspector } from './src/systems/generation/inspector.js';
 import { initInspectorModal } from './src/systems/ui/inspectorModal.js';
 import { initMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
+import { initMobileFocusLogger } from './src/systems/ui/mobileFocusLogger.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -183,6 +184,7 @@ async function addExtensionSettings() {
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initInspectorModal(); } catch (e) { console.error('[Dooms Tracker] initInspectorModal() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
+    try { initMobileFocusLogger(); } catch (e) { console.error('[Dooms Tracker] initMobileFocusLogger() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
     // Load the HTML template for the settings
     const settingsHtml = await renderExtensionTemplateAsync(extensionName, 'settings');
