@@ -21421,13 +21421,14 @@ body.dooms-hide-st-topbar .openDrawer {
        fully removed from the layout/hit-target when not active. */
     display: none;
     position: absolute;
-    /* Sit just above the form, 14px in from the right edge. bottom:100%
-       puts the button's bottom at the form's top; the margin gives an
-       8px gap so the button doesn't collide with the swipe arrow that
-       sits inside the last message bubble. */
+    /* Sit above the form + swipe arrow. bottom:100% puts the button's
+       bottom at the form's top; margin-bottom adds enough clearance
+       so the button doesn't collide with the per-message swipe `>`
+       arrow that sits at the bottom-right of the last message bubble,
+       just above the form. */
     bottom: 100%;
     right: 14px;
-    margin-bottom: 8px;
+    margin-bottom: 50px;
     width: 44px;
     height: 44px;
     border-radius: 50%;
