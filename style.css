@@ -21400,18 +21400,34 @@ body.dooms-hide-st-topbar .openDrawer {
    Floating button on the right edge of the chat that appears when the
    user scrolls up, lets them jump back to their most recent user
    message, and auto-hides after 2 seconds.
+
+   Positioning: the JS appends this button INSIDE ST's #send_form so
+   the button rides along with the form when the soft keyboard opens
+   or the layout shifts. No JS measurements — CSS handles everything.
    ============================================ */
+
+/* Ensure the parent anchors absolute children correctly. ST's
+   #send_form is usually position:relative already (it holds the
+   textarea + send button row), but enforce it so this isn't fragile
+   against ST style refactors. overflow:visible likewise so our
+   button can extend above the form boundary. */
+#send_form {
+    position: relative;
+    overflow: visible;
+}
 
 .dooms-mobile-quick-jump {
     /* Hidden until JS adds .visible. display:none here so the button is
        fully removed from the layout/hit-target when not active. */
     display: none;
-    position: fixed;
+    position: absolute;
+    /* Sit just above the form, 14px in from the right edge. bottom:100%
+       puts the button's bottom at the form's top; the margin gives an
+       8px gap so the button doesn't collide with the swipe arrow that
+       sits inside the last message bubble. */
+    bottom: 100%;
     right: 14px;
-    /* Above the chat input area. ST's send form is ~70px tall on mobile
-       plus safe-area padding; 110px clears it without floating into the
-       middle of the screen. */
-    bottom: 110px;
+    margin-bottom: 8px;
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -21423,8 +21439,6 @@ body.dooms-hide-st-topbar .openDrawer {
     line-height: 1;
     cursor: pointer;
     z-index: 1500;
-    /* Hint to the browser that this element animates often so transforms
-       composite on the GPU and the fade-in stays smooth on mobile. */
     will-change: opacity, transform;
     opacity: 0;
     transform: translateY(8px);
@@ -21443,12 +21457,23 @@ body.dooms-hide-st-topbar .openDrawer {
     background: rgba(233, 69, 96, 0.85);
 }
 
+/* Fallback positioning when the button gets appended to <body> because
+   #send_form / #sheld weren't available (transient during ST boot).
+   In that case absolute positioning would anchor to whatever positioned
+   ancestor body lives in (usually none → viewport), so override to
+   position:fixed with viewport offsets. */
+body > .dooms-mobile-quick-jump {
+    position: fixed;
+    bottom: 110px;
+    right: 14px;
+    margin-bottom: 0;
+}
+
 /* DEBUG MODE: when DEBUG_FORCE_VISIBLE is on the JS adds body.dooms-debug-quick-jump.
    We use that as a hook to make the button visually impossible to miss
    so we can verify it's actually painting, even on mobile where small
-   subdued buttons get lost in a busy UI. Bright red, double-sized,
-   labelled. Strip these styles together with the body class once
-   debugging is done. */
+   subdued buttons get lost in a busy UI. Strip these styles together
+   with the body class once debugging is done. */
 body.dooms-debug-quick-jump .dooms-mobile-quick-jump.visible {
     width: 72px;
     height: 72px;

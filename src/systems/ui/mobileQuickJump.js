@@ -1,17 +1,23 @@
 /**
  * Mobile Quick-Jump button.
  *
- * Adds a small floating button on the right edge of the screen, above the
- * chat input, that lets the user scroll back to their last sent message
- * with one tap. Tapping again (when already at that message) cycles back
- * to the previous user message, so repeated taps walk you up through
- * your own inputs.
+ * Adds a small floating button right at the corner of the chat input,
+ * above the swipe arrow, that lets the user scroll back to their last
+ * sent message with one tap. Tapping again (when already at that
+ * message) cycles back to the previous user message, so repeated taps
+ * walk you up through your own inputs.
  *
  * Lifecycle:
  *   - hidden by default
  *   - upward scroll on #chat reveals the button
  *   - 2 seconds after the last upward scroll, it auto-hides
  *   - tapping the button also hides it immediately
+ *
+ * Positioning: the button is appended INSIDE ST's #send_form (or its
+ * parent if the form isn't there yet) and positioned with plain CSS
+ * (absolute, bottom: 100%, right: 14px). No JS measurements, no
+ * resize handlers, no chatchange retries — CSS tracks the form
+ * automatically when the soft keyboard opens or the layout shifts.
  *
  * Mobile only — uses the same `window.innerWidth <= 1000` breakpoint as
  * the rest of DES's mobile UI (see src/systems/ui/mobile.js).
@@ -34,7 +40,8 @@ const SCROLL_UP_THRESHOLD_PX = 12;
 //   - the button is pinned visible from init (no scroll-up needed)
 //   - the 2-second auto-hide timer is suppressed
 //   - the mobile breakpoint check is bypassed so you can test on desktop
-//     responsive mode and full desktop without a touch device
+//   - the button is rendered with loud styling (see style.css
+//     `body.dooms-debug-quick-jump` rules)
 // Console will log "DEBUG_FORCE_VISIBLE on" once at init so you can confirm
 // the module loaded.
 const DEBUG_FORCE_VISIBLE = true;
@@ -54,8 +61,28 @@ function getChat() {
     return document.getElementById('chat');
 }
 
+/**
+ * Pick the closest stable parent to anchor the button to. Preference:
+ *   1. #send_form  — sits at the bottom of the chat, moves with keyboard
+ *   2. #sheld      — chat wrapper, slightly worse since its bottom is
+ *                    affected by other DES injections (portrait bar, etc.)
+ *   3. body        — last resort, falls back to viewport-fixed via CSS
+ */
+function pickAnchor() {
+    return document.getElementById('send_form')
+        || document.getElementById('sheld')
+        || document.body;
+}
+
 function ensureButton() {
-    if (_btn && document.body.contains(_btn)) return _btn;
+    const desiredParent = pickAnchor();
+    if (_btn && _btn.parentElement === desiredParent) return _btn;
+    if (_btn) {
+        // Anchor swapped (ST DOM rebuilt) — move the existing element
+        // rather than creating a new one to keep its event listener.
+        desiredParent.appendChild(_btn);
+        return _btn;
+    }
     const btn = document.createElement('button');
     btn.id = BUTTON_ID;
     btn.type = 'button';
@@ -64,7 +91,7 @@ function ensureButton() {
     btn.title = 'Jump to your last message';
     btn.innerHTML = '<i class="fa-solid fa-reply" aria-hidden="true"></i>';
     btn.addEventListener('click', onClick);
-    document.body.appendChild(btn);
+    desiredParent.appendChild(btn);
     _btn = btn;
     return btn;
 }
@@ -76,67 +103,13 @@ function showButton() {
     }
     const btn = ensureButton();
     btn.classList.add('visible');
-    repositionButton();
     if (_hideTimer) clearTimeout(_hideTimer);
-    // Skip the auto-hide while debugging so the button stays pinned and
-    // the click handler can be tested at will.
     if (!DEBUG_FORCE_VISIBLE) {
         _hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
     }
 }
 
-/**
- * Positions the button just above the send form, aligned with the right
- * edge of the chat panel. We keep position:fixed for stability across
- * #sheld's flex layout, but compute right/bottom from live element
- * rects so the button tracks the actual chat panel — not the viewport
- * edge — when the chat doesn't span the full screen width (DES side
- * panels, narrow ST layouts, desktop responsive testing).
- *
- * Falls back to fixed defaults if the ST elements aren't in the DOM yet.
- */
-// Vertical gap between the button's bottom edge and the top of #send_form.
-// Set high enough that the button sits clearly above the per-message
-// swipe `>` arrow (which is rendered inside the last message bubble,
-// typically just above the send form). 60px clears the swipe arrow
-// without floating into the middle of the chat content.
-const GAP_ABOVE_SEND_FORM_PX = 60;
-
-function repositionButton() {
-    if (!_btn) return;
-    const sheld = document.getElementById('sheld');
-    const sendForm = document.getElementById('send_form');
-    if (!sheld) {
-        _btn.style.right = '';
-        _btn.style.bottom = '';
-        if (DEBUG_FORCE_VISIBLE) console.log('[Dooms Tracker] MobileQuickJump: #sheld not found — falling back to CSS defaults');
-        return;
-    }
-    const sheldRect = sheld.getBoundingClientRect();
-    const rightOffset = Math.max(14, window.innerWidth - sheldRect.right + 14);
-    let bottomOffset = 110;
-    if (sendForm) {
-        const formRect = sendForm.getBoundingClientRect();
-        // Clamp >= 60 so the button never hugs the very bottom if the
-        // form rect is somehow zero.
-        bottomOffset = Math.max(60, window.innerHeight - formRect.top + GAP_ABOVE_SEND_FORM_PX);
-    }
-    _btn.style.right = rightOffset + 'px';
-    _btn.style.bottom = bottomOffset + 'px';
-    if (DEBUG_FORCE_VISIBLE) {
-        console.log('[Dooms Tracker] MobileQuickJump positioned at', {
-            right: rightOffset + 'px',
-            bottom: bottomOffset + 'px',
-            viewport: { w: window.innerWidth, h: window.innerHeight },
-            sheld: { right: sheldRect.right, width: sheldRect.width },
-            sendForm: sendForm ? sendForm.getBoundingClientRect() : null,
-        });
-    }
-}
-
 function hideButton() {
-    // While debugging, no-op: keep the button pinned so the user can test
-    // the click handler without racing the auto-hide timer.
     if (DEBUG_FORCE_VISIBLE) return;
     if (_btn) _btn.classList.remove('visible');
     if (_hideTimer) {
@@ -149,18 +122,12 @@ function onScroll() {
     const chat = getChat();
     if (!chat) return;
     const top = chat.scrollTop;
-    // Detect upward scroll. The threshold filters out tiny jitter from
-    // touch momentum bouncing back the other direction by 1-2px.
     if (top < _lastScrollTop - SCROLL_UP_THRESHOLD_PX) {
         showButton();
     }
     _lastScrollTop = top;
 }
 
-/**
- * Returns the index of the user message currently aligned with the top of
- * the chat viewport (within AT_MESSAGE_TOLERANCE_PX), or -1 if none.
- */
 function findActiveUserMessageIndex(userMessages, chatRect) {
     for (let i = 0; i < userMessages.length; i++) {
         const r = userMessages[i].getBoundingClientRect();
@@ -175,22 +142,16 @@ function findActiveUserMessageIndex(userMessages, chatRect) {
 function onClick() {
     const chat = getChat();
     if (!chat) { hideButton(); return; }
-    // ST renders user messages with `is_user="true"` on the message wrapper.
     const userMessages = chat.querySelectorAll('.mes[is_user="true"]');
     if (userMessages.length === 0) { hideButton(); return; }
     const chatRect = chat.getBoundingClientRect();
     const activeIdx = findActiveUserMessageIndex(userMessages, chatRect);
     let target;
     if (activeIdx === -1) {
-        // Not currently sitting on any user message → go to the most
-        // recent one. Common case: user just scrolled up to read history.
         target = userMessages[userMessages.length - 1];
     } else if (activeIdx > 0) {
-        // Sitting on a user message → walk back one.
         target = userMessages[activeIdx - 1];
     } else {
-        // Already at the very first user message — nothing to walk back
-        // to, so do nothing rather than jumping somewhere unexpected.
         hideButton();
         return;
     }
@@ -198,49 +159,35 @@ function onClick() {
     hideButton();
 }
 
-/**
- * Wire up the scroll listener. Safe to call more than once — guard flag
- * prevents double-binding.
- */
 export function initMobileQuickJump() {
     if (_bound) return;
     _bound = true;
     if (DEBUG_FORCE_VISIBLE) {
-        console.log('[Dooms Tracker] MobileQuickJump: DEBUG_FORCE_VISIBLE on — button pinned visible on all viewports. Flip the const off in src/systems/ui/mobileQuickJump.js before shipping.');
-        // Tag body so CSS bypasses the desktop @media hide rule. Without
-        // this the button stays invisible on viewports > 1000px even
-        // though the JS thinks it's visible.
+        console.log('[Dooms Tracker] MobileQuickJump: DEBUG_FORCE_VISIBLE on — flip the const off in src/systems/ui/mobileQuickJump.js before shipping.');
         document.body.classList.add('dooms-debug-quick-jump');
     }
-    // Delegated listener: ST sometimes recreates #chat on chat changes,
-    // so binding directly to the current element would break across chats.
-    // Listening on document with a #chat selector survives the rebuild.
     $(document).on('scroll.doomsQuickJump', '#chat', onScroll);
-    // Reset baseline when the chat element changes so a fresh chat at
-    // scrollTop=0 doesn't immediately trigger the button on the next
-    // small scroll. Also reposition since chat changes can resize the
-    // panel (e.g., new chat with different scene tracker height).
+    // Chat changes can rebuild the send form (and our button along
+    // with it), so re-ensure the anchor after the DOM settles.
     $(document).on('chatchange.doomsQuickJump', () => {
         _lastScrollTop = 0;
-        repositionButton();
+        // ST may rebuild #send_form on chat switch — re-attach.
+        if (_btn && !document.body.contains(_btn)) {
+            ensureButton();
+        } else if (_btn) {
+            // Anchor swap if needed.
+            const desired = pickAnchor();
+            if (_btn.parentElement !== desired) {
+                desired.appendChild(_btn);
+            }
+        }
     });
-    // Reposition + hide on resize. Resize fires when the soft keyboard
-    // opens on mobile and when DES panels open/close, both of which can
-    // shove the send form to a different y.
-    window.addEventListener('resize', () => {
-        if (!isMobile()) hideButton();
-        else repositionButton();
-    });
-    // While debugging, show the button immediately so the user can verify
-    // it renders and the click handler works without depending on scroll
-    // detection (which is the most likely thing to be silently broken).
     if (DEBUG_FORCE_VISIBLE) {
+        // Show immediately on init so the user can verify the button
+        // paints and the click handler works.
         showButton();
-        // ST's #sheld / #send_form may not be in the DOM at the exact
-        // moment this init runs. Retry the reposition a couple of times
-        // so the debug-pinned button still snaps to the right anchor
-        // once ST finishes painting.
-        setTimeout(repositionButton, 500);
-        setTimeout(repositionButton, 1500);
+        // If the form isn't in the DOM yet, retry mounting once it is.
+        setTimeout(() => { if (DEBUG_FORCE_VISIBLE) showButton(); }, 500);
+        setTimeout(() => { if (DEBUG_FORCE_VISIBLE) showButton(); }, 1500);
     }
 }
