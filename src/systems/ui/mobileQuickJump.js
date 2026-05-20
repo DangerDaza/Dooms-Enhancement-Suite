@@ -29,12 +29,24 @@ const AT_MESSAGE_TOLERANCE_PX = 120;
 // (filters jitter and momentum overshoot from touch devices).
 const SCROLL_UP_THRESHOLD_PX = 12;
 
+// ─── DEBUG ──────────────────────────────────────────────────────────────────
+// Flip to false before shipping. While true:
+//   - the button is pinned visible from init (no scroll-up needed)
+//   - the 2-second auto-hide timer is suppressed
+//   - the mobile breakpoint check is bypassed so you can test on desktop
+//     responsive mode and full desktop without a touch device
+// Console will log "DEBUG_FORCE_VISIBLE on" once at init so you can confirm
+// the module loaded.
+const DEBUG_FORCE_VISIBLE = true;
+// ────────────────────────────────────────────────────────────────────────────
+
 let _btn = null;
 let _hideTimer = null;
 let _lastScrollTop = 0;
 let _bound = false;
 
 function isMobile() {
+    if (DEBUG_FORCE_VISIBLE) return true;
     return window.innerWidth <= MOBILE_BREAKPOINT_PX;
 }
 
@@ -65,10 +77,17 @@ function showButton() {
     const btn = ensureButton();
     btn.classList.add('visible');
     if (_hideTimer) clearTimeout(_hideTimer);
-    _hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
+    // Skip the auto-hide while debugging so the button stays pinned and
+    // the click handler can be tested at will.
+    if (!DEBUG_FORCE_VISIBLE) {
+        _hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
+    }
 }
 
 function hideButton() {
+    // While debugging, no-op: keep the button pinned so the user can test
+    // the click handler without racing the auto-hide timer.
+    if (DEBUG_FORCE_VISIBLE) return;
     if (_btn) _btn.classList.remove('visible');
     if (_hideTimer) {
         clearTimeout(_hideTimer);
@@ -136,6 +155,13 @@ function onClick() {
 export function initMobileQuickJump() {
     if (_bound) return;
     _bound = true;
+    if (DEBUG_FORCE_VISIBLE) {
+        console.log('[Dooms Tracker] MobileQuickJump: DEBUG_FORCE_VISIBLE on — button pinned visible on all viewports. Flip the const off in src/systems/ui/mobileQuickJump.js before shipping.');
+        // Tag body so CSS bypasses the desktop @media hide rule. Without
+        // this the button stays invisible on viewports > 1000px even
+        // though the JS thinks it's visible.
+        document.body.classList.add('dooms-debug-quick-jump');
+    }
     // Delegated listener: ST sometimes recreates #chat on chat changes,
     // so binding directly to the current element would break across chats.
     // Listening on document with a #chat selector survives the rebuild.
@@ -148,4 +174,10 @@ export function initMobileQuickJump() {
     window.addEventListener('resize', () => {
         if (!isMobile()) hideButton();
     });
+    // While debugging, show the button immediately so the user can verify
+    // it renders and the click handler works without depending on scroll
+    // detection (which is the most likely thing to be silently broken).
+    if (DEBUG_FORCE_VISIBLE) {
+        showButton();
+    }
 }
