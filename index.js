@@ -2504,7 +2504,17 @@ jQuery(async () => {
         try {
             let vkTimer;
             let vkActive = false;
+            // Last seen viewport height. Drives open-vs-close direction
+            // detection so we can hold the kill class longer + nudge iOS
+            // into relayouts when the keyboard closes.
+            let lastVkHeight = window.visualViewport?.height || window.innerHeight;
             const killTransitions = () => {
+                const newHeight = window.visualViewport?.height || window.innerHeight;
+                // 50px threshold filters jitter from URL-bar show/hide on
+                // mobile Safari, which would otherwise mis-flag tiny
+                // viewport changes as a full keyboard cycle.
+                const isClosing = newHeight > lastVkHeight + 50;
+                lastVkHeight = newHeight;
                 // Apply the class synchronously on the FIRST fire so transitions
                 // are killed before the browser can start a transitioning layout.
                 // Subsequent fires during the same keyboard animation are no-ops
@@ -2514,16 +2524,42 @@ jQuery(async () => {
                     document.body.classList.add('dooms-vk-resizing');
                 }
                 clearTimeout(vkTimer);
-                // 600ms covers the keyboard animation (~300-400ms) plus one
-                // full reflow cycle.  We only re-enable after a full rAF so the
-                // browser has actually painted the new layout before transitions
-                // can kick in again.
+                // Close path takes much longer to reflow than open: the
+                // chat container has to grow back to full height with all
+                // its message children re-flexing, while open only had to
+                // shrink. iOS Safari additionally sometimes doesn't fire
+                // a relayout for the close transition at all, leaving the
+                // input "stuck high" for up to 10s. Hold longer + nudge.
+                const holdMs = isClosing ? 1500 : 600;
                 vkTimer = setTimeout(() => {
                     requestAnimationFrame(() => {
                         vkActive = false;
                         document.body.classList.remove('dooms-vk-resizing');
+                        if (isClosing) {
+                            forceMobileRelayout();
+                        }
                     });
-                }, 600);
+                }, holdMs);
+            };
+            // Force the browser to recompute layout. iOS Safari's keyboard-
+            // close handling sometimes updates visualViewport.height but
+            // never invalidates the page layout, so #sheld / #chat /
+            // #send_form stay sized for the keyboard-open state. Reading
+            // offsetHeight triggers a synchronous reflow; toggling
+            // body.minHeight invalidates the cache so the next frame
+            // actually paints at the new size.
+            const forceMobileRelayout = () => {
+                if (window.innerWidth > 1000) return;
+                // Sync reflow — reading layout-affecting property is the
+                // standard browser-agnostic nudge.
+                // eslint-disable-next-line no-unused-expressions
+                document.body.offsetHeight;
+                const body = document.body;
+                const prevMin = body.style.minHeight;
+                body.style.minHeight = '100dvh';
+                requestAnimationFrame(() => {
+                    body.style.minHeight = prevMin;
+                });
             };
             // visualViewport fires during the keyboard animation itself
             if (window.visualViewport) {
@@ -2531,6 +2567,26 @@ jQuery(async () => {
             }
             // window resize fires as a fallback / when visualViewport isn't available
             window.addEventListener('resize', killTransitions);
+            // Belt-and-suspenders: when a keyboard-triggering input loses
+            // focus, iOS may not fire visualViewport.resize at all. Use
+            // focusout as an additional close signal — schedule a relayout
+            // nudge a moment later so the layout actually responds to
+            // the keyboard dismissal.
+            document.addEventListener('focusout', (e) => {
+                if (window.innerWidth > 1000) return;
+                const t = e.target;
+                if (!t || t.nodeType !== 1) return;
+                const isKeyboardInput =
+                    t.tagName === 'TEXTAREA' ||
+                    (t.tagName === 'INPUT' && !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'hidden', 'range', 'color'].includes((t.type || '').toLowerCase())) ||
+                    t.getAttribute('contenteditable') === 'true';
+                if (!isKeyboardInput) return;
+                // Wait long enough for the keyboard close animation to
+                // start dropping height before nudging; otherwise we
+                // reflow against the keyboard-open viewport and have to
+                // redo it.
+                setTimeout(forceMobileRelayout, 350);
+            }, /*useCapture*/ true);
 
             // ── Force textarea into view on keyboard open ──
             // On mobile, the #chat flex child (100s of messages) can take seconds
