@@ -21394,3 +21394,61 @@ body.dooms-hide-st-topbar .openDrawer {
     font-weight: 500;
     color: #ffffff;
 }
+
+/* ============================================
+   MOBILE QUICK-JUMP BUTTON
+   Floating button on the right edge of the chat that appears when the
+   user scrolls up, lets them jump back to their most recent user
+   message, and auto-hides after 2 seconds.
+   ============================================ */
+
+.dooms-mobile-quick-jump {
+    /* Hidden until JS adds .visible. display:none here so the button is
+       fully removed from the layout/hit-target when not active. */
+    display: none;
+    position: fixed;
+    right: 14px;
+    /* Above the chat input area. ST's send form is ~70px tall on mobile
+       plus safe-area padding; 110px clears it without floating into the
+       middle of the screen. */
+    bottom: 110px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(15, 17, 22, 0.85);
+    color: #e6e6e6;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 1500;
+    /* Hint to the browser that this element animates often so transforms
+       composite on the GPU and the fade-in stays smooth on mobile. */
+    will-change: opacity, transform;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.dooms-mobile-quick-jump.visible {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transform: translateY(0);
+}
+.dooms-mobile-quick-jump:active {
+    transform: translateY(0) scale(0.94);
+    background: rgba(233, 69, 96, 0.85);
+}
+
+/* Mobile breakpoint matches the JS check in mobileQuickJump.js
+   (window.innerWidth <= 1000). On desktop we force-hide so the button
+   can never appear even if the visible class is somehow added. */
+@media (min-width: 1001px) {
+    .dooms-mobile-quick-jump,
+    .dooms-mobile-quick-jump.visible {
+        display: none !important;
+    }
+}
