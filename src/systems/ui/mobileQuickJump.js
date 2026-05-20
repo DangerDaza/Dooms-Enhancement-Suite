@@ -76,12 +76,47 @@ function showButton() {
     }
     const btn = ensureButton();
     btn.classList.add('visible');
+    repositionButton();
     if (_hideTimer) clearTimeout(_hideTimer);
     // Skip the auto-hide while debugging so the button stays pinned and
     // the click handler can be tested at will.
     if (!DEBUG_FORCE_VISIBLE) {
         _hideTimer = setTimeout(hideButton, HIDE_DELAY_MS);
     }
+}
+
+/**
+ * Positions the button just above the send form, aligned with the right
+ * edge of the chat panel. We keep position:fixed for stability across
+ * #sheld's flex layout, but compute right/bottom from live element
+ * rects so the button tracks the actual chat panel — not the viewport
+ * edge — when the chat doesn't span the full screen width (DES side
+ * panels, narrow ST layouts, desktop responsive testing).
+ *
+ * Falls back to fixed defaults if the ST elements aren't in the DOM yet.
+ */
+function repositionButton() {
+    if (!_btn) return;
+    const sheld = document.getElementById('sheld');
+    const sendForm = document.getElementById('send_form');
+    if (!sheld) {
+        // Pre-init or fallback: just clear inline overrides and let the
+        // CSS default (right:14px; bottom:110px) handle it.
+        _btn.style.right = '';
+        _btn.style.bottom = '';
+        return;
+    }
+    const sheldRect = sheld.getBoundingClientRect();
+    const rightOffset = Math.max(14, window.innerWidth - sheldRect.right + 14);
+    let bottomOffset = 110;
+    if (sendForm) {
+        const formRect = sendForm.getBoundingClientRect();
+        // 8px gap above the input form. clamp to >= 12 so the button
+        // never hugs the very bottom if the form rect is somehow zero.
+        bottomOffset = Math.max(12, window.innerHeight - formRect.top + 8);
+    }
+    _btn.style.right = rightOffset + 'px';
+    _btn.style.bottom = bottomOffset + 'px';
 }
 
 function hideButton() {
@@ -168,16 +203,29 @@ export function initMobileQuickJump() {
     $(document).on('scroll.doomsQuickJump', '#chat', onScroll);
     // Reset baseline when the chat element changes so a fresh chat at
     // scrollTop=0 doesn't immediately trigger the button on the next
-    // small scroll.
-    $(document).on('chatchange.doomsQuickJump', () => { _lastScrollTop = 0; });
-    // Hide when leaving mobile viewport.
+    // small scroll. Also reposition since chat changes can resize the
+    // panel (e.g., new chat with different scene tracker height).
+    $(document).on('chatchange.doomsQuickJump', () => {
+        _lastScrollTop = 0;
+        repositionButton();
+    });
+    // Reposition + hide on resize. Resize fires when the soft keyboard
+    // opens on mobile and when DES panels open/close, both of which can
+    // shove the send form to a different y.
     window.addEventListener('resize', () => {
         if (!isMobile()) hideButton();
+        else repositionButton();
     });
     // While debugging, show the button immediately so the user can verify
     // it renders and the click handler works without depending on scroll
     // detection (which is the most likely thing to be silently broken).
     if (DEBUG_FORCE_VISIBLE) {
         showButton();
+        // ST's #sheld / #send_form may not be in the DOM at the exact
+        // moment this init runs. Retry the reposition a couple of times
+        // so the debug-pinned button still snaps to the right anchor
+        // once ST finishes painting.
+        setTimeout(repositionButton, 500);
+        setTimeout(repositionButton, 1500);
     }
 }
