@@ -48,7 +48,39 @@ function ts() {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
 
+// V8 default stack trace limit is 10 frames; bump it so we can walk
+// past jQuery's internal dispatch chain to the real caller. Affects
+// only stacks created from now on, so no risk of perturbing other code.
+try { Error.stackTraceLimit = 60; } catch {}
+
 let _bound = false;
+
+/**
+ * Monkey-patch HTMLElement.prototype.focus on #send_textarea so we can
+ * capture the stack at the EXACT call site, not after jQuery's event
+ * dispatch chain has buried it. This is the only way to see who's
+ * actually triggering the refocus — jQuery's $.fn.focus / trigger
+ * funnels every caller through anonymous internals, so the focusin
+ * listener sees only jquery frames.
+ *
+ * Patch is one-shot: applies on the first focus the listener sees,
+ * then reverts to the native method to avoid permanent overhead.
+ */
+function patchSendTextareaFocus() {
+    const ta = document.getElementById('send_textarea');
+    if (!ta || ta.__desFocusPatched) return;
+    ta.__desFocusPatched = true;
+    const native = HTMLElement.prototype.focus;
+    ta.focus = function (...args) {
+        try {
+            const stack = (new Error()).stack || '(no stack)';
+            // Trim the patch's own frame off the top.
+            const trimmed = stack.split('\n').slice(2, 30).join('\n');
+            console.log(`[DES focus-call] send_textarea.focus() called at ${ts()}\n${trimmed}`);
+        } catch {}
+        return native.apply(this, args);
+    };
+}
 
 /**
  * Sample viewport / chat / sheld heights every 200ms for 5 seconds after
@@ -107,7 +139,9 @@ export function initMobileFocusLogger() {
         const stack = (new Error()).stack || '(no stack)';
         // First few frames are the listener itself and the Error
         // constructor — skip them so the user sees the actual caller.
-        const trimmedStack = stack.split('\n').slice(2, 8).join('\n');
+        // Capture more frames so we can walk past jQuery's dispatch
+        // chain to the original .focus() / .trigger('focus') site.
+        const trimmedStack = stack.split('\n').slice(2, 30).join('\n');
         console.log(
             `[DES focus] ${shortDesc(el)} at ${ts()}\n` +
             `  fromActiveElement: ${shortDesc(prev || document.activeElement)}\n` +
@@ -115,6 +149,16 @@ export function initMobileFocusLogger() {
             `  stack:\n${trimmedStack}`
         );
     }, /*useCapture*/ true);
+    // Patch send_textarea.focus() so we catch programmatic refocus calls
+    // at their actual call sites. ST's textarea may not exist at module
+    // load — retry on a short interval until it does.
+    const patchInterval = setInterval(() => {
+        if (document.getElementById('send_textarea')) {
+            patchSendTextareaFocus();
+            clearInterval(patchInterval);
+        }
+    }, 200);
+    setTimeout(() => clearInterval(patchInterval), 10000);
     // Sample post-close viewport heights so we can see whether the
     // browser updates them promptly.
     document.addEventListener('focusout', (e) => {
