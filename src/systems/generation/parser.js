@@ -93,6 +93,24 @@ function debugLog(message, data = null) {
     }
 }
 /**
+ * Drop fields the user has disabled in settings. The AI sometimes
+ * keeps emitting sections after the user toggles them off (in-context
+ * inertia from past assistant messages in chat history). Stopping the
+ * data here means it never re-enters lastGeneratedData /
+ * committedTrackerData / message.extra.dooms_tracker_swipes, so it
+ * stops appearing in subsequent prompts' tracker examples and the
+ * self-reinforcing loop breaks within a turn or two.
+ *
+ * Called at every return point of parseResponse so no path leaks.
+ */
+function dropDisabledSections(result) {
+    if (!extensionSettings.showQuests)            result.quests = null;
+    if (!extensionSettings.showInfoBox)           result.infoBox = null;
+    if (!extensionSettings.showCharacterThoughts) result.characterThoughts = null;
+    return result;
+}
+
+/**
  * Parses the model response to extract the different data sections.
  * Extracts tracker data from markdown code blocks in the AI response.
  * Handles both separate code blocks and combined code blocks gracefully.
@@ -178,7 +196,7 @@ export function parseResponse(responseText) {
                 }
                 if (result.quests || result.infoBox || result.characterThoughts) {
                     debugLog('[RPG Parser] Returning unified JSON parse results');
-                    return result;
+                    return dropDisabledSections(result);
                 }
             }
         }
@@ -215,7 +233,7 @@ export function parseResponse(responseText) {
         }
         if (result.quests || result.infoBox || result.characterThoughts) {
             debugLog('[RPG Parser] Returning raw JSON parse results');
-            return result;
+            return dropDisabledSections(result);
         } else {
             console.warn('[RPG Parser] ⚠️ No tracker data extracted from', extractedObjects.length, 'objects');
         }
@@ -254,7 +272,7 @@ export function parseResponse(responseText) {
         // Mixed formats (some JSON, some text) will still work
         if (result.quests || result.infoBox || result.characterThoughts) {
             debugLog('[RPG Parser] Returning JSON parse results');
-            return result;
+            return dropDisabledSections(result);
         } else {
             console.warn('[RPG Parser] ⚠️ No tracker data extracted from', jsonMatches.length, 'JSON blocks');
         }
@@ -297,7 +315,7 @@ export function parseResponse(responseText) {
             }
         }
         debugLog('[RPG Parser] Parsed from XML:', result);
-        return result;
+        return dropDisabledSections(result);
     }
     // Fallback to markdown code block parsing (old text format or mixed format)
     debugLog('[RPG Parser] No XML tags found, using code block parser');
@@ -372,7 +390,7 @@ export function parseResponse(responseText) {
         result.parsingFailed = true;
         console.error('[RPG Parser] ❌ No tracker data found in response - parsing failed');
     }
-    return result;
+    return dropDisabledSections(result);
 } // End parseResponse
 /**
  * Parses quests from the AI response and updates extensionSettings.quests.

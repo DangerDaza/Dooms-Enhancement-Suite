@@ -480,8 +480,11 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
         return '';
     };
     try {
-        // Process quests if present and persistence is enabled
-        if (trackerData.quests) {
+        // Process quests if present and persistence is enabled.
+        // Also respect the global showQuests toggle: when the section is
+        // off, suppress historical quest data so it doesn't leak back into
+        // the prompt and re-prime the model to emit quests again.
+        if (trackerData.quests && extensionSettings.showQuests) {
             const questsConfig = trackerConfig.quests;
             const shouldIncludeQuests = useAllEnabled || questsConfig?.persistInHistory;
             if (shouldIncludeQuests) {
@@ -523,8 +526,10 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 }
             }
         }
-        // Process infoBox if present and has persistence-enabled widgets
-        if (trackerData.infoBox) {
+        // Process infoBox if present and has persistence-enabled widgets.
+        // Gate on global showInfoBox so disabling the section suppresses
+        // historical infoBox data from re-priming the model.
+        if (trackerData.infoBox && extensionSettings.showInfoBox) {
             const infoBoxConfig = trackerConfig.infoBox;
             const infoBoxData = typeof trackerData.infoBox === 'string'
                 ? JSON.parse(trackerData.infoBox)
@@ -564,8 +569,10 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 formatted += infoFormatted.slice(0, -2) + '\n';
             }
         }
-        // Process characterThoughts if present and has persistence-enabled fields
-        if (trackerData.characterThoughts) {
+        // Process characterThoughts if present and has persistence-enabled fields.
+        // Gate on global showCharacterThoughts so disabling the section
+        // suppresses historical character data from re-priming the model.
+        if (trackerData.characterThoughts && extensionSettings.showCharacterThoughts) {
             const charsConfig = trackerConfig.presentCharacters;
             const charsData = typeof trackerData.characterThoughts === 'string'
                 ? JSON.parse(trackerData.characterThoughts)
