@@ -21,7 +21,7 @@ export const DEFAULT_HTML_PROMPT = `If appropriate, include inline HTML, CSS, an
 /**
  * Default Dialogue Coloring prompt text
  */
-export const DEFAULT_DIALOGUE_COLORING_PROMPT = `Wrap all character/NPC "dialogues" in unique <font color=######>tags</font>, exemplary: <font color=#abc123>"You're pretty good."</font> Assign a distinct color to each speaker and reuse it whenever they speak again.`;
+export const DEFAULT_DIALOGUE_COLORING_PROMPT = `Wrap all character/NPC "dialogues" in unique <font color=######>tags</font>, exemplary: <font color=#abc123>"You're pretty good."</font> Assign a distinct color to each speaker and reuse it whenever they speak again. ALSO record the exact same hex on each character's "color" field in the characters tracker JSON so the renderer knows which color belongs to which speaker without guessing.`;
 // NOTE: Deception, Omniscience Filter, CYOA, and Spotify prompts have been
 // archived to src/archived-features.js for testing. Restore from there if needed.
 /**

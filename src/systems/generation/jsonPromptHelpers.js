@@ -138,6 +138,13 @@ export function buildCharactersJSONInstruction() {
     instruction += '  {\n';
     instruction += '    "name": "CharacterName",\n';
     instruction += '    "emoji": "Character Emoji"';
+    // Dialogue color — only ask for it when dialogue coloring is on, since
+    // it's the only feature that consumes the field. Including the color
+    // each character is being voiced in lets the bubble splitter look up
+    // speakers directly instead of guessing from surrounding narration.
+    if (extensionSettings.enableDialogueColoring) {
+        instruction += ',\n    "color": "#RRGGBB hex matching the <font color> you use for this character\'s dialogue"';
+    }
     // Details fields
     if (enabledFields.length > 0) {
         instruction += ',\n    "details": {\n';

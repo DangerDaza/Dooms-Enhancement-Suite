@@ -97,90 +97,103 @@ function getAssignedColor(speakerName) {
 }
 
 /**
- * Auto-assign colors that the AI just made up in this message to newly-
- * introduced characters, so the bubble splitter can attribute them
- * correctly on the very first turn they appear.
+ * Sync the color → speaker mapping from the AI's tracker output into
+ * characterColors so the bubble splitter has an authoritative source
+ * instead of guessing from surrounding narration.
  *
- * Algorithm (per user spec):
- *   1. Extract every <font color=#XXX> color used in the message, in
- *      order of first appearance.
- *   2. Drop colors that are already mapped to a character in
- *      characterColors — those are known speakers, bubble chat already
- *      handles them.
- *   3. From characterThoughts, take the list of characters present this
- *      turn and drop the ones already in characterColors — those are
- *      the "new" characters.
- *   4. Pair the new colors with the new characters in order
- *      (1st new color → 1st new name, etc.) and persist into
- *      characterColors so subsequent turns find them.
+ * Two paths, in priority order:
  *
- * Counts won't always match (AI sometimes reuses a known character's
- * color for narration, or introduces a character without coloring their
- * dialogue). We pair as many as we can, leave the rest alone. The
- * surrounding-narration fallback in detectSpeaker() catches anything
- * the pairing misses.
+ *   PRIMARY (Option A): each character entry in characterThoughts is
+ *   expected to carry an explicit `color` field that the AI sets to
+ *   match the <font color> hex it uses for that character's dialogue.
+ *   When present, this is the authoritative mapping — no inference
+ *   needed. Added by buildCharactersJSONInstruction() when dialogue
+ *   coloring is enabled.
+ *
+ *   FALLBACK (heuristic): for characters whose entry lacks an explicit
+ *   color (smaller models drop the field, older chats with characters
+ *   that predate the schema, etc.), pair "new colors appearing in the
+ *   message" with "characters present this turn that don't have a
+ *   color yet" in order of first appearance. Counts often won't match
+ *   cleanly; we register as many as we can and let the
+ *   surrounding-narration fallback in detectSpeaker() catch the rest.
+ *
+ *   Existing assignments are NEVER overwritten — once a character has
+ *   a color, this function only fills in gaps. To deliberately reassign
+ *   a color, do it through the Character Workshop or Roster.
  *
  * Called from onMessageReceived after the parser has committed
  * lastGeneratedData.characterThoughts and before applyChatBubbles runs.
  *
  * @param {string} messageText - the raw .mes string (contains <font> tags)
  * @param {string|object} characterThoughtsData - parsed/raw characterThoughts
- * @returns {number} number of new (color, name) pairs registered
+ * @returns {number} number of (color, name) pairs registered this call
  */
 export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
-    if (typeof messageText !== 'string' || !messageText) return 0;
     if (!characterThoughtsData) return 0;
 
     const colors = getActiveCharacterColors() || {};
-    const knownColors = new Set(
-        Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase())
-    );
-
-    // 1+2. Pull unknown colors out of the message, preserving order of
-    //      first appearance. The <font color> tag is the source of
-    //      truth — the AI may also wrap a name in <font> for emphasis,
-    //      but those just become "known speaker" lookups on the next
-    //      pass; harmless.
-    const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
-    const newColors = [];
-    const seenColors = new Set();
-    let m;
-    while ((m = fontTagRegex.exec(messageText)) !== null) {
-        const color = m[1].toLowerCase();
-        if (seenColors.has(color)) continue;
-        seenColors.add(color);
-        if (knownColors.has(color)) continue;
-        newColors.push(color);
-    }
-    if (newColors.length === 0) return 0;
-
-    // 3. New character names = present this turn AND not in characterColors.
     const presentChars = _extractCharacterEntries(characterThoughtsData);
-    const newNames = [];
+    if (presentChars.length === 0) return 0;
+
+    const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+    const registered = [];
+
+    // ─── Primary path: trust the AI's explicit color field ────────────────
+    // Characters that already have a color in characterColors are left
+    // alone — the entry's color field on this turn may differ, but the
+    // user's stored mapping wins until they explicitly clear/change it.
     for (const entry of presentChars) {
         const name = entry && entry.name;
         if (!name || typeof name !== 'string') continue;
-        if (colors[name]) continue; // already has a color
-        newNames.push(name);
+        if (colors[name]) continue;
+        const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
+        if (!HEX_RE.test(proposed)) continue;
+        colors[name] = proposed;
+        registered.push(`${name} → ${proposed} (from JSON)`);
     }
-    if (newNames.length === 0) return 0;
 
-    // 4. Pair in order. We deliberately use the active color store
-    //    (getActiveCharacterColors), which is per-chat-aware: writes go
-    //    to chat_metadata.dooms_tracker.characterColors when
-    //    perChatCharacterTracking is on, otherwise to extensionSettings.
-    const pairCount = Math.min(newColors.length, newNames.length);
-    for (let i = 0; i < pairCount; i++) {
-        colors[newNames[i]] = newColors[i];
-    }
-    if (pairCount > 0) {
-        try { saveCharacterRosterChange(); } catch (e) {
-            console.warn('[Dooms Tracker] harvestNewSpeakerColors: save failed', e);
+    // ─── Fallback path: positional pairing from message font tags ─────────
+    // Only runs for characters still without a color after the primary
+    // pass — i.e. the AI dropped the color field but did paint dialogue.
+    if (typeof messageText === 'string' && messageText) {
+        const knownColors = new Set(
+            Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase())
+        );
+        const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
+        const newColors = [];
+        const seenColors = new Set();
+        let m;
+        while ((m = fontTagRegex.exec(messageText)) !== null) {
+            const color = m[1].toLowerCase();
+            if (seenColors.has(color)) continue;
+            seenColors.add(color);
+            if (knownColors.has(color)) continue;
+            newColors.push(color);
         }
-        console.log(`[Dooms Tracker] Auto-assigned ${pairCount} new speaker color${pairCount === 1 ? '' : 's'}:`,
-            newNames.slice(0, pairCount).map((n, i) => `${n} → ${newColors[i]}`).join(', '));
+        if (newColors.length > 0) {
+            const newNames = [];
+            for (const entry of presentChars) {
+                const name = entry && entry.name;
+                if (!name || typeof name !== 'string') continue;
+                if (colors[name]) continue;
+                newNames.push(name);
+            }
+            const pairCount = Math.min(newColors.length, newNames.length);
+            for (let i = 0; i < pairCount; i++) {
+                colors[newNames[i]] = newColors[i];
+                registered.push(`${newNames[i]} → ${newColors[i]} (heuristic)`);
+            }
+        }
     }
-    return pairCount;
+
+    if (registered.length === 0) return 0;
+
+    try { saveCharacterRosterChange(); } catch (e) {
+        console.warn('[Dooms Tracker] harvestNewSpeakerColors: save failed', e);
+    }
+    console.log(`[Dooms Tracker] Registered ${registered.length} new speaker color${registered.length === 1 ? '' : 's'}: ${registered.join(', ')}`);
+    return registered.length;
 }
 
 /** Build a map from lowercase hex colour → character name.
