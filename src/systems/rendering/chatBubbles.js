@@ -183,12 +183,33 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     return pairCount;
 }
 
-/** Build a map from lowercase hex colour → character name */
+/** Build a map from lowercase hex colour → character name.
+ *  Scoped to characters PRESENT in the current scene — characters who
+ *  are merely "known" (e.g. they appeared in a previous scene but are
+ *  not in this turn's characterThoughts) are excluded.
+ *
+ *  Why: the AI sometimes reuses a color it previously assigned to an
+ *  absent-but-known character for a brand-new speaker in the current
+ *  scene. If we let absent-character mappings into the lookup, the
+ *  bubble splitter attributes the new speaker's lines to the absent
+ *  character (e.g. Brennan's dialogue showing up under Jewels because
+ *  the AI grabbed Jewels's old color). Filtering to present characters
+ *  makes the unknown-color path correctly fall through to
+ *  findClosestName, which finds the actual speaker from surrounding
+ *  narration. */
 function buildColorToSpeakerMap() {
     const map = new Map();
     const colors = getActiveCharacterColors();
+    const presentNames = new Set(
+        getCharacterList()
+            .filter(c => c && c.present !== false) // present-only when the flag exists
+            .map(c => String(c.name || '').toLowerCase())
+            .filter(Boolean)
+    );
     for (const [name, color] of Object.entries(colors)) {
-        if (color) map.set(color.toLowerCase(), name);
+        if (!color) continue;
+        if (!presentNames.has(name.toLowerCase())) continue;
+        map.set(color.toLowerCase(), name);
     }
     return map;
 }
