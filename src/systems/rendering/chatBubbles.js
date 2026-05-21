@@ -8,12 +8,41 @@
  * Original HTML is preserved in a data attribute for clean revert.
  */
 import { extensionSettings } from '../../core/state.js';
-import { getActiveCharacterColors, getActiveKnownCharacters } from '../../core/persistence.js';
+import { getActiveCharacterColors, getActiveKnownCharacters, saveCharacterRosterChange } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+
+/**
+ * Extract character entries from characterThoughts data. Inlined here
+ * (rather than imported from apiClient.js) to avoid the circular
+ * dependency rendering → apiClient → rendering. Mirrors
+ * parseCharacterEntriesFromThoughts() in apiClient.js — keep in sync
+ * if that one's parsing changes.
+ */
+function _extractCharacterEntries(characterThoughtsData) {
+    if (!characterThoughtsData) return [];
+    try {
+        const parsed = typeof characterThoughtsData === 'string'
+            ? JSON.parse(characterThoughtsData)
+            : characterThoughtsData;
+        const arr = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        return arr.filter(c => c && c.name && String(c.name).toLowerCase() !== 'unavailable');
+    } catch {
+        // Legacy text format fallback.
+        const lines = String(characterThoughtsData).split('\n');
+        const out = [];
+        for (const line of lines) {
+            if (line.trim().startsWith('- ')) {
+                const name = line.trim().slice(2).trim();
+                if (name && name.toLowerCase() !== 'unavailable') out.push({ name });
+            }
+        }
+        return out;
+    }
+}
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -65,6 +94,93 @@ function getAssignedColor(speakerName) {
     }
 
     return null;
+}
+
+/**
+ * Auto-assign colors that the AI just made up in this message to newly-
+ * introduced characters, so the bubble splitter can attribute them
+ * correctly on the very first turn they appear.
+ *
+ * Algorithm (per user spec):
+ *   1. Extract every <font color=#XXX> color used in the message, in
+ *      order of first appearance.
+ *   2. Drop colors that are already mapped to a character in
+ *      characterColors — those are known speakers, bubble chat already
+ *      handles them.
+ *   3. From characterThoughts, take the list of characters present this
+ *      turn and drop the ones already in characterColors — those are
+ *      the "new" characters.
+ *   4. Pair the new colors with the new characters in order
+ *      (1st new color → 1st new name, etc.) and persist into
+ *      characterColors so subsequent turns find them.
+ *
+ * Counts won't always match (AI sometimes reuses a known character's
+ * color for narration, or introduces a character without coloring their
+ * dialogue). We pair as many as we can, leave the rest alone. The
+ * surrounding-narration fallback in detectSpeaker() catches anything
+ * the pairing misses.
+ *
+ * Called from onMessageReceived after the parser has committed
+ * lastGeneratedData.characterThoughts and before applyChatBubbles runs.
+ *
+ * @param {string} messageText - the raw .mes string (contains <font> tags)
+ * @param {string|object} characterThoughtsData - parsed/raw characterThoughts
+ * @returns {number} number of new (color, name) pairs registered
+ */
+export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
+    if (typeof messageText !== 'string' || !messageText) return 0;
+    if (!characterThoughtsData) return 0;
+
+    const colors = getActiveCharacterColors() || {};
+    const knownColors = new Set(
+        Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase())
+    );
+
+    // 1+2. Pull unknown colors out of the message, preserving order of
+    //      first appearance. The <font color> tag is the source of
+    //      truth — the AI may also wrap a name in <font> for emphasis,
+    //      but those just become "known speaker" lookups on the next
+    //      pass; harmless.
+    const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
+    const newColors = [];
+    const seenColors = new Set();
+    let m;
+    while ((m = fontTagRegex.exec(messageText)) !== null) {
+        const color = m[1].toLowerCase();
+        if (seenColors.has(color)) continue;
+        seenColors.add(color);
+        if (knownColors.has(color)) continue;
+        newColors.push(color);
+    }
+    if (newColors.length === 0) return 0;
+
+    // 3. New character names = present this turn AND not in characterColors.
+    const presentChars = _extractCharacterEntries(characterThoughtsData);
+    const newNames = [];
+    for (const entry of presentChars) {
+        const name = entry && entry.name;
+        if (!name || typeof name !== 'string') continue;
+        if (colors[name]) continue; // already has a color
+        newNames.push(name);
+    }
+    if (newNames.length === 0) return 0;
+
+    // 4. Pair in order. We deliberately use the active color store
+    //    (getActiveCharacterColors), which is per-chat-aware: writes go
+    //    to chat_metadata.dooms_tracker.characterColors when
+    //    perChatCharacterTracking is on, otherwise to extensionSettings.
+    const pairCount = Math.min(newColors.length, newNames.length);
+    for (let i = 0; i < pairCount; i++) {
+        colors[newNames[i]] = newColors[i];
+    }
+    if (pairCount > 0) {
+        try { saveCharacterRosterChange(); } catch (e) {
+            console.warn('[Dooms Tracker] harvestNewSpeakerColors: save failed', e);
+        }
+        console.log(`[Dooms Tracker] Auto-assigned ${pairCount} new speaker color${pairCount === 1 ? '' : 's'}:`,
+            newNames.slice(0, pairCount).map((n, i) => `${n} → ${newColors[i]}`).join(', '));
+    }
+    return pairCount;
 }
 
 /** Build a map from lowercase hex colour → character name */

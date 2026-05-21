@@ -31,6 +31,7 @@ import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { updateChatSceneHeaders, resetSceneHeaderCache } from '../rendering/sceneHeaders.js';
+import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
@@ -166,6 +167,17 @@ export async function onMessageReceived(data) {
             }
             if (parsedData.characterThoughts) {
                 lastGeneratedData.characterThoughts = parsedData.characterThoughts;
+                // Auto-register any new (color → speaker) pairings the AI
+                // just introduced this turn, so the bubble splitter (which
+                // runs ~800ms after CHARACTER_MESSAGE_RENDERED) finds them
+                // in the color map instead of falling back to "closest
+                // known name in narration" and misattributing the new
+                // character's lines to whoever is mentioned nearby.
+                try {
+                    harvestNewSpeakerColors(lastMessage.mes, parsedData.characterThoughts);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
+                }
             }
             // ── Name Ban: enforce name rules before rendering & swipe storage ──
             if (extensionSettings.nameBan?.enabled) {
