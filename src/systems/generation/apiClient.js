@@ -28,6 +28,7 @@ import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
+import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { i18n } from '../../core/i18n.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { generateAvatarsForCharacters, generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -343,6 +344,16 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             }
             if (parsedData.characterThoughts) {
                 lastGeneratedData.characterThoughts = parsedData.characterThoughts;
+                // Register any new (color → speaker) pairings the AI introduced.
+                // together mode does this in onMessageReceived; separate/external
+                // mode has to do it here or the color store never gets populated,
+                // breaking both bubble color resolution and the reserved-colors
+                // assignment list fed back to the model.
+                try {
+                    harvestNewSpeakerColors(lastMessage?.mes || '', parsedData.characterThoughts);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
+                }
             }
             // Also store on assistant message if present (existing behavior).
             // Skip GuidedGenerations' synthetic tracker/note messages — they
