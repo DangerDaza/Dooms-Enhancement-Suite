@@ -196,29 +196,40 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     return registered.length;
 }
 
-/** Build a map from lowercase hex colour → character name.
- *  Scoped to characters PRESENT in the current scene — characters who
- *  are merely "known" (e.g. they appeared in a previous scene but are
- *  not in this turn's characterThoughts) are excluded.
+/** Build a color → speaker-name lookup for the bubble splitter.
  *
- *  Why: the AI sometimes reuses a color it previously assigned to an
- *  absent-but-known character for a brand-new speaker in the current
- *  scene. If we let absent-character mappings into the lookup, the
- *  bubble splitter attributes the new speaker's lines to the absent
- *  character (e.g. Brennan's dialogue showing up under Jewels because
- *  the AI grabbed Jewels's old color). Filtering to present characters
- *  makes the unknown-color path correctly fall through to
- *  findClosestName, which finds the actual speaker from surrounding
- *  narration. */
+ *  Includes every known character in the current chat — present AND
+ *  off-screen — so a character keeps a consistent color even when they
+ *  are not in this turn's scene (e.g. quoted in a flashback or speaking
+ *  from elsewhere).
+ *
+ *  Collision handling: the AI sometimes reuses a color it previously
+ *  assigned to an absent character for a brand-new on-screen speaker. To
+ *  keep that from attributing the new speaker's lines to the absent
+ *  character, we build the map in two passes — absent-but-known first,
+ *  present second — so a present speaker's color overrides any absent
+ *  character that happens to share it. Off-screen characters only own a
+ *  color that no present character has claimed. */
 function buildColorToSpeakerMap() {
     const map = new Map();
     const colors = getActiveCharacterColors();
+    const list = getCharacterList();
+    const knownNames = new Set(
+        list.map(c => String(c?.name || '').toLowerCase()).filter(Boolean)
+    );
     const presentNames = new Set(
-        getCharacterList()
-            .filter(c => c && c.present !== false) // present-only when the flag exists
+        list.filter(c => c && c.present !== false)
             .map(c => String(c.name || '').toLowerCase())
             .filter(Boolean)
     );
+    // Pass 1: absent-but-known characters in this chat (lower priority).
+    for (const [name, color] of Object.entries(colors)) {
+        if (!color) continue;
+        const lower = name.toLowerCase();
+        if (!knownNames.has(lower) || presentNames.has(lower)) continue;
+        map.set(color.toLowerCase(), name);
+    }
+    // Pass 2: present characters override on a shared color.
     for (const [name, color] of Object.entries(colors)) {
         if (!color) continue;
         if (!presentNames.has(name.toLowerCase())) continue;
