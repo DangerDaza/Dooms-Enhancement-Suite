@@ -150,7 +150,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 import { initInspectorModal } from './src/systems/ui/inspectorModal.js';
-import { initMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
+import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { initMobileFocusLogger } from './src/systems/ui/mobileFocusLogger.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
@@ -602,6 +602,11 @@ async function initUI() {
         extensionSettings.showQuests = $(this).prop('checked');
         saveSettings();
         updateChatSceneHeaders();
+    });
+    $('#rpg-toggle-mobile-quick-jump').on('change', function () {
+        extensionSettings.mobileQuickJumpEnabled = $(this).prop('checked');
+        saveSettings();
+        refreshMobileQuickJump();
     });
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
     $('#rpg-toggle-portrait-bar').on('change', function () {
@@ -1687,6 +1692,7 @@ async function initUI() {
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
+    $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
     $('#rpg-toggle-portrait-bar').prop('checked', extensionSettings.showPortraitBar ?? true);
     $('#rpg-portrait-alignment').val(extensionSettings.portraitAlignment || 'left');

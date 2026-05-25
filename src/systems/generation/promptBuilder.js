@@ -206,6 +206,17 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 instructions += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
             }
             instructions += '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
+            // Explicitly forbid disabled sections. Past assistant messages in
+            // the chat history may still contain these keys, and the model
+            // tends to mimic that shape; naming the forbidden keys here stops
+            // it without us having to strip/null the parsed data downstream.
+            const disabledKeys = [];
+            if (!extensionSettings.showQuests) disabledKeys.push('"quests"');
+            if (!extensionSettings.showInfoBox) disabledKeys.push('"infoBox"');
+            if (!extensionSettings.showCharacterThoughts) disabledKeys.push('"characters"');
+            if (disabledKeys.length > 0) {
+                instructions += ` Do NOT include the following key${disabledKeys.length > 1 ? 's' : ''} under any circumstances, even if earlier messages used ${disabledKeys.length > 1 ? 'them' : 'it'}: ${disabledKeys.join(', ')}.`;
+            }
         }
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
@@ -480,11 +491,8 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
         return '';
     };
     try {
-        // Process quests if present and persistence is enabled.
-        // Also respect the global showQuests toggle: when the section is
-        // off, suppress historical quest data so it doesn't leak back into
-        // the prompt and re-prime the model to emit quests again.
-        if (trackerData.quests && extensionSettings.showQuests) {
+        // Process quests if present and persistence is enabled
+        if (trackerData.quests) {
             const questsConfig = trackerConfig.quests;
             const shouldIncludeQuests = useAllEnabled || questsConfig?.persistInHistory;
             if (shouldIncludeQuests) {
@@ -526,10 +534,8 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 }
             }
         }
-        // Process infoBox if present and has persistence-enabled widgets.
-        // Gate on global showInfoBox so disabling the section suppresses
-        // historical infoBox data from re-priming the model.
-        if (trackerData.infoBox && extensionSettings.showInfoBox) {
+        // Process infoBox if present and has persistence-enabled widgets
+        if (trackerData.infoBox) {
             const infoBoxConfig = trackerConfig.infoBox;
             const infoBoxData = typeof trackerData.infoBox === 'string'
                 ? JSON.parse(trackerData.infoBox)
@@ -569,10 +575,8 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 formatted += infoFormatted.slice(0, -2) + '\n';
             }
         }
-        // Process characterThoughts if present and has persistence-enabled fields.
-        // Gate on global showCharacterThoughts so disabling the section
-        // suppresses historical character data from re-priming the model.
-        if (trackerData.characterThoughts && extensionSettings.showCharacterThoughts) {
+        // Process characterThoughts if present and has persistence-enabled fields
+        if (trackerData.characterThoughts) {
             const charsConfig = trackerConfig.presentCharacters;
             const charsData = typeof trackerData.characterThoughts === 'string'
                 ? JSON.parse(trackerData.characterThoughts)

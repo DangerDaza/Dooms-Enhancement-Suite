@@ -25,6 +25,7 @@ export let extensionSettings = {
     showQuests: true, // Show quests section
     showThoughtsInChat: false, // Show thoughts overlay in chat
     showPortraitBar: true, // Show collapsible portrait bar above chat input
+    mobileQuickJumpEnabled: true, // Mobile-only floating button to jump back to your last sent message
     narratorMode: false, // Use character card as narrator instead of fixed character references
     customNarratorPrompt: '', // Custom narrator mode prompt text (empty = use default)
     customContextInstructionsPrompt: '', // Custom context instructions prompt text (empty = use default)

@@ -21,7 +21,11 @@
  *
  * Mobile only — uses the same `window.innerWidth <= 1000` breakpoint as
  * the rest of DES's mobile UI (see src/systems/ui/mobile.js).
+ *
+ * Gated by the `mobileQuickJumpEnabled` setting (Display settings toggle).
  */
+
+import { extensionSettings } from '../../core/state.js';
 
 const BUTTON_ID = 'dooms-mobile-quick-jump';
 const MOBILE_BREAKPOINT_PX = 1000;
@@ -44,13 +48,18 @@ const SCROLL_UP_THRESHOLD_PX = 12;
 //     `body.dooms-debug-quick-jump` rules)
 // Console will log "DEBUG_FORCE_VISIBLE on" once at init so you can confirm
 // the module loaded.
-const DEBUG_FORCE_VISIBLE = true;
+const DEBUG_FORCE_VISIBLE = false;
 // ────────────────────────────────────────────────────────────────────────────
 
 let _btn = null;
 let _hideTimer = null;
 let _lastScrollTop = 0;
 let _bound = false;
+
+function isEnabled() {
+    // Default on when the setting hasn't been written yet.
+    return extensionSettings.mobileQuickJumpEnabled !== false;
+}
 
 function isMobile() {
     if (DEBUG_FORCE_VISIBLE) return true;
@@ -97,7 +106,7 @@ function ensureButton() {
 }
 
 function showButton() {
-    if (!isMobile()) {
+    if (!isEnabled() || !isMobile()) {
         hideButton();
         return;
     }
@@ -126,6 +135,17 @@ function onScroll() {
         showButton();
     }
     _lastScrollTop = top;
+}
+
+// Bind directly to the #chat element. scroll events do NOT bubble, so jQuery
+// delegation ($(document).on('scroll', '#chat', ...)) never fires — the
+// listener has to sit on the scrolling element itself. Re-bind idempotently
+// (same function reference) so chatchange re-attach doesn't stack handlers.
+function bindScroll() {
+    const chat = getChat();
+    if (!chat) return;
+    chat.removeEventListener('scroll', onScroll);
+    chat.addEventListener('scroll', onScroll, { passive: true });
 }
 
 function findActiveUserMessageIndex(userMessages, chatRect) {
@@ -166,11 +186,12 @@ export function initMobileQuickJump() {
         console.log('[Dooms Tracker] MobileQuickJump: DEBUG_FORCE_VISIBLE on — flip the const off in src/systems/ui/mobileQuickJump.js before shipping.');
         document.body.classList.add('dooms-debug-quick-jump');
     }
-    $(document).on('scroll.doomsQuickJump', '#chat', onScroll);
+    bindScroll();
     // Chat changes can rebuild the send form (and our button along
     // with it), so re-ensure the anchor after the DOM settles.
     $(document).on('chatchange.doomsQuickJump', () => {
         _lastScrollTop = 0;
+        bindScroll();
         // ST may rebuild #send_form on chat switch — re-attach.
         if (_btn && !document.body.contains(_btn)) {
             ensureButton();
@@ -189,5 +210,16 @@ export function initMobileQuickJump() {
         // If the form isn't in the DOM yet, retry mounting once it is.
         setTimeout(() => { if (DEBUG_FORCE_VISIBLE) showButton(); }, 500);
         setTimeout(() => { if (DEBUG_FORCE_VISIBLE) showButton(); }, 1500);
+    }
+}
+
+/**
+ * Apply the current mobileQuickJumpEnabled setting at runtime. Called by the
+ * Display settings toggle: when switched off, hide the button immediately;
+ * when on, the next scroll-up reveals it.
+ */
+export function refreshMobileQuickJump() {
+    if (!isEnabled()) {
+        hideButton();
     }
 }
