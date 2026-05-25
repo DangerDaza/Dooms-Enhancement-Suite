@@ -187,6 +187,12 @@ export function initMobileQuickJump() {
         document.body.classList.add('dooms-debug-quick-jump');
     }
     bindScroll();
+    // #chat may not exist yet this early in ST startup; retry so we don't
+    // depend solely on a chatchange firing after init.
+    if (!getChat()) {
+        setTimeout(bindScroll, 500);
+        setTimeout(bindScroll, 1500);
+    }
     // Chat changes can rebuild the send form (and our button along
     // with it), so re-ensure the anchor after the DOM settles.
     $(document).on('chatchange.doomsQuickJump', () => {
@@ -221,5 +227,8 @@ export function initMobileQuickJump() {
 export function refreshMobileQuickJump() {
     if (!isEnabled()) {
         hideButton();
+        return;
     }
+    // Re-ensure the scroll listener in case #chat wasn't present at init.
+    bindScroll();
 }

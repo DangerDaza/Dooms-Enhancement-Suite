@@ -213,7 +213,11 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
             const disabledKeys = [];
             if (!extensionSettings.showQuests) disabledKeys.push('"quests"');
             if (!extensionSettings.showInfoBox) disabledKeys.push('"infoBox"');
-            if (!extensionSettings.showCharacterThoughts) disabledKeys.push('"characters"');
+            // Don't forbid "characters" while Dialogue Coloring is on: that
+            // feature records each speaker's hex on the characters tracker's
+            // color field, so suppressing the key would break coloring and
+            // the color harvest that feeds the reserved-colors list.
+            if (!extensionSettings.showCharacterThoughts && !extensionSettings.enableDialogueColoring) disabledKeys.push('"characters"');
             if (disabledKeys.length > 0) {
                 instructions += ` Do NOT include the following key${disabledKeys.length > 1 ? 's' : ''} under any circumstances, even if earlier messages used ${disabledKeys.length > 1 ? 'them' : 'it'}: ${disabledKeys.join(', ')}.`;
             }
