@@ -46,7 +46,7 @@ import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
 import { getSafeThumbnailUrl } from './src/utils/avatars.js';
 import { isSyntheticTrackerMessage } from './src/utils/messageGuards.js';
-import { renderInfoBox, updateInfoBoxField, initInfoBoxEventDelegation } from './src/systems/rendering/infoBox.js';
+import { renderInfoBox } from './src/systems/rendering/infoBox.js';
 import {
     renderThoughts,
     updateCharacterField,
@@ -542,7 +542,6 @@ async function initUI() {
     setThoughtsContainer($('#rpg-thoughts'));
     setQuestsContainer($('#rpg-quests'));
     // Register delegated event handlers ONCE (instead of re-attaching on every render)
-    initInfoBoxEventDelegation();
     initThoughtsEventDelegation();
     initQuestEventDelegation();
     // Lorebook Manager init
