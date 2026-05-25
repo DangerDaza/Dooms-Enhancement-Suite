@@ -107,7 +107,6 @@ import {
     injectReasoningTtsButtons
 } from './src/systems/rendering/chatBubbles.js';
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
-import { playLoadingIntro } from './src/systems/ui/loadingIntro.js';
 // Lorebook Manager modules
 import { setupLorebookModal, getLorebookModal } from './src/systems/ui/lorebookModal.js';
 import { initLorebookEventDelegation, renderLorebook } from './src/systems/rendering/lorebook.js';
@@ -901,10 +900,6 @@ async function initUI() {
         _pbSettings().absentOpacity = v;
         $('#rpg-pb-absent-opacity-value').text(v + '%');
         _savePb();
-    });
-    $('#rpg-loading-intro-mode').on('change', function () {
-        extensionSettings.loadingIntroMode = $(this).val();
-        saveSettings();
     });
     // ── Scene Tracker customization ──
     const _stSettings = () => {
@@ -1758,7 +1753,6 @@ async function initUI() {
     $('#rpg-pb-absent-opacity').val(pb.absentOpacity ?? 45);
     $('#rpg-pb-absent-opacity-value').text((pb.absentOpacity ?? 45) + '%');
     applyPortraitBarSettings();
-    $('#rpg-loading-intro-mode').val(extensionSettings.loadingIntroMode || 'off');
     $('#rpg-toggle-thoughts-in-chat').prop('checked', extensionSettings.showThoughtsInChat);
     // Scene Tracker customization
     const st = extensionSettings.sceneTracker || {};
@@ -2462,14 +2456,6 @@ jQuery(async () => {
         } catch (error) {
             console.error('[Dooms Tracker] Settings load failed, continuing with defaults:', error);
         }
-        // Play cinematic loading intro (if enabled) — runs CONCURRENTLY with initialization
-        // so the animation plays while everything loads in the background
-        let introPromise = Promise.resolve();
-        try {
-            introPromise = playLoadingIntro();
-        } catch (error) {
-            console.error('[Dooms Tracker] Loading intro failed:', error);
-        }
         // Check if migration to v3 JSON format is needed
         try {
             if (extensionSettings.settingsVersion < 3) {
@@ -2644,8 +2630,6 @@ jQuery(async () => {
             // Non-critical - continue without it
         }
         // Register all event listeners
-        // IMPORTANT: This must happen BEFORE await introPromise so we don't miss
-        // the CHAT_CHANGED event that ST fires while the loading intro is playing.
         try {
             registerAllEvents({
                 [event_types.MESSAGE_SENT]: onMessageSent,
@@ -2981,14 +2965,6 @@ jQuery(async () => {
             onCharacterChanged();
         }
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
-        // Wait for the intro animation to finish (if it's still playing).
-        // Everything is fully initialized at this point — we're just waiting for
-        // the visual overlay to fade out before revealing the loaded UI.
-        try {
-            await introPromise;
-        } catch (error) {
-            console.error('[Dooms Tracker] Loading intro failed:', error);
-        }
     } catch (error) {
         console.error('[Dooms Tracker] ❌ Critical initialization failure:', error);
         console.error('[Dooms Tracker] Error details:', error.message, error.stack);

@@ -29,7 +29,6 @@ export let extensionSettings = {
     narratorMode: false, // Use character card as narrator instead of fixed character references
     customNarratorPrompt: '', // Custom narrator mode prompt text (empty = use default)
     customContextInstructionsPrompt: '', // Custom context instructions prompt text (empty = use default)
-    loadingIntroMode: 'off', // Loading intro style: 'off', 'film-credits', or 'typewriter'
     enableHtmlPrompt: false, // Enable immersive HTML prompt injection
     customHtmlPrompt: '', // Custom HTML prompt text (empty = use default)
     enableDialogueColoring: false, // Enable dialogue coloring prompt injection
