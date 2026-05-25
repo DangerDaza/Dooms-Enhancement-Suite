@@ -2957,9 +2957,9 @@ jQuery(async () => {
             console.error('[Dooms Tracker] Event registration failed:', error);
             throw error; // This is critical - can't continue without events
         }
-        // If CHAT_CHANGED already fired while we were initializing (e.g. while the
-        // loading intro was playing), our handlers weren't registered in time and the
-        // initial render never happened. Trigger it now as a safety net.
+        // If CHAT_CHANGED already fired while we were initializing, our
+        // handlers weren't registered in time and the initial render never
+        // happened. Trigger it now as a safety net.
         if (chat && chat.length > 0) {
             onCharacterChanged();
         }

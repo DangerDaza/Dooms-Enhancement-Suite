@@ -2,18 +2,14 @@
  * Info Box Rendering Module
  * Handles rendering of the info box dashboard with weather, date, time, and location widgets
  */
-import { getContext } from '../../../../../../extensions.js';
 import {
     extensionSettings,
     lastGeneratedData,
     committedTrackerData,
     $infoBoxContainer
 } from '../../core/state.js';
-import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { i18n } from '../../core/i18n.js';
-import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
-import { separateEmojiFromText } from '../../utils/textUtils.js';
 /**
  * Helper to generate lock icon HTML if setting is enabled
  * @param {string} tracker - Tracker name
