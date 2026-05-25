@@ -481,11 +481,18 @@ export function parseCharacterEntriesFromThoughts(characterThoughtsData) {
         const parsed = typeof characterThoughtsData === 'string'
             ? JSON.parse(characterThoughtsData)
             : characterThoughtsData;
-        // Handle both {characters: [...]} and direct array formats
-        const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        // Handle both {characters: [...]} and direct array formats. Guard
+        // against a non-array characters field (e.g. the model emits
+        // "characters": "none") which would otherwise throw on .filter.
+        const charactersArray = Array.isArray(parsed)
+            ? parsed
+            : (Array.isArray(parsed?.characters) ? parsed.characters : []);
         if (charactersArray.length > 0) {
+            // String(char.name) guards against non-string names (e.g. a
+            // numeric or object name) that would crash on .toLowerCase().
             return charactersArray
-                .filter(char => char && char.name && char.name.toLowerCase() !== 'unavailable');
+                .filter(char => char && char.name != null && String(char.name).toLowerCase() !== 'unavailable')
+                .map(char => ({ ...char, name: String(char.name) }));
         }
     } catch (e) {
         // Not JSON, fall back to text parsing

@@ -23,6 +23,26 @@ import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '.
 const pendingGenerations = new Set();
 const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
 
+/**
+ * Sanitize an image prompt before it is interpolated into a `/sd` slash
+ * command. The prompt is model-generated free text, so it can contain
+ * characters that the slash-command parser treats as syntax:
+ *   - `|`        separates piped commands → would truncate the prompt
+ *   - newlines   end the single command line → would truncate the prompt
+ *   - `{{ }}`    macro delimiters → would be substituted unexpectedly
+ * We replace rather than escape so the result stays a clean, readable
+ * image prompt (a pipe becomes a comma, the usual prompt separator).
+ */
+function sanitizeForSlashCommand(text) {
+    return String(text ?? '')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/\|/g, ',')
+        .replace(/\{\{/g, '{')
+        .replace(/\}\}/g, '}')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
 export function isAutoPortraitModeEnabled() {
     return Boolean(
         extensionSettings.enabled &&
@@ -314,7 +334,7 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
     const previous = extensionSettings.npcAvatars?.[characterName];
     try {
         const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${prompt}`,
+            `/sd quiet=true ${sanitizeForSlashCommand(prompt)}`,
             { clearChatInput: false }
         );
         let imageUrl = extractImageUrl(result);
@@ -514,7 +534,7 @@ async function generateSingleAvatar(characterName, prompt = null) {
         }
         // Execute /sd command with quiet=true to suppress chat output
         const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${prompt}`,
+            `/sd quiet=true ${sanitizeForSlashCommand(prompt)}`,
             { clearChatInput: false }
         );
         // Extract image URL from result
