@@ -175,7 +175,7 @@ function buildColorAssignments() {
     const entries = Object.entries(colors).filter(([, color]) => color);
     if (entries.length === 0) return '';
     const assignments = entries.map(([name, color]) => `${name} = ${color}`).join(', ');
-    return ` Use these exact colors for the following characters: ${assignments}.`;
+    return ` Use these exact colors for the following characters: ${assignments}. These colors are RESERVED — never assign any of them to a different character. Any character not in this list must be given a brand-new, distinct hex color that does not match a reserved color or another character's color; with millions of colors available there is never a reason to reuse one.`;
 }
 
 function buildHistoricalContextMap() {
