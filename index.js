@@ -149,6 +149,12 @@ import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
+// ── Performance infrastructure ──
+import { DESPerf } from './src/core/perf.js';
+import { DESStateStore } from './src/core/stateStore.js';
+import { desEventBus } from './src/core/eventBus.js';
+import { FeatureRegistry } from './src/core/featureRegistry.js';
+import { bindVisibility as bindSchedulerVisibility } from './src/core/frameScheduler.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -2436,6 +2442,11 @@ jQuery(async () => {
         console.log('[Dooms Tracker] jQuery ready - Starting initialization...');
         console.log('[Dooms Tracker] extensionName:', extensionName);
         console.log('[Dooms Tracker] extensionSettings.enabled:', extensionSettings.enabled);
+        // ── Initialize performance infrastructure ──
+        bindSchedulerVisibility();
+        if (extensionSettings.doomCounter?.debugDisplay) {
+            DESPerf.setDebug(true);
+        }
         // Load settings with validation
         try {
             console.log('[Dooms Tracker] Loading settings...');
@@ -2955,6 +2966,15 @@ jQuery(async () => {
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
             throw error; // This is critical - can't continue without events
+        }
+        // ── Initialize DES Event Bus ──
+        // The event bus subscribes to SillyTavern events, computes state diffs,
+        // and notifies feature modules only when relevant state changed.
+        try {
+            desEventBus.init();
+            console.log('[Dooms Tracker] DES Event Bus initialized');
+        } catch (error) {
+            console.error('[Dooms Tracker] Event bus init failed:', error);
         }
         // If CHAT_CHANGED already fired while we were initializing (e.g. while the
         // loading intro was playing), our handlers weren't registered in time and the
