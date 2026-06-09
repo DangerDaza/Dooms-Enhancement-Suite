@@ -23,6 +23,8 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { openCharacterSheet } from './characterSheet.js';
+import { keyedReconcile } from '../../utils/domDiff.js';
+import { schedule } from '../../core/scheduler.js';
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -388,9 +390,33 @@ export function initPortraitBar() {
 // ─────────────────────────────────────────────
 
 /**
+ * Per-card steady-state HTML cache (name -> html). Lets the reconciler skip
+ * cards whose content hasn't changed without storing HTML in the DOM.
+ */
+const cardHtmlCache = new Map();
+
+/** Builds a detached element from an HTML string. */
+function htmlToElement(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html.trim();
+    return tpl.content.firstElementChild;
+}
+
+/**
  * Refreshes the portrait cards based on current character data.
+ * Scheduled through the render scheduler so bursts of calls (e.g. the
+ * CHAT_CHANGED handler chain) collapse into one render per frame.
  */
 export function updatePortraitBar() {
+    schedule('portraitBar', renderPortraitBarNow);
+}
+
+/**
+ * Immediate render. Reconciles existing cards in place instead of rebuilding
+ * the whole shelf, so unchanged cards keep their animations, scroll position,
+ * and hover state, and only changed/new/removed cards touch the DOM.
+ */
+function renderPortraitBarNow() {
     const $scroll = $('#dooms-pb-scroll');
     if (!$scroll.length) return;
 
@@ -419,10 +445,13 @@ export function updatePortraitBar() {
 
     if (totalCount === 0) {
         $scroll.html('<div class="dooms-pb-empty">No characters present</div>');
+        cardHtmlCache.clear();
         _previousCharacterNames = new Set();
         _initialRenderDone = true;
         return;
     }
+    // Leaving the empty state: remove the placeholder so reconcile sees only cards
+    $scroll.children('.dooms-pb-empty').remove();
 
     // Detect newly-arrived characters (only present ones, not absent)
     const currentPresentNames = new Set(characters.filter(c => c.present).map(c => c.name));
@@ -453,12 +482,12 @@ export function updatePortraitBar() {
     }
     if (colorsAssigned) saveCharacterRosterChange();
 
-    const cards = characters.map((char, idx) => {
+    // Build the steady-state HTML for each card (entrance markup is applied
+    // separately in onEnter so it never pollutes the diff cache).
+    const cardData = characters.map((char, idx) => {
         const portraitSrc = resolvePortrait(char.name);
         const speakingClass = (char.present && idx === 0) ? ' dooms-pb-speaking' : '';
         const absentClass = char.present ? '' : ' dooms-pb-absent';
-        const isNew = newCharNames.has(char.name);
-        const entranceClass = isNew ? ' dooms-pb-entrance' : '';
         const userClass = char.isUser ? ' dooms-pb-user' : '';
         const nameEsc = escapeHtml(char.name);
         const emoji = char.emoji || '👤';
@@ -473,7 +502,6 @@ export function updatePortraitBar() {
         const colorDot = charColor
             ? `<span class="dooms-portrait-card-color-dot" style="background:${charColor};"></span>`
             : '';
-        const newBadge = isNew ? '<span class="dooms-pb-new-badge">&#x2726; New</span>' : '';
         const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
         let backFace = '';
@@ -497,61 +525,73 @@ export function updatePortraitBar() {
             ? '<div class="dooms-pb-injecting-overlay" aria-hidden="true"><span>INJECTING&hellip;</span></div>'
             : '';
 
-        if (portraitSrc) {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
-                <img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-                <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>
+        const face = portraitSrc
+            ? `<img src="${portraitSrc}" alt="${nameEsc}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                <div class="dooms-portrait-card-emoji" style="display:none;">${emoji}</div>`
+            : `<div class="dooms-portrait-card-emoji">${emoji}</div>`;
+
+        const html = `<div class="dooms-portrait-card${speakingClass}${absentClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
+                ${face}
                 ${absentOverlay}
-                ${newBadge}
                 ${youBadge}
                 ${injectingOverlay}
-                <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
+                <div class="dooms-portrait-card-name">${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;
-        } else {
-            return `<div class="dooms-portrait-card${speakingClass}${absentClass}${entranceClass}${flippedClass}${injectingClass}${userClass}" title="${cardTitle}" data-char="${nameEsc}"${char.isUser ? ' data-user="1"' : ''}>
-                <div class="dooms-portrait-card-emoji">${emoji}</div>
-                ${absentOverlay}
-                ${newBadge}
-                ${youBadge}
-                ${injectingOverlay}
-                <div class="dooms-portrait-card-name${isNew ? ' dooms-pb-name-highlight' : ''}">${colorDot}${nameEsc}</div>
-                ${backFace}
-            </div>`;
-        }
+        return { char, html };
     });
 
-    $scroll.html(cards.join(''));
+    const scrollEl = $scroll[0];
+    keyedReconcile(scrollEl, cardData, {
+        key: (d) => d.char.name,
+        create: (d) => {
+            cardHtmlCache.set(d.char.name, d.html);
+            return htmlToElement(d.html);
+        },
+        update: (el, d) => {
+            if (cardHtmlCache.get(d.char.name) === d.html) return; // unchanged
+            cardHtmlCache.set(d.char.name, d.html);
+            // Patch in place (keeps the element identity the reconciler tracks)
+            const fresh = htmlToElement(d.html);
+            el.className = fresh.className;
+            el.setAttribute('title', fresh.getAttribute('title') || '');
+            if (fresh.hasAttribute('data-user')) el.setAttribute('data-user', '1');
+            else el.removeAttribute('data-user');
+            el.innerHTML = fresh.innerHTML;
+        },
+        onExit: (el) => {
+            const name = el.getAttribute('data-char');
+            if (name) cardHtmlCache.delete(name);
+            el.remove();
+        },
+        onEnter: (el, d) => {
+            if (!d || !newCharNames.has(d.char.name)) return;
+            // Entrance flourish for newly-arrived characters only
+            el.classList.add('dooms-pb-entrance');
+            el.querySelector('.dooms-portrait-card-name')?.classList.add('dooms-pb-name-highlight');
+            el.insertAdjacentHTML('beforeend', '<span class="dooms-pb-new-badge">&#x2726; New</span>');
+            const glow = document.createElement('div');
+            glow.className = 'dooms-pb-glow-burst';
+            el.appendChild(glow);
 
-    // Fire glow burst on new cards
-    if (newCharNames.size > 0) {
-        requestAnimationFrame(() => {
-            newCharNames.forEach(name => {
-                const $card = $scroll.find(`.dooms-portrait-card[data-char="${escapeAttr(name)}"]`);
-                if (!$card.length) return;
-
-                // Create glow burst overlay
-                const $glow = $('<div class="dooms-pb-glow-burst"></div>');
-                $card.append($glow);
-
-                // Auto-scroll to reveal the new card
-                const cardEl = $card[0];
-                const scrollEl = $scroll[0];
-                const cardRight = cardEl.offsetLeft + cardEl.offsetWidth;
+            // Auto-scroll to reveal the new card (next frame, after layout)
+            requestAnimationFrame(() => {
+                const cardRight = el.offsetLeft + el.offsetWidth;
                 if (cardRight > scrollEl.scrollLeft + scrollEl.clientWidth) {
                     scrollEl.scrollTo({ left: cardRight - scrollEl.clientWidth + 20, behavior: 'smooth' });
                 }
-
-                // Clean up animation classes after they finish
-                setTimeout(() => {
-                    $card.removeClass('dooms-pb-entrance');
-                    $card.find('.dooms-pb-new-badge').remove();
-                    $card.find('.dooms-pb-name-highlight').removeClass('dooms-pb-name-highlight');
-                    $glow.remove();
-                }, 3500);
             });
-        });
-    }
+
+            // Clean up animation artifacts after they finish; resync the cache
+            // since the steady-state HTML no longer matches the live element.
+            setTimeout(() => {
+                el.classList.remove('dooms-pb-entrance');
+                el.querySelector('.dooms-pb-new-badge')?.remove();
+                el.querySelector('.dooms-pb-name-highlight')?.classList.remove('dooms-pb-name-highlight');
+                glow.remove();
+            }, 3500);
+        },
+    });
 
     // Update tracking set
     _previousCharacterNames = currentPresentNames;
