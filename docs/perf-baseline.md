@@ -67,4 +67,12 @@ Code-level counts (baseline):
 | icon.svg bytes | 173,671 | deleted (unreferenced) |
 | Non-passive doc/scroll touch listeners | 3 | 0 (thought-panel scroll, FAB dismiss touchstart, mobile keyboard-dismiss touchend now native `{passive:true}`) |
 
+### Phase 2 — event hygiene (DONE)
+| Metric | Before | After |
+|---|---|---|
+| MutationObservers | 3 | 0 (all three were in dead-code checkpointUI.js — module deleted along with chapterCheckpoint.js) |
+| Untracked eventSource.on subscriptions in index.js | 10 | 0 (all through registerAllEvents; unregisterAllEvents now tears down everything) |
+| Dead CSS removed | — | combat-encounter modal (~137 rules) + checkpoint styles |
+| Delegation audit | — | render modules (infoBox, quests, thoughts, portraitBar, bubble TTS) already container-delegated; no render-loop bindings found. Remaining per-element bindings are settings controls (restructured in Phase 5). |
+
 (Add a table per phase as completed.)
