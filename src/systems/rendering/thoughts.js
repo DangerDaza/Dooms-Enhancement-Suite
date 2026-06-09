@@ -24,6 +24,29 @@ import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 const flippedCards = new Set();
 
 /**
+ * Native passive scroll listener for the floating thought panel.
+ * jQuery .on() registers scroll handlers as non-passive, which forces the
+ * browser to wait on the handler before scrolling #chat; a passive native
+ * listener avoids that. Tracked here so cleanup can remove it.
+ */
+let thoughtPanelScrollHandler = null;
+
+function bindThoughtPanelScroll(handler) {
+    unbindThoughtPanelScroll();
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return;
+    thoughtPanelScrollHandler = handler;
+    chatEl.addEventListener('scroll', handler, { passive: true });
+}
+
+function unbindThoughtPanelScroll() {
+    if (!thoughtPanelScrollHandler) return;
+    const chatEl = document.getElementById('chat');
+    if (chatEl) chatEl.removeEventListener('scroll', thoughtPanelScrollHandler);
+    thoughtPanelScrollHandler = null;
+}
+
+/**
  * Helper to generate lock icon HTML if setting is enabled
  * @param {string} tracker - Tracker name
  * @param {string} path - Item path
@@ -1331,7 +1354,7 @@ export function updateChatThoughts() {
     // Remove old floating thought panel/icon (legacy cleanup)
     $('#rpg-thought-panel').remove();
     $('#rpg-thought-icon').remove();
-    $('#chat').off('scroll.thoughtPanel');
+    unbindThoughtPanelScroll();
     $(window).off('resize.thoughtPanel');
     $(document).off('click.thoughtPanel');
     // Remove any existing inline thought dropdowns from previous renders
@@ -2127,7 +2150,7 @@ export function createThoughtPanel($message, thoughtsArray) {
         }
     };
     // Update visibility on scroll (but not position)
-    $('#chat').on('scroll.thoughtPanel', updatePanelPosition);
+    bindThoughtPanelScroll(updatePanelPosition);
     // Don't listen to window resize for position - we handle width separately
     // Position stays fixed at top-left
     // Remove panel when clicking outside (mobile only)

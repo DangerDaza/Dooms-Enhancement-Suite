@@ -2560,7 +2560,7 @@ jQuery(async () => {
                     )) {
                         active.blur();
                     }
-                });
+                }, { passive: true });
             }
         } catch (error) {
             console.error('[Dooms Tracker] Mobile keyboard dismissal setup failed:', error);

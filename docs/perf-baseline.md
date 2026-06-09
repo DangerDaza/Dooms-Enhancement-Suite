@@ -59,11 +59,12 @@ Code-level counts (baseline):
 
 ## Per-phase results
 
-### Phase 1 — dead weight
+### Phase 1 — dead weight (DONE)
 | Metric | Before | After |
 |---|---|---|
-| style.css bytes | 579,707 | _TBD_ |
-| icon.png bytes | 231,705 | _TBD_ |
-| icon.svg bytes | 173,671 | _TBD_ |
+| style.css bytes | 579,707 | 532,191 (−47.5KB: archived User Stats / Dice Roll / Inventory v2 rules + 3 orphan keyframes, selector-level purge) |
+| icon.png bytes | 231,705 | 8,998 (160×160 palette) |
+| icon.svg bytes | 173,671 | deleted (unreferenced) |
+| Non-passive doc/scroll touch listeners | 3 | 0 (thought-panel scroll, FAB dismiss touchstart, mobile keyboard-dismiss touchend now native `{passive:true}`) |
 
 (Add a table per phase as completed.)

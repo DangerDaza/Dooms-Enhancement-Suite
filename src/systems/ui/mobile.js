@@ -7,6 +7,25 @@ import { saveSettings } from '../../core/persistence.js';
 import { closeMobilePanelWithAnimation, updateCollapseToggleIcon } from './layout.js';
 import { setupDesktopTabs, removeDesktopTabs } from './desktop.js';
 import { i18n } from '../../core/i18n.js';
+
+/**
+ * Native passive touchstart used for the FAB-widget collapse-on-tap-outside
+ * behavior. jQuery can't register passive listeners, and a non-passive
+ * document-level touchstart delays every scroll gesture on mobile.
+ */
+let fabWidgetTouchHandler = null;
+
+function bindFabWidgetDismiss(handler) {
+    unbindFabWidgetDismiss();
+    fabWidgetTouchHandler = handler;
+    document.addEventListener('touchstart', handler, { passive: true });
+}
+
+function unbindFabWidgetDismiss() {
+    if (!fabWidgetTouchHandler) return;
+    document.removeEventListener('touchstart', fabWidgetTouchHandler);
+    fabWidgetTouchHandler = null;
+}
 /**
  * Updates the text labels of the mobile navigation tabs based on the current language.
  */
@@ -972,7 +991,8 @@ export function updateFabWidgets() {
     if ($fab.length === 0) return;
     // Remove existing widget container and clean up event listeners
     $('#rpg-fab-widget-container').remove();
-    $(document).off('click.fabWidgets touchstart.fabWidgets');
+    $(document).off('click.fabWidgets');
+    unbindFabWidgetDismiss();
     // Check if widgets are enabled
     const widgetSettings = extensionSettings.mobileFabWidgets;
     if (!widgetSettings || !widgetSettings.enabled) return;
@@ -1127,11 +1147,13 @@ export function updateFabWidgets() {
             }
         });
         // Collapse on tap outside
-        $(document).on('click.fabWidgets touchstart.fabWidgets', function(e) {
+        const dismissExpanded = function(e) {
             if (!$(e.target).closest('.rpg-fab-widget').length) {
                 $container.find('.rpg-fab-widget.expanded').removeClass('expanded');
             }
-        });
+        };
+        $(document).on('click.fabWidgets', dismissExpanded);
+        bindFabWidgetDismiss(dismissExpanded);
     }
 }
 /**
