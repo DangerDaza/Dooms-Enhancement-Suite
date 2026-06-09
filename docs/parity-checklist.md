@@ -81,7 +81,8 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Dialogue coloring: font tags display, stripped for TTS, 30-color palette
 - [ ] Name Ban filtering works (when enabled)
 - [ ] History persistence: save + restore snapshot
-- [ ] Chapter checkpoints: create / indicator / jump / delete
+- (Chapter checkpoints removed from checklist: checkpointUI.js/chapterCheckpoint.js
+  were dead code — exported but never imported/initialized anywhere — deleted in Phase 2)
 - [ ] Music player renders/controls (where applicable)
 - [ ] Character sheets open from portrait right-click; sections collapse
 
