@@ -2629,21 +2629,13 @@ jQuery(async () => {
         // IMPORTANT: This must happen BEFORE await introPromise so we don't miss
         // the CHAT_CHANGED event that ST fires while the loading intro is playing.
         try {
-            registerAllEvents({
-                [event_types.MESSAGE_SENT]: onMessageSent,
-                [event_types.GENERATION_STARTED]: onGenerationStarted,
-                [event_types.MESSAGE_RECEIVED]: onMessageReceived,
-                [event_types.GENERATION_STOPPED]: onGenerationEnded,
-                [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache],
-                [event_types.MESSAGE_SWIPED]: onMessageSwiped,
-                [event_types.USER_MESSAGE_RENDERED]: updatePersonaAvatar,
-                [event_types.SETTINGS_UPDATED]: updatePersonaAvatar
-            });
+            // ── Named handlers for everything that used to be ad-hoc
+            // eventSource.on() subscriptions. All registration now goes through
+            // registerAllEvents so unregisterAllEvents can tear everything down.
+
             // Re-populate connection profile dropdown when profiles are created/deleted/updated
-            eventSource.on(event_types.CONNECTION_PROFILE_CREATED, () => populateConnectionProfileDropdown());
-            eventSource.on(event_types.CONNECTION_PROFILE_DELETED, () => populateConnectionProfileDropdown());
-            eventSource.on(event_types.CONNECTION_PROFILE_UPDATED, () => populateConnectionProfileDropdown());
+            const onConnectionProfilesChanged = () => populateConnectionProfileDropdown();
+
             // TTS compatibility: remove any stale display_text that prior versions
             // may have saved to chat messages.  SillyTavern uses display_text for
             // RENDERING as well as TTS, so setting it to a font-stripped copy was
@@ -2651,7 +2643,7 @@ jQuery(async () => {
             //
             // Instead of display_text we now auto-enable the TTS regex filter to
             // strip <font> tags at narration time only, keeping colors in the UI.
-            eventSource.on(event_types.CHAT_CHANGED, () => {
+            const onChatChangedTtsCleanup = () => {
                 // Clean up stale display_text from ALL messages so SillyTavern
                 // renders from msg.mes (which contains the <font> colour tags).
                 // Prior versions set display_text to a font-stripped copy for TTS,
@@ -2724,7 +2716,7 @@ jQuery(async () => {
                         console.log('[Dooms Tracker] Set TTS regex to strip <font> tags for dialogue coloring');
                     }
                 }
-            });
+            };
             // ── Chat Bubbles: revert last message before Continue ──
             // When the user hits "Continue", SillyTavern reads/modifies .mes_text
             // to stream new content. If bubbles are active, .mes_text contains
@@ -2734,15 +2726,15 @@ jQuery(async () => {
             // IMPORTANT: Only revert for 'continue' — normal generations create a
             // NEW message element and never touch the old one, so reverting would
             // leave the previous message without bubbles.
-            eventSource.on(event_types.GENERATION_STARTED, (type) => {
+            const onGenerationStartedContinueRevert = (type) => {
                 if (type !== 'continue') return;
                 if (!extensionSettings.enabled) return;
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
                 revertLastMessageBubbles();
-            });
+            };
 
             // ── Chat Bubbles: apply per-character bubbles to messages ──
-            eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
+            const onCharacterMessageRenderedDecorations = (messageId) => {
                 if (!extensionSettings.enabled) return;
                 // Skip GG's synthetic tracker/note messages — they get
                 // is_user=false but their .mes is HTML, not real model
@@ -2800,8 +2792,8 @@ jQuery(async () => {
                         }
                     }
                 }
-            });
-            // ── Fullsheet import button click handler ──
+            };
+            // ── Fullsheet import button click handler (delegated) ──
             $(document).on('click', '.dooms-import-fullsheet-btn', function (e) {
                 e.stopPropagation();
                 const messageId = $(this).closest('.mes').attr('mesid');
@@ -2809,7 +2801,7 @@ jQuery(async () => {
                     importFullSheetFromMessage(parseInt(messageId));
                 }
             });
-            eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => {
+            const onUserMessageRenderedDecorations = (messageId) => {
                 if (!extensionSettings.enabled) return;
                 // Skip synthetic tracker/note messages other extensions inject
                 // into chat (currently GuidedGenerations). They re-emit
@@ -2841,8 +2833,8 @@ jQuery(async () => {
                         }
                     } catch (e) {}
                 }
-            });
-            eventSource.on(event_types.CHAT_CHANGED, () => {
+            };
+            const onChatChangedDecorations = () => {
                 if (!extensionSettings.enabled) return;
                 // Apply chat bubbles if active
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
@@ -2855,11 +2847,11 @@ jQuery(async () => {
                 setTimeout(() => onExpressionSyncChatChanged(), 0);
                 // Inject fullsheet import buttons on existing messages
                 setTimeout(() => injectFullSheetButtons(), 200);
-            });
+            };
             // MESSAGE_UPDATED fires after the DOM is re-rendered with the edited content.
             // CHARACTER_MESSAGE_RENDERED does NOT fire on edits.
             // We need to re-apply chat bubbles AND re-insert inline thoughts.
-            eventSource.on(event_types.MESSAGE_UPDATED, (messageId) => {
+            const onMessageUpdatedDecorations = (messageId) => {
                 if (!extensionSettings.enabled) return;
 
                 // Re-apply chat bubbles if active
@@ -2885,7 +2877,7 @@ jQuery(async () => {
                 if (updatedMessage && !updatedMessage.is_user && !updatedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(updatedMessage.name);
                 }
-            });
+            };
             // MESSAGE_DELETED does not fire the same render/update hooks as swipes or edits.
             // Two things to do when a message is removed:
             //   1. Roll the tracker panels (quests / info / thoughts / portrait /
@@ -2896,21 +2888,21 @@ jQuery(async () => {
             //   2. Reset transient expression-sync state so the observer doesn't keep
             //      attributing later ST expression changes to the speaker of the
             //      deleted message.
-            eventSource.on(event_types.MESSAGE_DELETED, () => {
+            const onMessageDeletedDecorations = () => {
                 if (!extensionSettings.enabled) return;
                 try { onMessageDeleted(); } catch (e) {
                     console.warn('[Dooms Tracker] onMessageDeleted failed:', e);
                 }
                 clearExpressionSyncCache();
                 setTimeout(() => onExpressionSyncChatChanged(), 0);
-            });
+            };
             // MESSAGE_SWIPED fires when the user navigates between swipe variants.
             // SillyTavern replaces .mes_text with the new swipe content, destroying
             // any bubble DOM we previously rendered.  CHARACTER_MESSAGE_RENDERED does
             // NOT fire for existing swipes, so we must re-apply bubbles here.
             // We wait 800ms because colored-dialogues recolors on swipe with a 600ms
             // debounce, and we need the <font color> tags in place before parsing.
-            eventSource.on(event_types.MESSAGE_SWIPED, (messageIndex) => {
+            const onMessageSwipedBubbles = (messageIndex) => {
                 const swipedMessage = chat[messageIndex];
                 if (swipedMessage && !swipedMessage.is_user && !swipedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(swipedMessage.name);
@@ -2936,11 +2928,11 @@ jQuery(async () => {
                     const freshEl = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);
                     if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
                 }, 800);
-            });
+            };
             // GENERATION_STOPPED safety net — when a generation is aborted (e.g. failed
             // swipe), ST may re-render the last message without firing MESSAGE_SWIPED or
             // CHARACTER_MESSAGE_RENDERED. Re-apply bubbles to the last message if missing.
-            eventSource.on(event_types.GENERATION_STOPPED, () => {
+            const onGenerationStoppedBubbleSafetyNet = () => {
                 if (!extensionSettings.enabled) return;
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
                 setTimeout(() => {
@@ -2951,6 +2943,26 @@ jQuery(async () => {
                         applyChatBubbles(lastMes, extensionSettings.chatBubbleMode);
                     }
                 }, 1200);
+            };
+
+            // Single tracked registration point. Array order preserves the
+            // original relative registration order within each event type.
+            registerAllEvents({
+                [event_types.MESSAGE_SENT]: onMessageSent,
+                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert],
+                [event_types.MESSAGE_RECEIVED]: onMessageReceived,
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
+                [event_types.GENERATION_ENDED]: onGenerationEnded,
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles],
+                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
+                [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
+                [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,
+                [event_types.MESSAGE_UPDATED]: onMessageUpdatedDecorations,
+                [event_types.MESSAGE_DELETED]: onMessageDeletedDecorations,
+                [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
+                [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
+                [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
             });
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
