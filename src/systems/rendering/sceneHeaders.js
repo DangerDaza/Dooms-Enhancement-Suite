@@ -18,6 +18,14 @@ import { chat } from '../../../../../../../script.js';
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
 let _lastSceneDataJSON = null;
 
+/**
+ * Incremental scene-transition state: where the last pass stopped and the
+ * location/time it ended on, so subsequent passes only process new messages.
+ * null forces a full re-walk (set by resetSceneHeaderCache on chat change /
+ * swipe / delete, or on style change / chat shrink).
+ */
+let _transitionsState = null;
+
 /** Active HUD drag cleanup function (called when HUD is removed) */
 let _hudDragCleanup = null;
 
@@ -287,9 +295,14 @@ export function applySceneTrackerSettings() {
 
 /**
  * Reset the scene header cache (call on chat change so first render always runs).
+ * Also resets the incremental scene-transition state, forcing the next
+ * injectSceneTransitions() to do a full pass — the callers of this function
+ * (chat change, swipe, message delete) are exactly the cases where existing
+ * messages' tracker data may have changed.
  */
 export function resetSceneHeaderCache() {
     _lastSceneDataJSON = null;
+    _transitionsState = null;
 }
 
 // ─────────────────────────────────────────────
@@ -305,9 +318,31 @@ function getCharacterColor(name) {
  */
 function removeAllSceneElements() {
     if (_hudDragCleanup) _hudDragCleanup();
-    $('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper, .dooms-scene-transition').remove();
+    $('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').remove();
+    removeSceneTransitions();
     $('#dooms-ticker-rotate-style').remove();
     $('#chat').removeClass('dooms-ticker-active dooms-ticker-bottom-active');
+}
+
+/**
+ * Removes only the header/banner/HUD/ticker singleton, leaving the per-message
+ * transition cards in place. Used by the normal re-render path so the
+ * incremental transition state stays valid.
+ */
+function removeSceneHeaderElements() {
+    if (_hudDragCleanup) _hudDragCleanup();
+    $('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').remove();
+    $('#dooms-ticker-rotate-style').remove();
+    $('#chat').removeClass('dooms-ticker-active dooms-ticker-bottom-active');
+}
+
+/**
+ * Removes the transition cards and invalidates the incremental state so the
+ * next injectSceneTransitions() does a full pass.
+ */
+function removeSceneTransitions() {
+    $('.dooms-scene-transition').remove();
+    _transitionsState = null;
 }
 
 /**
@@ -381,21 +416,36 @@ function injectSceneTransitions() {
 
     const style = ib.style || 'cinematic';
 
-    // Remove old transition cards first (idempotent)
-    $('.dooms-scene-transition').remove();
-
     if (!chat || !Array.isArray(chat)) return;
+
+    // Incremental mode: if a previous pass recorded its end state and nothing
+    // invalidated it (style change, chat shrank, explicit reset via
+    // resetSceneHeaderCache), only process messages newer than processedUpTo
+    // instead of re-walking the entire chat on every header update.
+    if (_transitionsState &&
+        (_transitionsState.style !== style || chat.length < _transitionsState.chatLength)) {
+        _transitionsState = null;
+    }
+    const fullPass = !_transitionsState;
+    if (fullPass) {
+        // Remove old transition cards first (idempotent)
+        $('.dooms-scene-transition').remove();
+        _transitionsState = { processedUpTo: -1, prevLocation: '', prevTime: '', chatLength: 0, style };
+    }
+    const startAfter = _transitionsState.processedUpTo;
 
     const $messages = $('#chat .mes[is_system="false"]');
     if (!$messages.length) return;
 
-    let prevLocation = '';
-    let prevTime = '';
+    let prevLocation = _transitionsState.prevLocation;
+    let prevTime = _transitionsState.prevTime;
+    let maxProcessed = startAfter;
 
     $messages.each(function () {
         const $mes = $(this);
         const mesId = parseInt($mes.attr('mesid'), 10);
-        if (isNaN(mesId)) return;
+        if (isNaN(mesId) || mesId <= startAfter) return;
+        if (mesId > maxProcessed) maxProcessed = mesId;
 
         const message = chat[mesId];
         if (!message || message.is_user || message.is_system) return;
@@ -430,6 +480,15 @@ function injectSceneTransitions() {
         if (curLocation) prevLocation = curLocation;
         if (curTime) prevTime = curTime;
     });
+
+    // Record end state so the next call can continue incrementally
+    _transitionsState = {
+        processedUpTo: maxProcessed,
+        prevLocation,
+        prevTime,
+        chatLength: chat.length,
+        style,
+    };
 }
 
 /**
@@ -473,8 +532,10 @@ export function updateChatSceneHeaders() {
         }
     }
     _lastSceneDataJSON = cacheKey;
-    // Remove existing scene headers before inserting new one
-    removeAllSceneElements();
+    // Remove existing scene headers before inserting the new one. Transition
+    // cards are left alone here — injectSceneTransitions extends them
+    // incrementally and resetSceneHeaderCache invalidates them when needed.
+    removeSceneHeaderElements();
 
     // Dispatch to the appropriate renderer
     if (layout === 'banner') {
