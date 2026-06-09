@@ -134,6 +134,8 @@ export let extensionSettings = {
         highlightOpacity: 100
     },
     enableAnimations: true, // Enable smooth animations for content updates
+    pauseWhenIdle: true, // Pause all DES animations when the user stops interacting / tab is hidden
+    idleTimeoutSeconds: 60, // Seconds of no interaction before DES considers the chat idle
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'

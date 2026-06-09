@@ -18778,6 +18778,22 @@ body.dooms-hide-st-topbar .openDrawer {
     }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   IDLE PAUSE — stop pulling resources while the chat is idle
+   ───────────────────────────────────────────────────────────────────────────────
+   When the user stops interacting (or the tab is backgrounded), idleManager.js
+   adds `dooms-idle` to <body>. DES has no JS polling loops, so the only thing
+   still consuming CPU/GPU at that point is the set of infinite CSS animations
+   (weather, snowflakes, portrait/thought pulses, ticker scroll, glow rings…).
+   Pausing every DES-owned animation freezes the compositor work to ~nothing.
+   The rule is a no-op on elements that aren't animating, and reverses instantly
+   the moment the class is removed.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+body.dooms-idle [class*="rpg-"],
+body.dooms-idle [class*="dooms-"] {
+    animation-play-state: paused !important;
+}
+
 /* ========================================
    SYSTEM LOG VIEWER
    ======================================== */

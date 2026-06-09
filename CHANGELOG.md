@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — Idle resource pause
+
+### Performance
+- **DES now pulls essentially no resources while the chat is idle.** The extension has no JS polling loops (no `setInterval`, no standing `requestAnimationFrame` loops), but it runs a large set of *infinite* CSS animations — weather particles, snowflakes, portrait/thought pulses, the scene-tracker ticker scroll, glow rings — that keep the browser's compositor working every frame even when nobody is interacting. A new idle manager (`src/core/idleManager.js`) watches for user activity (mouse, keyboard, touch, scroll) and tab visibility; when you stop interacting (default 60s) or switch tabs, it adds a `dooms-idle` class to `<body>` and a CSS rule sets `animation-play-state: paused` on every DES-owned animation, freezing that work to ~nothing. Any activity — or the tab regaining focus — resumes everything instantly. No timer or loop runs while idle; the only cost is a handful of throttled, passive listeners. Controlled by the new **Pause When Idle** toggle (on by default); the timeout is configurable via `idleTimeoutSeconds`.
+
 ## [1.11.3] - 2026-05-09 — User-persona/NPC duplicates + delete-does-nothing
 
 ### Fixed

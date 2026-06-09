@@ -96,6 +96,7 @@ import {
     toggleDynamicWeather,
     cleanupWeatherEffects
 } from './src/systems/ui/weatherEffects.js';
+import { initIdleManager, stopIdleManager } from './src/core/idleManager.js';
 import {
     applyChatBubbles,
     applyAllChatBubbles,
@@ -1486,6 +1487,17 @@ async function initUI() {
         saveSettings();
         toggleAnimations();
     });
+    // ── Pause When Idle toggle ──
+    $('#rpg-toggle-pause-idle').on('change', function () {
+        const enabled = $(this).prop('checked');
+        extensionSettings.pauseWhenIdle = enabled;
+        saveSettings();
+        if (enabled) {
+            initIdleManager();
+        } else {
+            stopIdleManager();
+        }
+    });
     // ── Theme Controls Scene Tracker toggle ──
     $('#rpg-st-theme-controlled').on('change', function () {
         const controlled = $(this).prop('checked');
@@ -1790,6 +1802,7 @@ async function initUI() {
     $('#rpg-theme-select').val(extensionSettings.theme);
     $('#rpg-theme-badge').text(extensionSettings.theme || 'default');
     $('#rpg-toggle-animations').prop('checked', extensionSettings.enableAnimations ?? true);
+    $('#rpg-toggle-pause-idle').prop('checked', extensionSettings.pauseWhenIdle ?? true);
     // Theme Controls Scene Tracker
     const _tcst = extensionSettings.sceneTracker?.themeControlled ?? false;
     $('#rpg-st-theme-controlled').prop('checked', _tcst);
@@ -2096,6 +2109,7 @@ async function initUI() {
     try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
     try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch (e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
     try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch (e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
+    try { initIdleManager(); console.log('[Dooms Tracker] initIdleManager() OK'); } catch (e) { console.error('[Dooms Tracker] initIdleManager() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
     // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
