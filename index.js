@@ -73,9 +73,6 @@ import {
     getSettingsModal
 } from './src/systems/ui/modals.js';
 import {
-    initTrackerEditor
-} from './src/systems/ui/trackerEditor.js';
-import {
     initPromptsEditor
 } from './src/systems/ui/promptsEditor.js';
 import {
@@ -89,8 +86,6 @@ import {
     applyPortraitBarSettings,
     applySideModeStyling
 } from './src/systems/ui/portraitBar.js';
-import { initCharacterWorkshop } from './src/systems/ui/characterWorkshop.js';
-import { initCharacterRoster } from './src/systems/ui/characterRoster.js';
 import {
     initWeatherEffects,
     updateWeatherEffect,
@@ -111,8 +106,6 @@ import {
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
 import { playLoadingIntro } from './src/systems/ui/loadingIntro.js';
 // Lorebook Manager modules
-import { setupLorebookModal, getLorebookModal } from './src/systems/ui/lorebookModal.js';
-import { initLorebookEventDelegation, renderLorebook } from './src/systems/rendering/lorebook.js';
 // Feature modules
 import { ensureHtmlCleaningRegex, detectConflictingRegexScripts, ensureTrackerCleaningRegex } from './src/systems/features/htmlCleaning.js';
 import { ensureJsonCleaningRegex, removeJsonCleaningRegex } from './src/systems/features/jsonCleaning.js';
@@ -150,7 +143,7 @@ import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPend
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
-import { initCharacterSheet, importFullSheetFromMessage, messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/characterSheet.js';
+import { messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -543,17 +536,28 @@ async function loadSettingsTemplate() {
     initInfoBoxEventDelegation();
     initThoughtsEventDelegation();
     initQuestEventDelegation();
+    // The modal-only modules (lorebook cluster, character sheet/workshop/
+    // roster, tracker editor — ~9,000 lines) are dynamic imports so their
+    // code never downloads or parses unless a DES modal is opened.
+    const [lorebookMod, lorebookModalMod, characterSheetMod, workshopMod, rosterMod, trackerEditorMod] = await Promise.all([
+        import('./src/systems/rendering/lorebook.js'),
+        import('./src/systems/ui/lorebookModal.js'),
+        import('./src/systems/ui/characterSheet.js'),
+        import('./src/systems/ui/characterWorkshop.js'),
+        import('./src/systems/ui/characterRoster.js'),
+        import('./src/systems/ui/trackerEditor.js'),
+    ]);
     // Lorebook Manager init
-    try { initLorebookEventDelegation(); } catch (e) { console.error('[Dooms Tracker] initLorebookEventDelegation() FAILED:', e); }
-    try { setupLorebookModal(); } catch (e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
+    try { lorebookMod.initLorebookEventDelegation(); } catch (e) { console.error('[Dooms Tracker] initLorebookEventDelegation() FAILED:', e); }
+    try { lorebookModalMod.setupLorebookModal(); } catch (e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
     // Re-apply translations to the entire body to catch all new elements from the template
     i18n.applyTranslations(document.body);
     bindSettingsUI();
-    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
-    try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
-    try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
+    try { characterSheetMod.initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
+    try { workshopMod.initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
+    try { rosterMod.initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
     try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
-    try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
+    try { trackerEditorMod.initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
     try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
     // The FAB was built at startup; now that the popup exists, fill its
     // per-button toggle list and stamp the current theme on the modal.
@@ -1464,7 +1468,8 @@ function bindSettingsUI() {
         $('#rpg-lb-badge').text($(this).prop('checked') ? 'on' : 'off');
         saveSettings();
     });
-    $('#rpg-open-lorebook').on('click', function () {
+    $('#rpg-open-lorebook').on('click', async function () {
+        const { getLorebookModal } = await import('./src/systems/ui/lorebookModal.js');
         const modal = getLorebookModal();
         if (modal) modal.open();
     });
@@ -2120,7 +2125,8 @@ async function initUI() {
         }
 
         // Open our Lorebook Manager modal (loads the deferred settings UI first)
-        ensureSettingsUI().then(() => {
+        ensureSettingsUI().then(async () => {
+            const { getLorebookModal } = await import('./src/systems/ui/lorebookModal.js');
             const modal = getLorebookModal();
             if (modal) modal.open();
         }).catch(() => {});
@@ -2849,7 +2855,11 @@ jQuery(async () => {
                 e.stopPropagation();
                 const messageId = $(this).closest('.mes').attr('mesid');
                 if (messageId !== undefined) {
-                    importFullSheetFromMessage(parseInt(messageId));
+                    // Sheet popup + parser live in the deferred settings UI
+                    ensureSettingsUI().then(async () => {
+                        const { importFullSheetFromMessage } = await import('./src/systems/ui/characterSheet.js');
+                        importFullSheetFromMessage(parseInt(messageId));
+                    }).catch(() => {});
                 }
             });
             const onUserMessageRenderedDecorations = (messageId) => {

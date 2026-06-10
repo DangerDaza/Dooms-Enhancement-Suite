@@ -11,15 +11,10 @@ import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
 import { chat_metadata, chat } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
-
-// ─────────────────────────────────────────────
-//  Stats cache (cleared on chat change)
-// ─────────────────────────────────────────────
-const statsCache = new Map();
-
-export function clearStatsCache() {
-    statsCache.clear();
-}
+// Eager half (fullsheet detection, import buttons, stats cache) lives in
+// fullsheetButtons.js so chat handlers don't need this whole module.
+import { statsCache, messageHasFullSheet } from './fullsheetButtons.js';
+export { clearStatsCache, messageHasFullSheet, injectFullSheetButtons } from './fullsheetButtons.js';
 
 // ─────────────────────────────────────────────
 //  Parser
@@ -761,35 +756,13 @@ export async function importFullSheetFromMessage(messageId) {
  * Used to determine whether to show the import button.
  * Language-agnostic — matches any N/M numbered section headers, not just English "SECTION".
  */
-export function messageHasFullSheet(messageText) {
-    if (!messageText) return false;
-    // Count how many numbered section headers (e.g. "## SECTION 1/8", "## 部分 1/8") are present
-    const headerMatches = messageText.match(/^#{0,2}\s*\S+\s+\d+\s*\/\s*\d+/gim);
-    return headerMatches !== null && headerMatches.length >= 2;
-}
+// messageHasFullSheet moved to fullsheetButtons.js
 
 /**
  * Scans all existing chat messages and injects the import button
  * on any that contain fullsheet data. Called on CHAT_CHANGED.
  */
-export function injectFullSheetButtons() {
-    if (!extensionSettings.enabled) return;
-    const context = SillyTavern.getContext();
-    const chat = context.chat || [];
-
-    $('#chat .mes').each(function () {
-        const mesId = parseInt($(this).attr('mesid'));
-        if (isNaN(mesId)) return;
-        const msg = chat[mesId];
-        if (!msg || msg.is_user || msg.is_system) return;
-        if (!messageHasFullSheet(msg.mes)) return;
-
-        const $extraBtns = $(this).find('.mes_buttons .extraMesButtons');
-        if ($extraBtns.length && !$extraBtns.find('.dooms-import-fullsheet-btn').length) {
-            $extraBtns.prepend(`<div class="dooms-import-fullsheet-btn mes_button fa-solid fa-scroll" title="Import Character Sheet"></div>`);
-        }
-    });
-}
+// injectFullSheetButtons moved to fullsheetButtons.js
 
 // ─────────────────────────────────────────────
 //  Copy

@@ -22,7 +22,6 @@ import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../.
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
-import { openCharacterSheet } from './characterSheet.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
@@ -363,8 +362,11 @@ export function initPortraitBar() {
         if (action === 'remove-character') {
             removeCharacter(characterName);
         } else if (action === 'character-sheet') {
-            // Character sheet popup lives in the deferred settings template
-            ensureSettingsUI().then(() => openCharacterSheet(characterName)).catch(() => {});
+            // Character sheet popup + module live in the deferred settings UI
+            ensureSettingsUI().then(async () => {
+                const { openCharacterSheet } = await import('./characterSheet.js');
+                openCharacterSheet(characterName);
+            }).catch(() => {});
         } else if (action === 'open-workshop') {
             // Workshop listener registers when the deferred settings UI loads
             ensureSettingsUI().then(() => {
