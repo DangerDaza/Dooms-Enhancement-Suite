@@ -146,6 +146,8 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
+// Context Inspector — see what DES is injecting into the prompt
+import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -169,6 +171,10 @@ function updatePortraitEnhancementSettingsVisibility() {
 async function addExtensionSettings() {
     // Initialize log captures early so they catch all init messages
     try { initSystemLog(); } catch (e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
+    // Context Inspector — must register its GENERATION_STARTED handler before
+    // any other DES generation listener so per-gen records bracket every
+    // slot write that follows.
+    try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
@@ -578,6 +584,11 @@ async function loadSettingsTemplate() {
     try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
     try { trackerEditorMod.initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
     try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
+    try {
+        const { initInspectorModal } = await import('./src/systems/ui/inspectorModal.js');
+        initInspectorModal();
+        console.log('[Dooms Tracker] initInspectorModal() OK');
+    } catch (e) { console.error('[Dooms Tracker] initInspectorModal() FAILED:', e); }
     // The FAB was built at startup; now that the popup exists, fill its
     // per-button toggle list and stamp the current theme on the modal.
     if (typeof window.__doomsFabPopulateToggles === 'function') window.__doomsFabPopulateToggles();
