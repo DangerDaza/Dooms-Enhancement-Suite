@@ -145,6 +145,7 @@ import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
+import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -169,6 +170,7 @@ async function addExtensionSettings() {
     // Initialize log captures early so they catch all init messages
     try { initSystemLog(); } catch (e) { console.error('[Dooms Tracker] initSystemLog() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
+    try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
     // Load the HTML template for the settings
     const settingsHtml = await renderExtensionTemplateAsync(extensionName, 'settings');
@@ -636,6 +638,11 @@ function bindSettingsUI() {
         extensionSettings.performanceMode = $(this).prop('checked');
         saveSettings();
         applyPerformanceMode();
+    });
+    $('#rpg-toggle-mobile-quick-jump').on('change', function () {
+        extensionSettings.mobileQuickJumpEnabled = $(this).prop('checked');
+        saveSettings();
+        refreshMobileQuickJump();
     });
     $('#rpg-toggle-compact-prompts').on('change', function () {
         extensionSettings.compactPrompts = $(this).prop('checked');
@@ -1710,6 +1717,7 @@ function bindSettingsUI() {
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
+    $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
@@ -3042,7 +3050,7 @@ jQuery(async () => {
                 [event_types.MESSAGE_RECEIVED]: onMessageReceived,
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,

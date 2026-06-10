@@ -12494,3 +12494,85 @@ body.dooms-hide-st-topbar .openDrawer {
     color: #ffffff;
 }
 
+
+/* ============================================
+   MOBILE QUICK-JUMP BUTTON
+   Floating button (mobile only) that scrolls back to the user's last
+   sent message; repeated taps walk up through earlier user messages.
+   Ported from the test/auto-portraits branch. JS: mobileQuickJump.js
+   ============================================ */
+/* Ensure the parent anchors absolute children correctly. ST's
+   #send_form is usually position:relative already (it holds the
+   textarea + send button row), but enforce it so this isn't fragile
+   against ST style refactors. overflow:visible likewise so our
+   button can extend above the form boundary. */
+#send_form {
+    position: relative;
+    overflow: visible;
+}
+
+.dooms-mobile-quick-jump {
+    /* Hidden until JS adds .visible. display:none here so the button is
+       fully removed from the layout/hit-target when not active. */
+    display: none;
+    position: absolute;
+    /* Sit well above the form + swipe arrow. bottom:100% puts the
+       button's bottom at the form's top; margin-bottom adds enough
+       clearance so the button sits above the per-message swipe `>`
+       arrow that lives inside the last message bubble. */
+    bottom: 100%;
+    right: 14px;
+    margin-bottom: 150px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(15, 17, 22, 0.85);
+    color: #e6e6e6;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 3px 9px rgba(0, 0, 0, 0.45);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 1500;
+    will-change: opacity, transform;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.dooms-mobile-quick-jump.visible {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transform: translateY(0);
+}
+.dooms-mobile-quick-jump:active {
+    transform: translateY(0) scale(0.94);
+    background: rgba(233, 69, 96, 0.85);
+}
+
+/* Fallback positioning when the button gets appended to <body> because
+   #send_form / #sheld weren't available (transient during ST boot).
+   In that case absolute positioning would anchor to whatever positioned
+   ancestor body lives in (usually none → viewport), so override to
+   position:fixed with viewport offsets. */
+body > .dooms-mobile-quick-jump {
+    position: fixed;
+    bottom: 110px;
+    right: 14px;
+    margin-bottom: 0;
+}
+
+/* Mobile breakpoint matches the JS check in mobileQuickJump.js
+   (window.innerWidth <= 1000). On desktop we force-hide so the button
+   can never appear even if the visible class is somehow added.
+   body.dooms-debug-quick-jump is set by the JS module when its
+   DEBUG_FORCE_VISIBLE const is true so the button stays visible on
+   desktop during testing. */
+@media (min-width: 1001px) {
+    body:not(.dooms-debug-quick-jump) .dooms-mobile-quick-jump,
+    body:not(.dooms-debug-quick-jump) .dooms-mobile-quick-jump.visible {
+        display: none !important;
+    }
+}

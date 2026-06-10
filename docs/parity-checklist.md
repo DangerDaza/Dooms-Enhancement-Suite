@@ -93,6 +93,9 @@ Run the full list at every phase boundary. A phase is not done until every line 
 
 ## Mobile / desktop
 - [ ] Mobile FAB drag + persist position; touch controls on all panels
+- [ ] Quick-Jump button (mobile): appears on scroll-up, auto-hides after 2s,
+      tap jumps to last user message, repeated taps walk up through earlier
+      ones; Display-section toggle hides it live
 - [ ] Virtual keyboard resize fix still active
 - [ ] Desktop tabs and strip widgets (clock/date/location) work
 
