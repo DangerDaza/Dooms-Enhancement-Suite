@@ -46,8 +46,6 @@ function _extractCharacterEntries(characterThoughtsData) {
     }
 }
 
-}
-
 /**
  * Original (pre-bubble) HTML per .mes_text element. Entries disappear with
  * their element, so deleted/re-rendered messages never leak their HTML copy.
