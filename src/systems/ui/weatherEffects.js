@@ -5,11 +5,15 @@
 
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
+import { getParticleEngine } from './particleCanvas.js';
 
 let weatherContainer = null;
 let currentWeatherType = null;
 let currentTimeOfDay = null;
 let currentHour = null;
+
+/** Memoized weather-text -> weather-type lookups (the pattern scan is O(languages × patterns)) */
+const weatherTypeCache = new Map();
 
 /**
  * Parse time string to extract hour (24-hour format)
@@ -195,16 +199,23 @@ function parseWeatherType(weatherText) {
     if (!weatherText) return "none";
 
     const text = weatherText.toLowerCase();
+    const cached = weatherTypeCache.get(text);
+    if (cached !== undefined) return cached;
 
+    let result = "none";
+    outer:
     for (const language of Object.values(WEATHER_PATTERNS_BY_LANGUAGE)) {
         for (const { id, patterns } of language) {
             if (patterns.some(p => text.includes(p))) {
-                return id;
+                result = id;
+                break outer;
             }
         }
     }
 
-    return "none";
+    if (weatherTypeCache.size > 200) weatherTypeCache.clear(); // bound memory
+    weatherTypeCache.set(text, result);
+    return result;
 }
 
 /**
@@ -236,66 +247,11 @@ function getCurrentWeather() {
     return null;
 }
 
-/**
- * Create snowflakes effect
- */
-function createSnowflakes() {
-    const container = document.createElement('div');
-    container.className = 'rpg-weather-particles';
-
-    // Create 50 snowflakes
-    for (let i = 0; i < 50; i++) {
-        const snowflake = document.createElement('div');
-        snowflake.className = 'rpg-weather-particle rpg-snowflake';
-        snowflake.textContent = '❄';
-        snowflake.style.left = `${Math.random() * 100}%`;
-        snowflake.style.animationDelay = `${Math.random() * 10}s`;
-        snowflake.style.animationDuration = `${10 + Math.random() * 10}s`;
-        container.appendChild(snowflake);
-    }
-
-    return container;
-}
-
-/**
- * Create rain effect
- */
-function createRain() {
-    const container = document.createElement('div');
-    container.className = 'rpg-weather-particles';
-
-    // Create 100 raindrops for heavier effect
-    for (let i = 0; i < 100; i++) {
-        const raindrop = document.createElement('div');
-        raindrop.className = 'rpg-weather-particle rpg-raindrop';
-        raindrop.style.left = `${Math.random() * 100}%`;
-        raindrop.style.animationDelay = `${Math.random() * 2}s`;
-        raindrop.style.animationDuration = `${0.5 + Math.random() * 0.5}s`;
-        container.appendChild(raindrop);
-    }
-
-    return container;
-}
-
-/**
- * Create mist/fog effect
- */
-function createMist() {
-    const container = document.createElement('div');
-    container.className = 'rpg-weather-particles';
-
-    // Create 5 mist layers
-    for (let i = 0; i < 5; i++) {
-        const mist = document.createElement('div');
-        mist.className = 'rpg-weather-particle rpg-mist';
-        mist.style.animationDelay = `${i * 2}s`;
-        mist.style.animationDuration = `${15 + i * 2}s`;
-        mist.style.opacity = `${0.1 + Math.random() * 0.2}`;
-        container.appendChild(mist);
-    }
-
-    return container;
-}
+// NOTE: snow / rain / mist / wind / star / firefly / dust-mote / light-orb
+// particles are rendered by the shared canvas engine (particleCanvas.js) —
+// one canvas + one rAF loop instead of up to ~100 individually CSS-animated
+// DOM nodes. Only the low-count gradient overlays (sun, moon, glows,
+// lightning, shooting star) remain as DOM elements below.
 
 /**
  * Calculate sun position based on hour (arc across sky)
@@ -327,7 +283,8 @@ function calculateSunPosition(hour) {
 }
 
 /**
- * Create clear/sunny weather effect with floating particles and warm glow
+ * Create clear/sunny weather overlays (sun, glow, ambient, lens flare).
+ * Dust motes and light orbs render on the particle canvas.
  */
 function createSunshine(hour) {
     const container = document.createElement('div');
@@ -353,36 +310,6 @@ function createSunshine(hour) {
     const ambientGlow = document.createElement('div');
     ambientGlow.className = 'rpg-weather-particle rpg-clear-ambient-glow';
     container.appendChild(ambientGlow);
-
-    // Create floating dust motes / pollen particles (golden sparkles)
-    for (let i = 0; i < 25; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'rpg-weather-particle rpg-clear-dust-mote';
-        particle.style.left = `${Math.random() * 100}vw`;
-        particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
-        // Vary the size slightly
-        const size = 2 + Math.random() * 4;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        container.appendChild(particle);
-    }
-
-    // Create soft light orbs that drift gently
-    for (let i = 0; i < 6; i++) {
-        const orb = document.createElement('div');
-        orb.className = 'rpg-weather-particle rpg-clear-light-orb';
-        orb.style.left = `${10 + Math.random() * 80}vw`;
-        orb.style.top = `${10 + Math.random() * 80}dvh`;
-        orb.style.animationDelay = `${i * 2}s`;
-        orb.style.animationDuration = `${20 + Math.random() * 10}s`;
-        // Vary the size
-        const size = 80 + Math.random() * 120;
-        orb.style.width = `${size}px`;
-        orb.style.height = `${size}px`;
-        container.appendChild(orb);
-    }
 
     // Create lens flare effect in corner
     const lensFlare = document.createElement('div');
@@ -426,32 +353,7 @@ function createSunrise(hour) {
     horizonGlow.className = 'rpg-weather-particle rpg-sunrise-horizon-glow';
     container.appendChild(horizonGlow);
 
-    // Add some fading stars (still visible at dawn)
-    for (let i = 0; i < 15; i++) {
-        const star = document.createElement('div');
-        star.className = 'rpg-weather-particle rpg-night-star rpg-sunrise-fading-star';
-        star.style.left = `${Math.random() * 100}vw`;
-        star.style.top = `${Math.random() * 40}dvh`;
-        star.style.animationDelay = `${Math.random() * 3}s`;
-        const size = 1 + Math.random() * 1.5;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        container.appendChild(star);
-    }
-
-    // Add some golden dust motes
-    for (let i = 0; i < 12; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'rpg-weather-particle rpg-clear-dust-mote';
-        particle.style.left = `${Math.random() * 100}vw`;
-        particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
-        const size = 2 + Math.random() * 3;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        container.appendChild(particle);
-    }
+    // Fading stars + golden dust motes render on the particle canvas
 
     return container;
 }
@@ -490,32 +392,7 @@ function createSunset(hour) {
     horizonGlow.className = 'rpg-weather-particle rpg-sunset-horizon-glow';
     container.appendChild(horizonGlow);
 
-    // Add some early stars (appearing at dusk)
-    for (let i = 0; i < 20; i++) {
-        const star = document.createElement('div');
-        star.className = 'rpg-weather-particle rpg-night-star rpg-sunset-emerging-star';
-        star.style.left = `${Math.random() * 100}vw`;
-        star.style.top = `${Math.random() * 50}dvh`;
-        star.style.animationDelay = `${Math.random() * 5}s`;
-        const size = 1 + Math.random() * 1.5;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        container.appendChild(star);
-    }
-
-    // Add some golden/pink dust motes
-    for (let i = 0; i < 12; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'rpg-weather-particle rpg-clear-dust-mote rpg-sunset-dust';
-        particle.style.left = `${Math.random() * 100}vw`;
-        particle.style.top = `${Math.random() * 100}dvh`;
-        particle.style.animationDelay = `${Math.random() * 15}s`;
-        particle.style.animationDuration = `${12 + Math.random() * 8}s`;
-        const size = 2 + Math.random() * 3;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        container.appendChild(particle);
-    }
+    // Emerging stars + dust motes render on the particle canvas
 
     return container;
 }
@@ -549,42 +426,7 @@ function createNighttime(hour) {
     moonGlow.style.top = `${moonPos.top - 3}dvh`;
     container.appendChild(moonGlow);
 
-    // Create twinkling stars
-    for (let i = 0; i < 60; i++) {
-        const star = document.createElement('div');
-        star.className = 'rpg-weather-particle rpg-night-star';
-        star.style.left = `${Math.random() * 100}vw`;
-        star.style.top = `${Math.random() * 60}dvh`; // Stars mostly in upper portion
-        star.style.animationDelay = `${Math.random() * 5}s`;
-        star.style.animationDuration = `${2 + Math.random() * 3}s`;
-        // Vary the size
-        const size = 1 + Math.random() * 2;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        container.appendChild(star);
-    }
-
-    // Create a few brighter stars
-    for (let i = 0; i < 8; i++) {
-        const brightStar = document.createElement('div');
-        brightStar.className = 'rpg-weather-particle rpg-night-star rpg-night-star-bright';
-        brightStar.style.left = `${Math.random() * 100}vw`;
-        brightStar.style.top = `${Math.random() * 50}dvh`;
-        brightStar.style.animationDelay = `${Math.random() * 4}s`;
-        brightStar.style.animationDuration = `${3 + Math.random() * 2}s`;
-        container.appendChild(brightStar);
-    }
-
-    // Create fireflies / floating light particles
-    for (let i = 0; i < 15; i++) {
-        const firefly = document.createElement('div');
-        firefly.className = 'rpg-weather-particle rpg-night-firefly';
-        firefly.style.left = `${Math.random() * 100}vw`;
-        firefly.style.top = `${40 + Math.random() * 55}dvh`; // Fireflies in lower portion
-        firefly.style.animationDelay = `${Math.random() * 10}s`;
-        firefly.style.animationDuration = `${8 + Math.random() * 7}s`;
-        container.appendChild(firefly);
-    }
+    // Twinkling stars + fireflies render on the particle canvas
 
     // Create subtle shooting star occasionally
     const shootingStar = document.createElement('div');
@@ -605,26 +447,6 @@ function createLightning() {
     const flash = document.createElement('div');
     flash.className = 'rpg-weather-particle rpg-lightning';
     container.appendChild(flash);
-
-    return container;
-}
-
-/**
- * Create wind effect
- */
-function createWind() {
-    const container = document.createElement('div');
-    container.className = 'rpg-weather-particles';
-
-    // Create 30 wind streaks
-    for (let i = 0; i < 30; i++) {
-        const streak = document.createElement('div');
-        streak.className = 'rpg-weather-particle rpg-wind-streak';
-        streak.style.top = `${Math.random() * 100}%`;
-        streak.style.animationDelay = `${Math.random() * 5}s`;
-        streak.style.animationDuration = `${1.5 + Math.random() * 1}s`;
-        container.appendChild(streak);
-    }
 
     return container;
 }
@@ -702,6 +524,7 @@ function updateCelestialPosition(hour) {
  * Remove current weather effect
  */
 function removeWeatherEffect() {
+    getParticleEngine().setEffects(null);
     if (weatherContainer) {
         weatherContainer.remove();
         weatherContainer = null;
@@ -754,56 +577,55 @@ export function updateWeatherEffect() {
     currentTimeOfDay = timeOfDay;
     currentHour = hour;
 
+    // Canvas effect plan + optional DOM overlay container per weather type
+    let canvasEffects = null;
     switch (weatherType) {
         case 'snow':
-            weatherContainer = createSnowflakes();
+            canvasEffects = { snow: { count: 50 } };
             break;
         case 'rain':
-            weatherContainer = createRain();
+            canvasEffects = { rain: { count: 100 } };
             break;
         case 'mist':
-            weatherContainer = createMist();
+            canvasEffects = { mist: { count: 5 } };
             break;
         case 'sunny':
             // Use appropriate effect based on time of day
             if (timeOfDay === 'night') {
                 weatherContainer = createNighttime(hour);
+                canvasEffects = { stars: { count: 68 }, fireflies: { count: 15 } };
             } else if (timeOfDay === 'dawn') {
                 weatherContainer = createSunrise(hour);
+                canvasEffects = { stars: { count: 15 }, dustMotes: { count: 12 } };
             } else if (timeOfDay === 'dusk') {
                 weatherContainer = createSunset(hour);
+                canvasEffects = { stars: { count: 20 }, dustMotes: { count: 12 } };
             } else {
                 weatherContainer = createSunshine(hour);
+                canvasEffects = { dustMotes: { count: 25 }, lightOrbs: { count: 6 } };
             }
             break;
         case 'wind':
-            weatherContainer = createWind();
+            canvasEffects = { wind: { count: 30 } };
             break;
-        case 'storm': {
-            // Storm = Rain + Lightning (combined effects)
-            const rainContainer = createRain();
-            const lightningContainer = createLightning();
-            // Merge both containers
-            weatherContainer = document.createElement('div');
-            weatherContainer.className = 'rpg-weather-particles';
-            weatherContainer.appendChild(rainContainer);
-            weatherContainer.appendChild(lightningContainer);
+        case 'storm':
+            // Storm = Rain + Lightning (lightning flash stays a DOM overlay)
+            weatherContainer = createLightning();
+            canvasEffects = { rain: { count: 100 } };
             break;
-        }
-        case 'blizzard': {
-            // Blizzard = Snow + Wind (combined effects)
-            const snowContainer = createSnowflakes();
-            const windContainer = createWind();
-            // Merge both containers
-            weatherContainer = document.createElement('div');
-            weatherContainer.className = 'rpg-weather-particles';
-            weatherContainer.appendChild(snowContainer);
-            weatherContainer.appendChild(windContainer);
+        case 'blizzard':
+            // Blizzard = Snow + Wind
+            canvasEffects = { snow: { count: 50 }, wind: { count: 30 } };
             break;
-        }
     }
 
-    if (weatherContainer) {
+    if (canvasEffects) {
+        // Effects with no DOM overlays still need a container for stacking
+        if (!weatherContainer) {
+            weatherContainer = document.createElement('div');
+            weatherContainer.className = 'rpg-weather-particles';
+        }
+
         // Apply z-index based on background/foreground settings
         if (extensionSettings.weatherForeground) {
             weatherContainer.style.zIndex = '9998'; // In front of chat
@@ -813,10 +635,14 @@ export function updateWeatherEffect() {
             weatherContainer.classList.remove('rpg-weather-foreground');
         } else {
             // Both disabled - don't show weather
+            weatherContainer = null;
             return;
         }
 
         document.body.appendChild(weatherContainer);
+        const engine = getParticleEngine();
+        engine.mount(weatherContainer);
+        engine.setEffects(canvasEffects);
     }
 }
 

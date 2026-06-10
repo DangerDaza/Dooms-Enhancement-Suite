@@ -1,41 +1,43 @@
 /**
  * Snowflakes Effect Module
- * Creates and manages animated snowflakes overlay
+ * Decorative falling-snow overlay, rendered on a dedicated particle canvas
+ * (one canvas + one rAF loop instead of 50 CSS-animated DOM nodes). Uses its
+ * own engine instance so it can run alongside a weather effect, which owns
+ * the shared engine and a different stacking context.
  */
 import { extensionSettings } from '../../core/state.js';
+import { createParticleEngine } from './particleCanvas.js';
+
 let snowflakesContainer = null;
+let snowEngine = null;
+
 /**
- * Create snowflakes container and snowflakes
+ * Create snowflakes canvas overlay
  */
 function createSnowflakes() {
     if (snowflakesContainer) return; // Already created
-    // Create container
     snowflakesContainer = document.createElement('div');
     snowflakesContainer.className = 'rpg-snowflakes-container';
-    // Create 50 snowflakes with random positions
-    for (let i = 0; i < 50; i++) {
-        const snowflake = document.createElement('div');
-        snowflake.className = 'rpg-snowflake';
-        snowflake.textContent = '❄';
-        // Random horizontal position
-        snowflake.style.left = `${Math.random() * 100}%`;
-        // Random animation delay for staggered effect
-        snowflake.style.animationDelay = `${Math.random() * 10}s`;
-        // Random animation duration (between 10-20s)
-        snowflake.style.animationDuration = `${10 + Math.random() * 10}s`;
-        snowflakesContainer.appendChild(snowflake);
-    }
     document.body.appendChild(snowflakesContainer);
+    snowEngine = createParticleEngine();
+    snowEngine.mount(snowflakesContainer);
+    snowEngine.setEffects({ snow: { count: 50 } });
 }
+
 /**
- * Remove snowflakes container
+ * Remove snowflakes overlay
  */
 function removeSnowflakes() {
+    if (snowEngine) {
+        snowEngine.destroy();
+        snowEngine = null;
+    }
     if (snowflakesContainer) {
         snowflakesContainer.remove();
         snowflakesContainer = null;
     }
 }
+
 /**
  * Toggle snowflakes effect
  */
@@ -46,6 +48,7 @@ export function toggleSnowflakes(enabled) {
         removeSnowflakes();
     }
 }
+
 /**
  * Initialize snowflakes based on saved state
  */
@@ -55,6 +58,7 @@ export function initSnowflakes() {
         createSnowflakes();
     }
 }
+
 /**
  * Clean up snowflakes
  */
