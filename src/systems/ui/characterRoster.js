@@ -795,8 +795,21 @@ function importCharacterPayload(payload) {
 
     const color = typeof payload.color === 'string' ? payload.color.trim() : '';
     if (color) {
-        if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
-        extensionSettings.characterColors[targetName] = color;
+        // Chat-aware write — when perChatCharacterTracking is on the live
+        // color store is chat_metadata, not extensionSettings. A manual
+        // edit here must overwrite whatever the harvest assigned.
+        const activeColors = getActiveCharacterColors();
+        const prev = activeColors[targetName] ? String(activeColors[targetName]).toLowerCase() : '';
+        if (prev && prev !== color.toLowerCase()) {
+            const known = getActiveKnownCharacters();
+            if (known) {
+                if (!known[targetName]) known[targetName] = { emoji: '❓' };
+                const aliases = Array.isArray(known[targetName].previousColors) ? known[targetName].previousColors : [];
+                if (!aliases.includes(prev)) aliases.push(prev);
+                known[targetName].previousColors = aliases;
+            }
+        }
+        activeColors[targetName] = color;
     }
 
     const avatar = typeof payload.avatar === 'string' ? payload.avatar : '';

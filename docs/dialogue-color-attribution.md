@@ -4,7 +4,9 @@ Tracking doc for the oldest bug in DES: **a newly-introduced character gets a
 unique dialogue color, but their lines display under an existing character's
 name (or "Unknown") instead of their own.**
 
-Status: **fix ported from `test/auto-portraits`** (see "The fix" below).
+Status: **reworked fix implemented** (see "The fix" below). The
+`test/auto-portraits` branch attempted this and did NOT solve it — its
+approach and why it failed are documented below so nobody re-walks that path.
 Verify in-browser with the test script at the bottom before closing this out.
 
 ---
@@ -57,49 +59,83 @@ Root causes, precisely:
 | 2 | DES independently assigns the new character a *different* palette color, poisoning the stored map | `portraitBar.js` auto-assign |
 | 3 | The narration-text fallback can only ever answer with an *already-known* name — for a brand-new speaker it is wrong by construction | `detectSpeaker` strategies 3–5 |
 
-## The fix (ported flow)
+## Why the test/auto-portraits attempt failed
 
-Make the AI itself the single authority, captured at parse time — the same
-turn that introduces the character delivers the mapping:
+That branch added a `"color"` field to the tracker JSON and harvested it,
+trusting the AI's claim. Two fatal holes:
+
+1. **The tracker JSON is written at the START of the reply** — before the
+   model has written any dialogue. The declared hex frequently doesn't match
+   the font color it actually uses (or is a literal `#RRGGBB` placeholder).
+   Trusting it *poisons* the store with colors that never appear in chat.
+2. **Its fallback paired colors to names positionally** (first new color ↔
+   first colorless character), which mispairs whenever counts don't line up.
+3. **The narration fallback stayed unconstrained** — an unknown color could
+   still resolve to an existing character who already owns a different
+   color, which is the original bug verbatim.
+
+## The fix (current flow)
+
+Nothing trusts the model. Every registration is validated against the
+message itself, and impossible attributions are excluded by construction:
 
 ```mermaid
 flowchart TD
-    P["PROMPT (per generation)<br/>• characters tracker JSON now requires a<br/>&quot;color&quot; field matching the font hex used<br/>• stored assignments marked RESERVED —<br/>new characters must get a brand-new hex"] --> A["AI reply<br/>font-tagged dialogue +<br/>tracker JSON: {name: Mira, color: #74b9ff, ...}"]
+    P["PROMPT (per generation)<br/>• characters tracker JSON asks for a &quot;color&quot; field<br/>• stored assignments marked RESERVED<br/>(helps compliant models; nothing depends on it)"] --> A["AI reply<br/>font-tagged dialogue + tracker JSON<br/>(Mira debuts, dialogue in #74b9ff)"]
 
-    A --> H["harvestNewSpeakerColors()<br/>runs at parse time, BEFORE renderers<br/>(both Together mode and Separate/External mode)"]
+    A --> H["harvestNewSpeakerColors()<br/>at parse time, BEFORE renderers<br/>(Together AND Separate/External modes)"]
 
-    H --> H1{"entry has valid<br/>&quot;color&quot; field?"}
-    H1 -- "yes (PRIMARY)" --> R["characterColors[Mira] = #74b9ff<br/>saved to roster — existing assignments<br/>are NEVER overwritten"]
-    H1 -- "no (model dropped it)" --> H2["FALLBACK: pair unrecognized font<br/>colors in the message with colorless<br/>new characters, in order of appearance"]
-    H2 --> R
+    H --> V{"1. VALIDATED JSON<br/>entry.color is a hex that ACTUALLY<br/>appears in this message's font tags<br/>and is unowned?"}
+    V -- yes --> R["characterColors[Mira] = #74b9ff<br/>(harvest never overwrites existing)"]
+    V -- "no — claim discarded,<br/>store never poisoned" --> E{"2. ELIMINATION<br/>exactly one colorless present char<br/>+ exactly one unowned font color?"}
+    E -- "yes — they MUST<br/>be each other" --> R
+    E -- no --> AD{"3. ADJACENCY<br/>score colorless candidates by name<br/>mentions around THAT color's segments<br/>(other dialogue stripped from windows)"}
+    AD -- "unique best" --> R
+    AD -- "tie / no signal —<br/>register nothing" --> RT["render-time safety net"]
 
-    R --> PB["Portrait bar render (later, scheduled)<br/>Mira already has a color →<br/>palette auto-assign SKIPS her<br/>(palette is now last-resort only)"]
+    R --> B["Bubble splitter — detectSpeaker(#74b9ff)<br/>S1 color map HIT"]
+    RT --> B2["detectSpeaker for unknown colors:<br/>S2.5 elimination (persisted if it fires)<br/>S3–S5 narration search CONSTRAINED:<br/>characters owning a DIFFERENT color<br/>are excluded — Lyra can never claim<br/>Mira's color"]
 
-    R --> B["Bubble splitter<br/>detectSpeaker(#74b9ff)<br/>Strategy 1: color map HIT"]
-    B --> OK["✅ bubble says MIRA<br/>same color in portraits, bubbles,<br/>and future prompts"]
-
-    R --> N["Next generation's prompt lists<br/>Mira = #74b9ff as RESERVED<br/>loop is closed"]
+    B --> OK["✅ bubble says MIRA"]
+    B2 --> OK
+    R --> N["Next generation's prompt lists<br/>Mira = #74b9ff as RESERVED"]
 
     style OK fill:#1d4a2a,stroke:#2ecc71,color:#fff
     style H fill:#1a3a5c,stroke:#74b9ff,color:#fff
+    style V fill:#1a3a5c,stroke:#74b9ff,color:#fff
 ```
+
+### Manual recolors always win
+
+The harvest never overwrites — but a **manual** color change in the
+Workshop or Roster always does. When a user replaces a character's color:
+
+- the write goes through the chat-aware store (`getActiveCharacterColors`),
+  so it works with per-chat character tracking (two secondary paths wrote
+  to the global store and silently no-opped — fixed);
+- the replaced hex is kept as a **previous-color alias** on the character's
+  roster entry, so historical messages whose font tags still use the old
+  color keep attributing to them (aliases are lowest priority — any current
+  owner of that hex wins);
+- existing bubbles are reverted and re-applied so the change is visible
+  immediately.
 
 Plus one more repair on the lookup side: `buildColorToSpeakerMap` is now
 built in two passes — absent-but-known characters first, **present characters
 second** — so if the AI reuses an absent character's color for someone
 on-screen, the present speaker wins the collision instead of the absent one.
 
-### What was ported (from `test/auto-portraits`)
+### Implementation map
 
 | Piece | File | Role |
 |---|---|---|
-| `"color"` field in characters tracker JSON (only when dialogue coloring is on) | `jsonPromptHelpers.js` | AI declares its own mapping |
-| "never reuse a color / record the hex in the JSON" instruction | `promptBuilder.js` (`DEFAULT_DIALOGUE_COLORING_PROMPT`) | prevents collisions at the source |
-| RESERVED-colors wording on the per-character assignment list | `injector.js` (`buildColorAssignments`) | protects existing assignments |
-| `harvestNewSpeakerColors()` + `_extractCharacterEntries()` | `chatBubbles.js` | captures the mapping at parse time (primary: JSON field; fallback: positional pairing) |
-| Harvest call after tracker parse — Together mode | `integration/sillytavern.js` | runs before bubbles/renderers |
-| Harvest call after tracker parse — Separate/External mode | `generation/apiClient.js` | same guarantee for the second API call |
-| Two-pass present-overrides-absent color map | `chatBubbles.js` (`buildColorToSpeakerMap`) | collision repair on lookup |
+| `"color"` field in characters tracker JSON + RESERVED/never-reuse instructions | `jsonPromptHelpers.js`, `promptBuilder.js`, `injector.js` | prompt-side nudges (kept from the branch — helpful, but nothing depends on compliance) |
+| `harvestNewSpeakerColors()` — validated JSON → elimination → adjacency | `chatBubbles.js` | parse-time registration, validated against the actual message |
+| `_bestAdjacentName()` | `chatBubbles.js` | adjacency scoring with other-dialogue-stripped windows |
+| Harvest calls in both generation modes | `integration/sillytavern.js`, `generation/apiClient.js` | runs before any renderer |
+| `detectSpeaker` S2.5 elimination + color-constrained S3–S5 (`allowed()`) | `chatBubbles.js` | render-time safety net; persists elimination results |
+| Two-pass present-overrides-absent map + previous-color alias pass | `chatBubbles.js` (`buildColorToSpeakerMap`) | collision repair + historical attribution after manual recolors |
+| Manual overwrite + alias recording + bubble refresh | `characterWorkshop.js`, `characterRoster.js` | user edits always win, chat-aware store |
 
 ### What was deliberately kept
 
@@ -112,16 +148,17 @@ on-screen, the present speaker wins the collision instead of the absent one.
 
 ## Known residual risks
 
-- **Small models may drop the `color` field** → fallback pairing is
-  positional (first new color ↔ first colorless character) and can mispair
-  when several characters debut in one turn with mismatched counts. The
-  narration fallback then decides — same as pre-fix behavior, no worse.
+- **Several characters debuting in one turn with no adjacency signal**: if
+  elimination can't isolate one candidate and adjacency ties, nothing is
+  registered — the segment shows "Unknown" rather than guessing wrong. The
+  next turn usually disambiguates (fewer remaining unknowns each turn).
 - **The AI can still disobey** the never-reuse instruction; the two-pass map
   limits the damage (present speaker wins), but two *present* characters
   sharing a color is unrecoverable until the user fixes one in the Workshop.
 - Existing chats whose rosters already contain palette-poisoned colors won't
-  self-heal (assignments are never overwritten by design). Clearing a wrong
-  color in the Workshop lets the next harvest re-learn it from the AI.
+  self-heal automatically. Fix is now one step: set the right color in the
+  Workshop — manual edits overwrite, and the old color stays as an alias so
+  history doesn't break.
 
 ## In-browser verification script
 
@@ -129,7 +166,8 @@ on-screen, the present speaker wins the collision instead of the absent one.
 2. Let the AI introduce a brand-new named character mid-conversation.
 3. Check, in order:
    - System Log shows `Registered 1 new speaker color: <Name> → #...` —
-     `(from JSON)` is the primary path, `(heuristic)` the fallback.
+     `(validated JSON)`, `(elimination)`, or `(adjacency)` shows which path
+     fired.
    - The new character's bubble shows **their own name**, not another
      character's, not "Unknown".
    - Portrait bar card color dot matches the dialogue color in chat.
@@ -139,3 +177,7 @@ on-screen, the present speaker wins the collision instead of the absent one.
    correctly via the JSON path.
 5. Have an absent character's color get reused by the AI for someone present
    (hard to force; if observed, the present character must win the bubble).
+6. Recolor an existing character in the Workshop → portrait dot and
+   re-rendered bubbles use the new color immediately; their OLD messages
+   still attribute to them (alias); next generation's RESERVED list shows
+   the new hex. Repeat with per-chat character tracking enabled.

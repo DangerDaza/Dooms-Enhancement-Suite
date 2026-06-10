@@ -1501,6 +1501,24 @@ function commitDraft() {
         // to extensionSettings here meant the PCP (which renders from
         // the chat-scoped map) never saw the new color.
         const colors = getActiveCharacterColors();
+        // A MANUAL color change always overwrites the assignment (only the
+        // automatic harvest is forbidden from overwriting). Remember the
+        // replaced color as an alias on the known-character entry so
+        // historical messages — whose font tags still use the old hex —
+        // keep attributing to this character.
+        const prev = colors[name] ? String(colors[name]).toLowerCase() : '';
+        const next = draft.color ? String(draft.color).toLowerCase() : '';
+        if (prev && prev !== next) {
+            try {
+                const known = getActiveKnownCharacters();
+                if (known) {
+                    if (!known[name]) known[name] = { emoji: '👤' };
+                    const aliases = Array.isArray(known[name].previousColors) ? known[name].previousColors : [];
+                    if (!aliases.includes(prev)) aliases.push(prev);
+                    known[name].previousColors = aliases;
+                }
+            } catch (e) { /* alias bookkeeping is best-effort */ }
+        }
         if (draft.color) {
             colors[name] = draft.color;
         } else {
@@ -1511,6 +1529,16 @@ function commitDraft() {
         // the right one. The trailing saveSettings() at the end of
         // commitDraft still runs for the non-per-chat fields.
         try { saveCharacterRosterChange(); } catch (e) {}
+        // Re-attribute existing bubbles with the updated color map.
+        Promise.resolve().then(async () => {
+            try {
+                const { revertAllChatBubbles, applyAllChatBubbles } = await import('../rendering/chatBubbles.js');
+                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
+                    revertAllChatBubbles();
+                    applyAllChatBubbles();
+                }
+            } catch (e) { /* non-fatal */ }
+        });
         changed = true;
     }
 
@@ -1677,7 +1705,11 @@ function copyUserToNpcCharacter(name) {
     if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
     if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
     extensionSettings.knownCharacters[trimmed] = { emoji: '👤' };
-    if (u.color) extensionSettings.characterColors[trimmed] = u.color;
+    if (u.color) {
+        // Chat-aware write — extensionSettings.characterColors is the wrong
+        // store when perChatCharacterTracking is on.
+        try { getActiveCharacterColors()[trimmed] = u.color; } catch (e) { extensionSettings.characterColors[trimmed] = u.color; }
+    }
     if (avatar) extensionSettings.npcAvatars[trimmed] = avatar;
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';

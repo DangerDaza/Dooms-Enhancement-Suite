@@ -126,29 +126,32 @@ function getAssignedColor(speakerName) {
  * characterColors so the bubble splitter has an authoritative source
  * instead of guessing from surrounding narration.
  *
- * Two paths, in priority order:
+ * Design constraint learned the hard way (the test/auto-portraits version
+ * of this trusted the AI and still misattributed): the tracker JSON is
+ * written at the START of the reply, BEFORE the model has written any
+ * dialogue — so its "color" field frequently doesn't match the font hex
+ * actually used, or is a literal placeholder. Nothing here trusts the
+ * model. Every registration is validated against the message itself:
  *
- *   PRIMARY (Option A): each character entry in characterThoughts is
- *   expected to carry an explicit `color` field that the AI sets to
- *   match the <font color> hex it uses for that character's dialogue.
- *   When present, this is the authoritative mapping — no inference
- *   needed. Added by buildCharactersJSONInstruction() when dialogue
- *   coloring is enabled.
+ *   1. VALIDATED JSON: an entry's "color" field is accepted only if that
+ *      exact hex appears in the message's font tags and isn't already
+ *      owned by someone else. A claim that doesn't match reality is
+ *      discarded instead of poisoning the store.
+ *   2. ELIMINATION: exactly one colorless present character + exactly one
+ *      unowned font color in the message → they must be each other.
+ *      Deterministic, no inference.
+ *   3. ADJACENCY: for remaining unknowns, score each colorless candidate
+ *      by how often their name appears in the narration immediately
+ *      around that color's dialogue segments (other characters' dialogue
+ *      is stripped from the windows first so quoted names don't vote).
+ *      A unique best candidate wins; ties register nothing.
  *
- *   FALLBACK (heuristic): for characters whose entry lacks an explicit
- *   color (smaller models drop the field, older chats with characters
- *   that predate the schema, etc.), pair "new colors appearing in the
- *   message" with "characters present this turn that don't have a
- *   color yet" in order of first appearance. Counts often won't match
- *   cleanly; we register as many as we can and let the
- *   surrounding-narration fallback in detectSpeaker() catch the rest.
+ *   Existing assignments are NEVER overwritten — once a character has a
+ *   color, this function only fills gaps. To deliberately reassign a
+ *   color, do it through the Character Workshop or Roster.
  *
- *   Existing assignments are NEVER overwritten — once a character has
- *   a color, this function only fills in gaps. To deliberately reassign
- *   a color, do it through the Character Workshop or Roster.
- *
- * Called from onMessageReceived after the parser has committed
- * lastGeneratedData.characterThoughts and before applyChatBubbles runs.
+ * Called at parse time (both Together and Separate/External modes),
+ * before any renderer runs.
  *
  * @param {string} messageText - the raw .mes string (contains <font> tags)
  * @param {string|object} characterThoughtsData - parsed/raw characterThoughts
@@ -164,50 +167,63 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     const HEX_RE = /^#[0-9a-fA-F]{6}$/;
     const registered = [];
 
-    // ─── Primary path: trust the AI's explicit color field ────────────────
-    // Characters that already have a color in characterColors are left
-    // alone — the entry's color field on this turn may differ, but the
-    // user's stored mapping wins until they explicitly clear/change it.
+    // Colors actually used in this message's font tags, first-appearance order.
+    const messageColors = [];
+    {
+        const seen = new Set();
+        const re = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
+        let m;
+        while ((m = re.exec(messageText || '')) !== null) {
+            const c = m[1].toLowerCase();
+            if (!seen.has(c)) { seen.add(c); messageColors.push(c); }
+        }
+    }
+    if (messageColors.length === 0) return 0;
+    const messageColorSet = new Set(messageColors);
+    const ownedColors = new Set(Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase()));
+
+    const colorlessNames = () => {
+        const out = [];
+        for (const entry of presentChars) {
+            const name = entry && entry.name;
+            if (name && typeof name === 'string' && !colors[name]) out.push(name);
+        }
+        return out;
+    };
+    const unownedColors = () => messageColors.filter(c => !ownedColors.has(c));
+    const register = (name, color, how) => {
+        colors[name] = color;
+        ownedColors.add(color);
+        registered.push(`${name} → ${color} (${how})`);
+    };
+
+    // ── 1. VALIDATED JSON ──
     for (const entry of presentChars) {
         const name = entry && entry.name;
-        if (!name || typeof name !== 'string') continue;
-        if (colors[name]) continue;
+        if (!name || typeof name !== 'string' || colors[name]) continue;
         const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
         if (!HEX_RE.test(proposed)) continue;
-        colors[name] = proposed;
-        registered.push(`${name} → ${proposed} (from JSON)`);
+        if (!messageColorSet.has(proposed)) continue;  // claim doesn't match the message — discard
+        if (ownedColors.has(proposed)) continue;       // already someone else's color
+        register(name, proposed, 'validated JSON');
     }
 
-    // ─── Fallback path: positional pairing from message font tags ─────────
-    // Only runs for characters still without a color after the primary
-    // pass — i.e. the AI dropped the color field but did paint dialogue.
-    if (typeof messageText === 'string' && messageText) {
-        const knownColors = new Set(
-            Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase())
-        );
-        const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
-        const newColors = [];
-        const seenColors = new Set();
-        let m;
-        while ((m = fontTagRegex.exec(messageText)) !== null) {
-            const color = m[1].toLowerCase();
-            if (seenColors.has(color)) continue;
-            seenColors.add(color);
-            if (knownColors.has(color)) continue;
-            newColors.push(color);
+    // ── 2. ELIMINATION ──
+    {
+        const names = colorlessNames();
+        const newColors = unownedColors();
+        if (names.length === 1 && newColors.length === 1) {
+            register(names[0], newColors[0], 'elimination');
         }
-        if (newColors.length > 0) {
-            const newNames = [];
-            for (const entry of presentChars) {
-                const name = entry && entry.name;
-                if (!name || typeof name !== 'string') continue;
-                if (colors[name]) continue;
-                newNames.push(name);
-            }
-            const pairCount = Math.min(newColors.length, newNames.length);
-            for (let i = 0; i < pairCount; i++) {
-                colors[newNames[i]] = newColors[i];
-                registered.push(`${newNames[i]} → ${newColors[i]} (heuristic)`);
+    }
+
+    // ── 3. ADJACENCY ──
+    {
+        const names = colorlessNames();
+        if (names.length > 0 && typeof messageText === 'string') {
+            for (const color of unownedColors()) {
+                const best = _bestAdjacentName(messageText, color, names.filter(n => !colors[n]));
+                if (best && !colors[best]) register(best, color, 'adjacency');
             }
         }
     }
@@ -219,6 +235,52 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     }
     console.log(`[Dooms Tracker] Registered ${registered.length} new speaker color${registered.length === 1 ? '' : 's'}: ${registered.join(', ')}`);
     return registered.length;
+}
+
+/**
+ * Find the candidate name most strongly adjacent to a color's dialogue
+ * segments. For every `<font color=X>...</font>` span, the surrounding
+ * narration (a window before the open tag and after the close tag, with
+ * ALL font-tagged spans stripped so other characters' quoted dialogue
+ * can't vote) is searched for candidate names. Mentions score 1, mentions
+ * hugging the segment boundary (within 60 chars) score 3. Returns the
+ * unique best candidate, or null on a tie / no signal.
+ */
+function _bestAdjacentName(messageText, color, candidateNames) {
+    if (!candidateNames || candidateNames.length === 0) return null;
+    if (candidateNames.length === 1) return candidateNames[0];
+
+    const WINDOW = 200;
+    const NEAR = 60;
+    const scores = new Map(candidateNames.map(n => [n, 0]));
+    const stripFonts = (s) => s.replace(/<font\b[^>]*>[\s\S]*?<\/font>/gi, ' ').replace(/<[^>]+>/g, ' ');
+
+    const openRe = new RegExp(`<font\\s+color=["']?${color.replace('#', '#?')}["']?>`, 'gi');
+    let m;
+    while ((m = openRe.exec(messageText)) !== null) {
+        const before = stripFonts(messageText.slice(Math.max(0, m.index - WINDOW), m.index));
+        const closeIdx = messageText.indexOf('</font>', m.index);
+        const afterStart = closeIdx === -1 ? openRe.lastIndex : closeIdx + 7;
+        const after = stripFonts(messageText.slice(afterStart, afterStart + WINDOW));
+        for (const name of candidateNames) {
+            const nameRe = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+            let nm;
+            while ((nm = nameRe.exec(before)) !== null) {
+                const dist = before.length - nm.index;
+                scores.set(name, scores.get(name) + (dist <= NEAR ? 3 : 1));
+            }
+            while ((nm = nameRe.exec(after)) !== null) {
+                scores.set(name, scores.get(name) + (nm.index <= NEAR ? 3 : 1));
+            }
+        }
+    }
+
+    let best = null, bestScore = 0, tie = false;
+    for (const [name, score] of scores) {
+        if (score > bestScore) { best = name; bestScore = score; tie = false; }
+        else if (score === bestScore && score > 0) tie = true;
+    }
+    return (!tie && bestScore > 0) ? best : null;
 }
 
 /** Build a color → speaker-name lookup for the bubble splitter.
@@ -247,6 +309,21 @@ function buildColorToSpeakerMap() {
             .map(c => String(c.name || '').toLowerCase())
             .filter(Boolean)
     );
+    // Pass 0 (lowest priority): previous-color aliases. When a user
+    // manually recolors a character in the Workshop/Roster, the replaced
+    // hex is kept as an alias so HISTORICAL messages (whose font tags
+    // still use the old color) keep attributing to that character. Any
+    // current owner of the same hex overrides the alias in later passes.
+    try {
+        const known = getActiveKnownCharacters() || {};
+        for (const [name, entry] of Object.entries(known)) {
+            if (!entry || !Array.isArray(entry.previousColors)) continue;
+            if (!knownNames.has(name.toLowerCase())) continue;
+            for (const prev of entry.previousColors) {
+                if (prev) map.set(String(prev).toLowerCase(), name);
+            }
+        }
+    } catch (e) { /* aliases are best-effort */ }
     // Pass 1: absent-but-known characters in this chat (lower priority).
     for (const [name, color] of Object.entries(colors)) {
         if (!color) continue;
@@ -293,6 +370,53 @@ function buildNameLookup() {
     return map;
 }
 
+/**
+ * Per-message attribution context, set by parseMessageIntoBubbles for the
+ * duration of one (synchronous) parse. Carries what detectSpeaker needs for
+ * elimination and color-constrained name search:
+ *   nameColor:        lowercase name → lowercase stored color
+ *   colorlessPresent: present, non-user characters with no stored color
+ *   newlyResolved:    color → name pairs resolved by elimination this parse,
+ *                      persisted to characterColors after the parse completes
+ */
+let _attribCtx = null;
+
+function buildAttributionContext() {
+    const colors = getActiveCharacterColors() || {};
+    // nameColors: lowercase name → Set of lowercase hexes the character has
+    // EVER owned (current color + previous-color aliases from manual
+    // recolors). Used by the allowed() constraint in detectSpeaker — a
+    // character may claim any color they have owned, but never someone
+    // else's, and an unknown color can't belong to someone who already has
+    // their own.
+    const nameColors = new Map();
+    const addOwned = (name, color) => {
+        if (!name || !color) return;
+        const key = String(name).toLowerCase();
+        if (!nameColors.has(key)) nameColors.set(key, new Set());
+        nameColors.get(key).add(String(color).toLowerCase());
+    };
+    for (const [n, c] of Object.entries(colors)) addOwned(n, c);
+    try {
+        const known = getActiveKnownCharacters() || {};
+        for (const [n, entry] of Object.entries(known)) {
+            if (entry && Array.isArray(entry.previousColors)) {
+                for (const prev of entry.previousColors) addOwned(n, prev);
+            }
+        }
+    } catch (e) { /* aliases are best-effort */ }
+    // "Colorless" means no CURRENT color — previous aliases don't count
+    // (a character whose color was cleared is eligible for elimination).
+    const hasCurrent = new Set(
+        Object.entries(colors).filter(([, c]) => c).map(([n]) => n.toLowerCase())
+    );
+    const colorlessPresent = getCharacterList()
+        .filter(c => c && c.present !== false && !c.isUser && c.name &&
+            !hasCurrent.has(String(c.name).toLowerCase()))
+        .map(c => c.name);
+    return { nameColors, colorlessPresent, newlyResolved: new Map() };
+}
+
 // ─────────────────────────────────────────────
 //  Parser — split .mes_text HTML into segments
 // ─────────────────────────────────────────────
@@ -305,6 +429,7 @@ function buildNameLookup() {
 function parseMessageIntoBubbles(mesText) {
     const colorMap = buildColorToSpeakerMap();
     const nameLookup = buildNameLookup();
+    _attribCtx = buildAttributionContext();
     // Track colours resolved during this message so repeated dialogue by the
     // same character is correctly attributed even when narration in between
     // doesn't mention the character's name.
@@ -334,6 +459,22 @@ function parseMessageIntoBubbles(mesText) {
         allSegments.push(...segs);
         blockIdx++;
     }
+
+    // Persist any color → name pairs that elimination resolved during this
+    // parse (high-confidence: there was exactly one possible speaker), so
+    // the mapping survives into future messages and the next generation's
+    // reserved-colors list. Fuzzy narration matches are NOT persisted.
+    if (_attribCtx && _attribCtx.newlyResolved.size > 0) {
+        const colors = getActiveCharacterColors() || {};
+        let wrote = false;
+        for (const [color, name] of _attribCtx.newlyResolved) {
+            if (!colors[name]) { colors[name] = color; wrote = true; }
+        }
+        if (wrote) {
+            try { saveCharacterRosterChange(); } catch (e) { /* non-fatal */ }
+        }
+    }
+    _attribCtx = null;
 
     return mergeConsecutiveNarration(allSegments);
 }
@@ -524,13 +665,14 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
  * to iterate first in the Map.
  * @returns {string|null} The original character name or null
  */
-function findClosestName(text, nameLookup) {
+function findClosestName(text, nameLookup, allowed = null) {
     if (!text) return null;
     const lower = text.toLowerCase();
     let bestPos = -1;
     let bestName = null;
 
     for (const [key, original] of nameLookup) {
+        if (allowed && !allowed(original)) continue;
         const re = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
         let match;
         while ((match = re.exec(lower)) !== null) {
@@ -560,12 +702,43 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         if (resolvedColors.has(normalised)) return resolvedColors.get(normalised);
     }
 
+    // A speaker constraint shared by every strategy below: a color the AI
+    // was told is RESERVED for character X can never belong to character Y.
+    // So when resolving an UNKNOWN color, characters that already own a
+    // DIFFERENT color are excluded from consideration. Without this, the
+    // narration fallbacks happily attribute a new character's dialogue to
+    // whichever existing character is mentioned nearby — the original
+    // "new character shows up as someone else" bug.
+    const allowed = (name) => {
+        if (!fontColor || !_attribCtx) return true;
+        const owned = _attribCtx.nameColors.get(String(name).toLowerCase());
+        return !owned || owned.size === 0 || owned.has(fontColor.toLowerCase());
+    };
+
+    // Strategy 2.5: Elimination — if exactly one present character has no
+    // stored color (and hasn't already claimed a different color in this
+    // message), an unknown color can only be theirs. Deterministic; also
+    // recorded for persistence so the mapping sticks for future messages.
+    if (fontColor && _attribCtx) {
+        const normalised = fontColor.toLowerCase();
+        const claimed = new Set(
+            [...resolvedColors.values()].map(n => String(n).toLowerCase())
+        );
+        const candidates = _attribCtx.colorlessPresent.filter(
+            n => !claimed.has(String(n).toLowerCase())
+        );
+        if (candidates.length === 1) {
+            _attribCtx.newlyResolved.set(normalised, candidates[0]);
+            return candidates[0];
+        }
+    }
+
     // Strategy 3: Search for the character name closest to the END of the
     // preceding narration text (the name mentioned right before dialogue
     // is most likely the speaker, even if other characters are mentioned earlier)
     const searchText = (precedingText || '');
     if (searchText.trim()) {
-        const found = findClosestName(searchText, nameLookup);
+        const found = findClosestName(searchText, nameLookup, allowed);
         if (found) return found;
     }
 
@@ -576,7 +749,7 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
     const blockClone = blockElement.cloneNode(true);
     blockClone.querySelectorAll('font[color]').forEach(el => el.remove());
     const narrationOnlyText = (blockClone.textContent || '');
-    const found = findClosestName(narrationOnlyText, nameLookup);
+    const found = findClosestName(narrationOnlyText, nameLookup, allowed);
     if (found) return found;
 
     // Strategy 5: Search backwards through RECENT segments in this message
@@ -588,7 +761,7 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
         const searchStart = Math.max(0, previousSegments.length - 3);
         for (let i = previousSegments.length - 1; i >= searchStart; i--) {
             const segText = stripHtml(previousSegments[i].html);
-            const segFound = findClosestName(segText, nameLookup);
+            const segFound = findClosestName(segText, nameLookup, allowed);
             if (segFound) return segFound;
         }
     }
