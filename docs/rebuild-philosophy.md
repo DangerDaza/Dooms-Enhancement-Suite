@@ -241,7 +241,11 @@ editor, and inspector modal.
 7. **Touching the prompt pipeline?** The parser (`parser.js` + `jsonRepair.js`)
    defines the contract. Prose can change; keys, shapes, and the single
    unified code block cannot. Gate phrasing changes behind `compactPrompts`.
-8. **Every change:** run `node tools/load-check.mjs` — it links and
+8. **Every release:** bump `manifest.json` version AND `whatsnew.json`
+   together — the What's New screen keys on the manifest version, so an
+   unbumped release silently never shows its notes (load-check enforces
+   the two stay in sync).
+9. **Every change:** run `node tools/load-check.mjs` — it links and
    evaluates the ENTIRE module graph with stubbed ST internals, which is the
    only reliable pre-ship gate. (`node --check` does not parse the module
    goal correctly and has passed files with top-level syntax errors that

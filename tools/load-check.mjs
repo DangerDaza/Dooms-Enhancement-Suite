@@ -88,6 +88,19 @@ globalThis.SillyTavern = anything;
 globalThis.requestAnimationFrame = () => 0;
 globalThis.cancelAnimationFrame = () => {};
 
+// Release invariant: whatsnew.json must target the manifest version,
+// otherwise the What's New screen silently never shows for the release
+// (the gate keys on manifest version vs last-seen version).
+{
+    const manifest = JSON.parse(readFileSync(join(repo, 'manifest.json'), 'utf8'));
+    const notes = JSON.parse(readFileSync(join(repo, 'whatsnew.json'), 'utf8'));
+    if (manifest.version !== notes.version) {
+        console.error(`VERSION DRIFT: manifest.json is ${manifest.version} but whatsnew.json targets ${notes.version}.`);
+        console.error('Bump both together — the What\'s New screen keys on the manifest version.');
+        process.exit(1);
+    }
+}
+
 try {
     await import(pathToFileURL(join(repoAt, 'index.js')).href);
     // index.js only statically reaches part of the tree — dynamic-only

@@ -1,7 +1,11 @@
 {
-    "version": "1.12.1",
+    "version": "1.12.2",
     "title": "The Rebuild",
     "items": [
+        {
+            "title": "This screen!",
+            "body": "DES now shows release notes once after every update (desktop and desktop-site view). Dismissing lasts until the next release; turn it off permanently in Display settings. You can reopen it any time with the What's New button in the extensions dropdown."
+        },
         {
             "title": "Dialogue colors finally stick to the right character",
             "body": "New characters no longer show up as someone else (or 'Unknown'). DES now learns each speaker's color the moment they debut — validated against the actual message, never guessed — and a manual recolor in the Workshop always wins, with old messages keeping their attribution."
