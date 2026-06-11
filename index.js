@@ -34,6 +34,7 @@ import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSw
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
+import { onIdle } from './src/core/scheduler.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -653,6 +654,10 @@ function bindSettingsUI() {
         extensionSettings.mobileQuickJumpEnabled = $(this).prop('checked');
         saveSettings();
         refreshMobileQuickJump();
+    });
+    $('#rpg-toggle-whats-new').on('change', function () {
+        extensionSettings.whatsNewDisabled = !$(this).prop('checked');
+        saveSettings();
     });
     $('#rpg-toggle-compact-prompts').on('change', function () {
         extensionSettings.compactPrompts = $(this).prop('checked');
@@ -1724,6 +1729,7 @@ function bindSettingsUI() {
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
     $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
+    $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewDisabled);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
@@ -3064,6 +3070,23 @@ jQuery(async () => {
             onCharacterChanged();
         }
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
+        // ── What's New screen (desktop, once per release, opt-out) ──
+        // The gate is three cheap checks; the module, its CSS, and the
+        // release-notes JSON only load when it will actually display.
+        // Scheduled to idle so it never competes with startup rendering.
+        onIdle('whatsNew', () => {
+            if (extensionSettings.whatsNewDisabled) return;
+            if (window.innerWidth <= 1000) return; // desktop only (DES mobile breakpoint)
+            getExtensionVersion().then(async (v) => {
+                if (!v || v === extensionSettings.whatsNewSeenVersion) return;
+                try {
+                    const { showWhatsNew } = await import('./src/systems/ui/whatsNew.js');
+                    await showWhatsNew();
+                } catch (e) {
+                    console.warn('[Dooms Tracker] What\'s New screen failed:', e);
+                }
+            }).catch(() => {});
+        }, 3000);
     } catch (error) {
         console.error('[Dooms Tracker] ❌ Critical initialization failure:', error);
         console.error('[Dooms Tracker] Error details:', error.message, error.stack);

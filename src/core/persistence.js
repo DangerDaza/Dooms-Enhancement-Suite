@@ -477,6 +477,16 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
+            // What's New screen (desktop, once per release, opt-out)
+            if (extensionSettings.whatsNewSeenVersion === undefined) {
+                extensionSettings.whatsNewSeenVersion = '';
+                settingsChanged = true;
+            }
+            if (extensionSettings.whatsNewDisabled === undefined) {
+                extensionSettings.whatsNewDisabled = false;
+                settingsChanged = true;
+            }
+
             // Save migrated settings
             if (settingsChanged) {
                 saveSettings();

@@ -1,0 +1,34 @@
+{
+    "version": "1.12.1",
+    "title": "The Rebuild",
+    "items": [
+        {
+            "title": "Dialogue colors finally stick to the right character",
+            "body": "New characters no longer show up as someone else (or 'Unknown'). DES now learns each speaker's color the moment they debut — validated against the actual message, never guessed — and a manual recolor in the Workshop always wins, with old messages keeping their attribution."
+        },
+        {
+            "title": "Context Inspector",
+            "body": "Settings → Context Inspector shows verbatim everything DES injects into the model's context: live slot snapshot plus a per-generation history of every injection, edit, and clear."
+        },
+        {
+            "title": "Quick-Jump button (mobile)",
+            "body": "Scroll up in chat to reveal a small button that jumps back to your last message — tap again to walk up through earlier ones. Toggle in Display settings."
+        },
+        {
+            "title": "Massive performance rebuild",
+            "body": "Startup payload cut roughly in half; settings UI, modals, and their code load only when first opened; weather particles moved to a single canvas that fully stops when hidden; rendering is incremental instead of rebuilt per message."
+        },
+        {
+            "title": "Performance Mode",
+            "body": "New Display toggle that strips all DES animations, blur, and transitions and pauses particles — for minimum GPU/CPU cost on weaker machines."
+        },
+        {
+            "title": "Compact Tracker Prompt",
+            "body": "Optional terser tracker instructions (~40% fewer prompt tokens) in Advanced. Existing installs keep the verbose phrasing they were tuned on; fresh installs default to compact."
+        },
+        {
+            "title": "Loading intro removed",
+            "body": "The startup cinematic is gone entirely — DES now gets out of the way and loads instantly."
+        }
+    ]
+}

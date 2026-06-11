@@ -6,6 +6,7 @@
  * on demand:
  *   - 'modals'        — all DES modal/settings UI (with the deferred template)
  *   - 'weather'       — weather overlay/ambience styles (only when enabled)
+ *   - 'whats-new'     — release-notes screen (desktop, once per release)
  *
  * ensureCss() resolves when the sheet has loaded, so callers can await it
  * before inserting matching DOM (no flash of unstyled content).

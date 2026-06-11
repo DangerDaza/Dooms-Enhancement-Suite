@@ -136,6 +136,8 @@ export let extensionSettings = {
     performanceMode: false, // Kill animations/blur/transitions + pause particles for minimum GPU/CPU cost
     compactPrompts: true, // Use terser tracker instructions (~40% fewer tokens); set false to restore verbose v1 phrasing
     mobileQuickJumpEnabled: true, // Mobile-only floating button to jump back to your last sent message
+    whatsNewSeenVersion: '', // Last extension version whose What's New screen was shown
+    whatsNewDisabled: false, // User clicked "Don't show again" on the What's New screen
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'
