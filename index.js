@@ -230,6 +230,13 @@ async function addExtensionSettings() {
         }).catch(() => {});
     });
     // "Star on GitHub" button in the extension dropdown
+    $('#dooms-whats-new-btn').on('click', function () {
+        // Manual view — works on any device; the desktop-only rule applies
+        // to the AUTOMATIC popup, not a deliberate request.
+        import('./src/systems/ui/whatsNew.js')
+            .then(({ showWhatsNew }) => showWhatsNew())
+            .catch((e) => console.warn("[Dooms Tracker] What's New failed:", e));
+    });
     $('#dooms-github-star-btn').on('click', function () {
         window.open('https://github.com/DangerDaza/Dooms-Enhancement-Suite', '_blank', 'noopener,noreferrer');
     });
@@ -3076,7 +3083,10 @@ jQuery(async () => {
         // Scheduled to idle so it never competes with startup rendering.
         onIdle('whatsNew', () => {
             if (extensionSettings.whatsNewDisabled) return;
-            if (window.innerWidth <= 1000) return; // desktop only (DES mobile breakpoint)
+            // Desktop only — but "Request desktop site" on a phone renders a
+            // 980px layout viewport, which the >1000px mobile breakpoint just
+            // misses. Treat >=980 as desktop so desktop-view users see it too.
+            if (window.innerWidth < 980) return;
             getExtensionVersion().then(async (v) => {
                 if (!v || v === extensionSettings.whatsNewSeenVersion) return;
                 try {

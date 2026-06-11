@@ -115,8 +115,3 @@
     color: #fff;
 }
 .dooms-wn-btn-primary:hover { filter: brightness(1.1); }
-
-/* Belt-and-suspenders: never render on mobile even if the gate is bypassed */
-@media (max-width: 1000px) {
-    .dooms-wn-overlay { display: none !important; }
-}
