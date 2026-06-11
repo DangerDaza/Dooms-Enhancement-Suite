@@ -631,14 +631,24 @@ async function loadSettingsTemplate() {
     try { toggleCustomColors(); } catch (_) { }
     // Tiny daily-users badge in the popup header. Fetched only now (first
     // settings open), session-cached, hidden silently when no data exists.
-    fetchDailyUserCount().then((n) => {
-        if (n === null) return;
-        const badge = document.getElementById('rpg-dau-badge');
-        if (badge) {
-            badge.textContent = `\u{1F465} ${n.toLocaleString()}/day`;
-            badge.style.display = '';
-        }
-    });
+    //
+    // SHIPS DORMANT in this release: the stats pipeline (release asset +
+    // daily cron) needs to run on main for a couple of days before the
+    // number means anything. No flag to flip — the badge self-activates on
+    // the NEXT version bump (every release bumps the version; load-check
+    // enforces it), by which time real data exists.
+    const DAU_BADGE_DORMANT_IN = '1.12.4';
+    getExtensionVersion().then((v) => {
+        if (!v || v === DAU_BADGE_DORMANT_IN) return; // dormant this release
+        fetchDailyUserCount().then((n) => {
+            if (n === null) return;
+            const badge = document.getElementById('rpg-dau-badge');
+            if (badge) {
+                badge.textContent = `\u{1F465} ${n.toLocaleString()}/day`;
+                badge.style.display = '';
+            }
+        });
+    }).catch(() => { });
     console.log('[Dooms Tracker] Deferred settings UI ready');
 }
 
