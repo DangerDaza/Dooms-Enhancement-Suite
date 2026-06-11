@@ -433,39 +433,67 @@ export async function triggerDoomCounter() {
     try {
         console.log('[Doom Counter] Generating twist options...');
 
-        // Generate while loading state is visible
-        const twists = await generateTwistOptions(dc.twistChoiceCount || 3);
-
-        // ── Swap loading content for twist cards ────────────────────────────
-        const cardsHtml = twists.map((twist, index) => `
-            <div class="dooms-dc-card" data-index="${index}" tabindex="0">
-                <div class="dooms-dc-card-emoji">${twist.emoji}</div>
-                <div class="dooms-dc-card-title">${twist.title}</div>
-                <div class="dooms-dc-card-desc">${twist.description}</div>
-            </div>
-        `).join('');
-
         const $body = $inline.find('.dooms-dc-inline-body');
-        $body.empty();
-        $inline.find('.dooms-dc-inline-header span').text('Choose your fate:');
-        $body.append(`<div class="dooms-dc-cards dooms-dc-cards-enter">${cardsHtml}</div>`);
 
-        // Remove enter class after animation fires
-        setTimeout(() => $body.find('.dooms-dc-cards').removeClass('dooms-dc-cards-enter'), 400);
+        const renderLoading = () => {
+            $inline.find('.dooms-dc-inline-header span').text('The Doom Counter has triggered...');
+            $body.html(`
+                <div class="dooms-dc-loading">
+                    <div class="dooms-dc-loading-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <div class="dooms-dc-loading-label">Consulting the fates...</div>
+                </div>
+            `);
+        };
 
-        // Scroll to show the cards
-        if (chatEl) {
-            chatEl.scrollTop = chatEl.scrollHeight;
-        }
+        const renderCards = (twists) => {
+            const cardsHtml = twists.map((twist, index) => `
+                <div class="dooms-dc-card" data-index="${index}" tabindex="0">
+                    <div class="dooms-dc-card-emoji">${twist.emoji}</div>
+                    <div class="dooms-dc-card-title">${twist.title}</div>
+                    <div class="dooms-dc-card-desc">${twist.description}</div>
+                </div>
+            `).join('');
 
-        // ── Wait for user to pick a card ────────────────────────────────────
+            $body.empty();
+            $inline.find('.dooms-dc-inline-header span').text('Choose your fate:');
+            $body.append(`<div class="dooms-dc-cards dooms-dc-cards-enter">${cardsHtml}</div>`);
+            $body.append(`
+                <div class="dooms-dc-actions">
+                    <button type="button" class="dooms-dc-action-btn dooms-dc-reroll">
+                        <i class="fa-solid fa-dice"></i> Reroll
+                    </button>
+                    <button type="button" class="dooms-dc-action-btn dooms-dc-cancel">
+                        <i class="fa-solid fa-xmark"></i> Cancel
+                    </button>
+                </div>
+            `);
+
+            // Remove enter class after animation fires
+            setTimeout(() => $body.find('.dooms-dc-cards').removeClass('dooms-dc-cards-enter'), 400);
+
+            // Scroll to show the cards
+            if (chatEl) {
+                chatEl.scrollTop = chatEl.scrollHeight;
+            }
+        };
+
+        // Generate while loading state is visible
+        let currentTwists = await generateTwistOptions(dc.twistChoiceCount || 3);
+        renderCards(currentTwists);
+
+        // ── Wait for user to pick a card, reroll, or cancel ─────────────────
+        let rerolling = false;
         const chosenTwist = await new Promise((resolve) => {
             $inline.on('click', '.dooms-dc-card', function () {
+                if (rerolling) return;
                 const index = parseInt($(this).data('index'));
-                const chosen = twists[index];
+                const chosen = currentTwists[index];
 
                 $(this).addClass('dooms-dc-card-selected');
                 $inline.find('.dooms-dc-card').not(this).addClass('dooms-dc-card-dimmed');
+                $inline.find('.dooms-dc-actions').remove();
 
                 // Collapse to a compact "twist chosen" summary after a brief pause
                 setTimeout(() => {
@@ -488,7 +516,33 @@ export async function triggerDoomCounter() {
                     $(this).trigger('click');
                 }
             });
+
+            $inline.on('click', '.dooms-dc-reroll', async function () {
+                if (rerolling) return;
+                rerolling = true;
+                try {
+                    console.log('[Doom Counter] Rerolling twist options...');
+                    renderLoading();
+                    currentTwists = await generateTwistOptions(dc.twistChoiceCount || 3);
+                    renderCards(currentTwists);
+                } finally {
+                    rerolling = false;
+                }
+            });
+
+            $inline.on('click', '.dooms-dc-cancel', function () {
+                if (rerolling) return;
+                resolve(null);
+            });
         });
+
+        // ── Cancelled: dismiss without a twist and reset the counter ────────
+        if (chosenTwist === null) {
+            console.log('[Doom Counter] Twist selection cancelled by user.');
+            resetCounters();
+            updateDoomCounterUI();
+            return;
+        }
 
         // Store the chosen twist for injection on next generation
         const state = getDoomCounterState();
