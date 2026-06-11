@@ -5,18 +5,30 @@
 
 .dooms-wn-overlay {
     position: fixed;
-    inset: 0;
+    /* Explicit offsets, not `inset: 0` — the shorthand is silently ignored
+       by some mobile WebViews, which collapses the fixed overlay to content
+       height (no full-screen dim, panel jammed under the URL bar). */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* dynamic viewport height accounts for the mobile URL bar */
     z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Keep the centered panel clear of the URL bar / notches */
+    box-sizing: border-box;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
     background: rgba(0, 0, 0, 0.6);
     pointer-events: auto;
 }
 
 .dooms-wn-panel {
-    width: min(560px, 92vw);
-    max-height: 80vh;
+    width: min(560px, 100%);
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     background: var(--rpg-bg, #14161d);
