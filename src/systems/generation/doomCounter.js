@@ -288,6 +288,81 @@ export function markCharacterKnifeUsed(characterName, knifeId, isUser) {
     }
 }
 
+/**
+ * Generates knife suggestions for a character via a separate API call.
+ * Used by the Character Workshop's "Generate Knives" button — the player
+ * picks which suggestions to keep, so this returns plain texts.
+ *
+ * @param {string} characterName - The character to write knives for
+ * @param {Object} [options]
+ * @param {boolean} [options.isUser=false] - True if the owner is a user persona
+ * @param {number} [options.count=5] - Number of suggestions to generate
+ * @param {Array<string>} [options.existingKnives=[]] - Knife texts to avoid duplicating
+ * @returns {Promise<Array<string>>} Suggested knife texts
+ */
+export async function generateKnifeSuggestions(characterName, { isUser = false, count = 5, existingKnives = [] } = {}) {
+    const context = getContext();
+    const playerName = context.name1 || 'the player';
+
+    // Pull what we know about the character from their Workshop record
+    let description = '';
+    let relationship = '';
+    if (isUser) {
+        description = extensionSettings.userCharacters?.[characterName]?.injection?.description || '';
+    } else {
+        description = extensionSettings.characterInjection?.[characterName]?.description || '';
+        relationship = extensionSettings.characterRelationships?.[characterName] || '';
+    }
+
+    // Recent conversation for tone/setting (same budget as the twist generator)
+    const dc = extensionSettings.doomCounter || {};
+    const contextMessages = dc.twistContextMessages || 15;
+    const messageTruncation = dc.twistMessageTruncation || 1200;
+    const chatMessages = context.chat || [];
+    const recentChat = chatMessages.slice(-contextMessages).map(m => {
+        const role = m.is_user ? playerName : (m.name || 'AI');
+        return `${role}: ${(m.mes || '').substring(0, messageTruncation)}`;
+    }).join('\n');
+
+    const systemPrompt = `You are generating "Knives" for a roleplay story. A Knife is a pre-planned story beat tied to one character: a secret, debt, grudge, obligation, or unresolved past that lies dormant until the story needs drama, then resurfaces with consequences.
+
+Write knives for this character:
+- Name: ${characterName}${isUser ? ` (the player's own character; the player is ${playerName})` : ''}
+${relationship ? `- Relationship to ${playerName}: ${relationship}\n` : ''}${description ? `- Description: ${description}\n` : ''}
+${existingKnives.length ? `Existing knives — do NOT duplicate or rephrase these:\n${existingKnives.map(t => `  • ${t}`).join('\n')}\n` : ''}
+Recent conversation (for tone and setting):
+${recentChat || '(no messages yet)'}
+
+Requirements:
+- Each knife is 1-2 sentences, written as a factual premise about ${characterName} (e.g. "David is a gambling addict — he owes a lot of money to the wrong people.")
+- Make them specific and consequence-laden: name what hangs over the character and who or what might come collecting
+- Vary the type across the options: debts, secrets, old flames, rivals, broken promises, past crimes, hidden identities
+- Fit the story's established tone and setting; don't contradict the description above
+
+Return ONLY a JSON array of exactly ${count} strings.`;
+
+    const response = await safeGenerateRaw({
+        prompt: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Generate ${count} knives for ${characterName}.` }
+        ],
+        quietToLoud: false
+    });
+    if (!response) throw new Error('No response from API');
+
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('No JSON array found in response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) throw new Error('Invalid knife data returned');
+
+    return parsed
+        .map(item => typeof item === 'string' ? item : (item?.text || item?.description || ''))
+        .map(t => String(t).trim())
+        .filter(Boolean)
+        .slice(0, count);
+}
+
 // ─── Twist Generation ─────────────────────────────────────────────────────────
 
 /**

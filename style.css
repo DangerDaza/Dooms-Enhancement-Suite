@@ -11615,6 +11615,58 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
+/* Generated knife suggestions (Character Workshop) — checkbox rows */
+#cw-knife-suggestions {
+    margin-top: 10px;
+}
+
+
+.cw-knife-suggestion {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+
+.cw-knife-suggestion:hover {
+    border-color: rgba(240, 192, 64, 0.4);
+}
+
+
+.cw-knife-suggestion:has(input:checked) {
+    border-color: rgba(240, 192, 64, 0.55);
+    background: rgba(240, 192, 64, 0.07);
+}
+
+
+.cw-knife-suggestion input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+
+.cw-knife-sugg-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+
+.cw-knife-sugg-loading {
+    font-size: 0.82em;
+    font-style: italic;
+    opacity: 0.6;
+    padding: 8px 2px;
+}
+
+
 /* Animations */
 @keyframes dooms-dc-fade-in {
     from { opacity: 0; transform: translateY(8px); }

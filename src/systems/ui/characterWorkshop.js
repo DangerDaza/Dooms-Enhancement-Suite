@@ -28,6 +28,7 @@ import { getBase64Async } from '../../../../../../utils.js';
 import { getSafeThumbnailUrl, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { renderThoughts } from '../rendering/thoughts.js';
+import { generateKnifeSuggestions } from '../generation/doomCounter.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 import {
@@ -102,6 +103,8 @@ const DIALOGUE_COLORS = [
 let draft = null;
 let $modal = null;
 let listenersBound = false;
+/** Guard so rapid clicks on Generate Knives don't stack API calls. */
+let _knifeGenInProgress = false;
 let _wsInitialized = false; // guard: don't double-register window/eventSource listeners
 let pendingInjectClear = false; // true while an inject prompt is queued
 // True only between a real (non-quiet, non-dryRun) GENERATION_STARTED and its
@@ -363,6 +366,7 @@ export function openCharacterWorkshop(characterName, options = {}) {
     renderInjection();
     renderKnives();
     $modal.find('#cw-knife-input').val('');
+    clearKnifeSuggestions();
     activatePane('identity');
 
     if (!listenersBound) {
@@ -667,6 +671,37 @@ function escapeKnifeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+/**
+ * Renders AI-generated knife suggestions as checkbox rows so the player
+ * can pick which ones to keep. Suggestions are stashed on the container's
+ * data so the Keep handler can read them back by index.
+ */
+function renderKnifeSuggestions(suggestions) {
+    const $sugg = $modal.find('#cw-knife-suggestions');
+    const rows = suggestions.map((text, i) => `
+        <label class="cw-knife-suggestion">
+            <input type="checkbox" data-index="${i}">
+            <span class="rpg-dc-knife-icon">🔪</span>
+            <span class="rpg-dc-knife-text">${escapeKnifeHtml(text)}</span>
+        </label>
+    `).join('');
+    $sugg.prop('hidden', false).html(`
+        <p class="helper" style="margin: 0 0 4px;">Pick the knives worth keeping — the rest are discarded:</p>
+        ${rows}
+        <div class="cw-knife-sugg-actions">
+            <button type="button" class="rpg-btn rpg-btn-primary" id="cw-knife-sugg-keep">
+                <i class="fa-solid fa-check"></i> Keep selected
+            </button>
+            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-knife-sugg-discard">Discard all</button>
+        </div>
+    `);
+    $sugg.data('suggestions', suggestions);
+}
+
+function clearKnifeSuggestions() {
+    $modal.find('#cw-knife-suggestions').prop('hidden', true).empty().removeData('suggestions');
 }
 
 function renderKnives() {
@@ -1013,6 +1048,57 @@ function bindStaticListeners() {
         draft.knives = draft.knives.map(k => k.id === id ? { ...k, used: false } : k);
         draft.dirty.knives = true;
         renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knife-generate', async function () {
+        if (!draft || _knifeGenInProgress) return;
+        _knifeGenInProgress = true;
+        const $btn = $(this);
+        const forName = draft.name;
+        const $sugg = $modal.find('#cw-knife-suggestions');
+        $btn.prop('disabled', true);
+        $sugg.prop('hidden', false).html('<div class="cw-knife-sugg-loading">Forging knives&hellip; (asking your AI)</div>');
+        try {
+            const suggestions = await generateKnifeSuggestions(forName, {
+                isUser: draft.isUser,
+                count: 5,
+                existingKnives: (draft.knives || []).map(k => k.text),
+            });
+            // Modal may have closed or switched character during the API call
+            if (!draft || draft.name !== forName) return;
+            if (!suggestions.length) throw new Error('Empty suggestion list');
+            renderKnifeSuggestions(suggestions);
+        } catch (e) {
+            console.error('[Dooms Tracker] Workshop: knife generation failed', e);
+            if (draft && draft.name === forName) {
+                $sugg.html('<div class="cw-knife-sugg-loading">Generation failed &mdash; check your API connection and try again.</div>');
+            }
+            try { if (window.toastr) window.toastr.error('Failed to generate knives.', 'Character Workshop', { timeOut: 4000 }); } catch (err) {}
+        } finally {
+            _knifeGenInProgress = false;
+            $btn.prop('disabled', false);
+        }
+    });
+    $modal.on('click.cw', '#cw-knife-sugg-keep', function () {
+        if (!draft) return;
+        const $sugg = $modal.find('#cw-knife-suggestions');
+        const suggestions = $sugg.data('suggestions') || [];
+        const picked = [];
+        $sugg.find('input[type="checkbox"]:checked').each(function () {
+            const idx = parseInt($(this).data('index'));
+            if (suggestions[idx]) picked.push(suggestions[idx]);
+        });
+        if (!picked.length) {
+            try { if (window.toastr) window.toastr.info('Tick at least one knife to keep, or Discard all.', 'Character Workshop', { timeOut: 3000 }); } catch (e) {}
+            return;
+        }
+        const now = Date.now();
+        picked.forEach((text, i) => draft.knives.push({ id: `knife_${now}_${i}`, text, used: false }));
+        draft.dirty.knives = true;
+        clearKnifeSuggestions();
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knife-sugg-discard', function () {
+        clearKnifeSuggestions();
     });
     $modal.on('click.cw', function (e) {
         if (e.target === this) closeCharacterWorkshop();
