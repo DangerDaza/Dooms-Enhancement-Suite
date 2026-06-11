@@ -1,7 +1,11 @@
 {
-    "version": "1.12.3",
+    "version": "1.12.4",
     "title": "The Rebuild",
     "items": [
+        {
+            "title": "Anonymous daily usage ping (you can turn it off)",
+            "body": "Once per day DES fetches a 1-byte public file on GitHub so the developer can see how many people use it. The request carries NO data and NO identifiers — nothing about you, your device, or your chats; the developer only ever sees one public number. Opt out any time: Advanced → Anonymous Usage Ping. The code is ~30 lines in src/core/usagePing.js if you want to verify."
+        },
         {
             "title": "New player experience + Restore Defaults",
             "body": "Fresh installs now start with a curated setup: Scene Tracker, Present Characters, dialogue coloring, and Discord-style chat bubbles on — everything else off, with the D button centered. Existing setups are untouched. Want the clean slate? Advanced → Restore Default Settings (keeps all your characters, colors, avatars, and presets)."

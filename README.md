@@ -157,6 +157,16 @@ Fully responsive design with touch-friendly controls. All panels adapt to small 
 
 ---
 
+## Privacy
+
+DES sends **one anonymous ping per day**: an empty HTTP GET for a 1-byte public
+file on GitHub, used solely to count daily users. It contains no payload, no
+identifiers, and nothing about you or your chats — the developer only ever sees
+a single public number (the file's download count). The entire mechanism is
+~30 lines in [`src/core/usagePing.js`](src/core/usagePing.js). Opt out any
+time: **Settings → Advanced → Anonymous Usage Ping**. Nothing else ever leaves
+your machine.
+
 ## Credits
 
 - Originally forked from [marinara_spaghetti's RPG Companion](https://github.com/SpicyMarinara) extension

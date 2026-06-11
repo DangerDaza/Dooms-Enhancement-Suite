@@ -1,0 +1,48 @@
+# Records the usage-ping counter once a day so daily-active-user history
+# accumulates in the repo (docs/usage-stats.csv: date, cumulative, daily).
+# The counter itself is the public download_count of the usage-ping release
+# asset — a single integer, nothing per-user.
+name: Record daily usage stats
+
+on:
+  schedule:
+    - cron: '7 0 * * *'   # daily, 00:07 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Append today's count
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/usage-ping" \
+            --jq '.assets[] | select(.name=="ping") | .download_count' 2>/dev/null || echo "")
+          if [ -z "$COUNT" ]; then
+            echo "usage-ping release not found — run 'Create usage-ping release' first"
+            exit 0
+          fi
+          FILE=docs/usage-stats.csv
+          mkdir -p docs
+          [ -f "$FILE" ] || echo "date,cumulative,daily" > "$FILE"
+          PREV=$(tail -n 1 "$FILE" | cut -d, -f2)
+          case "$PREV" in (*[!0-9]*|'') PREV=0;; esac
+          TODAY=$(date -u +%F)
+          # idempotent: skip if today already recorded
+          if tail -n 1 "$FILE" | grep -q "^$TODAY,"; then
+            echo "Already recorded today"; exit 0
+          fi
+          DAILY=$((COUNT - PREV))
+          [ "$DAILY" -lt 0 ] && DAILY=0
+          echo "$TODAY,$COUNT,$DAILY" >> "$FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "stats: $TODAY — $DAILY daily users ($COUNT cumulative)" || exit 0
+          git push

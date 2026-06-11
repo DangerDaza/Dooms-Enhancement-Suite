@@ -1,0 +1,30 @@
+# Creates (once) the tiny release asset that the anonymous daily usage ping
+# fetches. GitHub publicly counts asset downloads; the day-over-day delta of
+# download_count = daily active users. Run manually from the Actions tab.
+name: Create usage-ping release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release + 1-byte ping asset (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          printf '1' > ping
+          if gh release view usage-ping --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release exists — ensuring asset"
+            gh release upload usage-ping ping --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create usage-ping ping \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Usage ping counter (not a software release)" \
+              --notes "This release exists only as an anonymous usage counter. Doom's Enhancement Suite fetches the 1-byte 'ping' asset at most once per day per browser (no payload, no identifiers — see src/core/usagePing.js). The public download_count of the asset, read day over day, is the daily active user estimate. Opt out any time: DES Settings → Advanced → Anonymous usage ping."
+          fi

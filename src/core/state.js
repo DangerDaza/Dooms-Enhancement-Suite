@@ -139,6 +139,7 @@ export let extensionSettings = {
     mobileQuickJumpEnabled: true, // Mobile-only floating button to jump back to your last sent message
     whatsNewSeenVersion: '', // Last extension version whose What's New screen was shown
     whatsNewOptOut: false, // Permanent opt-out of the What's New screen (Display-settings toggle only)
+    usagePingOptOut: false, // Opt out of the anonymous daily usage ping (a 1-byte GET, no payload/ID — see src/core/usagePing.js)
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'

@@ -36,6 +36,7 @@ import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
 import { onIdle } from './src/core/scheduler.js';
+import { sendDailyUsagePing } from './src/core/usagePing.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -693,6 +694,10 @@ function bindSettingsUI() {
     });
     $('#rpg-toggle-compact-prompts').on('change', function () {
         extensionSettings.compactPrompts = $(this).prop('checked');
+        saveSettings();
+    });
+    $('#rpg-toggle-usage-ping').on('change', function () {
+        extensionSettings.usagePingOptOut = !$(this).prop('checked');
         saveSettings();
     });
     $('#rpg-restore-defaults').on('click', async function () {
@@ -1780,6 +1785,7 @@ function bindSettingsUI() {
     $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
     $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewOptOut);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
+    $('#rpg-toggle-usage-ping').prop('checked', !extensionSettings.usagePingOptOut);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
@@ -3145,6 +3151,10 @@ jQuery(async () => {
             onCharacterChanged();
         }
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
+        // ── Anonymous daily usage ping (opt-out: Advanced settings) ──
+        // One empty GET per day to a public GitHub release-asset counter;
+        // no payload, no identifiers. See src/core/usagePing.js.
+        onIdle('usagePing', sendDailyUsagePing, 10000);
         // ── What's New screen (desktop, once per release, opt-out) ──
         // The gate is three cheap checks; the module, its CSS, and the
         // release-notes JSON only load when it will actually display.
