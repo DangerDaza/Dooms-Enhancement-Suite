@@ -663,7 +663,7 @@ function bindSettingsUI() {
         refreshMobileQuickJump();
     });
     $('#rpg-toggle-whats-new').on('change', function () {
-        extensionSettings.whatsNewDisabled = !$(this).prop('checked');
+        extensionSettings.whatsNewOptOut = !$(this).prop('checked');
         saveSettings();
     });
     $('#rpg-toggle-compact-prompts').on('change', function () {
@@ -1736,7 +1736,7 @@ function bindSettingsUI() {
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
     $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
-    $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewDisabled);
+    $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewOptOut);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
@@ -3082,7 +3082,7 @@ jQuery(async () => {
         // release-notes JSON only load when it will actually display.
         // Scheduled to idle so it never competes with startup rendering.
         onIdle('whatsNew', () => {
-            if (extensionSettings.whatsNewDisabled) return;
+            if (extensionSettings.whatsNewOptOut) return;
             // Desktop only — but "Request desktop site" on a phone renders a
             // 980px layout viewport, which the >1000px mobile breakpoint just
             // misses. Treat >=980 as desktop so desktop-view users see it too.

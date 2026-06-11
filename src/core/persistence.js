@@ -482,8 +482,12 @@ export function loadSettings() {
                 extensionSettings.whatsNewSeenVersion = '';
                 settingsChanged = true;
             }
-            if (extensionSettings.whatsNewDisabled === undefined) {
-                extensionSettings.whatsNewDisabled = false;
+            if (extensionSettings.whatsNewOptOut === undefined) {
+                // Fresh key on purpose: the old whatsNewDisabled could be set
+                // by an in-dialog button (removed — every update must show
+                // its notes at least once). Opt-out is now settings-only.
+                extensionSettings.whatsNewOptOut = false;
+                delete extensionSettings.whatsNewDisabled;
                 settingsChanged = true;
             }
 

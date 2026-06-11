@@ -13,9 +13,11 @@
  *
  * Dismissal model:
  *   - Closing (X / "Got it" / Esc / click outside) records the current
- *     version in whatsNewSeenVersion → shows again on the NEXT release.
- *   - "Don't show again" sets whatsNewDisabled → never shows until the
- *     user re-enables it via the Display-section toggle.
+ *     version in whatsNewSeenVersion → the screen returns on the NEXT
+ *     release. It always shows at least once per update.
+ *   - The ONLY permanent opt-out is the "What's New on Update" toggle in
+ *     Display settings (whatsNewOptOut) — a deliberate settings action,
+ *     not a misclickable dialog button.
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
@@ -100,23 +102,16 @@ export async function showWhatsNew() {
     }
 
     const footer = el('footer', 'dooms-wn-footer');
-    const dontShow = el('button', 'dooms-wn-btn dooms-wn-btn-ghost', "Don't show again");
-    dontShow.type = 'button';
+    const hint = el('span', 'dooms-wn-hint', 'Can be turned off in Display settings');
     const gotIt = el('button', 'dooms-wn-btn dooms-wn-btn-primary', 'Got it');
     gotIt.type = 'button';
-    footer.append(dontShow, gotIt);
+    footer.append(hint, gotIt);
 
     panel.append(header, body, footer);
     overlay.appendChild(panel);
 
     closeBtn.addEventListener('click', () => { markSeen(); close(); });
     gotIt.addEventListener('click', () => { markSeen(); close(); });
-    dontShow.addEventListener('click', () => {
-        extensionSettings.whatsNewDisabled = true;
-        markSeen();
-        saveSettings();
-        close();
-    });
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) { markSeen(); close(); }
     });

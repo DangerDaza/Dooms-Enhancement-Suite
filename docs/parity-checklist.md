@@ -100,12 +100,12 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Desktop tabs and strip widgets (clock/date/location) work
 
 ## New in the Rebuild (verify both states)
-- [ ] What's New screen: shows once after an update on desktop AND on
-      phone "desktop site" mode (>=980px viewport), never in normal mobile view;
-      manual "What's New" button in the extensions dropdown works on any device;
-      X / Got it / Esc / click-outside hide it until the NEXT release;
-      "Don't show again" hides it permanently; Display-section toggle
-      re-enables it; DOM and stylesheet fully removed after close
+- [ ] What's New screen: shows AT LEAST ONCE after every update on desktop
+      and phone "desktop site" mode (>=980px viewport), never in normal mobile
+      view; manual "What's New" button in the extensions dropdown works on any
+      device; X / Got it / Esc / click-outside dismiss until the NEXT release
+      (no in-dialog permanent dismissal); permanent opt-out ONLY via the
+      Display-section toggle; DOM and stylesheet fully removed after close
 - [ ] Performance Mode toggle (Display section): on -> animations/blur/particles stop,
       off -> restored without reload
 - [ ] Compact Tracker Prompt toggle (Advanced): tracker JSON parses identically in both modes

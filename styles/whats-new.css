@@ -127,3 +127,9 @@
     color: #fff;
 }
 .dooms-wn-btn-primary:hover { filter: brightness(1.1); }
+
+.dooms-wn-hint {
+    font-size: 0.75rem;
+    opacity: 0.55;
+    align-self: center;
+}
