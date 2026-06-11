@@ -22,7 +22,7 @@ const loaded = new Map(); // id -> Promise<void>
  */
 export function ensureCss(id) {
     if (loaded.has(id)) return loaded.get(id);
-    const promise = new Promise((resolve) => {
+    const promise = new Promise((resolve, reject) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.id = `dooms-css-${id}`;
@@ -30,7 +30,12 @@ export function ensureCss(id) {
         link.onload = () => resolve();
         link.onerror = () => {
             console.error(`[Dooms Tracker] Failed to load styles/${id}.css`);
-            resolve(); // don't wedge callers on a missing sheet
+            // Remove the dead link and uncache so the next ensureCss(id)
+            // retries instead of permanently treating the sheet as loaded
+            // (which left features building unstyled DOM forever).
+            link.remove();
+            loaded.delete(id);
+            reject(new Error(`styles/${id}.css failed to load`));
         };
         document.head.appendChild(link);
     });

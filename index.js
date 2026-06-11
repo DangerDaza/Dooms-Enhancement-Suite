@@ -528,14 +528,21 @@ function loadChatBubbleSettingsUI() {
 function applyPerformanceMode() {
     const on = !!extensionSettings.performanceMode;
     document.body.classList.toggle('dooms-perf-mode', on);
-    if (on) ensureCss('perf-mode');
+    if (on) ensureCss('perf-mode').catch(() => { });
     else removeCss('perf-mode');
+    // Particle engines check the body class in _shouldRun() but only
+    // re-evaluate on events — without this, turning perf mode OFF leaves
+    // the weather canvas stopped (blank) until a tab switch or resize.
+    try { window.dispatchEvent(new CustomEvent('dooms:perf-mode-changed')); } catch (e) { }
 }
 
 /**
  * Hides/shows SillyTavern's top bar based on the FAB setting. Module-scope
  * because it must apply at startup, before the settings binder has run.
  */
+/** One-shot flag letting a failed Lore Library load fall through to ST's native World Info drawer. */
+let _wiInterceptBypassOnce = false;
+
 function applyHideStTopBar() {
     const shouldHide = !!(extensionSettings.fab && extensionSettings.fab.hideStTopBar);
     document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
@@ -550,17 +557,31 @@ function applyHideStTopBar() {
  * opened, instead of spending the ~165KB HTML parse and ~800 control
  * bindings/populations at startup.
  */
+/**
+ * Tracks how far loadSettingsTemplate got, so the lazyUI retry path (a
+ * failed load clears its cached promise) never appends the template or
+ * binds handlers a second time — that would duplicate every modal ID and
+ * double-fire delegated handlers (e.g. accordion headers toggling twice
+ * per click). Only the not-yet-completed stages re-run on retry.
+ */
+let _settingsTemplateAppended = false;
+let _settingsUiBound = false;
+
 async function loadSettingsTemplate() {
     console.log('[Dooms Tracker] Loading deferred settings UI...');
-    // Modal styles split out of style.css — must be in place before the
-    // template is appended so the popup never flashes unstyled.
-    await ensureCss('modals');
-    // Load the HTML template using SillyTavern's template system
-    const templateHtml = await renderExtensionTemplateAsync(extensionName, 'template');
-    console.log('[Dooms Tracker] Template loaded, length =', templateHtml?.length || 0);
-    // Append panel to body - positioning handled by CSS
-    $('body').append(templateHtml);
-    console.log('[Dooms Tracker] Template appended to body');
+    if (!_settingsTemplateAppended) {
+        // Modal styles split out of style.css — must be in place before the
+        // template is appended so the popup never flashes unstyled. Fetch
+        // CSS and template in parallel; await both before the append.
+        const cssReady = ensureCss('modals');
+        const templateHtml = await renderExtensionTemplateAsync(extensionName, 'template');
+        await cssReady;
+        console.log('[Dooms Tracker] Template loaded, length =', templateHtml?.length || 0);
+        // Append panel to body - positioning handled by CSS
+        $('body').append(templateHtml);
+        _settingsTemplateAppended = true;
+        console.log('[Dooms Tracker] Template appended to body');
+    }
     // Cache UI elements using state setters
     setInfoBoxContainer($('#rpg-info-box'));
     setThoughtsContainer($('#rpg-thoughts'));
@@ -585,7 +606,10 @@ async function loadSettingsTemplate() {
     try { lorebookModalMod.setupLorebookModal(); } catch (e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
     // Re-apply translations to the entire body to catch all new elements from the template
     i18n.applyTranslations(document.body);
-    bindSettingsUI();
+    if (!_settingsUiBound) {
+        bindSettingsUI();
+        _settingsUiBound = true;
+    }
     try { characterSheetMod.initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
     try { workshopMod.initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
     try { rosterMod.initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
@@ -682,8 +706,11 @@ function bindSettingsUI() {
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
         applyNewPlayerProfile();
         saveSettings();
-        toastr.success('Defaults restored — reloading...', "Doom's Enhancement Suite", { timeOut: 2000 });
-        setTimeout(() => location.reload(), 800);
+        toastr.success('Defaults restored — reloading...', "Doom's Enhancement Suite", { timeOut: 2500 });
+        // saveSettings() only schedules SillyTavern's ~1s debounced POST; a
+        // reload before it flushes silently cancels the restore. 2.5s gives
+        // the trailing debounce + request comfortable room.
+        setTimeout(() => location.reload(), 2500);
     });
     $('#rpg-toggle-thoughts').on('change', function () {
         extensionSettings.showCharacterThoughts = $(this).prop('checked');
@@ -2178,6 +2205,12 @@ async function initUI() {
     });
     // ── Intercept ST's native World Info button ──
     $('#WI-SP-button .drawer-toggle').on('click.rpgLorebook', function (e) {
+        // One-shot bypass: set when the Lore Library failed to load so the
+        // re-triggered click reaches ST's native drawer handler.
+        if (_wiInterceptBypassOnce) {
+            _wiInterceptBypassOnce = false;
+            return;
+        }
         // Only intercept if lorebook manager is enabled
         if (!extensionSettings.lorebook?.enabled) return; // let ST handle it normally
 
@@ -2198,7 +2231,16 @@ async function initUI() {
             const { getLorebookModal } = await import('./src/systems/ui/lorebookModal.js');
             const modal = getLorebookModal();
             if (modal) modal.open();
-        }).catch(() => {});
+        }).catch((err) => {
+            // The native drawer toggle was already suppressed above — if the
+            // deferred UI can't load, the user must not be stranded without
+            // ANY World Info access. Surface the failure and re-trigger the
+            // click with a one-shot bypass so ST's native drawer opens.
+            console.error('[Dooms Tracker] Lore Library failed to load:', err);
+            try { toastr.error('Lore Library failed to load — opening native World Info.', "Doom's Enhancement Suite"); } catch (e) { }
+            _wiInterceptBypassOnce = true;
+            $(this).trigger('click');
+        });
     });
     // Global appliers that used to run with the (now-deferred) settings
     // binder: bubble CSS settings, ST top-bar visibility, the doom-counter
