@@ -77,6 +77,15 @@ A tension-driven plot twist system that keeps your story from stagnating. The AI
 - At zero, a modal appears with twist options generated from your current scene context
 - Select a twist and it's injected into the next AI generation, then counters reset
 
+**Knives — plant your own twists:**
+
+Instead of relying on AI-generated twists, you can write your own story beats in advance — **Knives** — and let the Doom Counter hold them until the story goes quiet. Example: your character David is in Chicago, and one of his knives is *"David is a gambling addict — he owes a lot of money to the wrong people."* When the counter strikes, your armed knives are offered as cards instead of generated twists; pick one and the AI weaves its consequences into the next scene.
+
+- Add, delete, and re-arm knives in **Settings → Doom Counter → Knives** (saved per chat)
+- A chosen knife is marked *used* so it isn't offered twice — re-arm it to put it back in rotation
+- A "Generate twists instead" button on the knife picker falls back to AI-generated twists
+- In Trap Mode, a random armed knife is drawn and injected silently — you won't see it coming
+
 **Configurable settings:**
 - **Low Tension Ceiling** (2–6) — what counts as "too calm"
 - **Low Tension Threshold** (3–10) — how many calm responses before countdown starts

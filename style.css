@@ -11496,6 +11496,125 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
+/* Knife cards (player-authored story beats) — gold accent to set them apart */
+.dooms-dc-card-knife {
+    border-color: rgba(240, 192, 64, 0.25);
+}
+
+
+.dooms-dc-card-knife:hover {
+    border-color: rgba(240, 192, 64, 0.55);
+    background: rgba(240, 192, 64, 0.08);
+    box-shadow: 0 6px 20px rgba(240, 192, 64, 0.15);
+}
+
+
+.dooms-dc-card-knife.dooms-dc-card-selected {
+    border-color: #f0c040 !important;
+    background: rgba(240, 192, 64, 0.15) !important;
+    box-shadow: 0 0 24px rgba(240, 192, 64, 0.25) !important;
+}
+
+
+/* Knife list in the Doom Counter settings panel */
+.rpg-dc-knife-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+}
+
+
+.rpg-dc-knife-icon {
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+
+
+.rpg-dc-knife-text {
+    flex: 1;
+    font-size: 0.82em;
+    line-height: 1.4;
+    color: var(--rpg-text, #ccc);
+    word-break: break-word;
+}
+
+
+.rpg-dc-knife-used .rpg-dc-knife-text {
+    text-decoration: line-through;
+    opacity: 0.45;
+}
+
+
+.rpg-dc-knife-used-badge {
+    flex-shrink: 0;
+    font-size: 0.68em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #f0c040;
+    background: rgba(240, 192, 64, 0.1);
+    border: 1px solid rgba(240, 192, 64, 0.25);
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+
+
+.rpg-dc-knife-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    transition: color 0.2s ease;
+}
+
+
+.rpg-dc-knife-btn:hover {
+    color: #e94560;
+}
+
+
+.rpg-dc-knife-rearm:hover {
+    color: #f0c040;
+}
+
+
+.rpg-dc-knives-empty {
+    font-size: 0.78em;
+    font-style: italic;
+    opacity: 0.55;
+    padding: 6px 2px;
+}
+
+
+.rpg-dc-knife-add {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    margin-top: 8px;
+}
+
+
+.rpg-dc-knife-add textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 38px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: var(--rpg-text, #ccc);
+    font-size: 0.82em;
+    padding: 6px 8px;
+}
+
+
 /* Animations */
 @keyframes dooms-dc-fade-in {
     from { opacity: 0; transform: translateY(8px); }

@@ -16,7 +16,7 @@ import {
 import { getActiveCharacterColors } from '../../core/persistence.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
-import { getPendingTwist, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
+import { getPendingTwist, isPendingTwistAKnife, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
 import {
     generateTrackerExample,
     generateTrackerInstructions,
@@ -27,7 +27,7 @@ import {
     DEFAULT_NARRATOR_PROMPT,
     DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT
 } from './promptBuilder.js';
-import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
+import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
 import { buildNameBanInstruction } from '../features/nameBan.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
@@ -716,8 +716,16 @@ export async function onGenerationStarted(type, data, dryRun) {
         const pendingTwist = getPendingTwist();
         const twistDepth = extensionSettings.doomCounter?.twistInjectionDepth || 0;
         if (pendingTwist) {
-            const twistTemplate = extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT;
-            const twistPrompt = `\n${twistTemplate.replace('{twist}', pendingTwist)}\n`;
+            // Knives (player-authored story beats) get their own wrapper template.
+            // Read the flag BEFORE clearPendingTwist(), which resets it.
+            let twistPrompt;
+            if (isPendingTwistAKnife()) {
+                const knifeTemplate = extensionSettings.customKnifeTemplatePrompt || DEFAULT_KNIFE_TEMPLATE_PROMPT;
+                twistPrompt = `\n${knifeTemplate.replace('{knife}', pendingTwist)}\n`;
+            } else {
+                const twistTemplate = extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT;
+                twistPrompt = `\n${twistTemplate.replace('{twist}', pendingTwist)}\n`;
+            }
             setExtensionPrompt(DOOM_TWIST_SLOT, twistPrompt, extension_prompt_types.IN_CHAT, twistDepth, false);
             // Clear the pending twist after injecting — it's a one-shot
             clearPendingTwist();

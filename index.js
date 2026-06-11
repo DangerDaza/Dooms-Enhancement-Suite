@@ -141,7 +141,7 @@ import {
     classifyActiveUserExpression,
 } from './src/systems/integration/expressionSync.js';
 // Doom Counter
-import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag } from './src/systems/generation/doomCounter.js';
+import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag, addKnife, removeKnife, setKnifeUsed } from './src/systems/generation/doomCounter.js';
 // System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
@@ -1370,6 +1370,23 @@ function bindSettingsUI() {
         saveChatData();
         updateDoomCounterUI();
         toastr.info('Doom Counter reset.', '', { timeOut: 2000 });
+    });
+
+    // ── Knives (player-authored story beats) ──
+    $('#rpg-dc-add-knife').on('click', function () {
+        const $input = $('#rpg-dc-knife-input');
+        const text = String($input.val() || '').trim();
+        if (!text) return;
+        addKnife(text);
+        $input.val('');
+    });
+
+    $(document).on('click', '.rpg-dc-knife-delete', function () {
+        removeKnife($(this).closest('.rpg-dc-knife-row').data('id'));
+    });
+
+    $(document).on('click', '.rpg-dc-knife-rearm', function () {
+        setKnifeUsed($(this).closest('.rpg-dc-knife-row').data('id'), false);
     });
 
     // ── Name Ban ──

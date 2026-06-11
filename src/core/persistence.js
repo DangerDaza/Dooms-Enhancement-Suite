@@ -934,6 +934,28 @@ export function setDoomCounterState(state) {
 }
 
 /**
+ * Gets the player's Knives — pre-authored story beats held by the Doom Counter.
+ * Stored per-chat because knives are story-specific.
+ * @returns {Array<{id: string, text: string, used: boolean}>}
+ */
+export function getDoomKnives() {
+    return chat_metadata?.dooms_tracker?.doomKnives || [];
+}
+
+/**
+ * Saves the player's Knives to chat metadata.
+ * @param {Array<{id: string, text: string, used: boolean}>} knives
+ */
+export function setDoomKnives(knives) {
+    if (!chat_metadata) return;
+    if (!chat_metadata.dooms_tracker) {
+        chat_metadata.dooms_tracker = {};
+    }
+    chat_metadata.dooms_tracker.doomKnives = knives;
+    saveChatDebounced();
+}
+
+/**
  * Migrates old settings format to new trackerConfig format
  * Converts statNames to customStats array and sets up default config
  */
