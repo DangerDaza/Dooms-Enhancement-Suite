@@ -16,7 +16,7 @@ import {
 import { getActiveCharacterColors } from '../../core/persistence.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
-import { getPendingTwist, isPendingTwistAKnife, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
+import { getPendingTwist, isPendingTwistAKnife, getPendingKnifeCharacter, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
 import {
     generateTrackerExample,
     generateTrackerInstructions,
@@ -721,7 +721,8 @@ export async function onGenerationStarted(type, data, dryRun) {
             let twistPrompt;
             if (isPendingTwistAKnife()) {
                 const knifeTemplate = extensionSettings.customKnifeTemplatePrompt || DEFAULT_KNIFE_TEMPLATE_PROMPT;
-                twistPrompt = `\n${knifeTemplate.replace('{knife}', pendingTwist)}\n`;
+                const knifeCharacter = getPendingKnifeCharacter() || 'a character in the scene';
+                twistPrompt = `\n${knifeTemplate.replace('{knife}', pendingTwist).replace('{character}', knifeCharacter)}\n`;
             } else {
                 const twistTemplate = extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT;
                 twistPrompt = `\n${twistTemplate.replace('{twist}', pendingTwist)}\n`;

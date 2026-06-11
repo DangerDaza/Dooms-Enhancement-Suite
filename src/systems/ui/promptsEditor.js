@@ -15,10 +15,11 @@ let tempPrompts = null; // Temporary prompts for cancel functionality
 export const DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT = `<instruction>A dramatic development occurs in this scene. Weave this naturally into your response — don't announce it directly, let it unfold organically.</instruction> <twist_context> {twist} </twist_context>`;
 
 // ─── Default Prompt: Knife Template ──────────────────────────────────────────
-// Wrapper injected around a player-authored Knife (a story beat written in
-// advance) chosen from the Doom Counter. {knife} is replaced with the knife text.
+// Wrapper injected around a Knife — a story beat written in advance and attached
+// to a character in the Character Workshop — when the Doom Counter draws it.
+// {character} is replaced with the knife owner's name, {knife} with the text.
 // Overridable via extensionSettings.customKnifeTemplatePrompt.
-export const DEFAULT_KNIFE_TEMPLATE_PROMPT = `<instruction>A story element the player planted in advance now comes into play. Use it to drive the next scene — bring its consequences into the present moment naturally and organically. Don't announce it or restate it; let it surface through events, arrivals, messages, or confrontations.</instruction> <story_element> {knife} </story_element>`;
+export const DEFAULT_KNIFE_TEMPLATE_PROMPT = `<instruction>A story element about {character}, planted in advance by the player, now comes into play. Use it to drive the next scene — bring its consequences into the present moment naturally and organically. Don't announce it or restate it; let it surface through events, arrivals, messages, or confrontations involving {character}.</instruction> <story_element> {knife} </story_element>`;
 
 // ─── Default Prompt: New Fields Boost ────────────────────────────────────────
 // Injected when new tracker fields are enabled, reminding the AI to include them.

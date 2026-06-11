@@ -934,24 +934,25 @@ export function setDoomCounterState(state) {
 }
 
 /**
- * Gets the player's Knives — pre-authored story beats held by the Doom Counter.
- * Stored per-chat because knives are story-specific.
- * @returns {Array<{id: string, text: string, used: boolean}>}
+ * Whether Knives are enabled for the current chat. Knives themselves live on
+ * character records (Character Workshop); this per-chat switch controls
+ * whether the Doom Counter draws them when it triggers. Default: off.
+ * @returns {boolean}
  */
-export function getDoomKnives() {
-    return chat_metadata?.dooms_tracker?.doomKnives || [];
+export function isDoomKnivesEnabled() {
+    return chat_metadata?.dooms_tracker?.knivesEnabled === true;
 }
 
 /**
- * Saves the player's Knives to chat metadata.
- * @param {Array<{id: string, text: string, used: boolean}>} knives
+ * Enables/disables Knives for the current chat.
+ * @param {boolean} enabled
  */
-export function setDoomKnives(knives) {
+export function setDoomKnivesEnabled(enabled) {
     if (!chat_metadata) return;
     if (!chat_metadata.dooms_tracker) {
         chat_metadata.dooms_tracker = {};
     }
-    chat_metadata.dooms_tracker.doomKnives = knives;
+    chat_metadata.dooms_tracker.knivesEnabled = !!enabled;
     saveChatDebounced();
 }
 

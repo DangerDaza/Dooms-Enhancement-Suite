@@ -361,6 +361,8 @@ export function openCharacterWorkshop(characterName, options = {}) {
     renderIdentity();
     renderAppearance();
     renderInjection();
+    renderKnives();
+    $modal.find('#cw-knife-input').val('');
     activatePane('identity');
 
     if (!listenersBound) {
@@ -604,10 +606,12 @@ function buildDraft(name, isUser = false) {
                 lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false },
+            knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false },
         };
     }
     const inj = extensionSettings?.characterInjection?.[name] || {};
+    const npcKnives = extensionSettings?.characterKnives?.[name];
     // Read color from the chat-aware getter so we see the same value
     // commitDraft writes (and that the PCP renders). When
     // perChatCharacterTracking is on, the global characterColors is
@@ -626,7 +630,8 @@ function buildDraft(name, isUser = false) {
             lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
             promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
         },
-        dirty: { color: false, avatar: false, injection: false, relationship: false },
+        knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false },
     };
 }
 
@@ -652,6 +657,37 @@ function renderTitle() {
     $modal.find('#cw-user-badge').prop('hidden', !draft.isUser);
     $modal.find('#cw-modal-title').text(draft.isUser ? 'User Character Workshop' : 'Character Workshop');
     $modal.find('#cw-inject-label').text(draft.isUser ? 'Inject persona' : 'Inject into Scene');
+}
+
+/** Escapes HTML special characters — knife text is player-authored free text. */
+function escapeKnifeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderKnives() {
+    const $list = $modal.find('#cw-knives-list');
+    if (!$list.length) return;
+    const knives = draft?.knives || [];
+    if (!knives.length) {
+        $list.html('<div class="rpg-dc-knives-empty">No knives yet — story beats you add here lie in wait until the Doom Counter strikes while this character is in the scene.</div>');
+        return;
+    }
+    $list.html(knives.map(k => `
+        <div class="rpg-dc-knife-row${k.used ? ' rpg-dc-knife-used' : ''}" data-id="${escapeKnifeHtml(k.id)}">
+            <span class="rpg-dc-knife-icon">🔪</span>
+            <span class="rpg-dc-knife-text">${escapeKnifeHtml(k.text)}</span>
+            ${k.used ? `
+                <span class="rpg-dc-knife-used-badge">used</span>
+                <button class="rpg-dc-knife-btn rpg-dc-knife-rearm" type="button" title="Re-arm this knife so it can be offered again"><i class="fa-solid fa-rotate-left"></i></button>
+            ` : ''}
+            <button class="rpg-dc-knife-btn rpg-dc-knife-delete" type="button" title="Delete knife"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join(''));
 }
 
 function isHiddenFromPanel(name) {
@@ -952,6 +988,32 @@ function bindStaticListeners() {
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
     $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
+
+    // Knives — edits live on the draft and persist on Save
+    $modal.on('click.cw', '#cw-knife-add', function () {
+        if (!draft) return;
+        const $input = $modal.find('#cw-knife-input');
+        const text = String($input.val() || '').trim();
+        if (!text) return;
+        draft.knives.push({ id: 'knife_' + Date.now(), text, used: false });
+        draft.dirty.knives = true;
+        $input.val('');
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knives-list .rpg-dc-knife-delete', function () {
+        if (!draft) return;
+        const id = $(this).closest('.rpg-dc-knife-row').data('id');
+        draft.knives = draft.knives.filter(k => k.id !== id);
+        draft.dirty.knives = true;
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knives-list .rpg-dc-knife-rearm', function () {
+        if (!draft) return;
+        const id = $(this).closest('.rpg-dc-knife-row').data('id');
+        draft.knives = draft.knives.map(k => k.id === id ? { ...k, used: false } : k);
+        draft.dirty.knives = true;
+        renderKnives();
+    });
     $modal.on('click.cw', function (e) {
         if (e.target === this) closeCharacterWorkshop();
     });
@@ -1450,6 +1512,7 @@ function commitDraft() {
             pronouns: draft.pronouns || '',
             linkedPersona: draft.linkedPersona || '',
             injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
+            knives: Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [],
         };
         extensionSettings.userCharacters[name] = next;
         try { saveSettings(); } catch (e) {}
@@ -1564,6 +1627,16 @@ function commitDraft() {
             extensionSettings.characterRelationships[name] = draft.relationship;
         } else {
             delete extensionSettings.characterRelationships[name];
+        }
+        changed = true;
+    }
+
+    if (draft.dirty.knives) {
+        if (!extensionSettings.characterKnives) extensionSettings.characterKnives = {};
+        if (Array.isArray(draft.knives) && draft.knives.length) {
+            extensionSettings.characterKnives[name] = draft.knives.map(k => ({ ...k }));
+        } else {
+            delete extensionSettings.characterKnives[name];
         }
         changed = true;
     }

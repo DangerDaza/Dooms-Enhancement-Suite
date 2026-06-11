@@ -16,7 +16,7 @@
  */
 import { getContext } from '../../../../../../extensions.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
-import { getDoomCounterState, setDoomCounterState, getDoomKnives, setDoomKnives } from '../../core/persistence.js';
+import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSettings } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
 
@@ -179,16 +179,20 @@ export function resetCounters() {
     state.triggered = false;
     state.pendingTwist = null;
     state.pendingTwistIsKnife = false;
+    state.pendingKnifeCharacter = null;
     setDoomCounterState(state);
     // Remove any twist banners from the chat DOM
     $('.dooms-dc-inline').remove();
 }
 
 // ─── Knives ───────────────────────────────────────────────────────────────────
-// Knives are story beats the player writes in advance — secrets, debts, rivals
-// waiting in the wings. When the Doom Counter triggers and armed (unused) knives
-// exist, they are offered instead of AI-generated twists; the chosen knife is
-// injected into the next generation and marked as used. Stored per-chat.
+// Knives are story beats written in advance and attached to CHARACTERS in the
+// Character Workshop — secrets, debts, rivals waiting in the wings. When the
+// Doom Counter triggers (and Knives are enabled for the chat), one present
+// character with armed knives is chosen at random and their knives are offered
+// instead of AI-generated twists. NPC knives live in
+// extensionSettings.characterKnives[name]; user-persona knives live on
+// extensionSettings.userCharacters[name].knives.
 
 /** Escapes HTML special characters — knife text is player-authored free text. */
 function escapeHtml(str) {
@@ -206,61 +210,82 @@ function knifeCardTitle(text) {
     return words.length <= 6 ? words.join(' ') : words.slice(0, 6).join(' ') + '…';
 }
 
-/**
- * Adds a new knife to the current chat.
- * @param {string} text - The story beat text
- */
-export function addKnife(text) {
-    const trimmed = String(text || '').trim();
-    if (!trimmed) return;
-    const knives = [...getDoomKnives()];
-    knives.push({ id: 'knife_' + Date.now(), text: trimmed, used: false });
-    setDoomKnives(knives);
-    renderKnivesList();
+/** Filters a knife list down to armed (unused, non-empty) knives. */
+function armedKnivesOf(list) {
+    return Array.isArray(list) ? list.filter(k => k && !k.used && k.text) : [];
 }
 
 /**
- * Deletes a knife from the current chat.
- * @param {string} id - The knife id
+ * Gathers the characters currently in the scene that hold armed knives.
+ * Present NPCs come from the latest characterThoughts tracker data; the
+ * player's active persona is always considered present.
+ *
+ * @returns {Array<{characterName: string, isUser: boolean, knives: Array}>}
  */
-export function removeKnife(id) {
-    setDoomKnives(getDoomKnives().filter(k => k.id !== id));
-    renderKnivesList();
-}
+export function getSceneKnifeCandidates() {
+    if (!isDoomKnivesEnabled()) return [];
+    const candidates = [];
 
-/**
- * Marks a knife as used (spent) or re-arms it.
- * @param {string} id - The knife id
- * @param {boolean} used - True to spend the knife, false to re-arm it
- */
-export function setKnifeUsed(id, used) {
-    setDoomKnives(getDoomKnives().map(k => k.id === id ? { ...k, used } : k));
-    renderKnivesList();
-}
-
-/**
- * Renders the knife list in the settings panel (#rpg-dc-knives-list).
- * Called from updateDoomCounterUI so it refreshes on chat switches too.
- */
-export function renderKnivesList() {
-    const $list = $('#rpg-dc-knives-list');
-    if (!$list.length) return;
-    const knives = getDoomKnives();
-    if (!knives.length) {
-        $list.html('<div class="rpg-dc-knives-empty">No knives yet — story beats you add here lie in wait until the counter strikes.</div>');
-        return;
+    // Present NPCs from the latest tracker data
+    const presentLower = new Set();
+    let charData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
+    if (charData) {
+        if (typeof charData === 'string') {
+            try { charData = JSON.parse(charData); } catch { charData = null; }
+        }
+        if (charData) {
+            const arr = Array.isArray(charData) ? charData : (charData.characters || []);
+            for (const c of arr) {
+                if (c?.name && c.present !== false) presentLower.add(String(c.name).toLowerCase());
+            }
+        }
     }
-    $list.html(knives.map(k => `
-        <div class="rpg-dc-knife-row${k.used ? ' rpg-dc-knife-used' : ''}" data-id="${escapeHtml(k.id)}">
-            <span class="rpg-dc-knife-icon">🔪</span>
-            <span class="rpg-dc-knife-text">${escapeHtml(k.text)}</span>
-            ${k.used ? `
-                <span class="rpg-dc-knife-used-badge">used</span>
-                <button class="rpg-dc-knife-btn rpg-dc-knife-rearm" type="button" title="Re-arm this knife so it can be offered again"><i class="fa-solid fa-rotate-left"></i></button>
-            ` : ''}
-            <button class="rpg-dc-knife-btn rpg-dc-knife-delete" type="button" title="Delete knife"><i class="fa-solid fa-trash"></i></button>
-        </div>
-    `).join(''));
+    const knifeMap = extensionSettings.characterKnives || {};
+    for (const [name, knives] of Object.entries(knifeMap)) {
+        if (!presentLower.has(name.toLowerCase())) continue;
+        const armed = armedKnivesOf(knives);
+        if (armed.length) candidates.push({ characterName: name, isUser: false, knives: armed });
+    }
+
+    // The player's persona is always in the scene
+    const userChars = extensionSettings.userCharacters || {};
+    let activeName = extensionSettings.activeUserCharacter;
+    if (!activeName) {
+        try { activeName = getContext().name1; } catch { activeName = null; }
+    }
+    if (activeName) {
+        const lower = String(activeName).toLowerCase();
+        const key = Object.keys(userChars).find(k => k.toLowerCase() === lower);
+        if (key) {
+            const armed = armedKnivesOf(userChars[key].knives);
+            if (armed.length) candidates.push({ characterName: key, isUser: true, knives: armed });
+        }
+    }
+
+    return candidates;
+}
+
+/**
+ * Marks one of a character's knives as used (spent).
+ * @param {string} characterName - The knife owner's name
+ * @param {string} knifeId - The knife id
+ * @param {boolean} isUser - True if the owner is a user persona
+ */
+export function markCharacterKnifeUsed(characterName, knifeId, isUser) {
+    const spend = (list) => list.map(k => k.id === knifeId ? { ...k, used: true } : k);
+    if (isUser) {
+        const u = extensionSettings.userCharacters?.[characterName];
+        if (u && Array.isArray(u.knives)) {
+            u.knives = spend(u.knives);
+            saveSettings();
+        }
+    } else {
+        const map = extensionSettings.characterKnives;
+        if (map && Array.isArray(map[characterName])) {
+            map[characterName] = spend(map[characterName]);
+            saveSettings();
+        }
+    }
 }
 
 // ─── Twist Generation ─────────────────────────────────────────────────────────
@@ -456,16 +481,20 @@ export async function triggerDoomCounter() {
     // ── Trap Mode: silent trigger, 1 twist, auto-inject ──────────────
     if (dc.trapMode) {
         try {
-            // Player-authored knives take priority over generated twists
-            const armedKnives = getDoomKnives().filter(k => k && !k.used && k.text);
+            // Character knives take priority: one present character with armed
+            // knives is chosen at random, then one of their knives.
+            const candidates = getSceneKnifeCandidates();
             let chosenText;
             let isKnife = false;
-            if (armedKnives.length > 0) {
-                const knife = armedKnives[Math.floor(Math.random() * armedKnives.length)];
-                setKnifeUsed(knife.id, true);
+            let knifeCharacter = null;
+            if (candidates.length > 0) {
+                const owner = candidates[Math.floor(Math.random() * candidates.length)];
+                const knife = owner.knives[Math.floor(Math.random() * owner.knives.length)];
+                markCharacterKnifeUsed(owner.characterName, knife.id, owner.isUser);
                 chosenText = knife.text;
                 isKnife = true;
-                console.log('[Doom Counter] Trap mode: a knife was silently drawn.');
+                knifeCharacter = owner.characterName;
+                console.log(`[Doom Counter] Trap mode: one of ${owner.characterName}'s knives was silently drawn.`);
             } else {
                 console.log('[Doom Counter] Trap mode triggered — generating silent twist...');
                 const twists = await generateTwistOptions(1);
@@ -480,6 +509,7 @@ export async function triggerDoomCounter() {
             const state = getDoomCounterState();
             state.pendingTwist = chosenText;
             state.pendingTwistIsKnife = isKnife;
+            state.pendingKnifeCharacter = knifeCharacter;
             state.triggered = false;
             state.lowStreakCount = 0;
             state.countdownActive = false;
@@ -537,8 +567,8 @@ export async function triggerDoomCounter() {
             `);
         };
 
-        // mode: 'knives' (player-authored story beats) or 'twists' (AI-generated)
-        const renderCards = (cards, mode) => {
+        // mode: 'knives' (one character's pre-planted story beats) or 'twists' (AI-generated)
+        const renderCards = (cards, mode, knifeOwnerName) => {
             const cardsHtml = cards.map((card, index) => `
                 <div class="dooms-dc-card${card.knifeId ? ' dooms-dc-card-knife' : ''}" data-index="${index}" tabindex="0">
                     <div class="dooms-dc-card-emoji">${escapeHtml(card.emoji)}</div>
@@ -548,7 +578,9 @@ export async function triggerDoomCounter() {
             `).join('');
 
             $body.empty();
-            $inline.find('.dooms-dc-inline-header span').text(mode === 'knives' ? 'A knife finds its moment — choose:' : 'Choose your fate:');
+            $inline.find('.dooms-dc-inline-header span').text(mode === 'knives'
+                ? `${knifeOwnerName}'s knives are drawn — choose:`
+                : 'Choose your fate:');
             $body.append(`<div class="dooms-dc-cards dooms-dc-cards-enter">${cardsHtml}</div>`);
             const altAction = mode === 'knives'
                 ? `<button type="button" class="dooms-dc-action-btn dooms-dc-generate">
@@ -575,18 +607,22 @@ export async function triggerDoomCounter() {
             }
         };
 
-        // Player-authored knives take priority — no API call needed for them
-        const armedKnives = getDoomKnives().filter(k => k && !k.used && k.text);
+        // Character knives take priority — one present character with armed
+        // knives is chosen at random and their knives are offered (no API call).
+        const candidates = getSceneKnifeCandidates();
         let currentCards;
-        if (armedKnives.length > 0) {
-            console.log(`[Doom Counter] Offering ${armedKnives.length} armed knives.`);
-            currentCards = armedKnives.map(k => ({
+        if (candidates.length > 0) {
+            const owner = candidates[Math.floor(Math.random() * candidates.length)];
+            console.log(`[Doom Counter] ${owner.characterName} drew their knives (${owner.knives.length} armed, ${candidates.length} candidate characters).`);
+            currentCards = owner.knives.map(k => ({
                 emoji: '🔪',
                 title: knifeCardTitle(k.text),
                 description: k.text,
-                knifeId: k.id
+                knifeId: k.id,
+                knifeOwner: owner.characterName,
+                knifeOwnerIsUser: owner.isUser
             }));
-            renderCards(currentCards, 'knives');
+            renderCards(currentCards, 'knives', owner.characterName);
         } else {
             console.log('[Doom Counter] Generating twist options...');
             currentCards = await generateTwistOptions(dc.twistChoiceCount || 3);
@@ -607,7 +643,7 @@ export async function triggerDoomCounter() {
 
                 // Collapse to a compact "chosen" summary after a brief pause
                 setTimeout(() => {
-                    $inline.find('.dooms-dc-inline-header span').text(card.knifeId ? 'The knife is drawn' : 'Twist selected');
+                    $inline.find('.dooms-dc-inline-header span').text(card.knifeId ? `${card.knifeOwner}'s knife is drawn` : 'Twist selected');
                     $body.html(`
                         <div class="dooms-dc-chosen">
                             <span class="dooms-dc-chosen-emoji">${escapeHtml(card.emoji)}</span>
@@ -658,13 +694,14 @@ export async function triggerDoomCounter() {
 
         // A chosen knife is spent — mark it used so it isn't offered again
         if (chosen.knifeId) {
-            setKnifeUsed(chosen.knifeId, true);
+            markCharacterKnifeUsed(chosen.knifeOwner, chosen.knifeId, chosen.knifeOwnerIsUser);
         }
 
         // Store the chosen twist/knife for injection on next generation
         const state = getDoomCounterState();
         state.pendingTwist = chosen.description;
         state.pendingTwistIsKnife = !!chosen.knifeId;
+        state.pendingKnifeCharacter = chosen.knifeId ? chosen.knifeOwner : null;
         state.triggered = false;
         state.lowStreakCount = 0;
         state.countdownActive = false;
@@ -708,6 +745,18 @@ export function isPendingTwistAKnife() {
 }
 
 /**
+ * Name of the character whose knife is pending injection, or null.
+ * Used by the injector to fill the {character} placeholder in the knife
+ * template. Must be read BEFORE clearPendingTwist(), which resets it.
+ *
+ * @returns {string|null}
+ */
+export function getPendingKnifeCharacter() {
+    const state = getDoomCounterState();
+    return state.pendingKnifeCharacter || null;
+}
+
+/**
  * Clears the pending twist after it has been injected.
  * Called by injector.js after injection.
  */
@@ -730,6 +779,7 @@ export function clearPendingTwist() {
     }
     state.pendingTwist = null;
     state.pendingTwistIsKnife = false;
+    state.pendingKnifeCharacter = null;
     setDoomCounterState(state);
 }
 
@@ -755,8 +805,8 @@ export function buildDoomTensionInstruction() {
  */
 export function updateDoomCounterUI() {
     const dc = extensionSettings.doomCounter;
-    // Keep the knife list in sync (it's per-chat, so chat switches change it)
-    renderKnivesList();
+    // Keep the per-chat Knives toggle in sync (chat switches change it)
+    $('#rpg-dc-knives-enabled').prop('checked', isDoomKnivesEnabled());
     if (!dc?.enabled) {
         $('#rpg-dc-status').text('Disabled');
         $('#rpg-dc-streak').text('0');

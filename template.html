@@ -1257,20 +1257,20 @@
                         </div>
 
                         <div class="rpg-subsection-label">Knives</div>
-                        <div class="rpg-setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                            <span class="rpg-setting-hint">Knives are story beats you write in advance — secrets,
-                                debts, rivals waiting in the wings. When the counter triggers and you have armed
-                                knives, they're offered instead of AI-generated twists, and the one you pick drives
-                                the next scene. A used knife can be re-armed. Knives are saved per chat. Example:
-                                "David is a gambling addict — he owes a lot of money to the wrong people."</span>
-                        </div>
-                        <div id="rpg-dc-knives-list"></div>
-                        <div class="rpg-dc-knife-add">
-                            <textarea id="rpg-dc-knife-input" rows="2"
-                                placeholder="Write a story beat to hold in reserve..."></textarea>
-                            <button id="rpg-dc-add-knife" class="rpg-accordion-action-btn" type="button">
-                                <i class="fa-solid fa-plus"></i> Add Knife
-                            </button>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Enable Knives (this chat)</span>
+                                <span class="rpg-setting-hint">Knives are story beats attached to characters in the
+                                    Character Workshop (right-click a portrait → Character Workshop → Knives). When
+                                    the counter triggers, one present character with armed knives is chosen at random
+                                    and their knives are offered instead of AI-generated twists. Example knife for
+                                    your own character: "David is a gambling addict — he owes a lot of money to the
+                                    wrong people."</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-dc-knives-enabled" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
                         </div>
 
                         <div class="rpg-subsection-label">Speed Rules</div>
@@ -2393,6 +2393,7 @@
                     <button type="button" data-pane="appearance">&#127912; Appearance</button>
                     <button type="button" data-pane="expressions">&#128516; Expressions</button>
                     <button type="button" data-pane="injection">&#128137; Injection</button>
+                    <button type="button" data-pane="knives">&#128298; Knives</button>
                 </nav>
             </aside>
 
@@ -2607,6 +2608,27 @@
                             <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-clear-all-injects"
                                 title="Clear Doom's extension-prompt slot and drop all pending inject overlays">
                                 <i class="fa-solid fa-broom"></i> Clear all pending injections
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- KNIVES -->
+                <section class="rpg-editor-pane" data-pane="knives">
+                    <div class="rpg-editor-section">
+                        <h4>&#128298; Knives</h4>
+                        <p class="helper">Story beats tied to this character &mdash; secrets, debts, rivals waiting in
+                            the wings. When the Doom Counter triggers (and Knives are enabled for the chat in
+                            <strong>Settings &rarr; Doom Counter</strong>), one present character with armed knives is
+                            chosen at random and their knives become the twist options. A used knife stays here
+                            crossed out and can be re-armed. Example: "David is a gambling addict &mdash; he owes a
+                            lot of money to the wrong people."</p>
+                        <div id="cw-knives-list"></div>
+                        <div class="rpg-dc-knife-add">
+                            <textarea id="cw-knife-input" class="rpg-textarea" rows="2"
+                                placeholder="Write a story beat for this character..."></textarea>
+                            <button type="button" class="rpg-btn" id="cw-knife-add">
+                                <i class="fa-solid fa-plus"></i> Add Knife
                             </button>
                         </div>
                     </div>
