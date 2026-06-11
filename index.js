@@ -637,7 +637,7 @@ async function loadSettingsTemplate() {
     // number means anything. No flag to flip — the badge self-activates on
     // the NEXT version bump (every release bumps the version; load-check
     // enforces it), by which time real data exists.
-    const DAU_BADGE_DORMANT_IN = '1.12.4';
+    const DAU_BADGE_DORMANT_IN = '2.0.0';
     getExtensionVersion().then((v) => {
         if (!v || v === DAU_BADGE_DORMANT_IN) return; // dormant this release
         fetchDailyUserCount().then((n) => {
