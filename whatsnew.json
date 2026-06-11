@@ -38,5 +38,9 @@
             "title": "Loading intro removed",
             "body": "The startup cinematic is gone entirely — DES now gets out of the way and loads instantly."
         }
-    ]
+    ],
+    "contact": {
+        "label": "Questions, bugs, or feedback?",
+        "discordUser": "danger_daza"
+    }
 }

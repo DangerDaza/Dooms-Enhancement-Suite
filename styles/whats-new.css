@@ -133,3 +133,35 @@
     opacity: 0.55;
     align-self: center;
 }
+
+/* Contact row — between the notes and the footer */
+.dooms-wn-contact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 18px;
+    border-top: 1px solid var(--rpg-border, rgba(255, 255, 255, 0.12));
+    font-size: 0.82rem;
+}
+
+.dooms-wn-contact-label {
+    opacity: 0.8;
+}
+
+.dooms-wn-contact-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+    background: transparent;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: none;
+}
+.dooms-wn-contact-chip:hover {
+    background: var(--rpg-highlight, #e94560);
+    color: #fff;
+}

@@ -101,13 +101,47 @@ export async function showWhatsNew() {
         body.appendChild(entry);
     }
 
+    // Optional contact row — rendered only when whatsnew.json provides one.
+    // contact: { label?, discordUser?, discordInvite? }
+    //   discordUser   → shown as click-to-copy text (handles aren't URLs)
+    //   discordInvite → rendered as a link opening in a new tab
+    let contactRow = null;
+    const contact = notes.contact;
+    if (contact && (contact.discordUser || contact.discordInvite)) {
+        contactRow = el('div', 'dooms-wn-contact');
+        contactRow.appendChild(el('span', 'dooms-wn-contact-label',
+            String(contact.label || 'Questions or feedback?')));
+        if (contact.discordUser) {
+            const user = String(contact.discordUser);
+            const chip = el('button', 'dooms-wn-contact-chip', `Discord: ${user}`);
+            chip.type = 'button';
+            chip.title = 'Click to copy';
+            chip.addEventListener('click', () => {
+                navigator.clipboard?.writeText(user).then(
+                    () => { try { toastr.success(`Copied ${user}`, 'Discord'); } catch (e) {} },
+                    () => { try { toastr.info(user, 'Discord username'); } catch (e) {} }
+                );
+            });
+            contactRow.appendChild(chip);
+        }
+        if (contact.discordInvite) {
+            const link = el('a', 'dooms-wn-contact-chip', 'Join the Discord');
+            link.href = String(contact.discordInvite);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            contactRow.appendChild(link);
+        }
+    }
+
     const footer = el('footer', 'dooms-wn-footer');
     const hint = el('span', 'dooms-wn-hint', 'Can be turned off in Display settings');
     const gotIt = el('button', 'dooms-wn-btn dooms-wn-btn-primary', 'Got it');
     gotIt.type = 'button';
     footer.append(hint, gotIt);
 
-    panel.append(header, body, footer);
+    panel.append(header, body);
+    if (contactRow) panel.appendChild(contactRow);
+    panel.appendChild(footer);
     overlay.appendChild(panel);
 
     closeBtn.addEventListener('click', () => { markSeen(); close(); });
