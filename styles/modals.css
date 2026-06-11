@@ -6630,3 +6630,16 @@
     .rpg-inspector-diff { grid-template-columns: 1fr; }
 }
 
+
+/* Daily-users badge in the settings header (fed by docs/usage-stats.csv) */
+.rpg-dau-badge {
+    font-size: 0.62em;
+    font-weight: 400;
+    opacity: 0.65;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--rpg-border, rgba(255, 255, 255, 0.2));
+    vertical-align: middle;
+    white-space: nowrap;
+}

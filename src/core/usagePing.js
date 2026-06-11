@@ -34,3 +34,30 @@ export function sendDailyUsagePing() {
             .catch(() => { /* offline — try again next load */ });
     } catch (e) { /* never let the ping interfere with anything */ }
 }
+
+const STATS_CSV_URL = 'https://raw.githubusercontent.com/DangerDaza/Dooms-Enhancement-Suite/main/docs/usage-stats.csv';
+let _dauCache = null; // { value, fetchedAt }
+
+/**
+ * Reads yesterday's recorded daily-user count from docs/usage-stats.csv
+ * (committed daily by the usage-stats workflow). Returns a number or null
+ * (file missing / offline / malformed — callers hide the badge on null).
+ * Session-cached for an hour so reopening settings doesn't refetch.
+ */
+export async function fetchDailyUserCount() {
+    try {
+        if (_dauCache && Date.now() - _dauCache.fetchedAt < 3600_000) {
+            return _dauCache.value;
+        }
+        const res = await fetch(STATS_CSV_URL, { cache: 'no-store' });
+        if (!res.ok) return null;
+        const lines = (await res.text()).trim().split('\n');
+        if (lines.length < 2) return null; // header only — no data yet
+        const daily = parseInt(lines[lines.length - 1].split(',')[2], 10);
+        if (!Number.isFinite(daily)) return null;
+        _dauCache = { value: daily, fetchedAt: Date.now() };
+        return daily;
+    } catch (e) {
+        return null;
+    }
+}

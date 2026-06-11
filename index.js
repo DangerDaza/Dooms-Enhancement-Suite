@@ -36,7 +36,7 @@ import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
 import { onIdle } from './src/core/scheduler.js';
-import { sendDailyUsagePing } from './src/core/usagePing.js';
+import { sendDailyUsagePing, fetchDailyUserCount } from './src/core/usagePing.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -629,6 +629,16 @@ async function loadSettingsTemplate() {
     // Custom-colors section visibility depends on the current theme; the
     // eager call at startup ran before the popup existed.
     try { toggleCustomColors(); } catch (_) { }
+    // Tiny daily-users badge in the popup header. Fetched only now (first
+    // settings open), session-cached, hidden silently when no data exists.
+    fetchDailyUserCount().then((n) => {
+        if (n === null) return;
+        const badge = document.getElementById('rpg-dau-badge');
+        if (badge) {
+            badge.textContent = `\u{1F465} ${n.toLocaleString()}/day`;
+            badge.style.display = '';
+        }
+    });
     console.log('[Dooms Tracker] Deferred settings UI ready');
 }
 
