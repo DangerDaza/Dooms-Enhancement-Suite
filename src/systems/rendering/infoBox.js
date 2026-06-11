@@ -10,6 +10,7 @@ import {
     $infoBoxContainer
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
+import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
 import { i18n } from '../../core/i18n.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
@@ -363,6 +364,32 @@ export function renderInfoBox() {
             `;
         }
     }
+    // Row 2c: User-defined custom scene fields
+    const customSceneFields = getCustomSceneFields();
+    if (customSceneFields.length && infoBoxData) {
+        let parsedInfo = null;
+        try {
+            parsedInfo = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+        } catch (e) { /* ignore */ }
+        for (const field of customSceneFields) {
+            const raw = parsedInfo?.[field.key];
+            let value = '';
+            if (typeof raw === 'string') value = raw;
+            else if (typeof raw === 'number' || typeof raw === 'boolean') value = String(raw);
+            else if (Array.isArray(raw)) value = raw.map(v => typeof v === 'string' ? v : (v?.value ?? '')).filter(Boolean).join(', ');
+            else if (raw && raw.value !== undefined && raw.value !== null) value = String(raw.value);
+            const display = value || 'Unknown';
+            html += `
+                <div class="rpg-dashboard rpg-dashboard-row-extra">
+                    <div class="rpg-dashboard-widget rpg-extra-widget">
+                        <div class="rpg-extra-icon">${field.icon}</div>
+                        <div class="rpg-extra-label">${field.label}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${field.key}" title="Click to edit">${display}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
     // Row 3: Recent Events widget (notebook style) - show if enabled
     if (config?.widgets?.recentEvents?.enabled) {
         // Parse Recent Events from infoBox (supports both JSON and text formats)
@@ -520,6 +547,9 @@ export function updateInfoBoxField(field, value) {
                 jsonData.conditions = value;
             } else if (field === 'terrain') {
                 jsonData.terrain = value;
+            } else if (field && getCustomSceneFields().some(f => f.key === field)) {
+                // User-defined custom scene fields store flat values under their snake_case key
+                jsonData[field] = value;
             }
             // Save back as JSON
             lastGeneratedData.infoBox = JSON.stringify(jsonData, null, 2);

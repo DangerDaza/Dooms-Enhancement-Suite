@@ -305,7 +305,8 @@ function resetToDefaults() {
                 timeSinceRest: { enabled: false, persistInHistory: false },
                 conditions: { enabled: false, persistInHistory: false },
                 terrain: { enabled: false, persistInHistory: false }
-            }
+            },
+            customFields: []
         },
         presentCharacters: {
             showEmoji: true,
@@ -450,6 +451,17 @@ function migrateTrackerPreset(config) {
                 // Default to false for backwards compatibility - user must explicitly enable
                 widget.persistInHistory = false;
             }
+        }
+    }
+    // Ensure custom scene fields array exists on infoBox (added after presets shipped)
+    if (migrated.infoBox) {
+        if (!Array.isArray(migrated.infoBox.customFields)) {
+            migrated.infoBox.customFields = [];
+        } else {
+            migrated.infoBox.customFields = migrated.infoBox.customFields.map(field => ({
+                ...field,
+                persistInHistory: field.persistInHistory ?? false
+            }));
         }
     }
     return migrated;
@@ -634,6 +646,24 @@ function renderInfoBoxTab() {
     html += `<input type="checkbox" id="rpg-widget-terrain" ${config.widgets.terrain?.enabled ? 'checked' : ''}>`;
     html += `<label for="rpg-widget-terrain">🌿 Terrain <small style="opacity:0.6">(Dense Forest, City Streets…)</small></label>`;
     html += '</div>';
+    // --- Custom scene fields ---
+    const customFields = config.customFields || [];
+    html += `<h4 style="margin-top:10px"><i class="fa-solid fa-wand-magic-sparkles"></i> Custom Scene Fields</h4>`;
+    html += `<p class="rpg-editor-hint">Add your own fields to the Scene Tracker. The icon is shown next to the field; the AI instruction tells the model what to fill in each response.</p>`;
+    html += '<div class="rpg-editor-fields-list" id="rpg-infobox-custom-fields-list">';
+    customFields.forEach((field, index) => {
+        html += `
+            <div class="rpg-editor-field-item" data-index="${index}">
+                <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-infobox-field-toggle" data-index="${index}">
+                <input type="text" value="${field.icon || '✨'}" class="rpg-infobox-field-icon" data-index="${index}" maxlength="4" title="Icon shown in the Scene Tracker" style="width: 44px; flex: 0 0 auto; text-align: center;">
+                <input type="text" value="${field.name}" class="rpg-infobox-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${field.description || ''}" class="rpg-infobox-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <button class="rpg-field-remove rpg-infobox-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    html += `<button class="rpg-btn-secondary" id="rpg-infobox-add-field"><i class="fa-solid fa-plus"></i> Add Custom Field</button>`;
     html += '</div>';
     $('#rpg-editor-tab-infoBox').html(html);
     setupInfoBoxListeners();
@@ -697,6 +727,40 @@ function setupInfoBoxListeners() {
         if (!widgets.terrain) widgets.terrain = {};
         widgets.terrain.enabled = $(this).is(':checked');
         _syncSceneTracker('showTerrain', $(this).is(':checked'));
+    });
+    // Custom scene fields
+    const ensureCustomFields = () => {
+        if (!Array.isArray(extensionSettings.trackerConfig.infoBox.customFields)) {
+            extensionSettings.trackerConfig.infoBox.customFields = [];
+        }
+        return extensionSettings.trackerConfig.infoBox.customFields;
+    };
+    $('#rpg-infobox-add-field').off('click').on('click', function() {
+        ensureCustomFields().push({
+            id: 'scene_' + Date.now(),
+            name: 'New Field',
+            icon: '✨',
+            enabled: true,
+            description: 'Description for AI',
+            persistInHistory: false
+        });
+        renderInfoBoxTab();
+    });
+    $('.rpg-infobox-field-remove').off('click').on('click', function() {
+        ensureCustomFields().splice($(this).data('index'), 1);
+        renderInfoBoxTab();
+    });
+    $('.rpg-infobox-field-toggle').off('change').on('change', function() {
+        ensureCustomFields()[$(this).data('index')].enabled = $(this).is(':checked');
+    });
+    $('.rpg-infobox-field-icon').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].icon = $(this).val().trim();
+    });
+    $('.rpg-infobox-field-label').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].name = $(this).val();
+    });
+    $('.rpg-infobox-field-placeholder').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].description = $(this).val();
     });
 }
 /**
@@ -1084,6 +1148,17 @@ function renderHistoryPersistenceTab() {
             `;
         }
     }
+    // Custom scene fields
+    (infoBoxConfig.customFields || []).forEach((field, index) => {
+        if (field.enabled) {
+            html += `
+                <div class="rpg-editor-toggle-row">
+                    <input type="checkbox" id="rpg-history-scenefield-${field.id}" class="rpg-history-scenefield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-scenefield-${field.id}">${field.name}</label>
+                </div>
+            `;
+        }
+    });
     html += '</div>';
     // Present Characters section
     html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-users"></i> Present Characters</h4>`;
@@ -1159,6 +1234,11 @@ function setupHistoryPersistenceListeners() {
     $('.rpg-history-widget-toggle').off('change').on('change', function() {
         const widgetId = $(this).data('widget');
         extensionSettings.trackerConfig.infoBox.widgets[widgetId].persistInHistory = $(this).is(':checked');
+    });
+    // Custom scene field toggles
+    $('.rpg-history-scenefield-toggle').off('change').on('change', function() {
+        const index = $(this).data('index');
+        extensionSettings.trackerConfig.infoBox.customFields[index].persistInHistory = $(this).is(':checked');
     });
     // Present Characters field toggles
     $('.rpg-history-charfield-toggle').off('change').on('change', function() {

@@ -10,7 +10,8 @@ import {
     buildQuestsJSONInstruction,
     buildInfoBoxJSONInstruction,
     buildCharactersJSONInstruction,
-    addLockInstruction
+    addLockInstruction,
+    toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
 // NOTE: InventoryV2 type import removed — inventory system archived to src/archived/
@@ -568,6 +569,17 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
             if (shouldInclude(infoBoxConfig.widgets.recentEvents) && infoBoxData.recentEvents) {
                 const events = getValue(infoBoxData.recentEvents);
                 if (events) infoFormatted += `Events: ${events}, `;
+            }
+            // User-defined custom scene fields
+            for (const field of (infoBoxConfig.customFields || [])) {
+                if (!field || !field.name || !shouldIncludeStat(field)) continue;
+                const key = toFieldKey(field.name);
+                if (!key || infoBoxData[key] === undefined) continue;
+                const value = getValue(infoBoxData[key]);
+                if (value) {
+                    const label = field.name.replace(/\s*\(.*\)\s*$/, '').trim();
+                    infoFormatted += `${label}: ${value}, `;
+                }
             }
             if (infoFormatted) {
                 formatted += infoFormatted.slice(0, -2) + '\n';

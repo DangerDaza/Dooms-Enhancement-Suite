@@ -186,7 +186,9 @@ export let extensionSettings = {
                 timeSinceRest: { enabled: false, persistInHistory: false },
                 conditions: { enabled: false, persistInHistory: false },
                 terrain: { enabled: false, persistInHistory: false }
-            }
+            },
+            // User-defined custom scene fields (shown in the Scene Tracker alongside built-in fields)
+            customFields: []
         },
         presentCharacters: {
             // Fixed fields (always shown)

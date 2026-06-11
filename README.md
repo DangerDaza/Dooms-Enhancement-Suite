@@ -51,6 +51,8 @@ Compact scene info blocks injected after assistant messages in chat. Displays ti
 - **Banner** — horizontal strip after the last message
 - **HUD (Floating Panel)** — frosted-glass panel, fully draggable with position persistence
 - **Ticker** — collapsible bar pinned to top or bottom of chat
+
+Beyond the built-in fields, you can define your own **custom scene fields** (Tracker Editor → Info Box → Custom Scene Fields). Each field has a name, an emoji icon, and an AI instruction describing what to track — the AI fills it in with every response and it renders in all Scene Tracker layouts alongside the built-in fields. Custom fields support inline editing in the Info Box panel and can be included in History Persistence.
 <img width="1426" height="357" alt="image" src="https://github.com/user-attachments/assets/7d4ab31e-2fd0-4f70-ab0f-6a85665b166e" />
 
 ### Dynamic Weather Effects

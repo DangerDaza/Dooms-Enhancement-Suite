@@ -8849,6 +8849,33 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
+/* User-defined custom scene field icon — emoji stand-in for the FA <i> icons,
+   sized to line up with them in every Scene Tracker layout */
+.dooms-cf-icon {
+    font-style: normal;
+    width: 14px;
+    text-align: center;
+    font-size: 0.9em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.dooms-ip-ticker-item .dooms-cf-icon {
+    width: auto;
+    font-size: 0.8em;
+}
+
+.dooms-ip-panel-row .dooms-cf-icon {
+    width: 13px;
+    font-size: 0.8em;
+}
+
+.dooms-ip-hud-row .dooms-cf-icon {
+    font-size: 0.85em;
+    margin-top: 2px;
+}
+
+
 .dooms-scene-label {
     color: var(--st-label-color, #888);
     flex-shrink: 0;
