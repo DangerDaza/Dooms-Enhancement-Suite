@@ -344,6 +344,7 @@ Requirements:
 - Each knife is 1-2 sentences, written as a factual premise about ${characterName} (e.g. "David is a gambling addict — he owes a lot of money to the wrong people.")
 - Make them specific and consequence-laden: name what hangs over the character and who or what might come collecting
 ${themeLine}
+- If a knife involves another person, describe them by role or relationship ("an old creditor", "her estranged sister", "the partner she left behind") instead of inventing a named character — the story will name them when they appear. NEVER use stock AI names like Voss, Elara, Seraphina, Nyx, Kael, Thorne, or Lyra
 - A knife does NOT have to incriminate the character — drama can come from outside (pursuers, debts, the past returning) or even from good fortune. Keep the character recognizably themselves; do not quietly rewrite them into a villain or traitor unless the theme explicitly calls for it
 - Fit the story's established tone and setting; don't contradict the description above
 
