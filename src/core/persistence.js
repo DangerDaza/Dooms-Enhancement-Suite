@@ -298,21 +298,10 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 13;
                 settingsChanged = true;
             }
-            // Migration to version 14: Initialize Name Ban settings
+            // Migration to version 14: previously initialized Name Ban settings.
+            // Name Ban was removed (superseded by Character Aliases in the
+            // Workshop) — keeping the version bump so the chain stays monotonic.
             if (currentVersion < 14) {
-                if (!extensionSettings.nameBan) {
-                    extensionSettings.nameBan = {
-                        enabled: false,
-                        sensitivity: 'normal',
-                        autoApplyKnownMappings: true,
-                        showModalForNew: true,
-                        injectIntoPrompt: true,
-                        approvedNames: [],
-                        nameMappings: {},
-                        ignoredNames: [],
-                        customExcludedWords: [],
-                    };
-                }
                 extensionSettings.settingsVersion = 14;
                 settingsChanged = true;
             }

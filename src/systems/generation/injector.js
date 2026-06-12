@@ -28,7 +28,6 @@ import {
     DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT
 } from './promptBuilder.js';
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from '../ui/promptsEditor.js';
-import { buildNameBanInstruction } from '../features/nameBan.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
@@ -668,7 +667,6 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
-        setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
         // Also drop any historical-context payload queued from a prior
         // generation while the extension was enabled. Without this, the
         // persistent listeners (CHAT_COMPLETION_PROMPT_READY etc.) keep
@@ -888,17 +886,8 @@ export async function onGenerationStarted(type, data, dryRun) {
             // Clear Dialogue Coloring prompt if disabled
             setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
-        // ── Name Ban prompt injection ──
-        if (extensionSettings.nameBan?.enabled && extensionSettings.nameBan?.injectIntoPrompt && !shouldSuppress) {
-            const nameBanPrompt = buildNameBanInstruction();
-            if (nameBanPrompt) {
-                setExtensionPrompt('dooms-tracker-name-ban', nameBanPrompt, extension_prompt_types.IN_CHAT, 0, false);
-            } else {
-                setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
-            }
-        } else {
-            setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
-        }
+        // NOTE: Name Ban prompt injection removed — feature superseded by
+        // Character Aliases (src/systems/features/characterAliases.js).
     } else if (extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') {
         const resolveRole = (role) => {
             if (role === 'user') return extension_prompt_roles.USER;
@@ -955,17 +944,6 @@ ${contextInstructionsText}
             // Clear Dialogue Coloring prompt if disabled
             setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, dcDepth, false);
         }
-        // ── Name Ban prompt injection (separate/external mode) ──
-        if (extensionSettings.nameBan?.enabled && extensionSettings.nameBan?.injectIntoPrompt && !shouldSuppress) {
-            const nameBanPrompt = buildNameBanInstruction();
-            if (nameBanPrompt) {
-                setExtensionPrompt('dooms-tracker-name-ban', nameBanPrompt, extension_prompt_types.IN_CHAT, 0, false);
-            } else {
-                setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
-            }
-        } else {
-            setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
-        }
         // Clear together mode injections
         setExtensionPrompt('dooms-tracker-inject', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-example', '', extension_prompt_types.IN_CHAT, 0, false);
@@ -976,7 +954,6 @@ ${contextInstructionsText}
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
-        setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
     }
     // Set suppression state for the historical context injection
     currentSuppressionState = shouldSuppress;
@@ -1018,7 +995,6 @@ function onGenerationAfterCommands() {
     setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
     setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
     setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
-    setExtensionPrompt('dooms-tracker-name-ban', '', extension_prompt_types.IN_CHAT, 0, false);
     // Drop queued historical-context payload so the persistent prompt-ready
     // listeners (CHAT_COMPLETION_PROMPT_READY etc.) don't smuggle tracker
     // JSON in via context injection on this generation.

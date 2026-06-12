@@ -35,7 +35,7 @@ import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
-import { enforceNameBan } from '../features/nameBan.js';
+import { applyCharacterAliases } from '../features/characterAliases.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -179,19 +179,13 @@ export async function onMessageReceived(data) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
                 }
             }
-            // ── Name Ban: enforce name rules before rendering & swipe storage ──
-            if (extensionSettings.nameBan?.enabled) {
-                const nbResult = await enforceNameBan(lastMessage.mes, parsedData.characterThoughts);
-                if (nbResult.text !== lastMessage.mes) {
-                    lastMessage.mes = nbResult.text;
-                    if (Array.isArray(lastMessage.swipes) && lastMessage.swipe_id !== undefined) {
-                        lastMessage.swipes[lastMessage.swipe_id] = nbResult.text;
-                    }
-                }
-                if (nbResult.thoughts) {
-                    parsedData.characterThoughts = nbResult.thoughts;
-                    lastGeneratedData.characterThoughts = nbResult.thoughts;
-                }
+            // ── Character Aliases: canonicalize names before rendering & swipe storage ──
+            // An aliased name ("Sarah Greenfield" → card "Sarah") is rewritten in the
+            // tracker data only — prose stays untouched — so no duplicate card is born.
+            const aliasedThoughts = applyCharacterAliases(parsedData.characterThoughts);
+            if (aliasedThoughts !== parsedData.characterThoughts) {
+                parsedData.characterThoughts = aliasedThoughts;
+                lastGeneratedData.characterThoughts = aliasedThoughts;
             }
             // Store RPG data for this specific swipe in the message's extra field
             if (!lastMessage.extra) {
@@ -286,22 +280,8 @@ export async function onMessageReceived(data) {
         if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
             setTimeout(async () => {
                 await updateRPGData(renderInfoBox, renderThoughts);
-                // ── Name Ban: enforce in separate/external mode ──
-                if (extensionSettings.nameBan?.enabled) {
-                    const lastMsg = chat[chat.length - 1];
-                    if (lastMsg && !lastMsg.is_user && !isSyntheticTrackerMessage(lastMsg)) {
-                        const nbResult = await enforceNameBan(lastMsg.mes, lastGeneratedData.characterThoughts);
-                        if (nbResult.text !== lastMsg.mes) {
-                            lastMsg.mes = nbResult.text;
-                            if (Array.isArray(lastMsg.swipes) && lastMsg.swipe_id !== undefined) {
-                                lastMsg.swipes[lastMsg.swipe_id] = nbResult.text;
-                            }
-                        }
-                        if (nbResult.thoughts) {
-                            lastGeneratedData.characterThoughts = nbResult.thoughts;
-                        }
-                    }
-                }
+                // ── Character Aliases: canonicalize names in separate/external mode ──
+                lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateWeatherEffect();

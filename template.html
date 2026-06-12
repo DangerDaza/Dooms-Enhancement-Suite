@@ -742,115 +742,6 @@
                 </div>
             </div>
 
-            <!-- ═══════ NAME BAN (hidden — not yet released) ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="name-ban" style="display:none !important;">
-                <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-ban rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title" data-i18n="Name Ban">Name Ban</span>
-                    <span class="rpg-accordion-badge" id="rpg-nb-badge">off</span>
-                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
-                </div>
-                <div class="rpg-accordion-body">
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Enable Name Ban</span>
-                            <span class="rpg-setting-hint">Control which character names appear in responses</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-toggle-name-ban" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div id="rpg-nb-options" style="display:none;">
-                        <div class="rpg-subsection-label">Detection</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Sensitivity</span>
-                                <span class="rpg-setting-hint">How aggressively to flag new character names</span>
-                            </div>
-                            <select id="rpg-nb-sensitivity" class="rpg-accordion-select">
-                                <option value="strict">Strict — Dialogue attribution only</option>
-                                <option value="normal">Normal — Dialogue + action patterns</option>
-                                <option value="aggressive">Aggressive — All unknown capitalized words</option>
-                            </select>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Show Modal for New Names</span>
-                                <span class="rpg-setting-hint">Prompt for approval when new names are detected</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-show-modal" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Auto-Apply Known Mappings</span>
-                                <span class="rpg-setting-hint">Silently replace previously mapped names</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-auto-apply" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Inject into Prompt</span>
-                                <span class="rpg-setting-hint">Tell AI about banned/approved names</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-inject-prompt" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-subsection-label">Approved Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that are allowed and won't
-                            trigger the modal</div>
-                        <div id="rpg-nb-approved-tags" class="dooms-nb-tag-list"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-approved" class="rpg-accordion-input"
-                                placeholder="Add approved name..." style="flex:1;" />
-                            <button id="rpg-nb-add-approved-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Name Mappings</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Automatically replace banned names with
-                            approved alternatives</div>
-                        <div id="rpg-nb-mappings-container"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px; gap:6px;">
-                            <input type="text" id="rpg-nb-add-mapping-from" class="rpg-accordion-input"
-                                placeholder="Banned name..." style="flex:1;" />
-                            <span style="opacity:0.5;">&rarr;</span>
-                            <input type="text" id="rpg-nb-add-mapping-to" class="rpg-accordion-input"
-                                placeholder="Replacement..." style="flex:1;" />
-                            <button id="rpg-nb-add-mapping-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Ignored Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that will never be flagged, even
-                            if unrecognized</div>
-                        <div id="rpg-nb-ignored-tags" class="dooms-nb-tag-list"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-ignored" class="rpg-accordion-input"
-                                placeholder="Add ignored name..." style="flex:1;" />
-                            <button id="rpg-nb-add-ignored-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Custom Excluded Words</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Common words that should never be
-                            treated as character names (one per line)</div>
-                        <textarea id="rpg-nb-excluded-words" class="rpg-accordion-input" rows="3"
-                            placeholder="e.g., Tavern&#10;Guild&#10;Dragon"
-                            style="width:100%;resize:vertical;"></textarea>
-                        <div style="margin-top:12px;">
-                            <button id="rpg-nb-clear-all" class="menu_button" style="color:#e94560;">Clear All Name Ban
-                                Data</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ═══════ SCENE TRACKER ═══════ -->
             <div class="rpg-accordion-section" data-accordion="scene-tracker">
                 <div class="rpg-accordion-header">
@@ -2427,6 +2318,22 @@
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
                                     data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span>
                                     Neutral</button>
+                            </div>
+                        </div>
+                        <!-- NPC mode: aliases -->
+                        <div class="rpg-field cw-npc-only">
+                            <label>Aliases</label>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">Other names the AI might
+                                use for this character &mdash; a revealed full name ("Sarah Greenfield" for "Sarah"),
+                                a nickname, or a title. Tracker data using an alias resolves to this card instead of
+                                spawning a duplicate character. The AI is free to keep using the alias in prose.</p>
+                            <div class="cw-alias-tags" id="cw-alias-tags"></div>
+                            <div class="rpg-field-row" style="gap: 0.5em; margin-top: 0.4rem;">
+                                <input id="cw-alias-input" class="rpg-input" type="text"
+                                    placeholder="Add alias&hellip;" style="max-width: 240px;">
+                                <button type="button" class="rpg-btn" id="cw-alias-add">
+                                    <i class="fa-solid fa-plus"></i> Add
+                                </button>
                             </div>
                         </div>
                         <!-- User mode: pronouns chips + linked persona -->

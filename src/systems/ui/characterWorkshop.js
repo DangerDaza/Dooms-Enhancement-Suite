@@ -384,6 +384,8 @@ export function openCharacterWorkshop(characterName, options = {}) {
     renderKnives();
     $modal.find('#cw-knife-input').val('');
     clearKnifeSuggestions();
+    renderAliases();
+    $modal.find('#cw-alias-input').val('');
     activatePane('identity');
 
     if (!listenersBound) {
@@ -628,11 +630,15 @@ function buildDraft(name, isUser = false) {
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
             knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false },
+            // Aliases are NPC-only (a persona's name is the player's own);
+            // kept on the draft so shared render code can no-op safely.
+            aliases: [],
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false },
         };
     }
     const inj = extensionSettings?.characterInjection?.[name] || {};
     const npcKnives = extensionSettings?.characterKnives?.[name];
+    const npcAliases = extensionSettings?.characterAliases?.[name];
     // Read color from the chat-aware getter so we see the same value
     // commitDraft writes (and that the PCP renders). When
     // perChatCharacterTracking is on, the global characterColors is
@@ -652,7 +658,8 @@ function buildDraft(name, isUser = false) {
             promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
         },
         knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
-        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false },
+        aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false },
     };
 }
 
@@ -802,6 +809,21 @@ function restoreCharacterToPanel() {
     try {
         if (window.toastr) window.toastr.success(`"${name}" returned to the panel.`, 'Character Workshop', { timeOut: 3000 });
     } catch (e) {}
+}
+
+function renderAliases() {
+    const $tags = $modal.find('#cw-alias-tags');
+    if (!$tags.length) return;
+    const aliases = draft?.aliases || [];
+    if (!aliases.length) {
+        $tags.html('<span class="cw-alias-empty">No aliases yet.</span>');
+        return;
+    }
+    $tags.html(aliases.map(a => `
+        <span class="cw-alias-tag">${escapeKnifeHtml(a)}
+            <button type="button" class="cw-alias-remove" data-alias="${escapeKnifeHtml(a)}" title="Remove alias">&times;</button>
+        </span>
+    `).join(''));
 }
 
 function renderIdentity() {
@@ -1083,6 +1105,42 @@ function bindStaticListeners() {
         draft.dirty.knives = true;
         renderKnives();
     });
+    // Aliases — other names that resolve to this card. Edits live on the
+    // draft and persist on Save.
+    const addAlias = () => {
+        if (!draft || draft.isUser) return;
+        const $input = $modal.find('#cw-alias-input');
+        const alias = String($input.val() || '').trim();
+        if (!alias) return;
+        const lower = alias.toLowerCase();
+        if (lower === String(draft.name).toLowerCase()) {
+            try { if (window.toastr) window.toastr.info('That\'s already this character\'s name.', 'Character Workshop', { timeOut: 3000 }); } catch (e) {}
+            return;
+        }
+        if (draft.aliases.some(a => a.toLowerCase() === lower)) {
+            $input.val('');
+            return;
+        }
+        draft.aliases.push(alias);
+        draft.dirty.aliases = true;
+        $input.val('');
+        renderAliases();
+    };
+    $modal.on('click.cw', '#cw-alias-add', addAlias);
+    $modal.on('keypress.cw', '#cw-alias-input', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addAlias();
+        }
+    });
+    $modal.on('click.cw', '.cw-alias-remove', function () {
+        if (!draft) return;
+        const alias = String($(this).data('alias'));
+        draft.aliases = draft.aliases.filter(a => a !== alias);
+        draft.dirty.aliases = true;
+        renderAliases();
+    });
+
     // Generate Knives is a two-step flow: the button shows the theme
     // picker, and choosing a theme chip fires the actual API call.
     $modal.on('click.cw', '#cw-knife-generate', function () {
@@ -1766,6 +1824,16 @@ function commitDraft() {
             extensionSettings.characterKnives[name] = draft.knives.map(k => ({ ...k }));
         } else {
             delete extensionSettings.characterKnives[name];
+        }
+        changed = true;
+    }
+
+    if (draft.dirty.aliases) {
+        if (!extensionSettings.characterAliases) extensionSettings.characterAliases = {};
+        if (Array.isArray(draft.aliases) && draft.aliases.length) {
+            extensionSettings.characterAliases[name] = [...draft.aliases];
+        } else {
+            delete extensionSettings.characterAliases[name];
         }
         changed = true;
     }

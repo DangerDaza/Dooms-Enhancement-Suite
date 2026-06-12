@@ -57,18 +57,9 @@ export let extensionSettings = {
     skipInjectionsForGuided: 'none', // skip injections for instruct injections and quiet prompts (GuidedGenerations compatibility)
     enableRandomizedPlot: false, // Show randomized plot progression button above chat input
     enableNaturalPlot: false, // Show natural plot progression button above chat input
-    // Name Ban — control which character names the AI can use
-    nameBan: {
-        enabled: false,
-        sensitivity: 'normal',        // 'strict' | 'normal' | 'aggressive'
-        autoApplyKnownMappings: true, // Skip modal for known mappings
-        showModalForNew: true,        // Show popup for unknown names (false = auto-approve)
-        injectIntoPrompt: true,       // Tell AI about banned/approved names
-        approvedNames: [],            // string[] — names approved as-is
-        nameMappings: {},             // { "bannedName": "approvedReplacement" }
-        ignoredNames: [],             // string[] — never flag these
-        customExcludedWords: [],      // Words that are never names
-    },
+    // Character Aliases — alternative names that resolve to an existing
+    // character card instead of creating a duplicate (Workshop → Identity)
+    characterAliases: {},             // { [canonicalName]: string[] }
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature
@@ -456,7 +447,6 @@ export const NEW_PLAYER_PROFILE = {
     'autoGenerateAvatars': false,
     'syncExpressionsToPresentCharacters': false,
     'performanceMode': false,
-    'nameBan.enabled': false,
     'historyPersistence.enabled': false,
     'inlineBanners.enabled': false,
     'doomCounter.enabled': false,
