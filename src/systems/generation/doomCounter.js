@@ -298,9 +298,10 @@ export function markCharacterKnifeUsed(characterName, knifeId, isUser) {
  * @param {boolean} [options.isUser=false] - True if the owner is a user persona
  * @param {number} [options.count=5] - Number of suggestions to generate
  * @param {Array<string>} [options.existingKnives=[]] - Knife texts to avoid duplicating
+ * @param {{label: string, guidance: string}|null} [options.theme=null] - Style/theme steering the batch
  * @returns {Promise<Array<string>>} Suggested knife texts
  */
-export async function generateKnifeSuggestions(characterName, { isUser = false, count = 5, existingKnives = [] } = {}) {
+export async function generateKnifeSuggestions(characterName, { isUser = false, count = 5, existingKnives = [], theme = null } = {}) {
     const context = getContext();
     const playerName = context.name1 || 'the player';
 
@@ -324,6 +325,10 @@ export async function generateKnifeSuggestions(characterName, { isUser = false, 
         return `${role}: ${(m.mes || '').substring(0, messageTruncation)}`;
     }).join('\n');
 
+    const themeLine = theme?.guidance
+        ? `- Theme: ${theme.label}. ${theme.guidance}`
+        : '- Vary the type across the options: debts, secrets, old flames, rivals, regrets, lucky breaks';
+
     const systemPrompt = `You are generating "Knives" for a roleplay story. A Knife is a pre-planned story beat tied to one character: a secret, debt, grudge, obligation, or unresolved past that lies dormant until the story needs drama, then resurfaces with consequences.
 
 Write knives for this character:
@@ -336,7 +341,8 @@ ${recentChat || '(no messages yet)'}
 Requirements:
 - Each knife is 1-2 sentences, written as a factual premise about ${characterName} (e.g. "David is a gambling addict — he owes a lot of money to the wrong people.")
 - Make them specific and consequence-laden: name what hangs over the character and who or what might come collecting
-- Vary the type across the options: debts, secrets, old flames, rivals, broken promises, past crimes, hidden identities
+${themeLine}
+- A knife does NOT have to incriminate the character — drama can come from outside (pursuers, debts, the past returning) or even from good fortune. Keep the character recognizably themselves; do not quietly rewrite them into a villain or traitor unless the theme explicitly calls for it
 - Fit the story's established tone and setting; don't contradict the description above
 
 Return ONLY a JSON array of exactly ${count} strings.`;

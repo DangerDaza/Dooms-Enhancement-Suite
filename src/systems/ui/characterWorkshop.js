@@ -105,6 +105,23 @@ let $modal = null;
 let listenersBound = false;
 /** Guard so rapid clicks on Generate Knives don't stack API calls. */
 let _knifeGenInProgress = false;
+
+/**
+ * Knife generation themes. Clicking Generate Knives shows these as chips;
+ * the chosen theme steers the AI so every batch doesn't drift toward
+ * betrayal/villainy — Regrets and Fortune in particular produce knives
+ * that make a character sympathetic or lucky rather than compromised.
+ */
+const KNIFE_THEMES = [
+    { id: 'mixed',    emoji: '🎲', label: 'Mixed',      guidance: 'Mix sympathetic, neutral, and compromising beats across the options — debts, secrets, old flames, rivals, regrets, lucky breaks. Do NOT make every knife paint the character as a villain or traitor.' },
+    { id: 'betrayal', emoji: '🗡️', label: 'Betrayal',   guidance: 'Focus on divided loyalties, double lives, deals with the wrong side, and promises that will force the character to betray someone.' },
+    { id: 'enemies',  emoji: '⚔️', label: 'Enemies',    guidance: 'Focus on rivals, grudges, and people from the character\'s past hunting them or wanting them ruined — danger that comes FOR the character, not treachery BY them.' },
+    { id: 'debts',    emoji: '💰', label: 'Debts',      guidance: 'Focus on money owed, favors about to be called in, contracts, and obligations the character cannot easily pay.' },
+    { id: 'flames',   emoji: '💔', label: 'Old Flames', guidance: 'Focus on past romances, heartbreak, lost loves, exes, and unresolved feelings that resurface.' },
+    { id: 'secrets',  emoji: '🤫', label: 'Secrets',    guidance: 'Focus on hidden identities, concealed pasts, and truths the character keeps — not necessarily shameful ones: some secrets are protective, sad, or wondrous.' },
+    { id: 'regrets',  emoji: '🩹', label: 'Regrets',    guidance: 'Focus on guilt, grief, old wounds, and mistakes that haunt the character — sympathetic beats that make them vulnerable rather than villainous.' },
+    { id: 'fortune',  emoji: '🍀', label: 'Fortune',    guidance: 'Focus on POSITIVE surprises: inheritances, secret talents, old friends returning with help, debts owed TO the character, lucky breaks from their past.' },
+];
 let _wsInitialized = false; // guard: don't double-register window/eventSource listeners
 let pendingInjectClear = false; // true while an inject prompt is queued
 // True only between a real (non-quiet, non-dryRun) GENERATION_STARTED and its
@@ -674,6 +691,23 @@ function escapeKnifeHtml(str) {
 }
 
 /**
+ * Renders the theme picker shown when Generate Knives is clicked.
+ * Picking a chip starts the actual generation with that theme.
+ */
+function renderKnifeThemePicker() {
+    const $sugg = $modal.find('#cw-knife-suggestions');
+    const chips = KNIFE_THEMES.map((t, i) => `
+        <button type="button" class="rpg-rel-chip cw-knife-theme-chip" data-theme-index="${i}" title="${escapeKnifeHtml(t.guidance)}">
+            <span>${t.emoji}</span> ${t.label}
+        </button>
+    `).join('');
+    $sugg.prop('hidden', false).html(`
+        <p class="helper" style="margin: 0 0 6px;">What kind of knives should the AI forge?</p>
+        <div class="rpg-rel-chips">${chips}</div>
+    `);
+}
+
+/**
  * Renders AI-generated knife suggestions as checkbox rows so the player
  * can pick which ones to keep. Suggestions are stashed on the container's
  * data so the Keep handler can read them back by index.
@@ -1049,19 +1083,28 @@ function bindStaticListeners() {
         draft.dirty.knives = true;
         renderKnives();
     });
-    $modal.on('click.cw', '#cw-knife-generate', async function () {
+    // Generate Knives is a two-step flow: the button shows the theme
+    // picker, and choosing a theme chip fires the actual API call.
+    $modal.on('click.cw', '#cw-knife-generate', function () {
         if (!draft || _knifeGenInProgress) return;
+        renderKnifeThemePicker();
+    });
+    $modal.on('click.cw', '.cw-knife-theme-chip', async function () {
+        if (!draft || _knifeGenInProgress) return;
+        const theme = KNIFE_THEMES[parseInt($(this).attr('data-theme-index'))];
+        if (!theme) return;
         _knifeGenInProgress = true;
-        const $btn = $(this);
+        const $btn = $modal.find('#cw-knife-generate');
         const forName = draft.name;
         const $sugg = $modal.find('#cw-knife-suggestions');
         $btn.prop('disabled', true);
-        $sugg.prop('hidden', false).html('<div class="cw-knife-sugg-loading">Forging knives&hellip; (asking your AI)</div>');
+        $sugg.prop('hidden', false).html(`<div class="cw-knife-sugg-loading">Forging ${escapeKnifeHtml(theme.label.toLowerCase())} knives&hellip; (asking your AI)</div>`);
         try {
             const suggestions = await generateKnifeSuggestions(forName, {
                 isUser: draft.isUser,
                 count: 5,
                 existingKnives: (draft.knives || []).map(k => k.text),
+                theme,
             });
             // Modal may have closed or switched character during the API call
             if (!draft || draft.name !== forName) return;

@@ -82,7 +82,7 @@ A tension-driven plot twist system that keeps your story from stagnating. The AI
 Instead of relying on AI-generated twists, you can attach pre-written story beats — **Knives** — to any character in the **Character Workshop** (right-click a portrait → Character Workshop → 🔪 Knives tab). Example: your character David is in Chicago, and one of his knives is *"David is a gambling addict — he owes a lot of money to the wrong people."* When the counter strikes, **one character currently in the scene** (including your own persona) is chosen at random from those holding armed knives, and *their* knives are offered as cards instead of generated twists. Pick one and the AI weaves its consequences into the next scene.
 
 - Knives travel with the character across chats; both NPCs and user personas can carry them
-- Out of ideas? **Generate Knives** asks your AI for 5 suggestions based on the character and current chat — tick the ones worth keeping
+- Out of ideas? **Generate Knives** lets you pick a theme — Mixed, Betrayal, Enemies, Debts, Old Flames, Secrets, Regrets, or Fortune — and your AI suggests 5 knives in that vein, grounded in the character and current chat. Tick the ones worth keeping
 - Turn the system on per story with **Settings → Doom Counter → Enable Knives (this chat)**
 - Only one character's knives surface per trigger — you won't know whose until the counter strikes
 - A chosen knife is marked *used* so it isn't offered twice — re-arm it in the Workshop to put it back in rotation
