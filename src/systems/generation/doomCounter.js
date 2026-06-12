@@ -325,8 +325,10 @@ export async function generateKnifeSuggestions(characterName, { isUser = false, 
         return `${role}: ${(m.mes || '').substring(0, messageTruncation)}`;
     }).join('\n');
 
+    // Theme guidance may reference the player via {{user}} — resolve it to
+    // the actual name so the AI targets the right person.
     const themeLine = theme?.guidance
-        ? `- Theme: ${theme.label}. ${theme.guidance}`
+        ? `- Theme: ${theme.label}. ${theme.guidance.replace(/\{\{user\}\}/g, playerName)}`
         : '- Vary the type across the options: debts, secrets, old flames, rivals, regrets, lucky breaks';
 
     const systemPrompt = `You are generating "Knives" for a roleplay story. A Knife is a pre-planned story beat tied to one character: a secret, debt, grudge, obligation, or unresolved past that lies dormant until the story needs drama, then resurfaces with consequences.

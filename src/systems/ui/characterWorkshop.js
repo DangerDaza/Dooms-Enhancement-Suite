@@ -114,7 +114,7 @@ let _knifeGenInProgress = false;
  */
 const KNIFE_THEMES = [
     { id: 'mixed',    emoji: '🎲', label: 'Mixed',      guidance: 'Mix sympathetic, neutral, and compromising beats across the options — debts, secrets, old flames, rivals, regrets, lucky breaks. Do NOT make every knife paint the character as a villain or traitor.' },
-    { id: 'betrayal', emoji: '🗡️', label: 'Betrayal',   guidance: 'Focus on divided loyalties, double lives, deals with the wrong side, and promises that will force the character to betray someone.' },
+    { id: 'betrayal', emoji: '🗡️', label: 'Betrayal',   guidance: 'Focus on betrayal where {{user}} is the betrayed party — divided loyalties, double lives, deals with the wrong side, and broken promises that are set to cut {{user}} specifically, not strangers or off-screen characters.' },
     { id: 'enemies',  emoji: '⚔️', label: 'Enemies',    guidance: 'Focus on rivals, grudges, and people from the character\'s past hunting them or wanting them ruined — danger that comes FOR the character, not treachery BY them.' },
     { id: 'debts',    emoji: '💰', label: 'Debts',      guidance: 'Focus on money owed, favors about to be called in, contracts, and obligations the character cannot easily pay.' },
     { id: 'flames',   emoji: '💔', label: 'Old Flames', guidance: 'Focus on past romances, heartbreak, lost loves, exes, and unresolved feelings that resurface.' },
