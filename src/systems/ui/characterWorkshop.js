@@ -2024,6 +2024,11 @@ function deleteCharacter(name) {
     // delete-from-Workshop and delete-from-Roster are symmetric.
     if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     if (extensionSettings.characterRelationships) delete extensionSettings.characterRelationships[name];
+    // Knives and aliases too — an orphaned alias entry would keep silently
+    // renaming a future, unrelated character to this deleted one, and a
+    // recreated same-name character would inherit the dead one's knives.
+    if (extensionSettings.characterKnives) delete extensionSettings.characterKnives[name];
+    if (extensionSettings.characterAliases) delete extensionSettings.characterAliases[name];
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata. Without wiping those, the Roster grid (which
     // reads via the active getters) shows the character right back after

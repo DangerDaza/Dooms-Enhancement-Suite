@@ -51,6 +51,13 @@ export function initTrackerEditor() {
         activeTab = $(this).data('tab');
         $('.rpg-editor-tab-content').hide();
         $(`#rpg-editor-tab-${activeTab}`).show();
+        // Re-render History Persistence on activation — its per-field toggles
+        // carry array indices captured at render time, which go stale when
+        // custom fields are added/removed/reordered in the other tabs (those
+        // tabs only re-render themselves).
+        if (activeTab === 'historyPersistence') {
+            renderHistoryPersistenceTab();
+        }
     });
     // Save button
     $(document).on('click', '#rpg-editor-save', function() {
@@ -1238,12 +1245,14 @@ function setupHistoryPersistenceListeners() {
     // Custom scene field toggles
     $('.rpg-history-scenefield-toggle').off('change').on('change', function() {
         const index = $(this).data('index');
-        extensionSettings.trackerConfig.infoBox.customFields[index].persistInHistory = $(this).is(':checked');
+        const field = extensionSettings.trackerConfig.infoBox.customFields?.[index];
+        if (field) field.persistInHistory = $(this).is(':checked');
     });
     // Present Characters field toggles
     $('.rpg-history-charfield-toggle').off('change').on('change', function() {
         const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields[index].persistInHistory = $(this).is(':checked');
+        const field = extensionSettings.trackerConfig.presentCharacters.customFields?.[index];
+        if (field) field.persistInHistory = $(this).is(':checked');
     });
     // Thoughts
     $('#rpg-history-thoughts').off('change').on('change', function() {
