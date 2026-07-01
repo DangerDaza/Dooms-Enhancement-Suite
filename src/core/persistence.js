@@ -22,6 +22,7 @@ import {
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { scheduleAvatarMigration, retireAvatarBackupIfComplete } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
+import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -727,7 +728,9 @@ export function loadChatData() {
                         const latestData = {};
                         if (swipeData.quests) latestData.quests = swipeData.quests;
                         if (swipeData.infoBox) latestData.infoBox = swipeData.infoBox;
-                        if (swipeData.characterThoughts) latestData.characterThoughts = swipeData.characterThoughts;
+                        // Canonicalize alias names on restore — stored data may
+                        // predate an alias (or the aliases feature itself).
+                        if (swipeData.characterThoughts) latestData.characterThoughts = applyCharacterAliases(swipeData.characterThoughts);
                         if (latestData.quests || latestData.infoBox || latestData.characterThoughts) {
                             setLastGeneratedData({
                                 quests: latestData.quests || lastGeneratedData.quests,

@@ -156,6 +156,12 @@ export async function onMessageReceived(data) {
             }
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
+                // ── Character Aliases: canonicalize names FIRST, before the color
+                // harvest, rendering, and swipe storage below see the data. An
+                // aliased name ("Sarah Greenfield" → card "Sarah") is rewritten in
+                // the tracker data only — prose stays untouched — so no duplicate
+                // card is born and colors are harvested under the canonical name.
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
             }
             // Update display data with newly parsed response
             if (parsedData.quests) {
@@ -178,14 +184,6 @@ export async function onMessageReceived(data) {
                 } catch (e) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
                 }
-            }
-            // ── Character Aliases: canonicalize names before rendering & swipe storage ──
-            // An aliased name ("Sarah Greenfield" → card "Sarah") is rewritten in the
-            // tracker data only — prose stays untouched — so no duplicate card is born.
-            const aliasedThoughts = applyCharacterAliases(parsedData.characterThoughts);
-            if (aliasedThoughts !== parsedData.characterThoughts) {
-                parsedData.characterThoughts = aliasedThoughts;
-                lastGeneratedData.characterThoughts = aliasedThoughts;
             }
             // Store RPG data for this specific swipe in the message's extra field
             if (!lastMessage.extra) {
@@ -279,9 +277,8 @@ export async function onMessageReceived(data) {
         // Only trigger if this is a newly generated message, not loading chat history
         if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
             setTimeout(async () => {
+                // (updateRPGData canonicalizes alias names at its parse step)
                 await updateRPGData(renderInfoBox, renderThoughts);
-                // ── Character Aliases: canonicalize names in separate/external mode ──
-                lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateWeatherEffect();
@@ -434,6 +431,9 @@ export function onMessageSwiped(messageIndex) {
         } else {
             lastGeneratedData.characterThoughts = swipeData.characterThoughts || null;
         }
+        // Canonicalize alias names on restore — swipe data may have been stored
+        // before an alias existed (or before this feature shipped).
+        lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
         // DON'T parse user stats when loading swipe data
         // This would overwrite manually edited fields (like Conditions) with old swipe data
         // The lastGeneratedData is loaded for display purposes only

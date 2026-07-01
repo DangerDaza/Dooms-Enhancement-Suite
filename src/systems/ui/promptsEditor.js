@@ -21,6 +21,18 @@ export const DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT = `<instruction>A dramatic devel
 // Overridable via extensionSettings.customKnifeTemplatePrompt.
 export const DEFAULT_KNIFE_TEMPLATE_PROMPT = `<instruction>A story element about {character}, planted in advance by the player, now comes into play. Use it to drive the next scene — bring its consequences into the present moment naturally and organically. Don't announce it or restate it; let it surface through events, arrivals, messages, or confrontations involving {character}.</instruction> <story_element> {knife} </story_element>`;
 
+// ─── Default Prompt: Knife Generator Rules ───────────────────────────────────
+// Requirements appended to the Character Workshop's Generate Knives prompt.
+// {character} is replaced with the character's name. The structural context
+// (character description, existing knives, recent chat, chosen theme) is built
+// separately in doomCounter.generateKnifeSuggestions.
+// Overridable via extensionSettings.customKnifeGeneratorRulesPrompt.
+export const DEFAULT_KNIFE_GENERATOR_RULES_PROMPT = `- Each knife is 1-2 sentences, written as a factual premise about {character} (e.g. "David is a gambling addict — he owes a lot of money to the wrong people.")
+- Make them specific and consequence-laden: name what hangs over the character and who or what might come collecting
+- If a knife involves another person, describe them by role or relationship ("an old creditor", "her estranged sister", "the partner she left behind") instead of inventing a named character — the story will name them when they appear. NEVER use stock AI names like Voss, Elara, Seraphina, Nyx, Kael, Thorne, or Lyra
+- A knife does NOT have to incriminate the character — drama can come from outside (pursuers, debts, the past returning) or even from good fortune. Keep the character recognizably themselves; do not quietly rewrite them into a villain or traitor unless the theme explicitly calls for it
+- Fit the story's established tone and setting; don't contradict the description above`;
+
 // ─── Default Prompt: New Fields Boost ────────────────────────────────────────
 // Injected when new tracker fields are enabled, reminding the AI to include them.
 // {fieldList} is replaced with the list of newly-enabled field descriptions.
@@ -75,6 +87,8 @@ const DEFAULT_PROMPTS = {
     narrator: DEFAULT_NARRATOR_PROMPT,
     contextInstructions: DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT,
     plotTwistTemplate: DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
+    knifeTemplate: DEFAULT_KNIFE_TEMPLATE_PROMPT,
+    knifeGeneratorRules: DEFAULT_KNIFE_GENERATOR_RULES_PROMPT,
     newFieldsBoost: DEFAULT_NEW_FIELDS_BOOST_PROMPT,
     twistGeneratorRules: DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
     trackerInstructions: 'Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that {userName} perceives about the current scene and the present characters. For example: "Location" becomes Forest Clearing, "Mood Emoji" becomes "\u{1F60A}". DO NOT include {userName} in the characters section, only NPCs. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user\'s actions, the passage of time, and logical consequences (0% if the time progressed only by a few minutes, 1-5% normally, and above 5% only if a major time-skip/event occurs).',
@@ -139,6 +153,8 @@ function openPromptsEditor() {
         narrator: extensionSettings.customNarratorPrompt || '',
         contextInstructions: extensionSettings.customContextInstructionsPrompt || '',
         plotTwistTemplate: extensionSettings.customPlotTwistTemplatePrompt || '',
+        knifeTemplate: extensionSettings.customKnifeTemplatePrompt || '',
+        knifeGeneratorRules: extensionSettings.customKnifeGeneratorRulesPrompt || '',
         newFieldsBoost: extensionSettings.customNewFieldsBoostPrompt || '',
         twistGeneratorRules: extensionSettings.customTwistGeneratorRulesPrompt || '',
         trackerInstructions: extensionSettings.customTrackerInstructionsPrompt || '',
@@ -153,6 +169,8 @@ function openPromptsEditor() {
     $('#rpg-prompt-narrator').val(extensionSettings.customNarratorPrompt || DEFAULT_PROMPTS.narrator);
     $('#rpg-prompt-context-instructions').val(extensionSettings.customContextInstructionsPrompt || DEFAULT_PROMPTS.contextInstructions);
     $('#rpg-prompt-plot-twist-template').val(extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PROMPTS.plotTwistTemplate);
+    $('#rpg-prompt-knife-template').val(extensionSettings.customKnifeTemplatePrompt || DEFAULT_PROMPTS.knifeTemplate);
+    $('#rpg-prompt-knife-generator-rules').val(extensionSettings.customKnifeGeneratorRulesPrompt || DEFAULT_PROMPTS.knifeGeneratorRules);
     $('#rpg-prompt-new-fields-boost').val(extensionSettings.customNewFieldsBoostPrompt || DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(extensionSettings.customTwistGeneratorRulesPrompt || DEFAULT_PROMPTS.twistGeneratorRules);
     $('#rpg-prompt-tracker-instructions').val(extensionSettings.customTrackerInstructionsPrompt || DEFAULT_PROMPTS.trackerInstructions);
@@ -214,6 +232,8 @@ function savePrompts() {
     extensionSettings.customNarratorPrompt = $('#rpg-prompt-narrator').val().trim();
     extensionSettings.customContextInstructionsPrompt = $('#rpg-prompt-context-instructions').val().trim();
     extensionSettings.customPlotTwistTemplatePrompt = $('#rpg-prompt-plot-twist-template').val().trim();
+    extensionSettings.customKnifeTemplatePrompt = $('#rpg-prompt-knife-template').val().trim();
+    extensionSettings.customKnifeGeneratorRulesPrompt = $('#rpg-prompt-knife-generator-rules').val().trim();
     extensionSettings.customNewFieldsBoostPrompt = $('#rpg-prompt-new-fields-boost').val().trim();
     extensionSettings.customTwistGeneratorRulesPrompt = $('#rpg-prompt-twist-generator-rules').val().trim();
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
@@ -257,6 +277,12 @@ function restorePromptToDefault(promptType) {
         case 'plotTwistTemplate':
             extensionSettings.customPlotTwistTemplatePrompt = '';
             break;
+        case 'knifeTemplate':
+            extensionSettings.customKnifeTemplatePrompt = '';
+            break;
+        case 'knifeGeneratorRules':
+            extensionSettings.customKnifeGeneratorRulesPrompt = '';
+            break;
         case 'newFieldsBoost':
             extensionSettings.customNewFieldsBoostPrompt = '';
             break;
@@ -291,6 +317,8 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-narrator').val(DEFAULT_PROMPTS.narrator);
     $('#rpg-prompt-context-instructions').val(DEFAULT_PROMPTS.contextInstructions);
     $('#rpg-prompt-plot-twist-template').val(DEFAULT_PROMPTS.plotTwistTemplate);
+    $('#rpg-prompt-knife-template').val(DEFAULT_PROMPTS.knifeTemplate);
+    $('#rpg-prompt-knife-generator-rules').val(DEFAULT_PROMPTS.knifeGeneratorRules);
     $('#rpg-prompt-new-fields-boost').val(DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(DEFAULT_PROMPTS.twistGeneratorRules);
     $('#rpg-prompt-tracker-instructions').val(DEFAULT_PROMPTS.trackerInstructions);
@@ -318,6 +346,8 @@ function restoreAllToDefaults() {
     extensionSettings.customNarratorPrompt = '';
     extensionSettings.customContextInstructionsPrompt = '';
     extensionSettings.customPlotTwistTemplatePrompt = '';
+    extensionSettings.customKnifeTemplatePrompt = '';
+    extensionSettings.customKnifeGeneratorRulesPrompt = '';
     extensionSettings.customNewFieldsBoostPrompt = '';
     extensionSettings.customTwistGeneratorRulesPrompt = '';
     extensionSettings.customTrackerInstructionsPrompt = '';

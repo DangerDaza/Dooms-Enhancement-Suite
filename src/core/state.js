@@ -37,6 +37,8 @@ export let extensionSettings = {
     customWeatherPrompt: '', // Custom weather forecast instruction for info box JSON (empty = use default)
     customCharacterThoughtsPrompt: '', // Custom character thoughts/present characters prompt (empty = use default)
     customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
+    customKnifeTemplatePrompt: '', // Custom knife injection template (empty = use default)
+    customKnifeGeneratorRulesPrompt: '', // Custom knife generator rules prompt (empty = use default)
     customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic

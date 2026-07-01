@@ -27,6 +27,7 @@ import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
+import { applyCharacterAliases } from '../features/characterAliases.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -331,6 +332,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             }
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
+                // Canonicalize alias names at the parse chokepoint, BEFORE the
+                // color harvest, swipe storage, and commit below see the data —
+                // this covers both the auto-update and manual Refresh RPG Info
+                // paths in separate/external mode.
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
             }
             // Store RPG data for the last assistant message (separate mode)
             const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;

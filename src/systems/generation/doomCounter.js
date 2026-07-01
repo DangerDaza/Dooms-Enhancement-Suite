@@ -18,7 +18,7 @@ import { getContext } from '../../../../../../extensions.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSettings } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
-import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
+import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -331,6 +331,11 @@ export async function generateKnifeSuggestions(characterName, { isUser = false, 
         ? `- Theme: ${theme.label}. ${theme.guidance.replace(/\{\{user\}\}/g, playerName)}`
         : '- Vary the type across the options: debts, secrets, old flames, rivals, regrets, lucky breaks';
 
+    // Requirements are user-editable (Prompts Editor → Knife Generator Rules);
+    // {character} resolves to the knife owner's name.
+    const rulesText = (extensionSettings.customKnifeGeneratorRulesPrompt || DEFAULT_KNIFE_GENERATOR_RULES_PROMPT)
+        .replace(/\{character\}/g, characterName);
+
     const systemPrompt = `You are generating "Knives" for a roleplay story. A Knife is a pre-planned story beat tied to one character: a secret, debt, grudge, obligation, or unresolved past that lies dormant until the story needs drama, then resurfaces with consequences.
 
 Write knives for this character:
@@ -341,12 +346,8 @@ Recent conversation (for tone and setting):
 ${recentChat || '(no messages yet)'}
 
 Requirements:
-- Each knife is 1-2 sentences, written as a factual premise about ${characterName} (e.g. "David is a gambling addict — he owes a lot of money to the wrong people.")
-- Make them specific and consequence-laden: name what hangs over the character and who or what might come collecting
 ${themeLine}
-- If a knife involves another person, describe them by role or relationship ("an old creditor", "her estranged sister", "the partner she left behind") instead of inventing a named character — the story will name them when they appear. NEVER use stock AI names like Voss, Elara, Seraphina, Nyx, Kael, Thorne, or Lyra
-- A knife does NOT have to incriminate the character — drama can come from outside (pursuers, debts, the past returning) or even from good fortune. Keep the character recognizably themselves; do not quietly rewrite them into a villain or traitor unless the theme explicitly calls for it
-- Fit the story's established tone and setting; don't contradict the description above
+${rulesText}
 
 Return ONLY a JSON array of exactly ${count} strings.`;
 

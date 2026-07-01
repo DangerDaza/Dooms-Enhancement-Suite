@@ -2085,6 +2085,42 @@
                 </button>
             </div>
 
+            <!-- Knife Injection Template -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-knife-template"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    &#128298; Knife Injection Template
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Wrapper text injected when a Knife (a character's pre-planned story beat) is drawn by the Doom
+                    Counter. <code>{knife}</code> is replaced with the knife text, <code>{character}</code> with the
+                    knife owner's name.
+                </small>
+                <textarea id="rpg-prompt-knife-template" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="knifeTemplate"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Knife Generator Rules -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-knife-generator-rules"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    &#128298; Knife Generator Rules
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Requirements appended to the Character Workshop's Generate Knives prompt. Controls length, tone,
+                    and naming rules of generated knives. <code>{character}</code> is replaced with the character's
+                    name; the chosen theme's guidance is added separately.
+                </small>
+                <textarea id="rpg-prompt-knife-generator-rules" class="rpg-prompt-textarea" rows="6"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="knifeGeneratorRules"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
             <!-- Tracker Continuation Instruction -->
             <div class="rpg-prompt-editor-section">
                 <label for="rpg-prompt-tracker-continuation"
