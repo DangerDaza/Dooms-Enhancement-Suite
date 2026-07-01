@@ -1,46 +1,38 @@
 {
-    "version": "2.0.0",
-    "title": "The Rebuild",
+    "version": "2.1.0",
+    "title": "Knives Out",
     "items": [
         {
-            "title": "Anonymous daily usage ping (you can turn it off)",
-            "body": "Once per day DES fetches a 1-byte public file on GitHub so the developer can see how many people use it. The request carries NO data and NO identifiers — nothing about you, your device, or your chats; the developer only ever sees one public number. Opt out any time: Advanced → Anonymous Usage Ping. The code is ~30 lines in src/core/usagePing.js if you want to verify."
+            "title": "🔪 Knives — plant your own plot twists",
+            "body": "Attach story beats to any character in the Character Workshop (new Knives tab): secrets, debts, rivals waiting in the wings. When the Doom Counter strikes, one present character with armed knives is chosen at random and THEIR knives become the twist options — you won't know whose past surfaces until it does. Used knives can be re-armed. Turn it on per story: Doom Counter → Enable Knives (this chat)."
         },
         {
-            "title": "New player experience + Restore Defaults",
-            "body": "Fresh installs now start with a curated setup: Scene Tracker, Present Characters, dialogue coloring, and Discord-style chat bubbles on — everything else off, with the D button centered. Existing setups are untouched. Want the clean slate? Advanced → Restore Default Settings (keeps all your characters, colors, avatars, and presets)."
+            "title": "Generate Knives with themes",
+            "body": "Out of ideas? The Workshop's Generate Knives button asks your AI for 5 suggestions grounded in the character and your current chat. Pick a theme first — Mixed, Betrayal, Enemies, Debts, Old Flames, Secrets, Regrets, or Fortune — then tick the ones worth keeping. Regrets and Fortune produce sympathetic and lucky beats, not just villainy."
         },
         {
-            "title": "This screen!",
-            "body": "DES now shows release notes once after every update (desktop and desktop-site view). Dismissing lasts until the next release; turn it off permanently in Display settings. You can reopen it any time with the What's New button in the extensions dropdown."
+            "title": "Trap Mode draws knives too",
+            "body": "With Trap Mode on, a random armed knife from a random present character is injected silently. Your own pre-planted surprises can now ambush you."
         },
         {
-            "title": "Dialogue colors finally stick to the right character",
-            "body": "New characters no longer show up as someone else (or 'Unknown'). DES now learns each speaker's color the moment they debut — validated against the actual message, never guessed — and a manual recolor in the Workshop always wins, with old messages keeping their attribution."
+            "title": "Custom Scene Tracker fields",
+            "body": "Add your own fields to the Scene Tracker (Tracker Editor → Info Box → Custom Scene Fields): a name, an emoji icon, and an instruction telling the AI what to track. They render in every layout — grid, banner, HUD, and ticker — support inline editing, and can be included in History Persistence."
         },
         {
-            "title": "Context Inspector",
-            "body": "Settings → Context Inspector shows verbatim everything DES injects into the model's context: live slot snapshot plus a per-generation history of every injection, edit, and clear."
+            "title": "Character Aliases — no more duplicate cards",
+            "body": "The AI upgraded 'Sarah' to 'Sarah Greenfield' and DES spawned a second card? Add the full name as an Alias on Sarah's card (Workshop → Identity). Any tracker data using an alias now resolves to the existing card — portrait, color, sheet, and knives included — while the AI stays free to use the name in prose."
         },
         {
-            "title": "Quick-Jump button (mobile)",
-            "body": "Scroll up in chat to reveal a small button that jumps back to your last message — tap again to walk up through earlier ones. Toggle in Display settings."
+            "title": "Doom Counter picker: Reroll and Cancel",
+            "body": "Don't like the twist options? Reroll for a fresh set. Not in the mood at all? Cancel dismisses the picker and resets the counter."
         },
         {
-            "title": "Massive performance rebuild",
-            "body": "Startup payload cut roughly in half; settings UI, modals, and their code load only when first opened; weather particles moved to a single canvas that fully stops when hidden; rendering is incremental instead of rebuilt per message."
+            "title": "Knife prompts are editable",
+            "body": "The knife injection template and the Generate Knives rules join the other prompts in Advanced → Edit AI Prompts, each with a Restore Default button."
         },
         {
-            "title": "Performance Mode",
-            "body": "New Display toggle that strips all DES animations, blur, and transitions and pauses particles — for minimum GPU/CPU cost on weaker machines."
-        },
-        {
-            "title": "Compact Tracker Prompt",
-            "body": "Optional terser tracker instructions (~40% fewer prompt tokens) in Advanced. Existing installs keep the verbose phrasing they were tuned on; fresh installs default to compact."
-        },
-        {
-            "title": "Loading intro removed",
-            "body": "The startup cinematic is gone entirely — DES now gets out of the way and loads instantly."
+            "title": "Name Ban removed",
+            "body": "The old (hidden, unfinished) Name Ban system is gone — Character Aliases replaces its useful half without nagging your model. Elara, Seraphina, Nyx, and Voss remain at large; the knife generator at least refuses to hire them."
         }
     ],
     "contact": {
