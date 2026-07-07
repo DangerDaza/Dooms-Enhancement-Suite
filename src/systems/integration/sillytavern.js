@@ -331,6 +331,12 @@ export async function onMessageReceived(data) {
     }
 }
 /**
+ * Monotonic token for the delayed render chain below. Each CHAT_CHANGED
+ * bumps it, invalidating any polling chain scheduled by a previous chat so
+ * a slow chat switch can't paint the old chat's overlays into the new one.
+ */
+let renderChatToken = 0;
+/**
  * Event handler for character change.
  */
 export function onCharacterChanged() {
@@ -375,7 +381,14 @@ export function onCharacterChanged() {
     // where chat messages appear later and need thoughts overlays injected.
     let attempts = 0;
     const maxAttempts = 15;
+    const myToken = ++renderChatToken;
+    const myChatId = getContext().chatId;
     const tryRenderChat = () => {
+        // Bail if another chat switch happened since this chain was scheduled —
+        // the render targets read globals that loadChatData has overwritten.
+        if (myToken !== renderChatToken || getContext().chatId !== myChatId) {
+            return;
+        }
         attempts++;
         if ($('#chat .mes').length > 0) {
             // For classic layouts (grid/stacked/compact/banner) that inject after a
