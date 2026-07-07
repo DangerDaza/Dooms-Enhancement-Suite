@@ -2,7 +2,7 @@
 
 This document explains *how to think* about performance work in Doom's
 Enhancement Suite. It was written at the end of the original `Rebuild` effort
-(v1.11.3 → v1.12.0) and is addressed to whoever works on this codebase next —
+(v1.11.3 → v2.0.0, planned at the time as v1.12.0) and is addressed to whoever works on this codebase next —
 human or AI. Read this before optimizing anything.
 
 Companion documents:

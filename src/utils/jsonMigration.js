@@ -328,7 +328,8 @@ export async function migrateToV3JSON() {
             }
         });
     }
-    // Save migrated data
-    await saveChatData();
+    // Save migrated data — immediate so this one-time destructive migration
+    // isn't lost to a chat switch before a debounced write flushes.
+    await saveChatData({ immediate: true });
     await saveSettings();
 }

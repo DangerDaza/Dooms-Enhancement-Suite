@@ -22,6 +22,7 @@ import {
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { scheduleAvatarMigration, retireAvatarBackupIfComplete } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
+import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -298,21 +299,10 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 13;
                 settingsChanged = true;
             }
-            // Migration to version 14: Initialize Name Ban settings
+            // Migration to version 14: previously initialized Name Ban settings.
+            // Name Ban was removed (superseded by Character Aliases in the
+            // Workshop) — keeping the version bump so the chain stays monotonic.
             if (currentVersion < 14) {
-                if (!extensionSettings.nameBan) {
-                    extensionSettings.nameBan = {
-                        enabled: false,
-                        sensitivity: 'normal',
-                        autoApplyKnownMappings: true,
-                        showModalForNew: true,
-                        injectIntoPrompt: true,
-                        approvedNames: [],
-                        nameMappings: {},
-                        ignoredNames: [],
-                        customExcludedWords: [],
-                    };
-                }
                 extensionSettings.settingsVersion = 14;
                 settingsChanged = true;
             }
@@ -553,8 +543,13 @@ export function saveSettings() {
 }
 /**
  * Saves RPG data to the current chat's metadata.
+ * @param {Object} [options]
+ * @param {boolean} [options.immediate=false] Write through with
+ *   saveChatConditional instead of the debounced save. Use at commit points
+ *   (generation end, modal save) — a debounced write is silently lost if the
+ *   user switches chats before it fires.
  */
-export function saveChatData() {
+export function saveChatData({ immediate = false } = {}) {
     if (!chat_metadata) {
         return;
     }
@@ -565,6 +560,10 @@ export function saveChatData() {
         syncedExpressionPortraits: syncedExpressionPortraits,
         syncedExpressionLabels: syncedExpressionLabels,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
+        // Preserve the per-chat Knives toggle — this rebuild replaces the whole
+        // dooms_tracker object, so any field not copied here is dropped (and,
+        // with immediate saves, wiped from disk on the next generation).
+        knivesEnabled: chat_metadata.dooms_tracker?.knivesEnabled === true,
         characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
         timestamp: Date.now()
     };
@@ -576,9 +575,15 @@ export function saveChatData() {
         trackerData.bannedCharacters = chat_metadata.dooms_tracker?.bannedCharacters || [];
     }
     chat_metadata.dooms_tracker = trackerData;
-    // Use debounced save — the standard SillyTavern pattern.
-    // Immediate saves (saveChatConditional) on every UI edit caused performance issues.
+    // Debounced save by default — the standard SillyTavern pattern; immediate
+    // saves on every UI edit caused performance issues. Commit points pass
+    // { immediate: true } so the write can't be dropped by a fast chat switch.
+    // Returns the write promise for immediate saves so callers can await it.
+    if (immediate) {
+        return Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] chat save failed', err));
+    }
     saveChatDebounced();
+    return Promise.resolve();
 }
 /**
  * Updates the last assistant message's swipe data with current tracker data.
@@ -716,6 +721,10 @@ export function loadChatData() {
     if (savedData.doomCounterState) {
         chat_metadata.dooms_tracker.doomCounterState = savedData.doomCounterState;
     }
+    // Restore the per-chat Knives toggle (persisted in the tracker blob).
+    if (savedData.knivesEnabled !== undefined) {
+        chat_metadata.dooms_tracker.knivesEnabled = savedData.knivesEnabled === true;
+    }
     // Sync with the most recent assistant message's per-message swipe data.
     // This is the most reliable source since it's saved as part of the chat messages
     // themselves and won't be lost if the debounced chat_metadata save didn't flush.
@@ -738,7 +747,9 @@ export function loadChatData() {
                         const latestData = {};
                         if (swipeData.quests) latestData.quests = swipeData.quests;
                         if (swipeData.infoBox) latestData.infoBox = swipeData.infoBox;
-                        if (swipeData.characterThoughts) latestData.characterThoughts = swipeData.characterThoughts;
+                        // Canonicalize alias names on restore — stored data may
+                        // predate an alias (or the aliases feature itself).
+                        if (swipeData.characterThoughts) latestData.characterThoughts = applyCharacterAliases(swipeData.characterThoughts);
                         if (latestData.quests || latestData.infoBox || latestData.characterThoughts) {
                             setLastGeneratedData({
                                 quests: latestData.quests || lastGeneratedData.quests,
@@ -929,8 +940,40 @@ export function setDoomCounterState(state) {
     if (!chat_metadata.dooms_tracker) {
         chat_metadata.dooms_tracker = {};
     }
+    // Skip the write when nothing changed — onResponseReceived calls this on
+    // every AI message including no-op paths, and an immediate save serializes
+    // the whole chat. Only pay that cost when the state actually moved.
+    const prev = chat_metadata.dooms_tracker.doomCounterState;
+    const unchanged = prev && JSON.stringify(prev) === JSON.stringify(state);
     chat_metadata.dooms_tracker.doomCounterState = state;
-    saveChatDebounced();
+    if (unchanged) return;
+    // Immediate save: a debounced write is lost if the user switches chats
+    // before it flushes.
+    Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] doom counter save failed', err));
+}
+
+/**
+ * Whether Knives are enabled for the current chat. Knives themselves live on
+ * character records (Character Workshop); this per-chat switch controls
+ * whether the Doom Counter draws them when it triggers. Default: off.
+ * @returns {boolean}
+ */
+export function isDoomKnivesEnabled() {
+    return chat_metadata?.dooms_tracker?.knivesEnabled === true;
+}
+
+/**
+ * Enables/disables Knives for the current chat.
+ * @param {boolean} enabled
+ */
+export function setDoomKnivesEnabled(enabled) {
+    if (!chat_metadata) return;
+    if (!chat_metadata.dooms_tracker) {
+        chat_metadata.dooms_tracker = {};
+    }
+    chat_metadata.dooms_tracker.knivesEnabled = !!enabled;
+    // Immediate save: fires once per toggle click; see setDoomCounterState.
+    Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] knives toggle save failed', err));
 }
 
 /**

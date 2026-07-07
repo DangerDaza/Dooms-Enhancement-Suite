@@ -35,7 +35,7 @@ export function applyLocks(trackerData, trackerType) {
             return trackerData;
     }
 }
-// NOTE: applyUserStatsLocks() archived to src/archived/archived-features-userstats.js
+// NOTE: applyUserStatsLocks() removed (see git history)
 // Stats, status, skills, inventory lock logic removed. Quest locks extracted below.
 /**
  * Apply locks to Quests tracker

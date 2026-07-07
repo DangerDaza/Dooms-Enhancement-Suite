@@ -19,7 +19,7 @@ export let extensionSettings = {
         contextInstructions: { depth: 1, role: '' },
     },
     connectionProfile: '', // Connection Manager profile name for tracker generation (empty = use current)
-    // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
+    // NOTE: showUserStats and showInventory have been removed (see git history)
     showInfoBox: true,
     showCharacterThoughts: true,
     showQuests: false, // Show quests section (off in the new-player profile)
@@ -37,10 +37,12 @@ export let extensionSettings = {
     customWeatherPrompt: '', // Custom weather forecast instruction for info box JSON (empty = use default)
     customCharacterThoughtsPrompt: '', // Custom character thoughts/present characters prompt (empty = use default)
     customPlotTwistTemplatePrompt: '', // Custom plot twist injection template (empty = use default)
+    customKnifeTemplatePrompt: '', // Custom knife injection template (empty = use default)
+    customKnifeGeneratorRulesPrompt: '', // Custom knife generator rules prompt (empty = use default)
     customNewFieldsBoostPrompt: '', // Custom new fields boost template (empty = use default)
     customTwistGeneratorRulesPrompt: '', // Custom twist generator rules prompt (empty = use default)
     // NOTE: enableDeceptionSystem, enableOmniscienceFilter, enableCYOA, enableSpotifyMusic
-    // and their custom prompt fields have been archived to src/archived-features.js
+    // and their custom prompt fields have been removed (see git history)
     bunnyMoIntegration: true, // DEPRECATED in v1.11 — Bunny Mo integration is always on. Field kept for back-compat with any code paths that still read it; default flipped to true so stale reads return the right answer.
     heroPositions: {},         // Per-character hero art positioning { characterName: { x, y } }
     enableDynamicWeather: false, // Enable dynamic weather effects based on Info Box weather field
@@ -50,25 +52,16 @@ export let extensionSettings = {
     showHtmlToggle: true, // Show Immersive HTML toggle in main panel
     showDialogueColoringToggle: true, // Show Dialogue Coloring toggle in main panel (enabled by default)
     // NOTE: showDeceptionToggle, showOmniscienceToggle, showCYOAToggle, showSpotifyToggle
-    // have been archived to src/archived-features.js
+    // have been removed (see git history)
     showDynamicWeatherToggle: true, // Show Dynamic Weather Effects toggle in main panel
     showNarratorMode: true, // Show Narrator Mode toggle in main panel
     showAutoAvatars: true, // Show Auto-generate Avatars toggle in main panel
     skipInjectionsForGuided: 'none', // skip injections for instruct injections and quiet prompts (GuidedGenerations compatibility)
     enableRandomizedPlot: false, // Show randomized plot progression button above chat input
     enableNaturalPlot: false, // Show natural plot progression button above chat input
-    // Name Ban — control which character names the AI can use
-    nameBan: {
-        enabled: false,
-        sensitivity: 'normal',        // 'strict' | 'normal' | 'aggressive'
-        autoApplyKnownMappings: true, // Skip modal for known mappings
-        showModalForNew: true,        // Show popup for unknown names (false = auto-approve)
-        injectIntoPrompt: true,       // Tell AI about banned/approved names
-        approvedNames: [],            // string[] — names approved as-is
-        nameMappings: {},             // { "bannedName": "approvedReplacement" }
-        ignoredNames: [],             // string[] — never flag these
-        customExcludedWords: [],      // Words that are never names
-    },
+    // Character Aliases — alternative names that resolve to an existing
+    // character card instead of creating a duplicate (Workshop → Identity)
+    characterAliases: {},             // { [canonicalName]: string[] }
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature
@@ -152,7 +145,7 @@ export let extensionSettings = {
         clock: { enabled: true, position: 2 },            // Current time display
         date: { enabled: true, position: 3 },             // Date display
         location: { enabled: true, position: 4 }          // Location name
-        // NOTE: stats and attributes FAB widgets archived to src/archived/archived-features-userstats.js
+        // NOTE: stats and attributes FAB widgets removed (see git history)
     },
     // Desktop strip widget display options (shown in collapsed panel strip)
     desktopStripWidgets: {
@@ -161,14 +154,13 @@ export let extensionSettings = {
         clock: { enabled: true },            // Current time display
         date: { enabled: true },             // Date display
         location: { enabled: true }          // Location name
-        // NOTE: stats and attributes strip widgets archived to src/archived/archived-features-userstats.js
+        // NOTE: stats and attributes strip widgets removed (see git history)
     },
-    // NOTE: userStats JSON, statNames, and trackerConfig.userStats have been archived
-    // to src/archived/archived-features-userstats.js
+    // NOTE: userStats JSON, statNames, and trackerConfig.userStats have been removed (see git history)
     // Tracker customization configuration
     trackerConfig: {
         // NOTE: userStats config (customStats, rpgAttributes, statusSection, skillsSection,
-        // inventoryPersistInHistory, questsPersistInHistory) archived to src/archived/archived-features-userstats.js
+        // inventoryPersistInHistory, questsPersistInHistory) removed (see git history)
         // Quests tracker configuration (independent top-level tracker)
         quests: {
             persistInHistory: false // Persist quests in historical messages
@@ -186,7 +178,9 @@ export let extensionSettings = {
                 timeSinceRest: { enabled: false, persistInHistory: false },
                 conditions: { enabled: false, persistInHistory: false },
                 terrain: { enabled: false, persistInHistory: false }
-            }
+            },
+            // User-defined custom scene fields (shown in the Scene Tracker alongside built-in fields)
+            customFields: []
         },
         presentCharacters: {
             // Fixed fields (always shown)
@@ -250,7 +244,7 @@ export let extensionSettings = {
         characters: []
     }, null, 2),
     // NOTE: level, classicStats, lastDiceRoll, showDiceDisplay, collapsedInventoryLocations,
-    // inventoryViewModes archived to src/archived/archived-features-userstats.js
+    // inventoryViewModes removed (see git history)
     // npcAvatars / npcAvatarsFullRes — value is one of:
     //   - "/user/images/des-portraits/<file>?t=<mtime>" (post v1.11 migration; on-disk PNG)
     //   - "/characters/<file>" (ST card import — already file-backed)
@@ -358,7 +352,7 @@ export let extensionSettings = {
     },
     // Lock state for tracker items (v3 JSON format feature)
     lockedItems: {
-        // NOTE: stats, skills, inventory lock arrays archived to src/archived/archived-features-userstats.js
+        // NOTE: stats, skills, inventory lock arrays removed (see git history)
         quests: {
             main: false,        // Boolean for main quest lock
             optional: []        // Array of locked optional quest indices (e.g., [0, 2])
@@ -454,7 +448,6 @@ export const NEW_PLAYER_PROFILE = {
     'autoGenerateAvatars': false,
     'syncExpressionsToPresentCharacters': false,
     'performanceMode': false,
-    'nameBan.enabled': false,
     'historyPersistence.enabled': false,
     'inlineBanners.enabled': false,
     'doomCounter.enabled': false,
@@ -603,7 +596,7 @@ export function addDebugLog(message, data = null) {
         debugLogs.shift();
     }
 }
-// NOTE: FEATURE_FLAGS.useNewInventory archived to src/archived/archived-features-userstats.js
+// NOTE: FEATURE_FLAGS.useNewInventory removed (see git history)
 /**
  * Fallback avatar image (base64-encoded SVG with "?" icon)
  * Using base64 to avoid quote-encoding issues in HTML attributes
@@ -616,10 +609,10 @@ export let $panelContainer = null;
 export let $infoBoxContainer = null;
 export let $thoughtsContainer = null;
 export let $questsContainer = null;
-// NOTE: $userStatsContainer, $inventoryContainer archived to src/archived/archived-features-userstats.js
+// NOTE: $userStatsContainer, $inventoryContainer removed (see git history)
 export let $musicPlayerContainer = null;
 export let isPlotProgression = false;
-// NOTE: pendingDiceRoll archived to src/archived/archived-features-userstats.js
+// NOTE: pendingDiceRoll removed (see git history)
 /**
  * State setters - provide controlled mutation of state variables
  */

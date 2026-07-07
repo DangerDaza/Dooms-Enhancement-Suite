@@ -10,20 +10,13 @@ import {
     $infoBoxContainer
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
+import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
 import { i18n } from '../../core/i18n.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 import { separateEmojiFromText } from '../../utils/textUtils.js';
-/**
- * Helper to generate lock icon HTML if setting is enabled
- * @param {string} tracker - Tracker name
- * @param {string} path - Item path
- * @returns {string} Lock icon HTML or empty string
- */
-/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
-function getLockIconHtml(_tracker, _path) {
-    return '';
-}
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 /**
  * Updates the CSS variable for dynamic text scaling on the location field.
  * @param {jQuery} $element - The location element
@@ -259,13 +252,11 @@ export function renderInfoBox() {
             monthDisplay = monthDisplay;
             weekdayDisplay = weekdayDisplay;
         }
-        const dateLockIconHtml = getLockIconHtml('infoBox', 'date');
         row1Widgets.push(`
             <div class="rpg-dashboard-widget rpg-calendar-widget">
-                ${dateLockIconHtml}
-                <div class="rpg-calendar-top rpg-editable" contenteditable="true" data-field="month" data-full-value="${data.month || ''}" title="Click to edit">${monthDisplay}</div>
-                <div class="rpg-calendar-day" title="Click to edit"><span class="rpg-calendar-day-text rpg-editable" contenteditable="true" data-field="weekday" data-full-value="${data.weekday || ''}">${weekdayDisplay}</span></div>
-                <div class="rpg-calendar-year rpg-editable" contenteditable="true" data-field="year" data-full-value="${data.year || ''}" title="Click to edit">${yearDisplay}</div>
+                <div class="rpg-calendar-top rpg-editable" contenteditable="true" data-field="month" data-full-value="${escapeAttr(data.month || '')}" title="Click to edit">${escapeHtml(monthDisplay)}</div>
+                <div class="rpg-calendar-day" title="Click to edit"><span class="rpg-calendar-day-text rpg-editable" contenteditable="true" data-field="weekday" data-full-value="${escapeAttr(data.weekday || '')}">${escapeHtml(weekdayDisplay)}</span></div>
+                <div class="rpg-calendar-year rpg-editable" contenteditable="true" data-field="year" data-full-value="${escapeAttr(data.year || '')}" title="Click to edit">${escapeHtml(yearDisplay)}</div>
             </div>
         `);
     }
@@ -284,10 +275,8 @@ export function renderInfoBox() {
             hourAngle = (hours % 12) * 30 + minutes * 0.5; // 30° per hour + 0.5° per minute
             minuteAngle = minutes * 6; // 6° per minute
         }
-        const timeLockIconHtml = getLockIconHtml('infoBox', 'time');
         row1Widgets.push(`
             <div class="rpg-dashboard-widget rpg-clock-widget">
-                ${timeLockIconHtml}
                 <div class="rpg-clock">
                     <div class="rpg-clock-face">
                         <div class="rpg-clock-hour" style="transform: rotate(${hourAngle}deg)"></div>
@@ -296,9 +285,9 @@ export function renderInfoBox() {
                     </div>
                 </div>
                 <div class="rpg-time-range">
-                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeStart" title="Click to edit start time">${timeStartDisplay}</div>
+                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeStart" title="Click to edit start time">${escapeHtml(timeStartDisplay)}</div>
                     <span class="rpg-time-separator">→</span>
-                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeEnd" title="Click to edit end time">${timeEndDisplay}</div>
+                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeEnd" title="Click to edit end time">${escapeHtml(timeEndDisplay)}</div>
                 </div>
             </div>
         `);
@@ -312,15 +301,13 @@ export function renderInfoBox() {
     // Row 2: Location widget (full width) - show if enabled
     if (config?.widgets?.location?.enabled) {
         const locationDisplay = data.location || 'Location';
-        const locationLockIconHtml = getLockIconHtml('infoBox', 'location');
         html += `
             <div class="rpg-dashboard rpg-dashboard-row-2">
                 <div class="rpg-dashboard-widget rpg-location-widget">
-                    ${locationLockIconHtml}
                     <div class="rpg-map-bg">
                         <div class="rpg-map-marker">📍</div>
                     </div>
-                    <div class="rpg-location-text rpg-editable" contenteditable="true" data-field="location" title="Click to edit">${locationDisplay}</div>
+                    <div class="rpg-location-text rpg-editable" contenteditable="true" data-field="location" title="Click to edit">${escapeHtml(locationDisplay)}</div>
                 </div>
             </div>
         `;
@@ -330,7 +317,8 @@ export function renderInfoBox() {
     let extraFieldsData = {};
     if (infoBoxData) {
         try {
-            const parsed = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+            // Memoized shared parse — read-only; null for non-JSON input.
+            const parsed = parseTrackerJson(infoBoxData);
             if (parsed) {
                 extraFieldsData.moonPhase = typeof parsed.moonPhase === 'string' ? parsed.moonPhase : (parsed.moonPhase?.value || '');
                 extraFieldsData.tension = typeof parsed.tension === 'string' ? parsed.tension : (parsed.tension?.value || '');
@@ -350,14 +338,35 @@ export function renderInfoBox() {
     for (const w of extraWidgets) {
         if (config?.widgets?.[w.key]?.enabled) {
             const display = extraFieldsData[w.key] || w.placeholder;
-            const lockIconHtml = getLockIconHtml('infoBox', w.key);
             html += `
                 <div class="rpg-dashboard rpg-dashboard-row-extra">
                     <div class="rpg-dashboard-widget rpg-extra-widget">
-                        ${lockIconHtml}
                         <div class="rpg-extra-icon">${w.icon}</div>
                         <div class="rpg-extra-label">${w.label}</div>
-                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${display}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${escapeHtml(display)}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    // Row 2c: User-defined custom scene fields
+    const customSceneFields = getCustomSceneFields();
+    if (customSceneFields.length && infoBoxData) {
+        const parsedInfo = parseTrackerJson(infoBoxData);
+        for (const field of customSceneFields) {
+            const raw = parsedInfo?.[field.key];
+            let value = '';
+            if (typeof raw === 'string') value = raw;
+            else if (typeof raw === 'number' || typeof raw === 'boolean') value = String(raw);
+            else if (Array.isArray(raw)) value = raw.map(v => typeof v === 'string' ? v : (v?.value ?? '')).filter(Boolean).join(', ');
+            else if (raw && raw.value !== undefined && raw.value !== null) value = String(raw.value);
+            const display = value || 'Unknown';
+            html += `
+                <div class="rpg-dashboard rpg-dashboard-row-extra">
+                    <div class="rpg-dashboard-widget rpg-extra-widget">
+                        <div class="rpg-extra-icon">${escapeHtml(field.icon)}</div>
+                        <div class="rpg-extra-label">${escapeHtml(field.label)}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${escapeAttr(field.key)}" title="Click to edit">${escapeHtml(display)}</div>
                     </div>
                 </div>
             `;
@@ -368,15 +377,11 @@ export function renderInfoBox() {
         // Parse Recent Events from infoBox (supports both JSON and text formats)
         let recentEvents = [];
         if (infoBoxData) {
-            // Try JSON format first
-            try {
-                const parsed = typeof infoBoxData === 'string'
-                    ? JSON.parse(infoBoxData)
-                    : infoBoxData;
-                if (parsed && Array.isArray(parsed.recentEvents)) {
-                    recentEvents = parsed.recentEvents;
-                }
-            } catch (e) {
+            // Try JSON format first (memoized shared parse — read-only)
+            const parsed = parseTrackerJson(infoBoxData);
+            if (parsed && Array.isArray(parsed.recentEvents)) {
+                recentEvents = parsed.recentEvents;
+            } else if (parsed === null && typeof infoBoxData === 'string') {
                 // Fall back to old text format
                 const recentEventsLine = infoBoxData.split('\n').find(line => line.startsWith('Recent Events:'));
                 if (recentEventsLine) {
@@ -392,11 +397,9 @@ export function renderInfoBox() {
         if (validEvents.length === 0) {
             validEvents.push('Click to add event');
         }
-        const eventsLockIconHtml = getLockIconHtml('infoBox', 'recentEvents');
         html += `
             <div class="rpg-dashboard rpg-dashboard-row-3">
                 <div class="rpg-dashboard-widget rpg-events-widget">
-                    ${eventsLockIconHtml}
                     <div class="rpg-notebook-header">
                         <div class="rpg-notebook-ring"></div>
                         <div class="rpg-notebook-ring"></div>
@@ -410,7 +413,7 @@ export function renderInfoBox() {
             html += `
                         <div class="rpg-notebook-line">
                             <span class="rpg-bullet">•</span>
-                            <span class="rpg-event-text rpg-editable" contenteditable="true" data-field="event${i + 1}" title="Click to edit">${validEvents[i]}</span>
+                            <span class="rpg-event-text rpg-editable" contenteditable="true" data-field="event${i + 1}" title="Click to edit">${escapeHtml(validEvents[i])}</span>
                         </div>
             `;
         }
@@ -520,6 +523,9 @@ export function updateInfoBoxField(field, value) {
                 jsonData.conditions = value;
             } else if (field === 'terrain') {
                 jsonData.terrain = value;
+            } else if (field && getCustomSceneFields().some(f => f.key === field)) {
+                // User-defined custom scene fields store flat values under their snake_case key
+                jsonData[field] = value;
             }
             // Save back as JSON
             lastGeneratedData.infoBox = JSON.stringify(jsonData, null, 2);

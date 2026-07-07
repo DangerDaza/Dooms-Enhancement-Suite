@@ -18,6 +18,8 @@ import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/ava
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -62,10 +64,6 @@ function unbindThoughtPanelScroll() {
 /** Cache key for skipping redundant renderThoughts() calls */
 let _lastThoughtsDataKey = null;
 
-/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
-function getLockIconHtml(_tracker, _path) {
-    return '';
-}
 /**
  * Helper to log to both console and debug logs array
  */
@@ -328,11 +326,12 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     debugLog('[RPG Thoughts] Enabled custom fields:', enabledFields.map(f => f.name));
     debugLog('[RPG Thoughts] Enabled character stats:', enabledCharStats.map(s => s.name));
     let presentCharacters = [];
-    // Try parsing as JSON first (new format)
+    // Try parsing as JSON first (new format). parseTrackerJson memoizes on
+    // string identity and returns null for non-JSON, which throws on the
+    // property access below and lands in the legacy text-format catch —
+    // same flow as JSON.parse throwing. Result is shared: read-only.
     try {
-        const parsed = typeof characterThoughtsData === 'string'
-            ? JSON.parse(characterThoughtsData)
-            : characterThoughtsData;
+        const parsed = parseTrackerJson(characterThoughtsData);
         // Handle both {characters: [...]} and direct array formats
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
@@ -592,21 +591,26 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 }
                 debugLog(`[RPG Thoughts] Building HTML card for ${char.name}...`);
 
+                // Escaped once here; templates below must only use these escaped locals.
+                const nameAttr = escapeAttr(char.name);
+                const nameText = escapeHtml(char.name);
+                const emojiText = escapeHtml(char.emoji);
+
                 // ── FRONT FACE (existing card, wrapped in flipper) ──
                 html += `
-                    <div class="rpg-card-flipper" data-character-name="${char.name}">
+                    <div class="rpg-card-flipper" data-character-name="${nameAttr}">
                     <div class="rpg-card-inner">
                     <div class="rpg-card-front rpg-character-card">
                         <div class="rpg-character-header-row">
-                            <div class="rpg-character-avatar" data-character="${char.name}" title="Click to flip card">
-                                <img src="${characterPortrait}" alt="${char.name}" onerror="this.style.opacity='0.5';this.onerror=null;" />
+                            <div class="rpg-character-avatar" data-character="${nameAttr}" title="Click to flip card">
+                                <img src="${escapeAttr(characterPortrait)}" alt="${nameAttr}" onerror="this.style.opacity='0.5';this.onerror=null;" />
                                 <button class="rpg-avatar-upload-btn" title="Upload avatar">📷</button>
-                                ${hasRelationshipEnabled ? `<div class="rpg-relationship-badge rpg-editable" contenteditable="true" data-character="${char.name}" data-field="${relationshipFieldName}" title="Click to edit (use emoji: ⚔️ ⚖️ ⭐ ❤️)">${relationshipBadge}</div>` : ''}
+                                ${hasRelationshipEnabled ? `<div class="rpg-relationship-badge rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="${escapeAttr(relationshipFieldName)}" title="Click to edit (use emoji: ⚔️ ⚖️ ⭐ ❤️)">${escapeHtml(relationshipBadge)}</div>` : ''}
                             </div>
                             <div class="rpg-character-header">
-                                <span class="rpg-character-emoji rpg-editable" contenteditable="true" data-character="${char.name}" data-field="emoji" title="Click to edit emoji">${char.emoji}</span>
-                                <span class="rpg-character-name rpg-editable" contenteditable="true" data-character="${char.name}" data-field="name" title="Click to edit name">${char.name}</span>
-                                <button class="rpg-character-remove" data-character="${char.name}" title="Remove character">×</button>
+                                <span class="rpg-character-emoji rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="emoji" title="Click to edit emoji">${emojiText}</span>
+                                <span class="rpg-character-name rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="name" title="Click to edit name">${nameText}</span>
+                                <button class="rpg-character-remove" data-character="${nameAttr}" title="Remove character">×</button>
                             </div>
                         </div>
                         <div class="rpg-character-content">
@@ -615,25 +619,24 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 // Render custom fields dynamically
                 for (const field of enabledFields) {
                     const rawValue = char[field.name];
-                    const fieldValue = extractFieldValue(rawValue);
-                    const fieldId = field.name.toLowerCase().replace(/\s+/g, '-');
+                    const fieldValue = escapeHtml(extractFieldValue(rawValue));
+                    const fieldId = escapeAttr(field.name.toLowerCase().replace(/\s+/g, '-'));
                     const fieldNameLower = field.name.toLowerCase();
+                    const fieldNameAttr = escapeAttr(field.name);
                     // Skip lock icons for thoughts field
                     const showLock = !fieldNameLower.includes('thought');
                     // Add placeholder for empty fields
-                    const placeholder = fieldValue ? '' : `data-placeholder="${field.name}"`;
+                    const placeholder = fieldValue ? '' : `data-placeholder="${fieldNameAttr}"`;
                     const emptyClass = fieldValue ? '' : ' rpg-empty-field';
                     if (showLock) {
-                        const lockIconHtml = getLockIconHtml('characters', `${char.name}.${field.name}`);
                         html += `
                                 <div class="rpg-character-field rpg-character-${fieldId}" style="position: relative;">
-                                    ${lockIconHtml}
-                                    <span class="rpg-editable${emptyClass}" contenteditable="true" data-character="${char.name}" data-field="${field.name}" title="Click to edit ${field.name}" ${placeholder}>${fieldValue}</span>
+                                    <span class="rpg-editable${emptyClass}" contenteditable="true" data-character="${nameAttr}" data-field="${fieldNameAttr}" title="Click to edit ${fieldNameAttr}" ${placeholder}>${fieldValue}</span>
                                 </div>
                         `;
                     } else {
                         html += `
-                                <div class="rpg-character-field rpg-character-${fieldId} rpg-editable${emptyClass}" contenteditable="true" data-character="${char.name}" data-field="${field.name}" title="Click to edit ${field.name}" ${placeholder}>${fieldValue}</div>
+                                <div class="rpg-character-field rpg-character-${fieldId} rpg-editable${emptyClass}" contenteditable="true" data-character="${nameAttr}" data-field="${fieldNameAttr}" title="Click to edit ${fieldNameAttr}" ${placeholder}>${fieldValue}</div>
                         `;
                     }
                 }
@@ -642,15 +645,14 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 `;
                 // Render character stats if enabled (outside rpg-character-info)
                 if (enabledCharStats.length > 0) {
-                    const lockIconHtml = getLockIconHtml('characters', `${char.name}.stats`);
                     html += `<div class="rpg-character-stats" style="position: relative;">
-                        <span class="rpg-section-lock-icon" style="position: absolute; top: 4px; right: 4px; font-size: 1rem; z-index: 10; opacity: 0.7; pointer-events: auto;">${lockIconHtml}</span>
                         <div class="rpg-character-stats-inner">`;
                     for (const stat of enabledCharStats) {
-                        const statValue = char[stat.name] || 0;
+                        const statValue = escapeHtml(char[stat.name] || 0);
+                        const statNameAttr = escapeAttr(stat.name);
                         html += `
                                 <div class="rpg-character-stat">
-                                    <span class="rpg-stat-name">${stat.name}: </span><span class="rpg-editable" contenteditable="true" data-character="${char.name}" data-field="${stat.name}" title="Click to edit ${stat.name}">${statValue}%</span>
+                                    <span class="rpg-stat-name">${escapeHtml(stat.name)}: </span><span class="rpg-editable" contenteditable="true" data-character="${nameAttr}" data-field="${statNameAttr}" title="Click to edit ${statNameAttr}">${statValue}%</span>
                                 </div>
                         `;
                     }
@@ -661,13 +663,13 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     </div>
                 `;
                 // ── BACK FACE (read-only detail sheet) ──
-                const thoughtsContent = char.ThoughtsContent || '';
-                const relationshipText = char.Relationship || '';
+                const thoughtsContent = escapeHtml(char.ThoughtsContent || '');
+                const relationshipText = escapeHtml(char.Relationship || '');
                 html += `
                     <div class="rpg-card-back">
                         <div class="rpg-card-back-header">
-                            <span class="rpg-card-back-emoji">${char.emoji}</span>
-                            <span class="rpg-card-back-name">${char.name}</span>
+                            <span class="rpg-card-back-emoji">${emojiText}</span>
+                            <span class="rpg-card-back-name">${nameText}</span>
                             <span class="rpg-card-back-flip-hint"><i class="fa-solid fa-rotate-left"></i></span>
                         </div>
                         <div class="rpg-card-back-body">
@@ -693,10 +695,10 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 // All custom fields with labels
                 for (const field of enabledFields) {
                     const rawVal = char[field.name];
-                    const val = extractFieldValue(rawVal);
+                    const val = escapeHtml(extractFieldValue(rawVal));
                     html += `
                             <div class="rpg-card-back-section">
-                                <span class="rpg-card-back-label">${field.name}</span>
+                                <span class="rpg-card-back-label">${escapeHtml(field.name)}</span>
                                 <span class="rpg-card-back-value${val ? '' : ' rpg-card-back-empty'}">${val || 'Not set'}</span>
                             </div>
                     `;
@@ -705,10 +707,10 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 if (enabledCharStats.length > 0) {
                     html += `<div class="rpg-card-back-stats">`;
                     for (const stat of enabledCharStats) {
-                        const sv = char[stat.name] || 0;
+                        const sv = escapeHtml(char[stat.name] || 0);
                         html += `
                                 <div class="rpg-card-back-stat">
-                                    <span class="rpg-card-back-stat-name">${stat.name}</span>
+                                    <span class="rpg-card-back-stat-name">${escapeHtml(stat.name)}</span>
                                     <div class="rpg-card-back-stat-bar">
                                         <div class="rpg-card-back-stat-fill" style="width: ${sv}%;"></div>
                                     </div>
@@ -1448,11 +1450,9 @@ function parseThoughtsArray() {
     let thoughtsArray = [];
     const thoughtsConfig = extensionSettings.trackerConfig?.presentCharacters?.thoughts;
     const thoughtsLabel = thoughtsConfig?.name || 'Thoughts';
-    // Try JSON format first
+    // Try JSON format first (memoized shared parse: read-only result)
     try {
-        const parsed = typeof lastGeneratedData.characterThoughts === 'string'
-            ? JSON.parse(lastGeneratedData.characterThoughts)
-            : lastGeneratedData.characterThoughts;
+        const parsed = parseTrackerJson(lastGeneratedData.characterThoughts);
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
             const offScene = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
@@ -1833,10 +1833,10 @@ export function createThoughtPanel($message, thoughtsArray) {
         thoughtsHtml += `
             <div class="rpg-thought-item">
                 <div class="rpg-thought-emoji-box">
-                    ${thought.emoji}
+                    ${escapeHtml(thought.emoji)}
                 </div>
-                <div class="rpg-thought-content rpg-editable" contenteditable="true" data-character="${thought.name}" data-field="thoughts" title="Click to edit thoughts">
-                    ${thought.thought}
+                <div class="rpg-thought-content rpg-editable" contenteditable="true" data-character="${escapeAttr(thought.name)}" data-field="thoughts" title="Click to edit thoughts">
+                    ${escapeHtml(thought.thought)}
                 </div>
             </div>
         `;

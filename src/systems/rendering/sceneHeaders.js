@@ -13,6 +13,9 @@
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { getDoomCounterState, getActiveCharacterColors, saveSettings } from '../../core/persistence.js';
+import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
+import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { chat } from '../../../../../../../script.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
@@ -474,6 +477,10 @@ function injectSceneTransitions() {
         }
 
         const infoBox = swipeData?.infoBox;
+        // Plain parse, NOT the shared memo cache: each message's swipe blob is a
+        // distinct one-shot string, so routing them through the small FIFO cache
+        // would evict the hot lastGeneratedData/committedTrackerData entries the
+        // other renderers rely on and defeat the memoization.
         let parsedInfoBox = infoBox;
         if (typeof infoBox === 'string') {
             try { parsedInfoBox = JSON.parse(infoBox); } catch { parsedInfoBox = null; }
@@ -533,6 +540,7 @@ export function updateChatSceneHeaders() {
         sceneData.recentEvents || sceneData.activeQuest ||
         sceneData.moonPhase || sceneData.tension || sceneData.timeSinceRest ||
         sceneData.conditions || sceneData.terrain ||
+        sceneData.customFields.length > 0 ||
         sceneData.presentCharacters.length > 0;
     if (!hasAnyData) {
         removeAllSceneElements();
@@ -648,6 +656,7 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
         terrain: '',
         weather: '',
         doomTension: null,
+        customFields: [],
         presentCharacters: [],
         activeQuest: '',
         recentEvents: ''
@@ -655,7 +664,9 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
     // --- Parse Info Box ---
     if (infoBoxData) {
         try {
-            const info = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+            // Memoized shared parse — read-only. Null (non-JSON) throws on the
+            // first property access below and lands in the legacy-text catch.
+            const info = parseTrackerJson(infoBoxData);
             // Time — handle nested object {start, end} or {value} or flat string
             if (info.time) {
                 if (typeof info.time === 'string') {
@@ -733,6 +744,25 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
                         : info.recentEvents.events;
                 }
             }
+            // User-defined custom scene fields — values live at the top level
+            // under the snake_case key derived from the field name.
+            for (const field of getCustomSceneFields()) {
+                const raw = info[field.key];
+                if (raw === undefined || raw === null) continue;
+                let value = '';
+                if (typeof raw === 'string') {
+                    value = raw;
+                } else if (typeof raw === 'number' || typeof raw === 'boolean') {
+                    value = String(raw);
+                } else if (Array.isArray(raw)) {
+                    value = raw.map(v => typeof v === 'string' ? v : (v?.value ?? '')).filter(Boolean).join(', ');
+                } else if (raw.value !== undefined && raw.value !== null) {
+                    value = String(raw.value);
+                }
+                if (value) {
+                    result.customFields.push({ key: field.key, label: field.label, icon: field.icon, value });
+                }
+            }
         } catch (e) {
             // Try legacy text format
             if (typeof infoBoxData === 'string') {
@@ -754,9 +784,7 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
     const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
     if (characterThoughtsData) {
         try {
-            const parsed = typeof characterThoughtsData === 'string'
-                ? JSON.parse(characterThoughtsData)
-                : characterThoughtsData;
+            const parsed = parseTrackerJson(characterThoughtsData);
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
             result.presentCharacters = characters
                 .filter(char => {
@@ -895,6 +923,16 @@ function createSceneHeaderHTML(data) {
             </div>
         `);
     }
+    // User-defined custom scene fields
+    for (const cf of data.customFields) {
+        rows.push(`
+            <div class="dooms-scene-row">
+                <span class="dooms-cf-icon">${escapeHtml(cf.icon)}</span>
+                <span class="dooms-scene-label">${escapeHtml(cf.label)}:</span>
+                <span class="dooms-scene-value">${escapeHtml(cf.value)}</span>
+            </div>
+        `);
+    }
     // Present Characters
     if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
         const badges = data.presentCharacters.map(c =>
@@ -1010,6 +1048,13 @@ function createBannerHTML(data) {
             <i class="fa-solid fa-tree"></i>
             <span class="dooms-ip-label">Terrain:</span>
             <span class="dooms-ip-value">${escapeHtml(data.terrain)}</span>
+        </div>`);
+    }
+    for (const cf of data.customFields) {
+        items.push(`<div class="dooms-ip-item">
+            <span class="dooms-cf-icon">${escapeHtml(cf.icon)}</span>
+            <span class="dooms-ip-label">${escapeHtml(cf.label)}:</span>
+            <span class="dooms-ip-value">${escapeHtml(cf.value)}</span>
         </div>`);
     }
 
@@ -1137,6 +1182,13 @@ function createHudHTML(data) {
             <span class="dooms-ip-hud-value">${escapeHtml(data.terrain)}</span>
         </div>`);
     }
+    for (const cf of data.customFields) {
+        rows.push(`<div class="dooms-ip-hud-row">
+            <span class="dooms-cf-icon">${escapeHtml(cf.icon)}</span>
+            <span class="dooms-ip-hud-label">${escapeHtml(cf.label)}</span>
+            <span class="dooms-ip-hud-value">${escapeHtml(cf.value)}</span>
+        </div>`);
+    }
 
     // Characters
     if (data.presentCharacters.length > 0 && st.showCharacters !== false) {
@@ -1251,6 +1303,11 @@ function createTickerHTML(data) {
             <i class="fa-solid fa-tree"></i> ${escapeHtml(trunc(data.terrain))}
         </span>`);
     }
+    for (const cf of data.customFields) {
+        tickerItems.push(`<span class="dooms-ip-ticker-item">
+            <span class="dooms-cf-icon">${escapeHtml(cf.icon)}</span> ${escapeHtml(trunc(cf.value))}
+        </span>`);
+    }
     if (data.activeQuest && st.showQuest !== false) {
         tickerItems.push(`<span class="dooms-ip-ticker-item dooms-ip-ticker-quest">
             <i class="fa-solid fa-scroll"></i> ${escapeHtml(trunc(data.activeQuest))}
@@ -1339,6 +1396,13 @@ function createTickerHTML(data) {
             <i class="fa-solid fa-heart-crack"></i>
             <span class="dooms-ip-panel-label">Conditions</span>
             <span class="dooms-ip-panel-value">${escapeHtml(data.conditions)}</span>
+        </div>`);
+    }
+    for (const cf of data.customFields) {
+        compactRows.push(`<div class="dooms-ip-panel-row">
+            <span class="dooms-cf-icon">${escapeHtml(cf.icon)}</span>
+            <span class="dooms-ip-panel-label">${escapeHtml(cf.label)}</span>
+            <span class="dooms-ip-panel-value">${escapeHtml(cf.value)}</span>
         </div>`);
     }
 
@@ -1516,17 +1580,3 @@ function buildDoomCounterBadge(doomTension) {
 //  Utility
 // ─────────────────────────────────────────────
 
-/**
- * Simple HTML escape to prevent XSS from AI-generated content.
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-    if (!str) return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}

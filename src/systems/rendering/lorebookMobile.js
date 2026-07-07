@@ -8,6 +8,7 @@ import { saveSettings } from '../../core/persistence.js';
 import * as lorebookAPI from '../lorebook/lorebookAPI.js';
 import * as campaignManager from '../lorebook/campaignManager.js';
 import { getLorebookModal } from '../ui/lorebookModal.js';
+import { escapeHtml } from '../../utils/html.js';
 
 // ─── Icon Palette ────────────────────────────────────────────────────────────
 
@@ -71,17 +72,6 @@ function buildIconPickerHtml(campaignId, currentIcon, currentColor) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Escapes a string for safe HTML insertion
- * @param {string} text - Raw text to escape
- * @returns {string} HTML-safe string
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 /** @type {ReturnType<typeof setTimeout>|null} */
 let saveDebounceTimer = null;

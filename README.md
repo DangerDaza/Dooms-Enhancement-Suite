@@ -29,7 +29,9 @@ A horizontal card shelf displaying character portraits between the chat and inpu
 
 Each character gets their own card with an avatar — custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out.
 
-Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen).
+Right-click any portrait to open the Character Workshop (where custom images, dialogue colors, and knives are managed), open their character sheet, cancel a pending inject, or remove the character from the scene.
+
+NPCs support **Aliases** (Character Workshop → Identity): other names the AI might use for the same character — like a revealed full name ("Sarah Greenfield" for "Sarah"), a nickname, or a title. Tracker data using an alias resolves to the existing card instead of spawning a duplicate character, while the AI stays free to use the alias in prose. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen).
 
 Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts. Per-chat character tracking is available — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
 <img width="1443" height="372" alt="image" src="https://github.com/user-attachments/assets/91039d6c-0e98-4fb2-953e-e7195230a7a4" />
@@ -51,6 +53,8 @@ Compact scene info blocks injected after assistant messages in chat. Displays ti
 - **Banner** — horizontal strip after the last message
 - **HUD (Floating Panel)** — frosted-glass panel, fully draggable with position persistence
 - **Ticker** — collapsible bar pinned to top or bottom of chat
+
+Beyond the built-in fields, you can define your own **custom scene fields** (Tracker Editor → Scene Tracker → Custom Scene Fields). Each field has a name, an emoji icon, and an AI instruction describing what to track — the AI fills it in with every response and it renders in all Scene Tracker layouts alongside the built-in fields. Custom fields support inline editing in the Scene Tracker panel and can be included in History Persistence.
 <img width="1426" height="357" alt="image" src="https://github.com/user-attachments/assets/7d4ab31e-2fd0-4f70-ab0f-6a85665b166e" />
 
 ### Dynamic Weather Effects
@@ -74,6 +78,18 @@ A tension-driven plot twist system that keeps your story from stagnating. The AI
 - Lower tension = faster countdown (tension 1 drops by 3, tension 2 by 2)
 - At zero, a modal appears with twist options generated from your current scene context
 - Select a twist and it's injected into the next AI generation, then counters reset
+
+**Knives — every character carries their own twists:**
+
+Instead of relying on AI-generated twists, you can attach pre-written story beats — **Knives** — to any character in the **Character Workshop** (right-click a portrait → Character Workshop → 🔪 Knives tab). Example: your character David is in Chicago, and one of his knives is *"David is a gambling addict — he owes a lot of money to the wrong people."* When the counter strikes, **one character currently in the scene** (including your own persona) is chosen at random from those holding armed knives, and *their* knives are offered as cards instead of generated twists. Pick one and the AI weaves its consequences into the next scene.
+
+- Knives travel with the character across chats; both NPCs and user personas can carry them
+- Out of ideas? **Generate Knives** lets you pick a theme — Mixed, Betrayal, Enemies, Debts, Old Flames, Secrets, Regrets, or Fortune — and your AI suggests 5 knives in that vein, grounded in the character and current chat. Tick the ones worth keeping
+- Turn the system on per story with **Settings → Doom Counter → Enable Knives (this chat)**
+- Only one character's knives surface per trigger — you won't know whose until the counter strikes
+- A chosen knife is marked *used* so it isn't offered twice — re-arm it in the Workshop to put it back in rotation
+- A "Generate twists instead" button on the knife picker falls back to AI-generated twists
+- In Trap Mode, a random armed knife from a random present character is injected silently — you won't see it coming
 
 **Configurable settings:**
 - **Low Tension Ceiling** (2–6) — what counts as "too calm"

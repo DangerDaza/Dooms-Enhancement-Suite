@@ -445,7 +445,7 @@ export function parseQuests(questsText) {
         debugLog('[RPG Parser] ERROR:', error.message);
     }
 }
-// NOTE: parseUserStats() has been archived to src/archived/archived-features-userstats.js
+// NOTE: parseUserStats() has been removed (see git history)
 /**
  * Helper: Extract code blocks from text
  * @param {string} text - Text containing markdown code blocks

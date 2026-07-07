@@ -185,7 +185,6 @@ function buildDiagnosticHeader() {
         lines.push(`historyPersistence.enabled: ${s.historyPersistence?.enabled}`);
         lines.push(`historyPersistence.injectionPosition: ${s.historyPersistence?.injectionPosition || '(unset)'}`);
         lines.push(`historyPersistence.contextPreamble: ${JSON.stringify(s.historyPersistence?.contextPreamble || '')}`);
-        lines.push(`nameBan.enabled: ${s.nameBan?.enabled}`);
         lines.push(`doomCounter.enabled: ${s.doomCounter?.enabled}`);
         lines.push(`theme: ${s.theme || '(unset)'}`);
         lines.push(`activeUserCharacter: ${s.activeUserCharacter || '(none)'}`);

@@ -13,7 +13,7 @@
  * roster actions; portrait upload + dialogue color editing live in the
  * Workshop now.
  */
-import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel, addDebugLog } from '../../core/state.js';
 import { extensionFolderPath } from '../../core/config.js';
 import { saveSettings, getActiveKnownCharacters, getActiveRemovedCharacters, getActiveCharacterColors, saveCharacterRosterChange } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
@@ -23,8 +23,17 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
+import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
+
+/** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
+function debugLog(message, data = null) {
+    if (extensionSettings.debugMode) {
+        addDebugLog(message, data);
+    }
+}
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -500,7 +509,7 @@ function renderPortraitBarNow() {
         const absentClass = char.present ? '' : ' dooms-pb-absent';
         const userClass = char.isUser ? ' dooms-pb-user' : '';
         const nameEsc = escapeHtml(char.name);
-        const emoji = char.emoji || '👤';
+        const emoji = escapeHtml(char.emoji || '👤');
         const absentOverlay = char.present ? '' : '<div class="dooms-pb-absent-overlay"></div>';
         // For user characters, prefer the color stored on userCharacters
         // over any AI-assigned dialogue color.
@@ -510,13 +519,13 @@ function renderPortraitBarNow() {
             if (uc && uc.color) charColor = uc.color;
         }
         const colorDot = charColor
-            ? `<span class="dooms-portrait-card-color-dot" style="background:${charColor};"></span>`
+            ? `<span class="dooms-portrait-card-color-dot" style="background:${escapeHtml(charColor)};"></span>`
             : '';
         const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
         let backFace = '';
         try {
-            backFace = buildPortraitBackFace(char.name, emoji);
+            backFace = buildPortraitBackFace(char.name, emoji, char.details);
         } catch (e) {
             console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
         }
@@ -885,7 +894,7 @@ async function probePortraitFileUrl(name, basePath) {
             if (response.ok) {
                 portraitFileCache.set(name, testUrl);
                 // Update DOM if the card is still showing the optimistic .png
-                const $img = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"] img`);
+                const $img = $(`.dooms-portrait-card[data-char="${escapeJsString(name)}"] img`);
                 if ($img.length && $img.attr('src') !== testUrl) {
                     $img.attr('src', testUrl);
                 }
@@ -906,7 +915,7 @@ async function probePortraitFileUrl(name, basePath) {
 
     // If no npcAvatar either, show emoji fallback
     if (!(extensionSettings.npcAvatars && extensionSettings.npcAvatars[name])) {
-        const $card = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"]`);
+        const $card = $(`.dooms-portrait-card[data-char="${escapeJsString(name)}"]`);
         if ($card.length && $card.find('img').length) {
             const $img = $card.find('img');
             $img.hide();
@@ -1166,14 +1175,16 @@ export function getCharacterList() {
 
     if (data) {
         try {
-            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            // Memoized shared parse — read-only. Null (non-JSON) throws on the
+            // property access below and lands in the legacy-text catch.
+            const parsed = parseTrackerJson(data);
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
             presentChars = characters
                 .filter(c => {
                     // Filter out characters whose thoughts indicate they're off-scene
                     const thoughts = c.thoughts?.content || c.thoughts || '';
                     if (thoughts && offScenePatterns.test(thoughts)) {
-                        console.log(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
+                        debugLog(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
                         return false;
                     }
                     return true;
@@ -1181,7 +1192,10 @@ export function getCharacterList() {
                 .map(c => ({
                     name: c.name || 'Unknown',
                     emoji: c.emoji || '👤',
-                    present: true
+                    present: true,
+                    // Full parsed record (read-only), so per-card rendering
+                    // doesn't need a per-character getCharacterDetails lookup.
+                    details: c
                 }));
         } catch (e) {
             if (typeof data === 'string') {
@@ -1203,13 +1217,13 @@ export function getCharacterList() {
     const beforeRemoval = presentChars.length;
     presentChars = presentChars.filter(c => {
         if (removedLower.has(c.name.toLowerCase())) {
-            console.log(`[Dooms Portrait Bar] Filtered removed character: ${c.name}`);
+            debugLog(`[Dooms Portrait Bar] Filtered removed character: ${c.name}`);
             return false;
         }
         return true;
     });
     if (beforeRemoval !== presentChars.length) {
-        console.log(`[Dooms Portrait Bar] removedCharacters list:`, removed);
+        debugLog(`[Dooms Portrait Bar] removedCharacters list:`, removed);
     }
 
     // Update the persistent known-characters roster
@@ -1367,18 +1381,12 @@ function sanitizeFilename(name) {
     return name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    if (typeof str !== 'string') str = String(str);
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function escapeAttr(str) {
+/**
+ * Escapes a string for embedding inside a double-quoted jQuery selector
+ * (JS-string escaping, NOT HTML entities). Not an HTML attribute escaper —
+ * use escapeHtml/escapeAttr from utils/html.js for attribute contexts.
+ */
+function escapeJsString(str) {
     if (!str) return '';
     return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -1391,7 +1399,9 @@ function getCharacterDetails(charName) {
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (!data) return null;
     try {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        // Memoized shared parse — the same blob getCharacterList parsed is a
+        // cache hit here, so this is no longer a full re-parse per character.
+        const parsed = parseTrackerJson(data);
         const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         return characters.find(c => c.name === charName) || null;
     } catch (e) {
@@ -1404,8 +1414,10 @@ function getCharacterDetails(charName) {
  * Shows relationship status, appearance, demeanor, and other key character info.
  * Thoughts are omitted here since they're shown in the sidebar Thoughts panel.
  */
-function buildPortraitBackFace(charName, emoji) {
-    const details = getCharacterDetails(charName);
+function buildPortraitBackFace(charName, emoji, details = null) {
+    // Absent-but-known characters carry no parsed record; fall back to the
+    // (memoized) tracker-data lookup for them.
+    details = details || getCharacterDetails(charName);
     const nameEsc = escapeHtml(charName);
 
     let sectionsHtml = '';

@@ -26,11 +26,43 @@ function toSnakeCase(name) {
  * @param {string} name - Field name, possibly with parenthetical description
  * @returns {string} snake_case key from the base name only
  */
-function toFieldKey(name) {
+export function toFieldKey(name) {
     const baseName = name.replace(/\s*\(.*\)\s*$/, '').trim();
     return toSnakeCase(baseName);
 }
-// NOTE: buildUserStatsJSONInstruction() has been archived to src/archived-features-userstats.js
+/**
+ * Built-in infoBox JSON keys that user-defined custom scene fields must not shadow.
+ * A custom field named e.g. "Tension" would otherwise collide with the built-in key.
+ */
+const RESERVED_INFOBOX_KEYS = ['date', 'time', 'location', 'weather', 'temperature', 'recentEvents', 'moonPhase', 'tension', 'timeSinceRest', 'conditions', 'terrain', 'doomTension'];
+/**
+ * Returns the enabled user-defined custom scene fields with their resolved JSON keys.
+ * Filters out fields with empty/reserved/duplicate keys so prompt, rendering, and
+ * history persistence all agree on exactly which fields exist.
+ *
+ * @returns {Array<{key: string, name: string, label: string, icon: string, description: string, persistInHistory: boolean}>}
+ */
+export function getCustomSceneFields() {
+    const fields = extensionSettings.trackerConfig?.infoBox?.customFields || [];
+    const seen = new Set(RESERVED_INFOBOX_KEYS);
+    const result = [];
+    for (const field of fields) {
+        if (!field || !field.enabled || !field.name) continue;
+        const key = toFieldKey(field.name);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        result.push({
+            key,
+            name: field.name,
+            label: field.name.replace(/\s*\(.*\)\s*$/, '').trim(),
+            icon: field.icon || '✨',
+            description: field.description || field.name,
+            persistInHistory: field.persistInHistory === true
+        });
+    }
+    return result;
+}
+// NOTE: buildUserStatsJSONInstruction() has been removed (see git history)
 // User stats (Health, Satiety, Energy, Hygiene, Arousal), mood/status, RPG attributes,
 // skills, and inventory have been removed. Quests are now a top-level tracker.
 
@@ -123,6 +155,12 @@ export function buildInfoBoxJSONInstruction() {
         instruction += (hasFields ? ',\n' : '') + (compact
             ? '  "terrain": "Terrain/environment type, e.g. \\"Dense Forest\\""'
             : '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"');
+        hasFields = true;
+    }
+    // User-defined custom scene fields
+    for (const field of getCustomSceneFields()) {
+        const desc = field.description.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        instruction += (hasFields ? ',\n' : '') + `  "${field.key}": "${desc}"`;
         hasFields = true;
     }
     // Doom Counter: inject numeric tension scale (1-10) for automated tension tracking

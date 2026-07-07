@@ -4,6 +4,7 @@
  */
 import { i18n } from '../../core/i18n.js';
 import { extensionSettings } from '../../core/state.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import {
     saveSettings,
     getPresets,
@@ -29,6 +30,29 @@ import {
 } from '../../core/persistence.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts } from '../rendering/thoughts.js';
+import { applySceneTrackerSettings, updateChatSceneHeaders } from '../rendering/sceneHeaders.js';
+// Info Box widget key → Scene Tracker show-flag. Both express "is this field
+// on"; the editor edits the widget half and syncs the show-flag half on Save.
+const WIDGET_SHOW_KEYS = {
+    date: 'showDate',
+    time: 'showTime',
+    location: 'showLocation',
+    recentEvents: 'showRecentEvents',
+    weather: 'showWeather',
+    moonPhase: 'showMoonPhase',
+    tension: 'showTension',
+    timeSinceRest: 'showTimeSinceRest',
+    conditions: 'showConditions',
+    terrain: 'showTerrain',
+};
+// Widget key → DOM id suffix (the editor checkbox is #rpg-widget-<suffix>,
+// the Scene Tracker panel checkbox is #rpg-st-show-<suffix>).
+const WIDGET_DOM_SUFFIX = {
+    date: 'date', time: 'time', location: 'location', recentEvents: 'events',
+    weather: 'weather', moonPhase: 'moonphase', tension: 'tension',
+    timeSinceRest: 'timesincerest', conditions: 'conditions', terrain: 'terrain',
+};
+
 let $editorModal = null;
 let activeTab = 'infoBox';
 let tempConfig = null; // Temporary config for cancel functionality
@@ -51,6 +75,13 @@ export function initTrackerEditor() {
         activeTab = $(this).data('tab');
         $('.rpg-editor-tab-content').hide();
         $(`#rpg-editor-tab-${activeTab}`).show();
+        // Re-render History Persistence on activation — its per-field toggles
+        // carry array indices captured at render time, which go stale when
+        // custom fields are added/removed/reordered in the other tabs (those
+        // tabs only re-render themselves).
+        if (activeTab === 'historyPersistence') {
+            renderHistoryPersistenceTab();
+        }
     });
     // Save button
     $(document).on('click', '#rpg-editor-save', function() {
@@ -192,7 +223,7 @@ function updatePresetUI() {
     for (const [id, preset] of Object.entries(presets)) {
         const isDefault = id === defaultPresetId;
         const starPrefix = isDefault ? '★ ' : '';
-        $select.append(`<option value="${id}">${starPrefix}${preset.name}</option>`);
+        $select.append(`<option value="${escapeAttr(id)}">${starPrefix}${escapeHtml(preset.name)}</option>`);
     }
     $select.val(activePresetId);
     // Update the default button appearance
@@ -279,9 +310,22 @@ function applyTrackerConfig() {
     } else {
         saveSettings();
     }
-    // Re-render all trackers with new config
+    // Sync the Scene Tracker show-flags from the (now-committed) widget states so
+    // the two panels agree. Done here rather than live on each editor toggle so a
+    // Cancel — which restores the trackerConfig snapshot — leaves sceneTracker
+    // untouched instead of stranding a half-applied change.
+    if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
+    const widgets = extensionSettings.trackerConfig?.infoBox?.widgets || {};
+    for (const [widgetKey, showKey] of Object.entries(WIDGET_SHOW_KEYS)) {
+        const enabled = widgets[widgetKey]?.enabled === true;
+        extensionSettings.sceneTracker[showKey] = enabled;
+        $(`#rpg-st-show-${WIDGET_DOM_SUFFIX[widgetKey]}`).prop('checked', enabled);
+    }
+    // Re-render all trackers with new config, scene headers included.
     renderInfoBox();
     renderThoughts();
+    applySceneTrackerSettings();
+    updateChatSceneHeaders();
 }
 /**
  * Reset configuration to defaults
@@ -305,7 +349,8 @@ function resetToDefaults() {
                 timeSinceRest: { enabled: false, persistInHistory: false },
                 conditions: { enabled: false, persistInHistory: false },
                 terrain: { enabled: false, persistInHistory: false }
-            }
+            },
+            customFields: []
         },
         presentCharacters: {
             showEmoji: true,
@@ -452,6 +497,17 @@ function migrateTrackerPreset(config) {
             }
         }
     }
+    // Ensure custom scene fields array exists on infoBox (added after presets shipped)
+    if (migrated.infoBox) {
+        if (!Array.isArray(migrated.infoBox.customFields)) {
+            migrated.infoBox.customFields = [];
+        } else {
+            migrated.infoBox.customFields = migrated.infoBox.customFields.map(field => ({
+                ...field,
+                persistInHistory: field.persistInHistory ?? false
+            }));
+        }
+    }
     return migrated;
 }
 /**
@@ -580,7 +636,7 @@ function renderEditorUI() {
     renderPresentCharactersTab();
     renderHistoryPersistenceTab();
 }
-// NOTE: renderUserStatsTab() and setupUserStatsListeners() archived to src/archived/archived-features-userstats.js
+// NOTE: renderUserStatsTab() and setupUserStatsListeners() removed (see git history)
 /**
  * Render Info Box configuration tab
  */
@@ -612,6 +668,11 @@ function renderInfoBoxTab() {
     html += `<input type="checkbox" id="rpg-widget-events" ${config.widgets.recentEvents.enabled ? 'checked' : ''}>`;
     html += `<label for="rpg-widget-events">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.recentEventsWidget')}</label>`;
     html += '</div>';
+    // Weather widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-weather" ${config.widgets.weather?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-weather">🌤️ ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.weatherWidget')}</label>`;
+    html += '</div>';
     // --- New optional fields ---
     html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;
     html += '<div class="rpg-editor-widget-row">';
@@ -634,6 +695,24 @@ function renderInfoBoxTab() {
     html += `<input type="checkbox" id="rpg-widget-terrain" ${config.widgets.terrain?.enabled ? 'checked' : ''}>`;
     html += `<label for="rpg-widget-terrain">🌿 Terrain <small style="opacity:0.6">(Dense Forest, City Streets…)</small></label>`;
     html += '</div>';
+    // --- Custom scene fields ---
+    const customFields = config.customFields || [];
+    html += `<h4 style="margin-top:10px"><i class="fa-solid fa-wand-magic-sparkles"></i> Custom Scene Fields</h4>`;
+    html += `<p class="rpg-editor-hint">Add your own fields to the Scene Tracker. The icon is shown next to the field; the AI instruction tells the model what to fill in each response.</p>`;
+    html += '<div class="rpg-editor-fields-list" id="rpg-infobox-custom-fields-list">';
+    customFields.forEach((field, index) => {
+        html += `
+            <div class="rpg-editor-field-item" data-index="${index}">
+                <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-infobox-field-toggle" data-index="${index}">
+                <input type="text" value="${escapeAttr(field.icon || '✨')}" class="rpg-infobox-field-icon" data-index="${index}" maxlength="4" title="Icon shown in the Scene Tracker" style="width: 44px; flex: 0 0 auto; text-align: center;">
+                <input type="text" value="${escapeAttr(field.name)}" class="rpg-infobox-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-infobox-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <button class="rpg-field-remove rpg-infobox-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    html += `<button class="rpg-btn-secondary" id="rpg-infobox-add-field"><i class="fa-solid fa-plus"></i> Add Custom Field</button>`;
     html += '</div>';
     $('#rpg-editor-tab-infoBox').html(html);
     setupInfoBoxListeners();
@@ -643,60 +722,53 @@ function renderInfoBoxTab() {
  */
 function setupInfoBoxListeners() {
     const widgets = extensionSettings.trackerConfig.infoBox.widgets;
-    $('#rpg-widget-date').off('change').on('change', function() {
-        widgets.date.enabled = $(this).is(':checked');
-    });
+    // Widget toggles only mutate the (snapshot-backed) trackerConfig here; the
+    // matching Scene Tracker show-flags are synced on Save via applyTrackerConfig.
+    // Writing sceneTracker live would escape the tempConfig transaction, so a
+    // Cancel couldn't revert it (leaving the two panels contradicting each other).
+    for (const widgetKey of Object.keys(WIDGET_SHOW_KEYS)) {
+        $(`#rpg-widget-${WIDGET_DOM_SUFFIX[widgetKey]}`).off('change').on('change', function() {
+            const v = $(this).is(':checked');
+            if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
+            widgets[widgetKey].enabled = v;
+        });
+    }
     $('#rpg-date-format').off('change').on('change', function() {
         widgets.date.format = $(this).val();
     });
-    $('#rpg-widget-time').off('change').on('change', function() {
-        widgets.time.enabled = $(this).is(':checked');
-    });
-    $('#rpg-widget-location').off('change').on('change', function() {
-        widgets.location.enabled = $(this).is(':checked');
-    });
-    $('#rpg-widget-events').off('change').on('change', function() {
-        widgets.recentEvents.enabled = $(this).is(':checked');
-    });
-    // Optional fields: also sync the Scene Tracker show-flag so both settings agree.
-    // The Scene Tracker toggle in the main panel and the widget checkbox here are the same concept.
-    const _syncSceneTracker = (showKey, checked) => {
-        if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
-        extensionSettings.sceneTracker[showKey] = checked;
-        // Mirror the UI checkbox in the Scene Tracker panel (if the panel is open)
-        const uiMap = {
-            showMoonPhase: '#rpg-st-show-moonphase',
-            showTension: '#rpg-st-show-tension',
-            showTimeSinceRest: '#rpg-st-show-timesincerest',
-            showConditions: '#rpg-st-show-conditions',
-            showTerrain: '#rpg-st-show-terrain',
-        };
-        if (uiMap[showKey]) $(uiMap[showKey]).prop('checked', checked);
+    // Custom scene fields
+    const ensureCustomFields = () => {
+        if (!Array.isArray(extensionSettings.trackerConfig.infoBox.customFields)) {
+            extensionSettings.trackerConfig.infoBox.customFields = [];
+        }
+        return extensionSettings.trackerConfig.infoBox.customFields;
     };
-    $('#rpg-widget-moonphase').off('change').on('change', function() {
-        if (!widgets.moonPhase) widgets.moonPhase = {};
-        widgets.moonPhase.enabled = $(this).is(':checked');
-        _syncSceneTracker('showMoonPhase', $(this).is(':checked'));
+    $('#rpg-infobox-add-field').off('click').on('click', function() {
+        ensureCustomFields().push({
+            id: 'scene_' + Date.now(),
+            name: 'New Field',
+            icon: '✨',
+            enabled: true,
+            description: 'Description for AI',
+            persistInHistory: false
+        });
+        renderInfoBoxTab();
     });
-    $('#rpg-widget-tension').off('change').on('change', function() {
-        if (!widgets.tension) widgets.tension = {};
-        widgets.tension.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTension', $(this).is(':checked'));
+    $('.rpg-infobox-field-remove').off('click').on('click', function() {
+        ensureCustomFields().splice($(this).data('index'), 1);
+        renderInfoBoxTab();
     });
-    $('#rpg-widget-timesincerest').off('change').on('change', function() {
-        if (!widgets.timeSinceRest) widgets.timeSinceRest = {};
-        widgets.timeSinceRest.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTimeSinceRest', $(this).is(':checked'));
+    $('.rpg-infobox-field-toggle').off('change').on('change', function() {
+        ensureCustomFields()[$(this).data('index')].enabled = $(this).is(':checked');
     });
-    $('#rpg-widget-conditions').off('change').on('change', function() {
-        if (!widgets.conditions) widgets.conditions = {};
-        widgets.conditions.enabled = $(this).is(':checked');
-        _syncSceneTracker('showConditions', $(this).is(':checked'));
+    $('.rpg-infobox-field-icon').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].icon = $(this).val().trim();
     });
-    $('#rpg-widget-terrain').off('change').on('change', function() {
-        if (!widgets.terrain) widgets.terrain = {};
-        widgets.terrain.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTerrain', $(this).is(':checked'));
+    $('.rpg-infobox-field-label').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].name = $(this).val();
+    });
+    $('.rpg-infobox-field-placeholder').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].description = $(this).val();
     });
 }
 /**
@@ -726,10 +798,10 @@ function renderPresentCharactersTab() {
     for (const [relationship, emoji] of Object.entries(relationshipEmojis)) {
         html += `
             <div class="rpg-relationship-item">
-                <input type="text" value="${relationship}" class="rpg-relationship-name" placeholder="Relationship type">
+                <input type="text" value="${escapeAttr(relationship)}" class="rpg-relationship-name" placeholder="Relationship type">
                 <span class="rpg-arrow">→</span>
-                <input type="text" value="${emoji}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
-                <button class="rpg-remove-relationship" data-relationship="${relationship}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+                <input type="text" value="${escapeAttr(emoji)}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
+                <button class="rpg-remove-relationship" data-relationship="${escapeAttr(relationship)}" title="Remove"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
     }
@@ -747,8 +819,8 @@ function renderPresentCharactersTab() {
                     <button class="rpg-field-move-down" data-index="${index}" ${index === config.customFields.length - 1 ? 'disabled' : ''} title="Move down"><i class="fa-solid fa-arrow-down"></i></button>
                 </div>
                 <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-field-toggle" data-index="${index}">
-                <input type="text" value="${field.name}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
-                <input type="text" value="${field.description || ''}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <input type="text" value="${escapeAttr(field.name)}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
                 <button class="rpg-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
@@ -764,11 +836,11 @@ function renderPresentCharactersTab() {
     html += '<div class="rpg-thoughts-config">';
     html += '<div class="rpg-editor-input-group">';
     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsLabelLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-name" value="${config.thoughts?.name || 'Thoughts'}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
+    html += `<input type="text" id="rpg-thoughts-name" value="${escapeAttr(config.thoughts?.name || 'Thoughts')}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
     html += '</div>';
     html += '<div class="rpg-editor-input-group">';
     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.aiInstructionLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-description" value="${config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)'}" placeholder="Description of what to generate">`;
+    html += `<input type="text" id="rpg-thoughts-description" value="${escapeAttr(config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)')}" placeholder="Description of what to generate">`;
     html += '</div>';
     html += '</div>';
     // Character Stats
@@ -784,7 +856,7 @@ function renderPresentCharactersTab() {
         html += `
             <div class="rpg-editor-field-item" data-index="${index}">
                 <input type="checkbox" ${stat.enabled ? 'checked' : ''} class="rpg-char-stat-toggle" data-index="${index}">
-                <input type="text" value="${stat.name}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
+                <input type="text" value="${escapeAttr(stat.name)}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
                 <button class="rpg-field-remove rpg-char-stat-remove" data-index="${index}" title="Remove stat"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
@@ -1050,7 +1122,7 @@ function renderHistoryPersistenceTab() {
     // Custom preamble
     html += '<div class="rpg-editor-input-row" style="margin-top: 12px;">';
     html += `<label for="rpg-history-context-preamble">Custom Context Preamble:</label>`;
-    html += `<input type="text" id="rpg-history-context-preamble" value="${historyPersistence.contextPreamble || ''}" class="rpg-text-input" placeholder="Context for that moment:" style="width: 100%; margin-top: 4px;">`;
+    html += `<input type="text" id="rpg-history-context-preamble" value="${escapeAttr(historyPersistence.contextPreamble || '')}" class="rpg-text-input" placeholder="Context for that moment:" style="width: 100%; margin-top: 4px;">`;
     html += '</div>';
     // Quests section
     html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-scroll"></i> Quests</h4>`;
@@ -1084,6 +1156,17 @@ function renderHistoryPersistenceTab() {
             `;
         }
     }
+    // Custom scene fields
+    (infoBoxConfig.customFields || []).forEach((field, index) => {
+        if (field.enabled) {
+            html += `
+                <div class="rpg-editor-toggle-row">
+                    <input type="checkbox" id="rpg-history-scenefield-${escapeAttr(field.id)}" class="rpg-history-scenefield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-scenefield-${escapeAttr(field.id)}">${escapeHtml(field.name)}</label>
+                </div>
+            `;
+        }
+    });
     html += '</div>';
     // Present Characters section
     html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-users"></i> Present Characters</h4>`;
@@ -1094,8 +1177,8 @@ function renderHistoryPersistenceTab() {
         if (field.enabled) {
             html += `
                 <div class="rpg-editor-toggle-row">
-                    <input type="checkbox" id="rpg-history-charfield-${field.id}" class="rpg-history-charfield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
-                    <label for="rpg-history-charfield-${field.id}">${field.name}</label>
+                    <input type="checkbox" id="rpg-history-charfield-${escapeAttr(field.id)}" class="rpg-history-charfield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-charfield-${escapeAttr(field.id)}">${escapeHtml(field.name)}</label>
                 </div>
             `;
         }
@@ -1160,10 +1243,17 @@ function setupHistoryPersistenceListeners() {
         const widgetId = $(this).data('widget');
         extensionSettings.trackerConfig.infoBox.widgets[widgetId].persistInHistory = $(this).is(':checked');
     });
+    // Custom scene field toggles
+    $('.rpg-history-scenefield-toggle').off('change').on('change', function() {
+        const index = $(this).data('index');
+        const field = extensionSettings.trackerConfig.infoBox.customFields?.[index];
+        if (field) field.persistInHistory = $(this).is(':checked');
+    });
     // Present Characters field toggles
     $('.rpg-history-charfield-toggle').off('change').on('change', function() {
         const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields[index].persistInHistory = $(this).is(':checked');
+        const field = extensionSettings.trackerConfig.presentCharacters.customFields?.[index];
+        if (field) field.persistInHistory = $(this).is(':checked');
     });
     // Thoughts
     $('#rpg-history-thoughts').off('change').on('change', function() {

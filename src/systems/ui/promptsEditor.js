@@ -9,51 +9,23 @@ import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
 let $editorModal = null;
 let tempPrompts = null; // Temporary prompts for cancel functionality
 
-// ─── Default Prompt: Plot Twist Template ─────────────────────────────────────
-// Wrapper injected around user-selected twists from the Doom Counter.
-// {twist} is replaced with the twist description chosen by the user.
-export const DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT = `<instruction>A dramatic development occurs in this scene. Weave this naturally into your response — don't announce it directly, let it unfold organically.</instruction> <twist_context> {twist} </twist_context>`;
-
-// ─── Default Prompt: New Fields Boost ────────────────────────────────────────
-// Injected when new tracker fields are enabled, reminding the AI to include them.
-// {fieldList} is replaced with the list of newly-enabled field descriptions.
-export const DEFAULT_NEW_FIELDS_BOOST_PROMPT = `[TRACKER NOTE: The following fields have just been enabled and MUST be included in the infoBox JSON this turn: {fieldList}. Do not omit them.]`;
-
-// ─── Default Prompt: Twist Generator Rules ───────────────────────────────────
-// Creative guidance for the LLM when generating twist options for the Doom Counter.
-// This is appended to the structural system prompt (character data, scene context, JSON format).
-export const DEFAULT_TWIST_GENERATOR_RULES_PROMPT = `<instruction>Generate plot twist options for the current scene. Base ALL twists on what is happening RIGHT NOW in the most recent messages. The twist must make sense for the CURRENT scene, not something from several messages ago.</instruction>
-<output_requirements>
-- ONLY reference characters listed above — never invent new characters or treat existing ones as strangers
-- Twists must be proportional to the scene — no world-ending disasters for a quiet afternoon
-- Each twist should be a DIFFERENT type (interpersonal, environmental, revelation, discovery, emotional, etc.)
-- Build on existing character relationships and recent events rather than introducing random catastrophes
-- The twist should flow NATURALLY from the current conversation — it should feel like an organic story development, not a random insertion
-- The goal is to make the story MORE interesting, not to punish the characters
-- Each twist option should be 1-2 sentences — specific enough to guide the narrative, brief enough to not constrain it
-</output_requirements>
-<tone_variety>
-Vary the TONE across the options. Include a MIX of:
-- Positive/Exciting: Unexpected good fortune, a breakthrough, romantic moment, lucky discovery
-- Dramatic/Tense: A confrontation, revelation, moral dilemma, betrayal
-- Mysterious/Intriguing: Something strange, a clue, an omen, an unexplained event
-Do NOT make all options negative or catastrophic.
-</tone_variety>
-<twist_categories>
-Draw from these narrative directions when generating options — pick what fits the current scene:
-- Create a jealousy situation for {{user}}'s affection that affects {{char}}
-- Introduce a rival competing for {{user}}'s or {{char}}'s affection
-- Create an immediate external threat that {{user}} and {{char}} must solve
-- Reveal or confront an important part of {{char}}'s background
-- Generate a bonding experience where {{user}} and {{char}} grow closer emotionally and romantically
-- Introduce a celebration, holiday, or special event that {{user}} and {{char}} participate in together
-- Create an internal conflict or misunderstanding between {{user}} and {{char}}
-- Create a sexual encounter between {{user}} and {{char}}
-- Create a scenario where {{char}} is injured, ill, or emotionally vulnerable and {{user}} must care for them (or vice versa)
-- An unexpected visitor or return of someone from {{char}}'s or {{user}}'s past (not a rival — a family member, old friend, or someone bringing news)
-- A moral dilemma where {{user}} or {{char}} must make a difficult choice that directly affects the other
-- An environmental disruption that forces a change of setting or circumstances (stranded, sudden weather, forced relocation)
-</twist_categories>`;
+// Default prompt template constants live in generation/defaultPrompts.js
+// (import-free module) so generation code doesn't depend on this UI module.
+// Re-exported here for backward compatibility.
+export {
+    DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
+    DEFAULT_KNIFE_TEMPLATE_PROMPT,
+    DEFAULT_KNIFE_GENERATOR_RULES_PROMPT,
+    DEFAULT_NEW_FIELDS_BOOST_PROMPT,
+    DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
+} from '../generation/defaultPrompts.js';
+import {
+    DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
+    DEFAULT_KNIFE_TEMPLATE_PROMPT,
+    DEFAULT_KNIFE_GENERATOR_RULES_PROMPT,
+    DEFAULT_NEW_FIELDS_BOOST_PROMPT,
+    DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
+} from '../generation/defaultPrompts.js';
 
 // Default prompts
 // Weather default is lazily computed since it depends on getWeatherKeywordsAsPromptString
@@ -64,10 +36,12 @@ function getDefaultWeatherPrompt() {
 const DEFAULT_PROMPTS = {
     html: DEFAULT_HTML_PROMPT,
     dialogueColoring: DEFAULT_DIALOGUE_COLORING_PROMPT,
-    // NOTE: deception, omniscience, cyoa, spotify archived to src/archived-features.js
+    // NOTE: deception, omniscience, cyoa, spotify removed (see git history)
     narrator: DEFAULT_NARRATOR_PROMPT,
     contextInstructions: DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT,
     plotTwistTemplate: DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,
+    knifeTemplate: DEFAULT_KNIFE_TEMPLATE_PROMPT,
+    knifeGeneratorRules: DEFAULT_KNIFE_GENERATOR_RULES_PROMPT,
     newFieldsBoost: DEFAULT_NEW_FIELDS_BOOST_PROMPT,
     twistGeneratorRules: DEFAULT_TWIST_GENERATOR_RULES_PROMPT,
     trackerInstructions: 'Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that {userName} perceives about the current scene and the present characters. For example: "Location" becomes Forest Clearing, "Mood Emoji" becomes "\u{1F60A}". DO NOT include {userName} in the characters section, only NPCs. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user\'s actions, the passage of time, and logical consequences (0% if the time progressed only by a few minutes, 1-5% normally, and above 5% only if a major time-skip/event occurs).',
@@ -132,6 +106,8 @@ function openPromptsEditor() {
         narrator: extensionSettings.customNarratorPrompt || '',
         contextInstructions: extensionSettings.customContextInstructionsPrompt || '',
         plotTwistTemplate: extensionSettings.customPlotTwistTemplatePrompt || '',
+        knifeTemplate: extensionSettings.customKnifeTemplatePrompt || '',
+        knifeGeneratorRules: extensionSettings.customKnifeGeneratorRulesPrompt || '',
         newFieldsBoost: extensionSettings.customNewFieldsBoostPrompt || '',
         twistGeneratorRules: extensionSettings.customTwistGeneratorRulesPrompt || '',
         trackerInstructions: extensionSettings.customTrackerInstructionsPrompt || '',
@@ -146,6 +122,8 @@ function openPromptsEditor() {
     $('#rpg-prompt-narrator').val(extensionSettings.customNarratorPrompt || DEFAULT_PROMPTS.narrator);
     $('#rpg-prompt-context-instructions').val(extensionSettings.customContextInstructionsPrompt || DEFAULT_PROMPTS.contextInstructions);
     $('#rpg-prompt-plot-twist-template').val(extensionSettings.customPlotTwistTemplatePrompt || DEFAULT_PROMPTS.plotTwistTemplate);
+    $('#rpg-prompt-knife-template').val(extensionSettings.customKnifeTemplatePrompt || DEFAULT_PROMPTS.knifeTemplate);
+    $('#rpg-prompt-knife-generator-rules').val(extensionSettings.customKnifeGeneratorRulesPrompt || DEFAULT_PROMPTS.knifeGeneratorRules);
     $('#rpg-prompt-new-fields-boost').val(extensionSettings.customNewFieldsBoostPrompt || DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(extensionSettings.customTwistGeneratorRulesPrompt || DEFAULT_PROMPTS.twistGeneratorRules);
     $('#rpg-prompt-tracker-instructions').val(extensionSettings.customTrackerInstructionsPrompt || DEFAULT_PROMPTS.trackerInstructions);
@@ -207,6 +185,8 @@ function savePrompts() {
     extensionSettings.customNarratorPrompt = $('#rpg-prompt-narrator').val().trim();
     extensionSettings.customContextInstructionsPrompt = $('#rpg-prompt-context-instructions').val().trim();
     extensionSettings.customPlotTwistTemplatePrompt = $('#rpg-prompt-plot-twist-template').val().trim();
+    extensionSettings.customKnifeTemplatePrompt = $('#rpg-prompt-knife-template').val().trim();
+    extensionSettings.customKnifeGeneratorRulesPrompt = $('#rpg-prompt-knife-generator-rules').val().trim();
     extensionSettings.customNewFieldsBoostPrompt = $('#rpg-prompt-new-fields-boost').val().trim();
     extensionSettings.customTwistGeneratorRulesPrompt = $('#rpg-prompt-twist-generator-rules').val().trim();
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
@@ -250,6 +230,12 @@ function restorePromptToDefault(promptType) {
         case 'plotTwistTemplate':
             extensionSettings.customPlotTwistTemplatePrompt = '';
             break;
+        case 'knifeTemplate':
+            extensionSettings.customKnifeTemplatePrompt = '';
+            break;
+        case 'knifeGeneratorRules':
+            extensionSettings.customKnifeGeneratorRulesPrompt = '';
+            break;
         case 'newFieldsBoost':
             extensionSettings.customNewFieldsBoostPrompt = '';
             break;
@@ -284,6 +270,8 @@ function restoreAllToDefaults() {
     $('#rpg-prompt-narrator').val(DEFAULT_PROMPTS.narrator);
     $('#rpg-prompt-context-instructions').val(DEFAULT_PROMPTS.contextInstructions);
     $('#rpg-prompt-plot-twist-template').val(DEFAULT_PROMPTS.plotTwistTemplate);
+    $('#rpg-prompt-knife-template').val(DEFAULT_PROMPTS.knifeTemplate);
+    $('#rpg-prompt-knife-generator-rules').val(DEFAULT_PROMPTS.knifeGeneratorRules);
     $('#rpg-prompt-new-fields-boost').val(DEFAULT_PROMPTS.newFieldsBoost);
     $('#rpg-prompt-twist-generator-rules').val(DEFAULT_PROMPTS.twistGeneratorRules);
     $('#rpg-prompt-tracker-instructions').val(DEFAULT_PROMPTS.trackerInstructions);
@@ -311,6 +299,8 @@ function restoreAllToDefaults() {
     extensionSettings.customNarratorPrompt = '';
     extensionSettings.customContextInstructionsPrompt = '';
     extensionSettings.customPlotTwistTemplatePrompt = '';
+    extensionSettings.customKnifeTemplatePrompt = '';
+    extensionSettings.customKnifeGeneratorRulesPrompt = '';
     extensionSettings.customNewFieldsBoostPrompt = '';
     extensionSettings.customTwistGeneratorRulesPrompt = '';
     extensionSettings.customTrackerInstructionsPrompt = '';

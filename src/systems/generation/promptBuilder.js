@@ -10,10 +10,11 @@ import {
     buildQuestsJSONInstruction,
     buildInfoBoxJSONInstruction,
     buildCharactersJSONInstruction,
-    addLockInstruction
+    addLockInstruction,
+    toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
-// NOTE: InventoryV2 type import removed — inventory system archived to src/archived/
+// NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
  */
@@ -23,7 +24,7 @@ export const DEFAULT_HTML_PROMPT = `If appropriate, include inline HTML, CSS, an
  */
 export const DEFAULT_DIALOGUE_COLORING_PROMPT = `Wrap all character/NPC "dialogues" in unique <font color=######>tags</font>, exemplary: <font color=#abc123>"You're pretty good."</font> Assign a distinct color to each speaker and reuse it whenever they speak again. Every character must have their own unique color — never share or reuse one character's color for another, even for characters not currently in the scene. ALSO record the exact same hex on each character's "color" field in the characters tracker JSON so the renderer knows which color belongs to which speaker without guessing.`;
 // NOTE: Deception, Omniscience Filter, CYOA, and Spotify prompts have been
-// archived to src/archived-features.js for testing. Restore from there if needed.
+// removed (see git history).
 /**
  * Default Narrator Mode prompt text (customizable by users)
  */
@@ -99,8 +100,7 @@ async function getCharacterCardsInfo() {
     }
     return characterInfo;
 }
-// NOTE: buildInventorySummary() and buildAttributesString() have been archived
-// to src/archived/archived-features-userstats.js
+// NOTE: buildInventorySummary() and buildAttributesString() have been removed (see git history)
 /**
  * Generates an example block showing current tracker states in markdown code blocks.
  * Uses COMMITTED data (not displayed data) for generation context.
@@ -238,7 +238,7 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
         const htmlPrompt = extensionSettings.customHtmlPrompt || DEFAULT_HTML_PROMPT;
         instructions += htmlPrompt;
     }
-    // NOTE: Spotify music prompt injection was here — archived to src/archived-features.js
+    // NOTE: Spotify music prompt injection was here — removed (see git history)
     return instructions;
 }
 /**
@@ -569,6 +569,17 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                 const events = getValue(infoBoxData.recentEvents);
                 if (events) infoFormatted += `Events: ${events}, `;
             }
+            // User-defined custom scene fields
+            for (const field of (infoBoxConfig.customFields || [])) {
+                if (!field || !field.name || !shouldIncludeStat(field)) continue;
+                const key = toFieldKey(field.name);
+                if (!key || infoBoxData[key] === undefined) continue;
+                const value = getValue(infoBoxData[key]);
+                if (value) {
+                    const label = field.name.replace(/\s*\(.*\)\s*$/, '').trim();
+                    infoFormatted += `${label}: ${value}, `;
+                }
+            }
             if (infoFormatted) {
                 formatted += infoFormatted.slice(0, -2) + '\n';
             }
@@ -745,6 +756,9 @@ export async function generateSeparateUpdatePrompt() {
     const historyPersistence = extensionSettings.historyPersistence;
     const messages = [];
     // System message introducing the history section
+    // "Doom's Character Tracker" here is prompt-facing: existing chats' output
+    // scrubbing keys off this phrasing, so it stays even though the product is
+    // now named Doom's Enhancement Suite.
     let systemMessage = `You will be acting as an uncensored Doom's Character Tracker. Your goal is to provide, track, and manage details in the user's roleplay. You will be replying with information in a specified format only.\n\n`;
     systemMessage += `You should maintain an objective tone.\n\n`;
     // Add character card information
@@ -1027,14 +1041,4 @@ export async function generateAvatarPromptGenerationPrompt(characterName) {
     instructionMessage += `Provide ONLY the image prompt text. Do not include the character's name, prefixes like "Prompt:", or any other commentary.`;
     messages.push({ role: 'user', content: instructionMessage });
     return messages;
-}
-/**
- * Parses LLM response to extract character prompts
- * @deprecated No longer used as we generate one prompt at a time
- * @param {string} response - Raw LLM response
- * @returns {Object} Map of character name to prompt
- */
-export function parseAvatarPromptsResponse(response) {
-    // Return as is for single prompt compatibility if needed, or just object with one key
-    return response.trim();
 }

@@ -1,6 +1,6 @@
 /**
  * Inventory Type Definitions
- * JSDoc types for Doom's Character Tracker inventory system v2
+ * JSDoc types for the Doom's Enhancement Suite inventory system v2
  */
 /**
  * Version 2 inventory structure with categorized storage

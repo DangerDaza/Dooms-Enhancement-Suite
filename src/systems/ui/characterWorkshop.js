@@ -28,6 +28,7 @@ import { getBase64Async } from '../../../../../../utils.js';
 import { getSafeThumbnailUrl, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { renderThoughts } from '../rendering/thoughts.js';
+import { generateKnifeSuggestions } from '../generation/doomCounter.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 import {
@@ -39,6 +40,23 @@ import {
 import { desSetExtensionPrompt as setExtensionPrompt, recordPortraitArm, recordPortraitDisarm, recordPortraitFire } from '../generation/inspector.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
+import { escapeHtml } from '../../utils/html.js';
+
+/**
+ * Runs a save function, surfacing failures instead of silently discarding
+ * the user's edit — a swallowed save error loses knife/alias/color changes
+ * with zero feedback.
+ */
+function saveOrWarn(saveFn, what) {
+    try {
+        saveFn();
+    } catch (e) {
+        console.error(`[DES Workshop] ${what} save failed`, e);
+        try {
+            if (window.toastr) window.toastr.error(`Failed to save ${what} — changes may be lost. Check the console.`, 'Character Workshop', { timeOut: 5000 });
+        } catch (toastError) { /* toast is best-effort */ }
+    }
+}
 
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
@@ -102,6 +120,25 @@ const DIALOGUE_COLORS = [
 let draft = null;
 let $modal = null;
 let listenersBound = false;
+/** Guard so rapid clicks on Generate Knives don't stack API calls. */
+let _knifeGenInProgress = false;
+
+/**
+ * Knife generation themes. Clicking Generate Knives shows these as chips;
+ * the chosen theme steers the AI so every batch doesn't drift toward
+ * betrayal/villainy — Regrets and Fortune in particular produce knives
+ * that make a character sympathetic or lucky rather than compromised.
+ */
+const KNIFE_THEMES = [
+    { id: 'mixed',    emoji: '🎲', label: 'Mixed',      guidance: 'Mix sympathetic, neutral, and compromising beats across the options — debts, secrets, old flames, rivals, regrets, lucky breaks. Do NOT make every knife paint the character as a villain or traitor.' },
+    { id: 'betrayal', emoji: '🗡️', label: 'Betrayal',   guidance: 'Focus on betrayal where {{user}} is the betrayed party — divided loyalties, double lives, deals with the wrong side, and broken promises that are set to cut {{user}} specifically, not strangers or off-screen characters.' },
+    { id: 'enemies',  emoji: '⚔️', label: 'Enemies',    guidance: 'Focus on rivals, grudges, and people from the character\'s past hunting them or wanting them ruined — danger that comes FOR the character, not treachery BY them.' },
+    { id: 'debts',    emoji: '💰', label: 'Debts',      guidance: 'Focus on money owed, favors about to be called in, contracts, and obligations the character cannot easily pay.' },
+    { id: 'flames',   emoji: '💔', label: 'Old Flames', guidance: 'Focus on past romances, heartbreak, lost loves, exes, and unresolved feelings that resurface.' },
+    { id: 'secrets',  emoji: '🤫', label: 'Secrets',    guidance: 'Focus on hidden identities, concealed pasts, and truths the character keeps — not necessarily shameful ones: some secrets are protective, sad, or wondrous.' },
+    { id: 'regrets',  emoji: '🩹', label: 'Regrets',    guidance: 'Focus on guilt, grief, old wounds, and mistakes that haunt the character — sympathetic beats that make them vulnerable rather than villainous.' },
+    { id: 'fortune',  emoji: '🍀', label: 'Fortune',    guidance: 'Focus on POSITIVE surprises: inheritances, secret talents, old friends returning with help, debts owed TO the character, lucky breaks from their past.' },
+];
 let _wsInitialized = false; // guard: don't double-register window/eventSource listeners
 let pendingInjectClear = false; // true while an inject prompt is queued
 // True only between a real (non-quiet, non-dryRun) GENERATION_STARTED and its
@@ -192,7 +229,7 @@ export function setCharacterBanished(name, banished) {
             }
         } catch (e) {}
         saveCharacterRosterChange();
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         refreshBanPrompt();
         try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
         try { renderThoughts(); } catch (e) {}
@@ -203,7 +240,7 @@ export function setCharacterBanished(name, banished) {
             }
         }
         saveCharacterRosterChange();
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         refreshBanPrompt();
     }
 }
@@ -361,6 +398,11 @@ export function openCharacterWorkshop(characterName, options = {}) {
     renderIdentity();
     renderAppearance();
     renderInjection();
+    renderKnives();
+    $modal.find('#cw-knife-input').val('');
+    clearKnifeSuggestions();
+    renderAliases();
+    $modal.find('#cw-alias-input').val('');
     activatePane('identity');
 
     if (!listenersBound) {
@@ -604,10 +646,16 @@ function buildDraft(name, isUser = false) {
                 lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false },
+            knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
+            // Aliases are NPC-only (a persona's name is the player's own);
+            // kept on the draft so shared render code can no-op safely.
+            aliases: [],
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false },
         };
     }
     const inj = extensionSettings?.characterInjection?.[name] || {};
+    const npcKnives = extensionSettings?.characterKnives?.[name];
+    const npcAliases = extensionSettings?.characterAliases?.[name];
     // Read color from the chat-aware getter so we see the same value
     // commitDraft writes (and that the PCP renders). When
     // perChatCharacterTracking is on, the global characterColors is
@@ -626,7 +674,9 @@ function buildDraft(name, isUser = false) {
             lorebook: typeof inj.lorebook === 'string' ? inj.lorebook : '',
             promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
         },
-        dirty: { color: false, avatar: false, injection: false, relationship: false },
+        knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
+        aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false },
     };
 }
 
@@ -652,6 +702,75 @@ function renderTitle() {
     $modal.find('#cw-user-badge').prop('hidden', !draft.isUser);
     $modal.find('#cw-modal-title').text(draft.isUser ? 'User Character Workshop' : 'Character Workshop');
     $modal.find('#cw-inject-label').text(draft.isUser ? 'Inject persona' : 'Inject into Scene');
+}
+
+/**
+ * Renders the theme picker shown when Generate Knives is clicked.
+ * Picking a chip starts the actual generation with that theme.
+ */
+function renderKnifeThemePicker() {
+    const $sugg = $modal.find('#cw-knife-suggestions');
+    const chips = KNIFE_THEMES.map((t, i) => `
+        <button type="button" class="rpg-rel-chip cw-knife-theme-chip" data-theme-index="${i}" title="${escapeHtml(t.guidance)}">
+            <span>${t.emoji}</span> ${t.label}
+        </button>
+    `).join('');
+    $sugg.prop('hidden', false).html(`
+        <p class="helper" style="margin: 0 0 6px;">What kind of knives should the AI forge?</p>
+        <div class="rpg-rel-chips">${chips}</div>
+    `);
+}
+
+/**
+ * Renders AI-generated knife suggestions as checkbox rows so the player
+ * can pick which ones to keep. Suggestions are stashed on the container's
+ * data so the Keep handler can read them back by index.
+ */
+function renderKnifeSuggestions(suggestions) {
+    const $sugg = $modal.find('#cw-knife-suggestions');
+    const rows = suggestions.map((text, i) => `
+        <label class="cw-knife-suggestion">
+            <input type="checkbox" data-index="${i}">
+            <span class="rpg-dc-knife-icon">🔪</span>
+            <span class="rpg-dc-knife-text">${escapeHtml(text)}</span>
+        </label>
+    `).join('');
+    $sugg.prop('hidden', false).html(`
+        <p class="helper" style="margin: 0 0 4px;">Pick the knives worth keeping — the rest are discarded:</p>
+        ${rows}
+        <div class="cw-knife-sugg-actions">
+            <button type="button" class="rpg-btn rpg-btn-primary" id="cw-knife-sugg-keep">
+                <i class="fa-solid fa-check"></i> Keep selected
+            </button>
+            <button type="button" class="rpg-btn rpg-btn-ghost" id="cw-knife-sugg-discard">Discard all</button>
+        </div>
+    `);
+    $sugg.data('suggestions', suggestions);
+}
+
+function clearKnifeSuggestions() {
+    $modal.find('#cw-knife-suggestions').prop('hidden', true).empty().removeData('suggestions');
+}
+
+function renderKnives() {
+    const $list = $modal.find('#cw-knives-list');
+    if (!$list.length) return;
+    const knives = draft?.knives || [];
+    if (!knives.length) {
+        $list.html('<div class="rpg-dc-knives-empty">No knives yet — story beats you add here lie in wait until the Doom Counter strikes while this character is in the scene.</div>');
+        return;
+    }
+    $list.html(knives.map(k => `
+        <div class="rpg-dc-knife-row${k.used ? ' rpg-dc-knife-used' : ''}" data-id="${escapeHtml(k.id)}">
+            <span class="rpg-dc-knife-icon">🔪</span>
+            <span class="rpg-dc-knife-text">${escapeHtml(k.text)}</span>
+            ${k.used ? `
+                <span class="rpg-dc-knife-used-badge">used</span>
+                <button class="rpg-dc-knife-btn rpg-dc-knife-rearm" type="button" title="Re-arm this knife so it can be offered again"><i class="fa-solid fa-rotate-left"></i></button>
+            ` : ''}
+            <button class="rpg-dc-knife-btn rpg-dc-knife-delete" type="button" title="Delete knife"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join(''));
 }
 
 function isHiddenFromPanel(name) {
@@ -697,6 +816,21 @@ function restoreCharacterToPanel() {
     try {
         if (window.toastr) window.toastr.success(`"${name}" returned to the panel.`, 'Character Workshop', { timeOut: 3000 });
     } catch (e) {}
+}
+
+function renderAliases() {
+    const $tags = $modal.find('#cw-alias-tags');
+    if (!$tags.length) return;
+    const aliases = draft?.aliases || [];
+    if (!aliases.length) {
+        $tags.html('<span class="cw-alias-empty">No aliases yet.</span>');
+        return;
+    }
+    $tags.html(aliases.map(a => `
+        <span class="cw-alias-tag">${escapeHtml(a)}
+            <button type="button" class="cw-alias-remove" data-alias="${escapeHtml(a)}" title="Remove alias">&times;</button>
+        </span>
+    `).join(''));
 }
 
 function renderIdentity() {
@@ -952,6 +1086,128 @@ function bindStaticListeners() {
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
     $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
+
+    // Knives — edits live on the draft and persist on Save
+    $modal.on('click.cw', '#cw-knife-add', function () {
+        if (!draft) return;
+        const $input = $modal.find('#cw-knife-input');
+        const text = String($input.val() || '').trim();
+        if (!text) return;
+        draft.knives.push({ id: 'knife_' + Date.now(), text, used: false });
+        draft.dirty.knives = true;
+        $input.val('');
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knives-list .rpg-dc-knife-delete', function () {
+        if (!draft) return;
+        const id = $(this).closest('.rpg-dc-knife-row').data('id');
+        draft.knives = draft.knives.filter(k => k.id !== id);
+        draft.dirty.knives = true;
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knives-list .rpg-dc-knife-rearm', function () {
+        if (!draft) return;
+        const id = $(this).closest('.rpg-dc-knife-row').data('id');
+        draft.knives = draft.knives.map(k => k.id === id ? { ...k, used: false } : k);
+        draft.dirty.knives = true;
+        renderKnives();
+    });
+    // Aliases — other names that resolve to this card. Edits live on the
+    // draft and persist on Save.
+    const addAlias = () => {
+        if (!draft || draft.isUser) return;
+        const $input = $modal.find('#cw-alias-input');
+        const alias = String($input.val() || '').trim();
+        if (!alias) return;
+        const lower = alias.toLowerCase();
+        if (lower === String(draft.name).toLowerCase()) {
+            try { if (window.toastr) window.toastr.info('That\'s already this character\'s name.', 'Character Workshop', { timeOut: 3000 }); } catch (e) {}
+            return;
+        }
+        if (draft.aliases.some(a => a.toLowerCase() === lower)) {
+            $input.val('');
+            return;
+        }
+        draft.aliases.push(alias);
+        draft.dirty.aliases = true;
+        $input.val('');
+        renderAliases();
+    };
+    $modal.on('click.cw', '#cw-alias-add', addAlias);
+    $modal.on('keypress.cw', '#cw-alias-input', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addAlias();
+        }
+    });
+    $modal.on('click.cw', '.cw-alias-remove', function () {
+        if (!draft) return;
+        const alias = String($(this).data('alias'));
+        draft.aliases = draft.aliases.filter(a => a !== alias);
+        draft.dirty.aliases = true;
+        renderAliases();
+    });
+
+    // Generate Knives is a two-step flow: the button shows the theme
+    // picker, and choosing a theme chip fires the actual API call.
+    $modal.on('click.cw', '#cw-knife-generate', function () {
+        if (!draft || _knifeGenInProgress) return;
+        renderKnifeThemePicker();
+    });
+    $modal.on('click.cw', '.cw-knife-theme-chip', async function () {
+        if (!draft || _knifeGenInProgress) return;
+        const theme = KNIFE_THEMES[parseInt($(this).attr('data-theme-index'))];
+        if (!theme) return;
+        _knifeGenInProgress = true;
+        const $btn = $modal.find('#cw-knife-generate');
+        const forName = draft.name;
+        const $sugg = $modal.find('#cw-knife-suggestions');
+        $btn.prop('disabled', true);
+        $sugg.prop('hidden', false).html(`<div class="cw-knife-sugg-loading">Forging ${escapeHtml(theme.label.toLowerCase())} knives&hellip; (asking your AI)</div>`);
+        try {
+            const suggestions = await generateKnifeSuggestions(forName, {
+                isUser: draft.isUser,
+                count: 5,
+                existingKnives: (draft.knives || []).map(k => k.text),
+                theme,
+            });
+            // Modal may have closed or switched character during the API call
+            if (!draft || draft.name !== forName) return;
+            if (!suggestions.length) throw new Error('Empty suggestion list');
+            renderKnifeSuggestions(suggestions);
+        } catch (e) {
+            console.error('[Dooms Tracker] Workshop: knife generation failed', e);
+            if (draft && draft.name === forName) {
+                $sugg.html('<div class="cw-knife-sugg-loading">Generation failed &mdash; check your API connection and try again.</div>');
+            }
+            try { if (window.toastr) window.toastr.error('Failed to generate knives.', 'Character Workshop', { timeOut: 4000 }); } catch (err) {}
+        } finally {
+            _knifeGenInProgress = false;
+            $btn.prop('disabled', false);
+        }
+    });
+    $modal.on('click.cw', '#cw-knife-sugg-keep', function () {
+        if (!draft) return;
+        const $sugg = $modal.find('#cw-knife-suggestions');
+        const suggestions = $sugg.data('suggestions') || [];
+        const picked = [];
+        $sugg.find('input[type="checkbox"]:checked').each(function () {
+            const idx = parseInt($(this).data('index'));
+            if (suggestions[idx]) picked.push(suggestions[idx]);
+        });
+        if (!picked.length) {
+            try { if (window.toastr) window.toastr.info('Tick at least one knife to keep, or Discard all.', 'Character Workshop', { timeOut: 3000 }); } catch (e) {}
+            return;
+        }
+        const now = Date.now();
+        picked.forEach((text, i) => draft.knives.push({ id: `knife_${now}_${i}`, text, used: false }));
+        draft.dirty.knives = true;
+        clearKnifeSuggestions();
+        renderKnives();
+    });
+    $modal.on('click.cw', '#cw-knife-sugg-discard', function () {
+        clearKnifeSuggestions();
+    });
     $modal.on('click.cw', function (e) {
         if (e.target === this) closeCharacterWorkshop();
     });
@@ -1450,9 +1706,10 @@ function commitDraft() {
             pronouns: draft.pronouns || '',
             linkedPersona: draft.linkedPersona || '',
             injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
+            knives: Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [],
         };
         extensionSettings.userCharacters[name] = next;
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
         // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
         // the on-disk URL in the background. Idempotent + locked.
@@ -1528,7 +1785,7 @@ function commitDraft() {
         // saveSettings otherwise) — saveCharacterRosterChange picks
         // the right one. The trailing saveSettings() at the end of
         // commitDraft still runs for the non-per-chat fields.
-        try { saveCharacterRosterChange(); } catch (e) {}
+        saveOrWarn(saveCharacterRosterChange, 'roster change');
         // Re-attribute existing bubbles with the updated color map.
         Promise.resolve().then(async () => {
             try {
@@ -1564,6 +1821,26 @@ function commitDraft() {
             extensionSettings.characterRelationships[name] = draft.relationship;
         } else {
             delete extensionSettings.characterRelationships[name];
+        }
+        changed = true;
+    }
+
+    if (draft.dirty.knives) {
+        if (!extensionSettings.characterKnives) extensionSettings.characterKnives = {};
+        if (Array.isArray(draft.knives) && draft.knives.length) {
+            extensionSettings.characterKnives[name] = draft.knives.map(k => ({ ...k }));
+        } else {
+            delete extensionSettings.characterKnives[name];
+        }
+        changed = true;
+    }
+
+    if (draft.dirty.aliases) {
+        if (!extensionSettings.characterAliases) extensionSettings.characterAliases = {};
+        if (Array.isArray(draft.aliases) && draft.aliases.length) {
+            extensionSettings.characterAliases[name] = [...draft.aliases];
+        } else {
+            delete extensionSettings.characterAliases[name];
         }
         changed = true;
     }
@@ -1654,7 +1931,7 @@ function copyNpcToUserCharacter(name) {
             // a different default flow.
         },
     };
-    try { saveSettings(); } catch (e) {}
+    saveOrWarn(saveSettings, 'settings');
     try {
         if (window.toastr) window.toastr.success(
             `Copied "${trimmed}" to User Characters.`,
@@ -1714,7 +1991,7 @@ function copyUserToNpcCharacter(name) {
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
-    try { saveSettings(); } catch (e) {}
+    saveOrWarn(saveSettings, 'settings');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try {
         if (window.toastr) window.toastr.success(
@@ -1738,7 +2015,7 @@ function deleteCharacter(name) {
         if (extensionSettings.activeUserCharacter === name) {
             extensionSettings.activeUserCharacter = null;
         }
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
         return;
     }
@@ -1754,6 +2031,11 @@ function deleteCharacter(name) {
     // delete-from-Workshop and delete-from-Roster are symmetric.
     if (extensionSettings.characterInjection) delete extensionSettings.characterInjection[name];
     if (extensionSettings.characterRelationships) delete extensionSettings.characterRelationships[name];
+    // Knives and aliases too — an orphaned alias entry would keep silently
+    // renaming a future, unrelated character to this deleted one, and a
+    // recreated same-name character would inherit the dead one's knives.
+    if (extensionSettings.characterKnives) delete extensionSettings.characterKnives[name];
+    if (extensionSettings.characterAliases) delete extensionSettings.characterAliases[name];
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata. Without wiping those, the Roster grid (which
     // reads via the active getters) shows the character right back after
@@ -1796,7 +2078,7 @@ function deleteCharacter(name) {
     }
     saveSettings();
     if (extensionSettings.perChatCharacterTracking) {
-        try { saveChatData(); } catch (e) {}
+        saveOrWarn(saveChatData, 'chat data');
     }
     // Re-emit the standing ban-list extension prompt so the AI stops
     // being told to exclude a name we just deleted. Without this the
@@ -2085,7 +2367,7 @@ function markCharacterPresentNow(name) {
     try { updateLastGeneratedData({ characterThoughts: serialized }); }
     catch (e) { console.warn('[Dooms Tracker] Workshop: updateLastGeneratedData failed', e); }
 
-    try { saveChatData(); } catch (e) { /* best-effort */ }
+    saveOrWarn(saveChatData, 'chat data');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { renderThoughts(); } catch (e) {}
     return true;
@@ -2133,7 +2415,7 @@ function unmarkCharacterPresentNow(name) {
         serialized = JSON.stringify(parsed);
     }
     try { updateLastGeneratedData({ characterThoughts: serialized }); } catch (e) {}
-    try { saveChatData(); } catch (e) {}
+    saveOrWarn(saveChatData, 'chat data');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { renderThoughts(); } catch (e) {}
 }

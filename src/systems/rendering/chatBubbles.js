@@ -16,6 +16,8 @@ import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 
 /**
  * Extract character entries from characterThoughts data. Inlined here
@@ -27,9 +29,9 @@ import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 function _extractCharacterEntries(characterThoughtsData) {
     if (!characterThoughtsData) return [];
     try {
-        const parsed = typeof characterThoughtsData === 'string'
-            ? JSON.parse(characterThoughtsData)
-            : characterThoughtsData;
+        // Memoized shared parse — read-only. Null (non-JSON) throws on the
+        // property access below and lands in the legacy-text catch.
+        const parsed = parseTrackerJson(characterThoughtsData);
         const arr = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         return arr.filter(c => c && c.name && String(c.name).toLowerCase() !== 'unavailable');
     } catch {
@@ -69,13 +71,6 @@ export function clearBubbleState(mesText) {
 // ─────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────
-
-/** HTML-escape a string for safe insertion */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
 
 /** Strip HTML tags and return plain text */
 function stripHtml(html) {

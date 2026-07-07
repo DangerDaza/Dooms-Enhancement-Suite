@@ -157,7 +157,7 @@
                     </div>
                     <div class="rpg-subsection-label">Visible Sections</div>
                     <div class="rpg-setting-row">
-                        <span class="rpg-setting-label">Info Box</span>
+                        <span class="rpg-setting-label">Scene Tracker</span>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-info-box" />
                             <span class="rpg-toggle-slider"></span>
@@ -742,115 +742,6 @@
                 </div>
             </div>
 
-            <!-- ═══════ NAME BAN (hidden — not yet released) ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="name-ban" style="display:none !important;">
-                <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-ban rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title" data-i18n="Name Ban">Name Ban</span>
-                    <span class="rpg-accordion-badge" id="rpg-nb-badge">off</span>
-                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
-                </div>
-                <div class="rpg-accordion-body">
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Enable Name Ban</span>
-                            <span class="rpg-setting-hint">Control which character names appear in responses</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-toggle-name-ban" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div id="rpg-nb-options" style="display:none;">
-                        <div class="rpg-subsection-label">Detection</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Sensitivity</span>
-                                <span class="rpg-setting-hint">How aggressively to flag new character names</span>
-                            </div>
-                            <select id="rpg-nb-sensitivity" class="rpg-accordion-select">
-                                <option value="strict">Strict — Dialogue attribution only</option>
-                                <option value="normal">Normal — Dialogue + action patterns</option>
-                                <option value="aggressive">Aggressive — All unknown capitalized words</option>
-                            </select>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Show Modal for New Names</span>
-                                <span class="rpg-setting-hint">Prompt for approval when new names are detected</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-show-modal" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Auto-Apply Known Mappings</span>
-                                <span class="rpg-setting-hint">Silently replace previously mapped names</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-auto-apply" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Inject into Prompt</span>
-                                <span class="rpg-setting-hint">Tell AI about banned/approved names</span>
-                            </div>
-                            <label class="rpg-toggle-switch">
-                                <input type="checkbox" id="rpg-nb-inject-prompt" />
-                                <span class="rpg-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="rpg-subsection-label">Approved Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that are allowed and won't
-                            trigger the modal</div>
-                        <div id="rpg-nb-approved-tags" class="dooms-nb-tag-list"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-approved" class="rpg-accordion-input"
-                                placeholder="Add approved name..." style="flex:1;" />
-                            <button id="rpg-nb-add-approved-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Name Mappings</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Automatically replace banned names with
-                            approved alternatives</div>
-                        <div id="rpg-nb-mappings-container"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px; gap:6px;">
-                            <input type="text" id="rpg-nb-add-mapping-from" class="rpg-accordion-input"
-                                placeholder="Banned name..." style="flex:1;" />
-                            <span style="opacity:0.5;">&rarr;</span>
-                            <input type="text" id="rpg-nb-add-mapping-to" class="rpg-accordion-input"
-                                placeholder="Replacement..." style="flex:1;" />
-                            <button id="rpg-nb-add-mapping-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Ignored Names</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Names that will never be flagged, even
-                            if unrecognized</div>
-                        <div id="rpg-nb-ignored-tags" class="dooms-nb-tag-list"></div>
-                        <div class="rpg-setting-row" style="margin-top:6px;">
-                            <input type="text" id="rpg-nb-add-ignored" class="rpg-accordion-input"
-                                placeholder="Add ignored name..." style="flex:1;" />
-                            <button id="rpg-nb-add-ignored-btn" class="menu_button"
-                                style="margin-left:6px;">Add</button>
-                        </div>
-                        <div class="rpg-subsection-label">Custom Excluded Words</div>
-                        <div class="rpg-setting-hint" style="margin-bottom:6px;">Common words that should never be
-                            treated as character names (one per line)</div>
-                        <textarea id="rpg-nb-excluded-words" class="rpg-accordion-input" rows="3"
-                            placeholder="e.g., Tavern&#10;Guild&#10;Dragon"
-                            style="width:100%;resize:vertical;"></textarea>
-                        <div style="margin-top:12px;">
-                            <button id="rpg-nb-clear-all" class="menu_button" style="color:#e94560;">Clear All Name Ban
-                                Data</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ═══════ SCENE TRACKER ═══════ -->
             <div class="rpg-accordion-section" data-accordion="scene-tracker">
                 <div class="rpg-accordion-header">
@@ -1252,6 +1143,23 @@
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="rpg-dc-trap-mode" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="rpg-subsection-label">Knives</div>
+                        <div class="rpg-setting-row">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Enable Knives (this chat)</span>
+                                <span class="rpg-setting-hint">Knives are story beats attached to characters in the
+                                    Character Workshop (right-click a portrait → Character Workshop → Knives). When
+                                    the counter triggers, one present character with armed knives is chosen at random
+                                    and their knives are offered instead of AI-generated twists. Example knife for
+                                    your own character: "David is a gambling addict — he owes a lot of money to the
+                                    wrong people."</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="rpg-dc-knives-enabled" />
                                 <span class="rpg-toggle-slider"></span>
                             </label>
                         </div>
@@ -1877,7 +1785,7 @@
             <!-- NOTE: User Stats tab removed — system archived -->
             <button class="rpg-editor-tab active" data-tab="infoBox">
                 <i class="fa-solid fa-info-circle"></i> <span
-                    data-i18n-key="template.trackerEditorModal.tabs.infoBox">Info Box</span>
+                    data-i18n-key="template.trackerEditorModal.tabs.infoBox">Scene Tracker</span>
             </button>
             <button class="rpg-editor-tab" data-tab="presentCharacters">
                 <i class="fa-solid fa-users"></i> <span
@@ -2177,6 +2085,42 @@
                 </button>
             </div>
 
+            <!-- Knife Injection Template -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-knife-template"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    &#128298; Knife Injection Template
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Wrapper text injected when a Knife (a character's pre-planned story beat) is drawn by the Doom
+                    Counter. <code>{knife}</code> is replaced with the knife text, <code>{character}</code> with the
+                    knife owner's name.
+                </small>
+                <textarea id="rpg-prompt-knife-template" class="rpg-prompt-textarea" rows="3"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="knifeTemplate"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
+            <!-- Knife Generator Rules -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-knife-generator-rules"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    &#128298; Knife Generator Rules
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    Requirements appended to the Character Workshop's Generate Knives prompt. Controls length, tone,
+                    and naming rules of generated knives. <code>{character}</code> is replaced with the character's
+                    name; the chosen theme's guidance is added separately.
+                </small>
+                <textarea id="rpg-prompt-knife-generator-rules" class="rpg-prompt-textarea" rows="6"></textarea>
+                <button class="menu_button rpg-restore-prompt-btn" data-prompt="knifeGeneratorRules"
+                    style="margin-top: 8px;">
+                    <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                </button>
+            </div>
+
             <!-- Tracker Continuation Instruction -->
             <div class="rpg-prompt-editor-section">
                 <label for="rpg-prompt-tracker-continuation"
@@ -2235,7 +2179,7 @@
                     <i class="fa-solid fa-cloud-sun"></i> Weather Forecast Instruction
                 </label>
                 <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
-                    Controls how the AI generates the weather forecast field in the Info Box. By default, the AI is
+                    Controls how the AI generates the weather forecast field in the Scene Tracker. By default, the AI is
                     instructed to use a single keyword from a predefined list (for weather effects). Customize this to
                     allow richer weather descriptions.
                 </small>
@@ -2376,6 +2320,7 @@
                     <button type="button" data-pane="appearance">&#127912; Appearance</button>
                     <button type="button" data-pane="expressions">&#128516; Expressions</button>
                     <button type="button" data-pane="injection">&#128137; Injection</button>
+                    <button type="button" data-pane="knives">&#128298; Knives</button>
                 </nav>
             </aside>
 
@@ -2409,6 +2354,22 @@
                                 <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
                                     data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span>
                                     Neutral</button>
+                            </div>
+                        </div>
+                        <!-- NPC mode: aliases -->
+                        <div class="rpg-field cw-npc-only">
+                            <label>Aliases</label>
+                            <p class="helper" style="margin-top: -2px; margin-bottom: 6px;">Other names the AI might
+                                use for this character &mdash; a revealed full name ("Sarah Greenfield" for "Sarah"),
+                                a nickname, or a title. Tracker data using an alias resolves to this card instead of
+                                spawning a duplicate character. The AI is free to keep using the alias in prose.</p>
+                            <div class="cw-alias-tags" id="cw-alias-tags"></div>
+                            <div class="rpg-field-row" style="gap: 0.5em; margin-top: 0.4rem;">
+                                <input id="cw-alias-input" class="rpg-input" type="text"
+                                    placeholder="Add alias&hellip;" style="max-width: 240px;">
+                                <button type="button" class="rpg-btn" id="cw-alias-add">
+                                    <i class="fa-solid fa-plus"></i> Add
+                                </button>
                             </div>
                         </div>
                         <!-- User mode: pronouns chips + linked persona -->
@@ -2592,6 +2553,37 @@
                                 <i class="fa-solid fa-broom"></i> Clear all pending injections
                             </button>
                         </div>
+                    </div>
+                </section>
+
+                <!-- KNIVES -->
+                <section class="rpg-editor-pane" data-pane="knives">
+                    <div class="rpg-editor-section">
+                        <h4>&#128298; Knives</h4>
+                        <p class="helper">Story beats tied to this character &mdash; secrets, debts, rivals waiting in
+                            the wings. When the Doom Counter triggers (and Knives are enabled for the chat in
+                            <strong>Settings &rarr; Doom Counter</strong>), one present character with armed knives is
+                            chosen at random and their knives become the twist options. A used knife stays here
+                            crossed out and can be re-armed. Example: "David is a gambling addict &mdash; he owes a
+                            lot of money to the wrong people."</p>
+                        <div id="cw-knives-list"></div>
+                        <div class="rpg-dc-knife-add">
+                            <textarea id="cw-knife-input" class="rpg-textarea" rows="2"
+                                placeholder="Write a story beat for this character..."></textarea>
+                            <button type="button" class="rpg-btn" id="cw-knife-add">
+                                <i class="fa-solid fa-plus"></i> Add Knife
+                            </button>
+                        </div>
+                        <div class="rpg-field rpg-field-row" style="align-items: center; margin-top: 10px;">
+                            <button type="button" class="rpg-btn" id="cw-knife-generate">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Knives
+                            </button>
+                            <span class="muted" style="font-size: var(--modal-font-small, 0.8rem);">Pick a theme
+                                (betrayal, enemies, old flames, fortune&hellip;) and your AI suggests 5 knives based
+                                on this character and the current chat &mdash; then you tick which to keep. Sends a
+                                separate API request.</span>
+                        </div>
+                        <div id="cw-knife-suggestions" hidden></div>
                     </div>
                 </section>
 

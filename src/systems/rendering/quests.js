@@ -5,6 +5,7 @@
 import { extensionSettings, $questsContainer, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
+import { escapeHtml } from '../../utils/html.js';
 /**
  * Syncs the current extensionSettings.quests to committedTrackerData.quests
  * This ensures quest changes made via UI are reflected in the data sent to AI
@@ -14,26 +15,6 @@ function syncQuestsToCommittedData() {
     const questsJSON = JSON.stringify(questsData, null, 2);
     committedTrackerData.quests = questsJSON;
     lastGeneratedData.quests = questsJSON;
-}
-/**
- * Helper to generate lock icon HTML if setting is enabled
- * @param {string} tracker - Tracker name
- * @param {string} path - Item path
- * @returns {string} Lock icon HTML or empty string
- */
-/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
-function getLockIconHtml(_tracker, _path) {
-    return '';
-}
-/**
- * HTML escape helper
- * @param {string} text - Text to escape
- * @returns {string} Escaped HTML
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 /**
  * Renders the quests sub-tab navigation (Main, Optional)
@@ -82,7 +63,6 @@ export function renderMainQuestView(mainQuest) {
                         </div>
                     </div>
                     <div class="rpg-quest-item" data-field="main">
-                        ${getLockIconHtml('quests', 'quests.main')}
                         <div class="rpg-quest-title">${escapeHtml(questDisplay)}</div>
                         <div class="rpg-quest-actions">
                             <button class="rpg-quest-edit" data-action="edit-quest" data-field="main" title="Edit quest">
@@ -129,7 +109,6 @@ export function renderOptionalQuestsView(optionalQuests) {
         questsHtml = quests.map((quest, index) => {
             return `
             <div class="rpg-quest-item" data-field="optional" data-index="${index}">
-                ${getLockIconHtml('quests', `quests.optional[${index}]`)}
                 <div class="rpg-quest-title rpg-editable" contenteditable="true" data-field="optional" data-index="${index}" title="Click to edit">${escapeHtml(quest)}</div>
                 <div class="rpg-quest-actions">
                     <button class="rpg-quest-remove" data-action="remove-quest" data-field="optional" data-index="${index}" title="Complete/Remove quest">

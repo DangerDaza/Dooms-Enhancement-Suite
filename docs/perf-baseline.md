@@ -101,7 +101,7 @@ Code-level counts (baseline):
 - `compactPrompts` (fresh installs: on; existing installs: off to preserve tuned behavior): ~halves the per-generation tracker instruction text with an identical JSON contract. Toggle in Advanced.
 
 ### Phase 9 — final (DONE)
-- All caches audited (roster-bounded, TTL'd, or capped); swipe data remains per-message/per-swipe as before. manifest version → 1.12.0.
+- All caches audited (roster-bounded, TTL'd, or capped); swipe data remains per-message/per-swipe as before. shipped as the 2.0.0 "Rebuild" release (originally planned as 1.12.0).
 
 ## Headline summary vs baseline (static, measured in repo)
 

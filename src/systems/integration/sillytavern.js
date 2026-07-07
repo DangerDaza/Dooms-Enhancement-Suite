@@ -35,7 +35,7 @@ import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
-import { enforceNameBan } from '../features/nameBan.js';
+import { applyCharacterAliases } from '../features/characterAliases.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -156,6 +156,12 @@ export async function onMessageReceived(data) {
             }
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
+                // ── Character Aliases: canonicalize names FIRST, before the color
+                // harvest, rendering, and swipe storage below see the data. An
+                // aliased name ("Sarah Greenfield" → card "Sarah") is rewritten in
+                // the tracker data only — prose stays untouched — so no duplicate
+                // card is born and colors are harvested under the canonical name.
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
             }
             // Update display data with newly parsed response
             if (parsedData.quests) {
@@ -177,20 +183,6 @@ export async function onMessageReceived(data) {
                     harvestNewSpeakerColors(lastMessage.mes, parsedData.characterThoughts);
                 } catch (e) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
-                }
-            }
-            // ── Name Ban: enforce name rules before rendering & swipe storage ──
-            if (extensionSettings.nameBan?.enabled) {
-                const nbResult = await enforceNameBan(lastMessage.mes, parsedData.characterThoughts);
-                if (nbResult.text !== lastMessage.mes) {
-                    lastMessage.mes = nbResult.text;
-                    if (Array.isArray(lastMessage.swipes) && lastMessage.swipe_id !== undefined) {
-                        lastMessage.swipes[lastMessage.swipe_id] = nbResult.text;
-                    }
-                }
-                if (nbResult.thoughts) {
-                    parsedData.characterThoughts = nbResult.thoughts;
-                    lastGeneratedData.characterThoughts = nbResult.thoughts;
                 }
             }
             // Store RPG data for this specific swipe in the message's extra field
@@ -257,8 +249,8 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) {
                 setTimeout(() => updateChatThoughts(), 100);
             }
-            // Save to chat metadata
-            saveChatData();
+            // Save to chat metadata (immediate: generation-end commit point)
+            saveChatData({ immediate: true });
 
             // Doom Counter: evaluate tension after parsing (only for fresh generations, not history loads)
             if (extensionSettings.doomCounter?.enabled && isAwaitingNewMessage) {
@@ -285,23 +277,8 @@ export async function onMessageReceived(data) {
         // Only trigger if this is a newly generated message, not loading chat history
         if (extensionSettings.autoUpdate && isAwaitingNewMessage) {
             setTimeout(async () => {
+                // (updateRPGData canonicalizes alias names at its parse step)
                 await updateRPGData(renderInfoBox, renderThoughts);
-                // ── Name Ban: enforce in separate/external mode ──
-                if (extensionSettings.nameBan?.enabled) {
-                    const lastMsg = chat[chat.length - 1];
-                    if (lastMsg && !lastMsg.is_user && !isSyntheticTrackerMessage(lastMsg)) {
-                        const nbResult = await enforceNameBan(lastMsg.mes, lastGeneratedData.characterThoughts);
-                        if (nbResult.text !== lastMsg.mes) {
-                            lastMsg.mes = nbResult.text;
-                            if (Array.isArray(lastMsg.swipes) && lastMsg.swipe_id !== undefined) {
-                                lastMsg.swipes[lastMsg.swipe_id] = nbResult.text;
-                            }
-                        }
-                        if (nbResult.thoughts) {
-                            lastGeneratedData.characterThoughts = nbResult.thoughts;
-                        }
-                    }
-                }
                 updateChatSceneHeaders();
                 updatePortraitBar();
                 updateWeatherEffect();
@@ -354,6 +331,12 @@ export async function onMessageReceived(data) {
     }
 }
 /**
+ * Monotonic token for the delayed render chain below. Each CHAT_CHANGED
+ * bumps it, invalidating any polling chain scheduled by a previous chat so
+ * a slow chat switch can't paint the old chat's overlays into the new one.
+ */
+let renderChatToken = 0;
+/**
  * Event handler for character change.
  */
 export function onCharacterChanged() {
@@ -398,7 +381,14 @@ export function onCharacterChanged() {
     // where chat messages appear later and need thoughts overlays injected.
     let attempts = 0;
     const maxAttempts = 15;
+    const myToken = ++renderChatToken;
+    const myChatId = getContext().chatId;
     const tryRenderChat = () => {
+        // Bail if another chat switch happened since this chain was scheduled —
+        // the render targets read globals that loadChatData has overwritten.
+        if (myToken !== renderChatToken || getContext().chatId !== myChatId) {
+            return;
+        }
         attempts++;
         if ($('#chat .mes').length > 0) {
             // For classic layouts (grid/stacked/compact/banner) that inject after a
@@ -454,6 +444,9 @@ export function onMessageSwiped(messageIndex) {
         } else {
             lastGeneratedData.characterThoughts = swipeData.characterThoughts || null;
         }
+        // Canonicalize alias names on restore — swipe data may have been stored
+        // before an alias existed (or before this feature shipped).
+        lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
         // DON'T parse user stats when loading swipe data
         // This would overwrite manually edited fields (like Conditions) with old swipe data
         // The lastGeneratedData is loaded for display purposes only

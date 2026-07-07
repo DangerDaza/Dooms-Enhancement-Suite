@@ -2,7 +2,7 @@
  * Suppression helper for guided generation injection behavior.
  *
  * This module exports a pure function `evaluateSuppression` that computes
- * whether Doom's Character Tracker should suppress tracker and HTML injections for a
+ * whether Doom's Enhancement Suite should suppress tracker and HTML injections for a
  * given generation request, based on runtime settings, extended context, and
  * generation data (quiet prompt flags, etc.).
  */
@@ -54,7 +54,7 @@ export function evaluateSuppression(extensionSettings, context, data, type) {
     // bypass our guided-generation detection.
     //
     // We read `chat_metadata.script_injects` from the live ES-module export
-    // in script.js (same pattern used by portraitBar.js, nameBan.js,
+    // in script.js (same pattern used by portraitBar.js,
     // characterSheet.js). Earlier revisions tried `getContext().chatMetadata`
     // and `getContext().chat_metadata`, but neither shape is reliably
     // populated by every ST build — diagnostic logs on a confirmed guided

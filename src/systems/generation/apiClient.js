@@ -6,8 +6,8 @@ import { chat, eventSource } from '../../../../../../../script.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { getContext } from '../../../../../../extensions.js';
 import { safeGenerateRaw, extractTextFromResponse } from '../../utils/responseExtractor.js';
-// Custom event name for when Doom's Character Tracker finishes updating tracker data
-// Other extensions can listen for this event to know when Doom's Character Tracker is done
+// Custom event name for when Doom's Enhancement Suite finishes updating tracker data
+// Other extensions can listen for this event to know when DES is done
 export const DOOMS_TRACKER_UPDATE_COMPLETE = 'dooms_tracker_update_complete';
 import {
     extensionSettings,
@@ -27,6 +27,7 @@ import { harvestNewSpeakerColors } from '../rendering/chatBubbles.js';
 import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
+import { applyCharacterAliases } from '../features/characterAliases.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -257,6 +258,14 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
         return;
     }
+    // Nothing to update when every tracker section is hidden — the separate
+    // prompt gates all of its sections on these same flags, so the call would
+    // ask the model for nothing. Skipping also stops the external-API error
+    // box ("configure Base URL / API Key") from popping after every message
+    // when the trackers are toggled off but external mode isn't configured.
+    if (!extensionSettings.showInfoBox && !extensionSettings.showCharacterThoughts && !extensionSettings.showQuests) {
+        return;
+    }
     const isExternalMode = extensionSettings.generationMode === 'external';
     let originalProfileName = null;
     let originalPresetName = null;
@@ -331,6 +340,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             }
             if (parsedData.characterThoughts) {
                 parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
+                // Canonicalize alias names at the parse chokepoint, BEFORE the
+                // color harvest, swipe storage, and commit below see the data —
+                // this covers both the auto-update and manual Refresh RPG Info
+                // paths in separate/external mode.
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
             }
             // Store RPG data for the last assistant message (separate mode)
             const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;
@@ -391,8 +405,8 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             renderQuests();
             // Insert inline thought dropdowns into the chat message
             updateChatThoughts();
-            // Save to chat metadata
-            saveChatData();
+            // Save to chat metadata (immediate: generation-end commit point)
+            saveChatData({ immediate: true });
             if (isAutoPortraitModeEnabled()) {
                 const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
                 if (charactersForPortraits.length > 0) {
@@ -404,7 +418,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 }
             }
             // Generate avatars if auto-generate is enabled (runs within this workflow)
-            // This uses the Doom's Character Tracker Trackers preset and keeps the button spinning
+            // This uses the DES Trackers preset and keeps the button spinning
             if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
                 const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
                 if (charactersNeedingAvatars.length > 0) {
@@ -421,7 +435,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     } catch (error) {
         console.error('[Dooms Tracker] Error updating RPG data:', error);
         if (isExternalMode) {
-            toastr.error(error.message, "Doom's Character Tracker External API Error");
+            toastr.error(error.message, "Doom's Enhancement Suite External API Error");
         }
     } finally {
         // Restore connection profile AND preset if we switched.
@@ -464,7 +478,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         // Reset the flag after tracker generation completes
         // This ensures the flag persists through both main generation AND tracker generation
         setLastActionWasSwipe(false);
-        // Emit event for other extensions to know Doom's Character Tracker has finished updating
+        // Emit event for other extensions to know DES has finished updating
         console.debug('[Dooms Tracker] Emitting DOOMS_TRACKER_UPDATE_COMPLETE event');
         eventSource.emit(DOOMS_TRACKER_UPDATE_COMPLETE);
     }

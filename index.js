@@ -31,7 +31,7 @@ import {
     clearSessionAvatarPrompts,
     applyNewPlayerProfile
 } from './src/core/state.js';
-import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData } from './src/core/persistence.js';
+import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData, setDoomKnivesEnabled } from './src/core/persistence.js';
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
@@ -112,7 +112,6 @@ import {
 // Feature modules
 import { ensureHtmlCleaningRegex, detectConflictingRegexScripts, ensureTrackerCleaningRegex } from './src/systems/features/htmlCleaning.js';
 import { ensureJsonCleaningRegex, removeJsonCleaningRegex } from './src/systems/features/jsonCleaning.js';
-import { renderApprovedNamesTags, renderIgnoredNamesTags, renderMappingsTable } from './src/systems/features/nameBan.js';
 import { DEFAULT_HTML_PROMPT } from './src/systems/generation/promptBuilder.js';
 // Scene headers (inline chat rendering)
 import { updateChatSceneHeaders, applySceneTrackerSettings, resetSceneHeaderCache } from './src/systems/rendering/sceneHeaders.js';
@@ -152,13 +151,6 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
-/**
- * Updates UI elements that are dynamically generated and not covered by data-i18n-key.
- */
-function updateDynamicLabels() {
-    // Currently no dynamic labels to update
-}
-
 function updatePortraitEnhancementSettingsVisibility() {
     const enabled = extensionSettings.syncExpressionsToPresentCharacters === true;
     const source = extensionSettings.portraitEnhancementMode || 'expressions';
@@ -209,17 +201,6 @@ async function addExtensionSettings() {
             }
         }
     });
-    // Set up language selector
-    const langSelect = $('#dooms-tracker-language-select');
-    if (langSelect.length) {
-        langSelect.val(i18n.currentLanguage);
-        langSelect.on('change', async function () {
-            const selectedLanguage = $(this).val();
-            await i18n.setLanguage(selectedLanguage);
-            // We need to re-apply translations to the settings panel specifically
-            i18n.applyTranslations(document.getElementById('extensions_settings2'));
-        });
-    }
     // Set up "Open Settings" button in the extension dropdown
     $('#dooms-open-settings-btn').on('click', function () {
         ensureSettingsUI().then(() => {
@@ -1047,7 +1028,17 @@ function bindSettingsUI() {
         if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
         return extensionSettings.sceneTracker;
     };
-    const _saveSt = () => { saveSettings(); applySceneTrackerSettings(); updateChatSceneHeaders(); };
+    // saveSettings + applySceneTrackerSettings are cheap (debounced save +
+    // style-attr updates on existing headers = live preview), but
+    // updateChatSceneHeaders is a full rebuild — during a slider/color drag
+    // the input event fires per frame, so the rebuild is debounced.
+    let _stRebuildTimer = null;
+    const _saveSt = () => {
+        saveSettings();
+        applySceneTrackerSettings();
+        clearTimeout(_stRebuildTimer);
+        _stRebuildTimer = setTimeout(() => updateChatSceneHeaders(), 150);
+    };
 
     /**
      * Shows/hides the color pickers and theme-controlled notice in the
@@ -1063,58 +1054,54 @@ function bindSettingsUI() {
         }
     }
 
-    // Visibility toggles
-    $('#rpg-st-show-time').on('change', function () { _stSettings().showTime = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-date').on('change', function () { _stSettings().showDate = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-location').on('change', function () { _stSettings().showLocation = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-characters').on('change', function () { _stSettings().showCharacters = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-quest').on('change', function () { _stSettings().showQuest = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-events').on('change', function () { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
-    // Optional fields: Scene Tracker toggle and infoBox widget enabled flag are the same concept.
+    // Scene Tracker toggle and infoBox widget enabled flag are the same concept.
     // Syncing both ensures the AI generates the field AND the tracker bar displays it.
-    const _syncOptionalField = (widgetKey, checked) => {
+    // Also mirrors the Tracker Editor checkbox when its modal is open —
+    // .prop('checked') does not fire change events, so no sync loop.
+    const _editorCheckboxIds = {
+        time: '#rpg-widget-time',
+        date: '#rpg-widget-date',
+        location: '#rpg-widget-location',
+        recentEvents: '#rpg-widget-events',
+        weather: '#rpg-widget-weather',
+        moonPhase: '#rpg-widget-moonphase',
+        tension: '#rpg-widget-tension',
+        timeSinceRest: '#rpg-widget-timesincerest',
+        conditions: '#rpg-widget-conditions',
+        terrain: '#rpg-widget-terrain',
+    };
+    const _syncWidgetField = (widgetKey, checked) => {
         const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
         if (widgets) {
             if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
             widgets[widgetKey].enabled = checked;
         }
+        if (_editorCheckboxIds[widgetKey]) $(_editorCheckboxIds[widgetKey]).prop('checked', checked);
     };
-    $('#rpg-st-show-moonphase').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showMoonPhase = v;
-        _syncOptionalField('moonPhase', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-tension').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTension = v;
-        _syncOptionalField('tension', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-timesincerest').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTimeSinceRest = v;
-        _syncOptionalField('timeSinceRest', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-conditions').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showConditions = v;
-        _syncOptionalField('conditions', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-terrain').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTerrain = v;
-        _syncOptionalField('terrain', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-weather').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showWeather = v;
-        _syncOptionalField('weather', v);
-        _saveSt();
-    });
+    // Visibility toggles. showCharacters/showQuest have no infoBox widget
+    // equivalent (their data comes from other trackers), so they don't sync.
+    const _stToggles = [
+        ['#rpg-st-show-time', 'showTime', 'time'],
+        ['#rpg-st-show-date', 'showDate', 'date'],
+        ['#rpg-st-show-location', 'showLocation', 'location'],
+        ['#rpg-st-show-characters', 'showCharacters', null],
+        ['#rpg-st-show-quest', 'showQuest', null],
+        ['#rpg-st-show-events', 'showRecentEvents', 'recentEvents'],
+        ['#rpg-st-show-moonphase', 'showMoonPhase', 'moonPhase'],
+        ['#rpg-st-show-tension', 'showTension', 'tension'],
+        ['#rpg-st-show-timesincerest', 'showTimeSinceRest', 'timeSinceRest'],
+        ['#rpg-st-show-conditions', 'showConditions', 'conditions'],
+        ['#rpg-st-show-terrain', 'showTerrain', 'terrain'],
+        ['#rpg-st-show-weather', 'showWeather', 'weather'],
+    ];
+    for (const [selector, showKey, widgetKey] of _stToggles) {
+        $(selector).on('change', function () {
+            const v = $(this).prop('checked');
+            _stSettings()[showKey] = v;
+            if (widgetKey) _syncWidgetField(widgetKey, v);
+            _saveSt();
+        });
+    }
     // Layout
     $('#rpg-st-layout').on('change', function () {
         _stSettings().layout = $(this).val();
@@ -1372,40 +1359,14 @@ function bindSettingsUI() {
         toastr.info('Doom Counter reset.', '', { timeOut: 2000 });
     });
 
-    // ── Name Ban ──
-    const _nbSettings = () => {
-        if (!extensionSettings.nameBan) extensionSettings.nameBan = {};
-        return extensionSettings.nameBan;
-    };
-    const _renderNbLists = () => {
-        renderApprovedNamesTags($('#rpg-nb-approved-tags'));
-        renderIgnoredNamesTags($('#rpg-nb-ignored-tags'));
-        renderMappingsTable($('#rpg-nb-mappings-container'));
-    };
-
-    $('#rpg-toggle-name-ban').on('change', function () {
-        _nbSettings().enabled = $(this).prop('checked');
-        saveSettings();
-        $('#rpg-nb-badge').text($(this).prop('checked') ? 'on' : 'off');
-        $('#rpg-nb-options').toggle($(this).prop('checked'));
+    // ── Knives (per-chat toggle; the knives themselves live on character
+    //    cards in the Character Workshop) ──
+    $('#rpg-dc-knives-enabled').on('change', function () {
+        setDoomKnivesEnabled($(this).prop('checked'));
     });
-    $('#rpg-nb-sensitivity').on('change', function () { _nbSettings().sensitivity = $(this).val(); saveSettings(); });
-    $('#rpg-nb-show-modal').on('change', function () { _nbSettings().showModalForNew = $(this).prop('checked'); saveSettings(); });
-    $('#rpg-nb-auto-apply').on('change', function () { _nbSettings().autoApplyKnownMappings = $(this).prop('checked'); saveSettings(); });
-    $('#rpg-nb-inject-prompt').on('change', function () { _nbSettings().injectIntoPrompt = $(this).prop('checked'); saveSettings(); });
-    const addApprovedName = () => { const name = $('#rpg-nb-add-approved').val().trim(); if (!name) return; const nb = _nbSettings(); if (!nb.approvedNames) nb.approvedNames = []; if (!nb.approvedNames.includes(name)) { nb.approvedNames.push(name); saveSettings(); _renderNbLists(); } $('#rpg-nb-add-approved').val(''); };
-    $('#rpg-nb-add-approved-btn').on('click', addApprovedName);
-    $('#rpg-nb-add-approved').on('keypress', function (e) { if (e.key === 'Enter') addApprovedName(); });
-    const addIgnoredName = () => { const name = $('#rpg-nb-add-ignored').val().trim(); if (!name) return; const nb = _nbSettings(); if (!nb.ignoredNames) nb.ignoredNames = []; if (!nb.ignoredNames.includes(name)) { nb.ignoredNames.push(name); saveSettings(); _renderNbLists(); } $('#rpg-nb-add-ignored').val(''); };
-    $('#rpg-nb-add-ignored-btn').on('click', addIgnoredName);
-    $('#rpg-nb-add-ignored').on('keypress', function (e) { if (e.key === 'Enter') addIgnoredName(); });
-    const addMapping = () => { const from = $('#rpg-nb-add-mapping-from').val().trim(); const to = $('#rpg-nb-add-mapping-to').val().trim(); if (!from || !to) return; const nb = _nbSettings(); if (!nb.nameMappings) nb.nameMappings = {}; nb.nameMappings[from] = to; saveSettings(); _renderNbLists(); $('#rpg-nb-add-mapping-from').val(''); $('#rpg-nb-add-mapping-to').val(''); };
-    $('#rpg-nb-add-mapping-btn').on('click', addMapping);
-    $('#rpg-nb-add-mapping-to').on('keypress', function (e) { if (e.key === 'Enter') addMapping(); });
-    $(document).on('click', '.dooms-nb-tag-remove', function () { const name = $(this).data('name'); const list = $(this).data('list'); const nb = _nbSettings(); if (nb[list]) { nb[list] = nb[list].filter(n => n !== name); saveSettings(); _renderNbLists(); } });
-    $(document).on('click', '.dooms-nb-mapping-delete', function () { const banned = $(this).data('banned'); const nb = _nbSettings(); if (nb.nameMappings) { delete nb.nameMappings[banned]; saveSettings(); _renderNbLists(); } });
-    $('#rpg-nb-excluded-words').on('change', function () { _nbSettings().customExcludedWords = $(this).val().split('\n').map(w => w.trim()).filter(Boolean); saveSettings(); });
-    $('#rpg-nb-clear-all').on('click', async function () { const confirm = await callGenericPopup('Clear all Name Ban data?', POPUP_TYPE.CONFIRM); if (confirm === POPUP_RESULT.AFFIRMATIVE) { const nb = _nbSettings(); nb.approvedNames = []; nb.nameMappings = {}; nb.ignoredNames = []; nb.customExcludedWords = []; saveSettings(); _renderNbLists(); $('#rpg-nb-excluded-words').val(''); } });
+
+    // NOTE: Name Ban handlers removed — feature superseded by Character
+    // Aliases (Character Workshop → Identity → Aliases).
 
     // ── Chat Bubbles & Info Panel customization ──
     const _cbSettings = () => {
@@ -1992,19 +1953,7 @@ function bindSettingsUI() {
     // (Doom Counter toast listener is registered eagerly in initUI — it must
     // work before the settings UI has ever been opened.)
 
-    // Name Ban
-    const nb = extensionSettings.nameBan || {};
-    $('#rpg-toggle-name-ban').prop('checked', nb.enabled || false);
-    $('#rpg-nb-badge').text(nb.enabled ? 'on' : 'off');
-    $('#rpg-nb-options').toggle(nb.enabled || false);
-    $('#rpg-nb-sensitivity').val(nb.sensitivity || 'normal');
-    $('#rpg-nb-show-modal').prop('checked', nb.showModalForNew !== false);
-    $('#rpg-nb-auto-apply').prop('checked', nb.autoApplyKnownMappings !== false);
-    $('#rpg-nb-inject-prompt').prop('checked', nb.injectIntoPrompt !== false);
-    $('#rpg-nb-excluded-words').val((nb.customExcludedWords || []).join('\n'));
-    renderApprovedNamesTags($('#rpg-nb-approved-tags'));
-    renderIgnoredNamesTags($('#rpg-nb-ignored-tags'));
-    renderMappingsTable($('#rpg-nb-mappings-container'));
+    // NOTE: Name Ban settings init removed — feature superseded by Character Aliases.
 
     // ── Doom Button (FAB) ──
     if (!extensionSettings.fab || typeof extensionSettings.fab !== 'object') {
@@ -2665,8 +2614,6 @@ jQuery(async () => {
         }
         // Initialize i18n early for the settings panel
         await i18n.init();
-        // Set up a central listener for language changes to update dynamic UI parts
-        i18n.addEventListener('languageChanged', updateDynamicLabels);
         // Add extension settings to Extensions tab
         try {
             await addExtensionSettings();

@@ -21,6 +21,7 @@ import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portr
 import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -523,13 +524,6 @@ function buildTile(name, isActive) {
     );
 }
 
-function escapeAttr(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 function showContextMenu(x, y) {
     const $menu = $modal.find('#cr-context-menu');
     if (!$menu.length) return;
@@ -877,6 +871,11 @@ function purgeCharacter(name) {
     if (s.heroPositions) delete s.heroPositions[name];
     if (s.characterInjection) delete s.characterInjection[name];
     if (s.characterRelationships) delete s.characterRelationships[name];
+    // Knives and aliases too — an orphaned alias entry would keep silently
+    // renaming a future, unrelated character to this deleted one, and a
+    // recreated same-name character would inherit the dead one's knives.
+    if (s.characterKnives) delete s.characterKnives[name];
+    if (s.characterAliases) delete s.characterAliases[name];
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata, not extensionSettings. Wipe those too or the
     // tile reappears on the next renderGrid (which reads via the active
