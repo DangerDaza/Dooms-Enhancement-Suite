@@ -365,7 +365,7 @@ Return ONLY a JSON array of exactly ${count} strings.`;
     // repairJSON tolerates markdown fences, thinking tags, and trailing
     // commas; it returns null on unrecoverable input, which fails the
     // Array.isArray check below and keeps the caller's error path intact.
-    const parsed = repairJSON(jsonMatch[0]);
+    const parsed = repairJSON(jsonMatch[0], { allowFunctionEval: false });
     if (!Array.isArray(parsed)) throw new Error('Invalid knife data returned');
 
     return parsed
@@ -510,7 +510,7 @@ export async function generateTwistOptions(count) {
             throw new Error('No JSON array found in response');
         }
 
-        const twists = repairJSON(jsonMatch[0]);
+        const twists = repairJSON(jsonMatch[0], { allowFunctionEval: false });
         if (!Array.isArray(twists) || twists.length === 0) {
             throw new Error('Invalid twist data returned');
         }

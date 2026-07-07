@@ -7,9 +7,14 @@
  * Handles common AI mistakes like trailing commas, missing commas, wrong quotes, etc.
  *
  * @param {string} jsonString - Potentially malformed JSON string
+ * @param {Object} [options]
+ * @param {boolean} [options.allowFunctionEval=true] Whether the last-resort
+ *   repair may run the cleaned string through the Function constructor. This
+ *   executes the string as code, so callers handling untrusted/injectable AI
+ *   output should pass `false` to stay parse-only.
  * @returns {object|null} Repaired JSON object or null if repair fails
  */
-export function repairJSON(jsonString) {
+export function repairJSON(jsonString, { allowFunctionEval = true } = {}) {
     if (typeof jsonString !== 'string') {
         console.warn('[RPG JSON Repair] Invalid input type:', typeof jsonString);
         return null;
@@ -64,7 +69,10 @@ export function repairJSON(jsonString) {
         }
     }
     // Attempt 4: Use Function constructor (safer than eval, still controlled)
-    // Only as last resort for trusted AI output
+    // Only as last resort for trusted AI output; callers can opt out.
+    if (!allowFunctionEval) {
+        return null;
+    }
     try {
         const fn = new Function(`"use strict"; return (${cleaned});`);
         const result = fn();
