@@ -1062,58 +1062,54 @@ function bindSettingsUI() {
         }
     }
 
-    // Visibility toggles
-    $('#rpg-st-show-time').on('change', function () { _stSettings().showTime = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-date').on('change', function () { _stSettings().showDate = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-location').on('change', function () { _stSettings().showLocation = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-characters').on('change', function () { _stSettings().showCharacters = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-quest').on('change', function () { _stSettings().showQuest = $(this).prop('checked'); _saveSt(); });
-    $('#rpg-st-show-events').on('change', function () { _stSettings().showRecentEvents = $(this).prop('checked'); _saveSt(); });
-    // Optional fields: Scene Tracker toggle and infoBox widget enabled flag are the same concept.
+    // Scene Tracker toggle and infoBox widget enabled flag are the same concept.
     // Syncing both ensures the AI generates the field AND the tracker bar displays it.
-    const _syncOptionalField = (widgetKey, checked) => {
+    // Also mirrors the Tracker Editor checkbox when its modal is open —
+    // .prop('checked') does not fire change events, so no sync loop.
+    const _editorCheckboxIds = {
+        time: '#rpg-widget-time',
+        date: '#rpg-widget-date',
+        location: '#rpg-widget-location',
+        recentEvents: '#rpg-widget-events',
+        weather: '#rpg-widget-weather',
+        moonPhase: '#rpg-widget-moonphase',
+        tension: '#rpg-widget-tension',
+        timeSinceRest: '#rpg-widget-timesincerest',
+        conditions: '#rpg-widget-conditions',
+        terrain: '#rpg-widget-terrain',
+    };
+    const _syncWidgetField = (widgetKey, checked) => {
         const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
         if (widgets) {
             if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
             widgets[widgetKey].enabled = checked;
         }
+        if (_editorCheckboxIds[widgetKey]) $(_editorCheckboxIds[widgetKey]).prop('checked', checked);
     };
-    $('#rpg-st-show-moonphase').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showMoonPhase = v;
-        _syncOptionalField('moonPhase', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-tension').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTension = v;
-        _syncOptionalField('tension', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-timesincerest').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTimeSinceRest = v;
-        _syncOptionalField('timeSinceRest', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-conditions').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showConditions = v;
-        _syncOptionalField('conditions', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-terrain').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showTerrain = v;
-        _syncOptionalField('terrain', v);
-        _saveSt();
-    });
-    $('#rpg-st-show-weather').on('change', function () {
-        const v = $(this).prop('checked');
-        _stSettings().showWeather = v;
-        _syncOptionalField('weather', v);
-        _saveSt();
-    });
+    // Visibility toggles. showCharacters/showQuest have no infoBox widget
+    // equivalent (their data comes from other trackers), so they don't sync.
+    const _stToggles = [
+        ['#rpg-st-show-time', 'showTime', 'time'],
+        ['#rpg-st-show-date', 'showDate', 'date'],
+        ['#rpg-st-show-location', 'showLocation', 'location'],
+        ['#rpg-st-show-characters', 'showCharacters', null],
+        ['#rpg-st-show-quest', 'showQuest', null],
+        ['#rpg-st-show-events', 'showRecentEvents', 'recentEvents'],
+        ['#rpg-st-show-moonphase', 'showMoonPhase', 'moonPhase'],
+        ['#rpg-st-show-tension', 'showTension', 'tension'],
+        ['#rpg-st-show-timesincerest', 'showTimeSinceRest', 'timeSinceRest'],
+        ['#rpg-st-show-conditions', 'showConditions', 'conditions'],
+        ['#rpg-st-show-terrain', 'showTerrain', 'terrain'],
+        ['#rpg-st-show-weather', 'showWeather', 'weather'],
+    ];
+    for (const [selector, showKey, widgetKey] of _stToggles) {
+        $(selector).on('change', function () {
+            const v = $(this).prop('checked');
+            _stSettings()[showKey] = v;
+            if (widgetKey) _syncWidgetField(widgetKey, v);
+            _saveSt();
+        });
+    }
     // Layout
     $('#rpg-st-layout').on('change', function () {
         _stSettings().layout = $(this).val();

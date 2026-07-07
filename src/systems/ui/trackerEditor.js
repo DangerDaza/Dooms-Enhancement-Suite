@@ -30,6 +30,7 @@ import {
 } from '../../core/persistence.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts } from '../rendering/thoughts.js';
+import { applySceneTrackerSettings, updateChatSceneHeaders } from '../rendering/sceneHeaders.js';
 let $editorModal = null;
 let activeTab = 'infoBox';
 let tempConfig = null; // Temporary config for cancel functionality
@@ -287,9 +288,12 @@ function applyTrackerConfig() {
     } else {
         saveSettings();
     }
-    // Re-render all trackers with new config
+    // Re-render all trackers with new config. Scene headers included — widget
+    // toggles in this editor also sync the Scene Tracker show-flags.
     renderInfoBox();
     renderThoughts();
+    applySceneTrackerSettings();
+    updateChatSceneHeaders();
 }
 /**
  * Reset configuration to defaults
@@ -632,6 +636,11 @@ function renderInfoBoxTab() {
     html += `<input type="checkbox" id="rpg-widget-events" ${config.widgets.recentEvents.enabled ? 'checked' : ''}>`;
     html += `<label for="rpg-widget-events">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.recentEventsWidget')}</label>`;
     html += '</div>';
+    // Weather widget
+    html += '<div class="rpg-editor-widget-row">';
+    html += `<input type="checkbox" id="rpg-widget-weather" ${config.widgets.weather?.enabled ? 'checked' : ''}>`;
+    html += `<label for="rpg-widget-weather">🌤️ Weather</label>`;
+    html += '</div>';
     // --- New optional fields ---
     html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;
     html += '<div class="rpg-editor-widget-row">';
@@ -681,28 +690,18 @@ function renderInfoBoxTab() {
  */
 function setupInfoBoxListeners() {
     const widgets = extensionSettings.trackerConfig.infoBox.widgets;
-    $('#rpg-widget-date').off('change').on('change', function() {
-        widgets.date.enabled = $(this).is(':checked');
-    });
-    $('#rpg-date-format').off('change').on('change', function() {
-        widgets.date.format = $(this).val();
-    });
-    $('#rpg-widget-time').off('change').on('change', function() {
-        widgets.time.enabled = $(this).is(':checked');
-    });
-    $('#rpg-widget-location').off('change').on('change', function() {
-        widgets.location.enabled = $(this).is(':checked');
-    });
-    $('#rpg-widget-events').off('change').on('change', function() {
-        widgets.recentEvents.enabled = $(this).is(':checked');
-    });
-    // Optional fields: also sync the Scene Tracker show-flag so both settings agree.
-    // The Scene Tracker toggle in the main panel and the widget checkbox here are the same concept.
+    // Widget checkbox and Scene Tracker show-flag are the same concept, so every
+    // toggle here also syncs the flag and mirrors the panel checkbox (if open).
+    // .prop('checked') does not fire change events, so no sync loop.
     const _syncSceneTracker = (showKey, checked) => {
         if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
         extensionSettings.sceneTracker[showKey] = checked;
-        // Mirror the UI checkbox in the Scene Tracker panel (if the panel is open)
         const uiMap = {
+            showTime: '#rpg-st-show-time',
+            showDate: '#rpg-st-show-date',
+            showLocation: '#rpg-st-show-location',
+            showRecentEvents: '#rpg-st-show-events',
+            showWeather: '#rpg-st-show-weather',
             showMoonPhase: '#rpg-st-show-moonphase',
             showTension: '#rpg-st-show-tension',
             showTimeSinceRest: '#rpg-st-show-timesincerest',
@@ -711,30 +710,28 @@ function setupInfoBoxListeners() {
         };
         if (uiMap[showKey]) $(uiMap[showKey]).prop('checked', checked);
     };
-    $('#rpg-widget-moonphase').off('change').on('change', function() {
-        if (!widgets.moonPhase) widgets.moonPhase = {};
-        widgets.moonPhase.enabled = $(this).is(':checked');
-        _syncSceneTracker('showMoonPhase', $(this).is(':checked'));
-    });
-    $('#rpg-widget-tension').off('change').on('change', function() {
-        if (!widgets.tension) widgets.tension = {};
-        widgets.tension.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTension', $(this).is(':checked'));
-    });
-    $('#rpg-widget-timesincerest').off('change').on('change', function() {
-        if (!widgets.timeSinceRest) widgets.timeSinceRest = {};
-        widgets.timeSinceRest.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTimeSinceRest', $(this).is(':checked'));
-    });
-    $('#rpg-widget-conditions').off('change').on('change', function() {
-        if (!widgets.conditions) widgets.conditions = {};
-        widgets.conditions.enabled = $(this).is(':checked');
-        _syncSceneTracker('showConditions', $(this).is(':checked'));
-    });
-    $('#rpg-widget-terrain').off('change').on('change', function() {
-        if (!widgets.terrain) widgets.terrain = {};
-        widgets.terrain.enabled = $(this).is(':checked');
-        _syncSceneTracker('showTerrain', $(this).is(':checked'));
+    const _widgetToggles = [
+        ['#rpg-widget-date', 'date', 'showDate'],
+        ['#rpg-widget-time', 'time', 'showTime'],
+        ['#rpg-widget-location', 'location', 'showLocation'],
+        ['#rpg-widget-events', 'recentEvents', 'showRecentEvents'],
+        ['#rpg-widget-weather', 'weather', 'showWeather'],
+        ['#rpg-widget-moonphase', 'moonPhase', 'showMoonPhase'],
+        ['#rpg-widget-tension', 'tension', 'showTension'],
+        ['#rpg-widget-timesincerest', 'timeSinceRest', 'showTimeSinceRest'],
+        ['#rpg-widget-conditions', 'conditions', 'showConditions'],
+        ['#rpg-widget-terrain', 'terrain', 'showTerrain'],
+    ];
+    for (const [selector, widgetKey, showKey] of _widgetToggles) {
+        $(selector).off('change').on('change', function() {
+            const v = $(this).is(':checked');
+            if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
+            widgets[widgetKey].enabled = v;
+            _syncSceneTracker(showKey, v);
+        });
+    }
+    $('#rpg-date-format').off('change').on('change', function() {
+        widgets.date.format = $(this).val();
     });
     // Custom scene fields
     const ensureCustomFields = () => {
