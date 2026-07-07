@@ -1046,7 +1046,17 @@ function bindSettingsUI() {
         if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
         return extensionSettings.sceneTracker;
     };
-    const _saveSt = () => { saveSettings(); applySceneTrackerSettings(); updateChatSceneHeaders(); };
+    // saveSettings + applySceneTrackerSettings are cheap (debounced save +
+    // style-attr updates on existing headers = live preview), but
+    // updateChatSceneHeaders is a full rebuild — during a slider/color drag
+    // the input event fires per frame, so the rebuild is debounced.
+    let _stRebuildTimer = null;
+    const _saveSt = () => {
+        saveSettings();
+        applySceneTrackerSettings();
+        clearTimeout(_stRebuildTimer);
+        _stRebuildTimer = setTimeout(() => updateChatSceneHeaders(), 150);
+    };
 
     /**
      * Shows/hides the color pickers and theme-controlled notice in the
