@@ -20,6 +20,7 @@ import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSett
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
 import { escapeHtml } from '../../utils/html.js';
+import { repairJSON } from '../../utils/jsonRepair.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -354,7 +355,10 @@ Return ONLY a JSON array of exactly ${count} strings.`;
     const jsonMatch = response.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('No JSON array found in response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // repairJSON tolerates markdown fences, thinking tags, and trailing
+    // commas; it returns null on unrecoverable input, which fails the
+    // Array.isArray check below and keeps the caller's error path intact.
+    const parsed = repairJSON(jsonMatch[0]);
     if (!Array.isArray(parsed)) throw new Error('Invalid knife data returned');
 
     return parsed
@@ -499,7 +503,7 @@ export async function generateTwistOptions(count) {
             throw new Error('No JSON array found in response');
         }
 
-        const twists = JSON.parse(jsonMatch[0]);
+        const twists = repairJSON(jsonMatch[0]);
         if (!Array.isArray(twists) || twists.length === 0) {
             throw new Error('Invalid twist data returned');
         }
