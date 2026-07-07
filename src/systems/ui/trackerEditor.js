@@ -639,7 +639,7 @@ function renderInfoBoxTab() {
     // Weather widget
     html += '<div class="rpg-editor-widget-row">';
     html += `<input type="checkbox" id="rpg-widget-weather" ${config.widgets.weather?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-weather">🌤️ Weather</label>`;
+    html += `<label for="rpg-widget-weather">🌤️ ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.weatherWidget')}</label>`;
     html += '</div>';
     // --- New optional fields ---
     html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;

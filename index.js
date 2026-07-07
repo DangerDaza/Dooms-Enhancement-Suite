@@ -151,13 +151,6 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
-/**
- * Updates UI elements that are dynamically generated and not covered by data-i18n-key.
- */
-function updateDynamicLabels() {
-    // Currently no dynamic labels to update
-}
-
 function updatePortraitEnhancementSettingsVisibility() {
     const enabled = extensionSettings.syncExpressionsToPresentCharacters === true;
     const source = extensionSettings.portraitEnhancementMode || 'expressions';
@@ -208,17 +201,6 @@ async function addExtensionSettings() {
             }
         }
     });
-    // Set up language selector
-    const langSelect = $('#dooms-tracker-language-select');
-    if (langSelect.length) {
-        langSelect.val(i18n.currentLanguage);
-        langSelect.on('change', async function () {
-            const selectedLanguage = $(this).val();
-            await i18n.setLanguage(selectedLanguage);
-            // We need to re-apply translations to the settings panel specifically
-            i18n.applyTranslations(document.getElementById('extensions_settings2'));
-        });
-    }
     // Set up "Open Settings" button in the extension dropdown
     $('#dooms-open-settings-btn').on('click', function () {
         ensureSettingsUI().then(() => {
@@ -2632,8 +2614,6 @@ jQuery(async () => {
         }
         // Initialize i18n early for the settings panel
         await i18n.init();
-        // Set up a central listener for language changes to update dynamic UI parts
-        i18n.addEventListener('languageChanged', updateDynamicLabels);
         // Add extension settings to Extensions tab
         try {
             await addExtensionSettings();
