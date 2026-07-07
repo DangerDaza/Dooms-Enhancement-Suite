@@ -21,6 +21,7 @@ import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portr
 import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -521,13 +522,6 @@ function buildTile(name, isActive) {
             <span class="cr-tile-name">${safeName}</span>
         </button>`
     );
-}
-
-function escapeAttr(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function showContextMenu(x, y) {

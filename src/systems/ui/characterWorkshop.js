@@ -40,6 +40,7 @@ import {
 import { desSetExtensionPrompt as setExtensionPrompt, recordPortraitArm, recordPortraitDisarm, recordPortraitFire } from '../generation/inspector.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
+import { escapeHtml } from '../../utils/html.js';
 
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
@@ -687,16 +688,6 @@ function renderTitle() {
     $modal.find('#cw-inject-label').text(draft.isUser ? 'Inject persona' : 'Inject into Scene');
 }
 
-/** Escapes HTML special characters — knife text is player-authored free text. */
-function escapeKnifeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
 /**
  * Renders the theme picker shown when Generate Knives is clicked.
  * Picking a chip starts the actual generation with that theme.
@@ -704,7 +695,7 @@ function escapeKnifeHtml(str) {
 function renderKnifeThemePicker() {
     const $sugg = $modal.find('#cw-knife-suggestions');
     const chips = KNIFE_THEMES.map((t, i) => `
-        <button type="button" class="rpg-rel-chip cw-knife-theme-chip" data-theme-index="${i}" title="${escapeKnifeHtml(t.guidance)}">
+        <button type="button" class="rpg-rel-chip cw-knife-theme-chip" data-theme-index="${i}" title="${escapeHtml(t.guidance)}">
             <span>${t.emoji}</span> ${t.label}
         </button>
     `).join('');
@@ -725,7 +716,7 @@ function renderKnifeSuggestions(suggestions) {
         <label class="cw-knife-suggestion">
             <input type="checkbox" data-index="${i}">
             <span class="rpg-dc-knife-icon">🔪</span>
-            <span class="rpg-dc-knife-text">${escapeKnifeHtml(text)}</span>
+            <span class="rpg-dc-knife-text">${escapeHtml(text)}</span>
         </label>
     `).join('');
     $sugg.prop('hidden', false).html(`
@@ -754,9 +745,9 @@ function renderKnives() {
         return;
     }
     $list.html(knives.map(k => `
-        <div class="rpg-dc-knife-row${k.used ? ' rpg-dc-knife-used' : ''}" data-id="${escapeKnifeHtml(k.id)}">
+        <div class="rpg-dc-knife-row${k.used ? ' rpg-dc-knife-used' : ''}" data-id="${escapeHtml(k.id)}">
             <span class="rpg-dc-knife-icon">🔪</span>
-            <span class="rpg-dc-knife-text">${escapeKnifeHtml(k.text)}</span>
+            <span class="rpg-dc-knife-text">${escapeHtml(k.text)}</span>
             ${k.used ? `
                 <span class="rpg-dc-knife-used-badge">used</span>
                 <button class="rpg-dc-knife-btn rpg-dc-knife-rearm" type="button" title="Re-arm this knife so it can be offered again"><i class="fa-solid fa-rotate-left"></i></button>
@@ -820,8 +811,8 @@ function renderAliases() {
         return;
     }
     $tags.html(aliases.map(a => `
-        <span class="cw-alias-tag">${escapeKnifeHtml(a)}
-            <button type="button" class="cw-alias-remove" data-alias="${escapeKnifeHtml(a)}" title="Remove alias">&times;</button>
+        <span class="cw-alias-tag">${escapeHtml(a)}
+            <button type="button" class="cw-alias-remove" data-alias="${escapeHtml(a)}" title="Remove alias">&times;</button>
         </span>
     `).join(''));
 }
@@ -1156,7 +1147,7 @@ function bindStaticListeners() {
         const forName = draft.name;
         const $sugg = $modal.find('#cw-knife-suggestions');
         $btn.prop('disabled', true);
-        $sugg.prop('hidden', false).html(`<div class="cw-knife-sugg-loading">Forging ${escapeKnifeHtml(theme.label.toLowerCase())} knives&hellip; (asking your AI)</div>`);
+        $sugg.prop('hidden', false).html(`<div class="cw-knife-sugg-loading">Forging ${escapeHtml(theme.label.toLowerCase())} knives&hellip; (asking your AI)</div>`);
         try {
             const suggestions = await generateKnifeSuggestions(forName, {
                 isUser: draft.isUser,

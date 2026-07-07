@@ -16,6 +16,7 @@ import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { escapeHtml } from '../../utils/html.js';
 
 /**
  * Extract character entries from characterThoughts data. Inlined here
@@ -69,13 +70,6 @@ export function clearBubbleState(mesText) {
 // ─────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────
-
-/** HTML-escape a string for safe insertion */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
 
 /** Strip HTML tags and return plain text */
 function stripHtml(html) {

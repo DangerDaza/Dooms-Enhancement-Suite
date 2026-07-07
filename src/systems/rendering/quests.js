@@ -5,6 +5,7 @@
 import { extensionSettings, $questsContainer, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
+import { escapeHtml } from '../../utils/html.js';
 /**
  * Syncs the current extensionSettings.quests to committedTrackerData.quests
  * This ensures quest changes made via UI are reflected in the data sent to AI
@@ -24,16 +25,6 @@ function syncQuestsToCommittedData() {
 /** @deprecated Lock UI disabled — preserved for future scene tracker integration */
 function getLockIconHtml(_tracker, _path) {
     return '';
-}
-/**
- * HTML escape helper
- * @param {string} text - Text to escape
- * @returns {string} Escaped HTML
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 /**
  * Renders the quests sub-tab navigation (Main, Optional)

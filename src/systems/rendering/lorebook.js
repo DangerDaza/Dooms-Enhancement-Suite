@@ -15,6 +15,7 @@ import * as lorebookAPI from '../lorebook/lorebookAPI.js';
 import * as campaignManager from '../lorebook/campaignManager.js';
 import { getLorebookModal } from '../ui/lorebookModal.js';
 import { renderMobileLorebook, initMobileLorebookEventDelegation } from './lorebookMobile.js';
+import { escapeHtml } from '../../utils/html.js';
 
 // ─── Icon Palette ────────────────────────────────────────────────────────────
 
@@ -54,12 +55,6 @@ function buildIconPickerHtml(campaignId, currentIcon, currentColor) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 let saveDebounceTimer = null;
 function debouncedSave(worldName, data) {

@@ -21,6 +21,7 @@ import {
     clearGenerationLog,
     snapshot,
 } from '../generation/inspector.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 
 const MODAL_ID = 'rpg-inspector-popup';
 
@@ -441,24 +442,6 @@ function copyAllAsJson() {
     }).catch(() => {
         try { toastr.error('Copy failed.', '', { timeOut: 1500 }); } catch {}
     });
-}
-
-function escapeHtml(s) {
-    if (s == null) return '';
-    return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-// data URLs and file paths go straight into an attribute, so escape only
-// the chars that break the attribute (quote + ampersand). NOT general
-// HTML escaping — that would mangle base64 content.
-function escapeAttr(s) {
-    if (s == null) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
 // Quick tab-link hook (used in the empty-snapshot blurb)

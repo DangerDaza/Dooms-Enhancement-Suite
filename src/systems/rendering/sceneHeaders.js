@@ -14,6 +14,7 @@
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { getDoomCounterState, getActiveCharacterColors, saveSettings } from '../../core/persistence.js';
 import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
+import { escapeHtml } from '../../utils/html.js';
 import { chat } from '../../../../../../../script.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
@@ -1574,17 +1575,3 @@ function buildDoomCounterBadge(doomTension) {
 //  Utility
 // ─────────────────────────────────────────────
 
-/**
- * Simple HTML escape to prevent XSS from AI-generated content.
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-    if (!str) return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}

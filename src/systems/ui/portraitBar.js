@@ -23,6 +23,7 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
+import { escapeHtml } from '../../utils/html.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 
@@ -1365,17 +1366,6 @@ export function upscaleImage(srcDataUrl, width, height) {
 
 function sanitizeFilename(name) {
     return name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    if (typeof str !== 'string') str = String(str);
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
 }
 
 /**

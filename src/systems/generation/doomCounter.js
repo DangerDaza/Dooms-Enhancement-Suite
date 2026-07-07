@@ -19,6 +19,7 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSettings } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
+import { escapeHtml } from '../../utils/html.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -193,16 +194,6 @@ export function resetCounters() {
 // instead of AI-generated twists. NPC knives live in
 // extensionSettings.characterKnives[name]; user-persona knives live on
 // extensionSettings.userCharacters[name].knives.
-
-/** Escapes HTML special characters — knife text is player-authored free text. */
-function escapeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 /** Short card title for a knife — the first few words of its text. */
 function knifeCardTitle(text) {
