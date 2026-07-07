@@ -500,7 +500,7 @@ function renderPortraitBarNow() {
         const absentClass = char.present ? '' : ' dooms-pb-absent';
         const userClass = char.isUser ? ' dooms-pb-user' : '';
         const nameEsc = escapeHtml(char.name);
-        const emoji = char.emoji || '👤';
+        const emoji = escapeHtml(char.emoji || '👤');
         const absentOverlay = char.present ? '' : '<div class="dooms-pb-absent-overlay"></div>';
         // For user characters, prefer the color stored on userCharacters
         // over any AI-assigned dialogue color.
@@ -510,7 +510,7 @@ function renderPortraitBarNow() {
             if (uc && uc.color) charColor = uc.color;
         }
         const colorDot = charColor
-            ? `<span class="dooms-portrait-card-color-dot" style="background:${charColor};"></span>`
+            ? `<span class="dooms-portrait-card-color-dot" style="background:${escapeHtml(charColor)};"></span>`
             : '';
         const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
@@ -885,7 +885,7 @@ async function probePortraitFileUrl(name, basePath) {
             if (response.ok) {
                 portraitFileCache.set(name, testUrl);
                 // Update DOM if the card is still showing the optimistic .png
-                const $img = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"] img`);
+                const $img = $(`.dooms-portrait-card[data-char="${escapeJsString(name)}"] img`);
                 if ($img.length && $img.attr('src') !== testUrl) {
                     $img.attr('src', testUrl);
                 }
@@ -906,7 +906,7 @@ async function probePortraitFileUrl(name, basePath) {
 
     // If no npcAvatar either, show emoji fallback
     if (!(extensionSettings.npcAvatars && extensionSettings.npcAvatars[name])) {
-        const $card = $(`.dooms-portrait-card[data-char="${escapeAttr(name)}"]`);
+        const $card = $(`.dooms-portrait-card[data-char="${escapeJsString(name)}"]`);
         if ($card.length && $card.find('img').length) {
             const $img = $card.find('img');
             $img.hide();
@@ -1378,7 +1378,12 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-function escapeAttr(str) {
+/**
+ * Escapes a string for embedding inside a double-quoted jQuery selector
+ * (JS-string escaping, NOT HTML entities). Not an HTML attribute escaper —
+ * use escapeHtml/escapeAttr from utils/html.js for attribute contexts.
+ */
+function escapeJsString(str) {
     if (!str) return '';
     return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
