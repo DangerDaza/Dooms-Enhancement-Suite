@@ -1,6 +1,6 @@
 {
     "template.trackerEditorModal.title": "Edit Trackers",
-    "template.trackerEditorModal.tabs.infoBox": "Info Box",
+    "template.trackerEditorModal.tabs.infoBox": "Scene Tracker",
     "template.trackerEditorModal.tabs.presentCharacters": "Present Characters",
     "template.trackerEditorModal.buttons.reset": "Reset",
     "template.trackerEditorModal.buttons.save": "Save & Apply",
