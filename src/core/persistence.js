@@ -560,6 +560,10 @@ export function saveChatData({ immediate = false } = {}) {
         syncedExpressionPortraits: syncedExpressionPortraits,
         syncedExpressionLabels: syncedExpressionLabels,
         doomCounterState: chat_metadata.dooms_tracker?.doomCounterState || null,
+        // Preserve the per-chat Knives toggle — this rebuild replaces the whole
+        // dooms_tracker object, so any field not copied here is dropped (and,
+        // with immediate saves, wiped from disk on the next generation).
+        knivesEnabled: chat_metadata.dooms_tracker?.knivesEnabled === true,
         characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
         timestamp: Date.now()
     };
@@ -574,11 +578,12 @@ export function saveChatData({ immediate = false } = {}) {
     // Debounced save by default — the standard SillyTavern pattern; immediate
     // saves on every UI edit caused performance issues. Commit points pass
     // { immediate: true } so the write can't be dropped by a fast chat switch.
+    // Returns the write promise for immediate saves so callers can await it.
     if (immediate) {
-        Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] chat save failed', err));
-    } else {
-        saveChatDebounced();
+        return Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] chat save failed', err));
     }
+    saveChatDebounced();
+    return Promise.resolve();
 }
 /**
  * Updates the last assistant message's swipe data with current tracker data.
@@ -715,6 +720,10 @@ export function loadChatData() {
     // This is exported so doomCounter.js can access it on chat load
     if (savedData.doomCounterState) {
         chat_metadata.dooms_tracker.doomCounterState = savedData.doomCounterState;
+    }
+    // Restore the per-chat Knives toggle (persisted in the tracker blob).
+    if (savedData.knivesEnabled !== undefined) {
+        chat_metadata.dooms_tracker.knivesEnabled = savedData.knivesEnabled === true;
     }
     // Sync with the most recent assistant message's per-message swipe data.
     // This is the most reliable source since it's saved as part of the chat messages
@@ -931,9 +940,15 @@ export function setDoomCounterState(state) {
     if (!chat_metadata.dooms_tracker) {
         chat_metadata.dooms_tracker = {};
     }
+    // Skip the write when nothing changed — onResponseReceived calls this on
+    // every AI message including no-op paths, and an immediate save serializes
+    // the whole chat. Only pay that cost when the state actually moved.
+    const prev = chat_metadata.dooms_tracker.doomCounterState;
+    const unchanged = prev && JSON.stringify(prev) === JSON.stringify(state);
     chat_metadata.dooms_tracker.doomCounterState = state;
-    // Immediate save: this fires at most once per AI message, and a debounced
-    // write is lost if the user switches chats before it flushes.
+    if (unchanged) return;
+    // Immediate save: a debounced write is lost if the user switches chats
+    // before it flushes.
     Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] doom counter save failed', err));
 }
 
