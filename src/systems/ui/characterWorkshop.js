@@ -42,6 +42,22 @@ import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 import { escapeHtml } from '../../utils/html.js';
 
+/**
+ * Runs a save function, surfacing failures instead of silently discarding
+ * the user's edit — a swallowed save error loses knife/alias/color changes
+ * with zero feedback.
+ */
+function saveOrWarn(saveFn, what) {
+    try {
+        saveFn();
+    } catch (e) {
+        console.error(`[DES Workshop] ${what} save failed`, e);
+        try {
+            if (window.toastr) window.toastr.error(`Failed to save ${what} — changes may be lost. Check the console.`, 'Character Workshop', { timeOut: 5000 });
+        } catch (toastError) { /* toast is best-effort */ }
+    }
+}
+
 // SillyTavern extension-prompt slot key; must be unique per feature.
 const INJECT_SLOT = 'dooms-workshop-scene-inject';
 // Separate slot for "Eject from scene" — strong anti-inject direction
@@ -213,7 +229,7 @@ export function setCharacterBanished(name, banished) {
             }
         } catch (e) {}
         saveCharacterRosterChange();
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         refreshBanPrompt();
         try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
         try { renderThoughts(); } catch (e) {}
@@ -224,7 +240,7 @@ export function setCharacterBanished(name, banished) {
             }
         }
         saveCharacterRosterChange();
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         refreshBanPrompt();
     }
 }
@@ -1693,7 +1709,7 @@ function commitDraft() {
             knives: Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [],
         };
         extensionSettings.userCharacters[name] = next;
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
         // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
         // the on-disk URL in the background. Idempotent + locked.
@@ -1769,7 +1785,7 @@ function commitDraft() {
         // saveSettings otherwise) — saveCharacterRosterChange picks
         // the right one. The trailing saveSettings() at the end of
         // commitDraft still runs for the non-per-chat fields.
-        try { saveCharacterRosterChange(); } catch (e) {}
+        saveOrWarn(saveCharacterRosterChange, 'roster change');
         // Re-attribute existing bubbles with the updated color map.
         Promise.resolve().then(async () => {
             try {
@@ -1915,7 +1931,7 @@ function copyNpcToUserCharacter(name) {
             // a different default flow.
         },
     };
-    try { saveSettings(); } catch (e) {}
+    saveOrWarn(saveSettings, 'settings');
     try {
         if (window.toastr) window.toastr.success(
             `Copied "${trimmed}" to User Characters.`,
@@ -1975,7 +1991,7 @@ function copyUserToNpcCharacter(name) {
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
-    try { saveSettings(); } catch (e) {}
+    saveOrWarn(saveSettings, 'settings');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try {
         if (window.toastr) window.toastr.success(
@@ -1999,7 +2015,7 @@ function deleteCharacter(name) {
         if (extensionSettings.activeUserCharacter === name) {
             extensionSettings.activeUserCharacter = null;
         }
-        try { saveSettings(); } catch (e) {}
+        saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
         return;
     }
@@ -2062,7 +2078,7 @@ function deleteCharacter(name) {
     }
     saveSettings();
     if (extensionSettings.perChatCharacterTracking) {
-        try { saveChatData(); } catch (e) {}
+        saveOrWarn(saveChatData, 'chat data');
     }
     // Re-emit the standing ban-list extension prompt so the AI stops
     // being told to exclude a name we just deleted. Without this the
@@ -2351,7 +2367,7 @@ function markCharacterPresentNow(name) {
     try { updateLastGeneratedData({ characterThoughts: serialized }); }
     catch (e) { console.warn('[Dooms Tracker] Workshop: updateLastGeneratedData failed', e); }
 
-    try { saveChatData(); } catch (e) { /* best-effort */ }
+    saveOrWarn(saveChatData, 'chat data');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { renderThoughts(); } catch (e) {}
     return true;
@@ -2399,7 +2415,7 @@ function unmarkCharacterPresentNow(name) {
         serialized = JSON.stringify(parsed);
     }
     try { updateLastGeneratedData({ characterThoughts: serialized }); } catch (e) {}
-    try { saveChatData(); } catch (e) {}
+    saveOrWarn(saveChatData, 'chat data');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try { renderThoughts(); } catch (e) {}
 }
