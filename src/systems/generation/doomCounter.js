@@ -18,7 +18,7 @@ import { getContext } from '../../../../../../extensions.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSettings } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
-import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from '../ui/promptsEditor.js';
+import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from './defaultPrompts.js';
 import { escapeHtml } from '../../utils/html.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 
