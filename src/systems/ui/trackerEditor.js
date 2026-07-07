@@ -4,6 +4,7 @@
  */
 import { i18n } from '../../core/i18n.js';
 import { extensionSettings } from '../../core/state.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import {
     saveSettings,
     getPresets,
@@ -199,7 +200,7 @@ function updatePresetUI() {
     for (const [id, preset] of Object.entries(presets)) {
         const isDefault = id === defaultPresetId;
         const starPrefix = isDefault ? '★ ' : '';
-        $select.append(`<option value="${id}">${starPrefix}${preset.name}</option>`);
+        $select.append(`<option value="${escapeAttr(id)}">${starPrefix}${escapeHtml(preset.name)}</option>`);
     }
     $select.val(activePresetId);
     // Update the default button appearance
@@ -662,9 +663,9 @@ function renderInfoBoxTab() {
         html += `
             <div class="rpg-editor-field-item" data-index="${index}">
                 <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-infobox-field-toggle" data-index="${index}">
-                <input type="text" value="${field.icon || '✨'}" class="rpg-infobox-field-icon" data-index="${index}" maxlength="4" title="Icon shown in the Scene Tracker" style="width: 44px; flex: 0 0 auto; text-align: center;">
-                <input type="text" value="${field.name}" class="rpg-infobox-field-label" data-index="${index}" placeholder="Field Name">
-                <input type="text" value="${field.description || ''}" class="rpg-infobox-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <input type="text" value="${escapeAttr(field.icon || '✨')}" class="rpg-infobox-field-icon" data-index="${index}" maxlength="4" title="Icon shown in the Scene Tracker" style="width: 44px; flex: 0 0 auto; text-align: center;">
+                <input type="text" value="${escapeAttr(field.name)}" class="rpg-infobox-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-infobox-field-placeholder" data-index="${index}" placeholder="AI Instruction">
                 <button class="rpg-field-remove rpg-infobox-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
@@ -797,10 +798,10 @@ function renderPresentCharactersTab() {
     for (const [relationship, emoji] of Object.entries(relationshipEmojis)) {
         html += `
             <div class="rpg-relationship-item">
-                <input type="text" value="${relationship}" class="rpg-relationship-name" placeholder="Relationship type">
+                <input type="text" value="${escapeAttr(relationship)}" class="rpg-relationship-name" placeholder="Relationship type">
                 <span class="rpg-arrow">→</span>
-                <input type="text" value="${emoji}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
-                <button class="rpg-remove-relationship" data-relationship="${relationship}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+                <input type="text" value="${escapeAttr(emoji)}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
+                <button class="rpg-remove-relationship" data-relationship="${escapeAttr(relationship)}" title="Remove"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
     }
@@ -818,8 +819,8 @@ function renderPresentCharactersTab() {
                     <button class="rpg-field-move-down" data-index="${index}" ${index === config.customFields.length - 1 ? 'disabled' : ''} title="Move down"><i class="fa-solid fa-arrow-down"></i></button>
                 </div>
                 <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-field-toggle" data-index="${index}">
-                <input type="text" value="${field.name}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
-                <input type="text" value="${field.description || ''}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <input type="text" value="${escapeAttr(field.name)}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
+                <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
                 <button class="rpg-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
@@ -835,11 +836,11 @@ function renderPresentCharactersTab() {
     html += '<div class="rpg-thoughts-config">';
     html += '<div class="rpg-editor-input-group">';
     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsLabelLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-name" value="${config.thoughts?.name || 'Thoughts'}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
+    html += `<input type="text" id="rpg-thoughts-name" value="${escapeAttr(config.thoughts?.name || 'Thoughts')}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
     html += '</div>';
     html += '<div class="rpg-editor-input-group">';
     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.aiInstructionLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-description" value="${config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)'}" placeholder="Description of what to generate">`;
+    html += `<input type="text" id="rpg-thoughts-description" value="${escapeAttr(config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)')}" placeholder="Description of what to generate">`;
     html += '</div>';
     html += '</div>';
     // Character Stats
@@ -855,7 +856,7 @@ function renderPresentCharactersTab() {
         html += `
             <div class="rpg-editor-field-item" data-index="${index}">
                 <input type="checkbox" ${stat.enabled ? 'checked' : ''} class="rpg-char-stat-toggle" data-index="${index}">
-                <input type="text" value="${stat.name}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
+                <input type="text" value="${escapeAttr(stat.name)}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
                 <button class="rpg-field-remove rpg-char-stat-remove" data-index="${index}" title="Remove stat"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
@@ -1121,7 +1122,7 @@ function renderHistoryPersistenceTab() {
     // Custom preamble
     html += '<div class="rpg-editor-input-row" style="margin-top: 12px;">';
     html += `<label for="rpg-history-context-preamble">Custom Context Preamble:</label>`;
-    html += `<input type="text" id="rpg-history-context-preamble" value="${historyPersistence.contextPreamble || ''}" class="rpg-text-input" placeholder="Context for that moment:" style="width: 100%; margin-top: 4px;">`;
+    html += `<input type="text" id="rpg-history-context-preamble" value="${escapeAttr(historyPersistence.contextPreamble || '')}" class="rpg-text-input" placeholder="Context for that moment:" style="width: 100%; margin-top: 4px;">`;
     html += '</div>';
     // Quests section
     html += `<h4 style="margin-top: 20px;"><i class="fa-solid fa-scroll"></i> Quests</h4>`;
@@ -1160,8 +1161,8 @@ function renderHistoryPersistenceTab() {
         if (field.enabled) {
             html += `
                 <div class="rpg-editor-toggle-row">
-                    <input type="checkbox" id="rpg-history-scenefield-${field.id}" class="rpg-history-scenefield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
-                    <label for="rpg-history-scenefield-${field.id}">${field.name}</label>
+                    <input type="checkbox" id="rpg-history-scenefield-${escapeAttr(field.id)}" class="rpg-history-scenefield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-scenefield-${escapeAttr(field.id)}">${escapeHtml(field.name)}</label>
                 </div>
             `;
         }
@@ -1176,8 +1177,8 @@ function renderHistoryPersistenceTab() {
         if (field.enabled) {
             html += `
                 <div class="rpg-editor-toggle-row">
-                    <input type="checkbox" id="rpg-history-charfield-${field.id}" class="rpg-history-charfield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
-                    <label for="rpg-history-charfield-${field.id}">${field.name}</label>
+                    <input type="checkbox" id="rpg-history-charfield-${escapeAttr(field.id)}" class="rpg-history-charfield-toggle" data-index="${index}" ${field.persistInHistory ? 'checked' : ''}>
+                    <label for="rpg-history-charfield-${escapeAttr(field.id)}">${escapeHtml(field.name)}</label>
                 </div>
             `;
         }
