@@ -258,6 +258,14 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
         return;
     }
+    // Nothing to update when every tracker section is hidden — the separate
+    // prompt gates all of its sections on these same flags, so the call would
+    // ask the model for nothing. Skipping also stops the external-API error
+    // box ("configure Base URL / API Key") from popping after every message
+    // when the trackers are toggled off but external mode isn't configured.
+    if (!extensionSettings.showInfoBox && !extensionSettings.showCharacterThoughts && !extensionSettings.showQuests) {
+        return;
+    }
     const isExternalMode = extensionSettings.generationMode === 'external';
     let originalProfileName = null;
     let originalPresetName = null;
