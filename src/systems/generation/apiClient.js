@@ -405,8 +405,8 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             renderQuests();
             // Insert inline thought dropdowns into the chat message
             updateChatThoughts();
-            // Save to chat metadata
-            saveChatData();
+            // Save to chat metadata (immediate: generation-end commit point)
+            saveChatData({ immediate: true });
             if (isAutoPortraitModeEnabled()) {
                 const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
                 if (charactersForPortraits.length > 0) {

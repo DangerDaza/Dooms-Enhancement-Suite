@@ -249,8 +249,8 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) {
                 setTimeout(() => updateChatThoughts(), 100);
             }
-            // Save to chat metadata
-            saveChatData();
+            // Save to chat metadata (immediate: generation-end commit point)
+            saveChatData({ immediate: true });
 
             // Doom Counter: evaluate tension after parsing (only for fresh generations, not history loads)
             if (extensionSettings.doomCounter?.enabled && isAwaitingNewMessage) {

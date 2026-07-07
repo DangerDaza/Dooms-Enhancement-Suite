@@ -543,8 +543,13 @@ export function saveSettings() {
 }
 /**
  * Saves RPG data to the current chat's metadata.
+ * @param {Object} [options]
+ * @param {boolean} [options.immediate=false] Write through with
+ *   saveChatConditional instead of the debounced save. Use at commit points
+ *   (generation end, modal save) — a debounced write is silently lost if the
+ *   user switches chats before it fires.
  */
-export function saveChatData() {
+export function saveChatData({ immediate = false } = {}) {
     if (!chat_metadata) {
         return;
     }
@@ -566,9 +571,14 @@ export function saveChatData() {
         trackerData.bannedCharacters = chat_metadata.dooms_tracker?.bannedCharacters || [];
     }
     chat_metadata.dooms_tracker = trackerData;
-    // Use debounced save — the standard SillyTavern pattern.
-    // Immediate saves (saveChatConditional) on every UI edit caused performance issues.
-    saveChatDebounced();
+    // Debounced save by default — the standard SillyTavern pattern; immediate
+    // saves on every UI edit caused performance issues. Commit points pass
+    // { immediate: true } so the write can't be dropped by a fast chat switch.
+    if (immediate) {
+        Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] chat save failed', err));
+    } else {
+        saveChatDebounced();
+    }
 }
 /**
  * Updates the last assistant message's swipe data with current tracker data.
@@ -922,7 +932,9 @@ export function setDoomCounterState(state) {
         chat_metadata.dooms_tracker = {};
     }
     chat_metadata.dooms_tracker.doomCounterState = state;
-    saveChatDebounced();
+    // Immediate save: this fires at most once per AI message, and a debounced
+    // write is lost if the user switches chats before it flushes.
+    Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] doom counter save failed', err));
 }
 
 /**
@@ -945,7 +957,8 @@ export function setDoomKnivesEnabled(enabled) {
         chat_metadata.dooms_tracker = {};
     }
     chat_metadata.dooms_tracker.knivesEnabled = !!enabled;
-    saveChatDebounced();
+    // Immediate save: fires once per toggle click; see setDoomCounterState.
+    Promise.resolve(saveChatConditional()).catch(err => console.error('[DES] knives toggle save failed', err));
 }
 
 /**
