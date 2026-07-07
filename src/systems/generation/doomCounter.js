@@ -15,12 +15,19 @@
  *   tension 5+  → resets streak entirely (story is tense enough)
  */
 import { getContext } from '../../../../../../extensions.js';
-import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog } from '../../core/state.js';
 import { getDoomCounterState, setDoomCounterState, isDoomKnivesEnabled, saveSettings } from '../../core/persistence.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { DEFAULT_TWIST_GENERATOR_RULES_PROMPT, DEFAULT_KNIFE_GENERATOR_RULES_PROMPT } from './defaultPrompts.js';
 import { escapeHtml } from '../../utils/html.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
+
+/** Logs to the debug panel only when debugMode is on — parts of this module run per AI message. */
+function debugLog(message, data = null) {
+    if (extensionSettings.debugMode) {
+        addDebugLog(message, data);
+    }
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,20 +147,20 @@ export function onResponseReceived() {
     if (!state.countdownActive && state.lowStreakCount >= (dc.lowTensionThreshold || 5)) {
         state.countdownActive = true;
         state.countdownCount = dc.countdownLength || 3;
-        console.log(`[Doom Counter] Countdown activated! ${state.countdownCount} messages remaining.`);
+        debugLog(`[Doom Counter] Countdown activated! ${state.countdownCount} messages remaining.`);
     }
 
     // Phase 2: countdown ticks
     if (state.countdownActive) {
         const decrement = getCountdownSpeed(tension);
         state.countdownCount = Math.max(0, state.countdownCount - decrement);
-        console.log(`[Doom Counter] Countdown: ${state.countdownCount} (tension ${tension}, decrement ${decrement})`);
+        debugLog(`[Doom Counter] Countdown: ${state.countdownCount} (tension ${tension}, decrement ${decrement})`);
 
         if (state.countdownCount <= 0) {
             // DOOM TRIGGERED
             state.triggered = true;
             state.totalTwistsTriggered = (state.totalTwistsTriggered || 0) + 1;
-            console.log(`[Doom Counter] ☠️ TRIGGERED! Total triggers: ${state.totalTwistsTriggered}`);
+            debugLog(`[Doom Counter] ☠️ TRIGGERED! Total triggers: ${state.totalTwistsTriggered}`);
         }
     }
 
@@ -553,7 +560,7 @@ export async function triggerDoomCounter() {
 
     // Prevent concurrent triggers (e.g. rapid clicks or re-trigger on next message)
     if (_triggerInProgress) {
-        console.log('[Doom Counter] Trigger already in progress, skipping.');
+        debugLog('[Doom Counter] Trigger already in progress, skipping.');
         return;
     }
     _triggerInProgress = true;
@@ -574,16 +581,16 @@ export async function triggerDoomCounter() {
                 chosenText = knife.text;
                 isKnife = true;
                 knifeCharacter = owner.characterName;
-                console.log(`[Doom Counter] Trap mode: one of ${owner.characterName}'s knives was silently drawn.`);
+                debugLog(`[Doom Counter] Trap mode: one of ${owner.characterName}'s knives was silently drawn.`);
             } else {
-                console.log('[Doom Counter] Trap mode triggered — generating silent twist...');
+                debugLog('[Doom Counter] Trap mode triggered — generating silent twist...');
                 const twists = await generateTwistOptions(1);
                 if (!twists || twists.length === 0) {
                     console.warn('[Doom Counter] Trap mode: no twists generated.');
                     return;
                 }
                 chosenText = twists[0].description;
-                console.log(`[Doom Counter] Trap mode twist silently injected: "${twists[0].title}"`);
+                debugLog(`[Doom Counter] Trap mode twist silently injected: "${twists[0].title}"`);
             }
 
             const state = getDoomCounterState();
@@ -693,7 +700,7 @@ export async function triggerDoomCounter() {
         let currentCards;
         if (candidates.length > 0) {
             const owner = candidates[Math.floor(Math.random() * candidates.length)];
-            console.log(`[Doom Counter] ${owner.characterName} drew their knives (${owner.knives.length} armed, ${candidates.length} candidate characters).`);
+            debugLog(`[Doom Counter] ${owner.characterName} drew their knives (${owner.knives.length} armed, ${candidates.length} candidate characters).`);
             currentCards = owner.knives.map(k => ({
                 emoji: '🔪',
                 title: knifeCardTitle(k.text),
@@ -704,7 +711,7 @@ export async function triggerDoomCounter() {
             }));
             renderCards(currentCards, 'knives', owner.characterName);
         } else {
-            console.log('[Doom Counter] Generating twist options...');
+            debugLog('[Doom Counter] Generating twist options...');
             currentCards = await generateTwistOptions(dc.twistChoiceCount || 3);
             renderCards(currentCards, 'twists');
         }
@@ -749,7 +756,7 @@ export async function triggerDoomCounter() {
                 if (generating) return;
                 generating = true;
                 try {
-                    console.log('[Doom Counter] Generating twist options...');
+                    debugLog('[Doom Counter] Generating twist options...');
                     renderLoading();
                     currentCards = await generateTwistOptions(dc.twistChoiceCount || 3);
                     renderCards(currentCards, 'twists');
@@ -766,7 +773,7 @@ export async function triggerDoomCounter() {
 
         // ── Cancelled: dismiss without a twist and reset the counter ────────
         if (chosen === null) {
-            console.log('[Doom Counter] Twist selection cancelled by user.');
+            debugLog('[Doom Counter] Twist selection cancelled by user.');
             resetCounters();
             updateDoomCounterUI();
             return;
@@ -788,7 +795,7 @@ export async function triggerDoomCounter() {
         state.countdownCount = dc.countdownLength || 3;
         setDoomCounterState(state);
 
-        console.log(`[Doom Counter] ${chosen.knifeId ? 'Knife' : 'Twist'} chosen: "${chosen.description}"`);
+        debugLog(`[Doom Counter] ${chosen.knifeId ? 'Knife' : 'Twist'} chosen: "${chosen.description}"`);
 
         // Update the settings panel display
         updateDoomCounterUI();
@@ -891,7 +898,6 @@ export function updateDoomCounterUI() {
         $('#rpg-dc-status').text('Disabled');
         $('#rpg-dc-streak').text('0');
         $('#rpg-dc-countdown-display').hide();
-        hideDoomDebugHud();
         return;
     }
 
@@ -905,7 +911,6 @@ export function updateDoomCounterUI() {
         $('#rpg-dc-streak-max').text('?');
         $('#rpg-dc-countdown-display').hide();
         $('#rpg-dc-badge').text('trap');
-        updateDoomDebugHud();
         return;
     }
 
@@ -929,21 +934,5 @@ export function updateDoomCounterUI() {
 
     // Update badge
     $('#rpg-dc-badge').text(dc.enabled ? 'on' : 'off');
-
-    // Sync floating debug HUD
-    updateDoomDebugHud();
 }
 
-// ─── Floating Debug HUD (removed) ─────────────────────────────────────────────
-
-/** @deprecated Floating HUD removed — same info lives in scene headers & settings panel. */
-export function updateDoomDebugHud() {
-    hideDoomDebugHud();
-}
-
-/**
- * Removes the floating debug HUD from the DOM.
- */
-export function hideDoomDebugHud() {
-    $('#dooms-dc-debug-hud').remove();
-}

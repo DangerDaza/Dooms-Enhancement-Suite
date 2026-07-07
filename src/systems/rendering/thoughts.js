@@ -64,10 +64,6 @@ function unbindThoughtPanelScroll() {
 /** Cache key for skipping redundant renderThoughts() calls */
 let _lastThoughtsDataKey = null;
 
-/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
-function getLockIconHtml(_tracker, _path) {
-    return '';
-}
 /**
  * Helper to log to both console and debug logs array
  */
@@ -633,10 +629,8 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     const placeholder = fieldValue ? '' : `data-placeholder="${fieldNameAttr}"`;
                     const emptyClass = fieldValue ? '' : ' rpg-empty-field';
                     if (showLock) {
-                        const lockIconHtml = getLockIconHtml('characters', `${char.name}.${field.name}`);
                         html += `
                                 <div class="rpg-character-field rpg-character-${fieldId}" style="position: relative;">
-                                    ${lockIconHtml}
                                     <span class="rpg-editable${emptyClass}" contenteditable="true" data-character="${nameAttr}" data-field="${fieldNameAttr}" title="Click to edit ${fieldNameAttr}" ${placeholder}>${fieldValue}</span>
                                 </div>
                         `;
@@ -651,9 +645,7 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                 `;
                 // Render character stats if enabled (outside rpg-character-info)
                 if (enabledCharStats.length > 0) {
-                    const lockIconHtml = getLockIconHtml('characters', `${char.name}.stats`);
                     html += `<div class="rpg-character-stats" style="position: relative;">
-                        <span class="rpg-section-lock-icon" style="position: absolute; top: 4px; right: 4px; font-size: 1rem; z-index: 10; opacity: 0.7; pointer-events: auto;">${lockIconHtml}</span>
                         <div class="rpg-character-stats-inner">`;
                     for (const stat of enabledCharStats) {
                         const statValue = escapeHtml(char[stat.name] || 0);

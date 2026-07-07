@@ -62,7 +62,7 @@ export function getCustomSceneFields() {
     }
     return result;
 }
-// NOTE: buildUserStatsJSONInstruction() has been archived to src/archived-features-userstats.js
+// NOTE: buildUserStatsJSONInstruction() has been removed (see git history)
 // User stats (Health, Satiety, Energy, Hygiene, Arousal), mood/status, RPG attributes,
 // skills, and inventory have been removed. Quests are now a top-level tracker.
 

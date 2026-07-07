@@ -13,7 +13,7 @@
  * roster actions; portrait upload + dialogue color editing live in the
  * Workshop now.
  */
-import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel, addDebugLog } from '../../core/state.js';
 import { extensionFolderPath } from '../../core/config.js';
 import { saveSettings, getActiveKnownCharacters, getActiveRemovedCharacters, getActiveCharacterColors, saveCharacterRosterChange } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
@@ -27,6 +27,13 @@ import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
+
+/** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
+function debugLog(message, data = null) {
+    if (extensionSettings.debugMode) {
+        addDebugLog(message, data);
+    }
+}
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -1177,7 +1184,7 @@ export function getCharacterList() {
                     // Filter out characters whose thoughts indicate they're off-scene
                     const thoughts = c.thoughts?.content || c.thoughts || '';
                     if (thoughts && offScenePatterns.test(thoughts)) {
-                        console.log(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
+                        debugLog(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
                         return false;
                     }
                     return true;
@@ -1210,13 +1217,13 @@ export function getCharacterList() {
     const beforeRemoval = presentChars.length;
     presentChars = presentChars.filter(c => {
         if (removedLower.has(c.name.toLowerCase())) {
-            console.log(`[Dooms Portrait Bar] Filtered removed character: ${c.name}`);
+            debugLog(`[Dooms Portrait Bar] Filtered removed character: ${c.name}`);
             return false;
         }
         return true;
     });
     if (beforeRemoval !== presentChars.length) {
-        console.log(`[Dooms Portrait Bar] removedCharacters list:`, removed);
+        debugLog(`[Dooms Portrait Bar] removedCharacters list:`, removed);
     }
 
     // Update the persistent known-characters roster

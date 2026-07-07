@@ -36,7 +36,7 @@ function getDefaultWeatherPrompt() {
 const DEFAULT_PROMPTS = {
     html: DEFAULT_HTML_PROMPT,
     dialogueColoring: DEFAULT_DIALOGUE_COLORING_PROMPT,
-    // NOTE: deception, omniscience, cyoa, spotify archived to src/archived-features.js
+    // NOTE: deception, omniscience, cyoa, spotify removed (see git history)
     narrator: DEFAULT_NARRATOR_PROMPT,
     contextInstructions: DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT,
     plotTwistTemplate: DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT,

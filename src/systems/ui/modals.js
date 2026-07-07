@@ -15,7 +15,7 @@ import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
-// NOTE: DiceModal imports removed — dice system archived to src/archived/
+// NOTE: DiceModal imports removed — dice system removed (see git history)
 import { i18n } from '../../core/i18n.js';
 /**
  * SettingsModal - Manages the settings popup modal

@@ -18,16 +18,6 @@ import { separateEmojiFromText } from '../../utils/textUtils.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 /**
- * Helper to generate lock icon HTML if setting is enabled
- * @param {string} tracker - Tracker name
- * @param {string} path - Item path
- * @returns {string} Lock icon HTML or empty string
- */
-/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
-function getLockIconHtml(_tracker, _path) {
-    return '';
-}
-/**
  * Updates the CSS variable for dynamic text scaling on the location field.
  * @param {jQuery} $element - The location element
  */
@@ -262,10 +252,8 @@ export function renderInfoBox() {
             monthDisplay = monthDisplay;
             weekdayDisplay = weekdayDisplay;
         }
-        const dateLockIconHtml = getLockIconHtml('infoBox', 'date');
         row1Widgets.push(`
             <div class="rpg-dashboard-widget rpg-calendar-widget">
-                ${dateLockIconHtml}
                 <div class="rpg-calendar-top rpg-editable" contenteditable="true" data-field="month" data-full-value="${escapeAttr(data.month || '')}" title="Click to edit">${escapeHtml(monthDisplay)}</div>
                 <div class="rpg-calendar-day" title="Click to edit"><span class="rpg-calendar-day-text rpg-editable" contenteditable="true" data-field="weekday" data-full-value="${escapeAttr(data.weekday || '')}">${escapeHtml(weekdayDisplay)}</span></div>
                 <div class="rpg-calendar-year rpg-editable" contenteditable="true" data-field="year" data-full-value="${escapeAttr(data.year || '')}" title="Click to edit">${escapeHtml(yearDisplay)}</div>
@@ -287,10 +275,8 @@ export function renderInfoBox() {
             hourAngle = (hours % 12) * 30 + minutes * 0.5; // 30° per hour + 0.5° per minute
             minuteAngle = minutes * 6; // 6° per minute
         }
-        const timeLockIconHtml = getLockIconHtml('infoBox', 'time');
         row1Widgets.push(`
             <div class="rpg-dashboard-widget rpg-clock-widget">
-                ${timeLockIconHtml}
                 <div class="rpg-clock">
                     <div class="rpg-clock-face">
                         <div class="rpg-clock-hour" style="transform: rotate(${hourAngle}deg)"></div>
@@ -315,11 +301,9 @@ export function renderInfoBox() {
     // Row 2: Location widget (full width) - show if enabled
     if (config?.widgets?.location?.enabled) {
         const locationDisplay = data.location || 'Location';
-        const locationLockIconHtml = getLockIconHtml('infoBox', 'location');
         html += `
             <div class="rpg-dashboard rpg-dashboard-row-2">
                 <div class="rpg-dashboard-widget rpg-location-widget">
-                    ${locationLockIconHtml}
                     <div class="rpg-map-bg">
                         <div class="rpg-map-marker">📍</div>
                     </div>
@@ -354,11 +338,9 @@ export function renderInfoBox() {
     for (const w of extraWidgets) {
         if (config?.widgets?.[w.key]?.enabled) {
             const display = extraFieldsData[w.key] || w.placeholder;
-            const lockIconHtml = getLockIconHtml('infoBox', w.key);
             html += `
                 <div class="rpg-dashboard rpg-dashboard-row-extra">
                     <div class="rpg-dashboard-widget rpg-extra-widget">
-                        ${lockIconHtml}
                         <div class="rpg-extra-icon">${w.icon}</div>
                         <div class="rpg-extra-label">${w.label}</div>
                         <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${escapeHtml(display)}</div>
@@ -415,11 +397,9 @@ export function renderInfoBox() {
         if (validEvents.length === 0) {
             validEvents.push('Click to add event');
         }
-        const eventsLockIconHtml = getLockIconHtml('infoBox', 'recentEvents');
         html += `
             <div class="rpg-dashboard rpg-dashboard-row-3">
                 <div class="rpg-dashboard-widget rpg-events-widget">
-                    ${eventsLockIconHtml}
                     <div class="rpg-notebook-header">
                         <div class="rpg-notebook-ring"></div>
                         <div class="rpg-notebook-ring"></div>

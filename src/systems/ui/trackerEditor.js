@@ -604,7 +604,7 @@ function renderEditorUI() {
     renderPresentCharactersTab();
     renderHistoryPersistenceTab();
 }
-// NOTE: renderUserStatsTab() and setupUserStatsListeners() archived to src/archived/archived-features-userstats.js
+// NOTE: renderUserStatsTab() and setupUserStatsListeners() removed (see git history)
 /**
  * Render Info Box configuration tab
  */

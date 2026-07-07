@@ -14,7 +14,7 @@ import {
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
-// NOTE: InventoryV2 type import removed — inventory system archived to src/archived/
+// NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
  */
@@ -24,7 +24,7 @@ export const DEFAULT_HTML_PROMPT = `If appropriate, include inline HTML, CSS, an
  */
 export const DEFAULT_DIALOGUE_COLORING_PROMPT = `Wrap all character/NPC "dialogues" in unique <font color=######>tags</font>, exemplary: <font color=#abc123>"You're pretty good."</font> Assign a distinct color to each speaker and reuse it whenever they speak again. Every character must have their own unique color — never share or reuse one character's color for another, even for characters not currently in the scene. ALSO record the exact same hex on each character's "color" field in the characters tracker JSON so the renderer knows which color belongs to which speaker without guessing.`;
 // NOTE: Deception, Omniscience Filter, CYOA, and Spotify prompts have been
-// archived to src/archived-features.js for testing. Restore from there if needed.
+// removed (see git history).
 /**
  * Default Narrator Mode prompt text (customizable by users)
  */
@@ -100,8 +100,7 @@ async function getCharacterCardsInfo() {
     }
     return characterInfo;
 }
-// NOTE: buildInventorySummary() and buildAttributesString() have been archived
-// to src/archived/archived-features-userstats.js
+// NOTE: buildInventorySummary() and buildAttributesString() have been removed (see git history)
 /**
  * Generates an example block showing current tracker states in markdown code blocks.
  * Uses COMMITTED data (not displayed data) for generation context.
@@ -239,7 +238,7 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
         const htmlPrompt = extensionSettings.customHtmlPrompt || DEFAULT_HTML_PROMPT;
         instructions += htmlPrompt;
     }
-    // NOTE: Spotify music prompt injection was here — archived to src/archived-features.js
+    // NOTE: Spotify music prompt injection was here — removed (see git history)
     return instructions;
 }
 /**
@@ -1042,14 +1041,4 @@ export async function generateAvatarPromptGenerationPrompt(characterName) {
     instructionMessage += `Provide ONLY the image prompt text. Do not include the character's name, prefixes like "Prompt:", or any other commentary.`;
     messages.push({ role: 'user', content: instructionMessage });
     return messages;
-}
-/**
- * Parses LLM response to extract character prompts
- * @deprecated No longer used as we generate one prompt at a time
- * @param {string} response - Raw LLM response
- * @returns {Object} Map of character name to prompt
- */
-export function parseAvatarPromptsResponse(response) {
-    // Return as is for single prompt compatibility if needed, or just object with one key
-    return response.trim();
 }
