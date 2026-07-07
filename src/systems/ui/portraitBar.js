@@ -24,6 +24,7 @@ import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDisk
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 
@@ -1167,7 +1168,9 @@ export function getCharacterList() {
 
     if (data) {
         try {
-            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            // Memoized shared parse — read-only. Null (non-JSON) throws on the
+            // property access below and lands in the legacy-text catch.
+            const parsed = parseTrackerJson(data);
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
             presentChars = characters
                 .filter(c => {
@@ -1386,7 +1389,9 @@ function getCharacterDetails(charName) {
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (!data) return null;
     try {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        // Memoized shared parse — the same blob getCharacterList parsed is a
+        // cache hit here, so this is no longer a full re-parse per character.
+        const parsed = parseTrackerJson(data);
         const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         return characters.find(c => c.name === charName) || null;
     } catch (e) {

@@ -15,6 +15,7 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 import { getDoomCounterState, getActiveCharacterColors, saveSettings } from '../../core/persistence.js';
 import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
 import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { chat } from '../../../../../../../script.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
@@ -476,10 +477,8 @@ function injectSceneTransitions() {
         }
 
         const infoBox = swipeData?.infoBox;
-        let parsedInfoBox = infoBox;
-        if (typeof infoBox === 'string') {
-            try { parsedInfoBox = JSON.parse(infoBox); } catch { parsedInfoBox = null; }
-        }
+        // Memoized shared parse — read-only result, null for non-JSON.
+        const parsedInfoBox = parseTrackerJson(infoBox);
 
         const curLocation = extractLocationString(parsedInfoBox);
         const curTime = extractTimeString(parsedInfoBox);
@@ -659,7 +658,9 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
     // --- Parse Info Box ---
     if (infoBoxData) {
         try {
-            const info = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+            // Memoized shared parse — read-only. Null (non-JSON) throws on the
+            // first property access below and lands in the legacy-text catch.
+            const info = parseTrackerJson(infoBoxData);
             // Time — handle nested object {start, end} or {value} or flat string
             if (info.time) {
                 if (typeof info.time === 'string') {
@@ -777,9 +778,7 @@ export function extractSceneData(infoBoxData, characterThoughtsData, questsData)
     const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
     if (characterThoughtsData) {
         try {
-            const parsed = typeof characterThoughtsData === 'string'
-                ? JSON.parse(characterThoughtsData)
-                : characterThoughtsData;
+            const parsed = parseTrackerJson(characterThoughtsData);
             const characters = Array.isArray(parsed) ? parsed : (parsed.characters || []);
             result.presentCharacters = characters
                 .filter(char => {

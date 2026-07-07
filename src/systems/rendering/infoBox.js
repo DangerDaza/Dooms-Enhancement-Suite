@@ -16,6 +16,7 @@ import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 import { separateEmojiFromText } from '../../utils/textUtils.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 /**
  * Helper to generate lock icon HTML if setting is enabled
  * @param {string} tracker - Tracker name
@@ -332,7 +333,8 @@ export function renderInfoBox() {
     let extraFieldsData = {};
     if (infoBoxData) {
         try {
-            const parsed = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
+            // Memoized shared parse — read-only; null for non-JSON input.
+            const parsed = parseTrackerJson(infoBoxData);
             if (parsed) {
                 extraFieldsData.moonPhase = typeof parsed.moonPhase === 'string' ? parsed.moonPhase : (parsed.moonPhase?.value || '');
                 extraFieldsData.tension = typeof parsed.tension === 'string' ? parsed.tension : (parsed.tension?.value || '');
@@ -368,10 +370,7 @@ export function renderInfoBox() {
     // Row 2c: User-defined custom scene fields
     const customSceneFields = getCustomSceneFields();
     if (customSceneFields.length && infoBoxData) {
-        let parsedInfo = null;
-        try {
-            parsedInfo = typeof infoBoxData === 'string' ? JSON.parse(infoBoxData) : infoBoxData;
-        } catch (e) { /* ignore */ }
+        const parsedInfo = parseTrackerJson(infoBoxData);
         for (const field of customSceneFields) {
             const raw = parsedInfo?.[field.key];
             let value = '';
@@ -396,15 +395,11 @@ export function renderInfoBox() {
         // Parse Recent Events from infoBox (supports both JSON and text formats)
         let recentEvents = [];
         if (infoBoxData) {
-            // Try JSON format first
-            try {
-                const parsed = typeof infoBoxData === 'string'
-                    ? JSON.parse(infoBoxData)
-                    : infoBoxData;
-                if (parsed && Array.isArray(parsed.recentEvents)) {
-                    recentEvents = parsed.recentEvents;
-                }
-            } catch (e) {
+            // Try JSON format first (memoized shared parse — read-only)
+            const parsed = parseTrackerJson(infoBoxData);
+            if (parsed && Array.isArray(parsed.recentEvents)) {
+                recentEvents = parsed.recentEvents;
+            } else if (parsed === null && typeof infoBoxData === 'string') {
                 // Fall back to old text format
                 const recentEventsLine = infoBoxData.split('\n').find(line => line.startsWith('Recent Events:'));
                 if (recentEventsLine) {

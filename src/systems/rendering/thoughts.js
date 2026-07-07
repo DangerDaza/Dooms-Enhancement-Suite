@@ -19,6 +19,7 @@ import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -329,11 +330,12 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     debugLog('[RPG Thoughts] Enabled custom fields:', enabledFields.map(f => f.name));
     debugLog('[RPG Thoughts] Enabled character stats:', enabledCharStats.map(s => s.name));
     let presentCharacters = [];
-    // Try parsing as JSON first (new format)
+    // Try parsing as JSON first (new format). parseTrackerJson memoizes on
+    // string identity and returns null for non-JSON, which throws on the
+    // property access below and lands in the legacy text-format catch —
+    // same flow as JSON.parse throwing. Result is shared: read-only.
     try {
-        const parsed = typeof characterThoughtsData === 'string'
-            ? JSON.parse(characterThoughtsData)
-            : characterThoughtsData;
+        const parsed = parseTrackerJson(characterThoughtsData);
         // Handle both {characters: [...]} and direct array formats
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
@@ -1456,11 +1458,9 @@ function parseThoughtsArray() {
     let thoughtsArray = [];
     const thoughtsConfig = extensionSettings.trackerConfig?.presentCharacters?.thoughts;
     const thoughtsLabel = thoughtsConfig?.name || 'Thoughts';
-    // Try JSON format first
+    // Try JSON format first (memoized shared parse: read-only result)
     try {
-        const parsed = typeof lastGeneratedData.characterThoughts === 'string'
-            ? JSON.parse(lastGeneratedData.characterThoughts)
-            : lastGeneratedData.characterThoughts;
+        const parsed = parseTrackerJson(lastGeneratedData.characterThoughts);
         const charactersArray = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         if (charactersArray.length > 0) {
             const offScene = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;

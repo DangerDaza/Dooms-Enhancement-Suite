@@ -17,6 +17,7 @@ import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/sl
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { escapeHtml } from '../../utils/html.js';
+import { parseTrackerJson } from '../../utils/trackerParse.js';
 
 /**
  * Extract character entries from characterThoughts data. Inlined here
@@ -28,9 +29,9 @@ import { escapeHtml } from '../../utils/html.js';
 function _extractCharacterEntries(characterThoughtsData) {
     if (!characterThoughtsData) return [];
     try {
-        const parsed = typeof characterThoughtsData === 'string'
-            ? JSON.parse(characterThoughtsData)
-            : characterThoughtsData;
+        // Memoized shared parse — read-only. Null (non-JSON) throws on the
+        // property access below and lands in the legacy-text catch.
+        const parsed = parseTrackerJson(characterThoughtsData);
         const arr = Array.isArray(parsed) ? parsed : (parsed.characters || []);
         return arr.filter(c => c && c.name && String(c.name).toLowerCase() !== 'unavailable');
     } catch {
