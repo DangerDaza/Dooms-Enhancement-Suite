@@ -518,7 +518,7 @@ function renderPortraitBarNow() {
 
         let backFace = '';
         try {
-            backFace = buildPortraitBackFace(char.name, emoji);
+            backFace = buildPortraitBackFace(char.name, emoji, char.details);
         } catch (e) {
             console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
         }
@@ -1185,7 +1185,10 @@ export function getCharacterList() {
                 .map(c => ({
                     name: c.name || 'Unknown',
                     emoji: c.emoji || '👤',
-                    present: true
+                    present: true,
+                    // Full parsed record (read-only), so per-card rendering
+                    // doesn't need a per-character getCharacterDetails lookup.
+                    details: c
                 }));
         } catch (e) {
             if (typeof data === 'string') {
@@ -1404,8 +1407,10 @@ function getCharacterDetails(charName) {
  * Shows relationship status, appearance, demeanor, and other key character info.
  * Thoughts are omitted here since they're shown in the sidebar Thoughts panel.
  */
-function buildPortraitBackFace(charName, emoji) {
-    const details = getCharacterDetails(charName);
+function buildPortraitBackFace(charName, emoji, details = null) {
+    // Absent-but-known characters carry no parsed record; fall back to the
+    // (memoized) tracker-data lookup for them.
+    details = details || getCharacterDetails(charName);
     const nameEsc = escapeHtml(charName);
 
     let sectionsHtml = '';
