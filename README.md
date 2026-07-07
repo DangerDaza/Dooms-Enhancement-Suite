@@ -29,7 +29,7 @@ A horizontal card shelf displaying character portraits between the chat and inpu
 
 Each character gets their own card with an avatar — custom uploaded, auto-imported from SillyTavern character cards, or emoji fallback. Shows present characters with hover glow effects and animated pulses when a character is speaking. Absent characters can be shown greyed out.
 
-Right-click any portrait to upload a custom image, set dialogue colors, remove characters, or open their character sheet.
+Right-click any portrait to open the Character Workshop (where custom images, dialogue colors, and knives are managed), open their character sheet, cancel a pending inject, or remove the character from the scene.
 
 NPCs support **Aliases** (Character Workshop → Identity): other names the AI might use for the same character — like a revealed full name ("Sarah Greenfield" for "Sarah"), a nickname, or a title. Tracker data using an alias resolves to the existing card instead of spawning a duplicate character, while the AI stays free to use the alias in prose. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen).
 

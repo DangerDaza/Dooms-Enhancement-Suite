@@ -1,38 +1,26 @@
 {
-    "version": "2.1.0",
-    "title": "Knives Out",
+    "version": "2.2.0",
+    "title": "Locksmith",
     "items": [
         {
-            "title": "🔪 Knives — plant your own plot twists",
-            "body": "Attach story beats to any character in the Character Workshop (new Knives tab): secrets, debts, rivals waiting in the wings. When the Doom Counter strikes, one present character with armed knives is chosen at random and THEIR knives become the twist options — you won't know whose past surfaces until it does. Used knives can be re-armed. Turn it on per story: Doom Counter → Enable Knives (this chat)."
+            "title": "🔒 Security hardening",
+            "body": "All AI-generated tracker text (names, thoughts, scene fields, emoji, imported presets) is now escaped before it touches the page — malicious markup in a character name or a shared tracker preset can no longer run script in your browser. Update recommended for everyone."
         },
         {
-            "title": "Generate Knives with themes",
-            "body": "Out of ideas? The Workshop's Generate Knives button asks your AI for 5 suggestions grounded in the character and your current chat. Pick a theme first — Mixed, Betrayal, Enemies, Debts, Old Flames, Secrets, Regrets, or Fortune — then tick the ones worth keeping. Regrets and Fortune produce sympathetic and lucky beats, not just villainy."
+            "title": "Doom Counter progress survives chat switches",
+            "body": "Doom Counter state, the per-chat Knives toggle, and freshly generated tracker data now save immediately instead of on a delay that a quick chat switch could silently drop. Fast switching also no longer flashes the previous chat's scene tracker into the new one."
         },
         {
-            "title": "Trap Mode draws knives too",
-            "body": "With Trap Mode on, a random armed knife from a random present character is injected silently. Your own pre-planted surprises can now ambush you."
+            "title": "Scene Tracker toggles agree with each other",
+            "body": "The field toggles in the settings panel and the Tracker Editor now stay in sync both ways, and Weather — previously missing from the Tracker Editor — has its own row there. Failed saves in the Character Workshop now show an error toast instead of silently losing your edits."
         },
         {
-            "title": "Custom Scene Tracker fields",
-            "body": "Add your own fields to the Scene Tracker (Tracker Editor → Info Box → Custom Scene Fields): a name, an emoji icon, and an instruction telling the AI what to track. They render in every layout — grid, banner, HUD, and ticker — support inline editing, and can be included in History Persistence."
+            "title": "Snappier rendering",
+            "body": "Tracker data is parsed once per update instead of 6-8 times per message, portrait card back-faces stopped re-reading everything per character, and dragging the Scene Tracker color/size sliders no longer rebuilds every header per frame."
         },
         {
-            "title": "Character Aliases — no more duplicate cards",
-            "body": "The AI upgraded 'Sarah' to 'Sarah Greenfield' and DES spawned a second card? Add the full name as an Alias on Sarah's card (Workshop → Identity). Any tracker data using an alias now resolves to the existing card — portrait, color, sheet, and knives included — while the AI stays free to use the name in prose."
-        },
-        {
-            "title": "Doom Counter picker: Reroll and Cancel",
-            "body": "Don't like the twist options? Reroll for a fresh set. Not in the mood at all? Cancel dismisses the picker and resets the counter."
-        },
-        {
-            "title": "Knife prompts are editable",
-            "body": "The knife injection template and the Generate Knives rules join the other prompts in Advanced → Edit AI Prompts, each with a Restore Default button."
-        },
-        {
-            "title": "Name Ban removed",
-            "body": "The old (hidden, unfinished) Name Ban system is gone — Character Aliases replaces its useful half without nagging your model. Elara, Seraphina, Nyx, and Voss remain at large; the knife generator at least refuses to hire them."
+            "title": "English-only from here",
+            "body": "The Russian and Traditional Chinese locale files (and the language selector) are gone — almost none of the current UI was ever translated, so they only pretended to work. If you'd like to maintain a translation, open an issue on GitHub."
         }
     ],
     "contact": {

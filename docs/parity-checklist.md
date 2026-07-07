@@ -79,7 +79,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 
 ## Misc features
 - [ ] Dialogue coloring: font tags display, stripped for TTS, 30-color palette
-- [ ] Name Ban filtering works (when enabled)
+- (Name Ban removed in 2.1.0 — superseded by Character Aliases)
 - [ ] History persistence: save + restore snapshot
 - (Chapter checkpoints removed from checklist: checkpointUI.js/chapterCheckpoint.js
   were dead code — exported but never imported/initialized anywhere — deleted in Phase 2)

@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.2.0] - 2026-07-07 — Locksmith
+
+### Security
+- **Stored XSS: AI-generated tracker text is now escaped everywhere it reaches the DOM.** Character names, emoji, thoughts, custom field values, stats, relationship text (thoughts panel + thought bubbles), scene tracker values (location, date/time, moon/tension/rest/conditions/terrain, custom fields, recent events), portrait-card emoji and dialogue colors, and Tracker Editor inputs (preset names, field names/descriptions, relationships, stats, preamble) were interpolated raw into `innerHTML`/`.html()` — a character named `<img src=x onerror=…>` executed script on every render, and a shared tracker preset could inject markup into the importer's editor. All data is escaped once at template interpolation via a new shared `src/utils/html.js` escaper, which also replaces the ten inconsistent per-module copies (four of which didn't escape quotes). Inline editing round-trips cleanly — saved data stays raw, no double-escaping.
+
+### Fixed
+- **Doom Counter state, the Knives toggle, and generation-end tracker data no longer vanish on a fast chat switch.** These wrote through a debounced save that a chat switch could silently drop; they now save immediately (they fire at most once per message/toggle). Per-keystroke UI edits keep the debounced path.
+- **Scene Tracker core toggles (Time/Date/Location/Recent Events) now sync between the settings panel and the Tracker Editor** — previously only the optional fields synced and the two UIs could contradict each other. **Weather**, missing from the Tracker Editor entirely, gets a widget row; the editor's Save also rebuilds scene headers now.
+- **Failed saves in the Character Workshop are no longer silent.** Nine save calls swallowed errors in empty catch blocks, losing knife/alias/color/persona edits with zero feedback; they now log and show an error toast.
+- **Knife/twist generation tolerates messy AI JSON** (markdown fences, trailing commas) by routing through the same `repairJSON` helper every other AI-JSON consumer uses.
+- **Fast chat switches can no longer paint the previous chat's scene headers/thoughts into the new chat** — the delayed render chain after a chat change now cancels itself when another switch happens.
+
+### Performance
+- **Tracker JSON is parsed once per change instead of 6–8 times per message**: a small string-keyed memo cache (`src/utils/trackerParse.js`) is shared by the scene header, portrait bar, thoughts panel, info box, and chat bubble renderers.
+- **Portrait bar back-faces no longer re-parse the full tracker blob per character** (was O(N²) in bytes parsed for N characters).
+- **Slider/color drags in Scene Tracker settings no longer rebuild all scene headers on every input event** — live preview stays instant via style updates; the full rebuild is debounced (150 ms).
+- Prompt template constants moved out of the Prompts Editor UI module into `generation/defaultPrompts.js`, so generation code no longer drags settings-UI modules into its dependency graph.
+- *Deferred:* base64 avatar retention in settings when disk migration fails is a deliberate safety net (it retries next load) and is left as-is.
+
+### Removed
+- **Russian and Traditional Chinese locales, and the language selector.** The UI was ~95% hardcoded English — nothing shipped since the early versions had translation keys — so the locale files were dead weight. English string table stays; 202 unreferenced keys pruned.
+- Dead code: the deprecated avatar-prompt parser, the no-op doom debug-HUD plumbing, and the three always-empty lock-icon helpers.
+
+### Changed
+- Finished the "Info Box" → "Scene Tracker" rename in the Tracker Editor tab, README, and labels; standardized remaining user-facing naming on *Doom's Enhancement Suite* (prompt text and the regex-script identifier intentionally keep the old wording — they're matched against AI output and users' installed scripts).
+- Per-message console logging in the portrait bar and Doom Counter is now gated behind Debug Mode.
+
 ## [2.1.0] - 2026-07-01 — Knives Out
 
 ### Added
@@ -17,6 +44,10 @@
 
 ### Removed
 - **Name Ban.** The hidden, never-released system (new-name detection modal, name mappings, prompt nagging) is gone: module, enforcement hooks, prompt-injection slots, settings UI, defaults, and CSS. Character Aliases covers its useful half — mapping variant names onto one card — without forbidding the model anything. The v14 settings migration is neutered to a bare version bump so the migration chain stays monotonic; stale `nameBan` keys in old saves are inert.
+
+## [2.0.0] - 2026-06-11 — The Rebuild
+
+*Retroactive entry — this release shipped as a version bump without a changelog section.* The Rebuild was the ground-up performance and architecture pass documented in `docs/rebuild-philosophy.md` and `docs/perf-baseline.md`: the monolith was split into the current `src/` module layout, per-message render paths were rebuilt around DOM diffing and caches, tracker prompts were compacted, and the extension took its current name, Doom's Enhancement Suite. See the git history between v1.11.3 and this tag for the full detail.
 
 ## [1.11.3] - 2026-05-09 — User-persona/NPC duplicates + delete-does-nothing
 
