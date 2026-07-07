@@ -6,8 +6,8 @@ import { chat, eventSource } from '../../../../../../../script.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { getContext } from '../../../../../../extensions.js';
 import { safeGenerateRaw, extractTextFromResponse } from '../../utils/responseExtractor.js';
-// Custom event name for when Doom's Character Tracker finishes updating tracker data
-// Other extensions can listen for this event to know when Doom's Character Tracker is done
+// Custom event name for when Doom's Enhancement Suite finishes updating tracker data
+// Other extensions can listen for this event to know when DES is done
 export const DOOMS_TRACKER_UPDATE_COMPLETE = 'dooms_tracker_update_complete';
 import {
     extensionSettings,
@@ -418,7 +418,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 }
             }
             // Generate avatars if auto-generate is enabled (runs within this workflow)
-            // This uses the Doom's Character Tracker Trackers preset and keeps the button spinning
+            // This uses the DES Trackers preset and keeps the button spinning
             if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
                 const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
                 if (charactersNeedingAvatars.length > 0) {
@@ -435,7 +435,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     } catch (error) {
         console.error('[Dooms Tracker] Error updating RPG data:', error);
         if (isExternalMode) {
-            toastr.error(error.message, "Doom's Character Tracker External API Error");
+            toastr.error(error.message, "Doom's Enhancement Suite External API Error");
         }
     } finally {
         // Restore connection profile AND preset if we switched.
@@ -478,7 +478,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
         // Reset the flag after tracker generation completes
         // This ensures the flag persists through both main generation AND tracker generation
         setLastActionWasSwipe(false);
-        // Emit event for other extensions to know Doom's Character Tracker has finished updating
+        // Emit event for other extensions to know DES has finished updating
         console.debug('[Dooms Tracker] Emitting DOOMS_TRACKER_UPDATE_COMPLETE event');
         eventSource.emit(DOOMS_TRACKER_UPDATE_COMPLETE);
     }

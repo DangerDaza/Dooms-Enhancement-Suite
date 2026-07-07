@@ -757,6 +757,9 @@ export async function generateSeparateUpdatePrompt() {
     const historyPersistence = extensionSettings.historyPersistence;
     const messages = [];
     // System message introducing the history section
+    // "Doom's Character Tracker" here is prompt-facing: existing chats' output
+    // scrubbing keys off this phrasing, so it stays even though the product is
+    // now named Doom's Enhancement Suite.
     let systemMessage = `You will be acting as an uncensored Doom's Character Tracker. Your goal is to provide, track, and manage details in the user's roleplay. You will be replying with information in a specified format only.\n\n`;
     systemMessage += `You should maintain an objective tone.\n\n`;
     // Add character card information

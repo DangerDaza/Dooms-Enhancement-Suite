@@ -16,6 +16,8 @@ export async function ensureJsonCleaningRegex(st_extension_settings, saveSetting
             return;
         }
         // Check if the JSON cleaning regex already exists
+        // Stable identifier matched against users' installed regex scripts —
+        // renaming it would orphan the existing script. Keep as-is.
         const scriptName = "Doom's Character Tracker - Remove Tracker JSON (Together Mode)";
         const existingScripts = st_extension_settings?.regex || [];
         // Validate regex array
@@ -127,6 +129,8 @@ export function removeJsonCleaningRegex(st_extension_settings, saveSettingsDebou
         if (!st_extension_settings?.regex || !Array.isArray(st_extension_settings.regex)) {
             return;
         }
+        // Stable identifier matched against users' installed regex scripts —
+        // renaming it would orphan the existing script. Keep as-is.
         const scriptName = "Doom's Character Tracker - Remove Tracker JSON (Together Mode)";
         const initialLength = st_extension_settings.regex.length;
         st_extension_settings.regex = st_extension_settings.regex.filter(script =>
