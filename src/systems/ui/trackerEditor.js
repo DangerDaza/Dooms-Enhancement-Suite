@@ -31,6 +31,28 @@ import {
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { applySceneTrackerSettings, updateChatSceneHeaders } from '../rendering/sceneHeaders.js';
+// Info Box widget key → Scene Tracker show-flag. Both express "is this field
+// on"; the editor edits the widget half and syncs the show-flag half on Save.
+const WIDGET_SHOW_KEYS = {
+    date: 'showDate',
+    time: 'showTime',
+    location: 'showLocation',
+    recentEvents: 'showRecentEvents',
+    weather: 'showWeather',
+    moonPhase: 'showMoonPhase',
+    tension: 'showTension',
+    timeSinceRest: 'showTimeSinceRest',
+    conditions: 'showConditions',
+    terrain: 'showTerrain',
+};
+// Widget key → DOM id suffix (the editor checkbox is #rpg-widget-<suffix>,
+// the Scene Tracker panel checkbox is #rpg-st-show-<suffix>).
+const WIDGET_DOM_SUFFIX = {
+    date: 'date', time: 'time', location: 'location', recentEvents: 'events',
+    weather: 'weather', moonPhase: 'moonphase', tension: 'tension',
+    timeSinceRest: 'timesincerest', conditions: 'conditions', terrain: 'terrain',
+};
+
 let $editorModal = null;
 let activeTab = 'infoBox';
 let tempConfig = null; // Temporary config for cancel functionality
@@ -288,8 +310,18 @@ function applyTrackerConfig() {
     } else {
         saveSettings();
     }
-    // Re-render all trackers with new config. Scene headers included — widget
-    // toggles in this editor also sync the Scene Tracker show-flags.
+    // Sync the Scene Tracker show-flags from the (now-committed) widget states so
+    // the two panels agree. Done here rather than live on each editor toggle so a
+    // Cancel — which restores the trackerConfig snapshot — leaves sceneTracker
+    // untouched instead of stranding a half-applied change.
+    if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
+    const widgets = extensionSettings.trackerConfig?.infoBox?.widgets || {};
+    for (const [widgetKey, showKey] of Object.entries(WIDGET_SHOW_KEYS)) {
+        const enabled = widgets[widgetKey]?.enabled === true;
+        extensionSettings.sceneTracker[showKey] = enabled;
+        $(`#rpg-st-show-${WIDGET_DOM_SUFFIX[widgetKey]}`).prop('checked', enabled);
+    }
+    // Re-render all trackers with new config, scene headers included.
     renderInfoBox();
     renderThoughts();
     applySceneTrackerSettings();
@@ -690,44 +722,15 @@ function renderInfoBoxTab() {
  */
 function setupInfoBoxListeners() {
     const widgets = extensionSettings.trackerConfig.infoBox.widgets;
-    // Widget checkbox and Scene Tracker show-flag are the same concept, so every
-    // toggle here also syncs the flag and mirrors the panel checkbox (if open).
-    // .prop('checked') does not fire change events, so no sync loop.
-    const _syncSceneTracker = (showKey, checked) => {
-        if (!extensionSettings.sceneTracker) extensionSettings.sceneTracker = {};
-        extensionSettings.sceneTracker[showKey] = checked;
-        const uiMap = {
-            showTime: '#rpg-st-show-time',
-            showDate: '#rpg-st-show-date',
-            showLocation: '#rpg-st-show-location',
-            showRecentEvents: '#rpg-st-show-events',
-            showWeather: '#rpg-st-show-weather',
-            showMoonPhase: '#rpg-st-show-moonphase',
-            showTension: '#rpg-st-show-tension',
-            showTimeSinceRest: '#rpg-st-show-timesincerest',
-            showConditions: '#rpg-st-show-conditions',
-            showTerrain: '#rpg-st-show-terrain',
-        };
-        if (uiMap[showKey]) $(uiMap[showKey]).prop('checked', checked);
-    };
-    const _widgetToggles = [
-        ['#rpg-widget-date', 'date', 'showDate'],
-        ['#rpg-widget-time', 'time', 'showTime'],
-        ['#rpg-widget-location', 'location', 'showLocation'],
-        ['#rpg-widget-events', 'recentEvents', 'showRecentEvents'],
-        ['#rpg-widget-weather', 'weather', 'showWeather'],
-        ['#rpg-widget-moonphase', 'moonPhase', 'showMoonPhase'],
-        ['#rpg-widget-tension', 'tension', 'showTension'],
-        ['#rpg-widget-timesincerest', 'timeSinceRest', 'showTimeSinceRest'],
-        ['#rpg-widget-conditions', 'conditions', 'showConditions'],
-        ['#rpg-widget-terrain', 'terrain', 'showTerrain'],
-    ];
-    for (const [selector, widgetKey, showKey] of _widgetToggles) {
-        $(selector).off('change').on('change', function() {
+    // Widget toggles only mutate the (snapshot-backed) trackerConfig here; the
+    // matching Scene Tracker show-flags are synced on Save via applyTrackerConfig.
+    // Writing sceneTracker live would escape the tempConfig transaction, so a
+    // Cancel couldn't revert it (leaving the two panels contradicting each other).
+    for (const widgetKey of Object.keys(WIDGET_SHOW_KEYS)) {
+        $(`#rpg-widget-${WIDGET_DOM_SUFFIX[widgetKey]}`).off('change').on('change', function() {
             const v = $(this).is(':checked');
             if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
             widgets[widgetKey].enabled = v;
-            _syncSceneTracker(showKey, v);
         });
     }
     $('#rpg-date-format').off('change').on('change', function() {
