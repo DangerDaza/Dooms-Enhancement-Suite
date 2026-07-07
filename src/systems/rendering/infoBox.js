@@ -15,6 +15,7 @@ import { i18n } from '../../core/i18n.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 import { separateEmojiFromText } from '../../utils/textUtils.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 /**
  * Helper to generate lock icon HTML if setting is enabled
  * @param {string} tracker - Tracker name
@@ -264,9 +265,9 @@ export function renderInfoBox() {
         row1Widgets.push(`
             <div class="rpg-dashboard-widget rpg-calendar-widget">
                 ${dateLockIconHtml}
-                <div class="rpg-calendar-top rpg-editable" contenteditable="true" data-field="month" data-full-value="${data.month || ''}" title="Click to edit">${monthDisplay}</div>
-                <div class="rpg-calendar-day" title="Click to edit"><span class="rpg-calendar-day-text rpg-editable" contenteditable="true" data-field="weekday" data-full-value="${data.weekday || ''}">${weekdayDisplay}</span></div>
-                <div class="rpg-calendar-year rpg-editable" contenteditable="true" data-field="year" data-full-value="${data.year || ''}" title="Click to edit">${yearDisplay}</div>
+                <div class="rpg-calendar-top rpg-editable" contenteditable="true" data-field="month" data-full-value="${escapeAttr(data.month || '')}" title="Click to edit">${escapeHtml(monthDisplay)}</div>
+                <div class="rpg-calendar-day" title="Click to edit"><span class="rpg-calendar-day-text rpg-editable" contenteditable="true" data-field="weekday" data-full-value="${escapeAttr(data.weekday || '')}">${escapeHtml(weekdayDisplay)}</span></div>
+                <div class="rpg-calendar-year rpg-editable" contenteditable="true" data-field="year" data-full-value="${escapeAttr(data.year || '')}" title="Click to edit">${escapeHtml(yearDisplay)}</div>
             </div>
         `);
     }
@@ -297,9 +298,9 @@ export function renderInfoBox() {
                     </div>
                 </div>
                 <div class="rpg-time-range">
-                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeStart" title="Click to edit start time">${timeStartDisplay}</div>
+                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeStart" title="Click to edit start time">${escapeHtml(timeStartDisplay)}</div>
                     <span class="rpg-time-separator">→</span>
-                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeEnd" title="Click to edit end time">${timeEndDisplay}</div>
+                    <div class="rpg-time-value rpg-editable" contenteditable="true" data-field="timeEnd" title="Click to edit end time">${escapeHtml(timeEndDisplay)}</div>
                 </div>
             </div>
         `);
@@ -321,7 +322,7 @@ export function renderInfoBox() {
                     <div class="rpg-map-bg">
                         <div class="rpg-map-marker">📍</div>
                     </div>
-                    <div class="rpg-location-text rpg-editable" contenteditable="true" data-field="location" title="Click to edit">${locationDisplay}</div>
+                    <div class="rpg-location-text rpg-editable" contenteditable="true" data-field="location" title="Click to edit">${escapeHtml(locationDisplay)}</div>
                 </div>
             </div>
         `;
@@ -358,7 +359,7 @@ export function renderInfoBox() {
                         ${lockIconHtml}
                         <div class="rpg-extra-icon">${w.icon}</div>
                         <div class="rpg-extra-label">${w.label}</div>
-                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${display}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${w.key}" title="Click to edit">${escapeHtml(display)}</div>
                     </div>
                 </div>
             `;
@@ -382,9 +383,9 @@ export function renderInfoBox() {
             html += `
                 <div class="rpg-dashboard rpg-dashboard-row-extra">
                     <div class="rpg-dashboard-widget rpg-extra-widget">
-                        <div class="rpg-extra-icon">${field.icon}</div>
-                        <div class="rpg-extra-label">${field.label}</div>
-                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${field.key}" title="Click to edit">${display}</div>
+                        <div class="rpg-extra-icon">${escapeHtml(field.icon)}</div>
+                        <div class="rpg-extra-label">${escapeHtml(field.label)}</div>
+                        <div class="rpg-extra-value rpg-editable" contenteditable="true" data-field="${escapeAttr(field.key)}" title="Click to edit">${escapeHtml(display)}</div>
                     </div>
                 </div>
             `;
@@ -437,7 +438,7 @@ export function renderInfoBox() {
             html += `
                         <div class="rpg-notebook-line">
                             <span class="rpg-bullet">•</span>
-                            <span class="rpg-event-text rpg-editable" contenteditable="true" data-field="event${i + 1}" title="Click to edit">${validEvents[i]}</span>
+                            <span class="rpg-event-text rpg-editable" contenteditable="true" data-field="event${i + 1}" title="Click to edit">${escapeHtml(validEvents[i])}</span>
                         </div>
             `;
         }
