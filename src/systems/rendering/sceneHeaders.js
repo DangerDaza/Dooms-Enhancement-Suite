@@ -477,8 +477,14 @@ function injectSceneTransitions() {
         }
 
         const infoBox = swipeData?.infoBox;
-        // Memoized shared parse — read-only result, null for non-JSON.
-        const parsedInfoBox = parseTrackerJson(infoBox);
+        // Plain parse, NOT the shared memo cache: each message's swipe blob is a
+        // distinct one-shot string, so routing them through the small FIFO cache
+        // would evict the hot lastGeneratedData/committedTrackerData entries the
+        // other renderers rely on and defeat the memoization.
+        let parsedInfoBox = infoBox;
+        if (typeof infoBox === 'string') {
+            try { parsedInfoBox = JSON.parse(infoBox); } catch { parsedInfoBox = null; }
+        }
 
         const curLocation = extractLocationString(parsedInfoBox);
         const curTime = extractTimeString(parsedInfoBox);
