@@ -7,6 +7,14 @@
             "body": "We closed a hole where a character's name, their thoughts, or a tracker preset you imported from someone else could sneak hidden instructions into the page. You don't have to do anything — just updating fixes it. If you ever load presets other people made, this one's especially worth having."
         },
         {
+            "title": "🔪 New: Knives — plant your own plot twists",
+            "body": "Knives are story beats you write ahead of time and pin to a character in the Character Workshop — a secret, a debt, an old rival waiting in the wings. When the Doom Counter goes off, one character in the scene who has a knife ready gets theirs pulled as the twist, so you're surprised by which bit of buried backstory surfaces. Turn it on per chat under the Doom Counter, and re-arm a knife any time to use it again."
+        },
+        {
+            "title": "New: Aliases and your own scene details",
+            "body": "Two more recent additions if you missed them: Aliases stop duplicate character cards when the AI starts calling 'Sarah' by her full name 'Sarah Greenfield' — add the other name under the character's Identity and it stays one card. And Custom Scene Fields let you add your own tracked details to the scene tracker (a name, an icon, and a note telling the AI what to fill in)."
+        },
+        {
             "title": "Your Doom Counter and Knives stay put",
             "body": "Jumping quickly between chats could sometimes lose your Doom Counter progress or quietly switch your Knives back off. Those now save the instant they change, so nothing slips through the cracks — and switching chats no longer flashes the last chat's info into the new one for a moment."
         },
@@ -16,11 +24,7 @@
         },
         {
             "title": "Faster and smoother in busy scenes",
-            "body": "Character cards, the portrait bar and the scene tracker do a lot less repeated work behind the scenes, so chats with lots of characters feel snappier. Dragging the color and size sliders is smooth now instead of stuttering."
-        },
-        {
-            "title": "You'll know if a save fails",
-            "body": "If something ever stops a change from saving in the Character Workshop — a knife, an alias, a color — you'll now get a little heads-up instead of the edit quietly disappearing."
+            "body": "Character cards, the portrait bar and the scene tracker do a lot less repeated work behind the scenes, so chats with lots of characters feel snappier. Dragging the color and size sliders is smooth now instead of stuttering. And if a change ever fails to save in the Character Workshop, you'll get a heads-up instead of it quietly disappearing."
         },
         {
             "title": "English only for now",
