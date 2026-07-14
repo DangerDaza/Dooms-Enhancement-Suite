@@ -2878,6 +2878,23 @@ jQuery(async () => {
                 revertLastMessageBubbles();
             };
 
+            // ── Inline character thoughts: re-insert after .mes_text rewrites ──
+            // The dropdowns are appended to .mes_text, but the render/decoration
+            // pipeline rewrites that element after they go in: ST's final
+            // formatting pass, colored-dialogues' ~600ms debounced recolor, and
+            // the 800ms bubble pass. Anything inserted earlier (e.g. at
+            // MESSAGE_RECEIVED+100ms) is destroyed with no re-insertion, so the
+            // thoughts vanished on every new message until the user toggled the
+            // setting off/on. Debounced so bursts (chat load, multiple events
+            // for one message) collapse into a single pass after the last write.
+            let inlineThoughtsRefreshTimer = null;
+            const scheduleInlineThoughtsRefresh = (delay = 900) => {
+                if (inlineThoughtsRefreshTimer) clearTimeout(inlineThoughtsRefreshTimer);
+                inlineThoughtsRefreshTimer = setTimeout(() => {
+                    inlineThoughtsRefreshTimer = null;
+                    updateChatThoughts();
+                }, delay);
+            };
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             const onCharacterMessageRenderedDecorations = (messageId) => {
                 if (!extensionSettings.enabled) return;
@@ -2912,6 +2929,10 @@ jQuery(async () => {
                 }
                 // Update scene tracker (new data may be available after message render)
                 setTimeout(() => updateChatSceneHeaders(), 100);
+                // Re-insert inline character thoughts once the decoration
+                // pipeline (recolor ~600ms, bubbles 800ms) has stopped
+                // rewriting .mes_text — see scheduleInlineThoughtsRefresh.
+                scheduleInlineThoughtsRefresh();
                 // Show trap mode notification on the message that received the silent twist
                 if (isTrapTwistPending() && messageElement) {
                     clearTrapTwistFlag();
@@ -3053,6 +3074,10 @@ jQuery(async () => {
                     queueExpressionCaptureForSpeaker(swipedMessage.name);
                 }
                 if (!extensionSettings.enabled) return;
+                // onMessageSwiped re-inserts inline thoughts immediately, but the
+                // ~600ms recolor pass rewrites .mes_text after that and destroys
+                // them — schedule a post-pipeline re-insert (bubbles on or off).
+                scheduleInlineThoughtsRefresh();
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
 
                 const messageElement = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);

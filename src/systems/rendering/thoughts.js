@@ -1406,7 +1406,14 @@ export function updateChatThoughts() {
     unbindThoughtPanelScroll();
     $(window).off('resize.thoughtPanel');
     $(document).off('click.thoughtPanel');
-    // Remove any existing inline thought dropdowns from previous renders
+    // Remove any existing inline thought dropdowns from previous renders,
+    // remembering which ones the user had expanded so a re-insert (e.g. the
+    // post-decoration refresh after each message) doesn't collapse them.
+    const openThoughtCharacters = new Set();
+    $('.dooms-inline-thought[open]').each(function () {
+        const character = $(this).attr('data-character');
+        if (character) openThoughtCharacters.add(character);
+    });
     $('.dooms-inline-thought').remove();
     // If extension is disabled, thoughts in chat are disabled, or no thoughts, just return
     if (!extensionSettings.enabled || !extensionSettings.showThoughtsInChat || !lastGeneratedData.characterThoughts) {
@@ -1440,7 +1447,7 @@ export function updateChatThoughts() {
     }
     if (_debug) console.log('[Dooms Tracker] Target message found, inserting inline thought dropdowns...');
     // Insert inline thought dropdowns into the message
-    insertInlineThoughts($targetMessage, thoughtsArray);
+    insertInlineThoughts($targetMessage, thoughtsArray, openThoughtCharacters);
 }
 /**
  * Parses character thoughts from lastGeneratedData into a simple array.
@@ -1519,8 +1526,9 @@ function parseThoughtsArray() {
  *
  * @param {jQuery} $message - The message element to insert thoughts into
  * @param {Array<{name: string, emoji: string, thought: string}>} thoughtsArray
+ * @param {Set<string>} [openCharacters] - Lowercased character names whose dropdowns should start expanded
  */
-function insertInlineThoughts($message, thoughtsArray) {
+function insertInlineThoughts($message, thoughtsArray, openCharacters) {
     const _debug = extensionSettings.debugMode;
     const $mesText = $message.find('.mes_text');
     if (!$mesText.length) {
@@ -1538,6 +1546,9 @@ function insertInlineThoughts($message, thoughtsArray) {
     let insertedCount = 0;
     for (const [nameLower, thoughtData] of Object.entries(thoughtsMap)) {
         const $dropdown = createThoughtDropdown(thoughtData);
+        if (openCharacters && openCharacters.has(nameLower)) {
+            $dropdown.attr('open', '');
+        }
         $mesText.append($dropdown);
         insertedCount++;
     }

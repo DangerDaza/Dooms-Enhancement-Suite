@@ -244,8 +244,11 @@ export async function onMessageReceived(data) {
                         .catch(err => console.error('[DES] User expression classification failed:', err));
                 }
             }
-            // Insert inline thought dropdowns into the chat message
-            // (CHARACTER_MESSAGE_RENDERED fires after addOneMessage, so thoughts go in then)
+            // Insert inline thought dropdowns into the chat message. This is
+            // the fast first paint only — later .mes_text rewrites (ST's final
+            // formatting, colored-dialogues' ~600ms recolor, the 800ms bubble
+            // pass) destroy these; the CHARACTER_MESSAGE_RENDERED handler in
+            // index.js re-inserts them once the pipeline settles.
             if (parsedData.characterThoughts) {
                 setTimeout(() => updateChatThoughts(), 100);
             }
