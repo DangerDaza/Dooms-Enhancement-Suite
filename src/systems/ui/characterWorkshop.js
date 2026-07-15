@@ -1419,7 +1419,11 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.injection.promptTemplate = DEFAULT_INJECT_PROMPT;
         draft.dirty.injection = true;
-        $modal.find('#cw-inj-prompt').val(DEFAULT_INJECT_PROMPT).trigger('focus');
+        $modal.find('#cw-inj-prompt').val(DEFAULT_INJECT_PROMPT);
+        // Only auto-focus on desktop — on mobile this triggers the virtual keyboard
+        if (window.innerWidth > 1000) {
+            $modal.find('#cw-inj-prompt').trigger('focus');
+        }
     });
 
     $modal.on('click.cw', '#cw-clear-all-injects', function (e) {
@@ -1481,7 +1485,11 @@ function bindStaticListeners() {
             closeLorebookCombo();
         } else {
             openLorebookCombo();
-            $modal.find('#cw-inj-lorebook').trigger('focus');
+            // Only auto-focus on desktop (enables type-to-filter) — on mobile
+            // this pops the virtual keyboard over the list the user just opened
+            if (window.innerWidth > 1000) {
+                $modal.find('#cw-inj-lorebook').trigger('focus');
+            }
         }
     });
     $modal.on('mousedown.cw', '#cw-inj-lorebook-list li[data-value]', function (e) {
