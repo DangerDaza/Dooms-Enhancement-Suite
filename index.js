@@ -36,7 +36,6 @@ import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
 import { onIdle } from './src/core/scheduler.js';
-import { sendDailyUsagePing, fetchDailyUserCount } from './src/core/usagePing.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -610,26 +609,6 @@ async function loadSettingsTemplate() {
     // Custom-colors section visibility depends on the current theme; the
     // eager call at startup ran before the popup existed.
     try { toggleCustomColors(); } catch (_) { }
-    // Tiny daily-users badge in the popup header. Fetched only now (first
-    // settings open), session-cached, hidden silently when no data exists.
-    //
-    // SHIPS DORMANT in this release: the stats pipeline (release asset +
-    // daily cron) needs to run on main for a couple of days before the
-    // number means anything. No flag to flip — the badge self-activates on
-    // the NEXT version bump (every release bumps the version; load-check
-    // enforces it), by which time real data exists.
-    const DAU_BADGE_DORMANT_IN = '2.0.0';
-    getExtensionVersion().then((v) => {
-        if (!v || v === DAU_BADGE_DORMANT_IN) return; // dormant this release
-        fetchDailyUserCount().then((n) => {
-            if (n === null) return;
-            const badge = document.getElementById('rpg-dau-badge');
-            if (badge) {
-                badge.textContent = `\u{1F465} ${n.toLocaleString()}/day`;
-                badge.style.display = '';
-            }
-        });
-    }).catch(() => { });
     console.log('[Dooms Tracker] Deferred settings UI ready');
 }
 
@@ -695,10 +674,6 @@ function bindSettingsUI() {
     });
     $('#rpg-toggle-compact-prompts').on('change', function () {
         extensionSettings.compactPrompts = $(this).prop('checked');
-        saveSettings();
-    });
-    $('#rpg-toggle-usage-ping').on('change', function () {
-        extensionSettings.usagePingOptOut = !$(this).prop('checked');
         saveSettings();
     });
     $('#rpg-restore-defaults').on('click', async function () {
@@ -1766,7 +1741,6 @@ function bindSettingsUI() {
     $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
     $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewOptOut);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
-    $('#rpg-toggle-usage-ping').prop('checked', !extensionSettings.usagePingOptOut);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
@@ -3143,10 +3117,6 @@ jQuery(async () => {
             onCharacterChanged();
         }
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
-        // ── Anonymous daily usage ping (opt-out: Advanced settings) ──
-        // One empty GET per day to a public GitHub release-asset counter;
-        // no payload, no identifiers. See src/core/usagePing.js.
-        onIdle('usagePing', sendDailyUsagePing, 10000);
         // ── What's New screen (desktop, once per release, opt-out) ──
         // The gate is three cheap checks; the module, its CSS, and the
         // release-notes JSON only load when it will actually display.

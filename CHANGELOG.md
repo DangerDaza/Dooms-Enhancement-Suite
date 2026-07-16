@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+- **The anonymous usage-ping / daily user count feature, entirely.** The stats pipeline committed `docs/usage-stats.csv` to `main` every day, which made SillyTavern's extension manager flag an update for every user every single day. Gone: the daily ping (`src/core/usagePing.js`), the settings-header user-count badge, the Advanced "Anonymous Usage Ping" toggle, the `usagePingOptOut` setting, both GitHub workflows (`usage-ping-release.yml`, `usage-stats.yml`), and the stats CSV. A stale `usagePingOptOut` key in existing saves is inert. DES now sends no telemetry of any kind.
+
 ## [2.2.0] - 2026-07-07 — Locksmith
 
 ### Security
