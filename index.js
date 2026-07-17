@@ -2861,13 +2861,29 @@ jQuery(async () => {
             // thoughts vanished on every new message until the user toggled the
             // setting off/on. Debounced so bursts (chat load, multiple events
             // for one message) collapse into a single pass after the last write.
+            // (scheduler.js onIdle is not usable here: requestIdleCallback may
+            // fire well before `timeout`, but this needs a minimum-delay floor.)
             let inlineThoughtsRefreshTimer = null;
             const scheduleInlineThoughtsRefresh = (delay = 900) => {
+                // Feature off → nothing to re-insert; don't arm a timer that
+                // would just run updateChatThoughts's global teardown for nothing.
+                if (!extensionSettings.showThoughtsInChat) return;
                 if (inlineThoughtsRefreshTimer) clearTimeout(inlineThoughtsRefreshTimer);
                 inlineThoughtsRefreshTimer = setTimeout(() => {
                     inlineThoughtsRefreshTimer = null;
                     updateChatThoughts();
                 }, delay);
+            };
+            // A pending refresh must not survive a chat switch: with the timer
+            // unguarded, a message rendered <900ms before switching could paint
+            // the OLD chat's thoughts into the new chat (lastGeneratedData is
+            // only overwritten when the new chat has saved tracker data). Same
+            // failure class as the tryRenderChat cancellation in 2.2.0.
+            const cancelInlineThoughtsRefresh = () => {
+                if (inlineThoughtsRefreshTimer) {
+                    clearTimeout(inlineThoughtsRefreshTimer);
+                    inlineThoughtsRefreshTimer = null;
+                }
             };
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             const onCharacterMessageRenderedDecorations = (messageId) => {
@@ -2977,6 +2993,9 @@ jQuery(async () => {
                 }
             };
             const onChatChangedDecorations = () => {
+                // Always cancel a pending inline-thoughts refresh from the
+                // previous chat, even when the extension is disabled.
+                cancelInlineThoughtsRefresh();
                 if (!extensionSettings.enabled) return;
                 // Apply chat bubbles if active
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {

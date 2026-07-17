@@ -1419,10 +1419,11 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.injection.promptTemplate = DEFAULT_INJECT_PROMPT;
         draft.dirty.injection = true;
-        $modal.find('#cw-inj-prompt').val(DEFAULT_INJECT_PROMPT);
+        const $prompt = $modal.find('#cw-inj-prompt');
+        $prompt.val(DEFAULT_INJECT_PROMPT);
         // Only auto-focus on desktop — on mobile this triggers the virtual keyboard
         if (window.innerWidth > 1000) {
-            $modal.find('#cw-inj-prompt').trigger('focus');
+            $prompt.trigger('focus');
         }
     });
 
