@@ -1,9 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [2.3.0] - 2026-07-17 — Radio Silence
 
 ### Removed
 - **The anonymous usage-ping / daily user count feature, entirely.** The stats pipeline committed `docs/usage-stats.csv` to `main` every day, which made SillyTavern's extension manager flag an update for every user every single day. Gone: the daily ping (`src/core/usagePing.js`), the settings-header user-count badge, the Advanced "Anonymous Usage Ping" toggle, the `usagePingOptOut` setting, both GitHub workflows (`usage-ping-release.yml`, `usage-stats.yml`), and the stats CSV. A stale `usagePingOptOut` key in existing saves is inert. DES now sends no telemetry of any kind.
+
+### Fixed
+- **Inline character thoughts no longer vanish after every new message.** The 💭 thought dropdowns are appended to the message's `.mes_text`, which the render/decoration pipeline (SillyTavern's final formatting pass, colored-dialogues' ~600ms recolor, the 800ms chat-bubble pass) rewrites *after* they went in — destroying them with no re-insertion until the user toggled the setting off and on. They are now re-inserted after the pipeline settles, on both new messages and swipes, and a dropdown you've expanded stays expanded across the refresh. The refresh is cancelled on chat switch (so a fast switch can't paint the old chat's thoughts into the new one) and is skipped entirely when thoughts-in-chat is off.
+- **The mobile virtual keyboard no longer pops open uninvited in the Character Workshop.** The injection-prompt "Reset to default" button and the lorebook dropdown arrow both auto-focused a text input; on mobile that slid the keyboard over the screen (in the lorebook's case, over the very list just opened). Both now auto-focus on desktop only, matching the quest editor's existing behavior.
 
 ## [2.2.0] - 2026-07-07 — Locksmith
 

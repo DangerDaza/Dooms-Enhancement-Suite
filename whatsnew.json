@@ -1,34 +1,18 @@
 {
-    "version": "2.2.0",
-    "title": "Locksmith",
+    "version": "2.3.0",
+    "title": "Radio Silence",
     "items": [
         {
-            "title": "🔒 A safety fix — please update",
-            "body": "We closed a hole where a character's name, their thoughts, or a tracker preset you imported from someone else could sneak hidden instructions into the page. You don't have to do anything — just updating fixes it. If you ever load presets other people made, this one's especially worth having."
+            "title": "📡 No more daily update prompts — and zero telemetry",
+            "body": "The anonymous daily user counter is gone completely. It turned out the way it recorded its numbers made SillyTavern show you an 'update available' for DES every single day — that was never the intent, and we're sorry for the noise. The whole feature has been removed: DES now sends nothing anywhere, ever, and you'll only see an update when there's an actual update."
         },
         {
-            "title": "🔪 New: Knives — plant your own plot twists",
-            "body": "Knives are story beats you write ahead of time and pin to a character in the Character Workshop — a secret, a debt, an old rival waiting in the wings. When the Doom Counter goes off, one character in the scene who has a knife ready gets theirs pulled as the twist, so you're surprised by which bit of buried backstory surfaces. Turn it on per chat under the Doom Counter, and re-arm a knife any time to use it again."
+            "title": "💭 Character thoughts stay put",
+            "body": "The little thought dropdowns under a message could disappear on every new reply, only coming back if you switched the option off and on again. They now survive each message properly, on swipes too — and if you had someone's thoughts expanded, they stay expanded."
         },
         {
-            "title": "New: Aliases and your own scene details",
-            "body": "Two more recent additions if you missed them: Aliases stop duplicate character cards when the AI starts calling 'Sarah' by her full name 'Sarah Greenfield' — add the other name under the character's Identity and it stays one card. And Custom Scene Fields let you add your own tracked details to the scene tracker (a name, an icon, and a note telling the AI what to fill in)."
-        },
-        {
-            "title": "Your Doom Counter and Knives stay put",
-            "body": "Jumping quickly between chats could sometimes lose your Doom Counter progress or quietly switch your Knives back off. Those now save the instant they change, so nothing slips through the cracks — and switching chats no longer flashes the last chat's info into the new one for a moment."
-        },
-        {
-            "title": "The scene tracker switches finally match up",
-            "body": "The show/hide switches for Time, Date, Location, Weather and the rest now agree between the main settings and the Tracker Editor — flip one and the other follows. Weather is now a switch in the Tracker Editor too, where it used to be missing."
-        },
-        {
-            "title": "Faster and smoother in busy scenes",
-            "body": "Character cards, the portrait bar and the scene tracker do a lot less repeated work behind the scenes, so chats with lots of characters feel snappier. Dragging the color and size sliders is smooth now instead of stuttering. And if a change ever fails to save in the Character Workshop, you'll get a heads-up instead of it quietly disappearing."
-        },
-        {
-            "title": "English only for now",
-            "body": "We removed the half-finished Russian and Chinese translations. Almost none of the newer features were ever actually translated, so they created more confusion than they solved. If you'd like to help translate the extension properly, come say hi — details below."
+            "title": "📱 The keyboard stays down on mobile",
+            "body": "Two spots in the Character Workshop popped the phone keyboard open when you didn't want to type: resetting the injection prompt, and opening the lorebook dropdown (which then hid the very list you were trying to read). Both are fixed — the keyboard only appears when you actually tap into a text box."
         }
     ],
     "contact": {
