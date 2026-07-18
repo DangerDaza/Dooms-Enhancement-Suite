@@ -2425,6 +2425,16 @@
                         <input type="text" id="cw-appearance" class="rpg-input" maxlength="500"
                             placeholder="appearance tags for image generation (leave empty for automatic prompts)"
                             autocomplete="off">
+                        <div class="stack" style="margin-top: 0.6rem; max-width: 380px;">
+                            <button type="button" class="rpg-btn" id="cw-appearance-from-desc"
+                                title="Have the LLM turn the Injection section's description into a tag prompt (it lands in the field above), then render a new portrait with it. The current portrait is kept and restorable.">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate portrait from description
+                            </button>
+                        </div>
+                        <p class="helper" style="margin-top: 0.4rem;">Uses the description from the Injection section:
+                            the LLM distills it into appearance tags (shown above so you can tweak and Save), then your
+                            Image Generation extension renders the portrait. The previous portrait stays restorable
+                            from the character card's right-click menu.</p>
                     </div>
                     <div class="rpg-editor-section">
                         <h4>Dialogue color</h4>

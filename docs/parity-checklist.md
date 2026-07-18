@@ -91,6 +91,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] PCP right-click → Regenerate Portrait: confirms, replaces card + sheet hero art (both stores swapped), old portrait banked and Restore Previous Portrait swaps it back (item hidden when no history), toasts on missing SD extension / failure, hidden for user characters, no double-fire while pending, history purged with the character
 - [ ] Tracker Data in Chat (toggle off by default): 🗂️ dropdown on tracker-bearing AI messages; survives recolor/bubbles/edit; follows swipes; edit validates JSON, persists per-swipe, refreshes panels when latest message; invalid JSON toasts without saving; toggle off removes all dropdowns
 - [ ] Mobile Compose Overlay (toggle off by default, ≤1000px only): tap input → sheet opens with existing text; typing mirrors to real input (token counter live); Send sends via ST; close keeps text; sheet resizes with keyboard (Send stays visible); no reopen loop after send/close; desktop unaffected
+- [ ] Workshop → Appearance → Generate portrait from description: distills Injection description to tags (fills Portrait prompt field), renders via /sd, banks old portrait, disabled state + toasts, no-op without description, NPC-only
 - [ ] Portrait prompts: multi-line LLM/description prompts flattened before /sd (ComfyUI backend generates, no workflow-JSON error); Workshop → Appearance "Portrait prompt" field persists, is NPC-only, overrides LLM prompt for Regenerate Portrait AND auto-portraits, cleared on character delete
 
 ## Themes & customization

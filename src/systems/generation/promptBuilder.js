@@ -1042,3 +1042,37 @@ export async function generateAvatarPromptGenerationPrompt(characterName) {
     messages.push({ role: 'user', content: instructionMessage });
     return messages;
 }
+
+/**
+ * Builds messages that distill a Workshop character description into a
+ * single-line, tag-style portrait prompt (Appearance → "Generate portrait
+ * from description"). Appearance-only by design — quality and framing tags
+ * belong in the Image Generation extension's prompt prefixes, and prose is
+ * deliberately converted to tags: tag prompts consistently outperform prose
+ * dumps on SD-family backends.
+ *
+ * @param {string} characterName
+ * @param {string} description - The Injection section's description text
+ * @returns {Array<{role: string, content: string}>}
+ */
+export function generateDescriptionPortraitPrompt(characterName, description) {
+    return [
+        {
+            role: 'system',
+            content: 'You convert roleplay character descriptions into image-generation prompts for anime-style models. You reply with ONLY the prompt line — no commentary, no quotes, no "Prompt:" prefix.',
+        },
+        {
+            role: 'user',
+            content: `Convert the following character description into ONE single-line, comma-separated, Danbooru-style tag prompt describing the character's physical appearance for a portrait.
+
+Rules:
+- Start with 1girl, 1boy, or 1other according to the character's gender.
+- Appearance only: hair, eyes, face, build, skin, clothing, accessories, distinctive features.
+- No narrative prose, no quality tags (masterpiece etc.), no camera or framing tags.
+
+Character: ${characterName}
+Description:
+${description}`,
+        },
+    ];
+}

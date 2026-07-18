@@ -1410,6 +1410,63 @@ function bindStaticListeners() {
         draft.appearance = String($(this).val() || '');
         draft.dirty.appearance = true;
     });
+    // Generate a portrait from the Injection description: LLM distills the
+    // prose into a tag prompt (surfaced in the Portrait prompt field), then
+    // the image renders through the Image Generation extension.
+    $modal.on('click.cw', '#cw-appearance-from-desc', async function () {
+        if (!draft || draft.isUser) return;
+        const name = draft.name;
+        const description = String(draft.injection?.description || '').trim();
+        if (!description) {
+            try { if (window.toastr) window.toastr.info('No description to work from — fill in the Injection section\'s Description first.', 'Character Workshop', { timeOut: 4000 }); } catch (e) {}
+            return;
+        }
+        const $btn = $(this);
+        try {
+            const gen = await import('../features/avatarGenerator.js');
+            if (!gen.isSdAvailable()) {
+                if (window.toastr) window.toastr.warning('The Image Generation (Stable Diffusion) extension isn\'t enabled.', 'Character Workshop', { timeOut: 5000 });
+                return;
+            }
+            if (gen.isGenerating(name)) {
+                if (window.toastr) window.toastr.info(`Already generating a portrait for ${name}.`, '', { timeOut: 3000 });
+                return;
+            }
+            const ok = window.confirm(
+                `Generate a new portrait for ${name} from the description?\n\n` +
+                `The LLM writes an appearance tag prompt from the Injection description ` +
+                `(it will appear in the Portrait prompt field), then your Image Generation ` +
+                `extension renders it. The current portrait is kept and can be restored.`
+            );
+            if (!ok) return;
+            $btn.prop('disabled', true);
+            if (window.toastr) window.toastr.info(`Writing a portrait prompt from ${name}'s description…`, '', { timeOut: 4000 });
+            const result = await gen.generateAvatarFromDescription(name, description);
+            if (!result) return; // a generation was already in flight
+            // Surface the distilled prompt as the character's Portrait prompt
+            // so the user can tweak it and Save — the knob stays visible.
+            if (result.prompt && draft && draft.name === name && !draft.isUser) {
+                draft.appearance = result.prompt;
+                draft.dirty.appearance = true;
+                $modal.find('#cw-appearance').val(result.prompt);
+            }
+            if (result.url) {
+                if (draft && draft.name === name) {
+                    draft.avatar = result.url;
+                    renderAppearance();
+                }
+                try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+                if (window.toastr) window.toastr.success(`New portrait ready for ${name}.`, '', { timeOut: 3000 });
+            } else if (window.toastr) {
+                window.toastr.warning(`Portrait generation failed for ${name} — the image backend reported an error. Check the Image Generation extension settings and your backend's console.`, '', { timeOut: 8000 });
+            }
+        } catch (e) {
+            console.error('[Dooms Tracker] Workshop: generate-from-description failed', e);
+            if (window.toastr) window.toastr.error('Portrait generation failed — see console for details.', 'Character Workshop', { timeOut: 4000 });
+        } finally {
+            $btn.prop('disabled', false);
+        }
+    });
     $modal.on('input.cw change.cw', '#cw-inj-description', function () {
         if (!draft) return;
         draft.injection.description = String($(this).val() || '');

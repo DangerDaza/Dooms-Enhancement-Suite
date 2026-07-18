@@ -17,7 +17,7 @@ import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from 
 import { saveSettings } from '../../core/persistence.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
-import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt } from '../generation/promptBuilder.js';
+import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt, generateDescriptionPortraitPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 // Generation state - tracks characters currently being generated
 const pendingGenerations = new Set();
@@ -491,6 +491,51 @@ export async function regenerateAvatar(characterName) {
         pendingGenerations.delete(characterName);
     }
 }
+/**
+ * Generates a portrait from a Workshop description (Appearance → "Generate
+ * portrait from description"): the LLM distills the Injection description
+ * into a single-line tag prompt, the current portrait is banked to history,
+ * and the image renders through /sd. The distilled prompt is returned so the
+ * Workshop can surface it in the Portrait prompt field — the user keeps the
+ * knob.
+ *
+ * @param {string} characterName
+ * @param {string} description - The Injection section's description text
+ * @returns {Promise<{url: string|null, prompt: string}|null>} null when a
+ *          generation for this character is already in flight
+ */
+export async function generateAvatarFromDescription(characterName, description) {
+    if (pendingGenerations.has(characterName)) return null;
+    pendingGenerations.add(characterName);
+    try {
+        let prompt = '';
+        try {
+            const messages = generateDescriptionPortraitPrompt(characterName, description);
+            let response;
+            if (extensionSettings.generationMode === 'external') {
+                response = await generateWithExternalAPI(messages);
+            } else {
+                response = await safeGenerateRaw({ prompt: messages, quietToLoud: false });
+            }
+            prompt = stripReasoning(response || '')
+                .replace(/^["']|["']$/g, '')
+                .replace(/^prompt\s*:\s*/i, '')
+                .trim();
+        } catch (error) {
+            console.error(`[RPG Avatar] Description distillation failed for ${characterName}:`, error);
+        }
+        // Fallback: the raw description — the /sd chokepoint sanitizer
+        // flattens it to a safe single line either way.
+        if (!prompt) prompt = description;
+        stashCurrentPortraitToHistory(characterName);
+        saveSettings();
+        const url = await generateSingleAvatar(characterName, prompt);
+        return { url, prompt };
+    } finally {
+        pendingGenerations.delete(characterName);
+    }
+}
+
 /**
  * Generates an LLM prompt for a single character
  *
