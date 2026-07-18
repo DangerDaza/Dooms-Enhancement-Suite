@@ -14,10 +14,10 @@
  *
  * Storage: extensionSettings.characterAliases = { [canonicalName]: string[] }
  */
-import { extensionSettings } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData } from '../../core/state.js';
 import { chat_metadata, saveSettingsDebounced } from '../../../../../../../script.js';
-import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { namesAreSimilar } from '../../utils/nameSimilarity.js';
+import { escapeHtml } from '../../utils/html.js';
 
 /**
  * Builds a lowercase alias → canonical-name lookup from settings.
@@ -87,9 +87,13 @@ export function addCharacterAlias(canonical, alias) {
 //     existing card name, leading-article variants, and diacritic/spacing
 //     variants are canonicalized automatically and RECORDED as aliases — so
 //     they show up in Workshop → Identity → Aliases where the user can undo.
-//   Tier 2 (suggestion, fuzzy): merely-similar names ("Garden" vs "The
+//   Tier 2 (decision gate, fuzzy): merely-similar names ("Garden" vs "The
 //     Gardener") are NOT auto-merged — similar names can be genuinely
-//     different characters — but a one-time toast suggests adding the alias.
+//     different characters. Instead a yes/no popup asks once per pair:
+//     YES folds the name in as an alias AND scrubs any just-created
+//     duplicate card/color/avatar entries; NO records a persistent
+//     dismissal (extensionSettings.aliasDismissals) so the pair is never
+//     asked about again and the separate character stands.
 // A name that exactly matches an EXISTING card is never touched by either
 // tier: explicit user setup wins.
 // ────────────────────────────────────────────────────────────────────────────
@@ -153,31 +157,116 @@ function resolveStructuralVariant(name, canonMap) {
     return null;
 }
 
-// Tier 2: fuzzy pairs already suggested this session (variant|canonical) —
-// one toast per pair, not one per message.
-const _suggestedPairs = new Set();
+// Tier 2: pairs currently showing (or queued to show) their yes/no popup.
+const _pendingDecisions = new Set();
 
-function maybeSuggestAlias(name, canonMap) {
-    if (typeof window === 'undefined' || !window.toastr) return;
+/**
+ * Adopts a variant name as an alias of an existing card and scrubs every
+ * trace of the duplicate character the variant may have just auto-created:
+ * card entries, colors, avatars, injection extras — global and chat-scoped —
+ * then re-canonicalizes the live tracker data and refreshes the panels so
+ * the duplicate card vanishes immediately.
+ */
+export async function adoptVariantAsAlias(canonical, variant) {
+    addCharacterAlias(canonical, variant);
+
+    const lower = String(variant).trim().toLowerCase();
+    const scrub = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        for (const key of Object.keys(obj)) {
+            if (key.toLowerCase() === lower) delete obj[key];
+        }
+    };
+    for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes',
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
+        scrub(extensionSettings[store]);
+    }
+    try {
+        const meta = chat_metadata?.dooms_tracker;
+        if (meta) {
+            scrub(meta.knownCharacters);
+            scrub(meta.characterColors);
+            if (Array.isArray(meta.removedCharacters)) {
+                meta.removedCharacters = meta.removedCharacters.filter(n => String(n).toLowerCase() !== lower);
+            }
+        }
+    } catch (e) {}
+    try { saveSettingsDebounced(); } catch (e) {}
+
+    // Fold the variant out of the live tracker data and repaint. Dynamic
+    // imports — the render stack sits above this module in the import graph.
+    try {
+        lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
+        const { saveChatData } = await import('../../core/persistence.js');
+        saveChatData({ immediate: true });
+        const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
+        clearPortraitCache();
+        updatePortraitBar();
+        const { renderThoughts } = await import('../rendering/thoughts.js');
+        renderThoughts();
+    } catch (e) {
+        console.warn('[Dooms Tracker] Aliases: post-adopt refresh failed', e);
+    }
+    if (typeof window !== 'undefined' && window.toastr) {
+        window.toastr.success(`"${variant}" is now an alias of ${canonical}.`, 'Character Aliases', { timeOut: 4000 });
+    }
+}
+
+/**
+ * Tier 2 decision gate. Called during live parses when a NEW tracker name is
+ * fuzzy-similar to an existing card: asks the user yes/no (deferred out of
+ * the parse call stack). YES → adoptVariantAsAlias; NO → persistent
+ * dismissal, the pair is never asked about again.
+ */
+function queueAliasDecision(name, canonMap) {
     const key = normalizeNameKey(name);
     if (!key || canonMap.has(key)) return;
     for (const canonical of canonMap.values()) {
-        if (!namesAreSimilar(stripLeadingArticle(normalizeNameKey(name)), stripLeadingArticle(normalizeNameKey(canonical)))) continue;
+        if (!namesAreSimilar(stripLeadingArticle(key), stripLeadingArticle(normalizeNameKey(canonical)))) continue;
         const pairKey = `${key}|${normalizeNameKey(canonical)}`;
-        if (_suggestedPairs.has(pairKey)) return;
-        _suggestedPairs.add(pairKey);
-        window.toastr.info(
-            `The tracker mentioned "${name}" — similar to your character "${canonical}". If they're the same, click here to open ${canonical} in the Workshop and add "${name}" as an alias; otherwise ignore this.`,
-            'Possible duplicate character',
-            {
-                timeOut: 12000,
-                onclick: () => {
-                    ensureSettingsUI().then(() => {
-                        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: canonical, isUser: false } }));
-                    }).catch(() => {});
-                },
-            },
-        );
+        if (_pendingDecisions.has(pairKey)) return;
+        if (extensionSettings.aliasDismissals?.[pairKey]) return;
+        _pendingDecisions.add(pairKey);
+        setTimeout(async () => {
+            try {
+                let yes = false;
+                try {
+                    const { callGenericPopup, POPUP_TYPE, POPUP_RESULT } = await import('../../../../../../popup.js');
+                    if (!callGenericPopup || !POPUP_TYPE) throw new Error('popup module unavailable');
+                    const html = `
+                        <h3>Possible duplicate character</h3>
+                        <p>The AI's tracker mentioned <strong>${escapeHtml(name)}</strong>, which looks similar to your existing character <strong>${escapeHtml(canonical)}</strong>.</p>
+                        <p>Are they the same character?</p>
+                        <p style="font-size: 0.85em; opacity: 0.7;">
+                            Yes — "${escapeHtml(name)}" becomes an alias of ${escapeHtml(canonical)}; no separate character is kept.<br>
+                            No — they stay separate characters, and you won't be asked about this pair again.
+                        </p>`;
+                    const result = await callGenericPopup(html, POPUP_TYPE.CONFIRM, '', {
+                        okButton: 'Yes, same character',
+                        cancelButton: 'No, keep separate',
+                    });
+                    yes = (POPUP_RESULT && result === POPUP_RESULT.AFFIRMATIVE) || result === 1 || result === true;
+                } catch (popupError) {
+                    // The decision still has to happen — plain confirm fallback.
+                    yes = typeof window !== 'undefined' && window.confirm(
+                        `The AI mentioned "${name}" — similar to your character "${canonical}". Are they the same character?\n\n` +
+                        `OK = "${name}" becomes an alias of ${canonical} (no separate character).\n` +
+                        `Cancel = keep them separate (you won't be asked again).`
+                    );
+                }
+                if (yes) {
+                    await adoptVariantAsAlias(canonical, name);
+                } else {
+                    if (!extensionSettings.aliasDismissals) extensionSettings.aliasDismissals = {};
+                    extensionSettings.aliasDismissals[pairKey] = true;
+                    try { saveSettingsDebounced(); } catch (e) {}
+                }
+            } catch (e) {
+                console.warn('[Dooms Tracker] Aliases: duplicate-decision flow failed', e);
+            } finally {
+                _pendingDecisions.delete(pairKey);
+            }
+        }, 50);
         return;
     }
 }
@@ -192,7 +281,8 @@ function maybeSuggestAlias(name, canonMap) {
  * (parentheticals, leading articles, diacritic/spacing differences) are
  * folded in automatically and recorded as aliases (Tier 1 above). With
  * options.suggestSimilar (live-generation call sites only), merely-similar
- * new names trigger a one-time suggestion toast instead (Tier 2).
+ * new names raise a yes/no duplicate-decision popup instead (Tier 2):
+ * yes adopts the alias and scrubs the duplicate, no dismisses permanently.
  *
  * @param {string|Object|null} thoughts - characterThoughts data
  * @param {{suggestSimilar?: boolean}} [options]
@@ -231,7 +321,7 @@ export function applyCharacterAliases(thoughts, { suggestSimilar = false } = {})
                 // alias path and the user can see/remove it in the Workshop.
                 if (addCharacterAlias(structural, raw)) aliasesRecorded = true;
             } else if (suggestSimilar) {
-                maybeSuggestAlias(raw, canonMap);
+                queueAliasDecision(raw, canonMap);
             }
         }
         if (canonical && canonical !== char.name) {
