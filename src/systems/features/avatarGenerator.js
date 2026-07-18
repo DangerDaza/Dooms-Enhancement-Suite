@@ -25,15 +25,32 @@ const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
 
 /**
  * Flattens a portrait prompt to a single clean line before it goes into
- * `/sd`. A multi-line prompt (LLM output, a pasted workshop description)
- * detonates inside ST's ComfyUI workflow-JSON substitution — raw newlines
- * land unescaped in the JSON — and can also confuse slash-command parsing.
+ * `/sd`, and neutralizes every character that detonates somewhere in the
+ * delivery chain (verified against ST's stable-diffusion extension source):
+ *
+ * - newlines: broke ComfyUI workflow-JSON substitution on older ST builds
+ *   (plain string replace into JSON; current builds JSON.stringify), and
+ *   /sd free-mode prompts bypass ST's own processReply() sanitizer entirely.
+ * - `|`: STscript's command separator — a pipe in an LLM-written prompt
+ *   truncates the /sd command and executes the remainder as STscript.
+ * - `{{` `}}`: macro syntax — substituteParams() runs on free-mode prompts,
+ *   so stray braces get macro-expanded into who-knows-what.
+ * - `"`: unescaped quotes broke the older workflow-JSON substitution too.
  */
 export function sanitizePortraitPrompt(prompt) {
     return String(prompt || '')
         .replace(/\s*[\r\n]+\s*/g, ', ')    // newlines → comma-space
+        .replace(/\|/g, ', ')               // STscript pipe → separator
+        .replace(/\{\{|\}\}/g, ' ')         // defuse {{macro}} syntax
+        .replace(/["“”]/g, '\'')            // quotes → apostrophes
         .replace(/(?:\s*,\s*)+/g, ', ')     // collapse comma runs (",,", ", ,")
+        .replace(/\s+/g, ' ')               // collapse whitespace
         .replace(/^[,\s]+|[,\s]+$/g, '');   // no leading/trailing commas
+}
+
+/** Is SillyTavern's Image Generation extension (the /sd command) loaded? */
+export function isSdAvailable() {
+    try { return !!SlashCommandParser.commands['sd']; } catch (e) { return false; }
 }
 
 /**

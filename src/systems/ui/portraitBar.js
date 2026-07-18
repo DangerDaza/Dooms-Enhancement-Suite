@@ -1140,7 +1140,14 @@ function regeneratePortraitFor(characterName) {
         if (url) {
             if (window.toastr) toastr.success(`New portrait ready for ${characterName}.`, '', { timeOut: 3000 });
         } else if (window.toastr) {
-            toastr.warning(`Portrait generation failed for ${characterName} — is the Image Generation (Stable Diffusion) extension enabled?`, '', { timeOut: 6000 });
+            // Two very different failures deserve two different messages: the
+            // /sd command not existing (extension off) vs the image backend
+            // rejecting the request (its own console has the real reason).
+            if (gen.isSdAvailable()) {
+                toastr.warning(`Portrait generation failed for ${characterName} — the image backend reported an error. Check the Image Generation extension settings and your backend's console (for ComfyUI, the server log names the failing node/model).`, '', { timeOut: 8000 });
+            } else {
+                toastr.warning(`Portrait generation failed for ${characterName} — the Image Generation (Stable Diffusion) extension isn't enabled.`, '', { timeOut: 6000 });
+            }
         }
     }).catch((err) => {
         console.error('[Dooms Tracker] Portrait regeneration failed:', err);
