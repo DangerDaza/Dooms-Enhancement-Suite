@@ -147,6 +147,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
+import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -2942,8 +2943,15 @@ jQuery(async () => {
                             clearBubbleState(mesText);
                         }
                         // Wait for colored-dialogues to finish adding <font color> tags
-                        // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED)
-                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
+                        // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED).
+                        // Also hold for any open duplicate-character decision —
+                        // attributing dialogue before the user answers bakes the
+                        // wrong speaker onto bubbles when they pick "same character".
+                        setTimeout(async () => {
+                            await waitForAliasDecisions();
+                            const freshEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                            if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
+                        }, 800);
                     }
                 }
                 // Update scene tracker (new data may be available after message render)
@@ -3128,7 +3136,8 @@ jQuery(async () => {
                 // Re-query the DOM element inside setTimeout because a failed swipe causes ST
                 // to "swipe back" and re-render the message, replacing the DOM node entirely.
                 // Using the stale reference captured above would apply bubbles to a detached node.
-                setTimeout(() => {
+                setTimeout(async () => {
+                    await waitForAliasDecisions();
                     const freshEl = document.querySelector(`#chat .mes[mesid="${messageIndex}"]`);
                     if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
                 }, 800);
@@ -3151,7 +3160,8 @@ jQuery(async () => {
             const onGenerationStoppedBubbleSafetyNet = () => {
                 if (!extensionSettings.enabled) return;
                 if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
-                setTimeout(() => {
+                setTimeout(async () => {
+                    await waitForAliasDecisions();
                     const lastMes = document.querySelector('#chat .mes:last-child');
                     if (!lastMes) return;
                     const mesText = lastMes.querySelector('.mes_text');

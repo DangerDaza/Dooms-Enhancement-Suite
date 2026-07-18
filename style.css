@@ -8908,6 +8908,84 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
+/* ── Duplicate-character decision dialog (DES-native so it follows the
+      selected theme via data-theme + the .rpg-settings-popup token scope) ── */
+.rpg-settings-popup.dooms-alias-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10060;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+.dooms-alias-card {
+    width: min(440px, 92vw);
+    background: var(--rpg-bg, rgba(24, 24, 30, 0.98));
+    border: 2px solid var(--rpg-border, #4a7ba7);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem 1.2rem;
+    color: var(--rpg-text, #ddd);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+    font-size: 0.92em;
+    line-height: 1.5;
+}
+
+.dooms-alias-card h3 {
+    margin: 0 0 0.6rem;
+    color: var(--rpg-highlight, #e94560);
+    font-size: 1.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dooms-alias-card p { margin: 0 0 0.6rem; }
+
+.dooms-alias-card strong { color: var(--rpg-highlight, #e94560); }
+
+.dooms-alias-hint {
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
+.dooms-alias-hint strong { color: inherit; }
+
+.dooms-alias-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+}
+
+.dooms-alias-actions button {
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.95em;
+    cursor: pointer;
+}
+
+.dooms-alias-no {
+    background: transparent;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    color: var(--rpg-text, #ddd);
+}
+
+.dooms-alias-no:hover { border-color: var(--rpg-highlight, #e94560); }
+
+.dooms-alias-yes {
+    background: var(--rpg-highlight, #e94560);
+    border: 1px solid var(--rpg-highlight, #e94560);
+    color: #fff;
+    font-weight: 600;
+}
+
+.dooms-alias-yes:hover { filter: brightness(1.1); }
+
+
 /* ── Mobile Compose Overlay (fullscreen compose sheet, sized to the visual
       viewport so only IT resizes for the on-screen keyboard) ── */
 #dooms-compose-overlay {

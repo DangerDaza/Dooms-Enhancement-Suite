@@ -159,6 +159,78 @@ function resolveStructuralVariant(name, canonMap) {
 
 // Tier 2: pairs currently showing (or queued to show) their yes/no popup.
 const _pendingDecisions = new Set();
+// Callers (the chat-bubble pipeline) waiting for all decisions to settle.
+const _settlementWaiters = [];
+
+function settleIfIdle() {
+    if (_pendingDecisions.size === 0) {
+        while (_settlementWaiters.length) _settlementWaiters.shift()();
+    }
+}
+
+/**
+ * Resolves once no duplicate-decision popups are pending. The chat-bubble
+ * pipeline awaits this before attributing dialogue — attributing while a
+ * decision is open bakes the wrong speaker onto bubbles when the user then
+ * answers "yes, same character". Resolves immediately when nothing is
+ * pending; the timeout is a safety valve against an eternally-open popup.
+ */
+export function waitForAliasDecisions(timeoutMs = 120000) {
+    if (_pendingDecisions.size === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            const i = _settlementWaiters.indexOf(done);
+            if (i >= 0) _settlementWaiters.splice(i, 1);
+            resolve();
+        }, timeoutMs);
+        const done = () => { clearTimeout(timer); resolve(); };
+        _settlementWaiters.push(done);
+    });
+}
+
+/**
+ * DES-native yes/no dialog, themed like every other DES modal (data-theme +
+ * the .rpg-settings-popup theme token scope) — ST's generic popup can't
+ * follow the user's selected DES theme.
+ * Resolves true (same character), false (keep separate, never ask again),
+ * or null (backdrop/Escape — decide later, may ask again next message).
+ */
+function showAliasDecisionDialog(name, canonical) {
+    return new Promise((resolve) => {
+        if (typeof document === 'undefined' || typeof $ === 'undefined') { resolve(null); return; }
+        $('.dooms-alias-overlay').remove();
+        const theme = extensionSettings.theme;
+        const $overlay = $(`
+            <div class="rpg-settings-popup dooms-alias-overlay" role="dialog" aria-modal="true" aria-label="Possible duplicate character">
+                <div class="dooms-alias-card">
+                    <h3><i class="fa-solid fa-user-group"></i> Possible duplicate character</h3>
+                    <p>The AI's tracker mentioned <strong>${escapeHtml(name)}</strong>, which looks similar to your existing character <strong>${escapeHtml(canonical)}</strong>.</p>
+                    <p>Are they the same character?</p>
+                    <p class="dooms-alias-hint">
+                        <strong>Yes</strong> — "${escapeHtml(name)}" becomes an alias of ${escapeHtml(canonical)}; no separate character is kept.<br>
+                        <strong>No</strong> — they stay separate characters, and you won't be asked about this pair again.<br>
+                        Press Escape to decide later.
+                    </p>
+                    <div class="dooms-alias-actions">
+                        <button type="button" class="dooms-alias-no">No, keep separate</button>
+                        <button type="button" class="dooms-alias-yes">Yes, same character</button>
+                    </div>
+                </div>
+            </div>
+        `);
+        if (theme && theme !== 'default') $overlay.attr('data-theme', theme);
+        const done = (result) => {
+            $overlay.remove();
+            $(document).off('keydown.doomsAliasDecision');
+            resolve(result);
+        };
+        $overlay.on('click', '.dooms-alias-yes', () => done(true));
+        $overlay.on('click', '.dooms-alias-no', () => done(false));
+        $overlay.on('click', function (e) { if (e.target === this) done(null); });
+        $(document).on('keydown.doomsAliasDecision', (e) => { if (e.key === 'Escape') done(null); });
+        $('body').append($overlay);
+    });
+}
 
 /**
  * Adopts a variant name as an alias of an existing card and scrubs every
@@ -202,8 +274,9 @@ export async function adoptVariantAsAlias(canonical, variant) {
         const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
         clearPortraitCache();
         updatePortraitBar();
-        const { renderThoughts } = await import('../rendering/thoughts.js');
+        const { renderThoughts, updateChatThoughts } = await import('../rendering/thoughts.js');
         renderThoughts();
+        updateChatThoughts();
     } catch (e) {
         console.warn('[Dooms Tracker] Aliases: post-adopt refresh failed', e);
     }
@@ -229,42 +302,31 @@ function queueAliasDecision(name, canonMap) {
         _pendingDecisions.add(pairKey);
         setTimeout(async () => {
             try {
-                let yes = false;
+                let decision = null;
                 try {
-                    const { callGenericPopup, POPUP_TYPE, POPUP_RESULT } = await import('../../../../../../popup.js');
-                    if (!callGenericPopup || !POPUP_TYPE) throw new Error('popup module unavailable');
-                    const html = `
-                        <h3>Possible duplicate character</h3>
-                        <p>The AI's tracker mentioned <strong>${escapeHtml(name)}</strong>, which looks similar to your existing character <strong>${escapeHtml(canonical)}</strong>.</p>
-                        <p>Are they the same character?</p>
-                        <p style="font-size: 0.85em; opacity: 0.7;">
-                            Yes — "${escapeHtml(name)}" becomes an alias of ${escapeHtml(canonical)}; no separate character is kept.<br>
-                            No — they stay separate characters, and you won't be asked about this pair again.
-                        </p>`;
-                    const result = await callGenericPopup(html, POPUP_TYPE.CONFIRM, '', {
-                        okButton: 'Yes, same character',
-                        cancelButton: 'No, keep separate',
-                    });
-                    yes = (POPUP_RESULT && result === POPUP_RESULT.AFFIRMATIVE) || result === 1 || result === true;
-                } catch (popupError) {
+                    decision = await showAliasDecisionDialog(name, canonical);
+                } catch (dialogError) {
                     // The decision still has to happen — plain confirm fallback.
-                    yes = typeof window !== 'undefined' && window.confirm(
+                    decision = typeof window !== 'undefined' && window.confirm(
                         `The AI mentioned "${name}" — similar to your character "${canonical}". Are they the same character?\n\n` +
                         `OK = "${name}" becomes an alias of ${canonical} (no separate character).\n` +
                         `Cancel = keep them separate (you won't be asked again).`
                     );
                 }
-                if (yes) {
+                if (decision === true) {
                     await adoptVariantAsAlias(canonical, name);
-                } else {
+                } else if (decision === false) {
                     if (!extensionSettings.aliasDismissals) extensionSettings.aliasDismissals = {};
                     extensionSettings.aliasDismissals[pairKey] = true;
                     try { saveSettingsDebounced(); } catch (e) {}
                 }
+                // decision === null: closed without deciding — no dismissal
+                // recorded, the pair may ask again on a future message.
             } catch (e) {
                 console.warn('[Dooms Tracker] Aliases: duplicate-decision flow failed', e);
             } finally {
                 _pendingDecisions.delete(pairKey);
+                settleIfIdle();
             }
         }, 50);
         return;
