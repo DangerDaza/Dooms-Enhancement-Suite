@@ -16,7 +16,7 @@
 
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters } from '../../core/persistence.js';
-import { deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { deletePortraitFromDiskByValue, purgePortraitHistory } from '../../utils/avatars.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
@@ -1024,6 +1024,8 @@ function purgeCharacter(name) {
     // Best-effort — failure leaves an orphan but settings stays correct.
     try { deletePortraitFromDiskByValue(s.npcAvatars?.[name]); } catch (e) {}
     try { deletePortraitFromDiskByValue(s.npcAvatarsFullRes?.[name]); } catch (e) {}
+    // Banked previous portraits (from Regenerate Portrait) go too.
+    try { purgePortraitHistory(name); } catch (e) {}
     if (s.npcAvatars) delete s.npcAvatars[name];
     if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];
     if (s.knownCharacters) delete s.knownCharacters[name];

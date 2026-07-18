@@ -148,6 +148,90 @@ export async function deletePortraitFromDiskByValue(value) {
     }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Portrait history — replaced portraits are KEPT, not deleted.
+//
+// When a portrait is regenerated, the old image file stays where it already
+// lives (the des-portraits folder for DES-managed files) and its URLs move
+// into extensionSettings.npcAvatarHistory[name] so it isn't an orphan.
+// "Restore Previous Portrait" swaps the newest history entry back in. Only
+// two things ever delete history files from disk: trimming past the per-
+// character cap, and full character deletion (purgePortraitHistory).
+// ────────────────────────────────────────────────────────────────────────────
+
+const PORTRAIT_HISTORY_LIMIT = 5;
+
+/** How many replaced portraits are kept for this character. */
+export function getPortraitHistoryCount(name) {
+    const list = extensionSettings.npcAvatarHistory?.[name];
+    return Array.isArray(list) ? list.length : 0;
+}
+
+/**
+ * Moves the character's CURRENT portrait entries (low-res + full-res) into
+ * their history instead of deleting them. Trims history beyond the cap,
+ * deleting only the evicted files from disk. Caller persists via saveSettings.
+ * @returns {boolean} true if there was a current portrait to stash
+ */
+export function stashCurrentPortraitToHistory(name) {
+    const avatar = extensionSettings.npcAvatars?.[name] || '';
+    const avatarFullRes = extensionSettings.npcAvatarsFullRes?.[name] || '';
+    if (!avatar && !avatarFullRes) return false;
+    if (!extensionSettings.npcAvatarHistory) extensionSettings.npcAvatarHistory = {};
+    const store = extensionSettings.npcAvatarHistory;
+    if (!Array.isArray(store[name])) store[name] = [];
+    store[name].push({ avatar, avatarFullRes, replacedAt: new Date().toISOString() });
+    while (store[name].length > PORTRAIT_HISTORY_LIMIT) {
+        const evicted = store[name].shift();
+        try { deletePortraitFromDiskByValue(evicted.avatar); } catch (e) {}
+        try { deletePortraitFromDiskByValue(evicted.avatarFullRes); } catch (e) {}
+    }
+    if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
+    if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
+    return true;
+}
+
+/**
+ * Swaps the newest history entry back in as the current portrait; the
+ * currently live portrait (if any) takes its place in history, so repeated
+ * restores toggle between the last two and nothing is ever lost.
+ * Caller persists via saveSettings.
+ * @returns {boolean} true if a previous portrait existed and was restored
+ */
+export function restorePreviousPortrait(name) {
+    const list = extensionSettings.npcAvatarHistory?.[name];
+    if (!Array.isArray(list) || !list.length) return false;
+    const prev = list.pop();
+    const currentAvatar = extensionSettings.npcAvatars?.[name] || '';
+    const currentFull = extensionSettings.npcAvatarsFullRes?.[name] || '';
+    if (currentAvatar || currentFull) {
+        list.push({ avatar: currentAvatar, avatarFullRes: currentFull, replacedAt: new Date().toISOString() });
+    }
+    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
+    if (prev.avatar) extensionSettings.npcAvatars[name] = prev.avatar;
+    else delete extensionSettings.npcAvatars[name];
+    if (prev.avatarFullRes) extensionSettings.npcAvatarsFullRes[name] = prev.avatarFullRes;
+    else delete extensionSettings.npcAvatarsFullRes[name];
+    if (!list.length) delete extensionSettings.npcAvatarHistory[name];
+    return true;
+}
+
+/**
+ * Deletes every kept portrait file for a character and drops their history
+ * entry. Only for FULL character deletion — regeneration never calls this.
+ */
+export function purgePortraitHistory(name) {
+    const list = extensionSettings.npcAvatarHistory?.[name];
+    if (Array.isArray(list)) {
+        for (const entry of list) {
+            try { deletePortraitFromDiskByValue(entry.avatar); } catch (e) {}
+            try { deletePortraitFromDiskByValue(entry.avatarFullRes); } catch (e) {}
+        }
+    }
+    if (extensionSettings.npcAvatarHistory) delete extensionSettings.npcAvatarHistory[name];
+}
+
 // High-level wrapper used by the workshop, the portrait-bar drop handler,
 // the avatar generator, and the migration. Reuses an existing on-disk
 // filename when currentValue already points at one (so re-saves overwrite

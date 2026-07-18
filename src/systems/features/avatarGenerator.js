@@ -16,7 +16,7 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
-import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait } from '../../utils/avatars.js';
+import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
 import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 // Generation state - tracks characters currently being generated
@@ -418,17 +418,12 @@ export async function regenerateAvatar(characterName) {
     if (pendingGenerations.has(characterName)) return null;
     // Mark as pending immediately
     pendingGenerations.add(characterName);
-    // Clear existing avatar — BOTH stores. Leaving npcAvatarsFullRes behind
-    // would keep showing the old image in the sheet popup's hero art
-    // (resolveFullPortrait prefers the full-res entry).
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
-        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
-        delete extensionSettings.npcAvatars[characterName];
-    }
-    if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {
-        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes[characterName]); } catch (e) {}
-        delete extensionSettings.npcAvatarsFullRes[characterName];
-    }
+    // Move the existing portrait (BOTH stores — leaving npcAvatarsFullRes
+    // live would keep showing the old image in the sheet popup's hero art)
+    // into the character's portrait history instead of deleting it. The old
+    // file stays in the des-portraits folder and "Restore Previous Portrait"
+    // can bring it back.
+    stashCurrentPortraitToHistory(characterName);
     saveSettings();
     // Clear existing prompt cache
     if (sessionAvatarPrompts[characterName]) {

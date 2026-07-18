@@ -25,7 +25,7 @@ import {
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
-import { getSafeThumbnailUrl, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, deletePortraitFromDiskByValue, purgePortraitHistory } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { generateKnifeSuggestions } from '../generation/doomCounter.js';
@@ -2031,6 +2031,8 @@ function deleteCharacter(name) {
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
     try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars?.[name]); } catch (e) {}
     try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[name]); } catch (e) {}
+    // Banked previous portraits (from Regenerate Portrait) go too.
+    try { purgePortraitHistory(name); } catch (e) {}
     if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
     if (extensionSettings.knownCharacters) delete extensionSettings.knownCharacters[name];

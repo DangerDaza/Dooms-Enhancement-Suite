@@ -20,7 +20,7 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
-import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -208,8 +208,11 @@ export function initPortraitBar() {
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
                 <i class="fa-solid fa-scroll"></i> Character Sheet
             </div>
-            <div class="dooms-pb-ctx-item" data-action="regenerate-portrait" title="Generate a fresh AI portrait for this character — replaces the current one (needs the Image Generation extension)">
+            <div class="dooms-pb-ctx-item" data-action="regenerate-portrait" title="Generate a fresh AI portrait for this character — the current one is kept and can be restored (needs the Image Generation extension)">
                 <i class="fa-solid fa-arrows-rotate"></i> Regenerate Portrait
+            </div>
+            <div class="dooms-pb-ctx-item" data-action="restore-portrait" style="display:none;" title="Swap back to the portrait this character had before the last regeneration">
+                <i class="fa-solid fa-clock-rotate-left"></i> Restore Previous Portrait
             </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="remove-character" title="Hide from this chat's Present Characters panel — character stays in the Workshop where you can Return them later">
@@ -335,8 +338,10 @@ export function initPortraitBar() {
         $menu.find('[data-action="cancel-inject"]').toggle(isPending);
         // 'Regenerate Portrait' is NPC-only — the generator writes to the
         // npcAvatars store; user-character portraits are managed in the
-        // Workshop (upload / persona mirror).
+        // Workshop (upload / persona mirror). 'Restore' only shows when a
+        // replaced portrait is actually banked for this character.
         $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
+        $menu.find('[data-action="restore-portrait"]').toggle(!isUser && getPortraitHistoryCount(characterName) > 0);
 
         // Position near the cursor, clamped to viewport. Re-parent to
         // <body> first so the menu escapes any ancestor stacking context
@@ -392,6 +397,13 @@ export function initPortraitBar() {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         } else if (action === 'regenerate-portrait') {
             regeneratePortraitFor(characterName);
+        } else if (action === 'restore-portrait') {
+            if (restorePreviousPortrait(characterName)) {
+                saveSettings();
+                clearPortraitCache();
+                updatePortraitBar();
+                if (window.toastr) toastr.success(`Restored ${characterName}'s previous portrait.`, '', { timeOut: 3000 });
+            }
         }
     });
 
@@ -1100,15 +1112,16 @@ function clearCharacterColor(characterName) {
 
 /**
  * Re-runs AI portrait generation for a character from the context menu.
- * Confirms first (the current portrait — including a manually uploaded one —
- * is deleted), then delegates to avatarGenerator.regenerateAvatar, which
- * rebuilds the LLM prompt and calls the Image Generation extension's /sd.
+ * Confirms first (it spends an image-generation call), then delegates to
+ * avatarGenerator.regenerateAvatar, which banks the current portrait in the
+ * character's history, rebuilds the LLM prompt, and calls the Image
+ * Generation extension's /sd.
  */
 function regeneratePortraitFor(characterName) {
     const ok = window.confirm(
         `Regenerate ${characterName}'s portrait?\n\n` +
-        `The current portrait is deleted and replaced with a freshly generated one ` +
-        `(uses your Image Generation extension; the old image cannot be restored).`
+        `A fresh portrait is generated with your Image Generation extension. ` +
+        `The current one is kept — right-click → Restore Previous Portrait brings it back.`
     );
     if (!ok) return;
     // Lazy import — same idiom as the other menu actions; keeps this eager
