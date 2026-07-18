@@ -23,6 +23,38 @@ import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '.
 const pendingGenerations = new Set();
 const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
 
+/**
+ * Flattens a portrait prompt to a single clean line before it goes into
+ * `/sd`. A multi-line prompt (LLM output, a pasted workshop description)
+ * detonates inside ST's ComfyUI workflow-JSON substitution — raw newlines
+ * land unescaped in the JSON — and can also confuse slash-command parsing.
+ */
+export function sanitizePortraitPrompt(prompt) {
+    return String(prompt || '')
+        .replace(/\s*[\r\n]+\s*/g, ', ')    // newlines → comma-space
+        .replace(/(?:\s*,\s*)+/g, ', ')     // collapse comma runs (",,", ", ,")
+        .replace(/^[,\s]+|[,\s]+$/g, '');   // no leading/trailing commas
+}
+
+/**
+ * The user-maintained, appearance-only portrait prompt for a character
+ * (Workshop → Appearance → "Portrait prompt"). When set, portrait
+ * generation uses THIS line verbatim instead of asking the LLM to write a
+ * prompt — single-line tag-style appearance prompts outperform prose dumps
+ * on SD-family backends, stay consistent between regenerations, and give
+ * the user a knob instead of a mystery.
+ */
+export function getCharacterAppearance(characterName) {
+    const store = extensionSettings.characterAppearance;
+    if (!store || !characterName) return '';
+    if (typeof store[characterName] === 'string') return store[characterName].trim();
+    const lower = characterName.toLowerCase();
+    for (const [key, value] of Object.entries(store)) {
+        if (key.toLowerCase() === lower && typeof value === 'string') return value.trim();
+    }
+    return '';
+}
+
 export function isAutoPortraitModeEnabled() {
     return Boolean(
         extensionSettings.enabled &&
@@ -263,6 +295,9 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
 
 async function generateAutoPortraitPrompt(characterData, messageText = '') {
     const name = characterData?.name || 'Unknown Character';
+    // A user-maintained appearance line skips LLM prompt-writing entirely.
+    const appearance = getCharacterAppearance(name);
+    if (appearance) return appearance;
     try {
         const promptMessages = await generateAutoPortraitPromptGenerationPrompt(characterData, messageText);
         let response;
@@ -314,7 +349,7 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
     const previous = extensionSettings.npcAvatars?.[characterName];
     try {
         const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${prompt}`,
+            `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
             { clearChatInput: false }
         );
         let imageUrl = extractImageUrl(result);
@@ -446,6 +481,10 @@ export async function regenerateAvatar(characterName) {
  * @returns {Promise<string|null>} Generated prompt or null if failed
  */
 async function generateAvatarPrompt(characterName) {
+    // A user-maintained appearance line skips LLM prompt-writing entirely
+    // (and bypasses the session cache — it's already deterministic).
+    const appearance = getCharacterAppearance(characterName);
+    if (appearance) return appearance;
     // Check cache first if not forcing regeneration
     if (sessionAvatarPrompts[characterName]) {
         return sessionAvatarPrompts[characterName];
@@ -518,7 +557,7 @@ async function generateSingleAvatar(characterName, prompt = null) {
         }
         // Execute /sd command with quiet=true to suppress chat output
         const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${prompt}`,
+            `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
             { clearChatInput: false }
         );
         // Extract image URL from result

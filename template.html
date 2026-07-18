@@ -2416,6 +2416,16 @@
                                 portrait</button>
                         </div>
                     </div>
+                    <div class="rpg-editor-section cw-npc-only">
+                        <h4>Portrait prompt</h4>
+                        <p class="helper">Optional, single line, tag-style — e.g. <em>silver hair, violet eyes, black
+                            leather coat, pale skin, sharp features</em>. When set, AI portrait generation (Regenerate
+                            Portrait, auto-portraits) sends exactly this instead of asking the LLM to write a prompt
+                            from the whole description — consistent results and a knob you control.</p>
+                        <input type="text" id="cw-appearance" class="rpg-input" maxlength="500"
+                            placeholder="appearance tags for image generation (leave empty for automatic prompts)"
+                            autocomplete="off">
+                    </div>
                     <div class="rpg-editor-section">
                         <h4>Dialogue color</h4>
                         <p class="helper">Used for this character's dialogue in chat and the name label on the portrait

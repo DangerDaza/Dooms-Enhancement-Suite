@@ -676,7 +676,8 @@ function buildDraft(name, isUser = false) {
         },
         knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
-        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false },
+        appearance: typeof extensionSettings?.characterAppearance?.[name] === 'string' ? extensionSettings.characterAppearance[name] : '',
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false },
     };
 }
 
@@ -916,6 +917,7 @@ function renderAppearance() {
         $img.removeAttr('src').hide();
         $placeholder.show();
     }
+    $modal.find('#cw-appearance').val(draft.appearance || '');
     const $palette = $modal.find('#cw-palette').empty();
     for (const hex of DIALOGUE_COLORS) {
         const isSelected = (draft.color || '').toLowerCase() === hex.toLowerCase();
@@ -1403,6 +1405,11 @@ function bindStaticListeners() {
         }
     });
 
+    $modal.on('input.cw change.cw', '#cw-appearance', function () {
+        if (!draft || draft.isUser) return;
+        draft.appearance = String($(this).val() || '');
+        draft.dirty.appearance = true;
+    });
     $modal.on('input.cw change.cw', '#cw-inj-description', function () {
         if (!draft) return;
         draft.injection.description = String($(this).val() || '');
@@ -1854,6 +1861,17 @@ function commitDraft() {
         changed = true;
     }
 
+    if (draft.dirty.appearance) {
+        if (!extensionSettings.characterAppearance) extensionSettings.characterAppearance = {};
+        const appearance = String(draft.appearance || '').trim();
+        if (appearance) {
+            extensionSettings.characterAppearance[name] = appearance;
+        } else {
+            delete extensionSettings.characterAppearance[name];
+        }
+        changed = true;
+    }
+
     if (draft.dirty.injection) {
         if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
         const desc = (draft.injection.description || '').trim();
@@ -2047,6 +2065,7 @@ function deleteCharacter(name) {
     // recreated same-name character would inherit the dead one's knives.
     if (extensionSettings.characterKnives) delete extensionSettings.characterKnives[name];
     if (extensionSettings.characterAliases) delete extensionSettings.characterAliases[name];
+    if (extensionSettings.characterAppearance) delete extensionSettings.characterAppearance[name];
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata. Without wiping those, the Roster grid (which
     // reads via the active getters) shows the character right back after

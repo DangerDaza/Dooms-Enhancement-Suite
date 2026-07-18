@@ -1031,6 +1031,7 @@ function purgeCharacter(name) {
     if (s.knownCharacters) delete s.knownCharacters[name];
     if (s.heroPositions) delete s.heroPositions[name];
     if (s.characterInjection) delete s.characterInjection[name];
+    if (s.characterAppearance) delete s.characterAppearance[name];
     if (s.characterRelationships) delete s.characterRelationships[name];
     // Knives and aliases too — an orphaned alias entry would keep silently
     // renaming a future, unrelated character to this deleted one, and a
