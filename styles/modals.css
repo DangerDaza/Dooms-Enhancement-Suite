@@ -5781,7 +5781,8 @@
    the Appearance tab's Upload/Remove portrait pair (one is a <label>),
    the Trackers tab's 'Open Tracker Editor', and the footer row. */
 #character-workshop-popup .rpg-btn,
-#character-roster-popup .rpg-btn {
+#character-roster-popup .rpg-btn,
+#rpg-character-sheet-popup .rpg-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -5803,21 +5804,24 @@
 }
 
 #character-workshop-popup .rpg-btn:hover,
-#character-roster-popup .rpg-btn:hover {
+#character-roster-popup .rpg-btn:hover,
+#rpg-character-sheet-popup .rpg-btn:hover {
     background: rgba(255, 255, 255, 0.08);
     border-color: var(--rpg-highlight);
     color: var(--rpg-text);
 }
 
 #character-workshop-popup .rpg-btn:active,
-#character-roster-popup .rpg-btn:active {
+#character-roster-popup .rpg-btn:active,
+#rpg-character-sheet-popup .rpg-btn:active {
     transform: translateY(1px);
 }
 
 
 /* Primary (Save) — solid, uses the theme's highlight color */
 #character-workshop-popup .rpg-btn-primary,
-#character-roster-popup .rpg-btn-primary {
+#character-roster-popup .rpg-btn-primary,
+#rpg-character-sheet-popup .rpg-btn-primary {
     background: var(--rpg-highlight);
     color: var(--rpg-bg);
     border-color: var(--rpg-highlight);
@@ -5825,7 +5829,8 @@
 }
 
 #character-workshop-popup .rpg-btn-primary:hover,
-#character-roster-popup .rpg-btn-primary:hover {
+#character-roster-popup .rpg-btn-primary:hover,
+#rpg-character-sheet-popup .rpg-btn-primary:hover {
     background: var(--rpg-highlight);
     color: var(--rpg-bg);
     box-shadow: 0 0 10px var(--rpg-highlight);
@@ -5836,7 +5841,8 @@
 /* Ghost (Cancel, Remove portrait) — outlined, uses body text so it's
    always legible on every theme. */
 #character-workshop-popup .rpg-btn-ghost,
-#character-roster-popup .rpg-btn-ghost {
+#character-roster-popup .rpg-btn-ghost,
+#rpg-character-sheet-popup .rpg-btn-ghost {
     background: transparent;
     color: var(--rpg-text);
     border-color: var(--rpg-border);
@@ -5844,7 +5850,8 @@
 }
 
 #character-workshop-popup .rpg-btn-ghost:hover,
-#character-roster-popup .rpg-btn-ghost:hover {
+#character-roster-popup .rpg-btn-ghost:hover,
+#rpg-character-sheet-popup .rpg-btn-ghost:hover {
     opacity: 1;
     background: rgba(255, 255, 255, 0.06);
     color: var(--rpg-text);

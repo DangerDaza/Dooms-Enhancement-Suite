@@ -76,6 +76,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Per-library and master toggle-all; inline entry editing; search/filter
 - [ ] Token count estimates; mobile lorebook view
 - [ ] Bunny Mo: !fullsheet / !quicksheet import → character sheet popup; persists per-chat
+- [ ] Fullsheet import button visible on the message face with expand_message_actions OFF (the default); appears for all template generations (/6 /8 /13 /14), tags-only truncated replies, swipes, edits, and lazy-loaded history; never on HP/day-counter stat text; removed when a swipe/edit replaces the sheet with prose (run `node tools/sheet-detect-test.mjs`)
 
 ## Misc features
 - [ ] Dialogue coloring: font tags display, stripped for TTS, 30-color palette
@@ -85,6 +86,8 @@ Run the full list at every phase boundary. A phase is not done until every line 
   were dead code — exported but never imported/initialized anywhere — deleted in Phase 2)
 - [ ] Music player renders/controls (where applicable)
 - [ ] Character sheets open from portrait right-click; sections collapse
+- [ ] Notes Mode: per-character toggle swaps sheet for editable dropdown sections (add/edit/delete/reorder); imported sheet survives toggle round-trip and merge-on-import; notes persist per-chat across reload and fast chat switch; popup closes on chat change
+- [ ] New-character similar-name panel: Sara-vs-Sarah offers alias / create-separate / back; exact-alias name warns; alias lands in Workshop → Identity → Aliases; user-mode shows warning without alias option; bulk imports unaffected
 
 ## Themes & customization
 - [ ] All themes apply: Default, Sci-Fi, Fantasy, Cyberpunk, Minimal, Midnight Rose

@@ -23,8 +23,23 @@ import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
+import { addCharacterAlias } from '../features/characterAliases.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
+
+/**
+ * Closes the roster and opens the Character Workshop for a character after
+ * the roster's fade-out. Single home for the 220ms delay and the
+ * 'dooms:open-workshop' event shape — five call sites use it.
+ */
+function openWorkshopFor(characterName, isUser) {
+    closeCharacterRoster();
+    // Defer so this modal's fade-out doesn't overlap the Workshop's fade-in
+    setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser: !!isUser } }));
+    }, 220);
+}
+
 
 const REL_EMOJI = {
     Lover: '❤️',
@@ -137,9 +152,14 @@ function bindListeners() {
     // Esc key while modal is open
     $(document).on('keydown.cr', (e) => {
         if (e.key !== 'Escape') return;
-        // If the new-character dialog is open, Esc only closes that.
+        // If the new-character dialog is open, Esc steps back: first out of
+        // the similar-name panel (to the name input), then out of the dialog.
         if (!$modal.find('#cr-newchar-overlay').prop('hidden')) {
-            closeNewCharacterDialog();
+            if (!$modal.find('#cr-newchar-similar').prop('hidden')) {
+                hideSimilarNamePanel();
+            } else {
+                closeNewCharacterDialog();
+            }
             return;
         }
         // If the context menu is open, Esc only closes that.
@@ -170,10 +190,7 @@ function bindListeners() {
         if (!name) return;
         const isUser = rosterMode === 'users';
         if (action === 'edit') {
-            closeCharacterRoster();
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
-            }, 220);
+            openWorkshopFor(name, isUser);
         } else if (action === 'pin') {
             togglePin(name);
             renderGrid();
@@ -230,12 +247,7 @@ function bindListeners() {
     $modal.on('click.cr', '.cr-tile[data-character]', function () {
         const name = $(this).attr('data-character');
         if (!name) return;
-        closeCharacterRoster();
-        const isUser = rosterMode === 'users';
-        // Defer so this modal's fade-out doesn't overlap the Workshop's fade-in
-        setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: name, isUser } }));
-        }, 220);
+        openWorkshopFor(name, rosterMode === 'users');
     });
 
     // "+ New Character" tile
@@ -286,22 +298,16 @@ function bindListeners() {
         addAliasToExisting(match.canonical, newName);
         hideSimilarNamePanel();
         closeNewCharacterDialog();
-        closeCharacterRoster();
         // Open the EXISTING character so the user sees the alias chip land
         // in Workshop → Identity → Aliases.
-        setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: match.canonical, isUser: !!match.isUser } }));
-        }, 220);
+        openWorkshopFor(match.canonical, match.isUser);
     });
     $modal.on('click.cr', '#cr-similar-open', () => {
         if (!_pendingSimilar) return;
         const { match } = _pendingSimilar;
         hideSimilarNamePanel();
         closeNewCharacterDialog();
-        closeCharacterRoster();
-        setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: match.canonical, isUser: !!match.isUser } }));
-        }, 220);
+        openWorkshopFor(match.canonical, match.isUser);
     });
     $modal.on('click.cr', '#cr-similar-create', () => {
         if (!_pendingSimilar) return;
@@ -344,6 +350,11 @@ function handleNewCharacter() {
 function closeNewCharacterDialog() {
     const $dialog = $modal?.find('#cr-newchar-overlay');
     if ($dialog && $dialog.length) $dialog.prop('hidden', true);
+    // Reset similar-name panel state so a stale match can't survive into the
+    // next open (handleNewCharacter resets too — this is the belt).
+    _pendingSimilar = null;
+    $modal?.find('#cr-newchar-similar').prop('hidden', true);
+    $modal?.find('#cr-newchar-input, .cr-newchar-actions').prop('hidden', false);
 }
 
 function commitNewCharacter() {
@@ -459,20 +470,13 @@ function hideSimilarNamePanel() {
 }
 
 /**
- * Records newName as an alias of an existing NPC card — the same write
- * commitDraft() performs in the Workshop (characterAliases is global, never
- * chat-scoped), so the Workshop's alias chips and every tracker-ingestion
- * chokepoint pick it up with no extra plumbing.
+ * Records newName as an alias of an existing NPC card via the alias module's
+ * shared writer (characterAliases is global, never chat-scoped), so the
+ * Workshop's alias chips and every tracker-ingestion chokepoint pick it up
+ * with no extra plumbing.
  */
 function addAliasToExisting(canonical, newName) {
-    if (!extensionSettings.characterAliases) extensionSettings.characterAliases = {};
-    const list = Array.isArray(extensionSettings.characterAliases[canonical])
-        ? extensionSettings.characterAliases[canonical]
-        : [];
-    if (!list.some(a => String(a).toLowerCase() === newName.toLowerCase())) {
-        list.push(newName);
-    }
-    extensionSettings.characterAliases[canonical] = list;
+    addCharacterAlias(canonical, newName);
     saveSettings();
     if (window.toastr) {
         window.toastr.success(`"${newName}" added as an alias of ${canonical}.`, 'Character Roster', { timeOut: 4000 });
@@ -499,11 +503,7 @@ function performCreateCharacter(trimmed) {
         }
     }
     closeNewCharacterDialog();
-    closeCharacterRoster();
-    const isUser = rosterMode === 'users';
-    setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: trimmed, isUser } }));
-    }, 220);
+    openWorkshopFor(trimmed, rosterMode === 'users');
 }
 
 /**
@@ -741,6 +741,11 @@ function getAllExistingCharacterNamesLower() {
         extensionSettings?.npcAvatars,
         extensionSettings?.userCharacters,
     ];
+    // Chat-scoped stores too (perChatCharacterTracking flips the roster into
+    // chat_metadata) — without these, a name that exists only in the current
+    // chat's roster sails past the "already exists" check.
+    try { sources.push(getActiveKnownCharacters()); } catch (e) {}
+    try { sources.push(getActiveCharacterColors()); } catch (e) {}
     for (const src of sources) {
         if (!src || typeof src !== 'object') continue;
         for (const name of Object.keys(src)) {

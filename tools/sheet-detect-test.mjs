@@ -14,6 +14,7 @@
  * detection or the parser.
  */
 import { messageHasFullSheet } from '../src/systems/ui/fullsheetButtons.js';
+import { normalizeName, levenshtein, namesAreSimilar, findSimilarCharacter } from '../src/utils/nameSimilarity.js';
 
 const MUST_MATCH = [
     ['V3.0 fullsheet (verbatim, /14, emoji after colon)', `
@@ -94,6 +95,8 @@ const MUST_NOT_MATCH = [
     ['HP/MP stat block', 'HP 45/100\nMP 30/50\nThe battle continues...'],
     ['Day/Round counters (different denominators)', 'Day 3/10 of the voyage.\nRound 2/5 begins.'],
     ['two same-M day mentions (no low N, only 2)', 'Day 6/10 passed quietly.\nLater...\nDay 7/10 arrived with rain.'],
+    ['low-N same-M diary WITH colons but no markup', 'Day 1/7: We arrived at the harbor.\nDay 2/7: We sailed north into the fog.'],
+    ['three plain same-M counters, no markup', 'Day 1/7 dawn.\nDay 2/7 rain.\nDay 3/7 wind.'],
     ['dates', '07/18 was the date.\n08/19 came later.'],
     ['single truncated section (button arrives after Continue)', '## SECTION 1/14: 🆔 **Core Identity & Context**\n**Name:** [Luna]'],
     ['prose mentioning quicksheet', 'Want me to put together a quicksheet for her? Just say the word and **I will**.'],
@@ -113,6 +116,31 @@ for (const [label, text] of MUST_NOT_MATCH) {
     if (got) { failures++; console.log(`FAIL (expected no-match): ${label}`); }
     else console.log(`pass  no-match:           ${label}`);
 }
+
+// ── Name similarity (roster "did you mean the same character?" feature) ──
+
+const SIMILAR = [
+    ['Sara', 'Sarah', true], ['Nyx', 'Nix', true], ['Katherine', 'Catherine', true],
+    ['Sarah', 'Sarah Greenfield', true], ['Aria', 'Ari', true], ['Elena', 'Helena', true],
+    ['Marcus', 'Mara', false], ['Bob', 'Alice', false], ['Luna', 'Starlight', false],
+];
+for (const [a, b, expected] of SIMILAR) {
+    const got = namesAreSimilar(a, b);
+    if (got !== expected) { failures++; console.log(`FAIL similar(${a}, ${b}): got ${got}`); }
+}
+if (normalizeName('  Séra  VOSS ') !== 'sera voss') { failures++; console.log('FAIL normalizeName diacritics/space'); }
+if (levenshtein('sara', 'sarah', 3) !== 1) { failures++; console.log('FAIL levenshtein sara/sarah'); }
+const pool = [
+    { name: 'Sarah', canonical: 'Sarah' },
+    { name: 'Sarah Greenfield', canonical: 'Sarah' },
+    { name: 'Marcus', canonical: 'Marcus', isUser: true },
+];
+const best = findSimilarCharacter('Sara', pool);
+if (best?.name !== 'Sarah' || best.exactNormalized) { failures++; console.log('FAIL findSimilarCharacter best-match'); }
+const aliasHit = findSimilarCharacter('sarah greenfield', pool);
+if (!aliasHit?.exactNormalized || aliasHit.canonical !== 'Sarah') { failures++; console.log('FAIL findSimilarCharacter exact alias'); }
+if (findSimilarCharacter('Zebulon', pool) !== null) { failures++; console.log('FAIL findSimilarCharacter no-match'); }
+console.log('name-similarity checks done');
 
 if (failures) {
     console.error(`\n${failures} fixture(s) failed`);

@@ -47,6 +47,32 @@ export function resolveCharacterAlias(name) {
 }
 
 /**
+ * Records `alias` as an alias of `canonical` (case-insensitive dedup).
+ * This module owns the storage format — every writer must go through here
+ * (or replicate commitDraft's whole-array replace in characterWorkshop.js)
+ * so the shape can't drift. Caller is responsible for persisting via
+ * saveSettings().
+ *
+ * @param {string} canonical - existing NPC card name
+ * @param {string} alias - the alternative name to record
+ * @returns {boolean} true if the alias was added, false if it already existed
+ */
+export function addCharacterAlias(canonical, alias) {
+    if (!canonical || !alias) return false;
+    if (!extensionSettings.characterAliases) extensionSettings.characterAliases = {};
+    const list = Array.isArray(extensionSettings.characterAliases[canonical])
+        ? extensionSettings.characterAliases[canonical]
+        : [];
+    if (list.some(a => String(a).toLowerCase() === String(alias).toLowerCase())) {
+        extensionSettings.characterAliases[canonical] = list;
+        return false;
+    }
+    list.push(alias);
+    extensionSettings.characterAliases[canonical] = list;
+    return true;
+}
+
+/**
  * Rewrites alias names to canonical card names inside parsed characterThoughts
  * tracker data. Accepts a JSON string or object (array of characters or
  * {characters: []} wrapper) and returns the same shape. Called at the tracker

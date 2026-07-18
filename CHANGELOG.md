@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **The Bunny Mo fullsheet import button actually shows up now.** The scroll icon was being injected inside SillyTavern's "…" Message Actions flyout, which is collapsed by default — so with stock ST settings it never appeared on the message face at all. It now sits in the always-visible message button row, next to the edit icon. Detection was also hardened: it recognizes every Bunny Mo template generation (V2 through V3.0 — /6, /8, /13, and /14-section sheets), quicksheets, `<BunnymoTags>` blocks, and common AI drift (`###` headers, emoji decorations, `<details>` wrapping, indentation), while no longer false-positiving on ordinary RPG text like `HP 45/100` stat blocks or `Day 3/10` counters. The button now also appears on sheets revealed by swipe navigation, message edits, "show more messages" in long chats, and truncated sheets once their Continue completes. A failed deferred module load on click used to be a silent no-op; it now logs and toasts. Detection and the parser share one header grammar, pinned by a fixture test (`tools/sheet-detect-test.mjs`) built from the real Bunny Mo lorebook templates.
+
+### Added
+- **Notes Mode for Character Sheets.** A per-character toggle in the sheet popup turns the imported-sheet view into a freeform notes area with your own collapsible dropdown sections (emoji + title + markdown text) — the same look as a Bunny Mo sheet, fully editable, with reorder/edit/delete. The imported sheet is never lost: toggle off and it's back, and importing while in Notes Mode merges instead of overwriting. Notes are per-chat, save immediately, and Copy Sheet includes them.
+- **"Did you mean the same character?" on new-character creation.** Creating a Workshop character whose name is similar to an existing card or alias (Sara/Sarah, Nyx/Nix, or a name that's a fragment of a revealed full name) now offers to record it as an **alias** of the existing character instead — one click, and the tracker's alias canonicalization keeps portraits, colors, and sheets attached to the original card. You can still create a separate character with one tap. Creating a name that's already an alias of another card gets a clear warning instead of silently making a card that never receives tracker data.
+
 ## [2.3.0] - 2026-07-17 — Radio Silence
 
 ### Removed

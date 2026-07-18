@@ -2996,6 +2996,12 @@ jQuery(async () => {
                 // Always cancel a pending inline-thoughts refresh from the
                 // previous chat, even when the extension is disabled.
                 cancelInlineThoughtsRefresh();
+                // Close the character-sheet popup: it renders one chat's data,
+                // and its notes editors write through the LIVE chat_metadata
+                // binding — leaving it open across a chat switch would save
+                // the old chat's notes into the new chat. Plain DOM hide so
+                // the lazy characterSheet module isn't loaded just for this.
+                $('#rpg-character-sheet-popup').css('display', 'none').removeAttr('data-cs-character');
                 if (!extensionSettings.enabled) return;
                 // Apply chat bubbles if active
                 if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
@@ -3093,18 +3099,13 @@ jQuery(async () => {
                     if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
                 }, 800);
             };
-            // Navigating between EXISTING swipes emits only MESSAGE_SWIPED (no
-            // render event), so a fullsheet sitting on another swipe needs its
-            // import button injected here. Idempotent when already present.
-            const onMessageSwipedFullsheet = (messageIndex) => {
-                if (!extensionSettings.enabled) return;
-                injectFullSheetButtonForMessage(messageIndex);
-            };
             // "Show more messages" clones fresh message elements and emits only
             // MORE_MESSAGES_LOADED — without this, a sheet above the fold in a
-            // >chat_truncation chat never gets a button.
+            // >chat_truncation chat never gets a button. The sweep memoizes
+            // detection by message text, so re-sweeps are cheap. (The swipe
+            // path registers injectFullSheetButtonForMessage directly — it
+            // carries its own enabled guard.)
             const onMoreMessagesLoadedFullsheet = () => {
-                if (!extensionSettings.enabled) return;
                 setTimeout(() => injectFullSheetButtons(), 100);
             };
             // GENERATION_STOPPED safety net — when a generation is aborted (e.g. failed
@@ -3132,7 +3133,7 @@ jQuery(async () => {
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, onMessageSwipedFullsheet],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,

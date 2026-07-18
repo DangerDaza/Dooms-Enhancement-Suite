@@ -14,52 +14,28 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 // Eager half (fullsheet detection, import buttons, stats cache) lives in
 // fullsheetButtons.js so chat handlers don't need this whole module.
-import { statsCache, messageHasFullSheet, collectSectionHeaders, pickDominantSectionGroup } from './fullsheetButtons.js';
+import {
+    statsCache, messageHasFullSheet,
+    collectSectionHeaders, pickDominantSectionGroup, saneSectionHeaders,
+    collectUnnumberedHeaders, collectMachineTags, BUNNYMO_TAGS_BLOCK_RE,
+} from './fullsheetButtons.js';
 export { clearStatsCache, messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage } from './fullsheetButtons.js';
 
 // ─────────────────────────────────────────────
 //  Parser
 // ─────────────────────────────────────────────
-// The section header regex lives in fullsheetButtons.js (SECTION_HEADER_SOURCE)
-// and is shared with messageHasFullSheet — the detector and the parser must
-// accept the same shapes, or the button shows and the import then fails.
-
-// Bunny Mo's terminal machine-tag block; stripped from section prose and kept
-// on the sheet as rawTags.
-const BUNNYMO_TAGS_BLOCK_RE = /<BunnymoTags>([\s\S]*?)<\/BunnymoTags>/i;
-
-/**
- * Fallback for sheets without a coherent numbered-section group (e.g. a
- * drifted quicksheet): split on standalone bold or hash-heading lines.
- * Returns the same header shape collectSectionHeaders produces, or [].
- */
-function collectUnnumberedHeaders(text) {
-    // Two shapes: a line LEADING with a short bold token ("**Physical:** silver
-    // hair..." — the header ends after the bold, the rest of the line is
-    // content), or a plain hash heading on its own line.
-    const re = /^\s*(?:#{1,3}\s*)?(?:\S{1,8}\s+)?\*\*([^*\n]{2,40})\*\*:?[ \t]*|^\s*#{1,3}\s+([^\n]{2,60})$/gm;
-    const headers = [];
-    let match;
-    let n = 1;
-    while ((match = re.exec(text)) !== null) {
-        // Zero-width safety: a bold match can be empty-adjacent on odd input.
-        if (!match[0].trim()) { re.lastIndex++; continue; }
-        headers.push({
-            n: n++,
-            m: 0,
-            title: (match[1] || match[2] || '').replace(/:$/, '').trim(),
-            startIndex: match.index,
-            headerEndIndex: match.index + match[0].length,
-        });
-    }
-    return headers;
-}
+// All header/tag collectors are shared with messageHasFullSheet in
+// fullsheetButtons.js — the detector and the parser must accept the same
+// shapes, or the button shows and the import then fails. Every detection
+// signal has a parse path here: numbered groups, unnumbered quicksheet
+// headers, and machine tags (which become a Tags section).
 
 /**
  * Parses a fullsheet/quicksheet output from a message string.
  * Supports any language — section headers just need the N/M numbering
  * pattern; unnumbered quicksheet-style sheets fall back to bold/hash
- * heading splits.
+ * heading splits; a message that only carries BunnyMo machine tags (e.g. a
+ * truncated reply) imports as a single Tags section.
  * Returns { characterTitle, sections: [{ number, emoji, title, content }] } or null.
  */
 export function parseFullSheet(text) {
@@ -72,13 +48,27 @@ export function parseFullSheet(text) {
         return '';
     });
 
-    // Prefer the coherent numbered-section group (same logic the detector
-    // uses); fall back to unnumbered heading splits for drifted quicksheets.
-    let matches = pickDominantSectionGroup(collectSectionHeaders(body));
-    if (matches.length < 2) {
+    // Prefer numbered sections. The dominant group decides VALIDITY (same
+    // logic as the detector), but the split then uses every sane header —
+    // a mid-sheet denominator typo ("SECTION 6/9" in an /8 sheet) must not
+    // silently fold that section into its neighbor.
+    let matches = [];
+    const allHeaders = collectSectionHeaders(body);
+    if (pickDominantSectionGroup(allHeaders).length >= 2) {
+        matches = saneSectionHeaders(allHeaders);
+    } else {
+        // Fall back to unnumbered heading splits for drifted quicksheets.
         matches = collectUnnumberedHeaders(body);
+        if (matches.length < 2) matches = [];
     }
-    if (matches.length < 2) return null; // Need at least 2 sections to be a valid sheet
+
+    // Machine tags: the block's contents, or bare <TAG:value> tags when
+    // there's no block. Rendered as a final "Tags" section so tag-bearing
+    // messages are always importable (matching detection signal S1).
+    const tagText = rawTags || (collectMachineTags(body).length >= 3 ? collectMachineTags(body).join('\n') : '');
+    if (!rawTags && tagText) rawTags = tagText;
+
+    if (matches.length < 2 && !tagText) return null; // Not enough structure to be a sheet
 
     const sections = matches.map((m, idx) => {
         // Content runs from end of this header to start of next section (or end of text)
@@ -108,8 +98,10 @@ export function parseFullSheet(text) {
         // If the header is empty, the section keyword itself (e.g. "SECTION") was consumed —
         // fall back to the full content's first line as a title hint.
         const headerClean = rawTitle.replace(/<\/?(?:summary|details)[^>]*>/gi, '').replace(/\*\*/g, '').trim();
-        // First character(s) might be emoji
-        const emojiMatch = headerClean.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*/u);
+        // First character(s) might be emoji. Extended_Pictographic only —
+        // \p{Emoji} also matches ASCII digits and '#', which mangled titles
+        // like "3rd Impressions" into emoji '3' + title 'rd Impressions'.
+        const emojiMatch = headerClean.match(/^(\p{Extended_Pictographic}\uFE0F?)\s*/u);
         const emoji = emojiMatch ? emojiMatch[1] : '';
         const title = emojiMatch ? headerClean.substring(emojiMatch[0].length).trim() : headerClean;
 
@@ -121,14 +113,32 @@ export function parseFullSheet(text) {
         };
     });
 
+    // Machine tags render as a final collapsible section (renderMarkdown
+    // escapes the <TAG:value> angle brackets, so they display literally).
+    if (tagText) {
+        sections.push({
+            number: sections.length + 1,
+            emoji: '🏷️',
+            title: 'Tags',
+            content: tagText,
+        });
+    }
+
+    if (!sections.length) return null;
+
     // Try to extract character title from the text before first section
-    const preSection = body.substring(0, matches[0].startIndex);
+    const preSection = matches.length ? body.substring(0, matches[0].startIndex) : body;
     const titleMatch = preSection.match(/Character Title:\s*(?:The\s+)?(.+?)(?:\n|$)/i);
     const characterTitle = titleMatch ? titleMatch[1].replace(/\*\*/g, '').trim() : '';
 
-    // Try to extract character name from Section 1 content
+    // Try to extract character name from Section 1 content, falling back to
+    // a <Name:...> machine tag (CarrotKernel's trick) for tags-only imports.
     const nameMatch = sections[0]?.content.match(/\*\*Name:\*\*\s*(.+?)(?:\n|$)/i);
-    const characterName = nameMatch ? nameMatch[1].replace(/[\[\]]/g, '').trim() : '';
+    let characterName = nameMatch ? nameMatch[1].replace(/[\[\]]/g, '').trim() : '';
+    if (!characterName && tagText) {
+        const tagName = tagText.match(/<Name:\s*([^>]+)>/i);
+        if (tagName) characterName = tagName[1].trim().replace(/_/g, ' ');
+    }
 
     return {
         characterTitle,
@@ -762,14 +772,17 @@ function renderImportedSheet(sheetData) {
     }
     let sheetHTML = '';
     if (sheetData.characterTitle) {
-        sheetHTML += `<div class="rpg-cs-title">${sheetData.characterTitle}</div>`;
+        sheetHTML += `<div class="rpg-cs-title">${escapeHtml(sheetData.characterTitle)}</div>`;
     }
+    // Titles/emoji come from AI output — escape at interpolation, same as
+    // every other AI-derived string since the 2.2.0 XSS purge. Section
+    // content goes through renderMarkdown's selective allowlist instead.
     for (const section of sheetData.sections) {
         sheetHTML += `
             <div class="rpg-cs-section">
                 <div class="rpg-cs-section-header">
-                    <span class="rpg-cs-section-emoji">${section.emoji || ''}</span>
-                    <span class="rpg-cs-section-title">${section.title}</span>
+                    <span class="rpg-cs-section-emoji">${escapeHtml(section.emoji || '')}</span>
+                    <span class="rpg-cs-section-title">${escapeHtml(section.title || '')}</span>
                     <i class="fa-solid fa-chevron-down rpg-cs-chevron"></i>
                 </div>
                 <div class="rpg-cs-section-body" style="display: none;">
@@ -902,7 +915,10 @@ export async function importFullSheetFromMessage(messageId) {
     // Merge over any existing entry — an overwrite would wipe fields the
     // sheet popup stores alongside the import (notes mode, notes sections).
     const existing = getCharacterSheet(name.trim());
-    saveCharacterSheet(name.trim(), { ...(existing || {}), ...parsed });
+    const merged = { ...(existing || {}), ...parsed };
+    // A re-import without a tags block must not keep the OLD sheet's tags.
+    if (!parsed.rawTags) delete merged.rawTags;
+    saveCharacterSheet(name.trim(), merged);
     if (existing?.mode === 'notes') {
         toastr.success(`Character sheet imported for ${name.trim()}. Notes Mode is on for this character — toggle it off in the sheet popup to view the import.`, '', { timeOut: 5000 });
     } else {
@@ -1025,7 +1041,6 @@ export function initCharacterSheet() {
     $(document).on('click', '.rpg-cs-note-add', function () {
         const blank = { id: 'note-' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), emoji: '', title: '', content: '' };
         const $section = $(renderNoteSection(blank));
-        $section.attr('data-note-new', '1');
         $section.find('.rpg-cs-section-body').html(renderNoteEditor(blank)).show();
         $(this).before($section);
         $section.find('.rpg-cs-note-title-input').trigger('focus');
@@ -1043,39 +1058,46 @@ export function initCharacterSheet() {
         $section.find('.rpg-cs-note-title-input').trigger('focus');
     });
 
-    // Save (new or edited) section.
+    // Save (new or edited) section. Touches only THIS section's DOM node —
+    // a full popup re-render would destroy any other editor the user has
+    // open with unsaved text (and collapse every expanded section).
     $(document).on('click', '.rpg-cs-note-save', function () {
         const name = openSheetCharacter();
         if (!name) return;
         const entry = ensureSheetEntry(name);
-        if (!entry) return;
+        if (!entry) {
+            toastr.warning('No chat data yet — the note could not be saved.', '', { timeOut: 3000 });
+            return;
+        }
         const $section = $(this).closest('.rpg-cs-note');
         const id = $section.attr('data-note-id');
         const emoji = String($section.find('.rpg-cs-note-emoji-input').val() || '').trim();
         const title = String($section.find('.rpg-cs-note-title-input').val() || '').trim() || 'Untitled';
         const content = String($section.find('.rpg-cs-note-content-input').val() || '');
+        const saved = { id, emoji, title, content };
         const existing = entry.notesSections.find(s => s.id === id);
         if (existing) {
-            Object.assign(existing, { emoji, title, content });
+            Object.assign(existing, saved);
         } else {
-            entry.notesSections.push({ id, emoji, title, content });
+            entry.notesSections.push(saved);
         }
         saveCharacterSheet(name, entry, { immediate: true });
-        rerenderOpenSheet();
+        $section.closest('.rpg-cs-tab-content').find('.rpg-cs-empty').remove();
+        $section.replaceWith(renderNoteSection(saved));
     });
 
-    // Cancel editing — a never-saved section disappears, an edited one
-    // returns to its stored state.
+    // Cancel editing — a never-saved section (id not in storage) disappears,
+    // an edited one returns to its stored state. DOM-local, same reason as Save.
     $(document).on('click', '.rpg-cs-note-cancel', function () {
         const $section = $(this).closest('.rpg-cs-note');
-        if ($section.attr('data-note-new')) {
-            $section.remove();
-            return;
-        }
-        rerenderOpenSheet();
+        const id = $section.attr('data-note-id');
+        const name = openSheetCharacter();
+        const stored = name ? getCharacterSheet(name)?.notesSections?.find(s => s.id === id) : null;
+        if (stored) $section.replaceWith(renderNoteSection(stored));
+        else $section.remove();
     });
 
-    // Delete a section.
+    // Delete a section (DOM-local removal).
     $(document).on('click', '.rpg-cs-note-delete', function (e) {
         e.stopPropagation();
         const name = openSheetCharacter();
@@ -1089,23 +1111,26 @@ export function initCharacterSheet() {
         if (!window.confirm(`Delete ${label}? This can't be undone.`)) return;
         entry.notesSections = entry.notesSections.filter(s => s.id !== id);
         saveCharacterSheet(name, entry, { immediate: true });
-        rerenderOpenSheet();
+        $section.remove();
     });
 
-    // Reorder.
+    // Reorder — swap DOM nodes instead of re-rendering, so expanded sections
+    // stay expanded and repeated arrow clicks don't reset scroll.
     const moveNote = (el, delta) => {
         const name = openSheetCharacter();
         if (!name) return;
         const entry = getCharacterSheet(name);
         if (!entry?.notesSections) return;
-        const id = $(el).closest('.rpg-cs-note').attr('data-note-id');
+        const $section = $(el).closest('.rpg-cs-note');
+        const id = $section.attr('data-note-id');
         const idx = entry.notesSections.findIndex(s => s.id === id);
         const target = idx + delta;
         if (idx < 0 || target < 0 || target >= entry.notesSections.length) return;
         const [moved] = entry.notesSections.splice(idx, 1);
         entry.notesSections.splice(target, 0, moved);
         saveCharacterSheet(name, entry, { immediate: true });
-        rerenderOpenSheet();
+        if (delta < 0) $section.insertBefore($section.prevAll('.rpg-cs-note').first());
+        else $section.insertAfter($section.nextAll('.rpg-cs-note').first());
     };
     $(document).on('click', '.rpg-cs-note-up', function (e) { e.stopPropagation(); moveNote(this, -1); });
     $(document).on('click', '.rpg-cs-note-down', function (e) { e.stopPropagation(); moveNote(this, 1); });
