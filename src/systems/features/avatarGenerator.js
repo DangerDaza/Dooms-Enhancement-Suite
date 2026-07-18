@@ -413,14 +413,23 @@ export async function generateAvatarsForCharacters(characterNames, onStarted = n
  * @returns {Promise<string|null>} New avatar URL or null if failed
  */
 export async function regenerateAvatar(characterName) {
+    // Re-entry guard — a second call while one is in flight would delete the
+    // half-written result and double-bill the image API.
+    if (pendingGenerations.has(characterName)) return null;
     // Mark as pending immediately
     pendingGenerations.add(characterName);
-    // Clear existing avatar
+    // Clear existing avatar — BOTH stores. Leaving npcAvatarsFullRes behind
+    // would keep showing the old image in the sheet popup's hero art
+    // (resolveFullPortrait prefers the full-res entry).
     if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
         try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
         delete extensionSettings.npcAvatars[characterName];
-        saveSettings();
     }
+    if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {
+        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes[characterName]); } catch (e) {}
+        delete extensionSettings.npcAvatarsFullRes[characterName];
+    }
+    saveSettings();
     // Clear existing prompt cache
     if (sessionAvatarPrompts[characterName]) {
         delete sessionAvatarPrompts[characterName];

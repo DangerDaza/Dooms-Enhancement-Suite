@@ -88,6 +88,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Character sheets open from portrait right-click; sections collapse
 - [ ] Notes Mode: per-character toggle swaps sheet for editable dropdown sections (add/edit/delete/reorder); imported sheet survives toggle round-trip and merge-on-import; notes persist per-chat across reload and fast chat switch; popup closes on chat change
 - [ ] New-character similar-name panel: Sara-vs-Sarah offers alias / create-separate / back; exact-alias name warns; alias lands in Workshop → Identity → Aliases; user-mode shows warning without alias option; bulk imports unaffected
+- [ ] PCP right-click → Regenerate Portrait: confirms, replaces card + sheet hero art (both stores cleared), toasts on missing SD extension / failure, hidden for user characters, no double-fire while pending
 
 ## Themes & customization
 - [ ] All themes apply: Default, Sci-Fi, Fantasy, Cyberpunk, Minimal, Midnight Rose

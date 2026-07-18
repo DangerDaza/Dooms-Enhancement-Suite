@@ -208,6 +208,9 @@ export function initPortraitBar() {
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
                 <i class="fa-solid fa-scroll"></i> Character Sheet
             </div>
+            <div class="dooms-pb-ctx-item" data-action="regenerate-portrait" title="Generate a fresh AI portrait for this character — replaces the current one (needs the Image Generation extension)">
+                <i class="fa-solid fa-arrows-rotate"></i> Regenerate Portrait
+            </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="remove-character" title="Hide from this chat's Present Characters panel — character stays in the Workshop where you can Return them later">
                 <i class="fa-solid fa-user-minus"></i> Send to Workshop
@@ -330,6 +333,10 @@ export function initPortraitBar() {
         // mid-inject (post-click, pre-AI-reply).
         const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
         $menu.find('[data-action="cancel-inject"]').toggle(isPending);
+        // 'Regenerate Portrait' is NPC-only — the generator writes to the
+        // npcAvatars store; user-character portraits are managed in the
+        // Workshop (upload / persona mirror).
+        $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
 
         // Position near the cursor, clamped to viewport. Re-parent to
         // <body> first so the menu escapes any ancestor stacking context
@@ -383,6 +390,8 @@ export function initPortraitBar() {
             }).catch(() => {});
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
+        } else if (action === 'regenerate-portrait') {
+            regeneratePortraitFor(characterName);
         }
     });
 
@@ -1087,6 +1096,43 @@ function clearCharacterColor(characterName) {
         updatePortraitBar();
         console.log(`[Dooms Tracker] Dialogue color cleared for ${characterName}`);
     }
+}
+
+/**
+ * Re-runs AI portrait generation for a character from the context menu.
+ * Confirms first (the current portrait — including a manually uploaded one —
+ * is deleted), then delegates to avatarGenerator.regenerateAvatar, which
+ * rebuilds the LLM prompt and calls the Image Generation extension's /sd.
+ */
+function regeneratePortraitFor(characterName) {
+    const ok = window.confirm(
+        `Regenerate ${characterName}'s portrait?\n\n` +
+        `The current portrait is deleted and replaced with a freshly generated one ` +
+        `(uses your Image Generation extension; the old image cannot be restored).`
+    );
+    if (!ok) return;
+    // Lazy import — same idiom as the other menu actions; keeps this eager
+    // module free of a static dependency on the generation stack.
+    import('../features/avatarGenerator.js').then(async (gen) => {
+        if (gen.isGenerating(characterName)) {
+            if (window.toastr) toastr.info(`Already generating a portrait for ${characterName}.`, '', { timeOut: 3000 });
+            return;
+        }
+        if (window.toastr) toastr.info(`Generating a new portrait for ${characterName}…`, '', { timeOut: 4000 });
+        const url = await gen.regenerateAvatar(characterName);
+        // The old portrait is gone either way — refresh so the card shows
+        // the new image (success) or the initials placeholder (failure).
+        clearPortraitCache();
+        updatePortraitBar();
+        if (url) {
+            if (window.toastr) toastr.success(`New portrait ready for ${characterName}.`, '', { timeOut: 3000 });
+        } else if (window.toastr) {
+            toastr.warning(`Portrait generation failed for ${characterName} — is the Image Generation (Stable Diffusion) extension enabled?`, '', { timeOut: 6000 });
+        }
+    }).catch((err) => {
+        console.error('[Dooms Tracker] Portrait regeneration failed:', err);
+        if (window.toastr) toastr.error('Portrait regeneration failed — see console for details.', '', { timeOut: 4000 });
+    });
 }
 
 /**
