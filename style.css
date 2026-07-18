@@ -8908,9 +8908,11 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
-/* ── Duplicate-character decision dialog (DES-native so it follows the
-      selected theme via data-theme + the .rpg-settings-popup token scope) ── */
-.rpg-settings-popup.dooms-alias-overlay {
+/* ── Duplicate-character decision dialog (DES-native; theme tokens are
+      copied from the live .rpg-panel at open time — own classes only, the
+      .rpg-settings-popup class carries a ::before backdrop that painted
+      over the card) ── */
+.dooms-alias-overlay {
     position: fixed;
     inset: 0;
     z-index: 10060;

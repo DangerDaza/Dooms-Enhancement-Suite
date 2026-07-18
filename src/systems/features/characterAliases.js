@@ -201,7 +201,7 @@ function showAliasDecisionDialog(name, canonical) {
         $('.dooms-alias-overlay').remove();
         const theme = extensionSettings.theme;
         const $overlay = $(`
-            <div class="rpg-settings-popup dooms-alias-overlay" role="dialog" aria-modal="true" aria-label="Possible duplicate character">
+            <div class="dooms-alias-overlay" role="dialog" aria-modal="true" aria-label="Possible duplicate character">
                 <div class="dooms-alias-card">
                     <h3><i class="fa-solid fa-user-group"></i> Possible duplicate character</h3>
                     <p>The AI's tracker mentioned <strong>${escapeHtml(name)}</strong>, which looks similar to your existing character <strong>${escapeHtml(canonical)}</strong>.</p>
@@ -219,6 +219,20 @@ function showAliasDecisionDialog(name, canonical) {
             </div>
         `);
         if (theme && theme !== 'default') $overlay.attr('data-theme', theme);
+        // Inherit the ACTIVE theme's token values (including custom themes,
+        // which set inline vars) by copying computed vars off the themed
+        // panel — no class borrowing; .rpg-settings-popup's ::before backdrop
+        // painted over this dialog when we tried that.
+        try {
+            const themedSource = document.querySelector('.rpg-panel');
+            if (themedSource) {
+                const computed = getComputedStyle(themedSource);
+                for (const varName of ['--rpg-bg', '--rpg-text', '--rpg-highlight', '--rpg-border', '--rpg-accent']) {
+                    const value = computed.getPropertyValue(varName).trim();
+                    if (value) $overlay[0].style.setProperty(varName, value);
+                }
+            }
+        } catch (e) {}
         const done = (result) => {
             $overlay.remove();
             $(document).off('keydown.doomsAliasDecision');
