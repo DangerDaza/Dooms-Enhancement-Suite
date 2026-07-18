@@ -6296,6 +6296,115 @@
 #character-roster-popup .cr-similar-actions .rpg-btn[hidden] { display: none; }
 
 
+/* Character Sheet — Notes Mode */
+.rpg-cs-mode-toggle {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: var(--modal-font-small, 0.8rem);
+    color: rgba(234, 234, 234, 0.75);
+    cursor: pointer;
+    user-select: none;
+    padding: 0 0.4rem;
+}
+
+.rpg-cs-mode-toggle input {
+    accent-color: var(--rpg-highlight, #e94560);
+    cursor: pointer;
+}
+
+.rpg-cs-note-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: auto;
+    margin-right: 0.6rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.rpg-cs-note .rpg-cs-section-header:hover .rpg-cs-note-controls,
+.rpg-cs-note .rpg-cs-section-header:focus-within .rpg-cs-note-controls {
+    opacity: 0.85;
+}
+
+/* Touch devices have no hover — keep the controls visible. */
+@media (hover: none) {
+    .rpg-cs-note-controls { opacity: 0.7; }
+}
+
+.rpg-cs-note-controls i {
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.rpg-cs-note-controls i:hover {
+    color: var(--rpg-highlight, #e94560);
+}
+
+/* The title stops flexing so the controls can sit beside the chevron. */
+.rpg-cs-note .rpg-cs-section-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rpg-cs-note-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rpg-cs-note-editor-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.rpg-cs-note-emoji-input {
+    width: 3.2rem;
+    flex: 0 0 auto;
+    text-align: center;
+}
+
+.rpg-cs-note-title-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rpg-cs-note-emoji-input,
+.rpg-cs-note-title-input,
+.rpg-cs-note-content-input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 0.3rem;
+    color: inherit;
+    padding: 0.4rem 0.55rem;
+    font-size: var(--modal-font-base, 0.9rem);
+    box-sizing: border-box;
+}
+
+.rpg-cs-note-content-input {
+    width: 100%;
+    resize: vertical;
+    line-height: 1.45;
+    font-family: inherit;
+}
+
+.rpg-cs-note-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.rpg-cs-note-add {
+    margin-top: 0.7rem;
+    width: 100%;
+}
+
+
 /* Character Roster — pin badge + pinned-tile accent */
 #character-roster-popup .cr-tile-pin {
     position: absolute;

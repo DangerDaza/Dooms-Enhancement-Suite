@@ -11,6 +11,7 @@ import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait } from './portraitBar.js';
 import { chat_metadata, chat } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
+import { escapeHtml, escapeAttr } from '../../utils/html.js';
 // Eager half (fullsheet detection, import buttons, stats cache) lives in
 // fullsheetButtons.js so chat handlers don't need this whole module.
 import { statsCache, messageHasFullSheet, collectSectionHeaders, pickDominantSectionGroup } from './fullsheetButtons.js';
@@ -150,21 +151,43 @@ function ensureSheetStorage() {
     return true;
 }
 
-export function getCharacterSheet(name) {
-    if (!ensureSheetStorage()) return null;
-    if (!name) return null;
-    // Case-insensitive lookup
+/** Case-insensitive key lookup — returns the stored key or null. */
+function getCharacterSheetKey(name) {
+    if (!ensureSheetStorage() || !name) return null;
     const lower = name.toLowerCase();
-    for (const [key, val] of Object.entries(chat_metadata.dooms_tracker.characterSheets)) {
-        if (key.toLowerCase() === lower) return val;
+    for (const key of Object.keys(chat_metadata.dooms_tracker.characterSheets)) {
+        if (key.toLowerCase() === lower) return key;
     }
     return null;
 }
 
-export function saveCharacterSheet(name, data) {
+export function getCharacterSheet(name) {
+    const key = getCharacterSheetKey(name);
+    return key !== null ? chat_metadata.dooms_tracker.characterSheets[key] : null;
+}
+
+export function saveCharacterSheet(name, data, { immediate = false } = {}) {
     if (!ensureSheetStorage()) return;
-    chat_metadata.dooms_tracker.characterSheets[name] = data;
-    saveChatData();
+    // Reuse an existing key that differs only in case — writing under the
+    // typed casing would leave two entries for the same character.
+    const key = getCharacterSheetKey(name) ?? name;
+    chat_metadata.dooms_tracker.characterSheets[key] = data;
+    saveChatData({ immediate });
+}
+
+/**
+ * The sheet entry for a character, created (in notes-ready shape) if absent.
+ * Returns null only when there's no chat open yet (no chat_metadata).
+ */
+function ensureSheetEntry(characterName) {
+    if (!ensureSheetStorage() || !characterName) return null;
+    let entry = getCharacterSheet(characterName);
+    if (!entry) {
+        entry = { mode: 'sheet', notesSections: [] };
+        chat_metadata.dooms_tracker.characterSheets[characterName] = entry;
+    }
+    if (!Array.isArray(entry.notesSections)) entry.notesSections = [];
+    return entry;
 }
 
 // ─────────────────────────────────────────────
@@ -696,54 +719,137 @@ export function openCharacterSheet(characterName) {
 
     // Character name
     $modal.find('.rpg-cs-hero-name').text(characterName);
+    // Notes handlers need the open character's name after the fact.
+    $modal.attr('data-cs-character', characterName);
 
     // Build tab bar + content area
     const $sections = $modal.find('.rpg-cs-sections');
     $sections.empty();
 
-    // Tab bar
+    const notesMode = sheetData?.mode === 'notes';
+
+    // Tab bar — with the per-character Notes Mode toggle on the right.
     $sections.append(`
         <div class="rpg-cs-tabs">
-            <div class="rpg-cs-tab active" data-tab="sheet"><i class="fa-solid fa-scroll"></i> Sheet</div>
+            <div class="rpg-cs-tab active" data-tab="sheet"><i class="fa-solid ${notesMode ? 'fa-note-sticky' : 'fa-scroll'}"></i> ${notesMode ? 'Notes' : 'Sheet'}</div>
             <div class="rpg-cs-tab" data-tab="stats"><i class="fa-solid fa-chart-bar"></i> Stats</div>
+            <label class="rpg-cs-mode-toggle" title="Replace the imported sheet view with your own notes for this character. The imported sheet is kept and comes back when you toggle off.">
+                <input type="checkbox" id="rpg-cs-notes-toggle" ${notesMode ? 'checked' : ''}> Notes Mode
+            </label>
         </div>
     `);
 
-    // Sheet tab content
-    let sheetHTML = '';
-    if (!sheetData || !sheetData.sections || sheetData.sections.length === 0) {
-        sheetHTML = `
-            <div class="rpg-cs-empty">
-                <i class="fa-solid fa-scroll" style="font-size: 2em; opacity: 0.3; margin-bottom: 12px;"></i>
-                <p>No character sheet data.</p>
-                <p style="font-size: 0.85em; opacity: 0.6;">Use Bunny Mo's <code>!fullsheet</code> command to generate one, then click the import button on the resulting message.</p>
-            </div>
-        `;
-    } else {
-        if (sheetData.characterTitle) {
-            sheetHTML += `<div class="rpg-cs-title">${sheetData.characterTitle}</div>`;
-        }
-        for (const section of sheetData.sections) {
-            sheetHTML += `
-                <div class="rpg-cs-section">
-                    <div class="rpg-cs-section-header">
-                        <span class="rpg-cs-section-emoji">${section.emoji || ''}</span>
-                        <span class="rpg-cs-section-title">${section.title}</span>
-                        <i class="fa-solid fa-chevron-down rpg-cs-chevron"></i>
-                    </div>
-                    <div class="rpg-cs-section-body" style="display: none;">
-                        ${renderMarkdown(section.content)}
-                    </div>
-                </div>
-            `;
-        }
-    }
+    // Sheet tab content — imported sheet, or the editable notes area when
+    // this character is in Notes Mode.
+    const sheetHTML = notesMode ? renderNotesArea(sheetData) : renderImportedSheet(sheetData);
     $sections.append(`<div class="rpg-cs-tab-content" data-tab="sheet">${sheetHTML}</div>`);
 
     // Stats tab content (lazy — computed on first click)
-    $sections.append(`<div class="rpg-cs-tab-content" data-tab="stats" style="display: none;" data-character="${characterName}"></div>`);
+    $sections.append(`<div class="rpg-cs-tab-content" data-tab="stats" style="display: none;" data-character="${escapeAttr(characterName)}"></div>`);
 
     $modal.css('display', 'flex');
+}
+
+function renderImportedSheet(sheetData) {
+    if (!sheetData || !sheetData.sections || sheetData.sections.length === 0) {
+        return `
+            <div class="rpg-cs-empty">
+                <i class="fa-solid fa-scroll" style="font-size: 2em; opacity: 0.3; margin-bottom: 12px;"></i>
+                <p>No character sheet data.</p>
+                <p style="font-size: 0.85em; opacity: 0.6;">Use Bunny Mo's <code>!fullsheet</code> command to generate one, then click the import button on the resulting message.<br>Or flip <strong>Notes Mode</strong> above to keep your own notes for this character.</p>
+            </div>
+        `;
+    }
+    let sheetHTML = '';
+    if (sheetData.characterTitle) {
+        sheetHTML += `<div class="rpg-cs-title">${sheetData.characterTitle}</div>`;
+    }
+    for (const section of sheetData.sections) {
+        sheetHTML += `
+            <div class="rpg-cs-section">
+                <div class="rpg-cs-section-header">
+                    <span class="rpg-cs-section-emoji">${section.emoji || ''}</span>
+                    <span class="rpg-cs-section-title">${section.title}</span>
+                    <i class="fa-solid fa-chevron-down rpg-cs-chevron"></i>
+                </div>
+                <div class="rpg-cs-section-body" style="display: none;">
+                    ${renderMarkdown(section.content)}
+                </div>
+            </div>
+        `;
+    }
+    return sheetHTML;
+}
+
+// ─────────────────────────────────────────────
+//  Notes mode (user-created dropdown sections)
+// ─────────────────────────────────────────────
+
+function renderNotesArea(sheetData) {
+    const sections = Array.isArray(sheetData?.notesSections) ? sheetData.notesSections : [];
+    let html = '';
+    if (!sections.length) {
+        html += `
+            <div class="rpg-cs-empty">
+                <i class="fa-solid fa-note-sticky" style="font-size: 2em; opacity: 0.3; margin-bottom: 12px;"></i>
+                <p>No notes yet.</p>
+                <p style="font-size: 0.85em; opacity: 0.6;">Add your first section below — each section is a collapsible dropdown, like an imported sheet's.</p>
+            </div>
+        `;
+    }
+    for (const section of sections) {
+        html += renderNoteSection(section);
+    }
+    html += `<button class="rpg-cs-note-add rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plus"></i> Add Section</button>`;
+    return html;
+}
+
+function renderNoteSection(section) {
+    // Unlike imported sheets (whose text was already on-screen as a chat
+    // message), note titles/emoji are user-typed — escape them.
+    return `
+        <div class="rpg-cs-section rpg-cs-note" data-note-id="${escapeAttr(section.id)}">
+            <div class="rpg-cs-section-header">
+                <span class="rpg-cs-section-emoji">${escapeHtml(section.emoji || '')}</span>
+                <span class="rpg-cs-section-title">${escapeHtml(section.title || 'Untitled')}</span>
+                <span class="rpg-cs-note-controls">
+                    <i class="fa-solid fa-arrow-up rpg-cs-note-up" title="Move up"></i>
+                    <i class="fa-solid fa-arrow-down rpg-cs-note-down" title="Move down"></i>
+                    <i class="fa-solid fa-pencil rpg-cs-note-edit" title="Edit section"></i>
+                    <i class="fa-solid fa-trash rpg-cs-note-delete" title="Delete section"></i>
+                </span>
+                <i class="fa-solid fa-chevron-down rpg-cs-chevron"></i>
+            </div>
+            <div class="rpg-cs-section-body" style="display: none;">${renderMarkdown(section.content || '')}</div>
+        </div>
+    `;
+}
+
+function renderNoteEditor(section) {
+    return `
+        <div class="rpg-cs-note-editor">
+            <div class="rpg-cs-note-editor-row">
+                <input type="text" class="rpg-cs-note-emoji-input" maxlength="4" placeholder="📝" value="${escapeAttr(section.emoji || '')}" title="Emoji (optional)">
+                <input type="text" class="rpg-cs-note-title-input" maxlength="80" placeholder="Section title" value="${escapeAttr(section.title || '')}">
+            </div>
+            <textarea class="rpg-cs-note-content-input" rows="7" placeholder="Write your notes… **bold** and *italic* markdown works.">${escapeHtml(section.content || '')}</textarea>
+            <div class="rpg-cs-note-editor-actions">
+                <button type="button" class="rpg-btn rpg-btn-ghost rpg-cs-note-cancel">Cancel</button>
+                <button type="button" class="rpg-btn rpg-btn-primary rpg-cs-note-save">Save</button>
+            </div>
+        </div>
+    `;
+}
+
+/** The character whose sheet popup is currently open. */
+function openSheetCharacter() {
+    return $('#rpg-character-sheet-popup').attr('data-cs-character') || '';
+}
+
+/** Re-renders the whole popup body for the open character (cheap). */
+function rerenderOpenSheet() {
+    const name = openSheetCharacter();
+    if (name) openCharacterSheet(name);
 }
 
 function closeCharacterSheet() {
@@ -827,6 +933,8 @@ function copyCharacterSheet() {
     const sectionTexts = [];
 
     $sections.find('.rpg-cs-section').each(function () {
+        // A notes section mid-edit renders inputs, not content — skip it.
+        if ($(this).find('.rpg-cs-note-editor').length) return;
         const title = $(this).find('.rpg-cs-section-title').text();
         const emoji = $(this).find('.rpg-cs-section-emoji').text();
         const body = $(this).find('.rpg-cs-section-body').html()
@@ -884,12 +992,123 @@ export function initCharacterSheet() {
     });
 
     // Section collapse/expand
-    $(document).on('click', '.rpg-cs-section-header', function () {
+    $(document).on('click', '.rpg-cs-section-header', function (e) {
+        // Clicks on the note edit/delete/reorder controls must not toggle.
+        if ($(e.target).closest('.rpg-cs-note-controls').length) return;
         const $body = $(this).next('.rpg-cs-section-body');
+        // Don't collapse a section that's showing its editor.
+        if ($body.find('.rpg-cs-note-editor').length) return;
         const $chevron = $(this).find('.rpg-cs-chevron');
         $body.slideToggle(200);
         $chevron.toggleClass('fa-chevron-down fa-chevron-up');
     });
+
+    // ── Notes Mode ──
+
+    // Per-character toggle between the imported sheet and the notes area.
+    $(document).on('change', '#rpg-cs-notes-toggle', function () {
+        const name = openSheetCharacter();
+        if (!name) return;
+        const entry = ensureSheetEntry(name);
+        if (!entry) {
+            $(this).prop('checked', false);
+            toastr.warning('No chat data yet — send a message in this chat first.', '', { timeOut: 3000 });
+            return;
+        }
+        entry.mode = $(this).prop('checked') ? 'notes' : 'sheet';
+        saveCharacterSheet(name, entry, { immediate: true });
+        rerenderOpenSheet();
+    });
+
+    // Add a new section — rendered straight into edit state; it only joins
+    // the stored array when the user hits Save.
+    $(document).on('click', '.rpg-cs-note-add', function () {
+        const blank = { id: 'note-' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), emoji: '', title: '', content: '' };
+        const $section = $(renderNoteSection(blank));
+        $section.attr('data-note-new', '1');
+        $section.find('.rpg-cs-section-body').html(renderNoteEditor(blank)).show();
+        $(this).before($section);
+        $section.find('.rpg-cs-note-title-input').trigger('focus');
+    });
+
+    // Edit an existing section in place.
+    $(document).on('click', '.rpg-cs-note-edit', function (e) {
+        e.stopPropagation();
+        const name = openSheetCharacter();
+        const $section = $(this).closest('.rpg-cs-note');
+        const entry = name ? getCharacterSheet(name) : null;
+        const section = entry?.notesSections?.find(s => s.id === $section.attr('data-note-id'));
+        if (!section) return;
+        $section.find('.rpg-cs-section-body').html(renderNoteEditor(section)).show();
+        $section.find('.rpg-cs-note-title-input').trigger('focus');
+    });
+
+    // Save (new or edited) section.
+    $(document).on('click', '.rpg-cs-note-save', function () {
+        const name = openSheetCharacter();
+        if (!name) return;
+        const entry = ensureSheetEntry(name);
+        if (!entry) return;
+        const $section = $(this).closest('.rpg-cs-note');
+        const id = $section.attr('data-note-id');
+        const emoji = String($section.find('.rpg-cs-note-emoji-input').val() || '').trim();
+        const title = String($section.find('.rpg-cs-note-title-input').val() || '').trim() || 'Untitled';
+        const content = String($section.find('.rpg-cs-note-content-input').val() || '');
+        const existing = entry.notesSections.find(s => s.id === id);
+        if (existing) {
+            Object.assign(existing, { emoji, title, content });
+        } else {
+            entry.notesSections.push({ id, emoji, title, content });
+        }
+        saveCharacterSheet(name, entry, { immediate: true });
+        rerenderOpenSheet();
+    });
+
+    // Cancel editing — a never-saved section disappears, an edited one
+    // returns to its stored state.
+    $(document).on('click', '.rpg-cs-note-cancel', function () {
+        const $section = $(this).closest('.rpg-cs-note');
+        if ($section.attr('data-note-new')) {
+            $section.remove();
+            return;
+        }
+        rerenderOpenSheet();
+    });
+
+    // Delete a section.
+    $(document).on('click', '.rpg-cs-note-delete', function (e) {
+        e.stopPropagation();
+        const name = openSheetCharacter();
+        if (!name) return;
+        const entry = getCharacterSheet(name);
+        if (!entry?.notesSections) return;
+        const $section = $(this).closest('.rpg-cs-note');
+        const id = $section.attr('data-note-id');
+        const section = entry.notesSections.find(s => s.id === id);
+        const label = section?.title ? `"${section.title}"` : 'this section';
+        if (!window.confirm(`Delete ${label}? This can't be undone.`)) return;
+        entry.notesSections = entry.notesSections.filter(s => s.id !== id);
+        saveCharacterSheet(name, entry, { immediate: true });
+        rerenderOpenSheet();
+    });
+
+    // Reorder.
+    const moveNote = (el, delta) => {
+        const name = openSheetCharacter();
+        if (!name) return;
+        const entry = getCharacterSheet(name);
+        if (!entry?.notesSections) return;
+        const id = $(el).closest('.rpg-cs-note').attr('data-note-id');
+        const idx = entry.notesSections.findIndex(s => s.id === id);
+        const target = idx + delta;
+        if (idx < 0 || target < 0 || target >= entry.notesSections.length) return;
+        const [moved] = entry.notesSections.splice(idx, 1);
+        entry.notesSections.splice(target, 0, moved);
+        saveCharacterSheet(name, entry, { immediate: true });
+        rerenderOpenSheet();
+    };
+    $(document).on('click', '.rpg-cs-note-up', function (e) { e.stopPropagation(); moveNote(this, -1); });
+    $(document).on('click', '.rpg-cs-note-down', function (e) { e.stopPropagation(); moveNote(this, 1); });
 
     // Close button
     $(document).on('click', '#rpg-close-character-sheet', closeCharacterSheet);
