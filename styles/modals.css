@@ -6270,6 +6270,31 @@
     margin-top: 0.9rem;
 }
 
+#character-roster-popup .cr-newchar-actions[hidden] { display: none; }
+
+/* Similar-name panel inside the new-character card */
+#character-roster-popup .cr-newchar-similar[hidden] { display: none; }
+
+#character-roster-popup .cr-newchar-similar .cr-similar-text {
+    margin: 0.2rem 0 0.7rem;
+    color: rgba(234, 234, 234, 0.85);
+    font-size: var(--modal-font-small, 0.8rem);
+    line-height: 1.45;
+}
+
+#character-roster-popup .cr-newchar-similar .cr-similar-text strong {
+    color: var(--rpg-highlight, #e94560);
+}
+
+#character-roster-popup .cr-similar-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+#character-roster-popup .cr-similar-actions .rpg-btn[hidden] { display: none; }
+
 
 /* Character Roster — pin badge + pinned-tile accent */
 #character-roster-popup .cr-tile-pin {

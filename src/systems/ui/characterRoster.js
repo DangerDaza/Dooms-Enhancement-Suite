@@ -22,6 +22,7 @@ import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
 import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -277,6 +278,38 @@ function bindListeners() {
     // Inline new-character dialog
     $modal.on('click.cr', '#cr-newchar-cancel', () => closeNewCharacterDialog());
     $modal.on('click.cr', '#cr-newchar-create', () => commitNewCharacter());
+    // Similar-name panel (shown instead of creating when the new name
+    // resembles an existing character or alias)
+    $modal.on('click.cr', '#cr-similar-alias', () => {
+        if (!_pendingSimilar) return;
+        const { newName, match } = _pendingSimilar;
+        addAliasToExisting(match.canonical, newName);
+        hideSimilarNamePanel();
+        closeNewCharacterDialog();
+        closeCharacterRoster();
+        // Open the EXISTING character so the user sees the alias chip land
+        // in Workshop → Identity → Aliases.
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: match.canonical, isUser: !!match.isUser } }));
+        }, 220);
+    });
+    $modal.on('click.cr', '#cr-similar-open', () => {
+        if (!_pendingSimilar) return;
+        const { match } = _pendingSimilar;
+        hideSimilarNamePanel();
+        closeNewCharacterDialog();
+        closeCharacterRoster();
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: match.canonical, isUser: !!match.isUser } }));
+        }, 220);
+    });
+    $modal.on('click.cr', '#cr-similar-create', () => {
+        if (!_pendingSimilar) return;
+        const { newName } = _pendingSimilar;
+        hideSimilarNamePanel();
+        performCreateCharacter(newName);
+    });
+    $modal.on('click.cr', '#cr-similar-back', () => hideSimilarNamePanel());
     $modal.on('keydown.cr', '#cr-newchar-input', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); commitNewCharacter(); }
         else if (e.key === 'Escape') { e.stopPropagation(); closeNewCharacterDialog(); }
@@ -299,6 +332,10 @@ function handleNewCharacter() {
     }
     $input.val('');
     $error.prop('hidden', true).text('');
+    // Reset any leftover similar-name panel state from a previous attempt.
+    _pendingSimilar = null;
+    $modal.find('#cr-newchar-similar').prop('hidden', true);
+    $modal.find('#cr-newchar-input, .cr-newchar-actions').prop('hidden', false);
     $dialog.prop('hidden', false);
     // Defer focus so the dialog is visible first on slow mobile browsers.
     setTimeout(() => $input.trigger('focus'), 0);
@@ -326,6 +363,123 @@ function commitNewCharacter() {
         $error.prop('hidden', false).text(`A character named "${trimmed}" already exists (as user or NPC).`);
         return;
     }
+    // Similar-name check: "Sara" next to an existing "Sarah" (or a name that
+    // is already an alias of another card) usually means the same character —
+    // offer to record it as an alias instead of creating a duplicate card.
+    const match = findSimilarCharacter(trimmed, collectSimilarityPool());
+    if (match) {
+        showSimilarNamePanel(trimmed, match);
+        return;
+    }
+    performCreateCharacter(trimmed);
+}
+
+/**
+ * Every existing name the similarity scan should consider: NPC + user cards
+ * from both the global and chat-scoped stores, plus every alias (alias
+ * entries resolve to their owning card). First entry wins on lowercase dupes,
+ * so canonical NPC names take precedence over alias hits.
+ */
+function collectSimilarityPool() {
+    const pool = [];
+    const seen = new Set();
+    const push = (name, canonical, isUser) => {
+        const key = String(name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        pool.push({ name, canonical, isUser });
+    };
+    const npcSources = [
+        extensionSettings?.knownCharacters,
+        extensionSettings?.characterColors,
+        extensionSettings?.npcAvatars,
+    ];
+    // Chat-scoped stores too — getAllExistingCharacterNamesLower only reads
+    // the global ones, which misses per-chat rosters.
+    try { npcSources.push(getActiveKnownCharacters()); } catch (e) {}
+    try { npcSources.push(getActiveCharacterColors()); } catch (e) {}
+    for (const source of npcSources) {
+        if (!source || typeof source !== 'object') continue;
+        for (const name of Object.keys(source)) push(name, name, false);
+    }
+    for (const name of Object.keys(extensionSettings?.userCharacters || {})) push(name, name, true);
+    for (const [canonical, aliases] of Object.entries(extensionSettings?.characterAliases || {})) {
+        if (!Array.isArray(aliases)) continue;
+        for (const alias of aliases) push(alias, canonical, false);
+    }
+    return pool;
+}
+
+// The name + match pending in the similar-name panel, if it's showing.
+let _pendingSimilar = null;
+
+function showSimilarNamePanel(newName, match) {
+    const $panel = $modal.find('#cr-newchar-similar');
+    if (!$panel.length) {
+        // Panel markup missing (template out of date) — fall back to creating.
+        performCreateCharacter(newName);
+        return;
+    }
+    _pendingSimilar = { newName, match };
+    const safeNew = escapeHtml(newName);
+    const safeExisting = escapeHtml(match.canonical);
+    const isAliasHit = match.name !== match.canonical;
+
+    let text;
+    if (match.exactNormalized && isAliasHit) {
+        text = `"${safeNew}" is already an <strong>alias</strong> of <strong>${safeExisting}</strong>. Tracker data using this name is attributed to that character.`;
+    } else if (match.exactNormalized) {
+        text = `A character effectively named "${safeNew}" already exists: <strong>${safeExisting}</strong>.`;
+    } else if (isAliasHit) {
+        text = `"${safeNew}" looks similar to "${escapeHtml(match.name)}", an alias of <strong>${safeExisting}</strong>. Did you mean the same character?`;
+    } else {
+        text = `"${safeNew}" looks similar to existing character <strong>${safeExisting}</strong>. Did you mean the same character?`;
+    }
+    $panel.find('.cr-similar-text').html(text);
+
+    // The alias offer only makes sense for an NPC target from the NPC roster
+    // tab — aliases are an NPC-only concept and always resolve to NPC cards.
+    const canAlias = rosterMode !== 'users' && !match.isUser && !match.exactNormalized;
+    const $aliasBtn = $panel.find('#cr-similar-alias');
+    $aliasBtn.prop('hidden', !canAlias);
+    if (canAlias) $aliasBtn.text(`Add "${newName}" as alias of ${match.canonical}`);
+    $panel.find('#cr-similar-open').prop('hidden', !match.exactNormalized);
+
+    $modal.find('#cr-newchar-input, #cr-newchar-error').prop('hidden', true);
+    $modal.find('.cr-newchar-actions').prop('hidden', true);
+    $panel.prop('hidden', false);
+}
+
+function hideSimilarNamePanel() {
+    _pendingSimilar = null;
+    const $panel = $modal?.find('#cr-newchar-similar');
+    if ($panel?.length) $panel.prop('hidden', true);
+    $modal?.find('#cr-newchar-input, .cr-newchar-actions').prop('hidden', false);
+    $modal?.find('#cr-newchar-input').trigger('focus');
+}
+
+/**
+ * Records newName as an alias of an existing NPC card — the same write
+ * commitDraft() performs in the Workshop (characterAliases is global, never
+ * chat-scoped), so the Workshop's alias chips and every tracker-ingestion
+ * chokepoint pick it up with no extra plumbing.
+ */
+function addAliasToExisting(canonical, newName) {
+    if (!extensionSettings.characterAliases) extensionSettings.characterAliases = {};
+    const list = Array.isArray(extensionSettings.characterAliases[canonical])
+        ? extensionSettings.characterAliases[canonical]
+        : [];
+    if (!list.some(a => String(a).toLowerCase() === newName.toLowerCase())) {
+        list.push(newName);
+    }
+    extensionSettings.characterAliases[canonical] = list;
+    saveSettings();
+    if (window.toastr) {
+        window.toastr.success(`"${newName}" added as an alias of ${canonical}.`, 'Character Roster', { timeOut: 4000 });
+    }
+}
+
+function performCreateCharacter(trimmed) {
     if (rosterMode === 'users') {
         if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
         extensionSettings.userCharacters[trimmed] = {

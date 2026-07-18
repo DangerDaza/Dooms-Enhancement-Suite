@@ -2709,6 +2709,17 @@
                     <button type="button" class="rpg-btn rpg-btn-ghost" id="cr-newchar-cancel">Cancel</button>
                     <button type="button" class="rpg-btn rpg-btn-primary" id="cr-newchar-create">Create</button>
                 </div>
+                <!-- Similar-name panel: offered instead of creating when the new
+                     name resembles an existing character or alias -->
+                <div class="cr-newchar-similar" id="cr-newchar-similar" hidden>
+                    <p class="cr-similar-text"></p>
+                    <div class="cr-similar-actions">
+                        <button type="button" class="rpg-btn rpg-btn-primary" id="cr-similar-alias" hidden></button>
+                        <button type="button" class="rpg-btn rpg-btn-primary" id="cr-similar-open" hidden>Open in Workshop</button>
+                        <button type="button" class="rpg-btn rpg-btn-ghost" id="cr-similar-create">Create separate character</button>
+                        <button type="button" class="rpg-btn rpg-btn-ghost" id="cr-similar-back">Back</button>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
