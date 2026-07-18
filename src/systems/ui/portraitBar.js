@@ -21,6 +21,7 @@ import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
+import { DIALOGUE_COLORS } from '../../utils/dialogueColors.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -39,16 +40,9 @@ function debugLog(message, data = null) {
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
 /** Palette of dialogue colors auto-assigned to new characters */
-const DIALOGUE_COLORS = [
-    '#e94560', '#e07b39', '#f0c040', '#2ecc71',
-    '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
-    '#5dade2', '#f39c12', '#8e44ad', '#d35400',
-    '#16a085', '#c0392b', '#00b894', '#6c5ce7',
-    '#fd79a8', '#a29bfe', '#55efc4', '#fab1a0',
-    '#74b9ff', '#ffeaa7', '#e17055', '#00cec9',
-    '#0984e3', '#fdcb6e', '#d63031', '#e056fd',
-    '#7ed6df', '#badc58',
-];
+// Shared named palette (imported above) — single source of truth with the
+// Workshop's swatch grid. The bigger pool also gives auto-assignment more
+// headroom before it has to reuse colors in large casts.
 
 // ─────────────────────────────────────────────
 //  Settings → CSS custom properties

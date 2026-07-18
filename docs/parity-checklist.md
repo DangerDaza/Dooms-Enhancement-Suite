@@ -79,7 +79,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Fullsheet import button visible on the message face with expand_message_actions OFF (the default); appears for all template generations (/6 /8 /13 /14), tags-only truncated replies, swipes, edits, and lazy-loaded history; never on HP/day-counter stat text; removed when a swipe/edit replaces the sheet with prose (run `node tools/sheet-detect-test.mjs`)
 
 ## Misc features
-- [ ] Dialogue coloring: font tags display, stripped for TTS, 30-color palette
+- [ ] Dialogue coloring: font tags display, stripped for TTS, 54-color named palette (hover swatch → name+hex tooltip; original 30 unchanged; auto-assignment uses the same shared pool)
 - (Name Ban removed in 2.1.0 — superseded by Character Aliases)
 - [ ] History persistence: save + restore snapshot
 - (Chapter checkpoints removed from checklist: checkpointUI.js/chapterCheckpoint.js

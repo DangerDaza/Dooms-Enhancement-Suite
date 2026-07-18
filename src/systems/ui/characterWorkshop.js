@@ -41,6 +41,7 @@ import { desSetExtensionPrompt as setExtensionPrompt, recordPortraitArm, recordP
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 import { escapeHtml } from '../../utils/html.js';
+import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -105,17 +106,9 @@ The lorebook "{lorebook}" has been activated for additional context about this c
 This is a one-time direction from the user; do not mention these bracketed instructions in your reply.
 `;
 
-// Dialogue color palette copied verbatim from portraitBar.js:29-38.
-const DIALOGUE_COLORS = [
-    '#e94560', '#e07b39', '#f0c040', '#2ecc71',
-    '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
-    '#5dade2', '#f39c12', '#8e44ad', '#d35400',
-    '#16a085', '#c0392b', '#00b894', '#6c5ce7',
-    '#fd79a8', '#a29bfe', '#55efc4', '#fab1a0',
-    '#74b9ff', '#ffeaa7', '#e17055', '#00cec9',
-    '#0984e3', '#fdcb6e', '#d63031', '#e056fd',
-    '#7ed6df', '#badc58',
-];
+// Shared palette (with human names for tooltips) — src/utils/dialogueColors.js
+// is the single source of truth for both this swatch grid and the portrait
+// bar's automatic color assignment.
 
 let draft = null;
 let $modal = null;
@@ -919,14 +912,15 @@ function renderAppearance() {
     }
     $modal.find('#cw-appearance').val(draft.appearance || '');
     const $palette = $modal.find('#cw-palette').empty();
-    for (const hex of DIALOGUE_COLORS) {
+    for (const { hex, name } of DIALOGUE_COLOR_LIST) {
         const isSelected = (draft.color || '').toLowerCase() === hex.toLowerCase();
         const $sw = $(`<button type="button" class="rpg-color-swatch${isSelected ? ' selected' : ''}"></button>`);
         $sw.css('background', hex);
         $sw.attr({
             role: 'radio',
             'aria-checked': isSelected ? 'true' : 'false',
-            'aria-label': hex,
+            'aria-label': name,
+            title: `${name} (${hex})`,
             'data-hex': hex,
         });
         $palette.append($sw);
