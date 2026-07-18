@@ -13,62 +13,107 @@ import { chat_metadata, chat } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 // Eager half (fullsheet detection, import buttons, stats cache) lives in
 // fullsheetButtons.js so chat handlers don't need this whole module.
-import { statsCache, messageHasFullSheet } from './fullsheetButtons.js';
-export { clearStatsCache, messageHasFullSheet, injectFullSheetButtons } from './fullsheetButtons.js';
+import { statsCache, messageHasFullSheet, collectSectionHeaders, pickDominantSectionGroup } from './fullsheetButtons.js';
+export { clearStatsCache, messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage } from './fullsheetButtons.js';
 
 // ─────────────────────────────────────────────
 //  Parser
 // ─────────────────────────────────────────────
+// The section header regex lives in fullsheetButtons.js (SECTION_HEADER_SOURCE)
+// and is shared with messageHasFullSheet — the detector and the parser must
+// accept the same shapes, or the button shows and the import then fails.
 
-// Language-agnostic section header regex (ported from CarrotKernel).
-// Matches: "## SECTION 1/8:", "##セクション 1/8", "# 部分 1/8", "SECCIÓN 1/8:", etc.
-// \S+ matches ANY Unicode non-whitespace so it works for all languages.
-const SECTION_HEADER_REGEX = /^#{0,2}\s*(\S+)\s+(\d+)\s*\/\s*(\d+):?\s*(.*)$/gim;
+// Bunny Mo's terminal machine-tag block; stripped from section prose and kept
+// on the sheet as rawTags.
+const BUNNYMO_TAGS_BLOCK_RE = /<BunnymoTags>([\s\S]*?)<\/BunnymoTags>/i;
 
 /**
- * Parses a fullsheet output from a message string.
- * Supports any language — section headers just need the N/M numbering pattern.
+ * Fallback for sheets without a coherent numbered-section group (e.g. a
+ * drifted quicksheet): split on standalone bold or hash-heading lines.
+ * Returns the same header shape collectSectionHeaders produces, or [].
+ */
+function collectUnnumberedHeaders(text) {
+    // Two shapes: a line LEADING with a short bold token ("**Physical:** silver
+    // hair..." — the header ends after the bold, the rest of the line is
+    // content), or a plain hash heading on its own line.
+    const re = /^\s*(?:#{1,3}\s*)?(?:\S{1,8}\s+)?\*\*([^*\n]{2,40})\*\*:?[ \t]*|^\s*#{1,3}\s+([^\n]{2,60})$/gm;
+    const headers = [];
+    let match;
+    let n = 1;
+    while ((match = re.exec(text)) !== null) {
+        // Zero-width safety: a bold match can be empty-adjacent on odd input.
+        if (!match[0].trim()) { re.lastIndex++; continue; }
+        headers.push({
+            n: n++,
+            m: 0,
+            title: (match[1] || match[2] || '').replace(/:$/, '').trim(),
+            startIndex: match.index,
+            headerEndIndex: match.index + match[0].length,
+        });
+    }
+    return headers;
+}
+
+/**
+ * Parses a fullsheet/quicksheet output from a message string.
+ * Supports any language — section headers just need the N/M numbering
+ * pattern; unnumbered quicksheet-style sheets fall back to bold/hash
+ * heading splits.
  * Returns { characterTitle, sections: [{ number, emoji, title, content }] } or null.
  */
 export function parseFullSheet(text) {
     if (!text) return null;
 
-    // Collect all section header matches
-    const sectionHeaderRegex = new RegExp(SECTION_HEADER_REGEX.source, SECTION_HEADER_REGEX.flags);
-    const matches = [];
-    let match;
+    // Pull the machine-tag block out first — it's data, not prose.
+    let rawTags = '';
+    let body = text.replace(BUNNYMO_TAGS_BLOCK_RE, (whole, inner) => {
+        rawTags = inner.trim();
+        return '';
+    });
 
-    while ((match = sectionHeaderRegex.exec(text)) !== null) {
-        matches.push({
-            number: parseInt(match[2]),
-            fullHeader: match[4].trim(),
-            startIndex: match.index,
-            headerEndIndex: match.index + match[0].length,
-        });
+    // Prefer the coherent numbered-section group (same logic the detector
+    // uses); fall back to unnumbered heading splits for drifted quicksheets.
+    let matches = pickDominantSectionGroup(collectSectionHeaders(body));
+    if (matches.length < 2) {
+        matches = collectUnnumberedHeaders(body);
     }
-
-    if (matches.length < 2) return null; // Need at least 2 sections to be a valid fullsheet
+    if (matches.length < 2) return null; // Need at least 2 sections to be a valid sheet
 
     const sections = matches.map((m, idx) => {
         // Content runs from end of this header to start of next section (or end of text)
         const contentStart = m.headerEndIndex;
-        const contentEnd = idx < matches.length - 1 ? matches[idx + 1].startIndex : text.length;
-        let content = text.substring(contentStart, contentEnd).trim();
+        const contentEnd = idx < matches.length - 1 ? matches[idx + 1].startIndex : body.length;
+        let content = body.substring(contentStart, contentEnd).trim();
 
-        // Remove trailing --- dividers
-        content = content.replace(/\n---\s*$/, '').trim();
+        // Remove trailing --- dividers and dangling details/summary wrappers
+        // left behind when the header sat inside a <summary> line.
+        content = content
+            .replace(/^<\/summary>\s*/i, '')
+            .replace(/\n---\s*$/, '')
+            .replace(/<\/details>\s*$/i, '')
+            .trim();
+
+        // <summary>-wrapped headers put the whole "title</summary>body" run on
+        // the header line — split it so the body lands in content, not title.
+        let rawTitle = m.title || '';
+        const summarySplit = rawTitle.split(/<\/summary>/i);
+        if (summarySplit.length > 1) {
+            const inlineBody = summarySplit.slice(1).join(' ').replace(/<\/?details[^>]*>/gi, '').trim();
+            if (inlineBody) content = (inlineBody + (content ? '\n' + content : '')).trim();
+            rawTitle = summarySplit[0];
+        }
 
         // Extract emoji and title from header like "🆔 **Core Identity & Context**"
         // If the header is empty, the section keyword itself (e.g. "SECTION") was consumed —
         // fall back to the full content's first line as a title hint.
-        const headerClean = (m.fullHeader || '').replace(/\*\*/g, '').trim();
+        const headerClean = rawTitle.replace(/<\/?(?:summary|details)[^>]*>/gi, '').replace(/\*\*/g, '').trim();
         // First character(s) might be emoji
         const emojiMatch = headerClean.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*/u);
         const emoji = emojiMatch ? emojiMatch[1] : '';
         const title = emojiMatch ? headerClean.substring(emojiMatch[0].length).trim() : headerClean;
 
         return {
-            number: m.number,
+            number: m.n,
             emoji,
             title,
             content,
@@ -76,7 +121,7 @@ export function parseFullSheet(text) {
     });
 
     // Try to extract character title from the text before first section
-    const preSection = text.substring(0, matches[0].startIndex);
+    const preSection = body.substring(0, matches[0].startIndex);
     const titleMatch = preSection.match(/Character Title:\s*(?:The\s+)?(.+?)(?:\n|$)/i);
     const characterTitle = titleMatch ? titleMatch[1].replace(/\*\*/g, '').trim() : '';
 
@@ -88,6 +133,7 @@ export function parseFullSheet(text) {
         characterTitle,
         characterName,
         sections,
+        ...(rawTags ? { rawTags } : {}),
         importedAt: new Date().toISOString(),
     };
 }
@@ -747,8 +793,15 @@ export async function importFullSheetFromMessage(messageId) {
         return;
     }
 
-    saveCharacterSheet(name.trim(), parsed);
-    toastr.success(`Character sheet imported for ${name.trim()}.`, '', { timeOut: 3000 });
+    // Merge over any existing entry — an overwrite would wipe fields the
+    // sheet popup stores alongside the import (notes mode, notes sections).
+    const existing = getCharacterSheet(name.trim());
+    saveCharacterSheet(name.trim(), { ...(existing || {}), ...parsed });
+    if (existing?.mode === 'notes') {
+        toastr.success(`Character sheet imported for ${name.trim()}. Notes Mode is on for this character — toggle it off in the sheet popup to view the import.`, '', { timeOut: 5000 });
+    } else {
+        toastr.success(`Character sheet imported for ${name.trim()}.`, '', { timeOut: 3000 });
+    }
 }
 
 /**

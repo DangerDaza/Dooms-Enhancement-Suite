@@ -144,7 +144,7 @@ import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPend
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
-import { messageHasFullSheet, injectFullSheetButtons, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
+import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -2939,12 +2939,7 @@ jQuery(async () => {
                 if (renderedMessage && !renderedMessage.is_user && !renderedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
                     // Add fullsheet import button if message contains fullsheet data
-                    if (messageHasFullSheet(renderedMessage.mes) && messageElement) {
-                        const $extraBtns = $(messageElement).find('.mes_buttons .extraMesButtons');
-                        if ($extraBtns.length && !$extraBtns.find('.dooms-import-fullsheet-btn').length) {
-                            $extraBtns.prepend(`<div class="dooms-import-fullsheet-btn mes_button fa-solid fa-scroll" title="Import Character Sheet"></div>`);
-                        }
-                    }
+                    injectFullSheetButtonForMessage(messageId);
                 }
             };
             // ── Fullsheet import button click handler (delegated) ──
@@ -2956,7 +2951,12 @@ jQuery(async () => {
                     ensureSettingsUI().then(async () => {
                         const { importFullSheetFromMessage } = await import('./src/systems/ui/characterSheet.js');
                         importFullSheetFromMessage(parseInt(messageId));
-                    }).catch(() => {});
+                    }).catch((err) => {
+                        // A silently swallowed failure here makes the button a
+                        // dead click — surface it (see 11ad1b1 regression).
+                        console.error('[Dooms Tracker] Fullsheet import failed to load:', err);
+                        if (window.toastr) toastr.error('Character sheet module failed to load. Try opening the DES settings once, then click again.', '', { timeOut: 5000 });
+                    });
                 }
             });
             const onUserMessageRenderedDecorations = (messageId) => {
@@ -3036,6 +3036,9 @@ jQuery(async () => {
                 if (updatedMessage && !updatedMessage.is_user && !updatedMessage.is_system) {
                     queueExpressionCaptureForSpeaker(updatedMessage.name);
                 }
+                // A sheet pasted in via edit needs an import button too —
+                // CHARACTER_MESSAGE_RENDERED doesn't fire for edits.
+                injectFullSheetButtonForMessage(messageId);
             };
             // MESSAGE_DELETED does not fire the same render/update hooks as swipes or edits.
             // Two things to do when a message is removed:
@@ -3090,6 +3093,20 @@ jQuery(async () => {
                     if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
                 }, 800);
             };
+            // Navigating between EXISTING swipes emits only MESSAGE_SWIPED (no
+            // render event), so a fullsheet sitting on another swipe needs its
+            // import button injected here. Idempotent when already present.
+            const onMessageSwipedFullsheet = (messageIndex) => {
+                if (!extensionSettings.enabled) return;
+                injectFullSheetButtonForMessage(messageIndex);
+            };
+            // "Show more messages" clones fresh message elements and emits only
+            // MORE_MESSAGES_LOADED — without this, a sheet above the fold in a
+            // >chat_truncation chat never gets a button.
+            const onMoreMessagesLoadedFullsheet = () => {
+                if (!extensionSettings.enabled) return;
+                setTimeout(() => injectFullSheetButtons(), 100);
+            };
             // GENERATION_STOPPED safety net — when a generation is aborted (e.g. failed
             // swipe), ST may re-render the last message without firing MESSAGE_SWIPED or
             // CHARACTER_MESSAGE_RENDERED. Re-apply bubbles to the last message if missing.
@@ -3115,7 +3132,7 @@ jQuery(async () => {
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, onMessageSwipedFullsheet],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,
@@ -3124,6 +3141,11 @@ jQuery(async () => {
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
+                // Guarded: MORE_MESSAGES_LOADED doesn't exist on some older ST
+                // builds; a spread of {} registers nothing there.
+                ...(event_types.MORE_MESSAGES_LOADED
+                    ? { [event_types.MORE_MESSAGES_LOADED]: onMoreMessagesLoadedFullsheet }
+                    : {}),
             });
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
