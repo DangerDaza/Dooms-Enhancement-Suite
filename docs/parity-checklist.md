@@ -89,6 +89,8 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Notes Mode: per-character toggle swaps sheet for editable dropdown sections (add/edit/delete/reorder); imported sheet survives toggle round-trip and merge-on-import; notes persist per-chat across reload and fast chat switch; popup closes on chat change
 - [ ] New-character similar-name panel: Sara-vs-Sarah offers alias / create-separate / back; exact-alias name warns; alias lands in Workshop → Identity → Aliases; user-mode shows warning without alias option; bulk imports unaffected
 - [ ] PCP right-click → Regenerate Portrait: confirms, replaces card + sheet hero art (both stores swapped), old portrait banked and Restore Previous Portrait swaps it back (item hidden when no history), toasts on missing SD extension / failure, hidden for user characters, no double-fire while pending, history purged with the character
+- [ ] Tracker Data in Chat (toggle off by default): 🗂️ dropdown on tracker-bearing AI messages; survives recolor/bubbles/edit; follows swipes; edit validates JSON, persists per-swipe, refreshes panels when latest message; invalid JSON toasts without saving; toggle off removes all dropdowns
+- [ ] Mobile Compose Overlay (toggle off by default, ≤1000px only): tap input → sheet opens with existing text; typing mirrors to real input (token counter live); Send sends via ST; close keeps text; sheet resizes with keyboard (Send stays visible); no reopen loop after send/close; desktop unaffected
 
 ## Themes & customization
 - [ ] All themes apply: Default, Sci-Fi, Fantasy, Cyberpunk, Minimal, Midnight Rose

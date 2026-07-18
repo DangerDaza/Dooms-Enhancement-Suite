@@ -8797,6 +8797,189 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
+/* ── Inline Tracker Data dropdown (sibling of .mes_text, survives re-renders) ── */
+.dooms-tracker-json {
+    margin: 6px 0 2px;
+    border-left: 3px solid var(--rpg-border, #4a7ba7);
+    border-radius: 4px;
+    background: rgba(74, 123, 167, 0.07);
+    font-size: 0.88em;
+}
+
+.dooms-tracker-json[open] {
+    background: rgba(74, 123, 167, 0.11);
+}
+
+.dooms-tracker-json-summary {
+    cursor: pointer;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    list-style: none;
+    color: var(--rpg-text, #ccc);
+    opacity: 0.85;
+}
+
+.dooms-tracker-json-summary:hover { opacity: 1; }
+
+.dooms-tracker-json-summary::-webkit-details-marker { display: none; }
+
+.dooms-tracker-json-label {
+    font-weight: 500;
+    font-size: 0.88em;
+}
+
+.dooms-tracker-json-edit {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 0.85em;
+    padding: 2px 6px;
+}
+
+.dooms-tracker-json-edit:hover { opacity: 1; }
+
+.dooms-tracker-json-body {
+    border-top: 1px solid color-mix(in srgb, var(--rpg-border, #4a7ba7) 25%, transparent);
+}
+
+.dooms-tracker-json-view {
+    margin: 0;
+    padding: 8px 10px;
+    max-height: 320px;
+    overflow: auto;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+    line-height: 1.4;
+    white-space: pre;
+    color: var(--rpg-text, #ddd);
+}
+
+.dooms-tracker-json-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+}
+
+.dooms-tracker-json-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 4px;
+    color: var(--rpg-text, #ddd);
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+    line-height: 1.4;
+    resize: vertical;
+    padding: 6px 8px;
+}
+
+.dooms-tracker-json-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.dooms-tracker-json-btn {
+    background: transparent;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 4px;
+    color: var(--rpg-text, #ddd);
+    cursor: pointer;
+    padding: 4px 12px;
+    font-size: 0.85em;
+}
+
+.dooms-tracker-json-btn:hover {
+    border-color: var(--rpg-highlight, #e94560);
+}
+
+.dooms-tracker-json-save {
+    background: var(--rpg-highlight, #e94560);
+    border-color: var(--rpg-highlight, #e94560);
+    color: #fff;
+}
+
+
+/* ── Mobile Compose Overlay (fullscreen compose sheet, sized to the visual
+      viewport so only IT resizes for the on-screen keyboard) ── */
+#dooms-compose-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100dvh; /* fallback; JS pins to visualViewport.height while open */
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    background: var(--rpg-bg, rgba(20, 20, 24, 0.99));
+    color: var(--rpg-text, #ddd);
+}
+
+#dooms-compose-overlay .dooms-compose-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rpg-border, #4a7ba7);
+    flex: 0 0 auto;
+}
+
+#dooms-compose-overlay .dooms-compose-title {
+    font-weight: 600;
+    color: var(--rpg-highlight, #e94560);
+}
+
+#dooms-compose-overlay .dooms-compose-close {
+    background: none;
+    border: none;
+    color: var(--rpg-text, #ddd);
+    font-size: 1.3em;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+#dooms-compose-input {
+    flex: 1 1 auto;
+    width: 100%;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: inherit;
+    font-size: 1.05em;
+    line-height: 1.5;
+    padding: 12px 14px;
+}
+
+#dooms-compose-overlay .dooms-compose-actions {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rpg-border, #4a7ba7);
+}
+
+#dooms-compose-overlay .dooms-compose-send {
+    background: var(--rpg-highlight, #e94560);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 1em;
+    font-weight: 600;
+    padding: 10px 22px;
+    cursor: pointer;
+}
+
+
 /* ========================================
    Doom's Inline Scene Headers
    Compact info blocks injected after assistant messages

@@ -24,6 +24,8 @@ export let extensionSettings = {
     showCharacterThoughts: true,
     showQuests: false, // Show quests section (off in the new-player profile)
     showThoughtsInChat: false, // Show thoughts overlay in chat
+    showTrackerJsonInChat: false, // Inline 🗂️ Tracker Data dropdown under AI messages
+    mobileComposeOverlay: false, // Mobile: fullscreen compose box instead of resizing the chat UI
     showPortraitBar: true, // Show collapsible portrait bar above chat input
     narratorMode: false, // Use character card as narrator instead of fixed character references
     customNarratorPrompt: '', // Custom narrator mode prompt text (empty = use default)
@@ -440,6 +442,8 @@ export const NEW_PLAYER_PROFILE = {
     'fabPosition': 'center',
     'showQuests': false,
     'showThoughtsInChat': false,
+    'showTrackerJsonInChat': false,
+    'mobileComposeOverlay': false,
     'narratorMode': false,
     'enableHtmlPrompt': false,
     'enableDynamicWeather': false,

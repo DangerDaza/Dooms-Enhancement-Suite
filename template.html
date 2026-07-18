@@ -182,6 +182,16 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Tracker Data in Chat</span>
+                            <span class="rpg-setting-hint">Collapsible 🗂️ dropdown under each AI message showing its raw tracker JSON — read it or edit it in place (edits update the panels when it's the latest message)</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-tracker-json-in-chat" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
                     <!-- Lock Icons toggle removed — lock UI is disabled until
                          it can be wired into the scene tracker. Backend (lockManager.js)
                          is preserved for future use. -->
@@ -202,6 +212,16 @@
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-mobile-quick-jump" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Compose Overlay</span>
+                            <span class="rpg-setting-hint">Mobile only — tapping the message box opens a fullscreen compose sheet instead of squeezing the chat UI under the keyboard. Text mirrors into the real message box as you type; Send uses SillyTavern's own send. (Slash-command autocomplete doesn't pop up in the sheet, but commands still work.)</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-mobile-compose" />
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>

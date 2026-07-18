@@ -145,6 +145,8 @@ import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
+import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
+import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
@@ -667,6 +669,11 @@ function bindSettingsUI() {
         extensionSettings.mobileQuickJumpEnabled = $(this).prop('checked');
         saveSettings();
         refreshMobileQuickJump();
+    });
+    $('#rpg-toggle-mobile-compose').on('change', function () {
+        extensionSettings.mobileComposeOverlay = $(this).prop('checked');
+        saveSettings();
+        if (!extensionSettings.mobileComposeOverlay) closeMobileCompose();
     });
     $('#rpg-toggle-whats-new').on('change', function () {
         extensionSettings.whatsNewOptOut = !$(this).prop('checked');
@@ -1453,6 +1460,13 @@ function bindSettingsUI() {
         saveSettings();
         updateChatThoughts();
     });
+
+    $('#rpg-toggle-tracker-json-in-chat').on('change', function () {
+        extensionSettings.showTrackerJsonInChat = $(this).prop('checked');
+        saveSettings();
+        // Sync-style sweep adds or removes the dropdowns immediately.
+        updateTrackerJsonDropdowns();
+    });
     // ── Feature pill toggles ──
     $('#rpg-toggle-html-prompt').on('change', function () {
         extensionSettings.enableHtmlPrompt = $(this).prop('checked');
@@ -1739,6 +1753,7 @@ function bindSettingsUI() {
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
     $('#rpg-toggle-mobile-quick-jump').prop('checked', extensionSettings.mobileQuickJumpEnabled !== false);
+    $('#rpg-toggle-mobile-compose').prop('checked', !!extensionSettings.mobileComposeOverlay);
     $('#rpg-toggle-whats-new').prop('checked', !extensionSettings.whatsNewOptOut);
     $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
@@ -1809,6 +1824,7 @@ function bindSettingsUI() {
     $('#rpg-pb-absent-opacity-value').text((pb.absentOpacity ?? 45) + '%');
     applyPortraitBarSettings();
     $('#rpg-toggle-thoughts-in-chat').prop('checked', extensionSettings.showThoughtsInChat);
+    $('#rpg-toggle-tracker-json-in-chat').prop('checked', !!extensionSettings.showTrackerJsonInChat);
     // Scene Tracker customization
     const st = extensionSettings.sceneTracker || {};
     $('#rpg-st-show-time').prop('checked', st.showTime !== false);
@@ -2746,6 +2762,19 @@ jQuery(async () => {
             console.error('[Dooms Tracker] History injection init failed:', error);
             // Non-critical - continue without it
         }
+        // Inline Tracker Data dropdowns (delegated handlers; render paths are
+        // gated on the showTrackerJsonInChat toggle, so init is always safe)
+        try {
+            initTrackerJsonInline();
+        } catch (error) {
+            console.error('[Dooms Tracker] Tracker Data dropdowns init failed:', error);
+        }
+        // Mobile compose overlay (delegated focusin; gated on its toggle)
+        try {
+            initMobileCompose();
+        } catch (error) {
+            console.error('[Dooms Tracker] Mobile compose init failed:', error);
+        }
         // Register all event listeners
         try {
             // ── Named handlers for everything that used to be ad-hoc
@@ -2940,6 +2969,8 @@ jQuery(async () => {
                     queueExpressionCaptureForSpeaker(renderedMessage.name);
                     // Add fullsheet import button if message contains fullsheet data
                     injectFullSheetButtonForMessage(messageId);
+                    // Inline Tracker Data dropdown (optional, default off)
+                    syncTrackerJsonForMessage(messageId);
                 }
             };
             // ── Fullsheet import button click handler (delegated) ──
@@ -3014,6 +3045,8 @@ jQuery(async () => {
                 setTimeout(() => onExpressionSyncChatChanged(), 0);
                 // Inject fullsheet import buttons on existing messages
                 setTimeout(() => injectFullSheetButtons(), 200);
+                // Inline Tracker Data dropdowns on existing messages
+                setTimeout(() => updateTrackerJsonDropdowns(), 200);
             };
             // MESSAGE_UPDATED fires after the DOM is re-rendered with the edited content.
             // CHARACTER_MESSAGE_RENDERED does NOT fire on edits.
@@ -3045,6 +3078,7 @@ jQuery(async () => {
                 // A sheet pasted in via edit needs an import button too —
                 // CHARACTER_MESSAGE_RENDERED doesn't fire for edits.
                 injectFullSheetButtonForMessage(messageId);
+                syncTrackerJsonForMessage(messageId);
             };
             // MESSAGE_DELETED does not fire the same render/update hooks as swipes or edits.
             // Two things to do when a message is removed:
@@ -3106,7 +3140,10 @@ jQuery(async () => {
             // path registers injectFullSheetButtonForMessage directly — it
             // carries its own enabled guard.)
             const onMoreMessagesLoadedFullsheet = () => {
-                setTimeout(() => injectFullSheetButtons(), 100);
+                setTimeout(() => {
+                    injectFullSheetButtons();
+                    updateTrackerJsonDropdowns();
+                }, 100);
             };
             // GENERATION_STOPPED safety net — when a generation is aborted (e.g. failed
             // swipe), ST may re-render the last message without firing MESSAGE_SWIPED or
@@ -3133,7 +3170,7 @@ jQuery(async () => {
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,
