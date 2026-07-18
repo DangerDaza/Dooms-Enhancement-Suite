@@ -161,7 +161,7 @@ export async function onMessageReceived(data) {
                 // aliased name ("Sarah Greenfield" → card "Sarah") is rewritten in
                 // the tracker data only — prose stays untouched — so no duplicate
                 // card is born and colors are harvested under the canonical name.
-                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
             }
             // Update display data with newly parsed response
             if (parsedData.quests) {

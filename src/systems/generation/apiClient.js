@@ -344,7 +344,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 // color harvest, swipe storage, and commit below see the data —
                 // this covers both the auto-update and manual Refresh RPG Info
                 // paths in separate/external mode.
-                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts);
+                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
             }
             // Store RPG data for the last assistant message (separate mode)
             const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;
