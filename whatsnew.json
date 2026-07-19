@@ -1,18 +1,34 @@
 {
-    "version": "2.3.0",
-    "title": "Radio Silence",
+    "version": "2.4.0",
+    "title": "Stage Names",
     "items": [
         {
-            "title": "📡 No more daily update prompts — and zero telemetry",
-            "body": "The anonymous daily user counter is gone completely. It turned out the way it recorded its numbers made SillyTavern show you an 'update available' for DES every single day — that was never the intent, and we're sorry for the noise. The whole feature has been removed: DES now sends nothing anywhere, ever, and you'll only see an update when there's an actual update."
+            "title": "🐰 The Bunny Mo import button is back",
+            "body": "The scroll button for importing !fullsheet and !quicksheet results was hiding inside SillyTavern's '…' menu, which is collapsed by default — so for most people it simply never appeared. It now sits right on the message, next to the edit button, and it recognizes every sheet layout Bunny Mo produces (all template sizes, quicksheets, tag blocks, and the usual AI formatting drift). It also shows up on swipes, edited messages, and older messages loaded with 'show more'."
         },
         {
-            "title": "💭 Character thoughts stay put",
-            "body": "The little thought dropdowns under a message could disappear on every new reply, only coming back if you switched the option off and on again. They now survive each message properly, on swipes too — and if you had someone's thoughts expanded, they stay expanded."
+            "title": "👥 One character, one card",
+            "body": "The AI loves renaming people mid-story — 'Nine' becomes 'Nine (Nine-Coins-In-Sequence)', 'The Gardener' becomes 'Gardener' — and every variant used to spawn a duplicate character card. Obvious variants now fold into the original card automatically (recorded as aliases you can see in the Workshop). When a genuinely similar new name shows up, DES asks you once, in a popup that follows your theme: same character or not? While it's open, nothing spawns and chat bubbles wait. Answer Yes and the newcomer merges into the existing card — dialogue color, portrait and all. Answer No and you're never asked about that pair again."
         },
         {
-            "title": "📱 The keyboard stays down on mobile",
-            "body": "Two spots in the Character Workshop popped the phone keyboard open when you didn't want to type: resetting the injection prompt, and opening the lorebook dropdown (which then hid the very list you were trying to read). Both are fixed — the keyboard only appears when you actually tap into a text box."
+            "title": "🗣️ Chat bubbles stop guessing wrong",
+            "body": "Two long-standing speaker-attribution bugs are gone. Characters with names like 'The Anthem' or 'The Silence' could silently claim any dialogue line whose color wasn't recognized (the matcher treated the word 'the' in narration as their name — oops). And a character whose dialogue color drifted from what's stored could stay misattributed forever; colors now heal themselves on the next message."
+        },
+        {
+            "title": "📝 Notes Mode for character sheets",
+            "body": "A new toggle in the character sheet popup turns any character's sheet into a freeform notes area with your own collapsible sections — emoji, title, text, reorder and delete as you like, same look as an imported Bunny Mo sheet. Your imported sheet is never lost: switch back anytime, and importing while in Notes Mode merges instead of overwriting."
+        },
+        {
+            "title": "🖼️ Portrait tools grew up",
+            "body": "Right-click a character in the Present Characters panel to regenerate their portrait — the old image is kept, and 'Restore Previous Portrait' swaps it back anytime. The Workshop's Appearance section gets a per-character Portrait prompt field (short tag-style prompts beat prose on every image backend), plus a two-step flow: write a prompt from the character's description, review and tweak it, then render. Multi-line prompts no longer break ComfyUI generations, and failures now say what actually went wrong."
+        },
+        {
+            "title": "🗂️📱 Two new opt-in extras",
+            "body": "Tracker Data in Chat adds a small dropdown on each AI message showing that message's raw tracker JSON — readable and editable, with panels refreshing when you save. And on phones, the Mobile Compose Overlay replaces the cramped squeezed-around-the-keyboard typing experience with an instant fullscreen compose sheet that mirrors straight into the real message box. Both are off by default — flip them on in Display settings."
+        },
+        {
+            "title": "🎨 54 dialogue colors, all named",
+            "body": "The Workshop's color grid grows from 30 to 54 swatches, and hovering any of them now tells you its name — no more 'the third teal from the left'. Automatic color assignment draws from the same bigger pool, so large casts go longer before two characters look alike."
         }
     ],
     "contact": {

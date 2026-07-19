@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.4.0] - 2026-07-19 — Stage Names
 
 ### Fixed
 - **Chat bubbles no longer hand every unrecognized dialogue color to a "The …" character.** The bubble splitter's narration fallback keeps a one-word shortcut for multi-word names — but it registered the *article* for names like "The Anthem", so the shortcut `the` matched practically every narration sentence, and whichever "The X" character was registered first silently claimed every dialogue line whose color wasn't yet in the color map (new characters were the usual victims). The shortcut now skips leading articles ("The Anthem" → `anthem`), so those names only match when actually mentioned.
