@@ -44,6 +44,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 ## Chat Bubbles
 - [ ] Discord style and Card style both render
 - [ ] Group chat: speaker attribution correct per bubble
+- [ ] "The X" character names never claim unknown-color dialogue via the narration fallback (the article is not a name shortcut; "anthem" is); a present character whose stored color is absent from the message adopts their tracker-claimed hex when it's live and unowned (old hex banked to previousColors; a user-replaced hex is never re-adopted — run drift-reconcile sandbox test)
 - [ ] Quoted dialogue inside narration attributes correctly
 - [ ] Edit message → bubbles re-apply; delete → no residue; swipe → re-apply
 - [ ] Toggling bubbles off restores the original message HTML exactly

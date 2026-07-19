@@ -214,6 +214,48 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
         register(name, proposed, 'validated JSON');
     }
 
+    // ── 1b. DRIFT RECONCILIATION ──
+    // A present character can end up stored under a hex the model never
+    // writes: the model migrates them to a new color between turns, or DES
+    // auto-assigned a palette color the model never saw. Their real dialogue
+    // color then stays unowned forever (hasColor(name) shields them from
+    // step 1) and every line falls through to the narration fallbacks.
+    // When a present character's tracker claim matches a live font color
+    // that nobody owns, their stored color appears nowhere in this message,
+    // and the claim isn't a hex the user deliberately replaced
+    // (previousColors), adopt the claim: bank the old hex (historical
+    // messages keep attributing through the previous-color alias pass) and
+    // re-point the character at the color actually voicing them.
+    {
+        let known = {};
+        try { known = getActiveKnownCharacters() || {}; } catch (e) {}
+        const knownKeyByLower = new Map(Object.keys(known).map(k => [k.toLowerCase(), k]));
+        for (const entry of presentChars) {
+            const name = entry && entry.name;
+            if (!name || typeof name !== 'string') continue;
+            const canonical = canonicalByLower.get(String(name).toLowerCase());
+            if (canonical === undefined || !colors[canonical]) continue;   // colorless → step 1's job
+            const current = String(colors[canonical]).toLowerCase();
+            const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
+            if (!HEX_RE.test(proposed) || proposed === current) continue;
+            if (!messageColorSet.has(proposed)) continue;   // claim must match live usage
+            if (ownedColors.has(proposed)) continue;        // someone else's color
+            if (messageColorSet.has(current)) continue;     // still voiced in stored color — no drift
+            const kKey = knownKeyByLower.get(canonical.toLowerCase());
+            const kEntry = kKey !== undefined ? known[kKey] : undefined;
+            const prevList = kEntry && Array.isArray(kEntry.previousColors) ? kEntry.previousColors : [];
+            if (prevList.some(c => String(c).toLowerCase() === proposed)) continue; // user replaced this hex on purpose
+            if (kEntry && typeof kEntry === 'object') {
+                if (!Array.isArray(kEntry.previousColors)) kEntry.previousColors = [];
+                if (!kEntry.previousColors.some(c => String(c).toLowerCase() === current)) {
+                    kEntry.previousColors.push(colors[canonical]);
+                }
+            }
+            ownedColors.delete(current);
+            register(canonical, proposed, 'drift reconciled');
+        }
+    }
+
     // ── 2. ELIMINATION ──
     {
         const names = colorlessNames();
@@ -359,11 +401,20 @@ function buildNameLookup() {
     function addName(name) {
         const lower = name.toLowerCase();
         if (!map.has(lower)) map.set(lower, name);
-        // Add first name for multi-word names (≥ 3 chars to avoid "Mr", "Le", etc.)
+        // Add a single-word shortcut for multi-word names, skipping leading
+        // articles: "Sylvaine Moonwhisper" → "sylvaine", "The Anthem" →
+        // "anthem". Registering the article itself was catastrophic — "The"
+        // passes the ≥3-char guard, and a \bthe\b shortcut matches virtually
+        // every narration sentence near its end, so EVERY unknown-color
+        // dialogue in a chat with any "The X" character was attributed to
+        // that character by the narration fallbacks.
         const parts = name.split(/\s+/);
-        if (parts.length > 1 && parts[0].length >= 3) {
-            const firstName = parts[0].toLowerCase();
-            if (!map.has(firstName)) map.set(firstName, name);
+        if (parts.length > 1) {
+            let idx = 0;
+            while (idx < parts.length - 1 && /^(?:the|a|an)$/i.test(parts[idx])) idx++;
+            const firstName = parts[idx].toLowerCase();
+            // ≥ 3 chars to avoid "Mr", "Le", etc.
+            if (firstName.length >= 3 && !map.has(firstName)) map.set(firstName, name);
         }
     }
 
