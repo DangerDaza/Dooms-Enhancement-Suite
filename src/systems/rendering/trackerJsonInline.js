@@ -110,6 +110,12 @@ export function syncTrackerJsonForMessage(messageId) {
 
 /** Full sweep — wired to CHAT_CHANGED / MORE_MESSAGES_LOADED / the toggle. */
 export function updateTrackerJsonDropdowns() {
+    // Feature off (the default): one removal query instead of a full
+    // per-message sync sweep on every CHAT_CHANGED / "show more messages".
+    if (!extensionSettings.enabled || !extensionSettings.showTrackerJsonInChat) {
+        $('#chat .dooms-tracker-json').remove();
+        return;
+    }
     const context = SillyTavern.getContext();
     const chat = context.chat || [];
     $('#chat .mes').each(function () {

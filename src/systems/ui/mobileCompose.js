@@ -52,8 +52,24 @@ function ensureOverlay() {
     return document.getElementById('dooms-compose-overlay');
 }
 
+// Trailing-debounce handle for the keystroke mirror (see scheduleMirror).
+let _mirrorTimer = null;
+
+/** Debounced mirror for typing — trailing 250ms, superseded by any direct sync. */
+function scheduleMirror() {
+    if (_mirrorTimer) clearTimeout(_mirrorTimer);
+    _mirrorTimer = setTimeout(() => {
+        _mirrorTimer = null;
+        syncToOriginal();
+    }, 250);
+}
+
 /** Mirrors the sheet's text into the real input so ST state stays live. */
 function syncToOriginal() {
+    // A direct sync supersedes any scheduled one. Critically, a pending
+    // debounce timer firing AFTER send would mirror the sheet's old text
+    // back into the input ST just cleared.
+    if (_mirrorTimer) { clearTimeout(_mirrorTimer); _mirrorTimer = null; }
     const original = getSendTextarea();
     const compose = document.getElementById('dooms-compose-input');
     if (!original || !compose) return;
@@ -125,7 +141,12 @@ export function initMobileCompose() {
         openOverlay();
     });
 
-    $(document).on('input.doomsCompose', '#dooms-compose-input', syncToOriginal);
+    // Debounced mirror: a per-keystroke sync dispatches an 'input' event on
+    // the real textarea, running ST's autosize/token-count/send-state handlers
+    // against the hidden chat layout for every character — exactly the
+    // slow-phone relayout this overlay exists to avoid. Close/Send flush
+    // synchronously via their direct syncToOriginal() calls.
+    $(document).on('input.doomsCompose', '#dooms-compose-input', scheduleMirror);
     $(document).on('click.doomsCompose', '.dooms-compose-close', () => closeOverlay());
     $(document).on('click.doomsCompose', '.dooms-compose-send', sendFromOverlay);
     $(document).on('keydown.doomsCompose', '#dooms-compose-input', function (e) {

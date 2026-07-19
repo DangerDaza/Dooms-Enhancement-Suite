@@ -145,9 +145,10 @@ export function collectUnnumberedHeaders(text) {
 }
 
 // Bunny Mo terminal tag block — present at the end of current fullsheet AND
-// quicksheet output. Highest-precision signal we have, and truncation-proof.
+// quicksheet output. Highest-precision signal we have. (Detection requires
+// the CLOSED block — the parser can't extract anything from a bare open tag,
+// and a button that can't import is worse than no button.)
 export const BUNNYMO_TAGS_BLOCK_RE = /<BunnymoTags>([\s\S]*?)<\/BunnymoTags>/i;
-const BUNNYMO_TAGS_OPEN = /<BunnymoTags>/i;
 // <TAG:value> machine tags (CarrotKernel's fallback signal). The (?!\/\/)
 // keeps angle-bracketed URLs (<https://...>) from counting as tags.
 const BUNNYMO_TAG_RE = /<[A-Za-z][A-Za-z0-9_]*:(?!\/\/)[^>\n]+>/g;
@@ -156,6 +157,25 @@ const BUNNYMO_TAG_RE = /<[A-Za-z][A-Za-z0-9_]*:(?!\/\/)[^>\n]+>/g;
 export function collectMachineTags(text) {
     if (!text) return [];
     return text.match(BUNNYMO_TAG_RE) || [];
+}
+
+// Canonical Bunny Mo tag vocabulary (template keys across V2–V3). Bare-tag
+// detection requires at least one of these: any model can decorate prose
+// with three <Time: 14:30>-style pseudo-tags, and without an anchor key the
+// import button lands on ordinary messages and imports junk.
+const BUNNYMO_CORE_KEY_RE = /^(?:name|genre|species|gender|physical|personality|dere|trait|attachment|conflict|boundaries|kink|chemistry|arousal|trauma|jealousy|orientation|power|linguistics|ling|context|flavor|skill|secret|weakness)/i;
+
+/**
+ * Do these collected machine tags look like a Bunny Mo tag set (≥3 tags, at
+ * least one canonical key)? Shared by detection S1 and the parser's bare-tag
+ * fallback so "button shown ⇒ import succeeds" holds by construction.
+ */
+export function looksLikeBunnymoTagSet(tags) {
+    if (!Array.isArray(tags) || tags.length < 3) return false;
+    return tags.some(t => {
+        const m = /^<([A-Za-z][A-Za-z0-9_]*):/.exec(t);
+        return m !== null && BUNNYMO_CORE_KEY_RE.test(m[1]);
+    });
 }
 
 // Quicksheet title line, e.g. "# 🎯 QUICKSHEET CHARACTER ANALYSIS 🎯" or
@@ -175,8 +195,9 @@ const detectCache = new Map();
  * Heuristic: does a message contain BunnyMo fullsheet/quicksheet data?
  * Multi-signal — any of:
  *   S3: a coherent group of numbered section headers (see above)
- *   S1: a <BunnymoTags> block or ≥3 <TAG:value> machine tags (the parser
- *       turns these into a Tags section, so the import always succeeds)
+ *   S1: a closed <BunnymoTags> block, or a bare tag set that looks like
+ *       Bunny Mo output (≥3 tags incl. a canonical key) — mirrors exactly
+ *       what the parser accepts, so the import always succeeds
  *   S2: a quicksheet title line + ≥2 unnumbered headers the parser's
  *       fallback splitter will find (drifted quicksheets)
  */
@@ -184,12 +205,15 @@ export function messageHasFullSheet(messageText) {
     if (!messageText || messageText.length < 40) return false;
     const cached = detectCache.get(messageText);
     if (cached !== undefined) return cached;
-    if (detectCache.size > 2000) detectCache.clear();
+    // LRU-ish: evict the oldest entry (Map preserves insertion order) instead
+    // of dumping the whole memo — a clear() forced a full re-detect sweep of
+    // every rendered message right when the cache was most loaded.
+    if (detectCache.size > 2000) detectCache.delete(detectCache.keys().next().value);
 
     let result = false;
     if (pickDominantSectionGroup(collectSectionHeaders(messageText)).length >= 2) {
         result = true;
-    } else if (BUNNYMO_TAGS_OPEN.test(messageText) || collectMachineTags(messageText).length >= 3) {
+    } else if (BUNNYMO_TAGS_BLOCK_RE.test(messageText) || looksLikeBunnymoTagSet(collectMachineTags(messageText))) {
         result = true;
     } else if (QUICKSHEET_TITLE_RE.test(messageText)
         && collectUnnumberedHeaders(messageText).length >= 2) {

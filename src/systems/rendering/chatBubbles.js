@@ -214,7 +214,16 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
         register(name, proposed, 'validated JSON');
     }
 
-    // ── 1b. DRIFT RECONCILIATION ──
+    // ── 2. ELIMINATION ──
+    {
+        const names = colorlessNames();
+        const newColors = unownedColors();
+        if (names.length === 1 && newColors.length === 1) {
+            register(names[0], newColors[0], 'elimination');
+        }
+    }
+
+    // ── 2b. DRIFT RECONCILIATION ──
     // A present character can end up stored under a hex the model never
     // writes: the model migrates them to a new color between turns, or DES
     // auto-assigned a palette color the model never saw. Their real dialogue
@@ -226,6 +235,11 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     // (previousColors), adopt the claim: bank the old hex (historical
     // messages keep attributing through the previous-color alias pass) and
     // re-point the character at the color actually voicing them.
+    // Runs AFTER elimination on purpose: a genuinely-new colorless speaker
+    // gets first claim on the message's unowned hex — the model's color
+    // field is written before any dialogue and "frequently doesn't match"
+    // (see above), so a colored-but-silent character's stale claim must not
+    // steal the newcomer's color.
     {
         let known = {};
         try { known = getActiveKnownCharacters() || {}; } catch (e) {}
@@ -234,7 +248,7 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
             const name = entry && entry.name;
             if (!name || typeof name !== 'string') continue;
             const canonical = canonicalByLower.get(String(name).toLowerCase());
-            if (canonical === undefined || !colors[canonical]) continue;   // colorless → step 1's job
+            if (canonical === undefined || !colors[canonical]) continue;   // colorless → steps 1/2's job
             const current = String(colors[canonical]).toLowerCase();
             const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
             if (!HEX_RE.test(proposed) || proposed === current) continue;
@@ -253,15 +267,6 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
             }
             ownedColors.delete(current);
             register(canonical, proposed, 'drift reconciled');
-        }
-    }
-
-    // ── 2. ELIMINATION ──
-    {
-        const names = colorlessNames();
-        const newColors = unownedColors();
-        if (names.length === 1 && newColors.length === 1) {
-            register(names[0], newColors[0], 'elimination');
         }
     }
 

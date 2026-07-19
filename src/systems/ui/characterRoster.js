@@ -152,10 +152,18 @@ function bindListeners() {
     // Esc key while modal is open
     $(document).on('keydown.cr', (e) => {
         if (e.key !== 'Escape') return;
+        // A missing element must read as "hidden": .prop('hidden') on an
+        // empty jQuery set is undefined, and !undefined would treat a panel
+        // that doesn't exist (stale cached template) as OPEN — turning every
+        // Escape press into a no-op that can never close the dialog.
+        const isShown = (sel) => {
+            const $el = $modal.find(sel);
+            return $el.length > 0 && !$el.prop('hidden');
+        };
         // If the new-character dialog is open, Esc steps back: first out of
         // the similar-name panel (to the name input), then out of the dialog.
-        if (!$modal.find('#cr-newchar-overlay').prop('hidden')) {
-            if (!$modal.find('#cr-newchar-similar').prop('hidden')) {
+        if (isShown('#cr-newchar-overlay')) {
+            if (isShown('#cr-newchar-similar')) {
                 hideSimilarNamePanel();
             } else {
                 closeNewCharacterDialog();
@@ -163,7 +171,7 @@ function bindListeners() {
             return;
         }
         // If the context menu is open, Esc only closes that.
-        if (!$modal.find('#cr-context-menu').prop('hidden')) {
+        if (isShown('#cr-context-menu')) {
             hideContextMenu();
             return;
         }

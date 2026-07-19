@@ -3071,8 +3071,16 @@ jQuery(async () => {
                             // Clear stale original HTML since the content was just edited
                             clearBubbleState(mesText);
                         }
-                        // Wait for colored-dialogues to finish recoloring
-                        setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
+                        // Wait for colored-dialogues to finish recoloring.
+                        // Same gate + re-query as the render/swipe paths: an
+                        // edit while a duplicate-decision popup is open must
+                        // not bake pre-decision attribution onto the bubbles,
+                        // and the element can be replaced under us meanwhile.
+                        setTimeout(async () => {
+                            await waitForAliasDecisions();
+                            const freshEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                            if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
+                        }, 800);
                     }
                 }
 

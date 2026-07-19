@@ -17,7 +17,7 @@ import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import {
     statsCache, messageHasFullSheet,
     collectSectionHeaders, pickDominantSectionGroup, saneSectionHeaders,
-    collectUnnumberedHeaders, collectMachineTags, BUNNYMO_TAGS_BLOCK_RE,
+    collectUnnumberedHeaders, collectMachineTags, looksLikeBunnymoTagSet, BUNNYMO_TAGS_BLOCK_RE,
 } from './fullsheetButtons.js';
 export { clearStatsCache, messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage } from './fullsheetButtons.js';
 
@@ -49,13 +49,17 @@ export function parseFullSheet(text) {
     });
 
     // Prefer numbered sections. The dominant group decides VALIDITY (same
-    // logic as the detector), but the split then uses every sane header —
-    // a mid-sheet denominator typo ("SECTION 6/9" in an /8 sheet) must not
-    // silently fold that section into its neighbor.
+    // logic as the detector); the split then uses every sane header that is
+    // COMPATIBLE with it — same denominator, or visibly header-shaped
+    // (colon / markup). This keeps the denominator-typo tolerance ("SECTION
+    // 6/9:" in an /8 sheet still splits) while barring bare prose counters
+    // ("Day 3/10 of the voyage.") from splitting a real section in half.
     let matches = [];
     const allHeaders = collectSectionHeaders(body);
-    if (pickDominantSectionGroup(allHeaders).length >= 2) {
-        matches = saneSectionHeaders(allHeaders);
+    const dominantGroup = pickDominantSectionGroup(allHeaders);
+    if (dominantGroup.length >= 2) {
+        const domM = dominantGroup[0].m;
+        matches = saneSectionHeaders(allHeaders).filter(h => h.m === domM || h.structural || h.hasColon);
     } else {
         // Fall back to unnumbered heading splits for drifted quicksheets.
         matches = collectUnnumberedHeaders(body);
@@ -64,8 +68,11 @@ export function parseFullSheet(text) {
 
     // Machine tags: the block's contents, or bare <TAG:value> tags when
     // there's no block. Rendered as a final "Tags" section so tag-bearing
-    // messages are always importable (matching detection signal S1).
-    const tagText = rawTags || (collectMachineTags(body).length >= 3 ? collectMachineTags(body).join('\n') : '');
+    // messages are always importable (matching detection signal S1 —
+    // looksLikeBunnymoTagSet is the shared gate, so detector and parser
+    // accept exactly the same bare-tag messages).
+    const bareTags = collectMachineTags(body);
+    const tagText = rawTags || (looksLikeBunnymoTagSet(bareTags) ? bareTags.join('\n') : '');
     if (!rawTags && tagText) rawTags = tagText;
 
     if (matches.length < 2 && !tagText) return null; // Not enough structure to be a sheet

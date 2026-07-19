@@ -16,7 +16,7 @@
  */
 import { extensionSettings, lastGeneratedData } from '../../core/state.js';
 import { chat_metadata, saveSettingsDebounced } from '../../../../../../../script.js';
-import { namesAreSimilar } from '../../utils/nameSimilarity.js';
+import { namesAreSimilar, normalizeName } from '../../utils/nameSimilarity.js';
 import { escapeHtml } from '../../utils/html.js';
 
 /**
@@ -98,14 +98,9 @@ export function addCharacterAlias(canonical, alias) {
 // tier: explicit user setup wins.
 // ────────────────────────────────────────────────────────────────────────────
 
-function normalizeNameKey(s) {
-    return String(s || '')
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, ' ');
-}
+// Name normalization comes from nameSimilarity.js (normalizeName) \u2014 this
+// module previously carried a byte-identical local copy, which risked the
+// two tiers of duplicate detection drifting apart.
 
 function stripLeadingArticle(s) {
     return s.replace(/^(?:the|a|an)\s+/i, '').trim();
@@ -126,7 +121,7 @@ function buildCanonicalNameMap() {
     const push = (obj) => {
         if (!obj || typeof obj !== 'object') return;
         for (const name of Object.keys(obj)) {
-            const key = normalizeNameKey(name);
+            const key = normalizeName(name);
             if (key && !map.has(key)) map.set(key, name);
         }
     };
@@ -142,12 +137,12 @@ function buildCanonicalNameMap() {
  * card / no safe match exists.
  */
 function resolveStructuralVariant(name, canonMap) {
-    const key = normalizeNameKey(name);
+    const key = normalizeName(name);
     if (!key) return null;
     // Exactly an existing card (modulo case/diacritics/spacing) — not a variant.
     if (canonMap.has(key)) return null;
     // "Nine (Nine-Coins-In-Sequence)" → "Nine"
-    const noParen = normalizeNameKey(stripTrailingParenthetical(name));
+    const noParen = normalizeName(stripTrailingParenthetical(name));
     if (noParen && noParen !== key && canonMap.has(noParen)) return canonMap.get(noParen);
     // "Gardener" ↔ "The Gardener" (article-insensitive exact)
     const noArticle = stripLeadingArticle(key);
@@ -159,6 +154,11 @@ function resolveStructuralVariant(name, canonMap) {
 
 // Tier 2: pairs currently showing (or queued to show) their yes/no popup.
 const _pendingDecisions = new Set();
+// Decision dialogs are SERIALIZED through this chain — two shown at once
+// would destroy each other's DOM (showAliasDecisionDialog wipes any existing
+// .dooms-alias-overlay) without ever resolving the first, leaving its pair
+// pending forever and stalling every gated bubble pass on the full timeout.
+let _dialogQueue = Promise.resolve();
 // Variant names (normalized) belonging to those pairs. While a name is in
 // here it must not EXIST anywhere: getCharacterList holds it out of the
 // PCP (which also blocks knownCharacters card creation and color
@@ -177,7 +177,66 @@ const _settlementWaiters = [];
  */
 export function hasPendingAliasDecision(name) {
     if (_pendingNames.size === 0 || !name) return false;
-    return _pendingNames.has(normalizeNameKey(name));
+    return _pendingNames.has(normalizeName(name));
+}
+
+/**
+ * Normalized-name Set of the player's persona cards. Aliases are an NPC-only
+ * concept (the roster's similar-name flow forbids them on user cards):
+ * ingestion must never record an alias ON — or propose merging INTO — a
+ * persona, or an NPC gets permanently folded into the player character.
+ */
+function buildUserNameKeySet() {
+    const users = extensionSettings.userCharacters || {};
+    return new Set(Object.keys(users).map(normalizeName));
+}
+
+/**
+ * Persist settings through DES's own saveSettings(). This module writes NEW
+ * top-level settings keys (aliasDismissals) — ST's bare saveSettingsDebounced()
+ * serializes the stale pre-load blob until saveSettings() re-links
+ * extension_settings[extensionName], silently dropping them on reload.
+ * Dynamic import: persistence.js sits above this module in the import graph.
+ */
+function persistSettings() {
+    import('../../core/persistence.js')
+        .then(({ saveSettings }) => saveSettings())
+        .catch(() => { try { saveSettingsDebounced(); } catch (e) {} });
+}
+
+/**
+ * Repaints every surface that renders present characters after a duplicate
+ * decision settles, then re-applies chat bubbles to the last message with the
+ * corrected roster. The bubble step matters beyond cosmetics: in
+ * separate/external mode the tracker arrives via a second LLM roundtrip, so
+ * the popup opens AFTER the 800ms bubble pass already ran — without a
+ * re-apply here the pre-decision attribution stays baked on the message.
+ * Inline thoughts are re-inserted last (bubbles rewrite .mes_text and would
+ * wipe them). Dynamic imports — the render stack sits above this module.
+ */
+async function repaintAliasSurfaces() {
+    try {
+        const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
+        clearPortraitCache();
+        updatePortraitBar();
+        const { renderThoughts, updateChatThoughts } = await import('../rendering/thoughts.js');
+        renderThoughts();
+        try {
+            const mode = extensionSettings.chatBubbleMode;
+            if (typeof document !== 'undefined' && mode && mode !== 'off') {
+                const { applyChatBubbles, revertLastMessageBubbles } = await import('../rendering/chatBubbles.js');
+                // Revert-then-apply is safe in both states: not-yet-bubbled
+                // (revert is a no-op) and already-bubbled (revert restores the
+                // original font-tagged HTML so the re-parse sees clean input).
+                revertLastMessageBubbles();
+                const lastMes = document.querySelector('#chat .mes:last-child');
+                if (lastMes) applyChatBubbles(lastMes, mode);
+            }
+        } catch (e) { /* bubbles are best-effort */ }
+        setTimeout(() => { try { updateChatThoughts(); } catch (e) {} }, 250);
+    } catch (e) {
+        console.warn('[Dooms Tracker] Aliases: surface repaint failed', e);
+    }
 }
 
 function settleIfIdle() {
@@ -318,12 +377,26 @@ export async function adoptVariantAsAlias(canonical, variant) {
             if (key.toLowerCase() === lower) delete obj[key];
         }
     };
-    for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes',
+    for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
         transferIfMissing(extensionSettings[store]);
     }
     bankColorAlias(extensionSettings.characterColors, extensionSettings.knownCharacters);
-    for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes',
+    // Portrait data that will NOT survive the scrub (the canonical already has
+    // its own entry, so no transfer happened): collect the values now so their
+    // image files can be removed from disk afterwards — a bare key delete
+    // would orphan them in the des-portraits folder forever.
+    const orphanedPortraitValues = [];
+    for (const store of ['npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory']) {
+        const obj = extensionSettings[store];
+        if (!obj) continue;
+        const vKey = findKey(obj, lower);
+        if (vKey === undefined || findKey(obj, canonLower) === undefined) continue;
+        const val = obj[vKey];
+        if (Array.isArray(val)) orphanedPortraitValues.push(...val.filter(v => typeof v === 'string'));
+        else if (typeof val === 'string') orphanedPortraitValues.push(val);
+    }
+    for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
         scrub(extensionSettings[store]);
     }
@@ -339,7 +412,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
             }
         }
     } catch (e) {}
-    try { saveSettingsDebounced(); } catch (e) {}
+    persistSettings();
 
     // Fold the variant out of the live tracker data and repaint. Dynamic
     // imports — the render stack sits above this module in the import graph.
@@ -347,17 +420,20 @@ export async function adoptVariantAsAlias(canonical, variant) {
         lastGeneratedData.characterThoughts = applyCharacterAliases(lastGeneratedData.characterThoughts);
         const { saveChatData } = await import('../../core/persistence.js');
         saveChatData({ immediate: true });
-        const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
-        clearPortraitCache();
-        updatePortraitBar();
-        const { renderThoughts, updateChatThoughts } = await import('../rendering/thoughts.js');
-        renderThoughts();
-        updateChatThoughts();
+        if (orphanedPortraitValues.length) {
+            try {
+                const { deletePortraitFromDiskByValue } = await import('../../utils/avatars.js');
+                for (const value of orphanedPortraitValues) {
+                    try { await deletePortraitFromDiskByValue(value); } catch (e) {}
+                }
+            } catch (e) { /* disk cleanup is best-effort */ }
+        }
+        await repaintAliasSurfaces();
     } catch (e) {
         console.warn('[Dooms Tracker] Aliases: post-adopt refresh failed', e);
     }
     if (typeof window !== 'undefined' && window.toastr) {
-        window.toastr.success(`"${variant}" is now an alias of ${canonical}.`, 'Character Aliases', { timeOut: 4000 });
+        window.toastr.success(`"${escapeHtml(variant)}" is now an alias of ${escapeHtml(canonical)}.`, 'Character Aliases', { timeOut: 4000 });
     }
 }
 
@@ -367,17 +443,27 @@ export async function adoptVariantAsAlias(canonical, variant) {
  * the parse call stack). YES → adoptVariantAsAlias; NO → persistent
  * dismissal, the pair is never asked about again.
  */
-function queueAliasDecision(name, canonMap) {
-    const key = normalizeNameKey(name);
+function queueAliasDecision(name, canonMap, userKeys) {
+    const key = normalizeName(name);
     if (!key || canonMap.has(key)) return;
-    for (const canonical of canonMap.values()) {
-        if (!namesAreSimilar(stripLeadingArticle(key), stripLeadingArticle(normalizeNameKey(canonical)))) continue;
-        const pairKey = `${key}|${normalizeNameKey(canonical)}`;
-        if (_pendingDecisions.has(pairKey)) return;
-        if (extensionSettings.aliasDismissals?.[pairKey]) return;
+    // One open question per name — a re-parse (swipe, second call site) while
+    // this name's popup is pending must not queue a second dialog against a
+    // different canonical.
+    if (_pendingNames.has(key)) return;
+    for (const [candidateKey, canonical] of canonMap) {
+        // Cheap gates first: an already-dismissed pair costs two lookups on
+        // every future message, not a Levenshtein pass — and a dismissed or
+        // persona candidate must not stop the OTHER candidates from being
+        // considered (continue, never return).
+        const pairKey = `${key}|${candidateKey}`;
+        if (extensionSettings.aliasDismissals?.[pairKey]) continue;
+        // Merging an NPC into a user persona is never offered — aliases are
+        // an NPC-only concept (the roster's flow forbids them on user cards).
+        if (userKeys && userKeys.has(candidateKey)) continue;
+        if (!namesAreSimilar(stripLeadingArticle(key), stripLeadingArticle(candidateKey))) continue;
         _pendingDecisions.add(pairKey);
         _pendingNames.add(key);
-        setTimeout(async () => {
+        const job = async () => {
             let decision = null;
             try {
                 try {
@@ -395,7 +481,7 @@ function queueAliasDecision(name, canonMap) {
                 } else if (decision === false) {
                     if (!extensionSettings.aliasDismissals) extensionSettings.aliasDismissals = {};
                     extensionSettings.aliasDismissals[pairKey] = true;
-                    try { saveSettingsDebounced(); } catch (e) {}
+                    persistSettings();
                 }
                 // decision === null: closed without deciding — no dismissal
                 // recorded, the pair may ask again on a future message.
@@ -404,26 +490,20 @@ function queueAliasDecision(name, canonMap) {
             } finally {
                 _pendingDecisions.delete(pairKey);
                 _pendingNames.delete(key);
-                // While the popup was open the variant was held out of every
-                // render (hasPendingAliasDecision). No/Escape means it may
-                // exist after all — repaint so its card appears now instead
-                // of on the next message. Yes already repainted inside
-                // adoptVariantAsAlias with the variant folded away.
-                if (decision !== true) {
-                    try {
-                        const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
-                        clearPortraitCache();
-                        updatePortraitBar();
-                        const { renderThoughts, updateChatThoughts } = await import('../rendering/thoughts.js');
-                        renderThoughts();
-                        updateChatThoughts();
-                    } catch (e2) {
-                        console.warn('[Dooms Tracker] Aliases: post-decision repaint failed', e2);
-                    }
-                }
+                // Release the gated bubble passes FIRST (they need the settled
+                // roster), then repaint. Yes already repainted inside
+                // adoptVariantAsAlias with the variant folded away; No/Escape
+                // means the held-back card may exist after all — paint it now
+                // instead of on the next message.
                 settleIfIdle();
+                if (decision !== true) {
+                    await repaintAliasSurfaces();
+                }
             }
-        }, 50);
+        };
+        // Serialized: see _dialogQueue. job never rejects (it catches), but
+        // chain both callbacks anyway so one broken run can't stall the queue.
+        setTimeout(() => { _dialogQueue = _dialogQueue.then(job, job); }, 50);
         return;
     }
 }
@@ -466,6 +546,7 @@ export function applyCharacterAliases(thoughts, { suggestSimilar = false } = {})
     let changed = false;
     let aliasesRecorded = false;
     const canonMap = buildCanonicalNameMap();
+    const userKeys = buildUserNameKeySet();
     for (const char of characters) {
         if (!char?.name) continue;
         const raw = String(char.name).trim();
@@ -475,10 +556,13 @@ export function applyCharacterAliases(thoughts, { suggestSimilar = false } = {})
             if (structural) {
                 canonical = structural;
                 // Remember the variant so future ingestions hit the fast
-                // alias path and the user can see/remove it in the Workshop.
-                if (addCharacterAlias(structural, raw)) aliasesRecorded = true;
+                // alias path and the user can see/remove it in the Workshop —
+                // except on user personas: the fold itself is wanted (no NPC
+                // card for a decorated player name), but aliases are an
+                // NPC-only concept and must never be recorded on a user card.
+                if (!userKeys.has(normalizeName(structural)) && addCharacterAlias(structural, raw)) aliasesRecorded = true;
             } else if (suggestSimilar) {
-                queueAliasDecision(raw, canonMap);
+                queueAliasDecision(raw, canonMap, userKeys);
             }
         }
         if (canonical && canonical !== char.name) {
@@ -487,7 +571,7 @@ export function applyCharacterAliases(thoughts, { suggestSimilar = false } = {})
         }
     }
     if (aliasesRecorded) {
-        try { saveSettingsDebounced(); } catch (e) {}
+        persistSettings();
     }
 
     if (!changed) return thoughts;
