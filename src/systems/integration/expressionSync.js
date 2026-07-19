@@ -20,6 +20,7 @@ import {
     committedTrackerData,
 } from '../../core/state.js';
 import { getActiveCharacterColors, saveChatData } from '../../core/persistence.js';
+import { hasPendingAliasDecision } from '../features/characterAliases.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { updatePortraitBar, resolveActiveUserName } from '../ui/portraitBar.js';
 
@@ -374,7 +375,11 @@ export async function classifyAllCharacterExpressions(messageText) {
 
     if (characters.length === 0) return;
 
-    const charNames = characters.filter(c => c.name).map(c => c.name);
+    // Names with an open duplicate-decision popup don't get classified —
+    // they may fold into an existing card, and their PCP card is held back
+    // anyway so there is nothing to show the expression on.
+    const charNames = characters.filter(c => c.name && !hasPendingAliasDecision(c.name)).map(c => c.name);
+    if (charNames.length === 0) return;
 
     // Fetch sprite lists for all characters in parallel
     const spriteFetches = charNames.map(async name => {

@@ -20,6 +20,7 @@ import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
+import { hasPendingAliasDecision } from '../features/characterAliases.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -503,6 +504,13 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present|in\s+the)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+present)\b|\b(absent)\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
     const beforeFilter = presentCharacters.length;
     presentCharacters = presentCharacters.filter(char => {
+        // A name whose duplicate-decision popup is open doesn't get a card
+        // yet — it either folds into an existing character (Yes) or appears
+        // on the post-decision repaint (No/Escape).
+        if (hasPendingAliasDecision(char.name)) {
+            debugLog(`[RPG Thoughts] Holding pending duplicate-decision name: ${char.name}`);
+            return false;
+        }
         const thoughts = char.ThoughtsContent || '';
         if (thoughts && offScenePatterns.test(thoughts)) {
             debugLog(`[RPG Thoughts] Filtering out off-scene character: ${char.name} (thoughts: "${thoughts}")`);
@@ -1420,8 +1428,10 @@ export function updateChatThoughts() {
         if (_debug) console.log('[Dooms Tracker] Inline thoughts skipped - enabled:', extensionSettings.enabled, 'showThoughtsInChat:', extensionSettings.showThoughtsInChat, 'hasData:', !!lastGeneratedData.characterThoughts);
         return;
     }
-    // Parse the Present Characters data to get thoughts
-    const thoughtsArray = parseThoughtsArray();
+    // Parse the Present Characters data to get thoughts. Names with an open
+    // duplicate-decision popup are held back (same rule as the PCP/panel) —
+    // covers both the JSON and legacy-text parse paths in one place.
+    const thoughtsArray = parseThoughtsArray().filter(t => !hasPendingAliasDecision(t.name));
     if (_debug) {
         console.log('[Dooms Tracker] Parsed thoughts array:', thoughtsArray.length, 'thoughts');
         thoughtsArray.forEach(t => console.log('[Dooms Tracker]   -', t.name, ':', t.thought?.substring(0, 50) + '...'));

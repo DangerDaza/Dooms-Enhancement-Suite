@@ -19,6 +19,7 @@ import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
 import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt, generateDescriptionPortraitPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
+import { hasPendingAliasDecision } from './characterAliases.js';
 // Generation state - tracks characters currently being generated
 const pendingGenerations = new Set();
 const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
@@ -278,6 +279,10 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
     const entries = normalizeCharacterEntries(characterEntries);
     const queue = [];
     for (const characterData of entries) {
+        // Never spend a render on a name whose duplicate-decision popup is
+        // still open — a Yes answer folds the card away and orphans the art.
+        // If the name survives (No/Escape), the next message queues it.
+        if (hasPendingAliasDecision(characterData?.name)) continue;
         const { reserved, stateHash } = reserveAutoPortraitGeneration(characterData);
         if (reserved) {
             queue.push({ characterData, stateHash });

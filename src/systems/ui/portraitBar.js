@@ -22,6 +22,7 @@ import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../.
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
 import { DIALOGUE_COLORS } from '../../utils/dialogueColors.js';
+import { hasPendingAliasDecision } from '../features/characterAliases.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -1269,6 +1270,19 @@ export function getCharacterList() {
             }
         }
     }
+
+    // Hold back names whose duplicate-decision popup is still open. This is
+    // the choke point that stops a maybe-duplicate from EXISTING: no card in
+    // the bar, no knownCharacters entry created below, no auto-assigned
+    // color. Yes folds the name into the existing card; No/Escape repaints
+    // on settle and the card appears then.
+    presentChars = presentChars.filter(c => {
+        if (hasPendingAliasDecision(c.name)) {
+            debugLog(`[Dooms Portrait Bar] Holding pending duplicate-decision name: ${c.name}`);
+            return false;
+        }
+        return true;
+    });
 
     // Filter out characters the user has explicitly removed
     // Case-insensitive matching — AI may output name variants between generations

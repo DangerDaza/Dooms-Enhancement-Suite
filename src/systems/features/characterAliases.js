@@ -159,8 +159,26 @@ function resolveStructuralVariant(name, canonMap) {
 
 // Tier 2: pairs currently showing (or queued to show) their yes/no popup.
 const _pendingDecisions = new Set();
+// Variant names (normalized) belonging to those pairs. While a name is in
+// here it must not EXIST anywhere: getCharacterList holds it out of the
+// PCP (which also blocks knownCharacters card creation and color
+// auto-assign), the thoughts renders skip it, and auto-portraits refuse to
+// spend a render on it. Answering the popup releases it: Yes folds it into
+// the existing card, No/Escape lets it through on the settle repaint.
+const _pendingNames = new Set();
 // Callers (the chat-bubble pipeline) waiting for all decisions to settle.
 const _settlementWaiters = [];
+
+/**
+ * True while `name` has an open (or queued) duplicate-decision popup.
+ * Ingestion consumers (PCP roster, thoughts renders, auto-portraits) skip
+ * such names entirely so the maybe-duplicate never visibly spawns while
+ * the user is deciding.
+ */
+export function hasPendingAliasDecision(name) {
+    if (_pendingNames.size === 0 || !name) return false;
+    return _pendingNames.has(normalizeNameKey(name));
+}
 
 function settleIfIdle() {
     if (_pendingDecisions.size === 0) {
@@ -257,12 +275,54 @@ export async function adoptVariantAsAlias(canonical, variant) {
     addCharacterAlias(canonical, variant);
 
     const lower = String(variant).trim().toLowerCase();
+    const canonLower = String(canonical).trim().toLowerCase();
+    const findKey = (obj, target) => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        return Object.keys(obj).find(k => k.toLowerCase() === target);
+    };
+    // The variant existed for a moment before the user answered: the color
+    // harvest bound this message's <font> hex to it, auto-portraits may have
+    // rendered art for it. That data belongs to the canonical character —
+    // MOVE it rather than delete it. (Deleting the harvested color orphaned
+    // the hex actually used in the message, so the bubble splitter fell back
+    // to name-adjacency and attributed the dialogue to the wrong character.)
+    const transferIfMissing = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        const vKey = findKey(obj, lower);
+        if (vKey === undefined || obj[vKey] == null) return;
+        if (findKey(obj, canonLower) === undefined) obj[canonical] = obj[vKey];
+    };
+    // When the canonical already HAS a different color, the variant's hex is
+    // still the one painted on this message's font tags — bank it as a
+    // previous-color alias so buildColorToSpeakerMap keeps resolving it to
+    // the canonical character without overwriting their real color.
+    const bankColorAlias = (colorStore, knownStore) => {
+        if (!colorStore || typeof colorStore !== 'object') return;
+        const vKey = findKey(colorStore, lower);
+        if (vKey === undefined || !colorStore[vKey]) return;
+        const cKey = findKey(colorStore, canonLower);
+        if (cKey === undefined || !colorStore[cKey]) return; // transferIfMissing covers this case
+        const variantHex = String(colorStore[vKey]).toLowerCase();
+        if (String(colorStore[cKey]).toLowerCase() === variantHex) return;
+        const kKey = findKey(knownStore, canonLower);
+        const entry = kKey !== undefined ? knownStore[kKey] : undefined;
+        if (!entry || typeof entry !== 'object') return;
+        if (!Array.isArray(entry.previousColors)) entry.previousColors = [];
+        if (!entry.previousColors.some(c => String(c).toLowerCase() === variantHex)) {
+            entry.previousColors.push(colorStore[vKey]);
+        }
+    };
     const scrub = (obj) => {
         if (!obj || typeof obj !== 'object') return;
         for (const key of Object.keys(obj)) {
             if (key.toLowerCase() === lower) delete obj[key];
         }
     };
+    for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes',
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
+        transferIfMissing(extensionSettings[store]);
+    }
+    bankColorAlias(extensionSettings.characterColors, extensionSettings.knownCharacters);
     for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
         scrub(extensionSettings[store]);
@@ -270,6 +330,8 @@ export async function adoptVariantAsAlias(canonical, variant) {
     try {
         const meta = chat_metadata?.dooms_tracker;
         if (meta) {
+            transferIfMissing(meta.characterColors);
+            bankColorAlias(meta.characterColors, meta.knownCharacters);
             scrub(meta.knownCharacters);
             scrub(meta.characterColors);
             if (Array.isArray(meta.removedCharacters)) {
@@ -314,9 +376,10 @@ function queueAliasDecision(name, canonMap) {
         if (_pendingDecisions.has(pairKey)) return;
         if (extensionSettings.aliasDismissals?.[pairKey]) return;
         _pendingDecisions.add(pairKey);
+        _pendingNames.add(key);
         setTimeout(async () => {
+            let decision = null;
             try {
-                let decision = null;
                 try {
                     decision = await showAliasDecisionDialog(name, canonical);
                 } catch (dialogError) {
@@ -340,6 +403,24 @@ function queueAliasDecision(name, canonMap) {
                 console.warn('[Dooms Tracker] Aliases: duplicate-decision flow failed', e);
             } finally {
                 _pendingDecisions.delete(pairKey);
+                _pendingNames.delete(key);
+                // While the popup was open the variant was held out of every
+                // render (hasPendingAliasDecision). No/Escape means it may
+                // exist after all — repaint so its card appears now instead
+                // of on the next message. Yes already repainted inside
+                // adoptVariantAsAlias with the variant folded away.
+                if (decision !== true) {
+                    try {
+                        const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
+                        clearPortraitCache();
+                        updatePortraitBar();
+                        const { renderThoughts, updateChatThoughts } = await import('../rendering/thoughts.js');
+                        renderThoughts();
+                        updateChatThoughts();
+                    } catch (e2) {
+                        console.warn('[Dooms Tracker] Aliases: post-decision repaint failed', e2);
+                    }
+                }
                 settleIfIdle();
             }
         }, 50);
