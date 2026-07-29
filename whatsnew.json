@@ -1,7 +1,11 @@
 {
-    "version": "2.4.0",
+    "version": "2.4.1",
     "title": "Stage Names",
     "items": [
+        {
+            "title": "🩹 2.4.1 patch",
+            "body": "Fixes a crash in Separate/External tracker mode that could quietly stop the panels from refreshing (a console error about 'reading children'). If that was you, you're all set now. Everything below is what shipped in 2.4.0 — Stage Names."
+        },
         {
             "title": "🐰 The Bunny Mo import button is back",
             "body": "The scroll button for importing !fullsheet and !quicksheet results was hiding inside SillyTavern's '…' menu, which is collapsed by default — so for most people it simply never appeared. It now sits right on the message, next to the edit button, and it recognizes every sheet layout Bunny Mo produces (all template sizes, quicksheets, tag blocks, and the usual AI formatting drift). It also shows up on swipes, edited messages, and older messages loaded with 'show more'."

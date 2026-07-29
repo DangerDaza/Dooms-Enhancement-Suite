@@ -26,6 +26,10 @@
  * @returns {{created: HTMLElement[], removed: number}}
  */
 export function keyedReconcile(container, items, { key, create, update, onEnter, onExit }) {
+    // A missing container is a caller-state bug (stale cached reference),
+    // but crashing here takes the caller's whole render pass down with it —
+    // return the empty result instead.
+    if (!container) return { created: [], removed: 0 };
     const existing = new Map();
     for (const child of [...container.children]) {
         const k = child.getAttribute('data-reconcile-key');

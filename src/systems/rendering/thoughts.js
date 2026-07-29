@@ -10,6 +10,7 @@ import {
     lastGeneratedData,
     committedTrackerData,
     $thoughtsContainer,
+    setThoughtsContainer,
     FALLBACK_AVATAR_DATA_URI,
     addDebugLog
 } from '../../core/state.js';
@@ -279,6 +280,17 @@ export function initThoughtsEventDelegation() {
 export function renderThoughts({ preserveScroll = false } = {}) {
     if (!extensionSettings.showCharacterThoughts || !$thoughtsContainer) {
         return;
+    }
+    // Self-heal a stale container reference. The cached set can be EMPTY —
+    // e.g. it was cached while #rpg-thoughts wasn't in the DOM (master-toggle
+    // cycle, partial template load). An empty set is truthy, so it slid past
+    // the null guard above and crashed keyedReconcile below with an undefined
+    // contentEl (field report: separate-mode auto-update, TypeError reading
+    // 'children'). Re-query once so the panel recovers when the element is
+    // back; if it's genuinely absent, skip the render quietly.
+    if (!$thoughtsContainer.length) {
+        setThoughtsContainer($('#rpg-thoughts'));
+        if (!$thoughtsContainer.length) return;
     }
     // Save scroll position before re-render if requested
     let savedContentScroll = 0;

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.4.1] - 2026-07-29
+
+### Fixed
+- **Separate/external tracker mode: panels could stop refreshing with a console `TypeError: Cannot read properties of undefined (reading 'children')`.** `renderThoughts` guarded against its panel reference being uninitialized but not against it being an *empty* jQuery set — a stale reference cached while `#rpg-thoughts` wasn't in the DOM (e.g. after cycling the master enable toggle) slid past the guard and crashed the DOM reconciler, which also silently skipped every render step queued after it (scene headers, portrait bar, weather). The renderer now re-queries the panel and recovers when the element is back — the panel starts updating again on the next message instead of failing forever — and `keyedReconcile` itself tolerates a missing container so no future caller can take a render pass down the same way.
+
 ## [2.4.0] - 2026-07-19 — Stage Names
 
 ### Fixed
