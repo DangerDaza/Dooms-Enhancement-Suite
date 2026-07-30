@@ -1,10 +1,10 @@
 {
-    "version": "2.4.1",
+    "version": "2.4.2",
     "title": "Stage Names",
     "items": [
         {
-            "title": "🩹 2.4.1 patch",
-            "body": "Fixes a crash in Separate/External tracker mode that could quietly stop the panels from refreshing (a console error about 'reading children'). If that was you, you're all set now. Everything below is what shipped in 2.4.0 — Stage Names."
+            "title": "🩹 2.4.1 / 2.4.2 patches",
+            "body": "Fixes a crash that could quietly stop the panels from refreshing after each message (a console error about 'reading children') — and, more importantly, stop that turn's tracker data from being saved at all. The most confusing symptom: characters you injected from the Workshop looked like the AI was ignoring them. It wasn't — the injection was being sent correctly, DES just fell over before it could show or save the result. A failing panel can no longer take the rest of the turn down with it. Everything below is what shipped in 2.4.0 — Stage Names."
         },
         {
             "title": "🐰 The Bunny Mo import button is back",

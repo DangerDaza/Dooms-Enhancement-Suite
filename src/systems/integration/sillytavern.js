@@ -64,6 +64,28 @@ function findLastUserMessageText() {
     return null;
 }
 /**
+ * Runs one panel renderer in isolation.
+ *
+ * The message-received handler renders several panels and THEN persists the
+ * turn's tracker data. A throw from any one renderer used to abort the rest
+ * of the handler — so a single broken panel silently took out the portrait
+ * bar, auto-portraits, the doom counter, AND `saveChatData`, meaning that
+ * turn's tracker data was never written to the chat file. (Field report: a
+ * stale panel reference made renderThoughts throw on every message; the
+ * visible symptom was "the panels stopped updating and my injected
+ * character was ignored", nowhere near the actual cause.)
+ *
+ * Rendering is best-effort by nature; persistence is not. Isolate each one.
+ */
+function safeRender(label, fn) {
+    try {
+        fn();
+    } catch (e) {
+        console.error(`[Dooms Tracker] ${label} failed (continuing so tracker data still persists):`, e);
+    }
+}
+
+/**
  * Commits the tracker data from the last assistant message to be used as source for next generation.
  * This should be called when the user has replied to a message, ensuring all swipes of the next
  * response use the same committed context.
@@ -206,15 +228,15 @@ export async function onMessageReceived(data) {
             // Clear boost counters for any fields that now appear in the AI output
             if (parsedData.infoBox) clearBoostForAppearedFields();
             // Render only the sections that had new data parsed
-            if (parsedData.infoBox) renderInfoBox();
-            if (parsedData.characterThoughts) renderThoughts();
-            if (parsedData.quests) renderQuests();
+            if (parsedData.infoBox) safeRender('renderInfoBox', renderInfoBox);
+            if (parsedData.characterThoughts) safeRender('renderThoughts', renderThoughts);
+            if (parsedData.quests) safeRender('renderQuests', renderQuests);
             // Scene headers, portrait bar & weather depend on any of the above
             const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
             if (hadAnyData) {
-                updateChatSceneHeaders();
-                updatePortraitBar();
-                updateWeatherEffect();
+                safeRender('updateChatSceneHeaders', updateChatSceneHeaders);
+                safeRender('updatePortraitBar', updatePortraitBar);
+                safeRender('updateWeatherEffect', updateWeatherEffect);
             }
             // ── Expression classification: classify per-character after portrait bar renders ──
             const expressionSpritesEnabled = isExpressionSpritesModeEnabled();
@@ -523,15 +545,17 @@ export function onMessageDeleted() {
         committedTrackerData.infoBox = null;
         committedTrackerData.characterThoughts = null;
     }
-    // Re-render every panel that reads from those two stores.
-    renderInfoBox();
-    renderThoughts();
-    renderQuests();
+    // Re-render every panel that reads from those two stores. Isolated for
+    // the same reason as onMessageReceived: one throwing renderer must not
+    // stop the others (or anything queued after this) from running.
+    safeRender('renderInfoBox', renderInfoBox);
+    safeRender('renderThoughts', renderThoughts);
+    safeRender('renderQuests', renderQuests);
     resetSceneHeaderCache();
-    updateChatSceneHeaders();
-    updatePortraitBar();
-    updateWeatherEffect();
-    updateChatThoughts();
+    safeRender('updateChatSceneHeaders', updateChatSceneHeaders);
+    safeRender('updatePortraitBar', updatePortraitBar);
+    safeRender('updateWeatherEffect', updateWeatherEffect);
+    safeRender('updateChatThoughts', updateChatThoughts);
 }
 /**
  * Update the persona avatar image when user switches personas

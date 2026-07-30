@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.4.2] - 2026-07-30
+
+### Fixed
+- **A broken panel could silently stop the whole post-message pipeline — including saving that turn's tracker data.** `onMessageReceived` renders several panels and *then* persists; a throw from any one renderer aborted everything after it, so the portrait bar never refreshed, auto-portraits and the Doom Counter never ran, and `saveChatData` never fired — that turn's tracker data was simply lost. In practice this was triggered every message by the stale thoughts-panel reference fixed in 2.4.1 (`TypeError … reading 'children'`), and it looked like something else entirely: **characters injected from the Workshop appeared to be ignored by the AI.** They weren't — the injection prompt was sent correctly; DES just crashed before it could show or save the result. Each renderer now runs isolated: one failing panel logs and the rest of the turn (including persistence) completes. Applies to both the message-received and message-deleted paths.
+
 ## [2.4.1] - 2026-07-29
 
 ### Fixed
