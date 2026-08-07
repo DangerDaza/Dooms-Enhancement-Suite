@@ -955,12 +955,26 @@ function renderDiscordBubbles(segments) {
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
         const contClass = isContinuation ? 'dooms-bubble-continuation' : 'dooms-bubble-new-speaker';
 
-        // Inline avatar: new-speaker dialogue gets avatar, continuation gets spacer, narrator gets nothing
+        // Inline avatar: new-speaker dialogue gets an avatar, continuation gets
+        // a spacer, narrator gets nothing.
+        //
+        // The avatar goes INSIDE the content column (where it floats) rather
+        // than beside it. As a flex sibling it owned its own column, so a
+        // message longer than the portrait left a tall empty gutter under the
+        // portrait and squeezed the text into a narrow strip. Floated inside
+        // the text flow, the text runs alongside the portrait and then wraps
+        // underneath it at full width once it clears the bottom.
+        //
+        // The continuation spacer stays a flex sibling: it has no height to
+        // float and its only job is holding the indent that keeps continuation
+        // text aligned with the first bubble's text (spacer + flex gap ==
+        // avatar width + float margin).
         let avatarContent = '';
+        let spacerContent = '';
         if (!isNarrator && !isContinuation && seg.speaker) {
             avatarContent = `<div class="dooms-bubble-avatar">${getAvatarHtml(seg.speaker, 'dooms-bubble')}</div>`;
         } else if (!isNarrator && isContinuation) {
-            avatarContent = '<div class="dooms-bubble-avatar-spacer"></div>';
+            spacerContent = '<div class="dooms-bubble-avatar-spacer"></div>';
         }
 
         const showHeader = !isContinuation && showAuthorNames && (!isNarrator || showNarratorLabel);
@@ -973,8 +987,9 @@ function renderDiscordBubbles(segments) {
         const ttsButton = `<button class="dooms-bubble-tts" title="Read from here"><i class="fa-solid fa-bullhorn"></i></button>`;
 
         return `<div class="dooms-bubble ${typeClass} ${contClass}" data-segment-index="${index}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
-            ${avatarContent}
+            ${spacerContent}
             <div class="dooms-bubble-content">
+                ${avatarContent}
                 ${headerContent}
                 <div class="dooms-bubble-text"${textStyle}>${textHtml}</div>
                 ${ttsButton}
@@ -1028,12 +1043,15 @@ function renderCardBubbles(segments) {
         const roleLabel = isNarrator ? 'Narration' : 'Speaking';
         const roleClass = isNarrator ? 'dooms-card-role-narrator' : 'dooms-card-role-character';
 
-        // Inline avatar: new-speaker gets avatar, continuation gets spacer, narrator gets nothing
+        // Inline avatar: new-speaker gets avatar, continuation gets spacer,
+        // narrator gets nothing. Avatar floats inside the body for text
+        // wrap-around — see the Discord renderer above for the rationale.
         let avatarContent = '';
+        let spacerContent = '';
         if (!isNarrator && !isContinuation && seg.speaker) {
             avatarContent = `<div class="dooms-card-avatar">${getAvatarHtml(seg.speaker, 'dooms-card')}</div>`;
         } else if (!isNarrator && isContinuation) {
-            avatarContent = '<div class="dooms-card-avatar-spacer"></div>';
+            spacerContent = '<div class="dooms-card-avatar-spacer"></div>';
         }
 
         // Only show header on new speaker, same as discord
@@ -1048,8 +1066,9 @@ function renderCardBubbles(segments) {
         const ttsButton = `<button class="dooms-bubble-tts" title="Read from here"><i class="fa-solid fa-bullhorn"></i></button>`;
 
         return `<div class="dooms-card ${typeClass} ${contClass}" data-segment-index="${index}" data-speaker="${escapeHtml(seg.speaker || '')}"${borderStyle}>
-            ${avatarContent}
+            ${spacerContent}
             <div class="dooms-card-body">
+                ${avatarContent}
                 ${headerHtml}
                 <div class="dooms-card-text"${textStyle}>${stripFontColors(seg.html)}</div>
                 ${ttsButton}

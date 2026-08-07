@@ -43,6 +43,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 
 ## Chat Bubbles
 - [ ] Discord style and Card style both render
+- [ ] Long messages wrap AROUND the portrait (text beside it, then full width underneath — no tall empty gutter under the avatar); a message shorter than the portrait still contains it (next bubble starts below, no overlap); continuation segments stay aligned with the first segment's text; avatars-off has no indent
 - [ ] Group chat: speaker attribution correct per bubble
 - [ ] "The X" character names never claim unknown-color dialogue via the narration fallback (the article is not a name shortcut; "anthem" is); a present character whose stored color is absent from the message adopts their tracker-claimed hex when it's live and unowned (old hex banked to previousColors; a user-replaced hex is never re-adopted — run drift-reconcile sandbox test)
 - [ ] Quoted dialogue inside narration attributes correctly

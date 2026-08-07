@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Chat bubble text now wraps around the portrait instead of stopping beside it.** The avatar used to own its own column, so anything longer than the portrait was squeezed into a narrow strip with a tall empty gutter sitting under the picture — very noticeable on phones and on long speeches. The portrait now floats inside the text, so the text runs alongside it and then flows underneath at full width once it clears the bottom. Applies to both Discord and Card styles. Short messages still contain their portrait (no bleed into the next bubble), continuation segments keep their existing indent, and turning avatars off is unchanged.
+
 ## [2.4.2] - 2026-07-30
 
 ### Fixed

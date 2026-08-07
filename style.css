@@ -10455,9 +10455,16 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
-/* ── Inline avatars — flow with the document, sized by CSS vars ── */
+/* ── Inline avatars — float inside the text column so long messages wrap
+   around the portrait instead of leaving a tall empty gutter beneath it.
+   The margin-right matches the flex gap the avatar used to sit in, so the
+   text still starts at the same x as before (and stays aligned with the
+   continuation spacer, which is still a flex sibling). ── */
 .dooms-bubble-avatar,
 .dooms-card-avatar {
+    float: left;
+    margin-right: 12px;
+    margin-bottom: 4px;
     width: var(--cb-avatar-size, 40px);
     height: var(--cb-avatar-height, 51px);
     flex-shrink: 0;
@@ -10467,6 +10474,16 @@ body.dooms-hide-st-topbar .openDrawer {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Contain the floated avatar: without this a bubble whose text is shorter
+   than the portrait would collapse and let the portrait spill into the
+   next bubble. */
+.dooms-bubble-content::after,
+.dooms-card-body::after {
+    content: "";
+    display: block;
+    clear: both;
 }
 
 .dooms-bubble-avatar img,
