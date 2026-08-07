@@ -25,6 +25,20 @@ let _overlayOpen = false;
 // real input (e.g. after send) — a short suppression window keeps that from
 // bouncing the sheet right back open.
 let _suppressUntil = 0;
+// Timestamp of the last real finger/mouse landing on the message input.
+//
+// The sheet opens on focusin (it fires early enough to beat the native
+// keyboard), but focus is NOT proof the user asked for anything: SillyTavern
+// focuses #send_textarea programmatically on chat load, after sending, when
+// a generation finishes, and whenever a popup closes — so the sheet used to
+// ambush the user on every page reload and a handful of other moments. A
+// genuine tap always fires pointerdown/touchstart on the input immediately
+// before focus; a scripted .focus() never does. Requiring that gesture is
+// what makes "only when the user selects the text box" true.
+let _lastInputPointerAt = 0;
+// Generous enough for a slow phone's touch→focus latency, short enough that
+// an unrelated programmatic focus later can't borrow the same gesture.
+const GESTURE_WINDOW_MS = 700;
 
 function isMobileViewport() {
     return window.innerWidth <= 1000;
@@ -132,12 +146,33 @@ export function initMobileCompose() {
     if (_initialized) return;
     _initialized = true;
 
+    // Record a real pointer landing on the input. pointerdown covers touch and
+    // mouse on modern browsers; touchstart/mousedown are fallbacks for older
+    // mobile engines that don't emit pointer events on form controls.
+    $(document).on('pointerdown.doomsCompose touchstart.doomsCompose mousedown.doomsCompose', '#send_textarea', function () {
+        _lastInputPointerAt = Date.now();
+    });
+
+    // A tap that lands while the input is ALREADY focused fires no focusin, so
+    // its gesture would sit unspent and could be borrowed by the next
+    // programmatic focus (ST's post-send blur→focus is exactly that shape).
+    // The input losing focus invalidates any pending gesture.
+    $(document).on('focusout.doomsCompose', '#send_textarea', function () {
+        _lastInputPointerAt = 0;
+    });
+
     // Intercept focus on the real input. focusin bubbles (focus doesn't), so
-    // a delegated listener works even though ST builds the form early.
+    // a delegated listener works even though ST builds the form early — but
+    // only act on focus that a tap actually caused (see _lastInputPointerAt).
     $(document).on('focusin.doomsCompose', '#send_textarea', function () {
+        // Every focusin consumes the pending gesture, whether or not it opens
+        // anything — one tap must never be able to arm two openings.
+        const gestureAt = _lastInputPointerAt;
+        _lastInputPointerAt = 0;
         if (!extensionSettings.enabled || !extensionSettings.mobileComposeOverlay) return;
         if (!isMobileViewport() || _overlayOpen) return;
         if (Date.now() < _suppressUntil) return;
+        if (Date.now() - gestureAt > GESTURE_WINDOW_MS) return; // programmatic focus
         openOverlay();
     });
 
