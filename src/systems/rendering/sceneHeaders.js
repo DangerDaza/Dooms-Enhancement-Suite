@@ -360,6 +360,39 @@ function findLastAssistantMessage() {
     return null;
 }
 
+/**
+ * Is the rendered scene header still where THIS render would put it?
+ *
+ * The cache-skip in updateChatSceneHeaders used to ask only "does a header
+ * exist anywhere in the document". That misses the most common way it goes
+ * stale by far: a new AI message arrives whose scene data is IDENTICAL —
+ * same location, same time, which is most turns — so the cache key matches
+ * and we return early, leaving the header attached to the PREVIOUS message.
+ * It is still in the DOM, so an existence-only check passes, but it now sits
+ * one message up and scrolls out of view. That reads as "the scene tracker
+ * randomly disappeared", and toggling the feature off/on appears to fix it
+ * only because that resets the cache and forces a re-render.
+ *
+ * HUD and ticker anchor to the chat container rather than to a message, so
+ * their position cannot go stale this way — existence is the right test.
+ */
+function sceneHeaderIsCurrent(layout) {
+    if (layout === 'hud') return $('.dooms-info-hud').length > 0;
+    if (layout === 'ticker') return $('.dooms-info-ticker-wrapper').length > 0;
+
+    const $target = findLastAssistantMessage();
+    if (!$target || !$target.length) return false;
+
+    if (layout === 'banner') {
+        const $banner = $('.dooms-info-banner');
+        return $banner.length > 0 && $banner.prev()[0] === $target[0];
+    }
+    // Classic layouts (grid/stacked/compact) live inside the target's
+    // .mes_block — or directly after the message when it has no .mes_block.
+    if ($target.find('.dooms-scene-header').length > 0) return true;
+    return $target.next().hasClass('dooms-scene-header');
+}
+
 // ─────────────────────────────────────────────
 //  Main entry point
 // ─────────────────────────────────────────────
@@ -551,11 +584,12 @@ export function updateChatSceneHeaders() {
     // Include doom counter state in cache key so badge updates when streak/countdown changes
     const dcState = (extensionSettings.doomCounter?.enabled && extensionSettings.doomCounter?.debugDisplay && !extensionSettings.doomCounter?.trapMode) ? getDoomCounterState() : null;
     const cacheKey = JSON.stringify({ sceneData, st, dcState });
-    if (cacheKey === _lastSceneDataJSON) {
-        // Check if the element is still in the DOM
-        if ($('.dooms-scene-header, .dooms-info-banner, .dooms-info-hud, .dooms-info-ticker-wrapper').length) {
-            return;
-        }
+    // Skip the rebuild only when the data is unchanged AND the existing header
+    // is still anchored where this render would put it. Checking mere
+    // existence stranded the header on the previous message whenever two
+    // consecutive turns shared the same scene data — see sceneHeaderIsCurrent.
+    if (cacheKey === _lastSceneDataJSON && sceneHeaderIsCurrent(layout)) {
+        return;
     }
     _lastSceneDataJSON = cacheKey;
     // Remove existing scene headers before inserting the new one. Transition

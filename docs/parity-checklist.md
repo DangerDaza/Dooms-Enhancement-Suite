@@ -38,6 +38,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] All layout modes render: grid, stacked, compact, banner, HUD, ticker (top+bottom)
 - [ ] HUD is draggable; position persists
 - [ ] Scene transitions (location/time change cards) appear at the right messages
+- [ ] Scene header FOLLOWS the newest AI message across turns whose scene data is identical (same location+time) — it must not stay stranded on the previous message; no duplicates; unchanged scene still skips the rebuild (same DOM node kept); destroying the header re-renders it
 - [ ] Field visibility toggles apply
 - [ ] TTS does not read scene blocks
 
