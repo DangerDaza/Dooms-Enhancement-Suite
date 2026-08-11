@@ -769,10 +769,6 @@
                 </div>
                 <div class="rpg-accordion-body">
                     <div class="rpg-subsection-label">Visible Fields</div>
-                    <!-- Custom scene fields are appended here, generated from
-                         trackerConfig so they can never drift out of sync and
-                         a field you add is immediately togglable right here. -->
-                    <div id="rpg-st-custom-fields"></div>
                     <div class="rpg-setting-row">
                         <span class="rpg-setting-label">Time</span>
                         <label class="rpg-toggle-switch">
@@ -860,6 +856,17 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <!-- Your own fields, generated from trackerConfig so this
+                         list can never drift and a field you add shows up here
+                         immediately. -->
+                    <div id="rpg-st-custom-fields"></div>
+
+                    <button id="rpg-open-tracker-editor" class="rpg-accordion-action-btn" type="button"
+                        style="margin-top:12px;">
+                        <i class="fa-solid fa-sliders"></i> Customize Tracker Fields
+                    </button>
+                    <p class="rpg-note-text" style="margin-top:4px;">Add your own scene and character fields, choose
+                        what the AI is asked for, and reword any field's instruction.</p>
 
                     <div class="rpg-subsection-label">Layout</div>
                     <div class="rpg-setting-row">

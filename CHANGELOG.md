@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **The Tracker Editor had no way to open it.** Adding custom scene and character fields has been supported for a long time, but the button that opens that editor was missing from the interface entirely — the click handler was bound to an element that doesn't exist in the markup, so the whole editor was unreachable and the feature may as well not have existed. It now opens from **Settings → Scene Tracker → Customize Tracker Fields**, next to the field toggles it controls.
+
 ### Added
 - **Custom tracker fields can now have a type.** A custom Scene Tracker field used to be free text and nothing else — you described it and hoped the model answered in a usable shape. Each one can now be **Text, Number** (with an optional range), **Choice** (you supply the options), **List, Yes/No**, or **Percent**, and the prompt tells the model exactly what shape to return instead of leaving it to chance. Existing fields are unaffected — untyped fields still behave, and send, exactly as before.
 - **Custom scene fields finally show up in the Scene Tracker menu.** That menu's toggles were hardcoded, so a field you added in the Tracker Editor could never appear there — you had to reopen the editor just to hide it. The list is now generated from your tracker config, so every custom field gets a quick on/off toggle the moment you create it. (This is also the fix for the built-in toggles drifting out of sync with the editor, since both surfaces now read the same source.)

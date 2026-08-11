@@ -22,6 +22,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Manual update button works
 - [ ] Connection profile dropdown lists profiles; external API generation mode works
 - [ ] Prompt editor: custom prompts save and take effect
+- [ ] Tracker Editor OPENS from Settings → Scene Tracker → "Customize Tracker Fields" (the only entry point; verify it exists and the modal appears — it was orphaned markup-less before 2.5)
 - [ ] Custom tracker field types: Text/Number(+range)/Choice(+options)/List/Yes-No/Percent each emit their own spec shape; an UNTYPED or Text field emits byte-identical spec to pre-2.5 (no prompt drift for existing setups); Choice with no options degrades to text; type change re-renders the editor sub-row (choices / min-max)
 - [ ] Custom scene fields appear as quick toggles in Settings → Scene Tracker, generated from config (a field added in the Tracker Editor shows up there without a reload; toggling it there hides/shows it in the header and persists)
 - [ ] Optional scene fields (moon/tension/rest/conditions/terrain) accept a per-field wording override; empty = shipped wording restored exactly
