@@ -78,7 +78,7 @@ Re-framing the request against §0, the real gaps are:
 | G5 | **No raw format access.** | Power users want to hand-write the schema. |
 | G6 | **No preview.** Nobody can see what the tracker prompt becomes. | Editing blind. |
 | G7 | **Quests can't be customized.** | Third section left out. |
-| G8 | **Duplicated/split UI** (§0.4). | Confusing, and drifts. |
+| G8 | **Two hand-maintained UIs over one state** (§0.4) — and the accordion's toggles are hardcoded, so custom fields can never appear there. | Drifts (fixed once already); custom fields get no quick toggle. |
 
 ---
 
@@ -138,33 +138,72 @@ Each becomes a top-level key in the tracker JSON alongside `infoBox` / `characte
 8. **Locks** — `lockManager` key namespace.
 9. **Presets** — export/import round-trip.
 
-### 2.3 Prompt editing, in three tiers (G3, G5, G6)
+### 2.3 Editing the prompt that creates the tracker (G3, G5, G6)
 
-- **Tier 1 — per-field wording** (safe, covers most demand). Every field's `prompt` string is
-  editable inline in the editor, with Restore Default.
-- **Tier 2 — live preview** (G6). A read-only pane rendering the exact assembled tracker
-  prompt, updating as fields change, with a token estimate (reuse the lorebook estimator).
-  *Ship this early — it makes every other tier legible.*
-- **Tier 3 — raw override** (advanced, gated behind a warning).
-  `extensionSettings.customTrackerFormatOverride` replaces the generated spec verbatim.
-  Requirements: validate it parses as a JSON-ish template; show a persistent "override
-  active" badge; one-click revert; and **honesty in the UI** — DES renders the keys it
-  recognizes, everything else surfaces in the Tracker Data dropdown rather than the panels.
+**Decision: users get the real thing — the actual prompt, editable, in one box.**
+
+What DES sends today is two pieces glued together, and only the first is editable:
+
+```
+[ instruction text ]   ← editable now (customTrackerInstructionsPrompt)
+[ format spec      ]   ← generated from config, NOT editable  ← the thing people want
+```
+
+The plan exposes both in one **Tracker Prompt** editor: a single textarea pre-filled with the
+fully assembled prompt exactly as the AI receives it, plus **Restore Default** and a token
+estimate. Edit it, save it, that is what gets sent.
+
+**The one real constraint, stated plainly.** DES's panels find values by key: the scene header
+reads `location`, the character cards read `name`/`thoughts`, and so on. Rename a key in the
+raw prompt and the AI will happily produce it, but the panel looking for the old key renders
+nothing. That is not a bug we can fix from our side — it is what "edit the prompt freely"
+means.
+
+Handling, rather than forbidding:
+
+1. The editor shows a **live diff-aware warning** when an edit removes or renames a key a
+   panel depends on: *"The Scene Tracker reads `location`; nothing will show there."*
+2. Anything DES doesn't recognize still surfaces in the **Tracker Data dropdown**, so a custom
+   key is never invisible — it just isn't in a styled panel.
+3. **Restore Default** is always one click, and an "edited" badge marks the state so a user who
+   forgot they edited it can find their way back.
+4. Custom sections (§2.2) are the *supported* path to new content — defined through the
+   builder, DES knows how to render them. The raw editor is for wording and structure tweaks;
+   the builder is for adding things. Both ship.
+
+For users who don't want to touch raw text, every field's wording is also editable inline in
+the builder (the `prompt` string in §2.1), with the same Restore Default. Same capability,
+two levels of comfort.
 
 ### 2.4 The overhauled options menu (G1, G8)
 
-Single source of truth, split by *what kind of decision it is*:
+**Revised — the visibility toggles stay put.** An earlier draft moved them into the editor to
+kill the duplication. That was solving a maintenance smell at the user's expense: the quick
+toggles are the single most-used control in the accordion (one tap to hide Time), and removing
+a familiar control to tidy our internals is a bad trade. They stay.
 
-- **Settings → Scene Tracker accordion** keeps only **presentation**: layout, position,
-  colours, opacity — plus one prominent **"Customize Tracker Fields…"** button. The
-  duplicated "Visible Fields" toggles are **removed** from here (they move to the editor),
-  which structurally kills the drift in §0.4.
+The actual defect is not that two surfaces exist — it's that the accordion's toggles are
+**hardcoded HTML** (`rpg-st-show-time`, `rpg-st-show-date`, … in `template.html:764`+) while
+the editor reads `trackerConfig`. Two hand-maintained lists over one state is what drifted in
+2.2.0, and it is also exactly why **custom fields never appear in the quick menu**.
+
+Fix the cause instead:
+
+- **Both surfaces render from the same descriptor list** (§2.1). The accordion's "Visible
+  Fields" section is *generated* from config rather than hardcoded, so it can't drift, and
+  every custom field and custom section automatically gets a quick toggle the day it's
+  created. That turns the duplication from a liability into a feature.
+- **Split by decision type, not by removal.** The accordion keeps quick visibility toggles +
+  presentation (layout, position, colours, opacity), and gains one prominent
+  **"Customize Tracker Fields…"** button. Depth — adding, renaming, retyping, rewording,
+  reordering, prompt editing — lives in the editor.
 - **Tracker Editor → "Tracker Studio"**: left rail lists sections (Scene · Characters ·
   Quests · + Add Section), right pane is the field list for the selected section with
-  drag-reorder, inline enable/rename/retype/reword, and a **Prompt Preview** tab beside it.
+  drag-reorder and inline enable/rename/retype/reword, plus a **Tracker Prompt** tab (§2.3).
 
-Because the toggles move, a **one-time migration + a note in What's New** is mandatory, or
-users will report the toggles as "missing".
+Net effect for existing users: nothing they use disappears, the quick list simply grows to
+include their own fields. No disruptive migration note needed — which is the other reason
+this revision is better.
 
 ---
 
@@ -174,16 +213,19 @@ Each phase ships independently and leaves the extension working.
 
 | Phase | Scope | Risk |
 |---|---|---|
-| **P1 — Preview + de-duplication** | Prompt Preview pane (§2.3 Tier 2); make the editor the single writer for field visibility; accordion keeps presentation + entry button; migration + What's New note. | Low. No prompt-shape change. |
-| **P2 — Field descriptors + typing** | Refactor built-ins into descriptors; one emitter per type; editable per-field wording with Restore Default; extend custom fields to **Quests** (G7). | Medium. Touches prompt generation — pin with fixture tests comparing emitted spec before/after for a default config (must be byte-identical for untouched settings). |
-| **P3 — Custom sections** | Full §2.2 thread-through. | **High** — the persistence and render paths are the dangerous ones. |
-| **P4 — Tracker Studio UI** | Left-rail builder, drag reorder, per-field editing, preview tab. | Medium (UI only, but large). |
-| **P5 — Raw override + presets** | Tier 3 override with guard rails; preset export/import round-trip incl. custom sections; migration hardening. | Medium. |
+| **P1 — Tracker Prompt editor** | Assemble the full prompt into one editable box with Restore Default, token estimate, key-removal warnings, "edited" badge (§2.3). Delivers the headline ask on its own. | Low–Medium. Additive; generated path stays the default. |
+| **P2 — Field descriptors + typing** | Refactor built-ins into descriptors; one emitter per type; inline per-field wording; **generate the accordion's Visible Fields list from config** (§2.4); extend custom fields to **Quests** (G7). | Medium. Touches prompt generation — pinned by golden-file tests: a default config must emit a **byte-identical** prompt to today's. |
+| **P3 — Custom sections** | Full §2.2 thread-through: prompt, parse, per-swipe storage, per-chat persistence, six layouts, history persistence, locks, presets. | **High.** The persistence and render paths are the dangerous ones. |
+| **P4 — Tracker Studio UI** | Left-rail builder, drag reorder, per-field editing, prompt tab, "+ Add Section" front-end for P3. | Medium (UI only, but large). |
+| **P5 — Presets + hardening** | Preset export/import round-trip incl. custom sections; migration hardening; docs. | Medium. |
 
-Recommended first cut: **P1 + P2**. That alone delivers "edit the tracker prompt" (per-field,
-with preview) and "add custom things" (now including Quests), and it makes the existing
-hidden functionality discoverable — likely satisfying most of the request volume before the
-expensive P3 lands.
+Confirmed scope: **custom sections are in** (P3), so this runs the full sequence rather than
+stopping at fields. P1 is deliberately first and standalone — it answers "let me edit the
+prompt that creates the tracker" without waiting on the builder, and it's the phase that can
+ship soonest.
+
+P4's UI shell can land incrementally alongside P2/P3 rather than as one big-bang rewrite;
+"+ Add Section" simply stays hidden until P3's data model exists behind it.
 
 ---
 
@@ -212,11 +254,14 @@ expensive P3 lands.
   scene-tracker layouts; reload to prove per-chat persistence; swipe to prove per-swipe storage.
 - Parity checklist rows per phase.
 
-## 6. Open questions for the user
+## 6. Decisions (resolved)
 
-1. **Scope of "custom things"** — custom *fields* inside existing sections (cheap, P2), or
-   whole custom *sections* (expensive, P3)? This is the single biggest cost driver.
-2. **Raw prompt editing** — is Tier 1 (per-field wording + preview) enough, or is hand-writing
-   the whole schema (Tier 3) a hard requirement?
-3. **Moving the visibility toggles** out of the settings accordion — good (one source of
-   truth) or too disruptive for existing users?
+1. **Custom sections are in scope** — whole user-defined sections, not just fields inside the
+   existing two. P3 runs; the plan carries its full thread-through cost.
+2. **Prompt editing means the real prompt** — one box containing the actual assembled tracker
+   prompt (instructions *and* format spec), editable, with Restore Default. Per-field wording
+   editing ships alongside it for users who'd rather not touch raw text. The key-renaming
+   consequence is surfaced as a warning in the editor, not prevented.
+3. **The visibility toggles stay in the Scene Tracker menu.** The duplication is fixed by
+   generating both surfaces from one descriptor list rather than by deleting a control users
+   rely on — which also gets custom fields into the quick menu for free.
