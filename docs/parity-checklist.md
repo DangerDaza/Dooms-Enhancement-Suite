@@ -22,6 +22,9 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Manual update button works
 - [ ] Connection profile dropdown lists profiles; external API generation mode works
 - [ ] Prompt editor: custom prompts save and take effect
+- [ ] Custom tracker field types: Text/Number(+range)/Choice(+options)/List/Yes-No/Percent each emit their own spec shape; an UNTYPED or Text field emits byte-identical spec to pre-2.5 (no prompt drift for existing setups); Choice with no options degrades to text; type change re-renders the editor sub-row (choices / min-max)
+- [ ] Custom scene fields appear as quick toggles in Settings → Scene Tracker, generated from config (a field added in the Tracker Editor shows up there without a reload; toggling it there hides/shows it in the header and persists)
+- [ ] Optional scene fields (moon/tension/rest/conditions/terrain) accept a per-field wording override; empty = shipped wording restored exactly
 - [ ] Tracker Prompt editor: box prefills with the REAL assembled prompt (instructions + FORMAT spec); saving it untouched stores NO override (later field-config changes still reach the AI); a real edit is sent verbatim; Restore Default returns the generated text and clears the override; token estimate + "edited" badge update live; renaming/removing a key warns and names the affected panel; resetting Tracker Instructions refreshes the full box (run `node tools/tracker-prompt-test.mjs`)
 
 ## Present Characters Panel (portrait bar)

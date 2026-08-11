@@ -674,42 +674,57 @@ function renderInfoBoxTab() {
     html += `<label for="rpg-widget-weather">🌤️ ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.weatherWidget')}</label>`;
     html += '</div>';
     // --- New optional fields ---
+    // Each of these is a descriptive field: its whole JSON value is a sentence
+    // telling the model what to write, so it also gets a wording box. Empty =
+    // the shipped instruction.
     html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-moonphase" ${config.widgets.moonPhase?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-moonphase">🌙 Moon Phase <small style="opacity:0.6">(Full Moon, Waning Crescent…)</small></label>`;
-    html += '</div>';
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-tension" ${config.widgets.tension?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-tension">⚡ Tension / Mood <small style="opacity:0.6">(Calm, Tense, Hostile…)</small></label>`;
-    html += '</div>';
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-timesincerest" ${config.widgets.timeSinceRest?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-timesincerest">⏳ Time Since Rest <small style="opacity:0.6">(e.g. 6 hours, 2 days)</small></label>`;
-    html += '</div>';
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-conditions" ${config.widgets.conditions?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-conditions">💔 Active Conditions <small style="opacity:0.6">(Transformed, Poisoned…)</small></label>`;
-    html += '</div>';
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-terrain" ${config.widgets.terrain?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-terrain">🌿 Terrain <small style="opacity:0.6">(Dense Forest, City Streets…)</small></label>`;
-    html += '</div>';
+    html += `<p class="rpg-editor-hint">Leave the wording box empty to use the built-in instruction. Type in it to tell the AI exactly how you want that field written.</p>`;
+    const descriptiveWidget = (domId, widgetKey, label, hint) => {
+        const w = config.widgets[widgetKey] || {};
+        html += '<div class="rpg-editor-widget-row">';
+        html += `<input type="checkbox" id="rpg-widget-${domId}" ${w.enabled ? 'checked' : ''}>`;
+        html += `<label for="rpg-widget-${domId}">${label} <small style="opacity:0.6">${hint}</small></label>`;
+        html += '</div>';
+        html += `<div class="rpg-editor-field-subrow"><input type="text" class="rpg-widget-prompt" data-widget="${widgetKey}" value="${escapeAttr(w.prompt || '')}" placeholder="AI instruction for this field (empty = default)"></div>`;
+    };
+    descriptiveWidget('moonphase', 'moonPhase', '🌙 Moon Phase', '(Full Moon, Waning Crescent…)');
+    descriptiveWidget('tension', 'tension', '⚡ Tension / Mood', '(Calm, Tense, Hostile…)');
+    descriptiveWidget('timesincerest', 'timeSinceRest', '⏳ Time Since Rest', '(e.g. 6 hours, 2 days)');
+    descriptiveWidget('conditions', 'conditions', '💔 Active Conditions', '(Transformed, Poisoned…)');
+    descriptiveWidget('terrain', 'terrain', '🌿 Terrain', '(Dense Forest, City Streets…)');
     // --- Custom scene fields ---
     const customFields = config.customFields || [];
     html += `<h4 style="margin-top:10px"><i class="fa-solid fa-wand-magic-sparkles"></i> Custom Scene Fields</h4>`;
-    html += `<p class="rpg-editor-hint">Add your own fields to the Scene Tracker. The icon is shown next to the field; the AI instruction tells the model what to fill in each response.</p>`;
+    html += `<p class="rpg-editor-hint">Add your own fields to the Scene Tracker. The icon is shown next to the field; the AI instruction tells the model what to fill in each response. <strong>Type</strong> tells the model what shape to answer in — Choice needs a comma-separated option list, Number takes an optional range.</p>`;
     html += '<div class="rpg-editor-fields-list" id="rpg-infobox-custom-fields-list">';
     customFields.forEach((field, index) => {
+        const type = field.type || 'text';
+        const typeOpts = [
+            ['text', 'Text'], ['number', 'Number'], ['enum', 'Choice'],
+            ['list', 'List'], ['boolean', 'Yes/No'], ['progress', 'Percent'],
+        ].map(([v, label]) => `<option value="${v}"${type === v ? ' selected' : ''}>${label}</option>`).join('');
         html += `
             <div class="rpg-editor-field-item" data-index="${index}">
                 <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-infobox-field-toggle" data-index="${index}">
                 <input type="text" value="${escapeAttr(field.icon || '✨')}" class="rpg-infobox-field-icon" data-index="${index}" maxlength="4" title="Icon shown in the Scene Tracker" style="width: 44px; flex: 0 0 auto; text-align: center;">
                 <input type="text" value="${escapeAttr(field.name)}" class="rpg-infobox-field-label" data-index="${index}" placeholder="Field Name">
                 <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-infobox-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+                <select class="rpg-infobox-field-type" data-index="${index}" title="What shape should the AI answer in?" style="flex: 0 0 auto; width: 92px;">${typeOpts}</select>
                 <button class="rpg-field-remove rpg-infobox-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
             </div>
         `;
+        if (type === 'enum') {
+            html += `
+            <div class="rpg-editor-field-subrow" data-index="${index}">
+                <input type="text" value="${escapeAttr((field.options || []).join(', '))}" class="rpg-infobox-field-options" data-index="${index}" placeholder="Choices, comma-separated (e.g. Calm, Tense, Hostile)">
+            </div>`;
+        } else if (type === 'number') {
+            html += `
+            <div class="rpg-editor-field-subrow" data-index="${index}">
+                <input type="number" value="${field.min ?? ''}" class="rpg-infobox-field-min" data-index="${index}" placeholder="Min (optional)" style="width: 130px;">
+                <input type="number" value="${field.max ?? ''}" class="rpg-infobox-field-max" data-index="${index}" placeholder="Max (optional)" style="width: 130px;">
+            </div>`;
+        }
     });
     html += '</div>';
     html += `<button class="rpg-btn-secondary" id="rpg-infobox-add-field"><i class="fa-solid fa-plus"></i> Add Custom Field</button>`;
@@ -769,6 +784,29 @@ function setupInfoBoxListeners() {
     });
     $('.rpg-infobox-field-placeholder').off('blur').on('blur', function() {
         ensureCustomFields()[$(this).data('index')].description = $(this).val();
+    });
+    // Type drives which sub-row (choices / min-max) is shown, so re-render.
+    $('.rpg-infobox-field-type').off('change').on('change', function() {
+        ensureCustomFields()[$(this).data('index')].type = $(this).val();
+        renderInfoBoxTab();
+    });
+    $('.rpg-infobox-field-options').off('blur').on('blur', function() {
+        ensureCustomFields()[$(this).data('index')].options = String($(this).val() || '')
+            .split(',').map(s => s.trim()).filter(Boolean);
+    });
+    $('.rpg-infobox-field-min').off('blur').on('blur', function() {
+        const v = $(this).val();
+        ensureCustomFields()[$(this).data('index')].min = v === '' ? undefined : Number(v);
+    });
+    $('.rpg-infobox-field-max').off('blur').on('blur', function() {
+        const v = $(this).val();
+        ensureCustomFields()[$(this).data('index')].max = v === '' ? undefined : Number(v);
+    });
+    // Per-field wording for the descriptive built-ins. Empty = shipped text.
+    $('.rpg-widget-prompt').off('blur').on('blur', function() {
+        const key = $(this).data('widget');
+        if (!widgets[key]) widgets[key] = { enabled: false, persistInHistory: false };
+        widgets[key].prompt = String($(this).val() || '').trim();
     });
 }
 /**

@@ -589,7 +589,8 @@
 
 .rpg-editor-field-item {
     display: grid;
-    grid-template-columns: auto auto 1fr 2fr auto;
+    /* toggle · icon · name · instruction · type · remove */
+    grid-template-columns: auto auto 1fr 2fr auto auto;
     align-items: center;
     gap: 0.5em;
     padding: 0.5em;
@@ -597,6 +598,34 @@
     border: 1px solid var(--rpg-border);
     border-radius: 0.375em;
     min-width: 0; /* Allow grid items to shrink below content size */
+}
+
+/* Secondary row under a field/widget: enum choices, number range, or the
+   per-field AI wording box. Indented so it reads as belonging to the row
+   above it. */
+.rpg-editor-field-subrow {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    margin: 0.25em 0 0.5em 1.75em;
+    min-width: 0;
+}
+
+.rpg-editor-field-subrow input {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* text inputs (choices / wording) fill the row; see the number rule below */
+    font-size: 0.85em;
+    padding: 0.35em 0.5em;
+    border-radius: 0.3em;
+    border: 1px solid var(--rpg-border);
+    background: var(--rpg-bg);
+    color: var(--rpg-text);
+}
+
+/* Min/max stay compact instead of stretching across the row. */
+.rpg-editor-field-subrow input[type="number"] {
+    flex: 0 0 130px;
 }
 
 

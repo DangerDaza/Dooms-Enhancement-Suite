@@ -30,6 +30,59 @@ export function toFieldKey(name) {
     const baseName = name.replace(/\s*\(.*\)\s*$/, '').trim();
     return toSnakeCase(baseName);
 }
+/** Escapes a description so it can sit inside a JSON string in the spec. */
+function escapeSpecString(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Field types a user-defined tracker field can take. 'text' is the historical
+ * behaviour (a quoted description the AI replaces with prose) and stays the
+ * default, so existing fields emit byte-identical spec.
+ */
+export const FIELD_TYPES = ['text', 'number', 'enum', 'list', 'boolean', 'progress'];
+
+/**
+ * Builds the VALUE half of a custom field's spec line — the caller supplies
+ * `"key": `. Typing the field lets the prompt tell the model the SHAPE it
+ * must produce instead of hoping prose comes back parseable, and mirrors the
+ * conventions the built-in fields already use (`<number 1-10: …>` like
+ * doomTension, `A|B|C` like tension).
+ *
+ * @param {{type?: string, description?: string, name?: string, options?: string[], min?: number, max?: number}} field
+ * @param {boolean} compact - honours the Compact Tracker Prompt setting
+ * @returns {string}
+ */
+export function buildFieldSpec(field, compact = true) {
+    const desc = escapeSpecString(field?.description || field?.name || '');
+    const type = FIELD_TYPES.includes(field?.type) ? field.type : 'text';
+    switch (type) {
+        case 'number': {
+            const hasRange = Number.isFinite(field.min) && Number.isFinite(field.max);
+            const range = hasRange ? ` ${field.min}-${field.max}` : '';
+            return `<number${range}: ${desc}>`;
+        }
+        case 'progress':
+            return `<number 0-100: ${desc}>`;
+        case 'boolean':
+            return `<true|false: ${desc}>`;
+        case 'list':
+            return `["${desc}"]`;
+        case 'enum': {
+            const opts = Array.isArray(field.options)
+                ? field.options.map(o => escapeSpecString(o)).filter(Boolean)
+                : [];
+            if (!opts.length) return `"${desc}"`;   // no choices configured — degrade to text
+            return compact
+                ? `"${opts.join('|')}"`
+                : `"${desc} (choose one: ${opts.join(' / ')})"`;
+        }
+        case 'text':
+        default:
+            return `"${desc}"`;
+    }
+}
+
 /**
  * Built-in infoBox JSON keys that user-defined custom scene fields must not shadow.
  * A custom field named e.g. "Tension" would otherwise collide with the built-in key.
@@ -57,6 +110,10 @@ export function getCustomSceneFields() {
             label: field.name.replace(/\s*\(.*\)\s*$/, '').trim(),
             icon: field.icon || '✨',
             description: field.description || field.name,
+            type: FIELD_TYPES.includes(field.type) ? field.type : 'text',
+            options: Array.isArray(field.options) ? field.options : [],
+            min: field.min,
+            max: field.max,
             persistInHistory: field.persistInHistory === true
         });
     }
@@ -127,40 +184,36 @@ export function buildInfoBoxJSONInstruction() {
         hasFields = true;
     }
     const compact = extensionSettings.compactPrompts !== false;
-    if (widgets.moonPhase?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + (compact
-            ? '  "moonPhase": "New Moon|Waxing Crescent|First Quarter|Waxing Gibbous|Full Moon|Waning Gibbous|Last Quarter|Waning Crescent"'
-            : '  "moonPhase": "Current moon phase (New Moon / Waxing Crescent / First Quarter / Waxing Gibbous / Full Moon / Waning Gibbous / Last Quarter / Waning Crescent)"');
+    // Descriptive built-ins: the whole value is a sentence telling the model
+    // what to write, so a user can reword it per field
+    // (widgets[key].prompt). Empty = the shipped wording, byte for byte.
+    const descriptive = (key, compactText, verboseText) => {
+        if (!widgets[key]?.enabled) return;
+        const custom = typeof widgets[key].prompt === 'string' ? widgets[key].prompt.trim() : '';
+        const value = custom ? `"${escapeSpecString(custom)}"` : (compact ? compactText : verboseText);
+        instruction += (hasFields ? ',\n' : '') + `  "${key}": ${value}`;
         hasFields = true;
-    }
-    if (widgets.tension?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + (compact
-            ? '  "tension": "Calm|Uneasy|Tense|Hostile|Volatile|Intimate"'
-            : '  "tension": "Overall scene tension (Calm / Uneasy / Tense / Hostile / Volatile / Intimate)"');
-        hasFields = true;
-    }
-    if (widgets.timeSinceRest?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + (compact
-            ? '  "timeSinceRest": "Time since player last rested, e.g. \\"6 hours\\""'
-            : '  "timeSinceRest": "Time since the player character last slept or rested (e.g. \\"6 hours\\", \\"2 days\\")"');
-        hasFields = true;
-    }
-    if (widgets.conditions?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + (compact
-            ? '  "conditions": "Active conditions on the player, comma-separated, or \\"None\\""'
-            : '  "conditions": "Comma-separated active physical or magical conditions on the player (e.g. \\"Transformed, Poisoned\\" or \\"None\\")"');
-        hasFields = true;
-    }
-    if (widgets.terrain?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + (compact
-            ? '  "terrain": "Terrain/environment type, e.g. \\"Dense Forest\\""'
-            : '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"');
-        hasFields = true;
-    }
-    // User-defined custom scene fields
+    };
+    descriptive('moonPhase',
+        '"New Moon|Waxing Crescent|First Quarter|Waxing Gibbous|Full Moon|Waning Gibbous|Last Quarter|Waning Crescent"',
+        '"Current moon phase (New Moon / Waxing Crescent / First Quarter / Waxing Gibbous / Full Moon / Waning Gibbous / Last Quarter / Waning Crescent)"');
+    descriptive('tension',
+        '"Calm|Uneasy|Tense|Hostile|Volatile|Intimate"',
+        '"Overall scene tension (Calm / Uneasy / Tense / Hostile / Volatile / Intimate)"');
+    descriptive('timeSinceRest',
+        '"Time since player last rested, e.g. \\"6 hours\\""',
+        '"Time since the player character last slept or rested (e.g. \\"6 hours\\", \\"2 days\\")"');
+    descriptive('conditions',
+        '"Active conditions on the player, comma-separated, or \\"None\\""',
+        '"Comma-separated active physical or magical conditions on the player (e.g. \\"Transformed, Poisoned\\" or \\"None\\")"');
+    descriptive('terrain',
+        '"Terrain/environment type, e.g. \\"Dense Forest\\""',
+        '"General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"');
+    // User-defined custom scene fields. buildFieldSpec returns the historical
+    // quoted-description form for untyped/'text' fields, so existing setups
+    // emit byte-identical spec.
     for (const field of getCustomSceneFields()) {
-        const desc = field.description.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        instruction += (hasFields ? ',\n' : '') + `  "${field.key}": "${desc}"`;
+        instruction += (hasFields ? ',\n' : '') + `  "${field.key}": ${buildFieldSpec(field, compact)}`;
         hasFields = true;
     }
     // Doom Counter: inject numeric tension scale (1-10) for automated tension tracking
@@ -198,12 +251,19 @@ export function buildCharactersJSONInstruction() {
     }
     // Details fields
     if (enabledFields.length > 0) {
+        const compact = extensionSettings.compactPrompts !== false;
         instruction += ',\n    "details": {\n';
         for (let i = 0; i < enabledFields.length; i++) {
             const field = enabledFields[i];
             const fieldKey = toSnakeCase(field.name);
             const comma = i < enabledFields.length - 1 ? ',' : '';
-            instruction += `      "${fieldKey}": "${field.description}"${comma}\n`;
+            // Untyped fields keep the historical raw-description form (note:
+            // NOT escaped historically — preserved so existing setups emit
+            // byte-identical spec); typed fields go through buildFieldSpec.
+            const spec = field.type && field.type !== 'text'
+                ? buildFieldSpec(field, compact)
+                : `"${field.description}"`;
+            instruction += `      "${fieldKey}": ${spec}${comma}\n`;
         }
         instruction += '    }';
     }

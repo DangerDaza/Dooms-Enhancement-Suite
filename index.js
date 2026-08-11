@@ -149,10 +149,48 @@ import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDrop
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
+import { escapeHtml } from './src/utils/html.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
+/**
+ * Renders a quick visibility toggle in the Scene Tracker menu for each custom
+ * scene field, generated from trackerConfig.
+ *
+ * The built-in rows in that menu are hardcoded markup, which is why a field you
+ * added in the Tracker Editor never showed up here — and why those built-ins
+ * drifted out of sync with the editor once already. Generating these means the
+ * two surfaces read the same source and a new field is togglable the moment
+ * it exists. Safe to call repeatedly; it rebuilds the list.
+ */
+function renderSceneCustomFieldToggles() {
+    const $host = $('#rpg-st-custom-fields');
+    if (!$host.length) return;
+    const fields = extensionSettings.trackerConfig?.infoBox?.customFields;
+    if (!Array.isArray(fields) || !fields.length) {
+        $host.empty();
+        return;
+    }
+    const rows = fields
+        .filter(f => f && f.name)
+        .map(f => {
+            const id = escapeHtml(String(f.id ?? f.name));
+            const label = escapeHtml(`${f.icon || '✨'} ${f.name}`);
+            return `
+                <div class="rpg-setting-row">
+                    <span class="rpg-setting-label">${label}</span>
+                    <label class="rpg-toggle-switch">
+                        <input type="checkbox" class="rpg-st-custom-field-toggle"
+                               data-field-id="${id}" ${f.enabled ? 'checked' : ''} />
+                        <span class="rpg-toggle-slider"></span>
+                    </label>
+                </div>`;
+        })
+        .join('');
+    $host.html(rows);
+}
+
 function updatePortraitEnhancementSettingsVisibility() {
     const enabled = extensionSettings.syncExpressionsToPresentCharacters === true;
     const source = extensionSettings.portraitEnhancementMode || 'expressions';
@@ -1061,6 +1099,24 @@ function bindSettingsUI() {
         }
         if (_editorCheckboxIds[widgetKey]) $(_editorCheckboxIds[widgetKey]).prop('checked', checked);
     };
+    // Custom scene fields get quick toggles here too, generated from config.
+    // The built-in rows above are hardcoded markup, which is exactly why a
+    // custom field could never appear in this menu (and why the built-in
+    // toggles drifted from the Tracker Editor once already) — these are built
+    // from the same trackerConfig the editor writes, so they cannot disagree.
+    // A custom field has ONE switch (field.enabled) rather than the built-ins'
+    // separate show-flag + widget-flag pair.
+    $(document).on('change', '.rpg-st-custom-field-toggle', function () {
+        const key = String($(this).data('fieldId') || '');
+        const fields = extensionSettings.trackerConfig?.infoBox?.customFields;
+        if (!Array.isArray(fields)) return;
+        const field = fields.find(f => f && String(f.id) === key);
+        if (!field) return;
+        field.enabled = $(this).prop('checked');
+        _saveSt();
+        try { resetSceneHeaderCache(); updateChatSceneHeaders(); } catch (e) { /* non-fatal */ }
+    });
+
     // Visibility toggles. showCharacters/showQuest have no infoBox widget
     // equivalent (their data comes from other trackers), so they don't sync.
     const _stToggles = [
@@ -1840,6 +1896,7 @@ function bindSettingsUI() {
     $('#rpg-st-show-conditions').prop('checked', st.showConditions === true);
     $('#rpg-st-show-terrain').prop('checked', st.showTerrain === true);
     $('#rpg-st-show-weather').prop('checked', st.showWeather === true);
+    renderSceneCustomFieldToggles();
     $('#rpg-st-layout').val(st.layout || 'grid');
     $('#rpg-st-font-size').val(st.fontSize ?? 82);
     $('#rpg-st-font-size-value').text((st.fontSize ?? 82) + '%');

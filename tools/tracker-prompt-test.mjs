@@ -150,5 +150,62 @@ check('...and not when it is off',
     !pb.getTrackerPromptKeyWarnings('"quests":"" "infoBox":"" "characters":"" "name":"" "location":"" "time":"" "date":""')
         .some(w => w.key === 'doomTension'));
 
+// ── 8. Field types (P2) ──
+// The whole point of the type system is that it must be INVISIBLE to anyone
+// who never uses it: an untyped/'text' field has to emit exactly what it did
+// before typing existed.
+resetSettings();
+const jh = await import(`${DES}/src/systems/generation/jsonPromptHelpers.js`);
+const spec = (f, compact = true) => jh.buildFieldSpec(f, compact);
+
+check('untyped field emits the historical quoted description',
+    spec({ description: 'Ambient noise' }) === '"Ambient noise"');
+check('explicit text type is identical to untyped',
+    spec({ type: 'text', description: 'Ambient noise' }) === '"Ambient noise"');
+check('number without a range', spec({ type: 'number', description: 'Coins' }) === '<number: Coins>');
+check('number with a range',
+    spec({ type: 'number', description: 'Morale', min: 1, max: 10 }) === '<number 1-10: Morale>');
+check('progress is a 0-100 number',
+    spec({ type: 'progress', description: 'Fuel' }) === '<number 0-100: Fuel>');
+check('boolean', spec({ type: 'boolean', description: 'Raining?' }) === '<true|false: Raining?>');
+check('list', spec({ type: 'list', description: 'Items carried' }) === '["Items carried"]');
+check('enum compact uses pipes',
+    spec({ type: 'enum', description: 'Alert', options: ['Low', 'High'] }, true) === '"Low|High"');
+check('enum verbose spells out the choices',
+    spec({ type: 'enum', description: 'Alert', options: ['Low', 'High'] }, false)
+        === '"Alert (choose one: Low / High)"');
+check('enum with no options degrades to text',
+    spec({ type: 'enum', description: 'Alert', options: [] }) === '"Alert"');
+check('an unknown type degrades to text',
+    spec({ type: 'bogus', description: 'Alert' }) === '"Alert"');
+check('descriptions are escaped for JSON',
+    spec({ description: 'He said "hi"' }) === '"He said \\"hi\\""');
+
+// A typed custom scene field reaches the actual prompt.
+extensionSettings.trackerConfig.infoBox.customFields = [
+    { id: 'c1', name: 'Alert Level', enabled: true, description: 'Threat level',
+      type: 'enum', options: ['Green', 'Red'] },
+];
+const withCustom = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('typed custom scene field appears in the spec with its type',
+    withCustom.includes('"alert_level": "Green|Red"'),
+    withCustom.split('\n').filter(l => l.includes('alert_level')).join(' | '));
+extensionSettings.trackerConfig.infoBox.customFields = [];
+
+// ── 9. Per-field wording for descriptive built-ins (P2) ──
+extensionSettings.trackerConfig.infoBox.widgets.terrain = { enabled: true, persistInHistory: false };
+const shipped = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('a descriptive built-in uses its shipped wording by default',
+    shipped.includes('"terrain": "Terrain/environment type'));
+extensionSettings.trackerConfig.infoBox.widgets.terrain.prompt = 'One word for the ground underfoot';
+const reworded = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('a reworded built-in sends the user text',
+    reworded.includes('"terrain": "One word for the ground underfoot"'));
+check('...and drops the shipped wording', !reworded.includes('Terrain/environment type'));
+extensionSettings.trackerConfig.infoBox.widgets.terrain.prompt = '';
+check('clearing the wording restores the shipped text',
+    pb.buildTrackerPromptBlock(CTX_NAME, true).includes('"terrain": "Terrain/environment type'));
+delete extensionSettings.trackerConfig.infoBox.widgets.terrain;
+
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
