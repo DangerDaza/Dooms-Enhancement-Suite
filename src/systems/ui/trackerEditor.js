@@ -321,6 +321,14 @@ function applyTrackerConfig() {
         extensionSettings.sceneTracker[showKey] = enabled;
         $(`#rpg-st-show-${WIDGET_DOM_SUFFIX[widgetKey]}`).prop('checked', enabled);
     }
+    // Tell the settings panel to rebuild its custom-field quick toggles, so a
+    // field added here appears alongside the built-in ones immediately instead
+    // of only after a reload. index.js owns that list (it lives in the Scene
+    // Tracker accordion); an event keeps this module from importing the
+    // extension entry point.
+    try {
+        window.dispatchEvent(new CustomEvent('dooms:tracker-config-saved'));
+    } catch (e) { /* non-fatal */ }
     // Re-render all trackers with new config, scene headers included.
     renderInfoBox();
     renderThoughts();

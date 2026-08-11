@@ -436,6 +436,10 @@
 .rpg-editor-tab-content {
     max-height: none;
     overflow-y: visible;
+    /* Belt-and-braces against a future wide child dragging the whole panel
+       sideways: content wraps instead (see .rpg-editor-field-item). */
+    min-width: 0;
+    max-width: 100%;
 }
 
 
@@ -587,17 +591,35 @@
 }
 
 
+/* Wrapping row rather than a fixed column grid: the editor lives in a modal
+   that gets narrow on phones, and a rigid track count forced the whole panel
+   to scroll sideways (text inputs carry a ~170px default min-width, so the
+   columns could not shrink — focusing an input then jumped the panel
+   horizontally). Wrapping degrades at any width and works for every row
+   shape in the editor, whatever its child count. */
 .rpg-editor-field-item {
-    display: grid;
-    /* toggle · icon · name · instruction · type · remove */
-    grid-template-columns: auto auto 1fr 2fr auto auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5em;
     padding: 0.5em;
     background: var(--rpg-accent);
     border: 1px solid var(--rpg-border);
     border-radius: 0.375em;
-    min-width: 0; /* Allow grid items to shrink below content size */
+    min-width: 0;
+}
+
+/* Children must be allowed to shrink, or they re-create the overflow. */
+.rpg-editor-field-item > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Text inputs share the leftover space and wrap to a new line when there
+   isn't enough. Fixed-size controls (icon box, type select) set their own
+   flex inline and are unaffected. */
+.rpg-editor-field-item > input[type="text"] {
+    flex: 1 1 120px;
 }
 
 /* Secondary row under a field/widget: enum choices, number range, or the

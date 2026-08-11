@@ -1106,6 +1106,13 @@ function bindSettingsUI() {
     // from the same trackerConfig the editor writes, so they cannot disagree.
     // A custom field has ONE switch (field.enabled) rather than the built-ins'
     // separate show-flag + widget-flag pair.
+    // Saving the Tracker Editor can add/remove/rename custom fields — rebuild
+    // the quick-toggle list so a new field shows up with the built-in ones
+    // right away rather than after a reload.
+    window.addEventListener('dooms:tracker-config-saved', () => {
+        try { renderSceneCustomFieldToggles(); } catch (e) { /* non-fatal */ }
+    });
+
     $(document).on('change', '.rpg-st-custom-field-toggle', function () {
         const key = String($(this).data('fieldId') || '');
         const fields = extensionSettings.trackerConfig?.infoBox?.customFields;
