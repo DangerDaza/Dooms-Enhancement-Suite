@@ -1982,6 +1982,32 @@
                 </div>
             </div>
 
+            <!-- Tracker Prompt (full block: header + instructions + FORMAT spec) -->
+            <div class="rpg-prompt-editor-section">
+                <label for="rpg-prompt-tracker-full"
+                    style="display: block; margin-bottom: 8px; font-weight: 600;">
+                    <i class="fa-solid fa-code"></i> Tracker Prompt
+                    <span id="rpg-tracker-prompt-edited" class="rpg-tracker-prompt-badge" hidden>edited</span>
+                </label>
+                <small style="display: block; margin-bottom: 8px; color: #888; font-size: 11px;">
+                    The complete tracker prompt exactly as the AI receives it — the instructions
+                    <em>and</em> the JSON format specification. Normally DES builds this for you from your
+                    tracker field settings; type in here and your version is sent verbatim instead.
+                    <strong>Leave it untouched to keep the automatic behaviour.</strong>
+                    {userName} still works as a macro. (The continuation instruction below is separate.)
+                </small>
+                <textarea id="rpg-prompt-tracker-full" class="rpg-prompt-textarea" rows="14"
+                    spellcheck="false"></textarea>
+                <div id="rpg-tracker-prompt-warnings" class="rpg-tracker-prompt-warnings" hidden></div>
+                <div class="rpg-prompt-injection-controls"
+                    style="display: flex; gap: 12px; margin-top: 8px; align-items: center; flex-wrap: wrap;">
+                    <button class="menu_button" id="rpg-tracker-prompt-restore" type="button">
+                        <i class="fa-solid fa-rotate-left"></i>&nbsp;Restore Default
+                    </button>
+                    <span id="rpg-tracker-prompt-tokens" class="rpg-tracker-prompt-tokens">~0 tokens</span>
+                </div>
+            </div>
+
             <!-- Tracker Instructions -->
             <div class="rpg-prompt-editor-section">
                 <label for="rpg-prompt-tracker-instructions"

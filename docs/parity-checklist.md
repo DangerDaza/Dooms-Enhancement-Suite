@@ -22,6 +22,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Manual update button works
 - [ ] Connection profile dropdown lists profiles; external API generation mode works
 - [ ] Prompt editor: custom prompts save and take effect
+- [ ] Tracker Prompt editor: box prefills with the REAL assembled prompt (instructions + FORMAT spec); saving it untouched stores NO override (later field-config changes still reach the AI); a real edit is sent verbatim; Restore Default returns the generated text and clears the override; token estimate + "edited" badge update live; renaming/removing a key warns and names the affected panel; resetting Tracker Instructions refreshes the full box (run `node tools/tracker-prompt-test.mjs`)
 
 ## Present Characters Panel (portrait bar)
 - [ ] Cards render for present characters; absent grey-out option works

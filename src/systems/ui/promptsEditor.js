@@ -4,7 +4,8 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { DEFAULT_HTML_PROMPT, DEFAULT_DIALOGUE_COLORING_PROMPT, DEFAULT_NARRATOR_PROMPT, DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT, DEFAULT_AUTO_PORTRAIT_PROMPT } from '../generation/promptBuilder.js';
+import { DEFAULT_HTML_PROMPT, DEFAULT_DIALOGUE_COLORING_PROMPT, DEFAULT_NARRATOR_PROMPT, DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT, DEFAULT_AUTO_PORTRAIT_PROMPT, getAssembledTrackerPrompt, getTrackerPromptKeyWarnings } from '../generation/promptBuilder.js';
+import { escapeHtml } from '../../utils/html.js';
 import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
 let $editorModal = null;
 let tempPrompts = null; // Temporary prompts for cancel functionality
@@ -84,6 +85,15 @@ export function initPromptsEditor() {
         restorePromptToDefault(promptType);
         toastr.success('Prompt restored to default.');
     });
+    // ── Tracker Prompt (full block) ──
+    // Restore = drop the override and re-show what DES generates from the
+    // current field config, so the box always reflects what will be sent.
+    $(document).on('click', '#rpg-tracker-prompt-restore', function() {
+        $('#rpg-prompt-tracker-full').val(getAssembledTrackerPrompt({ generatedOnly: true }));
+        refreshTrackerPromptStatus();
+        toastr.success('Tracker prompt restored to the generated default.');
+    });
+    $(document).on('input', '#rpg-prompt-tracker-full', refreshTrackerPromptStatus);
     // Close on background click
     $(document).on('click', '#rpg-prompts-editor-popup', function(e) {
         if (e.target.id === 'rpg-prompts-editor-popup') {
@@ -95,6 +105,39 @@ export function initPromptsEditor() {
         openPromptsEditor();
     });
 }
+/**
+ * Live status for the Tracker Prompt box: token estimate, an "edited" badge,
+ * and warnings when the text no longer declares a key one of DES's panels
+ * reads. Renaming keys is allowed — this just makes the consequence visible
+ * before the user closes the dialog and wonders why a panel went blank.
+ */
+function refreshTrackerPromptStatus() {
+    const text = String($('#rpg-prompt-tracker-full').val() || '');
+    // ~3.5 chars/token, the same heuristic the lorebook token counter uses.
+    $('#rpg-tracker-prompt-tokens').text(`~${Math.round(text.length / 3.5)} tokens`);
+
+    const generated = getAssembledTrackerPrompt({ generatedOnly: true });
+    $('#rpg-tracker-prompt-edited').prop('hidden', text.trim() === generated.trim());
+
+    let warnings = [];
+    try { warnings = getTrackerPromptKeyWarnings(text) || []; } catch (e) { /* non-fatal */ }
+    const $box = $('#rpg-tracker-prompt-warnings');
+    if (!warnings.length) {
+        $box.prop('hidden', true).empty();
+        return;
+    }
+    const items = warnings
+        .map(w => `<li><code>"${escapeHtml(w.key)}"</code> — ${escapeHtml(w.label)} will show nothing</li>`)
+        .join('');
+    $box.prop('hidden', false).html(
+        `<div class="rpg-tracker-prompt-warn-head"><i class="fa-solid fa-triangle-exclamation"></i> `
+        + `This prompt no longer asks for ${warnings.length === 1 ? 'a key' : 'keys'} DES reads:</div>`
+        + `<ul>${items}</ul>`
+        + `<div class="rpg-tracker-prompt-warn-foot">That's allowed — anything DES doesn't recognize still `
+        + `appears in the Tracker Data dropdown. Restore Default undoes it.</div>`
+    );
+}
+
 /**
  * Open the prompts editor modal
  */
@@ -112,6 +155,7 @@ function openPromptsEditor() {
         twistGeneratorRules: extensionSettings.customTwistGeneratorRulesPrompt || '',
         trackerInstructions: extensionSettings.customTrackerInstructionsPrompt || '',
         trackerContinuation: extensionSettings.customTrackerContinuationPrompt || '',
+        trackerFull: extensionSettings.customTrackerPrompt || '',
         weather: extensionSettings.customWeatherPrompt || '',
         characterThoughts: extensionSettings.customCharacterThoughtsPrompt || '',
         autoPortrait: extensionSettings.customAutoPortraitPrompt || '',
@@ -131,6 +175,11 @@ function openPromptsEditor() {
     $('#rpg-prompt-weather').val(extensionSettings.customWeatherPrompt || DEFAULT_PROMPTS.weather);
     $('#rpg-prompt-character-thoughts').val(extensionSettings.customCharacterThoughtsPrompt || DEFAULT_PROMPTS.characterThoughts);
     $('#rpg-prompt-auto-portrait').val(extensionSettings.customAutoPortraitPrompt || DEFAULT_PROMPTS.autoPortrait);
+    // Tracker Prompt: prefill with the REAL assembled prompt (the saved
+    // override if there is one, otherwise what DES generates right now), so
+    // the box always shows what the AI actually receives.
+    $('#rpg-prompt-tracker-full').val(getAssembledTrackerPrompt());
+    refreshTrackerPromptStatus();
     // Load per-prompt injection depth & role settings
     const pInjection = extensionSettings.promptInjection || {};
     const defaultDepths = { html: 0, dialogueColoring: 0, trackerInstructions: 0, contextInstructions: 1 };
@@ -190,6 +239,15 @@ function savePrompts() {
     extensionSettings.customNewFieldsBoostPrompt = $('#rpg-prompt-new-fields-boost').val().trim();
     extensionSettings.customTwistGeneratorRulesPrompt = $('#rpg-prompt-twist-generator-rules').val().trim();
     extensionSettings.customTrackerInstructionsPrompt = $('#rpg-prompt-tracker-instructions').val().trim();
+    // Tracker Prompt: store an override ONLY when the text actually differs
+    // from what DES would generate. Saving the prefilled text verbatim would
+    // freeze the prompt, silently detaching it from the tracker field settings
+    // — every later field the user adds would stop reaching the AI.
+    {
+        const typed = String($('#rpg-prompt-tracker-full').val() || '').trim();
+        const generated = getAssembledTrackerPrompt({ generatedOnly: true }).trim();
+        extensionSettings.customTrackerPrompt = (typed && typed !== generated) ? typed : '';
+    }
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
     extensionSettings.customCharacterThoughtsPrompt = $('#rpg-prompt-character-thoughts').val().trim();
@@ -244,6 +302,14 @@ function restorePromptToDefault(promptType) {
             break;
         case 'trackerInstructions':
             extensionSettings.customTrackerInstructionsPrompt = '';
+            // The full-prompt box embeds the instruction portion, so it has to
+            // re-read or it would keep showing the text just reset away.
+            setTimeout(() => {
+                if (!extensionSettings.customTrackerPrompt) {
+                    $('#rpg-prompt-tracker-full').val(getAssembledTrackerPrompt({ generatedOnly: true }));
+                    refreshTrackerPromptStatus();
+                }
+            }, 0);
             break;
         case 'trackerContinuation':
             extensionSettings.customTrackerContinuationPrompt = '';

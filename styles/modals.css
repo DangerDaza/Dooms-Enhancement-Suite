@@ -663,6 +663,61 @@
 }
 
 
+/* ── Tracker Prompt editor (full block) ── */
+.rpg-tracker-prompt-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--rpg-highlight, #e94560);
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--rpg-highlight, #e94560) 35%, transparent);
+    vertical-align: middle;
+}
+
+.rpg-tracker-prompt-tokens {
+    font-size: 11px;
+    color: #888;
+    font-family: 'Courier New', monospace;
+}
+
+.rpg-tracker-prompt-warnings {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border-left: 3px solid #e0a800;
+    background: rgba(224, 168, 0, 0.08);
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--SmartThemeBodyColor, #ccc);
+}
+
+.rpg-tracker-prompt-warnings ul {
+    margin: 4px 0 6px;
+    padding-left: 18px;
+}
+
+.rpg-tracker-prompt-warnings code {
+    font-family: 'Courier New', monospace;
+    background: rgba(255, 255, 255, 0.07);
+    padding: 0 3px;
+    border-radius: 3px;
+}
+
+.rpg-tracker-prompt-warn-head {
+    font-weight: 600;
+    color: #e0a800;
+}
+
+.rpg-tracker-prompt-warn-foot {
+    opacity: 0.75;
+}
+
+
 /* ============================================
    SETTINGS MODAL - MOBILE FIRST
    ============================================ */

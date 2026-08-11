@@ -35,6 +35,11 @@ export let extensionSettings = {
     enableDialogueColoring: true, // Enable dialogue coloring prompt injection (on in the new-player profile)
     customDialogueColoringPrompt: '', // Custom dialogue coloring prompt text (empty = use default)
     customTrackerInstructionsPrompt: '', // Custom tracker instructions prompt (empty = use default)
+    // Full hand-edited tracker block (header + instructions + FORMAT spec).
+    // Empty = build it from trackerConfig as usual. When set it is sent
+    // verbatim, so it OVERRIDES customTrackerInstructionsPrompt and any field
+    // config — that is the point of it. See the Tracker Prompt editor.
+    customTrackerPrompt: '',
     customTrackerContinuationPrompt: '', // Custom tracker continuation prompt (empty = use default)
     customWeatherPrompt: '', // Custom weather forecast instruction for info box JSON (empty = use default)
     customCharacterThoughtsPrompt: '', // Custom character thoughts/present characters prompt (empty = use default)

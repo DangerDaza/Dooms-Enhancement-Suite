@@ -155,6 +155,122 @@ export function generateTrackerExample() {
  * @param {boolean} includeAttributes - Whether to include RPG attributes (false for separate tracker generation)
  * @returns {string} Formatted instruction text for the AI
  */
+/**
+ * Builds the tracker block exactly as the AI receives it: the universal
+ * header, the instruction portion, the lock rules, and the generated FORMAT
+ * specification for every enabled tracker section.
+ *
+ * Split out of generateTrackerInstructions so the Tracker Prompt editor can
+ * show — and let the user replace — the real thing rather than a paraphrase.
+ * Returns text with NO leading newline; the caller supplies the separator.
+ *
+ * @param {string} userName - substituted into the instruction copy
+ * @param {boolean} compact - honours the Compact Tracker Prompt setting
+ * @returns {string}
+ */
+export function buildTrackerPromptBlock(userName, compact) {
+    let out = compact
+        ? 'Start every reply with ONE JSON code block updating the trackers, exactly in the format shown below. '
+        : 'At the start of every reply, you must attach an update to the trackers in EXACTLY the JSON format shown below as a single unified JSON object containing all enabled tracker fields. ';
+    // Instruction portion (separately editable, and included here so the
+    // Tracker Prompt editor shows the assembled result rather than a stub).
+    const customPrompt = extensionSettings.customTrackerInstructionsPrompt;
+    if (customPrompt) {
+        out += customPrompt.replace(/{userName}/g, userName);
+    } else if (compact) {
+        out += `Replace every placeholder with concrete in-world details ${userName} perceives (e.g. "Location" -> "Forest Clearing"); numbers replace X. Exclude ${userName} from "characters" — NPCs only. Carry the previous trackers forward, changing values realistically per the user's actions, time passing, and consequences.`;
+    } else {
+        out += `Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that ${userName} perceives about the current scene and the present characters. For example: "Location" becomes "Forest Clearing", "Mood Emoji" becomes "😊". DO NOT include ${userName} in the characters section, only NPCs. `;
+        out += `Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user's actions, the passage of time, and logical consequences.`;
+    }
+    out += addLockInstruction('');
+    // Format specification — one unified JSON object across enabled sections.
+    const enabledTrackers = [];
+    if (extensionSettings.showQuests) enabledTrackers.push('quests');
+    if (extensionSettings.showInfoBox) enabledTrackers.push('infoBox');
+    if (extensionSettings.showCharacterThoughts) enabledTrackers.push('characters');
+    if (enabledTrackers.length > 0) {
+        out += '\n\nFORMAT:\n\nProvide EXACTLY ONE JSON code block with ALL tracker sections wrapped in a single object:\n\n```json\n{\n';
+        if (extensionSettings.showQuests) {
+            out += '  "quests": ';
+            const questsJSON = buildQuestsJSONInstruction();
+            out += questsJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
+            out += enabledTrackers.indexOf('quests') < enabledTrackers.length - 1 ? ',\n' : '\n';
+        }
+        if (extensionSettings.showInfoBox) {
+            out += '  "infoBox": ';
+            const infoBoxJSON = buildInfoBoxJSONInstruction();
+            out += infoBoxJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
+            out += enabledTrackers.indexOf('infoBox') < enabledTrackers.length - 1 ? ',\n' : '\n';
+        }
+        if (extensionSettings.showCharacterThoughts) {
+            out += '  "characters": ';
+            const charactersJSON = buildCharactersJSONInstruction();
+            out += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
+        }
+        out += compact
+            ? '\n}\n```\n\nONE unified JSON object only — never separate blocks.'
+            : '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
+    }
+    return out;
+}
+
+/**
+ * The text the Tracker Prompt editor shows: the user's saved override when
+ * there is one, otherwise the freshly generated block. Used to prefill the
+ * editor and to power Restore Default.
+ *
+ * @param {{ generatedOnly?: boolean }} [options] - generatedOnly ignores any
+ *        saved override (Restore Default / "what would DES send by itself").
+ * @returns {string}
+ */
+export function getAssembledTrackerPrompt({ generatedOnly = false } = {}) {
+    if (!generatedOnly) {
+        const override = (extensionSettings.customTrackerPrompt || '').trim();
+        if (override) return override;
+    }
+    let userName = 'User';
+    try { userName = getContext().name1 || 'User'; } catch (e) { /* editor may open before context */ }
+    return buildTrackerPromptBlock(userName, extensionSettings.compactPrompts !== false);
+}
+
+/**
+ * Keys DES's panels read out of the tracker JSON, so the editor can warn when
+ * an edit drops one. Renaming a key is allowed — the AI will produce it — but
+ * the panel looking for the old name then renders nothing, and that surprise
+ * is worth flagging BEFORE it happens rather than leaving a user to wonder why
+ * their Scene Tracker went blank.
+ *
+ * Only keys for sections the user actually has enabled are reported.
+ * @param {string} promptText
+ * @returns {Array<{key: string, label: string}>}
+ */
+export function getTrackerPromptKeyWarnings(promptText) {
+    const text = String(promptText || '');
+    const missing = [];
+    const need = (key, label) => {
+        // Match the JSON key as written in the spec ("key":), which is how
+        // every generated section declares it.
+        const re = new RegExp('"' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*:');
+        if (!re.test(text)) missing.push({ key, label });
+    };
+    if (extensionSettings.showQuests) need('quests', 'Quests panel');
+    if (extensionSettings.showInfoBox) {
+        need('infoBox', 'Scene Tracker');
+        const widgets = extensionSettings.trackerConfig?.infoBox?.widgets || {};
+        if (widgets.location?.enabled !== false) need('location', 'Scene Tracker — Location');
+        if (widgets.time?.enabled !== false) need('time', 'Scene Tracker — Time');
+        if (widgets.date?.enabled !== false) need('date', 'Scene Tracker — Date');
+        if (widgets.weather?.enabled) need('weather', 'Weather effects');
+    }
+    if (extensionSettings.showCharacterThoughts) {
+        need('characters', 'Present Characters');
+        need('name', 'Present Characters — character names');
+    }
+    if (extensionSettings.doomCounter?.enabled) need('doomTension', 'Doom Counter');
+    return missing;
+}
+
 export function generateTrackerInstructions(includeHtmlPrompt = true, includeContinuation = true) {
     const userName = getContext().name1;
     let instructions = '';
@@ -163,57 +279,17 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
     // Only add tracker instructions if at least one tracker is enabled
     const compact = extensionSettings.compactPrompts !== false;
     if (hasAnyTrackers) {
-        // Universal instruction header
-        instructions += compact
-            ? '\nStart every reply with ONE JSON code block updating the trackers, exactly in the format shown below. '
-            : '\nAt the start of every reply, you must attach an update to the trackers in EXACTLY the JSON format shown below as a single unified JSON object containing all enabled tracker fields. ';
-        // Append custom instruction portion if available
-        const customPrompt = extensionSettings.customTrackerInstructionsPrompt;
-        if (customPrompt) {
-            instructions += customPrompt.replace(/{userName}/g, userName);
-        } else if (compact) {
-            instructions += `Replace every placeholder with concrete in-world details ${userName} perceives (e.g. "Location" -> "Forest Clearing"); numbers replace X. Exclude ${userName} from "characters" — NPCs only. Carry the previous trackers forward, changing values realistically per the user's actions, time passing, and consequences.`;
-        } else {
-            instructions += `Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that ${userName} perceives about the current scene and the present characters. For example: "Location" becomes "Forest Clearing", "Mood Emoji" becomes "😊". DO NOT include ${userName} in the characters section, only NPCs. `;
-            instructions += `Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user's actions, the passage of time, and logical consequences.`;
-        }
-        // Add lock instruction
-        instructions += addLockInstruction('');
-        // Add format specifications for each enabled tracker using JSON
-        // Wrap all trackers in a unified JSON structure
-        const enabledTrackers = [];
-        if (extensionSettings.showQuests) {
-            enabledTrackers.push('quests');
-        }
-        if (extensionSettings.showInfoBox) {
-            enabledTrackers.push('infoBox');
-        }
-        if (extensionSettings.showCharacterThoughts) {
-            enabledTrackers.push('characters');
-        }
-        if (enabledTrackers.length > 0) {
-            instructions += '\n\nFORMAT:\n\nProvide EXACTLY ONE JSON code block with ALL tracker sections wrapped in a single object:\n\n```json\n{\n';
-            if (extensionSettings.showQuests) {
-                instructions += '  "quests": ';
-                const questsJSON = buildQuestsJSONInstruction();
-                instructions += questsJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
-                instructions += enabledTrackers.indexOf('quests') < enabledTrackers.length - 1 ? ',\n' : '\n';
-            }
-            if (extensionSettings.showInfoBox) {
-                instructions += '  "infoBox": ';
-                const infoBoxJSON = buildInfoBoxJSONInstruction();
-                instructions += infoBoxJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
-                instructions += enabledTrackers.indexOf('infoBox') < enabledTrackers.length - 1 ? ',\n' : '\n';
-            }
-            if (extensionSettings.showCharacterThoughts) {
-                instructions += '  "characters": ';
-                const charactersJSON = buildCharactersJSONInstruction();
-                instructions += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
-            }
-            instructions += compact
-                ? '\n}\n```\n\nONE unified JSON object only — never separate blocks.'
-                : '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
-        }
+        // The tracker block (header + instruction + lock rules + FORMAT spec)
+        // is user-editable as ONE piece — see buildTrackerPromptBlock and the
+        // Tracker Prompt editor. A saved override is sent verbatim; {userName}
+        // still substitutes so a macro the user typed keeps working when they
+        // switch personas. The continuation instruction below is NOT part of
+        // the override: it has its own editor, and letting two editors write
+        // the same text is how settings drift.
+        const override = (extensionSettings.customTrackerPrompt || '').trim();
+        instructions += '\n' + (override
+            ? override.replace(/{userName}/g, userName)
+            : buildTrackerPromptBlock(userName, compact));
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
             const customPrompt = extensionSettings.customTrackerContinuationPrompt;
