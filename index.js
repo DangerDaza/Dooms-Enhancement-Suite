@@ -45,6 +45,7 @@ import {
     generateSeparateUpdatePrompt
 } from './src/systems/generation/promptBuilder.js';
 import { parseResponse, parseQuests } from './src/systems/generation/parser.js';
+import { buildRelationshipSpec } from './src/systems/generation/jsonPromptHelpers.js';
 import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfiles } from './src/systems/generation/apiClient.js';
 import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
@@ -237,6 +238,24 @@ function renderWorkshopRelationships() {
                     title="Remove"><i class="fa-solid fa-trash"></i></button>
         </div>`).join('');
     $host.html(rows || '<p class="rpg-note-text">No relationships yet — add one below.</p>');
+    $('#rpg-ws-relationship-prompt').val(pc.relationships.prompt || '');
+    renderWorkshopRelationshipPreview();
+}
+
+/**
+ * Shows the exact `relationship.status` spec the AI will receive.
+ * Built by the emitter itself (buildRelationshipSpec) rather than
+ * reassembled here, so the preview cannot drift from what's actually sent.
+ */
+function renderWorkshopRelationshipPreview() {
+    const $out = $('#rpg-ws-relationship-preview');
+    if (!$out.length) return;
+    const pc = getRelationshipConfig();
+    if (!pc || pc.relationships.enabled === false) {
+        $out.text('nothing — relationship tracking is off');
+        return;
+    }
+    $out.text(`"relationship": {"status": "${buildRelationshipSpec(pc)}"}`);
 }
 
 function updatePortraitEnhancementSettingsVisibility() {
@@ -1168,6 +1187,7 @@ function bindSettingsUI() {
     const _saveRel = (pc) => {
         syncRelationshipConfig(pc);
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] relationship save failed', e); }
+        try { renderWorkshopRelationshipPreview(); } catch (e) { /* non-fatal */ }
         try { renderThoughts(); clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     };
     $(document).on('change', '#rpg-ws-relationships-enabled', function () {
@@ -1217,6 +1237,18 @@ function bindSettingsUI() {
         if (pc.relationships.relationshipEmojis[name] === undefined) return;
         pc.relationships.relationshipEmojis[name] = String($(this).val() || '').trim() || '🙂';
         _saveRel(pc);
+    });
+    // Wording override. Empty string is meaningful (= use the bare option
+    // list), so it's stored as '' rather than deleted. This one skips the
+    // _saveRel repaint: the wording only ever reaches the prompt, so there's
+    // nothing on screen to redraw, and repainting per keystroke would flicker
+    // the portrait bar while typing. saveSettings is debounced internally.
+    $(document).on('input', '#rpg-ws-relationship-prompt', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        pc.relationships.prompt = String($(this).val() || '');
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] relationship save failed', e); }
+        renderWorkshopRelationshipPreview();
     });
 
     $(document).on('change', '.rpg-st-custom-field-toggle', function () {

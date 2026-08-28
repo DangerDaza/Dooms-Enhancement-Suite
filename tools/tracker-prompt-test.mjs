@@ -246,5 +246,45 @@ check('color is omitted only when dialogue colouring is off',
 extensionSettings.enableDialogueColoring = true;
 resetSettings();
 
+// ── 11. Relationship wording override (Settings → Workshop → Wording) ──
+// Without a wording the emitted spec must stay byte-identical to the version
+// that shipped before the box existed — otherwise every existing setup takes
+// a silent prompt change on upgrade.
+resetSettings();
+const relCfg = extensionSettings.trackerConfig.presentCharacters;
+relCfg.relationships = { enabled: true };
+relCfg.relationshipFields = ['Lover', 'Enemy'];
+check('no wording set emits the historical spec byte-for-byte',
+    jh.buildRelationshipSpec(relCfg) === '(choose one: Lover/Enemy)');
+check('...and an empty-string wording is treated the same as unset',
+    (relCfg.relationships.prompt = '', jh.buildRelationshipSpec(relCfg)) === '(choose one: Lover/Enemy)');
+check('...as is a whitespace-only wording',
+    (relCfg.relationships.prompt = '   ', jh.buildRelationshipSpec(relCfg)) === '(choose one: Lover/Enemy)');
+
+relCfg.relationships.prompt = 'feeling toward {{user}}';
+check('wording is prefixed ahead of the options',
+    jh.buildRelationshipSpec(relCfg) === 'feeling toward {{user}} (choose one: Lover/Enemy)');
+check('...and reaches the assembled characters block',
+    jh.buildCharactersJSONInstruction().includes('feeling toward {{user}} (choose one: Lover/Enemy)'));
+
+// The wording lands inside a JSON string in the spec, so a stray quote or
+// backslash would otherwise break the shape the model is asked to copy.
+relCfg.relationships.prompt = 'how they "feel" about C:\\Users';
+const escaped = jh.buildRelationshipSpec(relCfg);
+check('quotes in the wording are escaped', escaped.includes('\\"feel\\"'));
+check('backslashes in the wording are escaped', escaped.includes('C:\\\\Users'));
+check('escaped wording keeps the JSON block parseable', (() => {
+    const block = jh.buildCharactersJSONInstruction();
+    const m = block.match(/"relationship": \{"status": "(.*)"\}/);
+    return !!m && JSON.parse(`{"status": "${m[1]}"}`).status.includes('"feel"');
+})());
+
+// Custom relationship names must reach the model, not just the built-ins.
+relCfg.relationships.prompt = '';
+relCfg.relationshipFields = ['Sworn Rival', 'Reluctant Ally', 'Blood Debt'];
+check('custom relationship names are offered to the model',
+    jh.buildRelationshipSpec(relCfg) === '(choose one: Sworn Rival/Reluctant Ally/Blood Debt)');
+resetSettings();
+
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

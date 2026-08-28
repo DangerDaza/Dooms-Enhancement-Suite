@@ -84,6 +84,30 @@ export function buildFieldSpec(field, compact = true) {
 }
 
 /**
+ * Builds the relationship status spec — the string the AI is shown for
+ * `relationship.status`.
+ *
+ * Exported so Settings → Workshop can preview the exact text it will send;
+ * a preview that rebuilt this string itself would drift from the emitter.
+ *
+ * Without a wording override the options ARE the whole instruction: nothing
+ * tells the model who the relationship is toward, so it infers that from the
+ * key name and the option words. That inference is dependable for
+ * Lover/Enemy and much less so for a custom set, which is what the wording
+ * box is for. Empty wording emits the historical string byte-for-byte.
+ *
+ * @param {object} presentCharsConfig - trackerConfig.presentCharacters
+ * @returns {string} spec text, already escaped for a JSON string
+ */
+export function buildRelationshipSpec(presentCharsConfig) {
+    const options = (presentCharsConfig?.relationshipFields || []).join('/');
+    const wording = escapeSpecString(presentCharsConfig?.relationships?.prompt || '').trim();
+    return wording
+        ? `${wording} (choose one: ${options})`
+        : `(choose one: ${options})`;
+}
+
+/**
  * Built-in infoBox JSON keys that user-defined custom scene fields must not shadow.
  * A custom field named e.g. "Tension" would otherwise collide with the built-in key.
  */
@@ -269,9 +293,7 @@ export function buildCharactersJSONInstruction() {
     }
     // Relationship — configured in Settings → Workshop.
     if (relationshipsEnabled) {
-        const relationshipFields = presentCharsConfig?.relationshipFields || [];
-        const options = relationshipFields.join('/');
-        instruction += ',\n    "relationship": {"status": "(choose one: ' + options + ')"}';
+        instruction += ',\n    "relationship": {"status": "' + buildRelationshipSpec(presentCharsConfig) + '"}';
     }
     // Stats
     if (enabledCharStats.length > 0) {

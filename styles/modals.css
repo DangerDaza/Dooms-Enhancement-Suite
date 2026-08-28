@@ -1537,6 +1537,22 @@
     border-color: var(--rpg-highlight);
 }
 
+.rpg-ws-rel-preview {
+    display: inline-block;
+    background: var(--rpg-bg);
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    padding: 2px 5px;
+    color: var(--rpg-text);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    /* The spec can be long once a wording override is set — wrap it rather
+       than pushing the settings drawer sideways. */
+    word-break: break-word;
+    white-space: normal;
+    max-width: 100%;
+}
+
 .rpg-ws-rel-remove {
     flex: 0 0 auto;
     background: transparent;

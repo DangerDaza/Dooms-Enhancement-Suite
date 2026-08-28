@@ -1041,7 +1041,18 @@
                         <i class="fa-solid fa-plus"></i> Add Relationship
                     </button>
                     <p class="rpg-note-text" style="margin-top:4px;">The AI is told to pick one of these for each
-                        character, so keep the list short and distinct.</p>
+                        character, so keep the list short and distinct. Only the names above are sent — the emoji is
+                        just what DES draws on the card.</p>
+
+                    <div class="rpg-subsection-label" style="margin-top:12px;">Wording</div>
+                    <p class="rpg-note-text" style="margin-bottom:6px;">How the relationship is described to the AI.
+                        Leave this empty and it only receives the list of names, which means it has to guess who the
+                        relationship is toward — worth filling in if you use custom names.</p>
+                    <textarea id="rpg-ws-relationship-prompt" class="rpg-prompt-textarea" rows="2"
+                        placeholder="e.g. how this character currently feels about the user"></textarea>
+                    <p class="rpg-note-text" style="margin-top:6px;">Sent as:
+                        <code id="rpg-ws-relationship-preview" class="rpg-ws-rel-preview"></code>
+                    </p>
                 </div>
             </div>
 
