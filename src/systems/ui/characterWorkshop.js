@@ -405,6 +405,14 @@ export function openCharacterWorkshop(characterName, options = {}) {
 
     $modal.attr('data-theme', extensionSettings?.theme || 'default');
     $modal.addClass('is-open').css('display', '');
+
+    // Only now does the relationship strip have a width to measure, so this
+    // has to come after the modal is shown — landing on the selected chip and
+    // sizing up the arrows both depend on real layout.
+    if (!isUser) {
+        scrollSelectedRelationshipIntoView();
+        updateRelationshipArrows();
+    }
 }
 
 export function closeCharacterWorkshop() {
@@ -835,6 +843,7 @@ function renderIdentity() {
         // Show pronouns in the preview slot in place of the relationship label
         $modal.find('#cw-preview-rel').text(draft.pronouns ? `(${draft.pronouns})` : '');
     } else {
+        renderRelationshipChips();
         const rel = (draft.relationship || '').toLowerCase();
         $modal.find('#cw-rel-chips .rpg-rel-chip').each(function () {
             const $chip = $(this);
@@ -844,16 +853,92 @@ function renderIdentity() {
         });
         const $rel = $modal.find('#cw-preview-rel');
         if (draft.relationship) {
-            const $match = $modal.find(`#cw-rel-chips .rpg-rel-chip[data-rel="${draft.relationship}"]`);
-            const emoji = $match.attr('data-emoji') || '';
+            // Attribute-selector lookup would break on a name containing a
+            // quote, and these are user-typed now — match in JS instead.
+            const emoji = relationshipEmojiFor(draft.relationship);
             $rel.text(`${emoji} ${draft.relationship}`.trim());
         } else {
             $rel.text('');
         }
+        // NB: the carousel's scroll position and arrow states are NOT set
+        // here — this runs while the modal is still display:none, so the
+        // strip has no width to measure. openCharacterWorkshop syncs them
+        // once the modal is actually laid out.
     }
     $modal.find('#cw-preview-name').text(draft.name);
     $modal.find('#cw-preview-card-name').text(draft.name);
     applyPreviewColor(draft.color || '#e94560');
+}
+
+/**
+ * The relationship list, as configured in Settings → Workshop.
+ *
+ * Read through the same nested-then-flat fallback the rest of DES uses, so a
+ * config saved by an older version still resolves. Falls back to the shipped
+ * five only when there's no config at all — an empty object is a deliberate
+ * "no relationships", not something to paper over.
+ */
+function getRelationshipOptions() {
+    const pc = extensionSettings.trackerConfig?.presentCharacters;
+    const map = pc?.relationships?.relationshipEmojis || pc?.relationshipEmojis;
+    if (!map) return { 'Lover': '❤️', 'Friend': '⭐', 'Ally': '🤝', 'Enemy': '⚔️', 'Neutral': '⚖️' };
+    return map;
+}
+
+/** Emoji for a relationship name, matched case-insensitively. */
+function relationshipEmojiFor(name) {
+    const target = String(name || '').toLowerCase();
+    if (!target) return '';
+    const entry = Object.entries(getRelationshipOptions())
+        .find(([key]) => key.toLowerCase() === target);
+    return entry ? entry[1] : '';
+}
+
+/**
+ * Paints the relationship chips from config. Custom relationships land at the
+ * end because insertion order is preserved by the emoji map they're added to.
+ *
+ * A relationship already on this character that's since been deleted from the
+ * list is appended too, so opening the card doesn't silently drop a value the
+ * user never asked to change.
+ */
+function renderRelationshipChips() {
+    const $host = $modal.find('#cw-rel-chips');
+    if (!$host.length) return;
+    const options = getRelationshipOptions();
+    const names = Object.keys(options);
+    const current = String(draft?.relationship || '');
+    if (current && !names.some(n => n.toLowerCase() === current.toLowerCase())) {
+        names.push(current);
+    }
+    $host.html(names.map(name => `
+        <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
+                data-rel="${escapeHtml(name)}" data-emoji="${escapeHtml(options[name] || '')}"
+                title="${escapeHtml(name)}"><span>${escapeHtml(options[name] || '')}</span> ${escapeHtml(name)}</button>
+    `).join(''));
+}
+
+/** Greys out an arrow once the strip can't travel any further that way. */
+function updateRelationshipArrows() {
+    const el = $modal.find('#cw-rel-chips')[0];
+    if (!el) return;
+    // 1px of slack: fractional scroll widths mean the end is rarely exact.
+    const atStart = el.scrollLeft <= 1;
+    const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1;
+    const overflows = el.scrollWidth > el.clientWidth + 1;
+    const $arrows = $modal.find('.cw-rel-arrow');
+    $arrows.toggleClass('hidden', !overflows);
+    $arrows.filter('[data-dir="-1"]').prop('disabled', atStart);
+    $arrows.filter('[data-dir="1"]').prop('disabled', atEnd);
+}
+
+function scrollSelectedRelationshipIntoView() {
+    const el = $modal.find('#cw-rel-chips')[0];
+    const chip = $modal.find('#cw-rel-chips .rpg-rel-chip.selected')[0];
+    if (!el) return;
+    if (!chip) { el.scrollLeft = 0; return; }
+    // Centre it when possible; clamped by the browser at either end.
+    el.scrollLeft = chip.offsetLeft - (el.clientWidth - chip.offsetWidth) / 2;
 }
 
 function renderPronounChips() {
@@ -1238,6 +1323,23 @@ function bindStaticListeners() {
             $rel.text('');
         }
     });
+
+    // Relationship carousel arrows. Scrolls by most of a screenful, leaving a
+    // chip of overlap so it's obvious the strip moved rather than jumped.
+    $modal.on('click.cw', '.cw-rel-arrow', function () {
+        const el = $modal.find('#cw-rel-chips')[0];
+        if (!el) return;
+        const dir = Number($(this).attr('data-dir')) || 1;
+        el.scrollBy({ left: dir * Math.max(80, el.clientWidth * 0.8), behavior: 'smooth' });
+    });
+    // Bound to the strip itself, not delegated: scroll doesn't bubble, so a
+    // delegated handler on the modal would never fire. `.off('.cw')` on the
+    // modal doesn't reach descendants either, hence the explicit off here so
+    // a re-bind can't stack a second copy.
+    // Covers arrow scrolls, trackpad swipes and shift+wheel alike; the smooth
+    // scroll settles over several frames, so the arrow state comes from the
+    // scroll events rather than a guess taken right after the click.
+    $modal.find('#cw-rel-chips').off('.cw').on('scroll.cw', updateRelationshipArrows);
 
     // Pronoun chip click (user-mode) — picks one of the presets or reveals
     // the custom input. Click the active chip again to clear.

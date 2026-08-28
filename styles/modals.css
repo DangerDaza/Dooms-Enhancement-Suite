@@ -5730,10 +5730,79 @@
 
 
 /* Relationship chips */
+/* Relationship carousel: arrow | scrolling strip | arrow.
+   The strip is one non-wrapping row so the field keeps a fixed height no
+   matter how many relationships are configured — the list scrolls instead of
+   the block growing. */
+#character-workshop-popup .cw-rel-carousel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
 #character-workshop-popup .rpg-rel-chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
+    overflow-x: auto;
+    /* No `scroll-behavior: smooth` here on purpose: it would also animate the
+       jump-to-selected on open, so every card with a relationship set would
+       visibly slide into place. The arrows pass behavior:'smooth' themselves,
+       which keeps the animation on the one interaction that wants it. */
+    flex: 1 1 auto;
+    min-width: 0;
+    /* The arrows are the affordance; a scrollbar here would double the
+       control's height and break the "same size as now" constraint. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Chips are pill-shaped and would otherwise be squashed by the flex row. */
+    padding: 1px 0;
+}
+
+#character-workshop-popup .rpg-rel-chips::-webkit-scrollbar {
+    display: none;
+}
+
+#character-workshop-popup .rpg-rel-chips .rpg-rel-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+#character-workshop-popup .cw-rel-arrow {
+    appearance: none;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--rpg-text, #eaeaea);
+    font-size: 0.7em;
+    cursor: pointer;
+    opacity: 0.75;
+    transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+}
+
+#character-workshop-popup .cw-rel-arrow:hover:not(:disabled) {
+    opacity: 1;
+    border-color: var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-rel-arrow:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+/* Kept in the layout when the list fits, so adding a relationship doesn't
+   shift the chips sideways. */
+#character-workshop-popup .cw-rel-arrow.hidden {
+    visibility: hidden;
 }
 
 #character-workshop-popup .rpg-rel-chip {

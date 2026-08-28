@@ -2437,20 +2437,19 @@
                         <!-- NPC mode: relationship chips -->
                         <div class="rpg-field cw-npc-only">
                             <label>Relationship to player</label>
-                            <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup" aria-label="Relationship">
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
-                                    data-rel="Lover" data-emoji="&#10084;&#65039;"><span>&#10084;&#65039;</span>
-                                    Lover</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
-                                    data-rel="Friend" data-emoji="&#11088;"><span>&#11088;</span> Friend</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
-                                    data-rel="Ally" data-emoji="&#129309;"><span>&#129309;</span> Ally</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
-                                    data-rel="Enemy" data-emoji="&#9876;&#65039;"><span>&#9876;&#65039;</span>
-                                    Enemy</button>
-                                <button type="button" class="rpg-rel-chip" role="radio" aria-checked="false"
-                                    data-rel="Neutral" data-emoji="&#9878;&#65039;"><span>&#9878;&#65039;</span>
-                                    Neutral</button>
+                            <!-- Chips are generated from the relationship list in
+                                 Settings → Workshop (renderRelationshipChips), so anything
+                                 added there appears here too. One non-wrapping row that
+                                 scrolls, rather than a block that grows with the list. -->
+                            <div class="cw-rel-carousel">
+                                <button type="button" class="cw-rel-arrow" data-dir="-1" tabindex="-1"
+                                    aria-label="Scroll relationships left"><i
+                                        class="fa-solid fa-chevron-left"></i></button>
+                                <div class="rpg-rel-chips" id="cw-rel-chips" role="radiogroup"
+                                    aria-label="Relationship"></div>
+                                <button type="button" class="cw-rel-arrow" data-dir="1" tabindex="-1"
+                                    aria-label="Scroll relationships right"><i
+                                        class="fa-solid fa-chevron-right"></i></button>
                             </div>
                         </div>
                         <!-- NPC mode: aliases -->
