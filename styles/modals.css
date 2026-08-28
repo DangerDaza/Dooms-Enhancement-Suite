@@ -1437,6 +1437,36 @@
     margin-left: 14px;
 }
 
+/* Inputs in this window had NO colour rule of their own — only
+   .rpg-editor-input-group and the History Persistence .rpg-input class were
+   ever styled — so the field rows fell back to the browser default: a white
+   box with black text, glaring on every dark theme. Style them all from the
+   theme tokens, once, for every tab. */
+#rpg-tracker-editor-popup .rpg-editor-tab-content input[type="text"],
+#rpg-tracker-editor-popup .rpg-editor-tab-content input[type="number"],
+#rpg-tracker-editor-popup .rpg-editor-tab-content select,
+#rpg-tracker-editor-popup .rpg-editor-tab-content textarea {
+    background: var(--rpg-bg);
+    color: var(--rpg-text);
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    padding: 0.4em 0.5em;
+    font-size: 0.9em;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-tab-content input[type="text"]:focus,
+#rpg-tracker-editor-popup .rpg-editor-tab-content input[type="number"]:focus,
+#rpg-tracker-editor-popup .rpg-editor-tab-content select:focus,
+#rpg-tracker-editor-popup .rpg-editor-tab-content textarea:focus {
+    outline: none;
+    border-color: var(--rpg-highlight);
+}
+
+#rpg-tracker-editor-popup .rpg-editor-tab-content ::placeholder {
+    color: var(--rpg-text);
+    opacity: 0.45;
+}
+
 /* Field rows read better with a touch more room than the shared style. */
 #rpg-tracker-editor-popup .rpg-editor-field-item {
     padding: 0.6em;

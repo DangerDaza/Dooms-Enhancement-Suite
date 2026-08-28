@@ -5,6 +5,9 @@
 ### Fixed
 - **The Tracker Editor had no way to open it.** Adding custom scene and character fields has been supported for a long time, but the button that opens that editor was missing from the interface entirely — the click handler was bound to an element that doesn't exist in the markup, so the whole editor was unreachable and the feature may as well not have existed. It now opens from **Settings → Scene Tracker → Customize Tracker Fields**, next to the field toggles it controls.
 
+### Fixed
+- **Text boxes in the Edit Trackers window were bright white.** Nothing in the stylesheet ever gave the field rows a colour — only two other input groups in that modal were styled — so the name, instruction and icon boxes (and the new type dropdown) fell back to the browser default: a white box with black text, glaring against every dark theme. Every input, number box, dropdown and textarea in the window now takes the theme's colours, on all three tabs.
+
 ### Changed
 - **The Edit Trackers window has been reworked.** It was capped at the same 500px width as a small settings dialog, which crushed field rows — an icon, a name, an AI instruction, a type and a delete button — into a column barely wider than a phone. It's now a proper working surface: much larger (up to 1080px), grouped into titled cards instead of one undifferentiated run of rows, and laid out in two columns on a desktop-sized window while stacking cleanly on a phone. The **Widgets** section is gone: every toggle in it now lives in Settings → Scene Tracker, and four of the five were misleading anyway — Date, Time, Location and Recent Events are always sent regardless of that checkbox, so unticking them did nothing. The Date format control and the per-field wording boxes stay, now under clearer headings.
 
