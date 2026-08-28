@@ -641,7 +641,10 @@ function showImportModeDialog(migratedConfig, suggestedName, historyPersistence 
 function renderEditorUI() {
     // NOTE: renderUserStatsTab() removed — user stats system archived
     renderInfoBoxTab();
-    renderPresentCharactersTab();
+    // Present Characters tab removed — its markup is commented out in
+    // template.html and renderPresentCharactersTab() below is dormant. The
+    // thoughts config it owned now renders at the end of the Scene Tracker tab.
+    // renderPresentCharactersTab();
     renderHistoryPersistenceTab();
 }
 // NOTE: renderUserStatsTab() and setupUserStatsListeners() removed (see git history)
@@ -724,8 +727,25 @@ function renderInfoBoxTab() {
     html += '</div>';
     html += `<button class="rpg-btn-secondary" id="rpg-infobox-add-field"><i class="fa-solid fa-plus"></i> Add Custom Field</button>`;
     html += '</div>';
+    // --- Character thoughts ---
+    // Relocated from the removed Present Characters tab: it's the one setting
+    // there that still reaches the AI.
+    const thoughts = extensionSettings.trackerConfig?.presentCharacters?.thoughts || {};
+    html += '<div class="rpg-editor-section">';
+    html += `<h4><i class="fa-solid fa-comment-dots"></i> Character thoughts</h4>`;
+    html += `<p class="rpg-editor-hint">The inner-monologue line each present character writes. Turn the thoughts display on or off in Settings → Display.</p>`;
+    html += '<div class="rpg-editor-toggle-row">';
+    html += `<input type="checkbox" id="rpg-thoughts-enabled" ${thoughts.enabled !== false ? 'checked' : ''}>`;
+    html += `<label for="rpg-thoughts-enabled">Ask the AI for character thoughts</label>`;
+    html += '</div>';
+    html += `<label class="rpg-editor-field-label">Label</label>`;
+    html += `<div class="rpg-editor-field-subrow"><input type="text" id="rpg-thoughts-name" value="${escapeAttr(thoughts.name || 'Thoughts')}" placeholder="e.g. Thoughts, Inner Voice"></div>`;
+    html += `<label class="rpg-editor-field-label">AI instruction</label>`;
+    html += `<div class="rpg-editor-field-subrow"><input type="text" id="rpg-thoughts-description" value="${escapeAttr(thoughts.description || '')}" placeholder="What the AI should write in this field"></div>`;
+    html += '</div>';
     $('#rpg-editor-tab-infoBox').html(html);
     setupInfoBoxListeners();
+    setupThoughtsListeners();
 }
 /**
  * Set up event listeners for Info Box tab
@@ -798,308 +818,341 @@ function setupInfoBoxListeners() {
         widgets[key].prompt = String($(this).val() || '').trim();
     });
 }
+
 /**
- * Render Present Characters configuration tab
+ * Character-thoughts config, moved onto the Scene Tracker tab when the Present
+ * Characters tab was removed. Writes into the same
+ * trackerConfig.presentCharacters.thoughts the prompt builder reads, so the
+ * storage shape is unchanged.
  */
-function renderPresentCharactersTab() {
-    const config = extensionSettings.trackerConfig.presentCharacters;
-    let html = '<div class="rpg-editor-section">';
-    // Relationship Fields Section
-    html += `<h4><i class="fa-solid fa-heart"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusTitle')}</h4>`;
-    // Toggle for enabling/disabling relationships
-    const relationshipsEnabled = config.relationships?.enabled !== false; // Default to true if not set
-    html += '<div class="rpg-editor-toggle-row">';
-    html += `<input type="checkbox" id="rpg-relationships-enabled" ${relationshipsEnabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-relationships-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableRelationshipStatus')}</label>`;
-    html += '</div>';
-    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusHint')}</p>`;
-    html += '<div class="rpg-relationship-mapping-list" id="rpg-relationship-mapping-list">';
-    // Show existing relationships as field → emoji pairs
-    const relationshipEmojis = config.relationships?.relationshipEmojis || config.relationshipEmojis || {
-        'Lover': '❤️',
-        'Friend': '⭐',
-        'Ally': '🤝',
-        'Enemy': '⚔️',
-        'Neutral': '⚖️'
-    };
-    for (const [relationship, emoji] of Object.entries(relationshipEmojis)) {
-        html += `
-            <div class="rpg-relationship-item">
-                <input type="text" value="${escapeAttr(relationship)}" class="rpg-relationship-name" placeholder="Relationship type">
-                <span class="rpg-arrow">→</span>
-                <input type="text" value="${escapeAttr(emoji)}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
-                <button class="rpg-remove-relationship" data-relationship="${escapeAttr(relationship)}" title="Remove"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
-    }
-    html += '</div>';
-    html += `<button class="rpg-btn-secondary" id="rpg-add-relationship"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.newRelationshipButton')}</button>`;
-    // Custom Fields Section
-    html += `<h4><i class="fa-solid fa-list"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorTitle')}</h4>`;
-    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorHint')}</p>`;
-    html += '<div class="rpg-editor-fields-list" id="rpg-editor-fields-list">';
-    config.customFields.forEach((field, index) => {
-        html += `
-            <div class="rpg-editor-field-item" data-index="${index}">
-                <div class="rpg-field-controls">
-                    <button class="rpg-field-move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move up"><i class="fa-solid fa-arrow-up"></i></button>
-                    <button class="rpg-field-move-down" data-index="${index}" ${index === config.customFields.length - 1 ? 'disabled' : ''} title="Move down"><i class="fa-solid fa-arrow-down"></i></button>
-                </div>
-                <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-field-toggle" data-index="${index}">
-                <input type="text" value="${escapeAttr(field.name)}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
-                <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
-                <button class="rpg-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
-    });
-    html += '</div>';
-    html += `<button class="rpg-btn-secondary" id="rpg-add-field"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCustomFieldButton')}</button>`;
-    // Thoughts Section
-    html += `<h4><i class="fa-solid fa-comment-dots"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsConfigTitle')}</h4>`;
-    html += '<div class="rpg-editor-toggle-row">';
-    html += `<input type="checkbox" id="rpg-thoughts-enabled" ${config.thoughts?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-thoughts-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableCharacterThoughts')}</label>`;
-    html += '</div>';
-    html += '<div class="rpg-thoughts-config">';
-    html += '<div class="rpg-editor-input-group">';
-    html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsLabelLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-name" value="${escapeAttr(config.thoughts?.name || 'Thoughts')}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
-    html += '</div>';
-    html += '<div class="rpg-editor-input-group">';
-    html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.aiInstructionLabel')}</label>`;
-    html += `<input type="text" id="rpg-thoughts-description" value="${escapeAttr(config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)')}" placeholder="Description of what to generate">`;
-    html += '</div>';
-    html += '</div>';
-    // Character Stats
-    html += `<h4><i class="fa-solid fa-chart-bar"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsTitle')}</h4>`;
-    html += '<div class="rpg-editor-toggle-row">';
-    html += `<input type="checkbox" id="rpg-char-stats-enabled" ${config.characterStats?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-char-stats-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.trackCharacterStats')}</label>`;
-    html += '</div>';
-    html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsHint')}</p>`;
-    html += '<div class="rpg-editor-fields-list" id="rpg-char-stats-list">';
-    const charStats = config.characterStats?.customStats || [];
-    charStats.forEach((stat, index) => {
-        html += `
-            <div class="rpg-editor-field-item" data-index="${index}">
-                <input type="checkbox" ${stat.enabled ? 'checked' : ''} class="rpg-char-stat-toggle" data-index="${index}">
-                <input type="text" value="${escapeAttr(stat.name)}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
-                <button class="rpg-field-remove rpg-char-stat-remove" data-index="${index}" title="Remove stat"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
-    });
-    html += '</div>';
-    html += `<button class="rpg-btn-secondary" id="rpg-add-char-stat"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCharacterStatButton')}</button>`;
-    html += '</div>';
-    $('#rpg-editor-tab-presentCharacters').html(html);
-    setupPresentCharactersListeners();
-}
-/**
- * Set up event listeners for Present Characters tab
- */
-function setupPresentCharactersListeners() {
-    // Relationships enabled toggle
-    $('#rpg-relationships-enabled').off('change').on('change', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
-            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
-        }
-        extensionSettings.trackerConfig.presentCharacters.relationships.enabled = $(this).is(':checked');
-    });
-    // Add new relationship
-    $('#rpg-add-relationship').off('click').on('click', function() {
-        // Ensure relationships object exists
-        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
-            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
-        }
-        if (!extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis) {
-            extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis = {};
-        }
-        // Generate a unique relationship name
-        let baseName = 'New Relationship';
-        let relationshipName = baseName;
-        let counter = 1;
-        const existingRelationships = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
-        while (existingRelationships[relationshipName]) {
-            counter++;
-            relationshipName = `${baseName} ${counter}`;
-        }
-        // Add to new structure
-        extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationshipName] = '😊';
-        // Also update legacy fields for backward compatibility
-        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
-            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
-        }
-        extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationshipName] = '😊';
-        // Sync relationshipFields
-        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
-        extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
-        renderPresentCharactersTab();
-    });
-    // Remove relationship
-    $('.rpg-remove-relationship').off('click').on('click', function() {
-        const relationship = $(this).data('relationship');
-        // Remove from new structure
-        if (extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis) {
-            delete extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationship];
-        }
-        // Remove from legacy structure
-        if (extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
-            delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationship];
-        }
-        // Sync relationshipFields
-        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis || {};
-        extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
-        renderPresentCharactersTab();
-    });
-    // Update relationship name
-    $('.rpg-relationship-name').off('blur').on('blur', function() {
-        const newName = $(this).val();
-        const $item = $(this).closest('.rpg-relationship-item');
-        const emoji = $item.find('.rpg-relationship-emoji').val();
-        // Ensure structures exist
-        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
-            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
-        }
-        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
-            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
-        }
-        // Find the old name by matching the emoji in new structure
-        const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
-        const oldName = Object.keys(emojis).find(
-            key => emojis[key] === emoji && key !== newName
-        );
-        if (oldName && oldName !== newName) {
-            // Update new structure
-            delete emojis[oldName];
-            emojis[newName] = emoji;
-            // Update legacy structure
-            delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[oldName];
-            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[newName] = emoji;
-            // Sync relationshipFields
-            extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
-        }
-    });
-    // Update relationship emoji
-    $('.rpg-relationship-emoji').off('blur').on('blur', function() {
-        const name = $(this).closest('.rpg-relationship-item').find('.rpg-relationship-name').val();
-        // Ensure structures exist
-        if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
-            extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
-        }
-        if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
-            extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
-        }
-        // Update both structures
-        extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[name] = $(this).val();
-        extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[name] = $(this).val();
-    });
-    // Thoughts configuration
+function setupThoughtsListeners() {
+    const pc = extensionSettings.trackerConfig.presentCharacters;
+    if (!pc.thoughts) pc.thoughts = { enabled: true, name: 'Thoughts', description: '', persistInHistory: false };
     $('#rpg-thoughts-enabled').off('change').on('change', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
-            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
-        }
-        extensionSettings.trackerConfig.presentCharacters.thoughts.enabled = $(this).is(':checked');
+        pc.thoughts.enabled = $(this).is(':checked');
     });
     $('#rpg-thoughts-name').off('blur').on('blur', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
-            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
-        }
-        extensionSettings.trackerConfig.presentCharacters.thoughts.name = $(this).val();
+        pc.thoughts.name = $(this).val();
     });
     $('#rpg-thoughts-description').off('blur').on('blur', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
-            extensionSettings.trackerConfig.presentCharacters.thoughts = {};
-        }
-        extensionSettings.trackerConfig.presentCharacters.thoughts.description = $(this).val();
-    });
-    // Add field
-    $('#rpg-add-field').off('click').on('click', function() {
-        extensionSettings.trackerConfig.presentCharacters.customFields.push({
-            id: 'custom_' + Date.now(),
-            name: 'New Field',
-            enabled: true,
-            description: 'Description for AI'
-        });
-        renderPresentCharactersTab();
-    });
-    // Remove field
-    $('.rpg-field-remove').off('click').on('click', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields.splice(index, 1);
-        renderPresentCharactersTab();
-    });
-    // Move field up
-    $('.rpg-field-move-up').off('click').on('click', function() {
-        const index = $(this).data('index');
-        if (index > 0) {
-            const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
-            [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
-            renderPresentCharactersTab();
-        }
-    });
-    // Move field down
-    $('.rpg-field-move-down').off('click').on('click', function() {
-        const index = $(this).data('index');
-        const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
-        if (index < fields.length - 1) {
-            [fields[index], fields[index + 1]] = [fields[index + 1], fields[index]];
-            renderPresentCharactersTab();
-        }
-    });
-    // Toggle field
-    $('.rpg-field-toggle').off('change').on('change', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields[index].enabled = $(this).is(':checked');
-    });
-    // Rename field
-    $('.rpg-field-label').off('blur').on('blur', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields[index].name = $(this).val();
-    });
-    // Update description
-    $('.rpg-field-placeholder').off('blur').on('blur', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.customFields[index].description = $(this).val();
-    });
-    // Character stats toggle
-    $('#rpg-char-stats-enabled').off('change').on('change', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
-            extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
-        }
-        extensionSettings.trackerConfig.presentCharacters.characterStats.enabled = $(this).is(':checked');
-    });
-    // Add character stat
-    $('#rpg-add-char-stat').off('click').on('click', function() {
-        if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
-            extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
-        }
-        if (!extensionSettings.trackerConfig.presentCharacters.characterStats.customStats) {
-            extensionSettings.trackerConfig.presentCharacters.characterStats.customStats = [];
-        }
-        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.push({
-            id: `stat-${Date.now()}`,
-            name: 'New Stat',
-            enabled: true
-        });
-        renderPresentCharactersTab();
-    });
-    // Remove character stat
-    $('.rpg-char-stat-remove').off('click').on('click', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.splice(index, 1);
-        renderPresentCharactersTab();
-    });
-    // Toggle character stat
-    $('.rpg-char-stat-toggle').off('change').on('change', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].enabled = $(this).is(':checked');
-    });
-    // Rename character stat
-    $('.rpg-char-stat-label').off('blur').on('blur', function() {
-        const index = $(this).data('index');
-        extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].name = $(this).val();
+        pc.thoughts.description = $(this).val();
     });
 }
+// ============================================================================
+// PRESENT CHARACTERS TAB — REMOVED (dormant code kept for easy restore)
+//
+// This tab configured relationship options, custom character detail fields
+// and character stats. None of those are requested from the AI any more (see
+// the commented blocks in jsonPromptHelpers.buildCharactersJSONInstruction),
+// so the UI for them had nothing to drive. The one setting that still
+// matters — character thoughts wording — moved to the Scene Tracker tab.
+//
+// To restore: un-comment this block, the tab button and content div in
+// template.html, the renderPresentCharactersTab() call in renderEditorUI(),
+// and the three field blocks in buildCharactersJSONInstruction.
+// ============================================================================
+// /**
+//  * Render Present Characters configuration tab
+//  */
+// function renderPresentCharactersTab() {
+//     const config = extensionSettings.trackerConfig.presentCharacters;
+//     let html = '<div class="rpg-editor-section">';
+//     // Relationship Fields Section
+//     html += `<h4><i class="fa-solid fa-heart"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusTitle')}</h4>`;
+//     // Toggle for enabling/disabling relationships
+//     const relationshipsEnabled = config.relationships?.enabled !== false; // Default to true if not set
+//     html += '<div class="rpg-editor-toggle-row">';
+//     html += `<input type="checkbox" id="rpg-relationships-enabled" ${relationshipsEnabled ? 'checked' : ''}>`;
+//     html += `<label for="rpg-relationships-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableRelationshipStatus')}</label>`;
+//     html += '</div>';
+//     html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.relationshipStatusHint')}</p>`;
+//     html += '<div class="rpg-relationship-mapping-list" id="rpg-relationship-mapping-list">';
+//     // Show existing relationships as field → emoji pairs
+//     const relationshipEmojis = config.relationships?.relationshipEmojis || config.relationshipEmojis || {
+//         'Lover': '❤️',
+//         'Friend': '⭐',
+//         'Ally': '🤝',
+//         'Enemy': '⚔️',
+//         'Neutral': '⚖️'
+//     };
+//     for (const [relationship, emoji] of Object.entries(relationshipEmojis)) {
+//         html += `
+//             <div class="rpg-relationship-item">
+//                 <input type="text" value="${escapeAttr(relationship)}" class="rpg-relationship-name" placeholder="Relationship type">
+//                 <span class="rpg-arrow">→</span>
+//                 <input type="text" value="${escapeAttr(emoji)}" class="rpg-relationship-emoji" placeholder="Emoji" maxlength="4">
+//                 <button class="rpg-remove-relationship" data-relationship="${escapeAttr(relationship)}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+//             </div>
+//         `;
+//     }
+//     html += '</div>';
+//     html += `<button class="rpg-btn-secondary" id="rpg-add-relationship"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.newRelationshipButton')}</button>`;
+//     // Custom Fields Section
+//     html += `<h4><i class="fa-solid fa-list"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorTitle')}</h4>`;
+//     html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.appearanceDemeanorHint')}</p>`;
+//     html += '<div class="rpg-editor-fields-list" id="rpg-editor-fields-list">';
+//     config.customFields.forEach((field, index) => {
+//         html += `
+//             <div class="rpg-editor-field-item" data-index="${index}">
+//                 <div class="rpg-field-controls">
+//                     <button class="rpg-field-move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move up"><i class="fa-solid fa-arrow-up"></i></button>
+//                     <button class="rpg-field-move-down" data-index="${index}" ${index === config.customFields.length - 1 ? 'disabled' : ''} title="Move down"><i class="fa-solid fa-arrow-down"></i></button>
+//                 </div>
+//                 <input type="checkbox" ${field.enabled ? 'checked' : ''} class="rpg-field-toggle" data-index="${index}">
+//                 <input type="text" value="${escapeAttr(field.name)}" class="rpg-field-label" data-index="${index}" placeholder="Field Name">
+//                 <input type="text" value="${escapeAttr(field.description || '')}" class="rpg-field-placeholder" data-index="${index}" placeholder="AI Instruction">
+//                 <button class="rpg-field-remove" data-index="${index}" title="Remove field"><i class="fa-solid fa-trash"></i></button>
+//             </div>
+//         `;
+//     });
+//     html += '</div>';
+//     html += `<button class="rpg-btn-secondary" id="rpg-add-field"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCustomFieldButton')}</button>`;
+//     // Thoughts Section
+//     html += `<h4><i class="fa-solid fa-comment-dots"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsConfigTitle')}</h4>`;
+//     html += '<div class="rpg-editor-toggle-row">';
+//     html += `<input type="checkbox" id="rpg-thoughts-enabled" ${config.thoughts?.enabled ? 'checked' : ''}>`;
+//     html += `<label for="rpg-thoughts-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.enableCharacterThoughts')}</label>`;
+//     html += '</div>';
+//     html += '<div class="rpg-thoughts-config">';
+//     html += '<div class="rpg-editor-input-group">';
+//     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.thoughtsLabelLabel')}</label>`;
+//     html += `<input type="text" id="rpg-thoughts-name" value="${escapeAttr(config.thoughts?.name || 'Thoughts')}" placeholder="e.g., Thoughts, Inner Voice, Feelings">`;
+//     html += '</div>';
+//     html += '<div class="rpg-editor-input-group">';
+//     html += `<label>${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.aiInstructionLabel')}</label>`;
+//     html += `<input type="text" id="rpg-thoughts-description" value="${escapeAttr(config.thoughts?.description || 'Internal Monologue (in first person from character\'s POV, up to three sentences long)')}" placeholder="Description of what to generate">`;
+//     html += '</div>';
+//     html += '</div>';
+//     // Character Stats
+//     html += `<h4><i class="fa-solid fa-chart-bar"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsTitle')}</h4>`;
+//     html += '<div class="rpg-editor-toggle-row">';
+//     html += `<input type="checkbox" id="rpg-char-stats-enabled" ${config.characterStats?.enabled ? 'checked' : ''}>`;
+//     html += `<label for="rpg-char-stats-enabled">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.trackCharacterStats')}</label>`;
+//     html += '</div>';
+//     html += `<p class="rpg-editor-hint">${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.characterStatsHint')}</p>`;
+//     html += '<div class="rpg-editor-fields-list" id="rpg-char-stats-list">';
+//     const charStats = config.characterStats?.customStats || [];
+//     charStats.forEach((stat, index) => {
+//         html += `
+//             <div class="rpg-editor-field-item" data-index="${index}">
+//                 <input type="checkbox" ${stat.enabled ? 'checked' : ''} class="rpg-char-stat-toggle" data-index="${index}">
+//                 <input type="text" value="${escapeAttr(stat.name)}" class="rpg-char-stat-label" data-index="${index}" placeholder="Stat Name (e.g., Health)">
+//                 <button class="rpg-field-remove rpg-char-stat-remove" data-index="${index}" title="Remove stat"><i class="fa-solid fa-trash"></i></button>
+//             </div>
+//         `;
+//     });
+//     html += '</div>';
+//     html += `<button class="rpg-btn-secondary" id="rpg-add-char-stat"><i class="fa-solid fa-plus"></i> ${i18n.getTranslation('template.trackerEditorModal.presentCharactersTab.addCharacterStatButton')}</button>`;
+//     html += '</div>';
+//     $('#rpg-editor-tab-presentCharacters').html(html);
+//     setupPresentCharactersListeners();
+// }
+// /**
+//  * Set up event listeners for Present Characters tab
+//  */
+// function setupPresentCharactersListeners() {
+//     // Relationships enabled toggle
+//     $('#rpg-relationships-enabled').off('change').on('change', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+//             extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.relationships.enabled = $(this).is(':checked');
+//     });
+//     // Add new relationship
+//     $('#rpg-add-relationship').off('click').on('click', function() {
+//         // Ensure relationships object exists
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+//             extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+//         }
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis) {
+//             extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis = {};
+//         }
+//         // Generate a unique relationship name
+//         let baseName = 'New Relationship';
+//         let relationshipName = baseName;
+//         let counter = 1;
+//         const existingRelationships = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+//         while (existingRelationships[relationshipName]) {
+//             counter++;
+//             relationshipName = `${baseName} ${counter}`;
+//         }
+//         // Add to new structure
+//         extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationshipName] = '😊';
+//         // Also update legacy fields for backward compatibility
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+//             extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationshipName] = '😊';
+//         // Sync relationshipFields
+//         const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+//         extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+//         renderPresentCharactersTab();
+//     });
+//     // Remove relationship
+//     $('.rpg-remove-relationship').off('click').on('click', function() {
+//         const relationship = $(this).data('relationship');
+//         // Remove from new structure
+//         if (extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis) {
+//             delete extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[relationship];
+//         }
+//         // Remove from legacy structure
+//         if (extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+//             delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[relationship];
+//         }
+//         // Sync relationshipFields
+//         const emojis = extensionSettings.trackerConfig.presentCharacters.relationships?.relationshipEmojis || {};
+//         extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+//         renderPresentCharactersTab();
+//     });
+//     // Update relationship name
+//     $('.rpg-relationship-name').off('blur').on('blur', function() {
+//         const newName = $(this).val();
+//         const $item = $(this).closest('.rpg-relationship-item');
+//         const emoji = $item.find('.rpg-relationship-emoji').val();
+//         // Ensure structures exist
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+//             extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+//         }
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+//             extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+//         }
+//         // Find the old name by matching the emoji in new structure
+//         const emojis = extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis;
+//         const oldName = Object.keys(emojis).find(
+//             key => emojis[key] === emoji && key !== newName
+//         );
+//         if (oldName && oldName !== newName) {
+//             // Update new structure
+//             delete emojis[oldName];
+//             emojis[newName] = emoji;
+//             // Update legacy structure
+//             delete extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[oldName];
+//             extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[newName] = emoji;
+//             // Sync relationshipFields
+//             extensionSettings.trackerConfig.presentCharacters.relationshipFields = Object.keys(emojis);
+//         }
+//     });
+//     // Update relationship emoji
+//     $('.rpg-relationship-emoji').off('blur').on('blur', function() {
+//         const name = $(this).closest('.rpg-relationship-item').find('.rpg-relationship-name').val();
+//         // Ensure structures exist
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationships) {
+//             extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true, relationshipEmojis: {} };
+//         }
+//         if (!extensionSettings.trackerConfig.presentCharacters.relationshipEmojis) {
+//             extensionSettings.trackerConfig.presentCharacters.relationshipEmojis = {};
+//         }
+//         // Update both structures
+//         extensionSettings.trackerConfig.presentCharacters.relationships.relationshipEmojis[name] = $(this).val();
+//         extensionSettings.trackerConfig.presentCharacters.relationshipEmojis[name] = $(this).val();
+//     });
+//     // Thoughts configuration
+//     $('#rpg-thoughts-enabled').off('change').on('change', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+//             extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.thoughts.enabled = $(this).is(':checked');
+//     });
+//     $('#rpg-thoughts-name').off('blur').on('blur', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+//             extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.thoughts.name = $(this).val();
+//     });
+//     $('#rpg-thoughts-description').off('blur').on('blur', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.thoughts) {
+//             extensionSettings.trackerConfig.presentCharacters.thoughts = {};
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.thoughts.description = $(this).val();
+//     });
+//     // Add field
+//     $('#rpg-add-field').off('click').on('click', function() {
+//         extensionSettings.trackerConfig.presentCharacters.customFields.push({
+//             id: 'custom_' + Date.now(),
+//             name: 'New Field',
+//             enabled: true,
+//             description: 'Description for AI'
+//         });
+//         renderPresentCharactersTab();
+//     });
+//     // Remove field
+//     $('.rpg-field-remove').off('click').on('click', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.customFields.splice(index, 1);
+//         renderPresentCharactersTab();
+//     });
+//     // Move field up
+//     $('.rpg-field-move-up').off('click').on('click', function() {
+//         const index = $(this).data('index');
+//         if (index > 0) {
+//             const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
+//             [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
+//             renderPresentCharactersTab();
+//         }
+//     });
+//     // Move field down
+//     $('.rpg-field-move-down').off('click').on('click', function() {
+//         const index = $(this).data('index');
+//         const fields = extensionSettings.trackerConfig.presentCharacters.customFields;
+//         if (index < fields.length - 1) {
+//             [fields[index], fields[index + 1]] = [fields[index + 1], fields[index]];
+//             renderPresentCharactersTab();
+//         }
+//     });
+//     // Toggle field
+//     $('.rpg-field-toggle').off('change').on('change', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.customFields[index].enabled = $(this).is(':checked');
+//     });
+//     // Rename field
+//     $('.rpg-field-label').off('blur').on('blur', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.customFields[index].name = $(this).val();
+//     });
+//     // Update description
+//     $('.rpg-field-placeholder').off('blur').on('blur', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.customFields[index].description = $(this).val();
+//     });
+//     // Character stats toggle
+//     $('#rpg-char-stats-enabled').off('change').on('change', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
+//             extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.characterStats.enabled = $(this).is(':checked');
+//     });
+//     // Add character stat
+//     $('#rpg-add-char-stat').off('click').on('click', function() {
+//         if (!extensionSettings.trackerConfig.presentCharacters.characterStats) {
+//             extensionSettings.trackerConfig.presentCharacters.characterStats = { enabled: false, customStats: [] };
+//         }
+//         if (!extensionSettings.trackerConfig.presentCharacters.characterStats.customStats) {
+//             extensionSettings.trackerConfig.presentCharacters.characterStats.customStats = [];
+//         }
+//         extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.push({
+//             id: `stat-${Date.now()}`,
+//             name: 'New Stat',
+//             enabled: true
+//         });
+//         renderPresentCharactersTab();
+//     });
+//     // Remove character stat
+//     $('.rpg-char-stat-remove').off('click').on('click', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.characterStats.customStats.splice(index, 1);
+//         renderPresentCharactersTab();
+//     });
+//     // Toggle character stat
+//     $('.rpg-char-stat-toggle').off('change').on('change', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].enabled = $(this).is(':checked');
+//     });
+//     // Rename character stat
+//     $('.rpg-char-stat-label').off('blur').on('blur', function() {
+//         const index = $(this).data('index');
+//         extensionSettings.trackerConfig.presentCharacters.characterStats.customStats[index].name = $(this).val();
+//     });
+// }
 /**
  * Render History Persistence configuration tab
  * Allows users to select which tracker data should be injected into historical messages

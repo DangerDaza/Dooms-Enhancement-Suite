@@ -250,39 +250,52 @@ export function buildCharactersJSONInstruction() {
         instruction += ',\n    "color": "#RRGGBB hex matching the <font color> you use for this character\'s dialogue"';
     }
     // Details fields
-    if (enabledFields.length > 0) {
-        const compact = extensionSettings.compactPrompts !== false;
-        instruction += ',\n    "details": {\n';
-        for (let i = 0; i < enabledFields.length; i++) {
-            const field = enabledFields[i];
-            const fieldKey = toSnakeCase(field.name);
-            const comma = i < enabledFields.length - 1 ? ',' : '';
-            // Untyped fields keep the historical raw-description form (note:
-            // NOT escaped historically — preserved so existing setups emit
-            // byte-identical spec); typed fields go through buildFieldSpec.
-            const spec = field.type && field.type !== 'text'
-                ? buildFieldSpec(field, compact)
-                : `"${field.description}"`;
-            instruction += `      "${fieldKey}": ${spec}${comma}\n`;
-        }
-        instruction += '    }';
-    }
-    // Relationship
-    if (relationshipsEnabled) {
-        const relationshipFields = presentCharsConfig?.relationshipFields || [];
-        const options = relationshipFields.join('/');
-        instruction += ',\n    "relationship": {"status": "(choose one: ' + options + ')"}';
-    }
-    // Stats
-    if (enabledCharStats.length > 0) {
-        instruction += ',\n    "stats": [\n';
-        for (let i = 0; i < enabledCharStats.length; i++) {
-            const stat = enabledCharStats[i];
-            const comma = i < enabledCharStats.length - 1 ? ',' : '';
-            instruction += `      {"name": "${stat.name}", "value": X}${comma}\n`;
-        }
-        instruction += '    ]';
-    }
+    // ── details / relationship / stats: no longer requested ──
+    // These three were configured only from the Present Characters tab of the
+    // Edit Trackers window, which has been removed. Asking for them cost ~69
+    // tokens of every single generation (appearance ~24, demeanor ~17,
+    // relationship ~23, plus the details wrapper) for data most setups never
+    // used. Kept as commented code rather than deleted so restoring them is a
+    // matter of un-commenting these blocks and the tab.
+    //
+    // What still depends on them, if this is ever reverted:
+    //   details.appearance  -> auto-portrait prompt hint (avatarGenerator.js);
+    //                          the Workshop's per-character Portrait prompt
+    //                          field is the supported replacement
+    //   details.*           -> thoughts-panel fields + portrait card back-face
+    //   relationship.status -> relationship emoji badge on portrait cards
+    //   stats               -> stat bars on the card back-face
+    // Every one of those renderers already guards for missing data, so their
+    // absence leaves those areas empty rather than breaking.
+    //
+    // if (enabledFields.length > 0) {
+    //     const compact = extensionSettings.compactPrompts !== false;
+    //     instruction += ',\n    "details": {\n';
+    //     for (let i = 0; i < enabledFields.length; i++) {
+    //         const field = enabledFields[i];
+    //         const fieldKey = toSnakeCase(field.name);
+    //         const comma = i < enabledFields.length - 1 ? ',' : '';
+    //         const spec = field.type && field.type !== 'text'
+    //             ? buildFieldSpec(field, compact)
+    //             : `"${field.description}"`;
+    //         instruction += `      "${fieldKey}": ${spec}${comma}\n`;
+    //     }
+    //     instruction += '    }';
+    // }
+    // if (relationshipsEnabled) {
+    //     const relationshipFields = presentCharsConfig?.relationshipFields || [];
+    //     const options = relationshipFields.join('/');
+    //     instruction += ',\n    "relationship": {"status": "(choose one: ' + options + ')"}';
+    // }
+    // if (enabledCharStats.length > 0) {
+    //     instruction += ',\n    "stats": [\n';
+    //     for (let i = 0; i < enabledCharStats.length; i++) {
+    //         const stat = enabledCharStats[i];
+    //         const comma = i < enabledCharStats.length - 1 ? ',' : '';
+    //         instruction += `      {"name": "${stat.name}", "value": X}${comma}\n`;
+    //     }
+    //     instruction += '    ]';
+    // }
     // Thoughts
     if (thoughtsConfig?.enabled) {
         const thoughtsDescription = extensionSettings.customCharacterThoughtsPrompt || thoughtsConfig.description || 'Internal monologue';

@@ -207,5 +207,35 @@ check('clearing the wording restores the shipped text',
     pb.buildTrackerPromptBlock(CTX_NAME, true).includes('"terrain": "Terrain/environment type'));
 delete extensionSettings.trackerConfig.infoBox.widgets.terrain;
 
+// ── 10. Characters block: only the fields still in use are requested ──
+// The Present Characters tab was removed and details/relationship/stats are
+// no longer asked for. These pin BOTH halves: the four fields that must stay
+// (each has a live consumer) and the three that must not come back by
+// accident, since every one costs tokens on every single generation.
+resetSettings();
+extensionSettings.enableDialogueColoring = true;
+const chars = jh.buildCharactersJSONInstruction();
+check('characters still asks for name', chars.includes('"name"'));
+check('characters still asks for emoji', chars.includes('"emoji"'));
+check('characters still asks for color (bubble attribution depends on it)',
+    chars.includes('"color"'));
+check('characters still asks for thoughts', chars.includes('"thoughts"'));
+check('characters no longer asks for details', !chars.includes('"details"'));
+check('characters no longer asks for relationship', !chars.includes('"relationship"'));
+check('characters no longer asks for stats', !chars.includes('"stats"'));
+// Custom character fields must not resurrect the details block either.
+extensionSettings.trackerConfig.presentCharacters.customFields = [
+    { id: 'appearance', name: 'Appearance', enabled: true, description: 'Looks' },
+];
+check('a configured custom character field stays out of the prompt',
+    !jh.buildCharactersJSONInstruction().includes('"details"'));
+extensionSettings.trackerConfig.presentCharacters.customFields = [];
+// Colour is load-bearing: dropping dialogue colouring is the only thing that
+// should remove it.
+extensionSettings.enableDialogueColoring = false;
+check('color is omitted only when dialogue colouring is off',
+    !jh.buildCharactersJSONInstruction().includes('"color"'));
+extensionSettings.enableDialogueColoring = true;
+
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
