@@ -1362,6 +1362,115 @@
 }
 
 
+/* ============================================================================
+   EDIT TRACKERS WINDOW
+   The tracker editor is a working surface, not a settings dialog: it holds
+   field lists with an icon, a name, an AI instruction, a type and a delete
+   button on ONE row. The shared 500/600px popup cap squeezed all of that into
+   a column barely wider than a phone, which is what made it feel broken. It
+   gets its own, much larger box and a proper section layout.
+   ============================================================================ */
+
+#rpg-tracker-editor-popup {
+    --modal-max-width: min(96vw, 1080px);
+    --modal-max-height: 90vh;
+}
+
+/* Sections become cards so the eye can find the group boundaries instead of
+   reading one undifferentiated run of rows. */
+#rpg-tracker-editor-popup .rpg-editor-section {
+    padding: 0;
+    margin-bottom: 14px;
+    border: 1px solid var(--rpg-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--rpg-accent) 45%, transparent);
+    overflow: hidden;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-section > h4 {
+    margin: 0;
+    padding: 10px 14px;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--rpg-highlight);
+    background: color-mix(in srgb, var(--rpg-highlight) 8%, transparent);
+    border-bottom: 1px solid var(--rpg-border);
+}
+
+/* Everything that isn't the header gets the card's padding. */
+#rpg-tracker-editor-popup .rpg-editor-section > *:not(h4) {
+    margin-left: 14px;
+    margin-right: 14px;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-section > *:nth-child(2) {
+    margin-top: 12px;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-section > *:last-child {
+    margin-bottom: 14px;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-hint {
+    margin-bottom: 10px;
+}
+
+/* Label above a wording box (the field's own enable toggle lives in the
+   Scene Tracker menu, so these rows are label + input only). */
+.rpg-editor-field-label {
+    display: block;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--rpg-text);
+    margin-top: 10px;
+}
+
+.rpg-editor-field-label small {
+    margin-left: 5px;
+    font-weight: 400;
+}
+
+#rpg-tracker-editor-popup .rpg-editor-field-label + .rpg-editor-field-subrow {
+    margin-top: 4px;
+    margin-left: 14px;
+}
+
+/* Field rows read better with a touch more room than the shared style. */
+#rpg-tracker-editor-popup .rpg-editor-field-item {
+    padding: 0.6em;
+    gap: 0.6em;
+}
+
+/* On a wide window the field list gets the space it was always designed for:
+   the AI instruction is the column that actually needs room. */
+@media (min-width: 900px) {
+    #rpg-tracker-editor-popup .rpg-editor-field-item > input[type="text"] {
+        flex: 1 1 160px;
+    }
+    #rpg-tracker-editor-popup .rpg-editor-field-item > .rpg-infobox-field-placeholder,
+    #rpg-tracker-editor-popup .rpg-editor-field-item > .rpg-char-field-placeholder {
+        flex: 2.5 1 260px;
+    }
+}
+
+/* Two-up section layout once there's room for it, so the tab isn't one very
+   long scroll on a desktop-sized window. */
+@media (min-width: 1000px) {
+    #rpg-tracker-editor-popup .rpg-editor-tab-content {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 16px;
+        align-items: start;
+    }
+    /* The custom-field builders are the wide ones — let them span. */
+    #rpg-tracker-editor-popup .rpg-editor-section.rpg-editor-section-wide {
+        grid-column: 1 / -1;
+    }
+}
+
+
 /* Accordion sections */
 .rpg-accordion-section {
     margin-bottom: 4px;

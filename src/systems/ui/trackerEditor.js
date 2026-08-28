@@ -650,59 +650,46 @@ function renderEditorUI() {
  */
 function renderInfoBoxTab() {
     const config = extensionSettings.trackerConfig.infoBox;
+    // NOTE: the old "Widgets" section (Date/Time/Location/Recent Events/
+    // Weather on-off checkboxes) is gone. Every one of those toggles is now in
+    // Settings -> Scene Tracker, and four of the five were misleading here
+    // anyway: buildInfoBoxJSONInstruction force-enables date/time/location/
+    // recentEvents as CORE_FIELDS, so unchecking them changed nothing about
+    // the prompt. This tab is now about how fields are CONFIGURED; the Scene
+    // Tracker menu owns which ones are shown.
     let html = '<div class="rpg-editor-section">';
-    html += `<h4><i class="fa-solid fa-info-circle"></i> ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.widgetsTitle')}</h4>`;
-    // Date widget
+    html += `<h4><i class="fa-solid fa-calendar-days"></i> Date format</h4>`;
+    html += `<p class="rpg-editor-hint">How the AI is asked to write the date. Field visibility lives in Settings → Scene Tracker.</p>`;
     html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-date" ${config.widgets.date.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-date">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.dateWidget')}</label>`;
     html += '<select id="rpg-date-format" class="rpg-select-mini">';
     html += `<option value="Weekday, Month, Year" ${config.widgets.date.format === 'Weekday, Month, Year' ? 'selected' : ''}>Weekday, Month, Year</option>`;
     html += `<option value="Day (Numerical), Month, Year" ${config.widgets.date.format === 'Day (Numerical), Month, Year' ? 'selected' : ''}>Day (Numerical), Month, Year</option>`;
     html += '</select>';
     html += '</div>';
-    // Time widget
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-time" ${config.widgets.time.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-time">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.timeWidget')}</label>`;
     html += '</div>';
-    // Location widget
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-location" ${config.widgets.location.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-location">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.locationWidget')}</label>`;
-    html += '</div>';
-    // Recent Events widget
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-events" ${config.widgets.recentEvents.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-events">${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.recentEventsWidget')}</label>`;
-    html += '</div>';
-    // Weather widget
-    html += '<div class="rpg-editor-widget-row">';
-    html += `<input type="checkbox" id="rpg-widget-weather" ${config.widgets.weather?.enabled ? 'checked' : ''}>`;
-    html += `<label for="rpg-widget-weather">🌤️ ${i18n.getTranslation('template.trackerEditorModal.infoBoxTab.weatherWidget')}</label>`;
-    html += '</div>';
-    // --- New optional fields ---
+    // --- Optional field wording ---
     // Each of these is a descriptive field: its whole JSON value is a sentence
-    // telling the model what to write, so it also gets a wording box. Empty =
-    // the shipped instruction.
-    html += `<h4 style="margin-top:10px"><i class="fa-solid fa-plus-circle"></i> Optional Fields</h4>`;
-    html += `<p class="rpg-editor-hint">Leave the wording box empty to use the built-in instruction. Type in it to tell the AI exactly how you want that field written.</p>`;
-    const descriptiveWidget = (domId, widgetKey, label, hint) => {
+    // telling the model what to write, so it gets a wording box. Empty = the
+    // shipped instruction. The enable checkbox is intentionally NOT here —
+    // that's the Scene Tracker menu's job.
+    html += '<div class="rpg-editor-section">';
+    html += `<h4><i class="fa-solid fa-pen-nib"></i> Optional field wording</h4>`;
+    html += `<p class="rpg-editor-hint">Leave a box empty to use the built-in instruction. Type in it to tell the AI exactly how you want that field written. Turn these fields on or off in Settings → Scene Tracker.</p>`;
+    const descriptiveWidget = (widgetKey, label, hint) => {
         const w = config.widgets[widgetKey] || {};
-        html += '<div class="rpg-editor-widget-row">';
-        html += `<input type="checkbox" id="rpg-widget-${domId}" ${w.enabled ? 'checked' : ''}>`;
-        html += `<label for="rpg-widget-${domId}">${label} <small style="opacity:0.6">${hint}</small></label>`;
-        html += '</div>';
-        html += `<div class="rpg-editor-field-subrow"><input type="text" class="rpg-widget-prompt" data-widget="${widgetKey}" value="${escapeAttr(w.prompt || '')}" placeholder="AI instruction for this field (empty = default)"></div>`;
+        html += `<label class="rpg-editor-field-label">${label} <small style="opacity:0.6">${hint}</small></label>`;
+        html += `<div class="rpg-editor-field-subrow"><input type="text" class="rpg-widget-prompt" data-widget="${escapeAttr(widgetKey)}" value="${escapeAttr(w.prompt || '')}" placeholder="AI instruction for this field (empty = default)"></div>`;
     };
-    descriptiveWidget('moonphase', 'moonPhase', '🌙 Moon Phase', '(Full Moon, Waning Crescent…)');
-    descriptiveWidget('tension', 'tension', '⚡ Tension / Mood', '(Calm, Tense, Hostile…)');
-    descriptiveWidget('timesincerest', 'timeSinceRest', '⏳ Time Since Rest', '(e.g. 6 hours, 2 days)');
-    descriptiveWidget('conditions', 'conditions', '💔 Active Conditions', '(Transformed, Poisoned…)');
-    descriptiveWidget('terrain', 'terrain', '🌿 Terrain', '(Dense Forest, City Streets…)');
+    descriptiveWidget('moonPhase', '🌙 Moon Phase', '(Full Moon, Waning Crescent…)');
+    descriptiveWidget('tension', '⚡ Tension / Mood', '(Calm, Tense, Hostile…)');
+    descriptiveWidget('timeSinceRest', '⏳ Time Since Rest', '(e.g. 6 hours, 2 days)');
+    descriptiveWidget('conditions', '💔 Active Conditions', '(Transformed, Poisoned…)');
+    descriptiveWidget('terrain', '🌿 Terrain', '(Dense Forest, City Streets…)');
+    html += '</div>';
     // --- Custom scene fields ---
     const customFields = config.customFields || [];
-    html += `<h4 style="margin-top:10px"><i class="fa-solid fa-wand-magic-sparkles"></i> Custom Scene Fields</h4>`;
+    html += '<div class="rpg-editor-section rpg-editor-section-wide">';
+    html += `<h4><i class="fa-solid fa-wand-magic-sparkles"></i> Custom Scene Fields</h4>`;
     html += `<p class="rpg-editor-hint">Add your own fields to the Scene Tracker. The icon is shown next to the field; the AI instruction tells the model what to fill in each response. <strong>Type</strong> tells the model what shape to answer in — Choice needs a comma-separated option list, Number takes an optional range.</p>`;
     html += '<div class="rpg-editor-fields-list" id="rpg-infobox-custom-fields-list">';
     customFields.forEach((field, index) => {
@@ -745,17 +732,11 @@ function renderInfoBoxTab() {
  */
 function setupInfoBoxListeners() {
     const widgets = extensionSettings.trackerConfig.infoBox.widgets;
-    // Widget toggles only mutate the (snapshot-backed) trackerConfig here; the
-    // matching Scene Tracker show-flags are synced on Save via applyTrackerConfig.
-    // Writing sceneTracker live would escape the tempConfig transaction, so a
-    // Cancel couldn't revert it (leaving the two panels contradicting each other).
-    for (const widgetKey of Object.keys(WIDGET_SHOW_KEYS)) {
-        $(`#rpg-widget-${WIDGET_DOM_SUFFIX[widgetKey]}`).off('change').on('change', function() {
-            const v = $(this).is(':checked');
-            if (!widgets[widgetKey]) widgets[widgetKey] = { enabled: false, persistInHistory: false };
-            widgets[widgetKey].enabled = v;
-        });
-    }
+    // The per-widget enable checkboxes used to be bound here. They now live in
+    // Settings -> Scene Tracker (the single place visibility is decided), so
+    // there is nothing to bind. WIDGET_SHOW_KEYS is still used by
+    // applyTrackerConfig to keep sceneTracker's show-flags in step with the
+    // committed widget states.
     $('#rpg-date-format').off('change').on('change', function() {
         widgets.date.format = $(this).val();
     });
