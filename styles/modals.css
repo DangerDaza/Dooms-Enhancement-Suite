@@ -1537,6 +1537,66 @@
     border-color: var(--rpg-highlight);
 }
 
+/* ── Emoji picker popover (src/systems/ui/emojiPicker.js) ──
+   Fixed-position and body-appended: the settings drawer and the modals that
+   host emoji inputs both clip their contents, so an in-flow popover would be
+   cut off at the panel edge. z-index sits above the modal layer. */
+.rpg-emoji-picker {
+    position: fixed;
+    z-index: 100001;
+    background: var(--rpg-accent);
+    border: 1px solid var(--rpg-border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px var(--rpg-shadow, rgba(0, 0, 0, 0.5));
+    padding: 8px;
+    width: 268px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.rpg-emoji-picker-group-label {
+    font-size: 0.66em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--rpg-text);
+    opacity: 0.55;
+    margin: 6px 0 3px 2px;
+}
+
+.rpg-emoji-picker-group-label:first-child {
+    margin-top: 0;
+}
+
+.rpg-emoji-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 1px;
+}
+
+.rpg-emoji-picker-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 0;
+    height: 24px;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.rpg-emoji-picker-btn:hover,
+.rpg-emoji-picker-btn:focus-visible {
+    background: var(--rpg-bg);
+    border-color: var(--rpg-highlight);
+    outline: none;
+}
+
+/* The emoji field opens the picker, so flag it as clickable. */
+.rpg-ws-rel-emoji {
+    cursor: pointer;
+}
+
 .rpg-ws-rel-preview {
     display: inline-block;
     background: var(--rpg-bg);

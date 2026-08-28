@@ -46,6 +46,7 @@ import {
 } from './src/systems/generation/promptBuilder.js';
 import { parseResponse, parseQuests } from './src/systems/generation/parser.js';
 import { buildRelationshipSpec } from './src/systems/generation/jsonPromptHelpers.js';
+import { openEmojiPicker, closeEmojiPicker } from './src/systems/ui/emojiPicker.js';
 import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfiles } from './src/systems/generation/apiClient.js';
 import { onGenerationStarted } from './src/systems/generation/injector.js';
 // Rendering modules
@@ -224,6 +225,9 @@ function syncRelationshipConfig(pc) {
 function renderWorkshopRelationships() {
     const $host = $('#rpg-ws-relationship-list');
     if (!$host.length) return;
+    // The picker is body-appended and positioned against one of these rows,
+    // so rebuilding the list would leave it anchored to a detached input.
+    closeEmojiPicker();
     const pc = getRelationshipConfig();
     if (!pc) { $host.empty(); return; }
     const emojis = pc.relationships.relationshipEmojis || {};
@@ -1237,6 +1241,19 @@ function bindSettingsUI() {
         if (pc.relationships.relationshipEmojis[name] === undefined) return;
         pc.relationships.relationshipEmojis[name] = String($(this).val() || '').trim() || '🙂';
         _saveRel(pc);
+    });
+    // Clicking the emoji field opens the picker; typing into it still works,
+    // so an emoji outside the curated set can be pasted in as before.
+    $(document).on('click', '.rpg-ws-rel-emoji', function () {
+        const input = this;
+        const name = String($(input).data('relationship'));
+        openEmojiPicker(input, (emoji) => {
+            const pc = getRelationshipConfig();
+            if (!pc || pc.relationships.relationshipEmojis[name] === undefined) return;
+            pc.relationships.relationshipEmojis[name] = emoji || '🙂';
+            $(input).val(pc.relationships.relationshipEmojis[name]);
+            _saveRel(pc);
+        });
     });
     // Wording override. Empty string is meaningful (= use the bare option
     // list), so it's stored as '' rather than deleted. This one skips the
