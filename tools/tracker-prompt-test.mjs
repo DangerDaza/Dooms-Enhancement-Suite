@@ -207,35 +207,44 @@ check('clearing the wording restores the shipped text',
     pb.buildTrackerPromptBlock(CTX_NAME, true).includes('"terrain": "Terrain/environment type'));
 delete extensionSettings.trackerConfig.infoBox.widgets.terrain;
 
-// ── 10. Characters block: only the fields still in use are requested ──
-// The Present Characters tab was removed and details/relationship/stats are
-// no longer asked for. These pin BOTH halves: the four fields that must stay
-// (each has a live consumer) and the three that must not come back by
-// accident, since every one costs tokens on every single generation.
+// ── 10. Characters block: every consumer's field is requested ──
+// Each of these has a live consumer, so a silent drop breaks a visible
+// feature: color drives chat-bubble speaker attribution, details.appearance
+// feeds auto-portrait prompts and the card back-face, relationship draws the
+// badge, stats draw the back-face bars.
 resetSettings();
 extensionSettings.enableDialogueColoring = true;
-const chars = jh.buildCharactersJSONInstruction();
-check('characters still asks for name', chars.includes('"name"'));
-check('characters still asks for emoji', chars.includes('"emoji"'));
-check('characters still asks for color (bubble attribution depends on it)',
-    chars.includes('"color"'));
-check('characters still asks for thoughts', chars.includes('"thoughts"'));
-check('characters no longer asks for details', !chars.includes('"details"'));
-check('characters no longer asks for relationship', !chars.includes('"relationship"'));
-check('characters no longer asks for stats', !chars.includes('"stats"'));
-// Custom character fields must not resurrect the details block either.
 extensionSettings.trackerConfig.presentCharacters.customFields = [
     { id: 'appearance', name: 'Appearance', enabled: true, description: 'Looks' },
 ];
-check('a configured custom character field stays out of the prompt',
-    !jh.buildCharactersJSONInstruction().includes('"details"'));
-extensionSettings.trackerConfig.presentCharacters.customFields = [];
-// Colour is load-bearing: dropping dialogue colouring is the only thing that
-// should remove it.
+extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true };
+extensionSettings.trackerConfig.presentCharacters.relationshipFields = ['Lover', 'Enemy'];
+extensionSettings.trackerConfig.presentCharacters.characterStats = {
+    enabled: true, customStats: [{ name: 'Trust', enabled: true }],
+};
+const chars = jh.buildCharactersJSONInstruction();
+check('characters asks for name', chars.includes('"name"'));
+check('characters asks for emoji', chars.includes('"emoji"'));
+check('characters asks for color (bubble attribution depends on it)', chars.includes('"color"'));
+check('characters asks for thoughts', chars.includes('"thoughts"'));
+check('characters asks for details (auto-portraits + back-face)', chars.includes('"details"'));
+check('...including the configured custom field', chars.includes('"appearance"'));
+check('characters asks for relationship (card badge)', chars.includes('"relationship"'));
+check('...with the configured options', chars.includes('Lover/Enemy'));
+check('characters asks for stats when enabled', chars.includes('"stats"'));
+
+// Relationship options come from the Workshop settings section, which writes
+// relationshipFields — an empty list must not emit a broken "choose one: ".
+extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: false };
+check('relationship omitted when tracking is turned off',
+    !jh.buildCharactersJSONInstruction().includes('"relationship"'));
+extensionSettings.trackerConfig.presentCharacters.relationships = { enabled: true };
+
 extensionSettings.enableDialogueColoring = false;
 check('color is omitted only when dialogue colouring is off',
     !jh.buildCharactersJSONInstruction().includes('"color"'));
 extensionSettings.enableDialogueColoring = true;
+resetSettings();
 
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

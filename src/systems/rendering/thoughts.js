@@ -331,7 +331,10 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     const characterStatsConfig = config?.characterStats;
     const enabledCharStats = characterStatsConfig?.enabled && characterStatsConfig?.customStats?.filter(s => s && s.enabled && s.name) || [];
     const relationshipFields = config?.relationshipFields || [];
-    const hasRelationshipEnabled = relationshipFields.length > 0;
+    // Honour Settings → Workshop → Track Relationships as well as the list
+    // itself; the prompt stops asking when it's off, so the badge would
+    // otherwise sit there showing a stale value forever.
+    const hasRelationshipEnabled = config?.relationships?.enabled !== false && relationshipFields.length > 0;
     // Use committedTrackerData as fallback if lastGeneratedData is empty (e.g., after page refresh)
     const characterThoughtsData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts || '';
     debugLog('[RPG Thoughts] Raw characterThoughts data:', characterThoughtsData);
@@ -940,7 +943,8 @@ export function addNewCharacter() {
     const enabledFields = presentCharsConfig?.customFields?.filter(f => f && f.enabled && f.name) || [];
     const characterStats = presentCharsConfig?.characterStats;
     const enabledCharStats = characterStats?.enabled && characterStats?.customStats?.filter(s => s && s.enabled && s.name) || [];
-    const hasRelationship = presentCharsConfig?.relationshipFields?.length > 0;
+    const hasRelationship = presentCharsConfig?.relationships?.enabled !== false
+        && presentCharsConfig?.relationshipFields?.length > 0;
     // Check if data is in JSON format
     let isJSON = false;
     let parsedData = null;

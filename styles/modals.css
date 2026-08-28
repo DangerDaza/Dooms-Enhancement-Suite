@@ -1501,6 +1501,60 @@
 }
 
 
+/* ── Workshop → Relationships rows (Settings accordion) ── */
+.rpg-ws-rel-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    min-width: 0;
+}
+
+.rpg-ws-rel-row input {
+    /* Explicit border-box so the emoji column's fixed basis is the real
+       rendered width and doesn't grow by its padding. */
+    box-sizing: border-box;
+    background: var(--rpg-bg);
+    color: var(--rpg-text);
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    padding: 5px 7px;
+    font-size: 0.85em;
+    min-width: 0;
+}
+
+.rpg-ws-rel-name {
+    flex: 1 1 auto;
+}
+
+.rpg-ws-rel-emoji {
+    flex: 0 0 52px;
+    text-align: center;
+}
+
+.rpg-ws-rel-row input:focus {
+    outline: none;
+    border-color: var(--rpg-highlight);
+}
+
+.rpg-ws-rel-remove {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    color: var(--rpg-text);
+    opacity: 0.6;
+    padding: 5px 8px;
+    cursor: pointer;
+}
+
+.rpg-ws-rel-remove:hover {
+    opacity: 1;
+    border-color: var(--rpg-highlight);
+    color: var(--rpg-highlight);
+}
+
+
 /* Accordion sections */
 .rpg-accordion-section {
     margin-bottom: 4px;

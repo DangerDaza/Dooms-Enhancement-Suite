@@ -1013,6 +1013,38 @@
                 </div>
             </div>
 
+            <!-- ═══════ WORKSHOP ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="workshop">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-wand-magic-sparkles rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Workshop</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Relationships</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Track Relationships</span>
+                            <span class="rpg-setting-hint">Ask the AI to rate each present character's relationship to
+                                you. The matching emoji is shown on their portrait card.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-ws-relationships-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- Rows generated from trackerConfig so this list and the prompt
+                         can never disagree about which relationships exist. -->
+                    <div id="rpg-ws-relationship-list"></div>
+                    <button id="rpg-ws-add-relationship" class="rpg-accordion-action-btn" type="button"
+                        style="margin-top:8px;">
+                        <i class="fa-solid fa-plus"></i> Add Relationship
+                    </button>
+                    <p class="rpg-note-text" style="margin-top:4px;">The AI is told to pick one of these for each
+                        character, so keep the list short and distinct.</p>
+                </div>
+            </div>
+
             <!-- ═══════ BUNNY MO INTEGRATION ═══════ -->
             <div class="rpg-accordion-section" data-accordion="bunny-mo">
                 <div class="rpg-accordion-header">

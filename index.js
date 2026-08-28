@@ -191,6 +191,54 @@ function renderSceneCustomFieldToggles() {
     $host.html(rows);
 }
 
+/**
+ * Relationship options for the Workshop settings section.
+ *
+ * These moved out of the Edit Trackers window's removed Present Characters
+ * tab. Each row is a name the AI may choose from plus the emoji shown on the
+ * portrait card. Generated from trackerConfig (rather than hardcoded markup)
+ * so the list and the prompt cannot disagree about which relationships exist.
+ *
+ * Storage keeps BOTH the modern nested shape and the legacy flat keys in
+ * step — relationshipFields is what buildCharactersJSONInstruction reads, and
+ * older saves/presets still carry the flat maps.
+ */
+function getRelationshipConfig() {
+    const pc = extensionSettings.trackerConfig?.presentCharacters;
+    if (!pc) return null;
+    if (!pc.relationships) pc.relationships = { enabled: true, relationshipEmojis: {} };
+    if (!pc.relationships.relationshipEmojis) {
+        pc.relationships.relationshipEmojis = pc.relationshipEmojis || {};
+    }
+    return pc;
+}
+
+/** Mirrors the emoji map out to the legacy keys the prompt/renderers read. */
+function syncRelationshipConfig(pc) {
+    const emojis = pc.relationships.relationshipEmojis;
+    pc.relationshipEmojis = { ...emojis };
+    pc.relationshipFields = Object.keys(emojis);
+}
+
+function renderWorkshopRelationships() {
+    const $host = $('#rpg-ws-relationship-list');
+    if (!$host.length) return;
+    const pc = getRelationshipConfig();
+    if (!pc) { $host.empty(); return; }
+    const emojis = pc.relationships.relationshipEmojis || {};
+    $('#rpg-ws-relationships-enabled').prop('checked', pc.relationships.enabled !== false);
+    const rows = Object.entries(emojis).map(([name, emoji]) => `
+        <div class="rpg-ws-rel-row" data-relationship="${escapeHtml(name)}">
+            <input type="text" class="rpg-ws-rel-name" value="${escapeHtml(name)}"
+                   data-relationship="${escapeHtml(name)}" placeholder="Relationship" />
+            <input type="text" class="rpg-ws-rel-emoji" value="${escapeHtml(emoji)}"
+                   data-relationship="${escapeHtml(name)}" maxlength="4" placeholder="🙂" />
+            <button type="button" class="rpg-ws-rel-remove" data-relationship="${escapeHtml(name)}"
+                    title="Remove"><i class="fa-solid fa-trash"></i></button>
+        </div>`).join('');
+    $host.html(rows || '<p class="rpg-note-text">No relationships yet — add one below.</p>');
+}
+
 function updatePortraitEnhancementSettingsVisibility() {
     const enabled = extensionSettings.syncExpressionsToPresentCharacters === true;
     const source = extensionSettings.portraitEnhancementMode || 'expressions';
@@ -1111,6 +1159,64 @@ function bindSettingsUI() {
     // right away rather than after a reload.
     window.addEventListener('dooms:tracker-config-saved', () => {
         try { renderSceneCustomFieldToggles(); } catch (e) { /* non-fatal */ }
+        try { renderWorkshopRelationships(); } catch (e) { /* non-fatal */ }
+    });
+
+    // ── Workshop → Relationships ──
+    // Writes straight to extensionSettings (no snapshot/Cancel transaction
+    // here, unlike the Edit Trackers modal), so each edit saves immediately.
+    const _saveRel = (pc) => {
+        syncRelationshipConfig(pc);
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] relationship save failed', e); }
+        try { renderThoughts(); clearPortraitCache(); updatePortraitBar(); } catch (e) {}
+    };
+    $(document).on('change', '#rpg-ws-relationships-enabled', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        pc.relationships.enabled = $(this).prop('checked');
+        _saveRel(pc);
+    });
+    $(document).on('click', '#rpg-ws-add-relationship', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        const emojis = pc.relationships.relationshipEmojis;
+        let name = 'New Relationship';
+        let n = 1;
+        while (emojis[name]) { n++; name = `New Relationship ${n}`; }
+        emojis[name] = '🙂';
+        _saveRel(pc);
+        renderWorkshopRelationships();
+    });
+    $(document).on('click', '.rpg-ws-rel-remove', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        delete pc.relationships.relationshipEmojis[String($(this).data('relationship'))];
+        _saveRel(pc);
+        renderWorkshopRelationships();
+    });
+    // Renaming rebuilds the map in place so the row order the user sees is
+    // preserved — reinserting the key would send it to the end of the list.
+    $(document).on('blur', '.rpg-ws-rel-name', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        const oldName = String($(this).data('relationship'));
+        const newName = String($(this).val() || '').trim();
+        if (!newName || newName === oldName) { renderWorkshopRelationships(); return; }
+        const emojis = pc.relationships.relationshipEmojis;
+        if (emojis[newName] !== undefined) { renderWorkshopRelationships(); return; } // name taken
+        const rebuilt = {};
+        for (const [k, v] of Object.entries(emojis)) rebuilt[k === oldName ? newName : k] = v;
+        pc.relationships.relationshipEmojis = rebuilt;
+        _saveRel(pc);
+        renderWorkshopRelationships();
+    });
+    $(document).on('blur', '.rpg-ws-rel-emoji', function () {
+        const pc = getRelationshipConfig();
+        if (!pc) return;
+        const name = String($(this).data('relationship'));
+        if (pc.relationships.relationshipEmojis[name] === undefined) return;
+        pc.relationships.relationshipEmojis[name] = String($(this).val() || '').trim() || '🙂';
+        _saveRel(pc);
     });
 
     $(document).on('change', '.rpg-st-custom-field-toggle', function () {
@@ -1904,6 +2010,7 @@ function bindSettingsUI() {
     $('#rpg-st-show-terrain').prop('checked', st.showTerrain === true);
     $('#rpg-st-show-weather').prop('checked', st.showWeather === true);
     renderSceneCustomFieldToggles();
+    renderWorkshopRelationships();
     $('#rpg-st-layout').val(st.layout || 'grid');
     $('#rpg-st-font-size').val(st.fontSize ?? 82);
     $('#rpg-st-font-size-value').text((st.fontSize ?? 82) + '%');
