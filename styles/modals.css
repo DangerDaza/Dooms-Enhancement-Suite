@@ -732,19 +732,29 @@
 
 .rpg-tracker-prompt-tokens {
     font-size: 11px;
-    color: #888;
+    /* Muted text follows the .rpg-editor-hint convention (token + opacity)
+       rather than a fixed grey, which would be unreadable on the light
+       and minimal themes. */
+    color: var(--rpg-text);
+    opacity: 0.65;
     font-family: 'Courier New', monospace;
 }
 
+/* Warning callout. DES has no semantic warn token, so this derives from
+   --rpg-highlight (the per-theme attention colour) via a local variable: it
+   tracks whatever theme is active, and a real --rpg-warn can be introduced
+   later by overriding one property. The tint is color-mix'd with transparent
+   instead of a fixed rgba so it sits correctly on light backgrounds too. */
 .rpg-tracker-prompt-warnings {
+    --rpg-warn: var(--rpg-highlight, #e94560);
     margin-top: 8px;
     padding: 8px 10px;
     border-radius: 4px;
-    border-left: 3px solid #e0a800;
-    background: rgba(224, 168, 0, 0.08);
+    border-left: 3px solid var(--rpg-warn);
+    background: color-mix(in srgb, var(--rpg-warn) 10%, transparent);
     font-size: 11px;
     line-height: 1.55;
-    color: var(--SmartThemeBodyColor, #ccc);
+    color: var(--rpg-text);
 }
 
 .rpg-tracker-prompt-warnings ul {
@@ -754,18 +764,31 @@
 
 .rpg-tracker-prompt-warnings code {
     font-family: 'Courier New', monospace;
-    background: rgba(255, 255, 255, 0.07);
+    /* Derived from the text colour so the chip stays visible whether the
+       surface is dark or light (a white alpha vanished on light themes). */
+    background: color-mix(in srgb, var(--rpg-text) 12%, transparent);
     padding: 0 3px;
     border-radius: 3px;
 }
 
 .rpg-tracker-prompt-warn-head {
     font-weight: 600;
-    color: #e0a800;
+    color: var(--rpg-warn, var(--rpg-highlight, #e94560));
 }
 
 .rpg-tracker-prompt-warn-foot {
     opacity: 0.75;
+}
+
+/* Hint line under a prompt label. Matches .rpg-editor-hint's themed
+   treatment; the older sibling sections in this modal still use an inline
+   #888, which is why this is a class rather than more inline styling. */
+.rpg-prompt-hint {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: var(--rpg-text);
+    opacity: 0.7;
 }
 
 

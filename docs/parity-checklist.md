@@ -22,6 +22,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Manual update button works
 - [ ] Connection profile dropdown lists profiles; external API generation mode works
 - [ ] Prompt editor: custom prompts save and take effect
+- [ ] New tracker menus follow the theme: the Tracker Prompt editor (edited badge, key-warning callout, token counter, hint) and the editor field rows/sub-rows use `--rpg-*` tokens only — no fixed greys or white-alpha fills. Cycle Default / Sci-Fi / Fantasy / Cyberpunk / Midnight Rose / Emerald Grove / Arctic / Volcanic / Dracula / Ocean Depths / Custom and confirm all text stays legible and the warning callout picks up each theme's highlight
 - [ ] Tracker Editor OPENS from Settings → Scene Tracker → "Customize Tracker Fields" (the only entry point; verify it exists and the modal appears — it was orphaned markup-less before 2.5)
 - [ ] Custom tracker field types: Text/Number(+range)/Choice(+options)/List/Yes-No/Percent each emit their own spec shape; an UNTYPED or Text field emits byte-identical spec to pre-2.5 (no prompt drift for existing setups); Choice with no options degrades to text; type change re-renders the editor sub-row (choices / min-max)
 - [ ] Custom scene fields appear as quick toggles in Settings → Scene Tracker, generated from config (a field added in the Tracker Editor shows up there without a reload; toggling it there hides/shows it in the header and persists)
