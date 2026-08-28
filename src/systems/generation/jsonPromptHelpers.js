@@ -250,7 +250,6 @@ export function buildCharactersJSONInstruction() {
         instruction += ',\n    "color": "#RRGGBB hex matching the <font color> you use for this character\'s dialogue"';
     }
     // Details fields
-    // Details fields
     if (enabledFields.length > 0) {
         const compact = extensionSettings.compactPrompts !== false;
         instruction += ',\n    "details": {\n';
