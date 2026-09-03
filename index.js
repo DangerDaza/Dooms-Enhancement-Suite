@@ -1272,7 +1272,10 @@ function bindSettingsUI() {
         const key = String($(this).data('fieldId') || '');
         const fields = extensionSettings.trackerConfig?.infoBox?.customFields;
         if (!Array.isArray(fields)) return;
-        const field = fields.find(f => f && String(f.id) === key);
+        // Same id-or-name fallback the toggle was rendered with; matching on
+        // id alone left fields that carry no id (imported presets) with a
+        // toggle that flipped visually and did nothing.
+        const field = fields.find(f => f && String(f.id ?? f.name) === key);
         if (!field) return;
         field.enabled = $(this).prop('checked');
         _saveSt();

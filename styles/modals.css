@@ -5741,10 +5741,18 @@
     min-width: 0;
 }
 
+/* The wrapping default stays for every OTHER chip row using this class —
+   #cw-pronoun-chips and the knife-theme picker, neither of which has arrows.
+   Making the class itself non-wrapping put their overflow out of mouse reach. */
 #character-workshop-popup .rpg-rel-chips {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 6px;
+}
+
+/* Carousel behaviour is scoped to the relationship strip alone. */
+#character-workshop-popup #cw-rel-chips {
+    flex-wrap: nowrap;
     overflow-x: auto;
     /* No `scroll-behavior: smooth` here on purpose: it would also animate the
        jump-to-selected on open, so every card with a relationship set would
@@ -5760,11 +5768,11 @@
     padding: 1px 0;
 }
 
-#character-workshop-popup .rpg-rel-chips::-webkit-scrollbar {
+#character-workshop-popup #cw-rel-chips::-webkit-scrollbar {
     display: none;
 }
 
-#character-workshop-popup .rpg-rel-chips .rpg-rel-chip {
+#character-workshop-popup #cw-rel-chips .rpg-rel-chip {
     flex: 0 0 auto;
     white-space: nowrap;
 }

@@ -8914,11 +8914,27 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
       over the card) ── */
 .dooms-alias-overlay {
     position: fixed;
-    inset: 0;
+    left: 0;
+    right: 0;
+    /* top/height rather than inset:0 because JS re-pins them to the VISUAL
+       viewport while the dialog is open (see fitAliasDialogToViewport). A
+       fixed element is laid out against the LAYOUT viewport, which on mobile
+       sits above the visible area whenever visualViewport.offsetTop is
+       non-zero — that's what put this dialog off the top of the screen with
+       only its lower half showing. dvh is the no-JS fallback. */
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
     z-index: 10060;
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Gutter so the card can never touch the screen edges, and a scroll of
+       last resort if it still doesn't fit (very short landscape phones, or a
+       large browser text size). */
+    padding: 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
     background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
@@ -8926,6 +8942,13 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 .dooms-alias-card {
     width: min(440px, 92vw);
+    box-sizing: border-box;
+    /* Must never grow taller than the visible viewport. A centred flex item
+       that overflows its container spills past BOTH edges, and the part above
+       the top can't be scrolled to. The overlay is pinned to the visual
+       viewport, so 100% here is exactly the visible height. */
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
     background: var(--rpg-bg, rgba(24, 24, 30, 0.98));
     border: 2px solid var(--rpg-border, #4a7ba7);
     border-radius: 10px;
@@ -8961,6 +8984,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     justify-content: flex-end;
     gap: 0.6rem;
     margin-top: 0.9rem;
+    /* Both labels are full sentences; on a narrow phone they'd otherwise push
+       past the card edge rather than stacking. */
+    flex-wrap: wrap;
 }
 
 .dooms-alias-actions button {

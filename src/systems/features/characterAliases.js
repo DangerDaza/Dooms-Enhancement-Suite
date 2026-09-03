@@ -310,7 +310,23 @@ function showAliasDecisionDialog(name, canonical) {
                 }
             }
         } catch (e) {}
+        // Pin to the VISUAL viewport, the same fix the mobile compose sheet
+        // uses. `position: fixed` lays out against the layout viewport, which
+        // on mobile can sit above the visible area (visualViewport.offsetTop)
+        // once the browser chrome slides away or the page is pinch-zoomed —
+        // the dialog then renders off the top of the screen with only its
+        // lower half in view. Re-pinned on resize/scroll so it tracks.
+        const vv = (typeof window !== 'undefined') ? window.visualViewport : null;
+        const fitToViewport = () => {
+            if (!vv || !$overlay[0]) return;
+            $overlay[0].style.top = vv.offsetTop + 'px';
+            $overlay[0].style.height = vv.height + 'px';
+        };
         const done = (result) => {
+            if (vv) {
+                vv.removeEventListener('resize', fitToViewport);
+                vv.removeEventListener('scroll', fitToViewport);
+            }
             $overlay.remove();
             $(document).off('keydown.doomsAliasDecision');
             resolve(result);
@@ -320,6 +336,11 @@ function showAliasDecisionDialog(name, canonical) {
         $overlay.on('click', function (e) { if (e.target === this) done(null); });
         $(document).on('keydown.doomsAliasDecision', (e) => { if (e.key === 'Escape') done(null); });
         $('body').append($overlay);
+        fitToViewport();
+        if (vv) {
+            vv.addEventListener('resize', fitToViewport);
+            vv.addEventListener('scroll', fitToViewport);
+        }
     });
 }
 

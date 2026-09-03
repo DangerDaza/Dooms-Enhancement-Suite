@@ -378,7 +378,14 @@ function findLastAssistantMessage() {
  */
 function sceneHeaderIsCurrent(layout) {
     if (layout === 'hud') return $('.dooms-info-hud').length > 0;
-    if (layout === 'ticker') return $('.dooms-info-ticker-wrapper').length > 0;
+    // Both ticker variants render the same wrapper (ticker-bottom just adds a
+    // class and anchors before #form_sheld). Missing 'ticker-bottom' here sent
+    // it down the message-anchored branch, which can never find a ticker — so
+    // the cache skip never fired and every update tore the ticker down and
+    // rebuilt it, restarting its scroll animation mid-read.
+    if (layout === 'ticker' || layout === 'ticker-bottom') {
+        return $('.dooms-info-ticker-wrapper').length > 0;
+    }
 
     const $target = findLastAssistantMessage();
     if (!$target || !$target.length) return false;

@@ -229,6 +229,20 @@ function closePromptsEditor() {
  * Save all prompts from the editor
  */
 function savePrompts() {
+    // Snapshot what DES generates BEFORE any setting is written.
+    //
+    // This has to come first. The Tracker Prompt box is prefilled with the
+    // assembled prompt, and the assembled prompt embeds
+    // customTrackerInstructionsPrompt — so computing it after that setting is
+    // written compares the user's untouched prefill against a prompt built
+    // from *different* instructions, decides they differ, and silently stores
+    // a verbatim override. On a fresh install that happened on the very first
+    // Save with zero edits (the instructions box prefills with
+    // DEFAULT_PROMPTS.trackerInstructions, which is not the same text
+    // buildTrackerPromptBlock uses when the setting is empty), and from then
+    // on no tracker field, relationship or wording change ever reached the AI.
+    const generatedTrackerPrompt = getAssembledTrackerPrompt({ generatedOnly: true }).trim();
+
     extensionSettings.customHtmlPrompt = $('#rpg-prompt-html').val().trim();
     extensionSettings.customDialogueColoringPrompt = $('#rpg-prompt-dialogue-coloring').val().trim();
     extensionSettings.customNarratorPrompt = $('#rpg-prompt-narrator').val().trim();
@@ -245,8 +259,8 @@ function savePrompts() {
     // — every later field the user adds would stop reaching the AI.
     {
         const typed = String($('#rpg-prompt-tracker-full').val() || '').trim();
-        const generated = getAssembledTrackerPrompt({ generatedOnly: true }).trim();
-        extensionSettings.customTrackerPrompt = (typed && typed !== generated) ? typed : '';
+        extensionSettings.customTrackerPrompt =
+            (typed && typed !== generatedTrackerPrompt) ? typed : '';
     }
     extensionSettings.customTrackerContinuationPrompt = $('#rpg-prompt-tracker-continuation').val().trim();
     extensionSettings.customWeatherPrompt = $('#rpg-prompt-weather').val().trim();
@@ -371,9 +385,19 @@ function restoreAllToDefaults() {
     extensionSettings.customTwistGeneratorRulesPrompt = '';
     extensionSettings.customTrackerInstructionsPrompt = '';
     extensionSettings.customTrackerContinuationPrompt = '';
+    // The Tracker Prompt override outranks every other setting in this dialog,
+    // so leaving it would let "Restore All" report success while the strongest
+    // customization quietly survived.
+    extensionSettings.customTrackerPrompt = '';
     extensionSettings.customWeatherPrompt = '';
     extensionSettings.customCharacterThoughtsPrompt = '';
     extensionSettings.customAutoPortraitPrompt = '';
+    // Refill the Tracker Prompt box only now that every setting it's assembled
+    // from has been cleared — doing it earlier would show a prompt built from
+    // the instructions we're about to wipe, and the next Save would bank that
+    // stale text right back as a fresh override.
+    $('#rpg-prompt-tracker-full').val(getAssembledTrackerPrompt({ generatedOnly: true }));
+    refreshTrackerPromptStatus();
     saveSettings();
 }
 /**
