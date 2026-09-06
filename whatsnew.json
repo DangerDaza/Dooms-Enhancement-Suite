@@ -1,38 +1,38 @@
 {
-    "version": "2.4.2",
-    "title": "Stage Names",
+    "version": "2.5.0",
+    "title": "House Rules",
     "items": [
         {
-            "title": "🩹 2.4.1 / 2.4.2 patches",
-            "body": "Fixes a crash that could quietly stop the panels from refreshing after each message (a console error about 'reading children') — and, more importantly, stop that turn's tracker data from being saved at all. The most confusing symptom: characters you injected from the Workshop looked like the AI was ignoring them. It wasn't — the injection was being sent correctly, DES just fell over before it could show or save the result. A failing panel can no longer take the rest of the turn down with it. Everything below is what shipped in 2.4.0 — Stage Names."
+            "title": "✏️ You can finally edit the tracker prompt",
+            "body": "The most-requested feature in DES. Prompts Editor → Tracker Prompt now shows the complete prompt exactly as the AI receives it — the instructions AND the JSON format specification that used to be generated-only and untouchable. Edit it and your version is sent word for word; leave it alone and DES keeps building it from your field settings as before, so fields you add later still get through. There's a live token estimate, an 'edited' badge, and a Restore Default button. Rename or remove a key and it warns you which panel goes blank when you do — because DES looks values up by key, and a silently empty Scene Tracker is a miserable thing to debug."
         },
         {
-            "title": "🐰 The Bunny Mo import button is back",
-            "body": "The scroll button for importing !fullsheet and !quicksheet results was hiding inside SillyTavern's '…' menu, which is collapsed by default — so for most people it simply never appeared. It now sits right on the message, next to the edit button, and it recognizes every sheet layout Bunny Mo produces (all template sizes, quicksheets, tag blocks, and the usual AI formatting drift). It also shows up on swipes, edited messages, and older messages loaded with 'show more'."
+            "title": "🧩 Custom tracker fields, now with a shape",
+            "body": "A custom Scene Tracker field used to be free text and nothing else — you described it and hoped the model answered in a usable form. Each one can now be Text, Number (with an optional range), Choice (you supply the options), List, Yes/No, or Percent, and the prompt tells the model exactly what to return instead of leaving it to chance. Custom fields also finally appear as on/off toggles in the Scene Tracker menu — that list was hardcoded before, so a field you created could never show up there. Existing fields are untouched and send exactly as they did."
         },
         {
-            "title": "👥 One character, one card",
-            "body": "The AI loves renaming people mid-story — 'Nine' becomes 'Nine (Nine-Coins-In-Sequence)', 'The Gardener' becomes 'Gardener' — and every variant used to spawn a duplicate character card. Obvious variants now fold into the original card automatically (recorded as aliases you can see in the Workshop). When a genuinely similar new name shows up, DES asks you once, in a popup that follows your theme: same character or not? While it's open, nothing spawns and chat bubbles wait. Answer Yes and the newcomer merges into the existing card — dialogue color, portrait and all. Answer No and you're never asked about that pair again."
+            "title": "🛠️ New Workshop section in Settings",
+            "body": "Relationships have moved out of a cramped tab in the Edit Trackers window and into their own section in the main menu. Add, rename and remove them freely, pick each one's card emoji from a click-to-choose grid, and turn the whole thing off if you don't use it. The list is generated from your config rather than hardcoded, so what you see is exactly what the AI is offered — and there's a new Wording box that lets you tell the model what the relationship actually means, with a live preview of the exact text it will receive."
         },
         {
-            "title": "🗣️ Chat bubbles stop guessing wrong",
-            "body": "Two long-standing speaker-attribution bugs are gone. Characters with names like 'The Anthem' or 'The Silence' could silently claim any dialogue line whose color wasn't recognized (the matcher treated the word 'the' in narration as their name — oops). And a character whose dialogue color drifted from what's stored could stay misattributed forever; colors now heal themselves on the next message."
+            "title": "🎭 Your relationships now show up on character cards",
+            "body": "The 'Relationship to player' row in the Character Workshop was five buttons written into the page — so a relationship you added was offered to the AI but could never be picked by hand. It's built from your list now, with your own additions on the end. Rather than growing taller with every one you add, it's a single row with arrows either side, and opening a card jumps straight to the relationship already set."
         },
         {
-            "title": "📝 Notes Mode for character sheets",
-            "body": "A new toggle in the character sheet popup turns any character's sheet into a freeform notes area with your own collapsible sections — emoji, title, text, reorder and delete as you like, same look as an imported Bunny Mo sheet. Your imported sheet is never lost: switch back anytime, and importing while in Notes Mode merges instead of overwriting."
+            "title": "🪟 The Edit Trackers window is a real working surface",
+            "body": "It was capped at the width of a small dialog, which crushed each field — icon, name, AI instruction, type, delete — into a column barely wider than a phone. It's now up to 1080px, grouped into titled cards instead of one long run of rows, and two columns on a desktop window while stacking cleanly on a phone. The text boxes were also plain white on every dark theme (nothing in the stylesheet ever coloured them); they take your theme now. The Widgets section is gone — its toggles live in Settings → Scene Tracker, and four of the five did nothing anyway."
         },
         {
-            "title": "🖼️ Portrait tools grew up",
-            "body": "Right-click a character in the Present Characters panel to regenerate their portrait — the old image is kept, and 'Restore Previous Portrait' swaps it back anytime. The Workshop's Appearance section gets a per-character Portrait prompt field (short tag-style prompts beat prose on every image backend), plus a two-step flow: write a prompt from the character's description, review and tweak it, then render. Multi-line prompts no longer break ComfyUI generations, and failures now say what actually went wrong."
+            "title": "🕐 The Scene Tracker stops vanishing",
+            "body": "It was never actually deleted — it was being left behind on the previous message. The tracker skips redrawing when the scene hasn't changed, and that check only asked whether a header existed somewhere on the page, not whether it was still attached to the newest message. So any time two turns shared the same location and time (most turns), it stayed pinned to the older message and scrolled out of view. Toggling the feature off and on only seemed to fix it because that clears the cache. It follows the conversation down now."
         },
         {
-            "title": "🗂️📱 Two new opt-in extras",
-            "body": "Tracker Data in Chat adds a small dropdown on each AI message showing that message's raw tracker JSON — readable and editable, with panels refreshing when you save. And on phones, the Mobile Compose Overlay replaces the cramped squeezed-around-the-keyboard typing experience with an instant fullscreen compose sheet that mirrors straight into the real message box. Both are off by default — flip them on in Display settings."
+            "title": "💬 Chat bubble text wraps around the portrait",
+            "body": "The avatar used to own its own column, so anything longer than the portrait was squeezed into a narrow strip with a tall empty gutter sitting underneath it — very noticeable on phones and on long speeches. The text now runs alongside the portrait and flows underneath at full width once it clears the bottom. Both Discord and Card styles."
         },
         {
-            "title": "🎨 54 dialogue colors, all named",
-            "body": "The Workshop's color grid grows from 30 to 54 swatches, and hovering any of them now tells you its name — no more 'the third teal from the left'. Automatic color assignment draws from the same bigger pool, so large casts go longer before two characters look alike."
+            "title": "📱 Two mobile annoyances fixed",
+            "body": "The Mobile Compose Overlay opened on any focus of the message box — and SillyTavern focuses that box itself on page load, after sending, when a generation finishes, and whenever a popup closes. It now requires a real tap on the input, so it stops ambushing you on every reload. And the 'is this the same character?' popup was positioning itself against the wrong viewport on phones, sliding off the top of the screen with only its lower half visible; it now pins to what you can actually see and follows it as the browser chrome moves."
         }
     ],
     "contact": {

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.5.0] - 2026-09-06 — House Rules
 
 ### Fixed
 - **Saving the Prompts Editor could silently freeze the tracker prompt.** Opening the editor and clicking Save — with no edits at all, on a fresh install — stored a verbatim copy of the tracker prompt as a permanent override. From then on nothing you changed about your trackers reached the AI: new fields, relationship edits, wording, none of it, because the frozen copy was sent instead. The cause was an ordering slip: the check for "did the user actually change this?" compared the untouched box against a prompt rebuilt from a setting the same Save had just rewritten, so they never matched. The comparison is now taken before anything is written. **If you've hit this,** open Prompts Editor → Tracker Prompt → **Restore Default** and save.
