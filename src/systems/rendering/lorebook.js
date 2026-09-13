@@ -137,6 +137,7 @@ function renderLeftPanel() {
     const unfiled = campaignManager.getUnfiledBooks();
     const lb = extensionSettings.lorebook || {};
     const lastFilter = lb.lastFilter || 'all';
+    const activeCampaignId = campaignManager.getActiveCampaignId();
 
     let html = '<aside class="rpg-lb-panel-left">';
 
@@ -170,12 +171,16 @@ function renderLeftPanel() {
         html += `<div class="rpg-lb-campaign-group" data-campaign="${id}">`;
 
         // Campaign header
-        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}" data-campaign="${id}">`;
+        const isActiveCampaign = activeCampaignId === id;
+        const accentStyle = campaign.color ? ` style="--rpg-lb-campaign-accent: ${escapeHtml(campaign.color)};"` : '';
+        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}${isActiveCampaign ? ' is-active-campaign' : ''}" data-campaign="${id}"${accentStyle}>`;
         const iconClass = campaign.icon || 'fa-folder';
         const iconColor = campaign.color ? ` style="color: ${escapeHtml(campaign.color)};"` : '';
         html += `<i class="fa-solid ${escapeHtml(iconClass)} rpg-lb-campaign-icon" data-campaign="${id}"${iconColor} title="Click to change icon"></i>`;
         html += `<span class="rpg-lb-campaign-name">${escapeHtml(campaign.name)}</span>`;
+        if (isActiveCampaign) html += '<span class="rpg-lb-campaign-active-badge">ACTIVE</span>';
         html += `<span class="rpg-lb-campaign-stats">${activeInCampaign}/${books.length}</span>`;
+        html += buildCampaignActivateHtml(id, isActiveCampaign);
         html += `<button class="rpg-lb-campaign-delete" data-campaign="${id}" title="Delete"><i class="fa-solid fa-trash"></i></button>`;
         html += `<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>`;
         html += '</div>';
@@ -275,13 +280,52 @@ function buildTreeBookHtml(worldName, activeNames, filter) {
     if (filter === 'active' && !isActive) return '';
     if (filter === 'inactive' && isActive) return '';
 
-    let html = `<div class="rpg-lb-tree-book ${isActive ? 'active-book' : 'inactive'} ${isSelected ? 'selected' : ''}" data-world="${w}">`;
+    const isGlobal = campaignManager.isGlobalBook(worldName);
+    let html = `<div class="rpg-lb-tree-book ${isActive ? 'active-book' : 'inactive'} ${isSelected ? 'selected' : ''}${isGlobal ? ' is-global' : ''}" data-world="${w}">`;
     html += `<div class="rpg-lb-toggle ${isActive ? 'active' : ''}" data-type="book" data-world="${w}"></div>`;
     html += `<i class="fa-solid fa-book rpg-lb-tree-book-icon"></i>`;
     html += `<span class="rpg-lb-tree-book-name">${w}</span>`;
+    html += buildBookGlobalHtml(w, isGlobal);
     html += `<span class="rpg-lb-tree-book-badge">...</span>`;
     html += '</div>';
     return html;
+}
+
+/**
+ * The "Set as active campaign" control for a campaign header. The mobile
+ * renderer emits the same markup so the shared click handler covers both.
+ * @param {string} id - Campaign ID
+ * @param {boolean} isActiveCampaign - Whether this campaign is the active one
+ * @returns {string} HTML string
+ */
+function buildCampaignActivateHtml(id, isActiveCampaign) {
+    const switching = isCampaignSwitching();
+    const cls = `rpg-lb-campaign-activate${switching ? ' is-switching' : ''}`;
+    const disabled = switching ? ' disabled' : '';
+    if (isActiveCampaign) {
+        return `<button class="${cls}" data-campaign="${id}"${disabled} title="Active campaign — click to deactivate"><i class="fa-solid fa-circle-check"></i></button>`;
+    }
+    return `<button class="${cls}" data-campaign="${id}"${disabled} title="Set as active campaign"><i class="fa-solid fa-play"></i></button>`;
+}
+
+/**
+ * True while campaignManager is mid-switch. Guarded so the renderer also
+ * works against a campaignManager that predates isSwitching().
+ * @returns {boolean}
+ */
+function isCampaignSwitching() {
+    return typeof campaignManager.isSwitching === 'function' && !!campaignManager.isSwitching();
+}
+
+/**
+ * The "global book" toggle for a book row. A global book stays active when
+ * the active campaign changes. The mobile spine emits the same markup.
+ * @param {string} w - Already-escaped world name
+ * @param {boolean} isGlobal - Whether the book is flagged global
+ * @returns {string} HTML string
+ */
+function buildBookGlobalHtml(w, isGlobal) {
+    return `<button class="rpg-lb-book-global${isGlobal ? ' active' : ''}" data-world="${w}" title="Global — stays active when the campaign changes"><i class="fa-solid fa-globe"></i></button>`;
 }
 
 // ─── Middle Panel (Entry List) ───────────────────────────────────────────────
@@ -612,6 +656,10 @@ function renderFooter() {
     html += `<span class="rpg-lb-footer-dot"></span>`;
     html += `<span class="rpg-lb-footer-stat">Active: ${activeNames.length} Lorebooks</span>`;
     html += `<span class="rpg-lb-footer-stat">Total: ${allNames.length} Lorebooks</span>`;
+    const activeCampaign = campaignManager.getActiveCampaign();
+    if (activeCampaign) {
+        html += `<span class="rpg-lb-footer-stat rpg-lb-footer-campaign" title="Active campaign"><i class="fa-solid fa-circle-check"></i> Campaign: ${escapeHtml(activeCampaign.campaign.name)}</span>`;
+    }
     html += '</div>';
 
     html += '<div class="rpg-lb-footer-right">';
@@ -702,6 +750,15 @@ function refreshActiveStats() {
     });
 
     renderFooter();
+}
+
+/**
+ * After a campaign's book list changes (move / unfile / rename / delete),
+ * re-applies "the active campaign's books are on". No-op with no active campaign.
+ */
+async function reconcileIfCampaignActive() {
+    if (!campaignManager.getActiveCampaignId()) return;
+    await campaignManager.reconcileActiveCampaignBooks();
 }
 
 function refreshCampaignToggles() {
@@ -806,7 +863,7 @@ export function initLorebookEventDelegation() {
 
     // ── Book selection (left panel) ──────────────────────────────────────────
     $modal.on('click', '.rpg-lb-tree-book', function (e) {
-        if ($(e.target).closest('.rpg-lb-toggle').length) return;
+        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-global').length) return;
         const worldName = $(this).data('world');
         selectedBook = worldName;
         selectedEntry = null;
@@ -903,14 +960,12 @@ export function initLorebookEventDelegation() {
                     if (newName && newName.trim() && newName.trim() !== worldName) {
                         const trimmed = newName.trim();
                         try {
-                            // Update campaign assignment (swap old name for new)
-                            if (currentCampaign) {
-                                campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
-                                campaignManager.addBookToCampaign(currentCampaign.id, trimmed);
-                            }
                             await lorebookAPI.renameWorld(worldName, trimmed);
+                            // Keeps the campaign folder, the global list and the switch ledger on the new name
+                            campaignManager.onWorldRenamed(worldName, trimmed);
                             if (selectedBook === worldName) selectedBook = trimmed;
                             saveSettings();
+                            await reconcileIfCampaignActive();
                             renderLorebook();
                         } catch (err) {
                             console.error('[LoreLibrary] Rename failed:', err);
@@ -931,13 +986,14 @@ export function initLorebookEventDelegation() {
                         subItems.push({
                             icon: 'fa-solid fa-folder',
                             label: campaign.name,
-                            action: () => {
+                            action: async () => {
                                 campaignManager.moveBookBetweenCampaigns(
                                     currentCampaign ? currentCampaign.id : null,
                                     id,
                                     worldName,
                                 );
                                 saveSettings();
+                                await reconcileIfCampaignActive();
                                 renderLorebook();
                             },
                         });
@@ -946,9 +1002,10 @@ export function initLorebookEventDelegation() {
                         subItems.push({
                             icon: 'fa-solid fa-folder-minus',
                             label: 'Unfiled',
-                            action: () => {
+                            action: async () => {
                                 campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
                                 saveSettings();
+                                await reconcileIfCampaignActive();
                                 renderLorebook();
                             },
                         });
@@ -964,16 +1021,15 @@ export function initLorebookEventDelegation() {
                 action: async () => {
                     if (!confirm(`Delete "${worldName}"? This cannot be undone.`)) return;
                     try {
-                        // Remove from campaign first
-                        if (currentCampaign) {
-                            campaignManager.removeBookFromCampaign(currentCampaign.id, worldName);
-                        }
                         await lorebookAPI.deleteWorld(worldName);
+                        // Drops the book from its campaign folder, the global list and the switch ledger
+                        campaignManager.onWorldDeleted(worldName);
                         if (selectedBook === worldName) {
                             selectedBook = null;
                             selectedEntry = null;
                         }
                         saveSettings();
+                        await reconcileIfCampaignActive();
                         renderLorebook();
                     } catch (err) {
                         console.error('[LoreLibrary] Delete failed:', err);
@@ -1129,7 +1185,7 @@ export function initLorebookEventDelegation() {
 
     // ── Campaign header collapse/expand ──────────────────────────────────────
     $modal.on('click', '.rpg-lb-campaign-header', function (e) {
-        if ($(e.target).closest('.rpg-lb-campaign-toggle, .rpg-lb-campaign-delete, .rpg-lb-icon-picker').length) return;
+        if ($(e.target).closest('.rpg-lb-campaign-toggle, .rpg-lb-campaign-delete, .rpg-lb-icon-picker, .rpg-lb-campaign-activate, .rpg-lb-book-global, .rpg-lb-campaign-active-badge').length) return;
         const id = $(this).data('campaign');
         if (!id || id === 'unfiled') {
             $(this).toggleClass('collapsed');
@@ -1142,14 +1198,42 @@ export function initLorebookEventDelegation() {
     });
 
     // ── Campaign delete ──────────────────────────────────────────────────────
-    $modal.on('click', '.rpg-lb-campaign-delete', function (e) {
+    $modal.on('click', '.rpg-lb-campaign-delete', async function (e) {
         e.stopPropagation();
         const campaignId = $(this).data('campaign');
         const campaign = (extensionSettings.lorebook?.campaigns || {})[campaignId];
         if (!campaign) return;
-        if (!confirm(`Delete library "${campaign.name}"? Books inside will become unfiled.`)) return;
-        campaignManager.deleteCampaign(campaignId);
+        const isActiveCampaign = campaignManager.getActiveCampaignId() === campaignId;
+        const message = isActiveCampaign
+            ? `"${campaign.name}" is the active campaign. It will be deactivated first (its books switched off, its character versions parked back to base), then deleted. Books inside will become unfiled. Continue?`
+            : `Delete library "${campaign.name}"? Books inside will become unfiled.`;
+        if (!confirm(message)) return;
+        await campaignManager.deleteCampaign(campaignId);
         renderLorebook();
+    });
+
+    // ── Campaign set-active / deactivate ─────────────────────────────────────
+    $modal.on('click', '.rpg-lb-campaign-activate', async function (e) {
+        e.stopPropagation();
+        if (isCampaignSwitching()) return;
+        const id = $(this).data('campaign');
+        if (!id || id === 'unfiled') return;
+        $modal.find('.rpg-lb-campaign-activate').addClass('is-switching').prop('disabled', true);
+        try {
+            await campaignManager.setActiveCampaign(campaignManager.getActiveCampaignId() === id ? null : id);
+        } finally {
+            renderLorebook();
+        }
+    });
+
+    // ── Book global flag (stays active across campaign switches) ─────────────
+    $modal.on('click', '.rpg-lb-book-global', function (e) {
+        e.stopPropagation();
+        const worldName = $(this).data('world');
+        if (!worldName) return;
+        const isGlobal = campaignManager.toggleGlobalBook(worldName);
+        $(this).toggleClass('active', isGlobal);
+        $(this).closest('.rpg-lb-tree-book, .rpg-lb-book-spine').toggleClass('is-global', isGlobal);
     });
 
     // ── Book toggle (activate/deactivate) ────────────────────────────────────
@@ -1323,15 +1407,16 @@ export function initLorebookEventDelegation() {
         if (!confirm(`Permanently delete lorebook "${worldName}" and all its entries?`)) return;
 
         try {
-            const ownerCampaign = campaignManager.getCampaignForBook(worldName);
-            if (ownerCampaign) campaignManager.removeBookFromCampaign(ownerCampaign.id, worldName);
             await lorebookAPI.deleteWorld(worldName);
+            // Drops the book from its campaign folder, the global list and the switch ledger
+            campaignManager.onWorldDeleted(worldName);
 
             if (selectedBook === worldName) {
                 selectedBook = null;
                 selectedEntry = null;
                 expandedEditor = false;
             }
+            await reconcileIfCampaignActive();
             renderLorebook();
         } catch (err) {
             console.error('[DES] Failed to delete lorebook:', err);
@@ -1512,7 +1597,7 @@ export function initLorebookEventDelegation() {
         $dropdown.find('.rpg-lb-move-menu').toggle();
     });
 
-    $modal.on('click', '.rpg-lb-move-menu-item', function () {
+    $modal.on('click', '.rpg-lb-move-menu-item', async function () {
         const targetCampaignId = $(this).data('campaign');
         const checked = $modal.find('.rpg-lb-book-check.checked');
         for (const el of checked) {
@@ -1527,6 +1612,7 @@ export function initLorebookEventDelegation() {
         }
         $(this).closest('.rpg-lb-move-menu').hide();
         checked.removeClass('checked');
+        await reconcileIfCampaignActive();
         renderLorebook();
     });
 }

@@ -399,21 +399,34 @@ export function renderMobileLorebook() {
     // ── Book list: Campaign groups ──────────────────────────────────────────
     html += '<div class="rpg-lb-book-list">';
 
+    const activeCampaignId = campaignManager.getActiveCampaignId();
+    // Guarded so this also works against a campaignManager that predates isSwitching()
+    const switching = typeof campaignManager.isSwitching === 'function' && !!campaignManager.isSwitching();
+    const activateCls = `rpg-lb-campaign-activate${switching ? ' is-switching' : ''}`;
+    const activateDisabled = switching ? ' disabled' : '';
+
     for (const { id, campaign } of campaigns) {
         const isCollapsed = campaignManager.isCampaignCollapsed(id);
         const books = (campaign.books || []).filter(b => allNames.includes(b));
         const activeInCampaign = books.filter(b => activeNames.includes(b)).length;
         activeCount += activeInCampaign;
+        const isActiveCampaign = activeCampaignId === id;
+        const accentStyle = campaign.color ? ` style="--rpg-lb-campaign-accent: ${escapeHtml(campaign.color)};"` : '';
 
         html += `<div class="rpg-lb-campaign-group" data-campaign="${id}">`;
-        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}" data-campaign="${id}">`;
+        html += `<div class="rpg-lb-campaign-header ${isCollapsed ? 'collapsed' : ''}${isActiveCampaign ? ' is-active-campaign' : ''}" data-campaign="${id}"${accentStyle}>`;
         const iconClass = campaign.icon || 'fa-folder';
         const iconColor = campaign.color ? ` style="color: ${escapeHtml(campaign.color)};"` : '';
         html += `<i class="fa-solid ${escapeHtml(iconClass)} rpg-lb-campaign-icon" data-campaign="${id}"${iconColor} title="Click to change icon"></i>`;
         html += `<span class="rpg-lb-campaign-name">${escapeHtml(campaign.name)}</span>`;
+        if (isActiveCampaign) html += '<span class="rpg-lb-campaign-active-badge">ACTIVE</span>';
         html += `<span class="rpg-lb-campaign-stats">${activeInCampaign}/${books.length} active</span>`;
         const allBooksActive = books.length > 0 && activeInCampaign === books.length;
         html += `<div class="rpg-lb-toggle rpg-lb-campaign-toggle ${allBooksActive ? 'active' : ''}" data-type="campaign" data-campaign="${id}" title="Toggle all books in this library"></div>`;
+        // Same markup as the desktop tree — the click handler is shared (registered in lorebook.js)
+        html += isActiveCampaign
+            ? `<button class="${activateCls}" data-campaign="${id}"${activateDisabled} title="Active campaign — click to deactivate"><i class="fa-solid fa-circle-check"></i></button>`
+            : `<button class="${activateCls}" data-campaign="${id}"${activateDisabled} title="Set as active campaign"><i class="fa-solid fa-play"></i></button>`;
         html += `<button class="rpg-lb-campaign-delete" data-campaign="${id}" title="Delete library"><i class="fa-solid fa-trash"></i></button>`;
         html += `<i class="fa-solid fa-chevron-down rpg-lb-campaign-chevron"></i>`;
         html += '</div>';
@@ -464,7 +477,9 @@ export function renderMobileLorebook() {
     html += '</div>';
 
     // Footer stats
-    html += `<div class="rpg-lb-footer-stats">Active: ${activeCount} books | Total: ${allNames.length} lorebooks</div>`;
+    const activeCampaign = campaignManager.getActiveCampaign();
+    const campaignStat = activeCampaign ? ` | Campaign: ${escapeHtml(activeCampaign.campaign.name)}` : '';
+    html += `<div class="rpg-lb-footer-stats">Active: ${activeCount} books | Total: ${allNames.length} lorebooks${campaignStat}</div>`;
 
     // New book / Import buttons
     html += '<div class="rpg-lb-new-book-row">';
@@ -505,11 +520,12 @@ export function renderMobileLorebook() {
  */
 function buildBookSpineHtml(worldName, campaignId, activeNames) {
     const isActive = activeNames.includes(worldName);
+    const isGlobal = campaignManager.isGlobalBook(worldName);
     const w = escapeHtml(worldName);
     const cid = escapeHtml(campaignId);
 
     let html = '';
-    html += `<div class="rpg-lb-book-spine expandable ${isActive ? 'active-book' : 'inactive'}" data-world="${w}" data-campaign="${cid}">`;
+    html += `<div class="rpg-lb-book-spine expandable ${isActive ? 'active-book' : 'inactive'}${isGlobal ? ' is-global' : ''}" data-world="${w}" data-campaign="${cid}">`;
     html += '<i class="fa-solid fa-chevron-right rpg-lb-spine-chevron"></i>';
     html += '<div class="rpg-lb-book-check"><i class="fa-solid fa-check"></i></div>';
     html += `<div class="rpg-lb-toggle ${isActive ? 'active' : ''}" data-type="book" data-world="${w}"></div>`;
@@ -517,6 +533,8 @@ function buildBookSpineHtml(worldName, campaignId, activeNames) {
     html += `<span class="rpg-lb-spine-name">${w}</span>`;
     html += '<span class="rpg-lb-spine-meta">? entries</span>';
     html += '<span class="rpg-lb-spine-tokens">...</span>';
+    // Same markup as the desktop tree row — the click handler is shared (registered in lorebook.js)
+    html += `<button class="rpg-lb-book-global${isGlobal ? ' active' : ''}" data-world="${w}" title="Global — stays active when the campaign changes"><i class="fa-solid fa-globe"></i></button>`;
     html += `<button class="rpg-lb-spine-export" data-world="${w}" title="Export"><i class="fa-solid fa-file-export"></i></button>`;
     html += `<button class="rpg-lb-spine-delete" data-world="${w}" title="Delete lorebook"><i class="fa-solid fa-trash"></i></button>`;
     html += '<button class="rpg-lb-spine-edit"><i class="fa-solid fa-pen-to-square"></i></button>';
@@ -655,8 +673,10 @@ function refreshActiveStats() {
     });
 
     // Update footer stats
+    const activeCampaign = campaignManager.getActiveCampaign();
+    const campaignStat = activeCampaign ? ` | Campaign: ${activeCampaign.campaign.name}` : '';
     $modal.find('.rpg-lb-footer-stats').text(
-        `Active: ${totalActive} books | Total: ${allNames.length} lorebooks`
+        `Active: ${totalActive} books | Total: ${allNames.length} lorebooks${campaignStat}`
     );
 }
 
@@ -724,7 +744,7 @@ export function initMobileLorebookEventDelegation() {
     // ── Book spine expand/collapse (lazy-load entries) ──────────────────────
     $modal.on('click', '.rpg-lb-book-spine.expandable', function (e) {
         // Don't trigger when clicking toggles, checkboxes, or edit buttons
-        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete').length) return;
+        if ($(e.target).closest('.rpg-lb-toggle, .rpg-lb-book-check, .rpg-lb-spine-edit, .rpg-lb-spine-export, .rpg-lb-spine-delete, .rpg-lb-book-global').length) return;
 
         const $spine = $(this);
         const worldName = $spine.data('world');

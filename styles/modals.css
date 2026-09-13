@@ -4037,6 +4037,130 @@
 
 .rpg-lb-campaign-delete:hover { color: #e74c3c; opacity: 1; }
 
+
+/* ─── Campaigns as an active mode (Set active / ACTIVE badge / global books) ─── */
+/* Both layouts (desktop tree + mobile spines) share these selectors. The header
+   carries --rpg-lb-campaign-accent inline when the campaign has its own colour;
+   otherwise the theme highlight is used. */
+
+/* Set-active button: dim at rest (never hover-only — the mobile Lore Library
+   has no hover), brighter on row hover, fully visible once the campaign is
+   active. */
+.rpg-lb-campaign-activate {
+    background: none;
+    border: none;
+    color: var(--rpg-text, #666);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.55;
+    font-size: 0.85em;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: opacity 0.15s, color 0.2s, background 0.15s;
+}
+
+.rpg-lb-campaign-header:hover .rpg-lb-campaign-activate { opacity: 0.85; }
+
+.rpg-lb-campaign-activate.is-switching,
+.rpg-lb-campaign-activate:disabled {
+    opacity: 0.35;
+    cursor: progress;
+    pointer-events: none;
+}
+
+.rpg-lb-campaign-activate:hover {
+    color: var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+    background: rgba(255, 255, 255, 0.06);
+    opacity: 1;
+}
+
+.rpg-lb-campaign-header.is-active-campaign .rpg-lb-campaign-activate,
+.rpg-lb-campaign-header.is-active-campaign:hover .rpg-lb-campaign-activate {
+    opacity: 1;
+    color: var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+}
+
+/* Active header: accent rail + tint. An inset shadow is used for the rail so
+   the header does not shift relative to its siblings. */
+.rpg-lb-campaign-header.is-active-campaign {
+    box-shadow: inset 3px 0 0 var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+    background: rgba(233, 69, 96, 0.08);
+    background: color-mix(in srgb, var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560)) 12%, transparent);
+}
+
+.rpg-lb-campaign-header.is-active-campaign:hover {
+    background: rgba(233, 69, 96, 0.12);
+    background: color-mix(in srgb, var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560)) 18%, transparent);
+}
+
+.rpg-lb-campaign-header.is-active-campaign .rpg-lb-campaign-name {
+    color: var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+}
+
+.rpg-lb-campaign-active-badge {
+    font-size: 0.62em;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+    color: var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560));
+    background: rgba(233, 69, 96, 0.1);
+    background: color-mix(in srgb, var(--rpg-lb-campaign-accent, var(--rpg-highlight, #e94560)) 14%, transparent);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Global-book toggle: ghost icon button on every book row / spine. Dim while
+   off (never hover-only — phones have no hover), highlight-coloured and fully
+   visible while on. */
+.rpg-lb-book-global {
+    background: none;
+    border: none;
+    color: var(--rpg-text, #666);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    line-height: 1;
+    opacity: 0.55;
+    flex-shrink: 0;
+    transition: opacity 0.15s, color 0.2s, background 0.15s;
+}
+
+.rpg-lb-tree-book:hover .rpg-lb-book-global,
+.rpg-lb-book-spine:hover .rpg-lb-book-global { opacity: 0.85; }
+
+.rpg-lb-book-global:hover {
+    opacity: 1;
+    color: var(--rpg-text, #ddd);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.rpg-lb-book-global.active,
+.rpg-lb-tree-book:hover .rpg-lb-book-global.active,
+.rpg-lb-book-spine:hover .rpg-lb-book-global.active {
+    opacity: 1;
+    color: var(--rpg-highlight, #e94560);
+}
+
+.rpg-lb-book-global.active:hover { background: rgba(233, 69, 96, 0.12); }
+
+/* Footer: name of the active campaign (desktop footer). */
+.rpg-lb-footer-campaign { color: var(--rpg-highlight, #e94560); }
+
+.rpg-lb-footer-campaign i { margin-right: 2px; }
+
+/* Touch devices have no hover — keep the off-state controls discoverable.
+   (Their 44px tap surface lives in the coarse-pointer block further down,
+   next to the .rpg-lb-toggle hit-area rules.) */
+@media (hover: none) {
+    .rpg-lb-campaign-activate,
+    .rpg-lb-book-global { opacity: 0.8; }
+}
+
 .rpg-lb-campaign-chevron {
     font-size: 0.65em;
     transition: transform 0.2s;
@@ -6687,6 +6811,30 @@
     /* Make sure the row's click handler still gets the toggle as e.target
        when the user lands inside the expanded hit area, so the row's
        'closest .rpg-lb-toggle' bail-out check fires. */.rpg-lb-toggle * {
+        pointer-events: none;
+    }
+
+    /* Set-active and global-book buttons: same 44px tap surface. The visible
+       button grows a little; the invisible ::after covers the rest. */
+    .rpg-lb-campaign-activate,
+    .rpg-lb-book-global {
+        position: relative;
+        padding: 6px 8px;
+        min-width: 28px;
+        min-height: 28px;
+        touch-action: manipulation;
+    }
+
+    .rpg-lb-campaign-activate::after,
+    .rpg-lb-book-global::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
+        z-index: 1;
+    }
+
+    .rpg-lb-campaign-activate *,
+    .rpg-lb-book-global * {
         pointer-events: none;
     }
 }
