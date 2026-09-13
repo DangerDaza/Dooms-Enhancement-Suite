@@ -9,6 +9,7 @@
  * single-character expression panel.
  */
 import { chat, getRequestHeaders, generateRaw } from '../../../../../../../script.js';
+import { withRelayKind, DES_INTERNAL_KIND } from '../relay/relayClient.js';
 import {
     extensionSettings,
     syncedExpressionPortraits,
@@ -277,14 +278,14 @@ ${charEntries.join('\n')}
 Return JSON like: {"Name1":"emotion1","Name2":"emotion2"}`;
 
     try {
-        const response = await generateRaw({
+        const response = await withRelayKind(DES_INTERNAL_KIND, () => generateRaw({
             prompt: prompt,
             systemPrompt: 'You are an emotion classifier. Output only valid JSON.',
             instructOverride: false,
             // Generous budget so reasoning/thinking models have room to think
             // and still emit the JSON answer.
             responseLength: 4000,
-        });
+        }));
 
         const cleaned = stripThinkingTags(response);
         // Greedy match: the JSON object may itself contain quoted strings, so a
@@ -332,7 +333,7 @@ async function classifyLlmSingle(text, availableLabels) {
     const prompt = `Classify the emotion of this text. Output just one word from: ${labels.join(', ')}\n\nText: "${text.slice(0, 300)}"`;
 
     try {
-        const response = await generateRaw({
+        const response = await withRelayKind(DES_INTERNAL_KIND, () => generateRaw({
             prompt: prompt,
             systemPrompt: 'You are an emotion classifier. Output only one emotion word.',
             instructOverride: false,
@@ -341,7 +342,7 @@ async function classifyLlmSingle(text, availableLabels) {
             // pass and still emit a final answer. Non-thinking models stop at
             // the first newline so the extra budget costs nothing.
             responseLength: 1500,
-        });
+        }));
         return findLabelInResponse(response, labels);
     } catch (err) {
         console.warn('[DES Expressions] LLM single classification failed:', err);

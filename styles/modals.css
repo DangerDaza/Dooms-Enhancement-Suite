@@ -7879,3 +7879,63 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 @media (max-width: 720px) {
     .rpg-inspector-diff { grid-template-columns: 1fr; }
 }
+
+/* ============================================
+   GENERATION RELAY — settings status + tray
+   ============================================ */
+.rpg-relay-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 4px 0 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    line-height: 1.35;
+    color: var(--rpg-text, #bbb);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rpg-relay-status > i { margin-top: 2px; flex: 0 0 auto; }
+.rpg-relay-status.is-ok { border-color: rgba(80, 200, 120, 0.4); }
+.rpg-relay-status.is-ok > i { color: #5ec87a; }
+.rpg-relay-status.is-missing { border-color: rgba(240, 173, 78, 0.45); }
+.rpg-relay-status.is-missing > i { color: #f0ad4e; }
+.rpg-relay-status.is-off { opacity: 0.75; }
+.rpg-relay-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.rpg-relay-buttons .rpg-accordion-action-btn { width: auto; flex: 1 1 160px; }
+#rpg-open-relay-tray.has-items { border-color: var(--rpg-highlight, #e94560); }
+#rpg-relay-tray-count { margin-left: auto; }
+
+.rpg-relay-tray-entries { display: flex; flex-direction: column; gap: 10px; }
+.rpg-relay-entry {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rpg-relay-entry.is-running { border-style: dashed; }
+.rpg-relay-entry-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.8em;
+    margin-bottom: 6px;
+}
+.rpg-relay-entry-kind { font-weight: 600; color: var(--rpg-highlight, #e94560); }
+.rpg-relay-entry-time { color: #888; }
+.rpg-relay-entry-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 40vh;
+    overflow-y: auto;
+    font-size: 0.9em;
+    line-height: 1.4;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.25);
+}
+.rpg-relay-entry-error { color: #f0ad4e; font-size: 0.85em; margin-bottom: 6px; }
+.rpg-relay-entry-note { color: #999; font-size: 0.8em; margin-bottom: 6px; font-style: italic; }
+.rpg-relay-entry-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rpg-relay-entry-actions .rpg-accordion-action-btn { width: auto; flex: 1 1 auto; justify-content: center; }

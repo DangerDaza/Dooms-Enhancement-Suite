@@ -38,3 +38,6 @@ src/archived-features.js
 
 # Claude Code worktrees / local session data
 .claude/
+
+# Generation Relay: finished jobs the server plugin keeps until the client consumes them
+server-plugin/des-relay/data/

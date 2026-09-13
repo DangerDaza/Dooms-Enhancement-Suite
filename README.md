@@ -175,6 +175,10 @@ Customize the generation prompts for HTML formatting, dialogue coloring, twist g
 
 Fully responsive design with touch-friendly controls. All panels adapt to small screens with a dedicated mobile toggle and draggable FAB button.
 
+### Phone & Reliability (Generation Relay)
+
+Lock the phone, close the app, or lose the tunnel mid-reply and the reply still finishes. DES ships a small SillyTavern server plugin (`server-plugin/des-relay`) that owns Chat Completion generations on the server; the tab reads the reply back by byte offset, so a frozen tab resumes where it stopped and a killed tab picks the finished reply up on the next open. Replies that can no longer be placed automatically wait in **Doom's Settings → Phone & Reliability → Recovered generations**. Install the plugin once (copy the folder into SillyTavern's `plugins` directory, set `enableServerPlugins: true`, restart — full steps in `server-plugin/README.md`); without it nothing changes. The same section has a **keep the screen awake while generating** toggle.
+
 ---
 
 ## Privacy

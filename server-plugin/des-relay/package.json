@@ -1,0 +1,9 @@
+{
+    "name": "des-relay",
+    "version": "1.0.0",
+    "description": "Doom's Enhancement Suite — generation relay server plugin for SillyTavern",
+    "type": "module",
+    "main": "index.mjs",
+    "private": true,
+    "license": "MIT"
+}

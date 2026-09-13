@@ -467,6 +467,15 @@ export function loadSettings() {
             if (ensureCampaignSettings()) {
                 settingsChanged = true;
             }
+            // Generation Relay: the shallow merge keeps the default `relay`
+            // object for blobs that predate it; a saved object may lack keys.
+            if (!extensionSettings.relay || typeof extensionSettings.relay !== 'object') {
+                extensionSettings.relay = { enabled: true, wakeLock: true };
+                settingsChanged = true;
+            } else {
+                if (typeof extensionSettings.relay.enabled !== 'boolean') { extensionSettings.relay.enabled = true; settingsChanged = true; }
+                if (typeof extensionSettings.relay.wakeLock !== 'boolean') { extensionSettings.relay.wakeLock = true; settingsChanged = true; }
+            }
 
             // ── Rebuild guards: keys whose DEFAULT changed (or is new) on the
             // Rebuild branch. CRITICAL: these must test savedSettings — the

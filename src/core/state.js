@@ -400,6 +400,14 @@ export let extensionSettings = {
         autoLinkByName: true,   // feature toggle (Settings → Lore Library)
         autoLinked: [],         // ledger: the books auto-link switched on — only these get switched off
     },
+    // Generation Relay (src/systems/relay/, server-plugin/des-relay): keeps
+    // chat-completion generations running on the server when the tab freezes
+    // (phone locked) or dies, and recovers finished replies on the next open.
+    // Inert until the server plugin answers the handshake.
+    relay: {
+        enabled: true,   // route generations through the des-relay plugin when it is installed
+        wakeLock: true,  // hold a screen wake lock while a generation is running
+    },
     // Doom Counter — tension-driven plot twist system
     // Uses its own 1-10 numeric tension scale (independent of the infoBox tension widget)
     doomCounter: {

@@ -10,6 +10,7 @@
  * intercepts the raw fetch response as a fallback.
  */
 import { generateRaw } from '../../../../../../../script.js';
+import { withRelayKind, DES_INTERNAL_KIND } from '../systems/relay/relayClient.js';
 /**
  * Extracts text from any API response shape (Anthropic content-block arrays,
  * OpenAI choices, plain strings, etc.).
@@ -70,9 +71,16 @@ export function extractTextFromResponse(response) {
  * @param {object} options - Options passed directly to `generateRaw`
  * @param {Array<{role: string, content: string}>} options.prompt - Message array
  * @param {boolean} [options.quietToLoud] - Whether to use quiet-to-loud mode
+ * @param {string} [options.relayKind] - Generation Relay tag: 'des-tracker' for the
+ *   tracker request (recoverable), anything else is a DES-internal helper call
+ *   whose result is useless once the tab is gone. Not passed to generateRaw.
  * @returns {Promise<string>} The generated text
  */
 export async function safeGenerateRaw(options) {
+    const { relayKind = DES_INTERNAL_KIND, ...rawOptions } = options || {};
+    return withRelayKind(relayKind, () => safeGenerateRawInner(rawOptions));
+}
+async function safeGenerateRawInner(options) {
     let capturedRawData = null;
     const originalFetch = window.fetch;
     window.fetch = async function (...args) {

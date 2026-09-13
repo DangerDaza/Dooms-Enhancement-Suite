@@ -144,6 +144,9 @@ import {
 import { triggerDoomCounter, updateDoomCounterUI, resetCounters, isTrapTwistPending, clearTrapTwistFlag } from './src/systems/generation/doomCounter.js';
 // System Log & Notification Log
 import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
+import { initRelayClient, onGenerationStarted as onRelayGenerationStarted, onGenerationEnded as onRelayGenerationEnded, onGenerationStopped as onRelayGenerationStopped } from './src/systems/relay/relayClient.js';
+import { initRelayRecovery, onRelayChatChanged } from './src/systems/relay/relayRecovery.js';
+import { initRelayUI, refreshRelaySettingsUI } from './src/systems/relay/relayUI.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
@@ -2161,6 +2164,8 @@ function bindSettingsUI() {
     $('#rpg-toggle-lorebook').prop('checked', lbEnabled);
     $('#rpg-lb-badge').text(lbEnabled ? 'on' : 'off');
     $('#rpg-toggle-lorebook-autolink').prop('checked', extensionSettings.lorebook?.autoLinkByName !== false);
+    // Generation Relay (Phone & Reliability)
+    try { refreshRelaySettingsUI(); } catch (e) { console.warn('[Dooms Tracker] refreshRelaySettingsUI failed', e); }
     // Bunny Mo Integration — always on, no toggle/badge to initialize.
 
     // Inline Banners
@@ -2854,6 +2859,13 @@ jQuery(async () => {
             console.error('[Dooms Tracker] Migration to v3 failed:', error);
             // Non-critical - extension can still work with v2 format
         }
+        // Generation Relay: wrap fetch before the first generation can happen.
+        // Inert until the des-relay server plugin answers the handshake.
+        try {
+            initRelayClient();
+        } catch (error) {
+            console.error('[Dooms Tracker] initRelayClient() FAILED:', error);
+        }
         // Initialize i18n early for the settings panel
         await i18n.init();
         // Add extension settings to Extensions tab
@@ -2862,6 +2874,11 @@ jQuery(async () => {
         } catch (error) {
             console.error('[Dooms Tracker] Failed to add extension settings tab:', error);
             // Don't throw - extension can still work without settings tab
+        }
+        try {
+            initRelayUI();
+        } catch (error) {
+            console.error('[Dooms Tracker] initRelayUI() FAILED:', error);
         }
         // Initialize UI
         try {
@@ -3434,11 +3451,11 @@ jQuery(async () => {
             // original relative registration order within each event type.
             registerAllEvents({
                 [event_types.MESSAGE_SENT]: onMessageSent,
-                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert],
+                [event_types.GENERATION_STARTED]: [onRelayGenerationStarted, onGenerationStarted, onGenerationStartedContinueRevert],
                 [event_types.MESSAGE_RECEIVED]: onMessageReceived,
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
-                [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onRelayGenerationStopped],
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onRelayGenerationEnded],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onRelayChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -3457,6 +3474,12 @@ jQuery(async () => {
         } catch (error) {
             console.error('[Dooms Tracker] Event registration failed:', error);
             throw error; // This is critical - can't continue without events
+        }
+        // Generation Relay: recover replies that finished while this tab was gone.
+        try {
+            initRelayRecovery();
+        } catch (error) {
+            console.error('[Dooms Tracker] initRelayRecovery() FAILED:', error);
         }
         // If CHAT_CHANGED already fired while we were initializing (e.g. while the
         // loading intro was playing), our handlers weren't registered in time and the

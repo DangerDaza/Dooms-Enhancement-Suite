@@ -157,6 +157,24 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Weather/snowflake visuals on canvas match the old CSS particles per type
       (snow/rain/mist/wind/clear day/night/dawn/dusk, storm, blizzard)
 
+## Phone & Reliability (Generation Relay)
+- [ ] Without the server plugin: status line says not reachable, badge "no plugin", generations
+      behave exactly as before (no relay requests in the network tab)
+- [ ] Plugin installed (`plugins/des-relay`, `enableServerPlugins: true`, restart): Re-check turns the
+      status green; a normal reply, a regenerate, a swipe and a separate-mode tracker request all go
+      through `/api/plugins/des-relay/generate` and render identically to the direct path (streaming
+      and non-streaming; Stop button aborts the server job)
+- [ ] Phone: lock the screen mid-stream, unlock after 30 s+ → the message continues from where it
+      stopped, no gap, no repeated text, saved normally
+- [ ] Phone: kill the app mid-reply, reopen the chat → the finished reply is added (toast), or
+      appears as a swipe if the old reply was still there (regenerate); nothing is ever overwritten
+- [ ] Chat moved on before reopening → reply lands in Recovered generations; Add as reply / Put in
+      input box / Copy / Dismiss all work; dismissed items do not return
+- [ ] Guided-generation / other quiet prompts finished while away → tray, never the chat
+- [ ] Group chats are not relayed (pass-through); Text Completion APIs are not relayed
+- [ ] Relay toggle off → status "switched off", direct requests again; wake-lock toggle honoured
+      (`node tools/relay-plugin-test.mjs`, `node tools/relay-client-test.mjs`, `node tools/relay-plan-test.mjs`)
+
 ## Feature toggle cycling (added requirement from rebuild)
 For EACH feature: disable mid-session → no DOM residue, no console errors;
 re-enable → feature fully functional without page reload; repeat twice
