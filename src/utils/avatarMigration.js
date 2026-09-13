@@ -129,8 +129,61 @@ async function migrateUserCharacters(userCharacters, sharedByName) {
     return result;
 }
 
-// Returns a count of remaining data:-URL entries across all four maps.
-// settingsVersion may only bump to 24 when this is zero.
+// Every campaign-version bucket that can hold a portrait: the shadowed base
+// entries plus each campaign's saved versions. Shape: { [name]: Profile|null }.
+function profileBuckets() {
+    const out = [];
+    const shadow = extensionSettings.campaignBaseShadow;
+    if (shadow && typeof shadow === 'object') out.push(shadow);
+    const profiles = extensionSettings.campaignProfiles;
+    if (profiles && typeof profiles === 'object') {
+        for (const b of Object.values(profiles)) if (b && typeof b === 'object') out.push(b);
+    }
+    return out;
+}
+
+// Walks the campaign-version buckets. A portrait uploaded while viewing an
+// inactive campaign's version (or the shadowed Base) never passes through the
+// flat maps, so it has to be moved to disk from here.
+async function migrateProfileBuckets() {
+    const result = { migrated: 0, failed: 0 };
+    for (const bucket of profileBuckets()) {
+        for (const name of Object.keys(bucket)) {
+            const profile = bucket[name];
+            if (!profile || typeof profile !== 'object') continue;
+            let cropUrl = null;
+            if (isDataUrl(profile.avatar)) {
+                try {
+                    cropUrl = await persistPortrait(profile.avatar, name, profile.avatar);
+                    if (profile.avatarFullRes === profile.avatar) profile.avatarFullRes = cropUrl;
+                    profile.avatar = cropUrl;
+                    result.migrated++;
+                    await sleep(THROTTLE_MS);
+                } catch (err) {
+                    console.warn(`[Dooms Tracker] avatar migration: campaign version "${name}".avatar failed:`, err);
+                    result.failed++;
+                    if (result.migrated === 0 && result.failed === 1) throw err;
+                }
+            }
+            if (isDataUrl(profile.avatarFullRes)) {
+                try {
+                    profile.avatarFullRes = await persistPortrait(profile.avatarFullRes, `${name}-full`, profile.avatarFullRes);
+                    result.migrated++;
+                    await sleep(THROTTLE_MS);
+                } catch (err) {
+                    console.warn(`[Dooms Tracker] avatar migration: campaign version "${name}".avatarFullRes failed:`, err);
+                    result.failed++;
+                    if (result.migrated === 0 && result.failed === 1) throw err;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+// Returns a count of remaining data:-URL entries across all four maps plus
+// the campaign-version buckets. settingsVersion may only bump to 24 when
+// this is zero.
 function countRemainingDataUrls() {
     let n = 0;
     const npc = extensionSettings.npcAvatars || {};
@@ -141,6 +194,12 @@ function countRemainingDataUrls() {
     for (const u of Object.values(users)) {
         if (isDataUrl(u?.avatar)) n++;
         if (isDataUrl(u?.avatarFullRes)) n++;
+    }
+    for (const bucket of profileBuckets()) {
+        for (const p of Object.values(bucket)) {
+            if (isDataUrl(p?.avatar)) n++;
+            if (isDataUrl(p?.avatarFullRes)) n++;
+        }
     }
     return n;
 }
@@ -194,6 +253,10 @@ export async function migrateAvatarsToFiles(saveSettings) {
         const users = await migrateUserCharacters(extensionSettings.userCharacters);
         out.migrated += users.migrated;
         out.failed += users.failed;
+
+        const buckets = await migrateProfileBuckets();
+        out.migrated += buckets.migrated;
+        out.failed += buckets.failed;
 
         const remaining = countRemainingDataUrls();
         if (remaining === 0) {

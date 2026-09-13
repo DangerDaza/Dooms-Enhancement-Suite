@@ -8,6 +8,7 @@
 import { getRequestHeaders, getThumbnailUrl } from '../../../../../../script.js';
 import { extensionSettings } from '../core/state.js';
 import { getExpressionPortraitForCharacter } from '../systems/integration/expressionSync.js';
+import { unreferencedPortraits } from '../systems/lorebook/campaignProfiles.js';
 
 // Subdirectory under data/default-user/user/images/ where DES drops cropped
 // portraits. ST creates this on first POST via ensureDirectoryExistence in
@@ -148,6 +149,25 @@ export async function deletePortraitFromDiskByValue(value) {
     }
 }
 
+/**
+ * Reference-counted disk cleanup. Deletes only the portrait files that no
+ * store, user character, shadowed base entry or campaign version still
+ * points at — a campaign version cloned from Base shares Base's file, so a
+ * bare delete of "the value we just cleared" would take the other version's
+ * picture with it. Call AFTER the settings entries have been removed.
+ * @param {string[]} values - candidate portrait values (URLs / data URLs)
+ * @returns {Promise<number>} files deleted
+ */
+export async function deletePortraitsIfUnreferenced(values) {
+    let survivors = [];
+    try { survivors = unreferencedPortraits(values); } catch (e) { survivors = []; }
+    let n = 0;
+    for (const value of survivors) {
+        try { if (await deletePortraitFromDiskByValue(value)) n++; } catch (e) {}
+    }
+    return n;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Portrait history — replaced portraits are KEPT, not deleted.
 //
@@ -181,13 +201,16 @@ export function stashCurrentPortraitToHistory(name) {
     const store = extensionSettings.npcAvatarHistory;
     if (!Array.isArray(store[name])) store[name] = [];
     store[name].push({ avatar, avatarFullRes, replacedAt: new Date().toISOString() });
+    const evictedValues = [];
     while (store[name].length > PORTRAIT_HISTORY_LIMIT) {
         const evicted = store[name].shift();
-        try { deletePortraitFromDiskByValue(evicted.avatar); } catch (e) {}
-        try { deletePortraitFromDiskByValue(evicted.avatarFullRes); } catch (e) {}
+        evictedValues.push(evicted?.avatar, evicted?.avatarFullRes);
     }
     if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
     if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
+    // Evicted files go only if no other version of the character (or anyone
+    // else) still references them.
+    if (evictedValues.length) deletePortraitsIfUnreferenced(evictedValues).catch(() => {});
     return true;
 }
 
@@ -218,18 +241,33 @@ export function restorePreviousPortrait(name) {
 }
 
 /**
- * Deletes every kept portrait file for a character and drops their history
- * entry. Only for FULL character deletion — regeneration never calls this.
+ * Drops a character's live portrait history entry and returns the portrait
+ * values it held, WITHOUT touching disk. Full-deletion paths collect these
+ * together with the current portrait values, remove every settings entry,
+ * then hand the whole list to deletePortraitsIfUnreferenced.
+ * @returns {string[]}
  */
-export function purgePortraitHistory(name) {
+export function takePortraitHistoryValues(name) {
     const list = extensionSettings.npcAvatarHistory?.[name];
+    const values = [];
     if (Array.isArray(list)) {
         for (const entry of list) {
-            try { deletePortraitFromDiskByValue(entry.avatar); } catch (e) {}
-            try { deletePortraitFromDiskByValue(entry.avatarFullRes); } catch (e) {}
+            if (entry && typeof entry === 'object') values.push(entry.avatar, entry.avatarFullRes);
+            else values.push(entry);
         }
     }
     if (extensionSettings.npcAvatarHistory) delete extensionSettings.npcAvatarHistory[name];
+    return values.filter(v => typeof v === 'string' && v);
+}
+
+/**
+ * Deletes every kept portrait file for a character (that nothing else still
+ * references) and drops their history entry. Only for FULL character
+ * deletion — regeneration never calls this.
+ */
+export function purgePortraitHistory(name) {
+    const values = takePortraitHistoryValues(name);
+    if (values.length) deletePortraitsIfUnreferenced(values).catch(() => {});
 }
 
 // High-level wrapper used by the workshop, the portrait-bar drop handler,

@@ -18,6 +18,7 @@ import { extensionSettings, lastGeneratedData } from '../../core/state.js';
 import { chat_metadata, saveSettingsDebounced } from '../../../../../../../script.js';
 import { namesAreSimilar, normalizeName } from '../../utils/nameSimilarity.js';
 import { escapeHtml } from '../../utils/html.js';
+import { mergeVariantIntoCanonicalProfiles } from '../lorebook/campaignProfiles.js';
 
 /**
  * Builds a lowercase alias → canonical-name lookup from settings.
@@ -398,6 +399,15 @@ export async function adoptVariantAsAlias(canonical, variant) {
             if (key.toLowerCase() === lower) delete obj[key];
         }
     };
+    // Campaign versions fold first: this also parks the canonical's base
+    // entry when the active campaign overrode only the variant, which has
+    // to happen BEFORE the live merge below changes the canonical's stores.
+    const orphanedPortraitValues = [];
+    try {
+        orphanedPortraitValues.push(...mergeVariantIntoCanonicalProfiles(canonical, variant));
+    } catch (e) {
+        console.warn('[Dooms Tracker] Aliases: campaign profile merge failed', e);
+    }
     for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
         transferIfMissing(extensionSettings[store]);
@@ -406,8 +416,9 @@ export async function adoptVariantAsAlias(canonical, variant) {
     // Portrait data that will NOT survive the scrub (the canonical already has
     // its own entry, so no transfer happened): collect the values now so their
     // image files can be removed from disk afterwards — a bare key delete
-    // would orphan them in the des-portraits folder forever.
-    const orphanedPortraitValues = [];
+    // would orphan them in the des-portraits folder forever. (Deletion is
+    // reference-counted across every campaign version, so a file another
+    // version still points at is kept.)
     for (const store of ['npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory']) {
         const obj = extensionSettings[store];
         if (!obj) continue;
@@ -443,10 +454,8 @@ export async function adoptVariantAsAlias(canonical, variant) {
         saveChatData({ immediate: true });
         if (orphanedPortraitValues.length) {
             try {
-                const { deletePortraitFromDiskByValue } = await import('../../utils/avatars.js');
-                for (const value of orphanedPortraitValues) {
-                    try { await deletePortraitFromDiskByValue(value); } catch (e) {}
-                }
+                const { deletePortraitsIfUnreferenced } = await import('../../utils/avatars.js');
+                await deletePortraitsIfUnreferenced(orphanedPortraitValues);
             } catch (e) { /* disk cleanup is best-effort */ }
         }
         await repaintAliasSurfaces();

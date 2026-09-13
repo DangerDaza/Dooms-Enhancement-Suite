@@ -23,6 +23,7 @@ import { migrateToV3JSON } from '../utils/jsonMigration.js';
 import { scheduleAvatarMigration, retireAvatarBackupIfComplete } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
 import { applyCharacterAliases } from '../systems/features/characterAliases.js';
+import { bankActiveCampaign, ensureCampaignSettings } from '../systems/lorebook/campaignProfiles.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -457,6 +458,13 @@ export function loadSettings() {
                 extensionSettings.customAutoPortraitPrompt = '';
                 settingsChanged = true;
             }
+            // Campaigns as a mode: campaignProfiles / campaignBaseShadow objects,
+            // the lorebook.activeCampaignId / globalBooks / campaignActivated
+            // keys (the shallow merge above replaces the whole lorebook object,
+            // so a pre-campaign blob lacks them), and a dangling active id.
+            if (ensureCampaignSettings()) {
+                settingsChanged = true;
+            }
 
             // ── Rebuild guards: keys whose DEFAULT changed (or is new) on the
             // Rebuild branch. CRITICAL: these must test savedSettings — the
@@ -532,6 +540,11 @@ export function loadSettings() {
  * Saves the extension settings to the global settings object.
  */
 export function saveSettings() {
+    // Campaign banking: copy the live identity stores back into the active
+    // campaign's saved versions before anything reaches disk. Every write
+    // that would survive a reload passes through here, so edits made while
+    // a campaign is active can never be lost on the next switch.
+    try { bankActiveCampaign(); } catch (e) { console.warn('[Dooms Tracker] campaign banking failed', e); }
     const context = getContext();
     const extension_settings = context.extension_settings || context.extensionSettings;
     if (!extension_settings) {
