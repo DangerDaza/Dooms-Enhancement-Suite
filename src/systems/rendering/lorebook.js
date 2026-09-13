@@ -927,7 +927,7 @@ export function initLorebookEventDelegation() {
     // Right-click on campaign header
     $modal.on('contextmenu', '.rpg-lb-campaign-header', function (e) {
         const campaignId = $(this).data('campaign');
-        if (campaignId === '__unfiled__') return; // Can't rename Unfiled
+        if (!campaignId || campaignId === 'unfiled') return; // Can't rename Unfiled
         showContextMenu(e, [
             {
                 icon: 'fa-solid fa-pen',

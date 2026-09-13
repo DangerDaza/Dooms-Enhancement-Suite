@@ -17,7 +17,7 @@
  * With no active campaign everything behaves exactly as it did before
  * campaigns became a mode.
  */
-import { extensionSettings } from '../../core/state.js';
+import { extensionSettings, clearSessionAvatarPrompts } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { getAllWorldNames, isWorldActive, applyWorldActivation } from './lorebookAPI.js';
 import {
@@ -233,6 +233,10 @@ async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
     //        apply its versions. Synchronous and pure.
     switchCampaignProfiles(prev, next);
     lb.activeCampaignId = next;
+    // Persist the swapped stores before ST's own World Info change handler
+    // (fired by the book step) schedules its save — on a fresh session that
+    // save could otherwise serialize the pre-load blob. Idempotent.
+    saveSettings();
 
     // 3. Books.
     const { turnedOn, turnedOff } = await reconcileActiveCampaignBooks();
@@ -300,6 +304,9 @@ export async function reconcileActiveCampaignBooks() {
  * module in the import graph. Mirrors characterAliases.repaintAliasSurfaces.
  */
 export async function repaintAfterCampaignSwitch() {
+    // LLM-written portrait prompts were derived from the previous campaign's
+    // descriptions; a regeneration must not reuse them for the new versions.
+    try { clearSessionAvatarPrompts(); } catch (e) {}
     // The data switch always happens; the DOM work is pointless (and can
     // resurrect panels) while the extension is disabled.
     if (extensionSettings.enabled === false) return;
@@ -324,6 +331,15 @@ export async function repaintAfterCampaignSwitch() {
     try {
         const roster = await import('../ui/characterRoster.js');
         if (typeof roster.refreshRosterIfOpen === 'function') roster.refreshRosterIfOpen();
+    } catch (e) {}
+    try {
+        // The Character Sheet reads the hero art and its position only when
+        // it opens; an open sheet would keep showing the previous version and
+        // a drag would write into the new one. Close it.
+        if (typeof document !== 'undefined') {
+            const sheet = document.getElementById('rpg-character-sheet-popup');
+            if (sheet && sheet.style.display !== 'none' && sheet.style.display !== '') sheet.style.display = 'none';
+        }
     } catch (e) {}
     try {
         const workshop = await import('../ui/characterWorkshop.js');

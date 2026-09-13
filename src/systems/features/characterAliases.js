@@ -426,8 +426,15 @@ export async function adoptVariantAsAlias(canonical, variant) {
         const vKey = findKey(obj, lower);
         if (vKey === undefined || findKey(obj, canonLower) === undefined) continue;
         const val = obj[vKey];
-        if (Array.isArray(val)) orphanedPortraitValues.push(...val.filter(v => typeof v === 'string'));
-        else if (typeof val === 'string') orphanedPortraitValues.push(val);
+        if (Array.isArray(val)) {
+            // npcAvatarHistory entries are { avatar, avatarFullRes, replacedAt } objects.
+            for (const entry of val) {
+                if (entry && typeof entry === 'object') orphanedPortraitValues.push(entry.avatar, entry.avatarFullRes);
+                else if (typeof entry === 'string') orphanedPortraitValues.push(entry);
+            }
+        } else if (typeof val === 'string') {
+            orphanedPortraitValues.push(val);
+        }
     }
     for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
