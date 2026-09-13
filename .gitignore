@@ -35,3 +35,6 @@ mockups/
 # Archived/deprecated code
 src/archived/
 src/archived-features.js
+
+# Claude Code worktrees / local session data
+.claude/

@@ -20,7 +20,7 @@ import {
     clearSyncedExpressionLabels,
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
-import { scheduleAvatarMigration, retireAvatarBackupIfComplete } from '../utils/avatarMigration.js';
+import { scheduleAvatarMigration, retireAvatarBackupIfComplete, hasPendingPortraitDataUrls } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
 import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { bankActiveCampaign, ensureCampaignSettings } from '../systems/lorebook/campaignProfiles.js';
@@ -431,7 +431,9 @@ export function loadSettings() {
             // migration, which renders identically via <img>.src in v1.10.7
             // and earlier. Async; schedule from idle and let the migration
             // bump settingsVersion to 24 only after every upload succeeds.
-            if (currentVersion < 24) {
+            if (currentVersion < 24 || hasPendingPortraitDataUrls()) {
+                // Past v24 the only way a data URL gets here is a portrait
+                // saved into a campaign version whose upload failed — retry.
                 scheduleAvatarMigration(saveSettings);
             } else {
                 // Migration already completed and persisted in a prior session —

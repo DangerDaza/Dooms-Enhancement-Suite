@@ -282,6 +282,90 @@ test('snapshots are clones, not references', () => {
     assert.equal(extensionSettings.campaignProfiles.c1.Hex.injection.description, 'base hex');
 });
 
+test('a live deletion under an active campaign frees the file (stale banked copy is ignored)', () => {
+    cp.addProfile('c1', 'Hex');
+    const own = '/user/images/des-portraits/hex-mecha-only.png?t=5';
+    cp.writeVersion('c1', 'Hex', { ...cp.readVersion('c1', 'Hex'), avatar: own, avatarFullRes: own });
+    activate('c1');
+    cp.bankActiveCampaign(); // bucket now holds the same URL as live
+    delete extensionSettings.npcAvatars.Hex;
+    delete extensionSettings.npcAvatarsFullRes.Hex;
+    assert.deepEqual(cp.unreferencedPortraits([own]), [own]);
+    // base's own file is still pinned by the shadow
+    assert.deepEqual(cp.unreferencedPortraits(['/user/images/des-portraits/hex-aaaaaaaa.png?t=1']), []);
+    // and a copy held by an INACTIVE campaign pins too
+    cp.addProfile('c2', 'Lucy');
+    cp.writeVersion('c2', 'Lucy', { avatar: own });
+    assert.deepEqual(cp.unreferencedPortraits([own]), []);
+});
+
+test('portraitRefCount counts every entry that shares the file', () => {
+    // Hex: npcAvatars + npcAvatarsFullRes share one file
+    assert.equal(cp.portraitRefCount(extensionSettings.npcAvatars.Hex), 2);
+    delete extensionSettings.npcAvatarsFullRes.Hex;
+    assert.equal(cp.portraitRefCount(extensionSettings.npcAvatars.Hex), 1);
+    // a clone in an inactive campaign adds one
+    cp.addProfile('c1', 'Hex');
+    assert.equal(cp.portraitRefCount(extensionSettings.npcAvatars.Hex), 2);
+    // once that campaign is active its bucket is the live view (not counted) but
+    // the shadowed base entry now holds the shared file — still 2, so an
+    // in-place overwrite of the file is refused
+    activate('c1');
+    assert.equal(cp.portraitRefCount(extensionSettings.npcAvatars.Hex), 2);
+    // give the override its own file: only live references it
+    extensionSettings.npcAvatars.Hex = '/user/images/des-portraits/hex-solo.png';
+    assert.equal(cp.portraitRefCount(extensionSettings.npcAvatars.Hex), 1);
+    assert.equal(cp.portraitRefCount('data:image/png;base64,xyz'), 0);
+});
+
+test('alias merge when the active campaign overrides the canonical but not the variant keeps the variant base', () => {
+    // Base Alice has no portrait; Base Alyce has P; Mecha overrides Alice with Q.
+    extensionSettings.npcAvatars.Alyce = '/user/images/des-portraits/alyce-pppppppp.png';
+    extensionSettings.characterInjection.Alyce = { description: 'alyce base', lorebook: '' };
+    extensionSettings.characterInjection.Alice = { description: 'alice base', lorebook: '' };
+    cp.addProfile('c1', 'Alice');
+    cp.writeVersion('c1', 'Alice', { injection: { description: 'alice mecha', lorebook: '' }, avatar: '/user/images/des-portraits/alice-qqqqqqqq.png' });
+    activate('c1');
+    const candidates = cp.mergeVariantIntoCanonicalProfiles('Alice', 'Alyce');
+    // P moved into Alice's shadowed base, so it survives the live scrub
+    assert.equal(extensionSettings.campaignBaseShadow.Alice.avatar, '/user/images/des-portraits/alyce-pppppppp.png');
+    assert.equal(extensionSettings.campaignBaseShadow.Alice.injection.description, 'alice base');
+    cp.removeFromLive('Alyce');
+    assert.deepEqual(cp.unreferencedPortraits([...candidates, '/user/images/des-portraits/alyce-pppppppp.png']), []);
+    activate(null);
+    assert.equal(extensionSettings.npcAvatars.Alice, '/user/images/des-portraits/alyce-pppppppp.png');
+});
+
+test('ensureCampaignSettings drops buckets whose campaign no longer exists', () => {
+    cp.addProfile('c1', 'Hex');
+    extensionSettings.campaignProfiles.ghost = { Hex: { appearance: 'orphan' } };
+    assert.deepEqual(cp.listProfileCampaigns('Hex'), ['c1']);
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.equal(extensionSettings.campaignProfiles.ghost, undefined);
+    assert.equal(cp.hasProfile('c1', 'Hex'), true);
+});
+
+test('alias merge under an active campaign survives a round-trip switch without resurrecting the variant', () => {
+    extensionSettings.characterInjection.Hexley = { description: 'variant base', lorebook: '' };
+    cp.addProfile('c1', 'Hexley');
+    activate('c1');
+    extensionSettings.characterInjection.Hexley.description = 'variant mecha (unbanked edit)';
+    cp.mergeVariantIntoCanonicalProfiles('Hex', 'Hexley');
+    // the merge banked first, so the canonical inherited the live edit in the active bucket
+    assert.equal(extensionSettings.campaignProfiles.c1.Hex.injection.description, 'variant mecha (unbanked edit)');
+    // simulate the live merge + scrub characterAliases performs next
+    cp.removeFromLive('Hexley');
+    cp.bankActiveCampaign();
+    activate(null);
+    activate('c1');
+    activate(null);
+    assert.equal(extensionSettings.characterInjection.Hexley, undefined);
+    assert.equal(cp.hasProfile('c1', 'Hexley'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(extensionSettings.campaignBaseShadow, 'Hexley'), false);
+    // the canonical's base was parked and comes back intact
+    assert.equal(extensionSettings.characterInjection.Hex.description, 'base hex');
+});
+
 if (failures) {
     console.error(`\n${failures} failed, ${passes} passed`);
     process.exit(1);

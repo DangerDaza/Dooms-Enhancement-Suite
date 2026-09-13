@@ -126,9 +126,14 @@ export function getProfile(campaignId, name) {
     return hasProfile(campaignId, name) ? clone(bucket(campaignId)[name]) : null;
 }
 
-/** Campaign ids that hold a version of `name`, in campaignProfiles key order. */
+/**
+ * Campaign ids that hold a version of `name`, in campaignProfiles key order.
+ * Buckets whose campaign no longer exists are ignored (ensureCampaignSettings
+ * removes them on the next load).
+ */
 export function listProfileCampaigns(name) {
-    return Object.keys(profilesRoot()).filter(id => hasProfile(id, name));
+    const campaigns = extensionSettings.lorebook?.campaigns;
+    return Object.keys(profilesRoot()).filter(id => hasProfile(id, name) && (!campaigns || !!campaigns[id]));
 }
 
 /** Base + every campaign version. Always ≥ 1. */
@@ -360,14 +365,38 @@ export function mergeVariantIntoCanonicalProfiles(canonical, variant) {
     const candidates = [];
     const active = getActiveCampaignId();
     const shadow = shadowRoot();
+    // The active bucket only lags behind live between saves; refresh it so
+    // the merge below sees the variant's current version, not a stale copy.
+    bankActiveCampaign();
     const activeBucket = bucket(active);
 
     // The active campaign overrides the variant but not the canonical: the
     // canonical is about to become overridden too (it inherits the variant's
     // version), so its base — which is its live entry at this moment — must
     // be parked first or a later switch-away would lose it.
-    if (activeBucket && findKey(activeBucket, lower) !== undefined && findKey(activeBucket, canonLower) === undefined) {
+    const activeHasVariant = !!activeBucket && findKey(activeBucket, lower) !== undefined;
+    const activeHasCanonical = !!activeBucket && findKey(activeBucket, canonLower) !== undefined;
+    if (activeHasVariant && !activeHasCanonical) {
         if (findKey(shadow, canonLower) === undefined) shadow[canonical] = snapshotLive(canonical);
+    }
+    // The reverse: the active campaign overrides the canonical but not the
+    // variant. The variant's live entry IS its base, and the live merge that
+    // follows would fold it into the canonical's CAMPAIGN version only — its
+    // base would never reach the canonical's base and its portrait file would
+    // be deleted as an orphan. Fold it into the canonical's shadowed base here.
+    if (activeHasCanonical && !activeHasVariant) {
+        const variantBase = snapshotLive(variant);
+        if (variantBase) {
+            const sKey = findKey(shadow, canonLower);
+            const target = (sKey !== undefined && shadow[sKey] && typeof shadow[sKey] === 'object') ? shadow[sKey] : {};
+            for (const { field } of PROFILE_FIELDS) {
+                const vValue = variantBase[field];
+                if (vValue === undefined || vValue === null) continue;
+                if (target[field] === undefined || target[field] === null) target[field] = vValue;
+                else candidates.push(...portraitValuesOf({ [field]: vValue }));
+            }
+            shadow[sKey !== undefined ? sKey : canonical] = target;
+        }
     }
 
     const mergeBucket = (b) => {
@@ -422,14 +451,15 @@ export function portraitValuesOf(profile) {
 }
 
 /**
- * Every portrait file still referenced anywhere: live stores (current,
- * full-res, history, auto-portrait meta), user characters, the shadow and
- * every campaign bucket. Keys are portraitRefKey() values.
- * @returns {Set<string>}
+ * Visits every portrait value still referenced anywhere: live stores
+ * (current, full-res, history, auto-portrait meta), user characters, the
+ * shadow and every INACTIVE campaign bucket. The active campaign's bucket is
+ * deliberately skipped — the live stores ARE that bucket, and its banked
+ * copy only lags behind live (a value just deleted from live would still
+ * show up there and pin its file forever).
  */
-export function collectPortraitRefs() {
-    const refs = new Set();
-    const add = (v) => { const k = portraitRefKey(v); if (k) refs.add(k); };
+function forEachPortraitRef(visit) {
+    const add = (v) => { if (typeof v === 'string' && v) visit(v); };
     for (const store of ['npcAvatars', 'npcAvatarsFullRes']) {
         const map = extensionSettings[store];
         if (map && typeof map === 'object') for (const v of Object.values(map)) add(v);
@@ -448,12 +478,38 @@ export function collectPortraitRefs() {
     if (generated && typeof generated === 'object') for (const meta of Object.values(generated)) add(meta?.url);
     const users = extensionSettings.userCharacters;
     if (users && typeof users === 'object') for (const u of Object.values(users)) { add(u?.avatar); add(u?.avatarFullRes); }
-    const buckets = [shadowRoot(), ...Object.values(profilesRoot())];
+    const active = getActiveCampaignId();
+    const root = profilesRoot();
+    const buckets = [shadowRoot(), ...Object.keys(root).filter(id => id !== active).map(id => root[id])];
     for (const b of buckets) {
         if (!b || typeof b !== 'object') continue;
         for (const profile of Object.values(b)) for (const v of portraitValuesOf(profile)) add(v);
     }
+}
+
+/**
+ * Every portrait file still referenced (see forEachPortraitRef for the
+ * sources). Keys are portraitRefKey() values.
+ * @returns {Set<string>}
+ */
+export function collectPortraitRefs() {
+    const refs = new Set();
+    forEachPortraitRef((v) => { const k = portraitRefKey(v); if (k) refs.add(k); });
     return refs;
+}
+
+/**
+ * How many store entries point at the same file as `value`. A portrait file
+ * may only be overwritten in place (persistPortrait reuses the filename)
+ * when this is at most 1 — i.e. only the entry being replaced references it.
+ * @returns {number}
+ */
+export function portraitRefCount(value) {
+    const key = portraitRefKey(value);
+    if (!key) return 0;
+    let n = 0;
+    forEachPortraitRef((v) => { if (portraitRefKey(v) === key) n++; });
+    return n;
 }
 
 /**
@@ -531,8 +587,21 @@ export function ensureCampaignSettings() {
         if (active && !(lb.campaigns && lb.campaigns[active])) {
             switchCampaignProfiles(active, null);
             lb.activeCampaignId = null;
-            lb.campaignActivated = [];
+            // The ledger is left as is: the next reconcile turns those books off.
             changed = true;
+        }
+        // Buckets for campaigns that no longer exist (deleted on another
+        // device, or a crash between deleteCampaign's steps) would still show
+        // up as versions in the Workshop. Drop them; any portrait files only
+        // they referenced are reclaimed by the next ref-counted deletion.
+        if (lb.campaigns && typeof lb.campaigns === 'object') {
+            const root = profilesRoot();
+            for (const id of Object.keys(root)) {
+                if (!lb.campaigns[id]) {
+                    delete root[id];
+                    changed = true;
+                }
+            }
         }
     }
     return changed;

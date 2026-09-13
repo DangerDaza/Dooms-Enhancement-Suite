@@ -1750,13 +1750,23 @@ function bindSettingsUI() {
         saveSettings();
     });
     // ── Lorebook Manager settings ──
-    $('#rpg-toggle-lorebook').on('change', function () {
+    $('#rpg-toggle-lorebook').on('change', async function () {
         if (!extensionSettings.lorebook) {
             extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], collapsedCampaigns: [], expandedBooks: [], lastActiveTab: 'all', lastFilter: 'all', lastSearch: '' };
         }
         extensionSettings.lorebook.enabled = $(this).prop('checked');
         $('#rpg-lb-badge').text($(this).prop('checked') ? 'on' : 'off');
         saveSettings();
+        // Turning the Lore Library off while a campaign is active would leave
+        // the character stores swapped with no UI to switch them back.
+        if (!extensionSettings.lorebook.enabled && extensionSettings.lorebook.activeCampaignId) {
+            try {
+                const { setActiveCampaign } = await import('./src/systems/lorebook/campaignManager.js');
+                await setActiveCampaign(null);
+            } catch (e) {
+                console.warn('[Dooms Tracker] could not deactivate the campaign', e);
+            }
+        }
     });
     $('#rpg-open-lorebook').on('click', async function () {
         const { getLorebookModal } = await import('./src/systems/ui/lorebookModal.js');

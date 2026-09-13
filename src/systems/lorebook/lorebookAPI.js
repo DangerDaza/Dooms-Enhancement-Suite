@@ -116,6 +116,37 @@ export async function deactivateWorld(name) {
     }
 }
 
+/**
+ * Bulk activation in ONE round trip: applies every add/remove to
+ * selected_world_info, then refreshes ST's list and fires its change handler
+ * once. A campaign switch with a dozen books would otherwise do a dozen
+ * updateWorldInfoList() + change-trigger cycles.
+ * @param {{activate?: string[], deactivate?: string[]}} changes
+ * @returns {Promise<{activated: string[], deactivated: string[]}>}
+ */
+export async function applyWorldActivation({ activate = [], deactivate = [] } = {}) {
+    const activated = [];
+    const deactivated = [];
+    for (const name of deactivate) {
+        const idx = selected_world_info.indexOf(name);
+        if (idx !== -1) {
+            selected_world_info.splice(idx, 1);
+            deactivated.push(name);
+        }
+    }
+    for (const name of activate) {
+        if (!selected_world_info.includes(name)) {
+            selected_world_info.push(name);
+            activated.push(name);
+        }
+    }
+    if (activated.length || deactivated.length) {
+        await updateWorldInfoList();
+        $('#world_info').trigger('change');
+    }
+    return { activated, deactivated };
+}
+
 // ─── Load / Save ────────────────────────────────────────────────────────────
 
 /**

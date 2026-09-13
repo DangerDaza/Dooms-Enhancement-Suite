@@ -19,7 +19,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { getAllWorldNames, isWorldActive, activateWorld, deactivateWorld } from './lorebookAPI.js';
+import { getAllWorldNames, isWorldActive, applyWorldActivation } from './lorebookAPI.js';
 import {
     switchCampaignProfiles,
     deleteCampaignProfiles,
@@ -191,6 +191,17 @@ export function getActiveCampaign() {
     return campaign ? { id, campaign } : null;
 }
 
+// Switches are serialized: a second click while the first is still awaiting
+// ST's World Info update would interleave two reconciles and corrupt the
+// ledger. Every setActiveCampaign call queues behind the previous one.
+let switchChain = Promise.resolve();
+let switchesPending = 0;
+
+/** True while a campaign switch is in flight (UI can disable its controls). */
+export function isSwitching() {
+    return switchesPending > 0;
+}
+
 /**
  * Makes a campaign active (or none, with null). Swaps character versions,
  * turns the campaign's books on, turns the previous campaign's books off
@@ -200,7 +211,17 @@ export function getActiveCampaign() {
  * @param {{silent?: boolean}} [options] - silent: no toast
  * @returns {Promise<boolean>} True if the active campaign changed
  */
-export async function setActiveCampaign(campaignId, { silent = false } = {}) {
+export function setActiveCampaign(campaignId, options = {}) {
+    switchesPending++;
+    const run = switchChain
+        .then(() => doSetActiveCampaign(campaignId, options))
+        .finally(() => { switchesPending--; });
+    // Keep the chain alive even when one switch throws.
+    switchChain = run.catch(() => {});
+    return run;
+}
+
+async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
     ensureLorebook();
     const lb = extensionSettings.lorebook;
     const next = campaignId && lb.campaigns[campaignId] ? campaignId : null;
@@ -237,10 +258,14 @@ export async function setActiveCampaign(campaignId, { silent = false } = {}) {
 
 /**
  * Brings ST's active World Info selection in line with the active campaign:
- * every book filed under it is on, every book the previous switch turned on
+ * every book filed under it is on, every book the previous switch left on
  * that is no longer wanted is off (unless flagged global), and the ledger
- * records what this call left on. Safe to call whenever a campaign's book
- * list changes; a no-op when nothing is active except releasing the ledger.
+ * records what this call left on. The ledger is "the campaign's books", so a
+ * campaign really is a mode: switching away turns its non-global books off
+ * even if the user had switched one of them on by hand beforehand — while
+ * books outside the campaign (manual picks, imports) are never touched.
+ * Safe to call whenever a campaign's book list changes; with nothing active
+ * it only releases the ledger.
  * @returns {Promise<{turnedOn: number, turnedOff: number}>}
  */
 export async function reconcileActiveCampaignBooks() {
@@ -253,26 +278,17 @@ export async function reconcileActiveCampaignBooks() {
         ? (lb.campaigns[active]?.books || []).filter(b => existing.has(b))
         : [];
     const wantedSet = new Set(wanted);
+    const deactivate = lb.campaignActivated.filter(name =>
+        !wantedSet.has(name) && !globals.has(name) && isWorldActive(name));
+    const activate = wanted.filter(name => !isWorldActive(name));
     let turnedOn = 0;
     let turnedOff = 0;
-    for (const name of lb.campaignActivated) {
-        if (wantedSet.has(name) || globals.has(name)) continue;
-        if (!isWorldActive(name)) continue;
-        try {
-            await deactivateWorld(name);
-            turnedOff++;
-        } catch (e) {
-            console.warn(`[Dooms Tracker] Campaign: could not deactivate "${name}"`, e);
-        }
-    }
-    for (const name of wanted) {
-        if (isWorldActive(name)) continue;
-        try {
-            await activateWorld(name);
-            turnedOn++;
-        } catch (e) {
-            console.warn(`[Dooms Tracker] Campaign: could not activate "${name}"`, e);
-        }
+    try {
+        const result = await applyWorldActivation({ activate, deactivate });
+        turnedOn = result.activated.length;
+        turnedOff = result.deactivated.length;
+    } catch (e) {
+        console.warn('[Dooms Tracker] Campaign: World Info update failed', e);
     }
     lb.campaignActivated = [...wanted];
     return { turnedOn, turnedOff };
@@ -284,6 +300,9 @@ export async function reconcileActiveCampaignBooks() {
  * module in the import graph. Mirrors characterAliases.repaintAliasSurfaces.
  */
 export async function repaintAfterCampaignSwitch() {
+    // The data switch always happens; the DOM work is pointless (and can
+    // resurrect panels) while the extension is disabled.
+    if (extensionSettings.enabled === false) return;
     try {
         const { clearPortraitCache, updatePortraitBar } = await import('../ui/portraitBar.js');
         clearPortraitCache();

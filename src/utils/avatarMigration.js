@@ -67,7 +67,16 @@ async function migrateMap(label, map, byNameSeed = null) {
         }
         try {
             const url = await persistPortrait(value, name, value);
-            map[name] = url;
+            // Compare-and-swap: a campaign switch during the upload can have
+            // moved this data URL out of the live map (banked into a campaign
+            // version) and put another version's URL here. Never overwrite a
+            // value that changed under us — write the URL wherever the data
+            // URL went instead.
+            if (map[name] === value) {
+                map[name] = url;
+            } else {
+                relocateMigratedValue(value, url);
+            }
             result.byName.set(name, { dataUrl: value, url });
             result.migrated++;
             await sleep(THROTTLE_MS);
@@ -142,43 +151,84 @@ function profileBuckets() {
     return out;
 }
 
+// After an await, a value we uploaded may have moved (campaign switch banked
+// it into a bucket / restored another version into the live map). Find every
+// place that still holds the data URL and put the uploaded URL there.
+function relocateMigratedValue(dataUrl, url) {
+    const swapIn = (obj, key) => { if (obj && obj[key] === dataUrl) obj[key] = url; };
+    for (const store of ['npcAvatars', 'npcAvatarsFullRes']) {
+        const map = extensionSettings[store];
+        if (map && typeof map === 'object') for (const name of Object.keys(map)) swapIn(map, name);
+    }
+    for (const bucket of profileBuckets()) {
+        for (const profile of Object.values(bucket)) {
+            if (!profile || typeof profile !== 'object') continue;
+            swapIn(profile, 'avatar');
+            swapIn(profile, 'avatarFullRes');
+        }
+    }
+}
+
 // Walks the campaign-version buckets. A portrait uploaded while viewing an
 // inactive campaign's version (or the shadowed Base) never passes through the
-// flat maps, so it has to be moved to disk from here.
-async function migrateProfileBuckets() {
+// flat maps, so it has to be moved to disk from here. The ACTIVE campaign's
+// bucket is skipped: it mirrors the live maps (banked on every save), so the
+// live walk above already covered it and uploading again would duplicate the
+// file. Byte-identical data URLs upload once (uploadedByBytes).
+async function migrateProfileBuckets(uploadedByBytes) {
     const result = { migrated: 0, failed: 0 };
-    for (const bucket of profileBuckets()) {
+    const active = extensionSettings.lorebook?.activeCampaignId || null;
+    const buckets = [];
+    const shadow = extensionSettings.campaignBaseShadow;
+    if (shadow && typeof shadow === 'object') buckets.push(shadow);
+    const profiles = extensionSettings.campaignProfiles;
+    if (profiles && typeof profiles === 'object') {
+        for (const id of Object.keys(profiles)) {
+            if (id !== active && profiles[id] && typeof profiles[id] === 'object') buckets.push(profiles[id]);
+        }
+    }
+    const upload = async (bucket, name, field, label) => {
+        const value = bucket[name]?.[field];
+        if (!isDataUrl(value)) return;
+        let url = uploadedByBytes.get(value);
+        if (!url) {
+            try {
+                url = await persistPortrait(value, label, value);
+                uploadedByBytes.set(value, url);
+                result.migrated++;
+                await sleep(THROTTLE_MS);
+            } catch (err) {
+                console.warn(`[Dooms Tracker] avatar migration: campaign version "${name}".${field} failed:`, err);
+                result.failed++;
+                if (result.migrated === 0 && result.failed === 1) throw err;
+                return;
+            }
+        }
+        // Re-read after the await — bankActiveCampaign / a switch may have
+        // replaced the profile object meanwhile.
+        const current = bucket[name];
+        if (current && typeof current === 'object' && current[field] === value) current[field] = url;
+        else relocateMigratedValue(value, url);
+    };
+    for (const bucket of buckets) {
         for (const name of Object.keys(bucket)) {
-            const profile = bucket[name];
-            if (!profile || typeof profile !== 'object') continue;
-            let cropUrl = null;
-            if (isDataUrl(profile.avatar)) {
-                try {
-                    cropUrl = await persistPortrait(profile.avatar, name, profile.avatar);
-                    if (profile.avatarFullRes === profile.avatar) profile.avatarFullRes = cropUrl;
-                    profile.avatar = cropUrl;
-                    result.migrated++;
-                    await sleep(THROTTLE_MS);
-                } catch (err) {
-                    console.warn(`[Dooms Tracker] avatar migration: campaign version "${name}".avatar failed:`, err);
-                    result.failed++;
-                    if (result.migrated === 0 && result.failed === 1) throw err;
-                }
-            }
-            if (isDataUrl(profile.avatarFullRes)) {
-                try {
-                    profile.avatarFullRes = await persistPortrait(profile.avatarFullRes, `${name}-full`, profile.avatarFullRes);
-                    result.migrated++;
-                    await sleep(THROTTLE_MS);
-                } catch (err) {
-                    console.warn(`[Dooms Tracker] avatar migration: campaign version "${name}".avatarFullRes failed:`, err);
-                    result.failed++;
-                    if (result.migrated === 0 && result.failed === 1) throw err;
-                }
-            }
+            if (!bucket[name] || typeof bucket[name] !== 'object') continue;
+            await upload(bucket, name, 'avatar', name);
+            await upload(bucket, name, 'avatarFullRes', `${name}-full`);
         }
     }
     return result;
+}
+
+/**
+ * True when any portrait anywhere (flat maps, user characters, campaign
+ * versions) is still a data: URL. persistence.js uses it to schedule the
+ * migration on installs already past v24 — a portrait saved into a campaign
+ * version whose upload failed would otherwise sit as base64 until the next
+ * Workshop save.
+ */
+export function hasPendingPortraitDataUrls() {
+    try { return countRemainingDataUrls() > 0; } catch (e) { return false; }
 }
 
 // Returns a count of remaining data:-URL entries across all four maps plus
@@ -254,7 +304,12 @@ export async function migrateAvatarsToFiles(saveSettings) {
         out.migrated += users.migrated;
         out.failed += users.failed;
 
-        const buckets = await migrateProfileBuckets();
+        // Bytes already uploaded by the live walk (Workshop saves clone the
+        // same data URL into a campaign version) must not upload twice.
+        const uploadedByBytes = new Map();
+        for (const { dataUrl, url } of npcCrop.byName.values()) uploadedByBytes.set(dataUrl, url);
+        for (const { dataUrl, url } of npcFull.byName.values()) uploadedByBytes.set(dataUrl, url);
+        const buckets = await migrateProfileBuckets(uploadedByBytes);
         out.migrated += buckets.migrated;
         out.failed += buckets.failed;
 

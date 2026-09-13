@@ -394,7 +394,7 @@ export let extensionSettings = {
         // Campaigns as an active mode (campaignManager.setActiveCampaign):
         activeCampaignId: null, // campaign whose books + character versions are live, or null
         globalBooks: [],        // WI filenames exempt from campaign switching (BunnyMo-style packs)
-        campaignActivated: [],  // ledger of the books the last switch turned on — only these get turned off
+        campaignActivated: [],  // ledger: the active campaign's books as of the last switch — only these get turned off (globals exempt); books outside the campaign are never touched
     },
     // Doom Counter — tension-driven plot twist system
     // Uses its own 1-10 numeric tension scale (independent of the infoBox tension widget)
