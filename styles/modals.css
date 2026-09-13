@@ -4796,6 +4796,15 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     padding: 4px 0;
     min-width: 150px;
+    /* Never wider than the screen; long campaign names wrap inside. The
+       height cap and scroll are set by placeOnScreen() from the live viewport. */
+    max-width: min(340px, calc(100vw - 12px));
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+}
+
+.rpg-lb-context-menu .rpg-lb-context-menu-item {
+    overflow-wrap: anywhere;
 }
 
 .rpg-lb-context-menu-item {

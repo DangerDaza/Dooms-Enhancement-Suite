@@ -241,17 +241,22 @@ function showHeroContextMenu(e, characterName) {
         </div>
     `);
 
-    // Position near cursor
+    // Position near the cursor, clamped so the menu stays inside both the
+    // hero box (it is absolutely positioned within it) and the viewport.
     const $hero = $(e.currentTarget).closest('.rpg-cs-hero');
     const heroRect = $hero[0].getBoundingClientRect();
-    $menu.css({
-        position: 'absolute',
-        top: (e.clientY - heroRect.top) + 'px',
-        left: (e.clientX - heroRect.left) + 'px',
-        zIndex: 1000
-    });
-
+    $menu.css({ position: 'absolute', top: 0, left: 0, zIndex: 1000, visibility: 'hidden' });
     $hero.append($menu);
+    const menuW = $menu.outerWidth() || 160;
+    const menuH = $menu.outerHeight() || 36;
+    const margin = 4;
+    const maxLeft = Math.min(heroRect.width, window.innerWidth - heroRect.left) - menuW - margin;
+    const maxTop = Math.min(heroRect.height, window.innerHeight - heroRect.top) - menuH - margin;
+    $menu.css({
+        top: Math.max(0, Math.min(e.clientY - heroRect.top, maxTop)) + 'px',
+        left: Math.max(0, Math.min(e.clientX - heroRect.left, maxLeft)) + 'px',
+        visibility: '',
+    });
 
     $menu.on('click', '[data-action="reposition"]', function () {
         $menu.remove();

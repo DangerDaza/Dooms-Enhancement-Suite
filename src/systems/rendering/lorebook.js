@@ -915,12 +915,32 @@ export function initLorebookEventDelegation() {
                 });
                 $menu.append($item);
             }
+            // A submenu can be far taller than the menu it replaces (one row
+            // per campaign): re-fit whenever the contents change.
+            if ($menu[0].isConnected) placeOnScreen();
+        }
+
+        // Keep the whole menu inside the viewport: measure the REAL size
+        // (not a guessed 180×200) and clamp, capping the height so a long
+        // submenu scrolls instead of running off the bottom.
+        const anchorX = e.clientX;
+        const anchorY = e.clientY;
+        function placeOnScreen() {
+            const margin = 6;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            $menu.css({ maxHeight: `${Math.max(80, vh - margin * 2)}px`, overflowY: 'auto', left: 0, top: 0 });
+            const w = $menu.outerWidth() || 180;
+            const h = $menu.outerHeight() || 200;
+            $menu.css({
+                left: `${Math.max(margin, Math.min(anchorX, vw - w - margin))}px`,
+                top: `${Math.max(margin, Math.min(anchorY, vh - h - margin))}px`,
+            });
         }
 
         populateMenu(items, false);
-        // Position but keep on screen
-        $menu.css({ top: Math.min(e.clientY, window.innerHeight - 200), left: Math.min(e.clientX, window.innerWidth - 180) });
         $('body').append($menu);
+        placeOnScreen();
         // Close on click outside
         setTimeout(() => $(document).one('click', () => $('.rpg-lb-context-menu').remove()), 0);
     }
