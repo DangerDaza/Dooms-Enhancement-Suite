@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Campaigns are now a mode, not just a folder.** The Lore Library's campaign folders get a **Set active** button. Making a campaign active does three things at once: every character in the Workshop switches to that campaign's version of themselves (portrait, description, appearance prompt, relationship, knives, hero position), the books filed under the campaign are switched on, and the books the previous campaign had switched on are switched off. Playing *Wardens Rest*, click *Mecha*, and the whole rig — cast, portraits, active World Info — becomes the Mecha rig. Books you switched on by hand outside any campaign are never touched, and a book can be flagged **global** (the globe on its row) so it survives every switch — the place for BunnyMo-style packs. Deactivate by clicking the active campaign again; with no active campaign everything behaves exactly as before.
+- **Characters can have a different version per campaign.** The Workshop's identity stores were one flat namespace, so a recurring cast serving several settings got one card per name — and the obvious workaround (a suffixed card) never resolved, while merging as an alias deleted the variant and her images. Now each character has a **Base** version plus any number of campaign versions. Add one from the "+" tile on the card (it clones whatever version you're looking at), edit it, and it takes over whenever that campaign is active; remove it and the character falls back to Base in that campaign. Installs without campaigns see no change: the version strip only appears once a campaign exists, and Base *is* the card you always had.
+- **The Character Workshop has been redesigned around the portrait.** The picture fills the whole left side of the window edge to edge, with the name, relationship and the version strip laid over it; the editing sections sit on the right as tabs. Picking another version crossfades the portrait and slides the fields in, tinted with that campaign's colour; the header badge says which version is on the stage and whether it is the one the chat is using. Every field, tab and footer action from before is still there. Transitions are off under performance mode and when the OS asks for reduced motion, and on a phone the stage becomes a banner above the editor.
+- **The Roster shows which campaign you are looking at** ("Viewing Mecha" above the grid) and marks characters that have more than one version, so it is obvious when you are looking at the wrong Hex.
+
+### Changed
+- **Portrait files are now reference-counted before deletion.** A campaign version cloned from Base shares Base's image file, so deleting a version, a character, a replaced auto-portrait or an alias merge's leftovers only removes files nothing else still points at. This also fixes a long-standing edge case where deleting an NPC deleted the file a persona created with *Copy to Users* was still showing.
+- **Edits made while a campaign is active are banked automatically.** The active campaign's saved versions are refreshed from the live cards on every settings save, so nothing done during play is lost on the next switch — there is no "save the campaign" step. A portrait generation that finishes after you switched campaigns lands in the version it was started for.
+- **Alias merges respect campaign versions.** Adopting a variant name folds its versions into the canonical character campaign by campaign, so a later switch can't bring the duplicate back.
+
 ## [2.5.0] - 2026-09-06 — House Rules
 
 ### Fixed

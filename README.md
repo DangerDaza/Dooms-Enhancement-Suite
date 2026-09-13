@@ -31,6 +31,8 @@ Each character gets their own card with an avatar — custom uploaded, auto-impo
 
 Right-click any portrait to open the Character Workshop (where custom images, dialogue colors, and knives are managed), open their character sheet, cancel a pending inject, or remove the character from the scene.
 
+The Workshop puts the portrait on a full-height stage with the editing sections beside it as tabs. Once the Lore Library has a campaign, a **version strip** appears under the portrait: every character has a **Base** version plus any number of campaign versions (portrait, description, appearance prompt, relationship, knives, hero position). The "+" tile clones the version on the stage into a campaign; picking a tile crossfades to that version; the "×" removes it and the character falls back to Base in that campaign. Whichever campaign is active in the Lore Library decides which version the chat sees — the tile marked **Live**. Dialogue colour is per chat and aliases are global, so both are the same on every version.
+
 NPCs support **Aliases** (Character Workshop → Identity): other names the AI might use for the same character — like a revealed full name ("Sarah Greenfield" for "Sarah"), a nickname, or a title. Tracker data using an alias resolves to the existing card instead of spawning a duplicate character, while the AI stays free to use the alias in prose. Fully customizable — card size, spacing, border radius, colors, glow intensity, and positioning (above input, below input, or top of screen).
 
 Supports a palette of 30 distinct dialogue colors to prevent collisions in large casts. Per-chat character tracking is available — when enabled, each chat maintains its own independent character roster so characters don't bleed between conversations.
@@ -110,6 +112,7 @@ A full-featured lorebook manager that replaces SillyTavern's native World Info i
 - Bulk visibility controls
 - Drag-to-reorder libraries
 - Token count estimates
+- **Active campaign** — a library folder can be *set active*. Doing so switches every Workshop character to that campaign's version of themselves, turns the campaign's books on and turns the previous campaign's books off. Books you switched on by hand outside any campaign are left alone, and a book flagged **global** (the globe on its row) stays on across every switch — the place for BunnyMo-style packs. Click the active campaign again to deactivate it; with nothing active, the library is the plain folder view it always was.
 <img width="1557" height="2380" alt="image" src="https://github.com/user-attachments/assets/cad2d576-480e-446e-8d3f-bc1abd1e96b4" />
 
 ### Quest Tracking
