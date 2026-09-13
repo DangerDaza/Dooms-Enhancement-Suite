@@ -204,6 +204,16 @@ await test('reconcile after a book joins or leaves the active campaign', async (
     assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['B', 'C']);
 });
 
+await test('a book name that is not a string can never be filed', async () => {
+    cm.addBookToCampaign('c1', undefined);
+    cm.addBookToCampaign('c1', '');
+    cm.addBookToCampaign('c1', null);
+    cm.moveBookBetweenCampaigns(null, 'c2', undefined);
+    cm.removeBookFromCampaign('c1', undefined);
+    assert.deepEqual(extensionSettings.lorebook.campaigns.c1.books, ['A', 'B']);
+    assert.deepEqual(extensionSettings.lorebook.campaigns.c2.books, ['B', 'C', 'Missing']);
+});
+
 await test('rename and delete bookkeeping follow the book', async () => {
     await cm.setActiveCampaign('c1', { silent: true });
     cm.onWorldRenamed('A', 'A2');

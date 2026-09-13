@@ -1601,9 +1601,15 @@ export function initLorebookEventDelegation() {
         const targetCampaignId = $(this).data('campaign');
         const checked = $modal.find('.rpg-lb-book-check.checked');
         for (const el of checked) {
-            const $book = $(el).closest('.rpg-lb-tree-book');
+            // The checkboxes are rendered only by the mobile spines
+            // (.rpg-lb-book-spine); the desktop tree rows carry no
+            // checkbox. Resolve either row shape, like the other shared
+            // helpers do, and skip anything that has no book name.
+            const $book = $(el).closest('.rpg-lb-tree-book, .rpg-lb-book-spine');
             const worldName = $book.data('world');
-            const currentCampaign = $book.closest('.rpg-lb-campaign-group').data('campaign') || '';
+            if (typeof worldName !== 'string' || !worldName) continue;
+            const groupId = $book.closest('.rpg-lb-campaign-group').data('campaign') || '';
+            const currentCampaign = groupId === 'unfiled' ? '' : groupId;
             if (targetCampaignId) {
                 campaignManager.moveBookBetweenCampaigns(currentCampaign || null, targetCampaignId, worldName);
             } else if (currentCampaign) {

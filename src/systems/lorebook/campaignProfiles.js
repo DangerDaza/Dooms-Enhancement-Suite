@@ -583,6 +583,24 @@ export function ensureCampaignSettings() {
         if (lb.activeCampaignId === undefined) { lb.activeCampaignId = null; changed = true; }
         if (!Array.isArray(lb.globalBooks)) { lb.globalBooks = []; changed = true; }
         if (!Array.isArray(lb.campaignActivated)) { lb.campaignActivated = []; changed = true; }
+        // A pre-campaign bug in the mobile bulk "Move to" filed `undefined`
+        // in campaign folders. Book lists hold WI filenames only.
+        const isBookName = (v) => typeof v === 'string' && v.length > 0;
+        const scrubList = (list) => {
+            if (!Array.isArray(list)) return list;
+            const clean = list.filter(isBookName);
+            if (clean.length !== list.length) { list.length = 0; list.push(...clean); changed = true; }
+            return list;
+        };
+        scrubList(lb.globalBooks);
+        scrubList(lb.campaignActivated);
+        if (lb.campaigns && typeof lb.campaigns === 'object') {
+            for (const campaign of Object.values(lb.campaigns)) {
+                if (!campaign || typeof campaign !== 'object') continue;
+                if (!Array.isArray(campaign.books)) { campaign.books = []; changed = true; continue; }
+                scrubList(campaign.books);
+            }
+        }
         const active = getActiveCampaignId();
         if (active && !(lb.campaigns && lb.campaigns[active])) {
             switchCampaignProfiles(active, null);

@@ -336,6 +336,19 @@ test('alias merge when the active campaign overrides the canonical but not the v
     assert.equal(extensionSettings.npcAvatars.Alice, '/user/images/des-portraits/alyce-pppppppp.png');
 });
 
+test('ensureCampaignSettings scrubs non-string entries out of every book list', () => {
+    extensionSettings.lorebook.campaigns.c1.books = ['Mecha Lore', undefined, '', null, 'Shared Rules'];
+    extensionSettings.lorebook.globalBooks = [undefined, 'G'];
+    extensionSettings.lorebook.campaignActivated = ['Mecha Lore', 42];
+    const books = extensionSettings.lorebook.campaigns.c1.books; // same array must survive (UI may hold it)
+    assert.equal(cp.ensureCampaignSettings(), true);
+    assert.deepEqual(extensionSettings.lorebook.campaigns.c1.books, ['Mecha Lore', 'Shared Rules']);
+    assert.equal(extensionSettings.lorebook.campaigns.c1.books, books);
+    assert.deepEqual(extensionSettings.lorebook.globalBooks, ['G']);
+    assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['Mecha Lore']);
+    assert.equal(cp.ensureCampaignSettings(), false);
+});
+
 test('ensureCampaignSettings drops buckets whose campaign no longer exists', () => {
     cp.addProfile('c1', 'Hex');
     extensionSettings.campaignProfiles.ghost = { Hex: { appearance: 'orphan' } };

@@ -404,6 +404,9 @@ export function onWorldDeleted(worldName) {
  */
 export function addBookToCampaign(campaignId, worldName) {
     ensureLorebook();
+    // A caller that resolved no book (an empty jQuery lookup yields
+    // undefined) must not file "undefined" in a folder.
+    if (typeof worldName !== 'string' || !worldName) return;
 
     // Remove from any existing campaign first
     for (const campaign of Object.values(extensionSettings.lorebook.campaigns)) {
@@ -430,6 +433,7 @@ export function addBookToCampaign(campaignId, worldName) {
  */
 export function removeBookFromCampaign(campaignId, worldName) {
     ensureLorebook();
+    if (typeof worldName !== 'string' || !worldName) return;
     const campaign = extensionSettings.lorebook.campaigns[campaignId];
     if (campaign) {
         const idx = campaign.books.indexOf(worldName);
