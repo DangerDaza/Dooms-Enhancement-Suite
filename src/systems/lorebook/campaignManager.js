@@ -221,6 +221,17 @@ export function setActiveCampaign(campaignId, options = {}) {
     return run;
 }
 
+/**
+ * Runs reconcileActiveCampaignBooks after any in-flight switch instead of
+ * interleaving with it (both await ST's World Info update and both write
+ * the ledger). Use this from UI handlers that change a campaign's books.
+ */
+export function queueReconcile() {
+    const run = switchChain.then(() => reconcileActiveCampaignBooks());
+    switchChain = run.catch(() => {});
+    return run;
+}
+
 async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
     ensureLorebook();
     const lb = extensionSettings.lorebook;

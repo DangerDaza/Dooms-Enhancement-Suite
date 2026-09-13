@@ -17,7 +17,7 @@ import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from 
 import { saveSettings } from '../../core/persistence.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { deletePortraitsIfUnreferenced, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
-import { BASE_VERSION, getActiveCampaignId, portraitRefCount, readVersion, writeVersion } from '../lorebook/campaignProfiles.js';
+import { BASE_VERSION, getActiveCampaignId, hasProfile, portraitRefCount, readVersion, writeVersion } from '../lorebook/campaignProfiles.js';
 import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt, generateDescriptionPortraitPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 import { hasPendingAliasDecision } from './characterAliases.js';
@@ -109,16 +109,29 @@ function setGeneratedPortraitMeta(characterName, prompt, stateHash, url) {
 }
 
 /**
+ * The version of `characterName` the live stores hold right now: the active
+ * campaign's when it overrides the name, else Base. Captured BEFORE a
+ * generation awaits so its result can be filed where it belongs.
+ */
+function liveVersionIdFor(characterName) {
+    const active = getActiveCampaignId();
+    return active && hasProfile(active, characterName) ? active : BASE_VERSION;
+}
+
+/**
  * Portrait generation awaits /sd (and often an LLM prompt) for many seconds.
  * If the user switched the active campaign meanwhile, the live stores now
  * belong to a different campaign and the result must land in the version
  * it was generated for instead. Returns true when it did so (the caller
  * must then NOT write the live stores).
  * @param {string|null} campaignAtStart - getActiveCampaignId() when the generation began
+ * @param {string} startVersionId - liveVersionIdFor(characterName) when it began — 'base'
+ *   when the campaign did not override the character, so a Base portrait never
+ *   invents a campaign version out of thin air
  */
-function storeResultInStartingVersion(campaignAtStart, characterName, imageUrl, meta = null) {
+function storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl, meta = null) {
     if (getActiveCampaignId() === campaignAtStart) return false;
-    const versionId = campaignAtStart || BASE_VERSION;
+    const versionId = startVersionId || BASE_VERSION;
     const profile = readVersion(versionId, characterName) || {};
     profile.avatar = imageUrl;
     if (meta) profile.portraitMeta = meta;
@@ -394,12 +407,8 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
     }
     const previous = extensionSettings.npcAvatars?.[characterName];
     const campaignAtStart = getActiveCampaignId();
-    // Only the previous portrait's own entry may point at its file for the
-    // upload to reuse the filename (persistPortrait overwrites in place). A
-    // campaign version cloned from Base shares Base's file — overwriting it
-    // would silently repaint the other version too.
+    const startVersionId = liveVersionIdFor(characterName);
     const previousMeta = getGeneratedPortraitMeta(characterName);
-    const reusable = previous && portraitRefCount(previous) <= 1 ? previous : null;
     try {
         const result = await executeSlashCommandsOnChatInput(
             `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
@@ -414,10 +423,17 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
             extensionSettings.npcAvatars = {};
         }
         if (isDataUrl(imageUrl)) {
+            // Only the previous portrait's own entry may point at its file
+            // for the upload to reuse the filename (persistPortrait
+            // overwrites in place). A campaign version cloned from Base
+            // shares Base's file — overwriting it would silently repaint the
+            // other version too. Decided NOW, not before the /sd await: a
+            // version cloned while it ran shares the file as well.
+            const reusable = previous && portraitRefCount(previous) <= 1 ? previous : null;
             imageUrl = await persistPortrait(reusable, characterName, imageUrl);
         }
         const meta = buildGeneratedPortraitMeta(prompt, stateHash, imageUrl);
-        if (!storeResultInStartingVersion(campaignAtStart, characterName, imageUrl, meta)) {
+        if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl, meta)) {
             extensionSettings.npcAvatars[characterName] = imageUrl;
             setGeneratedPortraitMeta(characterName, prompt, stateHash, imageUrl);
         }
@@ -658,6 +674,7 @@ async function generateSingleAvatar(characterName, prompt = null) {
         prompt = buildFallbackPrompt(characterName);
     }
     const campaignAtStart = getActiveCampaignId();
+    const startVersionId = liveVersionIdFor(characterName);
     try {
         // Check if the /sd slash command is available (Stable Diffusion extension loaded)
         if (!SlashCommandParser.commands['sd']) {
@@ -677,7 +694,7 @@ async function generateSingleAvatar(characterName, prompt = null) {
             if (!extensionSettings.npcAvatars) {
                 extensionSettings.npcAvatars = {};
             }
-            if (!storeResultInStartingVersion(campaignAtStart, characterName, imageUrl)) {
+            if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl)) {
                 extensionSettings.npcAvatars[characterName] = imageUrl;
             }
             saveSettings();

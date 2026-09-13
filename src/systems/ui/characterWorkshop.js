@@ -509,6 +509,36 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     clearKnifeSuggestions();
 }
 
+/** After a successful commit the draft matches the stores again. */
+function clearDirtyFlags() {
+    if (!draft || !draft.dirty) return;
+    for (const key of Object.keys(draft.dirty)) draft.dirty[key] = false;
+}
+
+/**
+ * Folds a half-typed knife or alias (text sitting in the input, Add not yet
+ * clicked) into the draft so a save keeps it, then clears the inputs. Used
+ * by every "save before switching" path; a plain discard clears them only.
+ */
+function pushPendingInputs() {
+    if (!draft) return;
+    const knife = String($modal.find('#cw-knife-input').val() || '').trim();
+    if (knife) {
+        draft.knives.push({ id: 'knife_' + Date.now(), text: knife, used: false });
+        draft.dirty.knives = true;
+    }
+    $modal.find('#cw-knife-input').val('');
+    if (!draft.isUser) {
+        const alias = String($modal.find('#cw-alias-input').val() || '').trim();
+        const lower = alias.toLowerCase();
+        if (alias && lower !== String(draft.name).toLowerCase() && !draft.aliases.some(a => a.toLowerCase() === lower)) {
+            draft.aliases.push(alias);
+            draft.dirty.aliases = true;
+        }
+    }
+    $modal.find('#cw-alias-input').val('');
+}
+
 /** Any edit that belongs to the version on the stage (colour and aliases are version-independent). */
 function hasVersionedEdits() {
     if (!draft) return false;
@@ -537,9 +567,7 @@ async function switchVersion(versionId) {
         ));
         if (ok) {
             // Push the pending inputs in first so they are part of the save.
-            const knife = String($modal.find('#cw-knife-input').val() || '').trim();
-            if (knife) { draft.knives.push({ id: 'knife_' + Date.now(), text: knife, used: false }); draft.dirty.knives = true; }
-            $modal.find('#cw-knife-input').val('');
+            pushPendingInputs();
             commitDraft();
         } else {
             $modal.find('#cw-knife-input').val('');
@@ -573,6 +601,7 @@ async function addVersion(campaignId) {
     if (hasVersionedEdits()) {
         // The clone is taken from the saved version, so save what is on the
         // stage first — that is what the user is looking at and expects to copy.
+        pushPendingInputs();
         commitDraft();
     }
     addProfile(campaignId, name, { from: draft.versionId });
@@ -603,6 +632,13 @@ async function removeVersion(campaignId) {
     if (draft.versionId === campaignId) {
         loadVersion(name, false, null, {});
     } else {
+        // Removing the active campaign's version while Base is on the stage
+        // makes Base live again: refresh the badge and the Render button
+        // without rebuilding the draft (unsaved edits stay untouched).
+        draft.isLive = isLiveVersion(draft.versionId, name);
+        $modal.toggleClass('cw-version-readonly-portrait', !draft.isLive);
+        renderCampaignBadge();
+        renderAppearance();
         renderVersionStrip();
     }
 }
@@ -624,7 +660,10 @@ export function refreshWorkshopIfOpen() {
             'You have unsaved changes to the {version} version of {name}.\n\nOK saves them before switching; Cancel discards them.',
             { version: versionLabel(draft.versionId), name },
         ));
-        if (ok) commitDraft();
+        if (ok) {
+            pushPendingInputs();
+            commitDraft();
+        }
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
@@ -640,9 +679,14 @@ async function refreshRosterBadges() {
     } catch (e) {}
 }
 
-/** Sets the modal's accent to the campaign colour of the version on the stage (theme highlight for Base). */
+/**
+ * Sets the accent to the campaign colour of the version on the stage (theme
+ * highlight for Base). Set on .rpg-settings-popup-content — the element that
+ * owns the --rpg-* theme tokens — so the stylesheet fallback there sees the
+ * theme's highlight and the inline value beats it.
+ */
 function applyVersionAccent() {
-    const el = $modal[0];
+    const el = $modal.find('.rpg-settings-popup-content')[0];
     if (!el) return;
     const campaign = campaignById(draft?.versionId);
     const color = campaign && typeof campaign.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(campaign.color) ? campaign.color : '';
@@ -663,7 +707,7 @@ function renderCampaignBadge() {
     const campaign = campaignById(draft.versionId);
     const icon = campaign ? escapeHtml(campaign.icon || 'fa-folder') : 'fa-layer-group';
     const live = draft.isLive ? ` <span class="cw-campaign-badge-live" title="This is the version the chat sees right now">${escapeHtml(t('characterWorkshop.versionLive', 'Live'))}</span>` : '';
-    $badge.html(`<i class="fa-solid ${icon}" aria-hidden="true"></i> ${escapeHtml(versionLabel(draft.versionId))}${live}`)
+    $badge.html(`<i class="fa-solid ${icon}" aria-hidden="true"></i><span class="cw-campaign-badge-text">${escapeHtml(versionLabel(draft.versionId))}</span>${live}`)
         .prop('hidden', false)
         .attr('title', draft.isLive
             ? 'The version the chat is using'
@@ -679,6 +723,9 @@ function renderCampaignBadge() {
 function renderVersionStrip() {
     const $strip = $modal.find('#cw-version-strip');
     if (!$strip.length) return;
+    // A re-render destroys the focused tile; put keyboard focus back on the
+    // current tile afterwards so arrow keys keep working.
+    const hadFocus = typeof document !== 'undefined' && $strip[0].contains(document.activeElement);
     closeVersionAddMenu();
     const campaigns = getCampaignsInOrder();
     if (!draft || draft.isUser || !campaigns.length) {
@@ -733,6 +780,9 @@ function renderVersionStrip() {
     const cur = $strip.find('.cw-version-tile.is-current')[0];
     if (cur && typeof cur.scrollIntoView === 'function') {
         try { cur.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
+    }
+    if (hadFocus && cur) {
+        try { cur.focus({ preventScroll: true }); } catch (e) { try { cur.focus(); } catch (err) {} }
     }
 }
 
@@ -2407,6 +2457,7 @@ function commitDraft() {
                 );
             } catch (e) {}
         }
+        clearDirtyFlags();
         return;
     }
 
@@ -2588,6 +2639,7 @@ function commitDraft() {
 
     if (!changed) return;
     saveSettings();
+    clearDirtyFlags();
     // Now that the settings no longer point at the replaced files, drop
     // the ones nothing else references (a version cloned from Base shares
     // Base's file — that one stays).

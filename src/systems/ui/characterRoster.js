@@ -162,7 +162,7 @@ function renderCampaignChip() {
     const icon = campaign ? escapeAttr(campaign.icon || 'fa-folder') : 'fa-layer-group';
     const label = campaign ? campaign.name : 'Base';
     const color = campaign && typeof campaign.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(campaign.color) ? campaign.color : '';
-    $chip.html(`<i class="fa-solid ${icon}" aria-hidden="true"></i> Viewing ${escapeHtml(label)}`)
+    $chip.html(`<i class="fa-solid ${icon}" aria-hidden="true"></i><span class="cr-campaign-chip-text">Viewing ${escapeHtml(label)}</span>`)
         .attr('title', campaign
             ? `${campaign.name} is the active campaign — tiles show its versions of each character (Base where it has none). New characters are created in Base.`
             : 'No active campaign — tiles show the Base version of every character. Set a campaign active in the Lore Library to switch.')

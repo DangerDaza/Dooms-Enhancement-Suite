@@ -204,11 +204,11 @@ async function migrateProfileBuckets(uploadedByBytes) {
                 return;
             }
         }
-        // Re-read after the await — bankActiveCampaign / a switch may have
-        // replaced the profile object meanwhile.
-        const current = bucket[name];
-        if (current && typeof current === 'object' && current[field] === value) current[field] = url;
-        else relocateMigratedValue(value, url);
+        // Never write through the object captured before the await: a
+        // campaign switch replaces the shadow root and re-clones profiles,
+        // so `bucket`/`bucket[name]` may be detached by now. Re-resolve every
+        // holder of the data URL from the current settings instead.
+        relocateMigratedValue(value, url);
     };
     for (const bucket of buckets) {
         for (const name of Object.keys(bucket)) {
@@ -245,7 +245,20 @@ function countRemainingDataUrls() {
         if (isDataUrl(u?.avatar)) n++;
         if (isDataUrl(u?.avatarFullRes)) n++;
     }
-    for (const bucket of profileBuckets()) {
+    // The active campaign's bucket mirrors the live maps (already counted
+    // above) and is re-banked from them on the next save; counting it too
+    // would keep settingsVersion below 24 for one extra session.
+    const active = extensionSettings.lorebook?.activeCampaignId || null;
+    const shadow = extensionSettings.campaignBaseShadow;
+    const profiles = extensionSettings.campaignProfiles;
+    const buckets = [];
+    if (shadow && typeof shadow === 'object') buckets.push(shadow);
+    if (profiles && typeof profiles === 'object') {
+        for (const id of Object.keys(profiles)) {
+            if (id !== active && profiles[id] && typeof profiles[id] === 'object') buckets.push(profiles[id]);
+        }
+    }
+    for (const bucket of buckets) {
         for (const p of Object.values(bucket)) {
             if (isDataUrl(p?.avatar)) n++;
             if (isDataUrl(p?.avatarFullRes)) n++;

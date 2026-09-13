@@ -758,7 +758,8 @@ function refreshActiveStats() {
  */
 async function reconcileIfCampaignActive() {
     if (!campaignManager.getActiveCampaignId()) return;
-    await campaignManager.reconcileActiveCampaignBooks();
+    // Queued behind any switch still awaiting ST, never interleaved with it.
+    await campaignManager.queueReconcile();
 }
 
 function refreshCampaignToggles() {
@@ -900,7 +901,7 @@ export function initLorebookEventDelegation() {
                 }
                 const dangerClass = item.danger ? ' rpg-lb-context-menu-danger' : '';
                 const arrowHint = item.submenu ? '<i class="fa-solid fa-chevron-right" style="margin-left:auto;opacity:0.4;font-size:0.75em;"></i>' : '';
-                const $item = $(`<div class="rpg-lb-context-menu-item${dangerClass}"><i class="${item.icon}"></i> ${item.label}${arrowHint}</div>`);
+                const $item = $(`<div class="rpg-lb-context-menu-item${dangerClass}"><i class="${item.icon}"></i> ${escapeHtml(String(item.label ?? ''))}${arrowHint}</div>`);
                 $item.on('click', (ev) => {
                     ev.stopPropagation();
                     if (item.submenu) {

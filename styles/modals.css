@@ -5701,7 +5701,10 @@
    host. --cw-accent is the campaign colour of the version on the stage
    (characterWorkshop.applyVersionAccent) and falls back to the theme
    highlight, so Base and colourless campaigns still get an accent. */
-#character-workshop-popup {
+/* Declared on the content element because that is where the --rpg-* theme
+   tokens live (a var() inside a custom property is resolved on the element
+   that declares it, and the popup root has no --rpg-highlight of its own). */
+#character-workshop-popup .rpg-settings-popup-content {
     --cw-accent: var(--rpg-highlight, #e94560);
 }
 
@@ -5736,6 +5739,7 @@
 #character-workshop-popup .cw-stage-art {
     position: absolute;
     inset: 0;
+    overflow: hidden; /* the crossfade layers scale slightly */
 }
 
 
@@ -5837,8 +5841,11 @@
     display: flex;
     align-items: stretch;
     gap: 0.45rem;
-    margin-top: 0.45rem;
-    padding: 0.35rem 0.1rem 0.25rem;
+    /* A scroll container clips on every side: leave room inside the padding
+       box for the "×" overhang (6px) and the current tile's glow (up to
+       18px), and pull the extra back with negative margins. */
+    margin: 0.45rem -0.5rem -0.7rem;
+    padding: 0.55rem 0.6rem 1.2rem;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: thin;
@@ -6057,12 +6064,22 @@
     border: 1px solid color-mix(in srgb, var(--cw-accent) 45%, transparent);
     color: var(--cw-accent);
     max-width: 40%;
+    min-width: 0;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 #character-workshop-popup .cw-campaign-badge[hidden] { display: none !important; }
+
+/* text-overflow only works on a block container: truncate the name in its
+   own span, keep the icon and the Live pill whole. */
+#character-workshop-popup .cw-campaign-badge > i,
+#character-workshop-popup .cw-campaign-badge-live { flex-shrink: 0; }
+
+#character-workshop-popup .cw-campaign-badge-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 #character-workshop-popup .cw-campaign-badge-live {
     padding: 0 5px;
@@ -6121,9 +6138,20 @@
     transition: background 0.2s, color 0.2s, border-color 0.2s;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.4rem;
-    flex: 0 0 auto;
+    /* Share the row: five labelled tabs are within a few px of the editor
+       width at the 1000px cap, so shrink (with an ellipsis on the label)
+       rather than overflow into a hidden scroller. */
+    flex: 1 1 auto;
+    min-width: 0;
     white-space: nowrap;
+}
+
+#character-workshop-popup .cw-tab-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 
@@ -6384,10 +6412,21 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     #character-workshop-popup .cw-version-thumb { height: 64px; }
     #character-workshop-popup .cw-version-add { min-height: 64px; }
     #character-workshop-popup .cw-campaign-badge { display: none !important; }
+    /* The banner is short: the add-version menu opens DOWN over the editor
+       instead of up into a clipped 40px of stage. The art layer keeps the
+       clip the crossfade needs; the stage itself must let the menu out. */
+    #character-workshop-popup .cw-stage { overflow: visible; z-index: 2; }
+    #character-workshop-popup .cw-version-add-menu {
+        bottom: auto;
+        top: calc(100% - 0.5rem);
+        max-height: 50vh;
+        overflow-y: auto;
+    }
 }
 
-/* Narrow desktop windows: icons-only tabs so all five fit without scrolling. */
-@media (max-width: 860px) and (min-width: 641px) {
+/* Below the 1000px content cap the five labelled tabs no longer fit: icons
+   only, with the label as a tooltip (title attribute in the markup). */
+@media (max-width: 1000px) {
     #character-workshop-popup .cw-tab-label { display: none; }
     #character-workshop-popup .workshop-nav button { padding-inline: 0.55rem; font-size: 1rem; }
 }
@@ -6474,11 +6513,16 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     border-radius: 999px;
     white-space: nowrap;
     max-width: 45%;
+    min-width: 0;
+}
+
+#character-roster-popup .cr-campaign-chip i { color: var(--cr-campaign-accent); flex-shrink: 0; }
+
+#character-roster-popup .cr-campaign-chip-text {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
-#character-roster-popup .cr-campaign-chip i { color: var(--cr-campaign-accent); }
 
 #character-roster-popup .cr-campaign-chip[hidden] { display: none !important; }
 
