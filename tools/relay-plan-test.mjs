@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { parseSseData, foldStream, isPrefixOrEmpty, planReplyApply, chatKeyOf, resolveKind } =
+const { parseSseData, foldStream, isPrefixOrEmpty, planReplyApply, chatKeyOf, resolveKind, resolveMarker } =
     await import(path.join(here, '..', 'src', 'systems', 'relay', 'relayPlan.js'));
 
 let passed = 0;
@@ -55,6 +55,7 @@ test('normal: append after the user message, replace partial, keep foreign text'
     assert.deepEqual(planReplyApply({ kind: 'normal', messageIndex: 2 }, [user('a'), user('b')], 'reply'), { action: 'append', index: 2 });
     assert.deepEqual(planReplyApply({ kind: 'normal', messageIndex: 1 }, [user('a'), bot('rep')], 'reply'), { action: 'replace', index: 1 });
     assert.deepEqual(planReplyApply({ kind: 'normal', messageIndex: 1 }, [user('a'), bot('reply')], 'reply'), { action: 'noop', reason: 'present' });
+    assert.deepEqual(planReplyApply({ kind: 'regenerate', messageIndex: 1 }, [user('a'), bot('old', ['old', 'reply'])], 'reply'), { action: 'noop', reason: 'present' }, 'already one of the swipes');
     assert.equal(planReplyApply({ kind: 'normal', messageIndex: 1 }, [user('a'), bot('something else')], 'reply').action, 'tray');
     assert.equal(planReplyApply({ kind: 'normal', messageIndex: 1 }, [user('a'), user('b')], 'reply').action, 'tray', 'index points at a user message');
     assert.equal(planReplyApply({ kind: 'normal', messageIndex: 5 }, [user('a')], 'reply').action, 'tray', 'index beyond the chat');
@@ -96,6 +97,9 @@ test('chatKeyOf and resolveKind', () => {
     assert.equal(resolveKind({ started: { type: 'normal', at: now - 50 }, tagged: { kind: 'des-tracker', at: now - 10 }, now }), 'des-tracker', 'newer marker wins');
     assert.equal(resolveKind({ started: { type: 'normal', at: now - 10 }, tagged: { kind: 'des-tracker', at: now - 50 }, now }), 'normal');
     assert.equal(resolveKind({ started: { type: 'normal', at: now - 500000 }, now }), 'raw', 'stale marker ignored');
+    assert.deepEqual(resolveMarker({ started: { type: 'normal', at: now - 50 }, tagged: { kind: 'des-internal', at: now - 10 }, now }), { kind: 'des-internal', from: 'tagged' });
+    assert.deepEqual(resolveMarker({ started: { type: 'swipe', at: now - 10 }, now }), { kind: 'swipe', from: 'started' });
+    assert.deepEqual(resolveMarker({ now }), { kind: 'raw', from: null });
 });
 
 console.log(process.exitCode ? `\n${passed} passed, some FAILED` : `\nALL ${passed} PASSED`);

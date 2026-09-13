@@ -121,6 +121,7 @@ export function planReplyApply(meta, chat, text) {
     const existing = chat[index];
     if (existing && !existing.is_user) {
         if (existing.mes === text) return { action: 'noop', reason: 'present' };
+        if (Array.isArray(existing.swipes) && existing.swipes.includes(text)) return { action: 'noop', reason: 'present' };
         if (isPrefixOrEmpty(existing.mes, text)) return { action: 'replace', index };
         if (kind === 'regenerate' && index === last) return { action: 'swipe-add', index };
         return { action: 'tray', reason: 'conflict' };
@@ -146,14 +147,24 @@ export function chatKeyOf({ groupId, characterAvatar, chatId }) {
  * GENERATION_STARTED type seen since the last request (with its timestamp),
  * `tagged` is DES's own marker (des-tracker / des-internal) — the newer wins.
  */
-export function resolveKind({ started, tagged, now = Date.now(), maxAgeMs = 120000 }) {
+export function resolveKind(args) {
+    return resolveMarker(args).kind;
+}
+
+/**
+ * Like resolveKind, but also says which marker won so the caller can clear
+ * only that one: a DES helper request that fires between a user's
+ * GENERATION_STARTED and its fetch must not eat the user's marker.
+ * @returns {{kind: string, from: 'started'|'tagged'|null}}
+ */
+export function resolveMarker({ started, tagged, now = Date.now(), maxAgeMs = 120000 }) {
     const fresh = (x) => x && typeof x.at === 'number' && now - x.at <= maxAgeMs;
     const s = fresh(started) ? started : null;
     const t = fresh(tagged) ? tagged : null;
-    if (s && t) return s.at >= t.at ? normalizeType(s.type) : t.kind;
-    if (t) return t.kind;
-    if (s) return normalizeType(s.type);
-    return 'raw';
+    if (s && t) return s.at >= t.at ? { kind: normalizeType(s.type), from: 'started' } : { kind: t.kind, from: 'tagged' };
+    if (t) return { kind: t.kind, from: 'tagged' };
+    if (s) return { kind: normalizeType(s.type), from: 'started' };
+    return { kind: 'raw', from: null };
 }
 
 export function normalizeType(type) {

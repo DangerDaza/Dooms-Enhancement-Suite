@@ -223,7 +223,7 @@ await test('resume from a byte offset while the job is still running', async () 
     await fetch(`${base}/jobs/${id}/consume`, { method: 'POST' });
 });
 
-await test('heartbeat comments are injected only on event boundaries and do not corrupt events', async () => {
+await test('heartbeat comments are injected only on event boundaries, stored, and do not corrupt events', async () => {
     backend.mode = 'stream';
     backend.gapMs = 150; // > heartbeatMs (60) so pings fire between events
     const id = await generate({ stream: true, messages: [] });
@@ -231,9 +231,73 @@ await test('heartbeat comments are injected only on event boundaries and do not 
     assert.ok(text.includes(': ping\n\n'), 'at least one heartbeat was sent');
     assert.deepEqual(sseData(text), [...backend.events, '[DONE]'], 'data events intact');
     const stored = await (await fetch(`${base}/jobs/${id}/result`)).text();
-    assert.ok(!stored.includes(': ping'), 'heartbeats are never stored');
+    assert.equal(stored, text, 'what the client received is exactly what is stored — offsets stay valid');
+    for (const m of text.matchAll(/: ping\n\n/g)) {
+        const before = text.slice(0, m.index);
+        assert.ok(before === '' || before.endsWith('\n\n'), 'every ping sits on an event boundary');
+    }
     backend.gapMs = 20;
     await fetch(`${base}/jobs/${id}/consume`, { method: 'POST' });
+});
+
+await test('resuming after a heartbeat continues at the exact byte (the phone-lock scenario)', async () => {
+    backend.mode = 'stream';
+    backend.gapMs = 150;
+    const id = await generate({ stream: true, messages: [] });
+    // Read the live stream only until the first ping has arrived, then "drop".
+    const res = await fetch(`${base}/jobs/${id}/stream?offset=0`);
+    const reader = res.body.getReader();
+    let received = '';
+    while (!received.includes(': ping\n\n')) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += Buffer.from(value).toString('latin1');
+    }
+    await reader.cancel();
+    assert.ok(received.includes(': ping'), 'the drop happened after a ping');
+    const rest = await (await fetch(`${base}/jobs/${id}/stream?offset=${Buffer.byteLength(received, 'latin1')}`)).text();
+    const full = await (await fetch(`${base}/jobs/${id}/result`)).text();
+    assert.equal(received + rest, full, 'no bytes skipped, none repeated');
+    assert.deepEqual(sseData(received + rest), [...backend.events, '[DONE]']);
+    backend.gapMs = 20;
+    await fetch(`${base}/jobs/${id}/consume`, { method: 'POST' });
+});
+
+await test('a client-chosen job id is honoured; bad or duplicate ids get a fresh one', async () => {
+    backend.mode = 'json';
+    const mine = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const id = await generate({ stream: false, messages: [] }, { chatId: 'c', jobId: mine });
+    assert.equal(id, mine);
+    const dup = await generate({ stream: false, messages: [] }, { chatId: 'c', jobId: mine });
+    assert.notEqual(dup, mine, 'duplicate id is replaced');
+    const bad = await generate({ stream: false, messages: [] }, { chatId: 'c', jobId: '../../etc/passwd' });
+    assert.match(bad, /^[0-9a-f-]{36}$/);
+    for (const j of [id, dup, bad]) { await waitDone(j); await fetch(`${base}/jobs/${j}/consume`, { method: 'POST' }); }
+    backend.mode = 'stream';
+});
+
+await test('chat ids longer than the stored limit still match on listing', async () => {
+    backend.mode = 'json';
+    const long = 'c:' + 'x'.repeat(700);
+    const id = await generate({ stream: false, messages: [] }, { chatId: long });
+    await waitDone(id);
+    const list = await (await fetch(`${base}/jobs?chatId=${encodeURIComponent(long)}`)).json();
+    assert.ok(list.jobs.some(j => j.id === id));
+    await fetch(`${base}/jobs/${id}/consume`, { method: 'POST' });
+    backend.mode = 'stream';
+});
+
+await test('a refused loopback host falls through to the next candidate', async () => {
+    relay.close();
+    relay = createRelay({ dataDir, loopbackHosts: ['127.0.0.2', '127.0.0.1'], log: () => {}, warn: () => {} });
+    router = makeRouter();
+    relay.attach(router);
+    backend.mode = 'json';
+    const id = await generate({ stream: false, messages: [] });
+    const s = await waitDone(id);
+    assert.equal(s.status, 'done', `job finished via the second host (${s.error})`);
+    await fetch(`${base}/jobs/${id}/consume`, { method: 'POST' });
+    backend.mode = 'stream';
 });
 
 await test('non-streaming job: result long-poll answers 202 while running, then mirrors the backend', async () => {

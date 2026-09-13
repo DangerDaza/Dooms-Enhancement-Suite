@@ -33,7 +33,8 @@ import {
     cleanUpMessage,
 } from '../../../../../../../script.js';
 import { getStreamingReply } from '../../../../../../openai.js';
-import { extractReasoningFromData } from '../../../../../../reasoning.js';
+import { extractReasoningFromData, parseReasoningFromString } from '../../../../../../reasoning.js';
+import { power_user } from '../../../../../../power-user.js';
 import { extensionSettings } from '../../core/state.js';
 import { applySeparateTrackerResponse } from '../generation/apiClient.js';
 import {
@@ -42,6 +43,7 @@ import {
     relayFetch,
     currentChatKey,
     drivenState,
+    isGeneratePending,
     consumeJob,
 } from './relayClient.js';
 import { planReplyApply, foldStream, CHAT_KINDS, DES_TRACKER_KIND, DES_INTERNAL_KIND } from './relayPlan.js';
@@ -156,13 +158,27 @@ async function readJobPayload(job) {
     return { text, reasoning, error: null };
 }
 
-/** Same trimming ST applies to a live reply (names, stop strings, spaces). */
-function tidyReply(text) {
+/**
+ * The same finalisation ST applies to a live reply (names, stop strings,
+ * incomplete-sentence trim, auto-parsed reasoning) so a reply ST already
+ * saved compares equal to the recovered one and is recognised as present.
+ * @returns {{text: string, reasoning: string}}
+ */
+function tidyReply(text, reasoning = '') {
+    let out = text;
     try {
-        return cleanUpMessage({ getMessage: text, isImpersonate: false, isContinue: false, displayIncompleteSentences: true }) || text;
-    } catch {
-        return text;
-    }
+        out = cleanUpMessage({ getMessage: text, isImpersonate: false, isContinue: false, displayIncompleteSentences: false }) || text;
+    } catch { /* keep raw */ }
+    try {
+        if (power_user?.reasoning?.auto_parse) {
+            const parsed = parseReasoningFromString(out);
+            if (parsed && typeof parsed.content === 'string') {
+                out = parsed.content;
+                if (!reasoning && parsed.reasoning) reasoning = parsed.reasoning;
+            }
+        }
+    } catch { /* keep as is */ }
+    return { text: out, reasoning };
 }
 
 /* ------------------------------------------------------------------ */
@@ -214,21 +230,21 @@ async function replaceSwipe(index, swipeId, text, reasoning, kind) {
  * @returns {Promise<'applied'|'noop'|'tray'>}
  */
 async function applyChatReply(job, payload) {
-    const text = tidyReply(payload.text);
+    const { text, reasoning } = tidyReply(payload.text, payload.reasoning);
     const plan = planReplyApply(job.meta, chat, text);
     const kind = job.meta.kind;
     switch (plan.action) {
         case 'append':
-            await appendReply(text, payload.reasoning);
+            await appendReply(text, reasoning);
             return 'applied';
         case 'replace':
-            await replaceMessageText(plan.index, text, payload.reasoning, kind);
+            await replaceMessageText(plan.index, text, reasoning, kind);
             return 'applied';
         case 'swipe-add':
-            await addSwipe(plan.index, text, payload.reasoning);
+            await addSwipe(plan.index, text, reasoning);
             return 'applied';
         case 'swipe-replace':
-            await replaceSwipe(plan.index, plan.swipeId, text, payload.reasoning, kind);
+            await replaceSwipe(plan.index, plan.swipeId, text, reasoning, kind);
             return 'applied';
         case 'noop':
             return 'noop';
@@ -353,6 +369,12 @@ function watchRunning(job, chatKey) {
     const entry = { timer: null };
     watching.set(job.id, entry);
     const tick = async () => {
+        if (drivenState(job.id)) {
+            // This tab started streaming it after all (a scan raced the POST).
+            watching.delete(job.id);
+            trayDrop(job.id);
+            return;
+        }
         try {
             const res = await relayFetch(`/jobs/${encodeURIComponent(job.id)}`);
             if (res.status === 404) {
@@ -410,6 +432,7 @@ async function doScan(reason) {
     if (connection.state !== 'connected') return;
     const chatKey = currentChatKey();
     if (!chatKey) return;
+    const scanStartedAt = Date.now();
     const res = await relayFetch(`/jobs?chatId=${encodeURIComponent(chatKey)}`);
     if (!res.ok) return;
     const { jobs } = await res.json();
@@ -425,6 +448,10 @@ async function doScan(reason) {
             continue;
         }
         if (!FINISHED.has(job.status)) {
+            // A job this tab is creating right now is not yet in `driven`;
+            // never adopt a running job younger than this scan or while a
+            // POST /generate is in flight.
+            if (isGeneratePending() || (job.startedAt || 0) >= scanStartedAt - 2000) continue;
             watchRunning(job, chatKey);
             continue;
         }
@@ -490,7 +517,8 @@ export async function addTrayItemAsReply(id) {
     const item = tray.get(id);
     if (!item || !item.text) return false;
     if (item.chatId && currentChatKey() !== item.chatId) return false;
-    await appendReply(tidyReply(item.text), item.reasoning);
+    const tidy = tidyReply(item.text, item.reasoning);
+    await appendReply(tidy.text, tidy.reasoning);
     await dismissTrayItem(id);
     return true;
 }

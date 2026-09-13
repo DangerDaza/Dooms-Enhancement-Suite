@@ -16,10 +16,10 @@
  * Nothing here runs unless the plugin answered the `/info` handshake; without
  * it the fetch wrapper is a transparent pass-through.
  */
-import { getRequestHeaders } from '../../../../../../../script.js';
+import { getRequestHeaders, saveChatConditional } from '../../../../../../../script.js';
 import { getContext } from '../../../../../../extensions.js';
 import { extensionSettings } from '../../core/state.js';
-import { chatKeyOf, resolveKind, CHAT_KINDS, DES_INTERNAL_KIND } from './relayPlan.js';
+import { chatKeyOf, resolveMarker, CHAT_KINDS, DES_INTERNAL_KIND } from './relayPlan.js';
 
 export const RELAY_BASE = '/api/plugins/des-relay';
 export const RELAY_PROTOCOL = 1;
@@ -54,6 +54,8 @@ let tagged = null;    // { kind, at }  — from markNextRelayKind / withRelayKin
  * @type {Map<string, {id: string, kind: string, stream: boolean, settled: boolean, ok: boolean, chatId: string}>}
  */
 const driven = new Map();
+/** Set while a POST /generate is in flight (the server may already hold the job). */
+let pendingGenerates = 0;
 let generating = false;
 let wakeLock = null;
 let initialized = false;
@@ -77,6 +79,19 @@ function abortError() {
 
 function throwIfAborted(signal) {
     if (signal?.aborted) throw abortError();
+}
+
+function newJobId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    // http:// on a LAN has no crypto.randomUUID; RFC 4122 v4 from Math.random is fine for a job id
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function sseErrorEvent(message) {
+    return new TextEncoder().encode(`data: ${JSON.stringify({ error: { message } })}\n\n`);
 }
 
 async function backoff(failures, signal) {
@@ -143,6 +158,11 @@ export function relayFetch(path, init = {}) {
 
 export function drivenState(jobId) {
     return driven.get(jobId) || null;
+}
+
+/** True while this tab is creating a job (its id is not yet in `driven`). */
+export function isGeneratePending() {
+    return pendingGenerates > 0;
 }
 
 /** Marks the next generate request as DES's own (des-tracker / des-internal). */
@@ -253,9 +273,12 @@ function shouldRelay(url, init) {
 
 /** Describes the request so a later tab knows where the reply belongs. */
 function buildMeta(bodyText) {
-    const kind = resolveKind({ started, tagged });
-    started = null;
-    tagged = null;
+    const { kind, from } = resolveMarker({ started, tagged });
+    // Only the marker that described this request is spent; the other one
+    // (e.g. a user's GENERATION_STARTED while a DES helper request went out
+    // first) stays for the fetch it belongs to.
+    if (from === 'started') started = null;
+    if (from === 'tagged') tagged = null;
     const chatId = currentChatKey();
     if (!chatId) return null;
     let stream = false;
@@ -268,7 +291,7 @@ function buildMeta(bodyText) {
         return null;
     }
     const chat = getContext().chat || [];
-    const meta = { chatId, kind, type: kind, stream, source, messageIndex: chat.length };
+    const meta = { jobId: newJobId(), chatId, kind, type: kind, stream, source, messageIndex: chat.length };
     if (kind === 'swipe') {
         const last = chat[chat.length - 1];
         meta.messageIndex = chat.length - 1;
@@ -286,8 +309,14 @@ async function interceptFetch(input, init) {
         return await relayGenerate(init, meta);
     } catch (e) {
         if (isAbortError(e)) throw e;
-        console.warn(LOG, 'relay unavailable for this request, sending it directly:', e?.message || e);
         if (e?.relayFatal) setConnection('missing', null, e.message);
+        if (e?.relayJobExists) {
+            // The server holds the job; a direct retry would generate the reply
+            // twice. Let ST report the error — recovery picks the job up later.
+            console.warn(LOG, 'lost contact with the relay; the generation continues on the server:', e?.message || e);
+            throw e;
+        }
+        console.warn(LOG, 'relay unavailable for this request, sending it directly:', e?.message || e);
         return realFetch.call(window, input, init);
     }
 }
@@ -295,34 +324,57 @@ async function interceptFetch(input, init) {
 async function relayGenerate(init, meta) {
     const signal = init.signal;
     throwIfAborted(signal);
+    const jobId = meta.jobId;
+    // The id is ours, so Stop pressed while the POST is still in flight can
+    // already abort the job the server may have created from it.
+    const onAbort = () => { abortJob(jobId); };
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+
     const headers = { ...getRequestHeaders(), [META_HEADER]: encodeURIComponent(JSON.stringify(meta)) };
     const doFetch = realFetch;
-    const res = await doFetch.call(window, `${RELAY_BASE}/generate`, { method: 'POST', headers, body: init.body, signal, cache: 'no-store' });
+    let res;
+    pendingGenerates++;
+    try {
+        res = await doFetch.call(window, `${RELAY_BASE}/generate`, { method: 'POST', headers, body: init.body, signal, cache: 'no-store' });
+    } catch (e) {
+        pendingGenerates--;
+        if (!isAbortError(e)) {
+            // Unknown whether the server got the request; never generate twice.
+            abortJob(jobId);
+            e.relayJobExists = true;
+        }
+        throw e;
+    }
+    pendingGenerates--;
     if (res.status === 404) {
+        signal?.removeEventListener('abort', onAbort);
         const e = new Error('relay plugin is gone (404)');
         e.relayFatal = true;
         throw e;
     }
-    if (!res.ok) throw new Error(`relay /generate answered ${res.status}`);
-    const { jobId } = await res.json();
-    if (typeof jobId !== 'string' || !jobId) throw new Error('relay returned no job id');
+    if (!res.ok) {
+        signal?.removeEventListener('abort', onAbort);
+        throw new Error(`relay /generate answered ${res.status}`);
+    }
+    const answer = await res.json();
+    if (answer?.jobId !== jobId) {
+        const e = new Error('relay job id mismatch');
+        e.relayJobExists = true;
+        if (typeof answer?.jobId === 'string') abortJob(answer.jobId);
+        throw e;
+    }
 
     const job = { id: jobId, kind: meta.kind, stream: meta.stream, settled: false, ok: false, chatId: meta.chatId };
     driven.set(jobId, job);
-    if (signal) {
-        if (signal.aborted) {
-            abortJob(jobId);
-            throw abortError();
-        }
-        signal.addEventListener('abort', () => { abortJob(jobId); }, { once: true });
+    if (signal?.aborted) {
+        abortJob(jobId);
+        throw abortError();
     }
 
     try {
         return meta.stream ? await openResilientStream(job, signal) : await pollResult(job, signal);
     } catch (e) {
-        // Nothing reached SillyTavern yet: stop the server job so the direct
-        // fallback does not generate the same reply twice.
-        if (!isAbortError(e)) abortJob(jobId);
+        if (!isAbortError(e)) e.relayJobExists = true;
         throw e;
     }
 }
@@ -354,7 +406,18 @@ async function openResilientStream(job, signal) {
                         if (!current) {
                             current = await openStream(job.id, offset, signal);
                             if (current.status === 404) throw Object.assign(new Error('relay job vanished'), { fatal: true });
-                            if (!current.ok) throw new Error(`relay stream answered ${current.status}`);
+                            if (!current.ok) {
+                                // The backend answered with an error after we had
+                                // already handed ST a 200: surface it in-band (ST's
+                                // stream parser toasts it) and finish.
+                                const text = (await current.text()).slice(0, 2000);
+                                controller.enqueue(sseErrorEvent(`${current.status}: ${text}`));
+                                job.settled = true;
+                                job.ok = true;
+                                consumeJob(job.id);
+                                controller.close();
+                                return;
+                            }
                         }
                         const reader = current.body.getReader();
                         while (true) {
@@ -484,7 +547,17 @@ export function onGenerationEnded() {
     releaseWakeLock();
     const settled = [...driven.values()].filter(j => j.settled);
     if (!settled.length) return;
-    setTimeout(() => {
+    setTimeout(async () => {
+        // Streaming replies: GENERATION_ENDED fires before ST's own chat save
+        // (hideStopButton → unblockGeneration → … → saveChatConditional). Make
+        // sure the reply is on disk before the server forgets it.
+        if (settled.some(j => j.ok && j.stream)) {
+            try {
+                if (typeof saveChatConditional === 'function') await saveChatConditional();
+            } catch (e) {
+                console.debug(LOG, 'chat save before consume failed', e);
+            }
+        }
         for (const job of settled) {
             if (job.ok) consumeJob(job.id);
             else driven.delete(job.id); // leave it for recovery

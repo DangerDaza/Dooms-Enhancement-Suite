@@ -46,7 +46,7 @@ for (const f of ['relayClient.js', 'relayPlan.js']) {
     fs.copyFileSync(path.join(repo, 'src/systems/relay', f), path.join(des, 'src/systems/relay', f));
 }
 fs.writeFileSync(path.join(des, 'src/core/state.js'), `export const extensionSettings = { enabled: true, relay: { enabled: true, wakeLock: false } };\n`);
-fs.writeFileSync(path.join(sandbox, 'script.js'), `export function getRequestHeaders({ omitContentType = false } = {}) { const h = { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-1' }; if (omitContentType) delete h['Content-Type']; return h; }\n`);
+fs.writeFileSync(path.join(sandbox, 'script.js'), `export function getRequestHeaders({ omitContentType = false } = {}) { const h = { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-1' }; if (omitContentType) delete h['Content-Type']; return h; }\nexport const saves = { count: 0 };\nexport async function saveChatConditional() { saves.count++; }\n`);
 fs.writeFileSync(path.join(sandbox, 'scripts/extensions.js'), `export const ctx = { groupId: null, characterId: 0, characters: [{ avatar: 'hex.png' }], chatId: 'chat-1', chat: [{ is_user: true, mes: 'hi' }] };\nexport function getContext() { return ctx; }\n`);
 
 globalThis.window = globalThis;
@@ -59,7 +59,7 @@ globalThis.fetch = (input, init) => nodeFetch(new URL(typeof input === 'string' 
 
 const { createRelay } = await import(pathToFileURL(path.join(repo, 'server-plugin/des-relay/index.mjs')).href);
 const dataDir = path.join(sandbox, 'data');
-const relay = createRelay({ dataDir, heartbeatMs: 50, log: () => {}, warn: () => {} });
+const relay = createRelay({ dataDir, heartbeatMs: 50, headerWaitMs: 40, log: () => {}, warn: () => {} });
 
 function makeRouter() {
     const routes = [];
@@ -91,6 +91,7 @@ const backend = {
     events: ['{"choices":[{"delta":{"content":"Hel"}}]}', '{"choices":[{"delta":{"content":"lo"}}]}', '{"choices":[{"delta":{"content":" world"}}]}', '{"choices":[{"delta":{"content":"!"}}]}'],
     gapMs: 30,
     cutStreamOnce: false,   // destroy the client's /stream socket after the first bytes (once)
+    lateErrorMs: 0,         // > 0: answer with 429 after this delay instead of streaming
 };
 const expectedStream = () => backend.events.map(e => `data: ${e}\n\n`).join('') + 'data: [DONE]\n\n';
 
@@ -102,6 +103,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/backends/chat-completions/generate') {
         const payload = JSON.parse(body.toString() || '{}');
         backend.seen.push({ headers: req.headers, body: payload });
+        if (backend.lateErrorMs) {
+            await sleep(backend.lateErrorMs);
+            res.statusCode = 429;
+            return res.end('{"error":{"message":"rate limited"}}');
+        }
         if (!payload.stream) {
             await sleep(backend.gapMs);
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -126,7 +132,7 @@ const server = http.createServer(async (req, res) => {
     try { req.body = body.length ? JSON.parse(body.toString()) : undefined; } catch { req.body = undefined; }
     if (m.params.id && url.pathname.endsWith('/stream') && backend.cutStreamOnce) {
         backend.cutStreamOnce = false;
-        // Let a first chunk through, then kill the connection under the client.
+        // Let a first chunk (or the headers) through, then kill the connection under the client.
         const origWrite = res.write.bind(res);
         let writes = 0;
         res.write = (chunk, ...rest) => {
@@ -134,6 +140,7 @@ const server = http.createServer(async (req, res) => {
             if (++writes === 1) setTimeout(() => res.socket?.destroy(), 5);
             return r;
         };
+        if (backend.lateErrorMs) setTimeout(() => res.socket?.destroy(), 60);
     }
     await m.handler(req, res);
 });
@@ -145,6 +152,7 @@ base = `http://127.0.0.1:${server.address().port}`;
 
 const client = await import(pathToFileURL(path.join(des, 'src/systems/relay/relayClient.js')).href);
 const { ctx } = await import(pathToFileURL(path.join(sandbox, 'scripts/extensions.js')).href);
+const { saves } = await import(pathToFileURL(path.join(sandbox, 'script.js')).href);
 const GEN = '/api/backends/chat-completions/generate';
 const stHeaders = () => ({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-1' });
 const readAll = async (res) => Buffer.from(await res.arrayBuffer()).toString();
@@ -172,8 +180,11 @@ await test('streaming reply goes through the relay and arrives byte-identical', 
     assert.equal(jobs[0].meta.kind, 'normal');
     assert.equal(jobs[0].meta.messageIndex, 1, 'reply will be pushed at chat.length');
     assert.equal(jobs[0].meta.chatId, 'c:hex.png:chat-1');
+    assert.match(jobs[0].id, /^[0-9a-f-]{36}$/, 'client-chosen job id');
+    const savesBefore = saves.count;
     client.onGenerationEnded();
     await sleep(1700); // consume runs 1.5 s after GENERATION_ENDED
+    assert.equal(saves.count, savesBefore + 1, 'chat saved before the server forgets the job');
     assert.equal((await jobsOnServer()).length, 0, 'job consumed after the chat save');
 });
 
@@ -190,6 +201,22 @@ await test('a cut connection mid-stream is resumed at the byte offset — no gap
     client.onGenerationEnded();
     await sleep(1700);
     assert.equal((await jobsOnServer()).length, 0);
+});
+
+await test('a backend error that lands after a reconnect is surfaced in-band, not retried for minutes', async () => {
+    backend.lateErrorMs = 120;      // backend answers 429 after the header wait (40 ms) expired
+    backend.cutStreamOnce = true;   // the first /stream (sent as 200) is cut under the client
+    client.onGenerationStarted('normal', {}, false);
+    const t0 = Date.now();
+    const res = await window.fetch(GEN, { method: 'POST', headers: stHeaders(), body: JSON.stringify({ stream: true, messages: [] }) });
+    const text = await readAll(res);
+    backend.lateErrorMs = 0;
+    assert.equal(res.status, 200, 'ST was handed 200 before the backend answered');
+    assert.ok(Date.now() - t0 < 5000, 'finished promptly');
+    assert.match(text, /data: \{"error":\{"message":"429: .*rate limited/, `in-band error event, got: ${text}`);
+    await sleep(50);
+    assert.equal((await jobsOnServer()).length, 0, 'nothing left to recover');
+    client.onGenerationEnded();
 });
 
 await test('swipe meta records the target message and pending swipe slot', async () => {

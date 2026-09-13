@@ -23,6 +23,8 @@
  *   GET  /info                    handshake { protocol, version, limits }
  *   POST /generate                body = ST generate payload, header
  *                                 x-des-relay-meta = encodeURIComponent(JSON)
+ *                                 (meta.jobId, a client-chosen UUID, is honoured
+ *                                 so the client can abort before the answer)
  *                                 → { jobId }
  *   GET  /jobs?chatId=            unconsumed jobs of this user (for a chat)
  *   GET  /jobs/:id                job summary
@@ -56,6 +58,9 @@ const GENERATE_PATH = '/api/backends/chat-completions/generate';
 const META_HEADER = 'x-des-relay-meta';
 const FORWARD_HEADERS = ['cookie', 'x-csrf-token', 'authorization', 'host', 'user-agent', 'accept', 'accept-language'];
 const META_STRING_KEYS = ['chatId', 'kind', 'type', 'source', 'label'];
+const META_MAX = 512;
+const HEARTBEAT = Buffer.from(': ping\n\n');
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const META_NUMBER_KEYS = ['messageIndex', 'swipeId'];
 const FINISHED = new Set(['done', 'error', 'aborted']);
 
@@ -69,6 +74,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
     maxResultWaitMs: 25 * 1000,
     maxJobsPerUser: 200,
     pruneIntervalMs: 60 * 60 * 1000,
+    /** Loopback hosts tried in order (ECONNREFUSED moves to the next); null = auto. */
+    loopbackHosts: null,
     log: (...args) => console.log('[DES Relay]', ...args),
     warn: (...args) => console.warn('[DES Relay]', ...args),
 });
@@ -107,7 +114,7 @@ function sanitizeMeta(raw) {
     const meta = {};
     if (!raw || typeof raw !== 'object') return meta;
     for (const key of META_STRING_KEYS) {
-        if (typeof raw[key] === 'string') meta[key] = raw[key].slice(0, 512);
+        if (typeof raw[key] === 'string') meta[key] = raw[key].slice(0, META_MAX);
     }
     for (const key of META_NUMBER_KEYS) {
         if (Number.isInteger(raw[key])) meta[key] = raw[key];
@@ -116,11 +123,13 @@ function sanitizeMeta(raw) {
 }
 
 function parseMetaHeader(value) {
-    if (typeof value !== 'string' || !value) return {};
+    if (typeof value !== 'string' || !value) return { meta: {}, requestedId: null };
     try {
-        return sanitizeMeta(JSON.parse(decodeURIComponent(value)));
+        const raw = JSON.parse(decodeURIComponent(value));
+        const requestedId = typeof raw?.jobId === 'string' && UUID_RE.test(raw.jobId) ? raw.jobId.toLowerCase() : null;
+        return { meta: sanitizeMeta(raw), requestedId };
     } catch {
-        return {};
+        return { meta: {}, requestedId: null };
     }
 }
 
@@ -129,11 +138,20 @@ function clientStatus(code) {
     return code === 401 ? 400 : code;
 }
 
-function loopbackHost(req) {
+/**
+ * Hosts to reach SillyTavern itself on, in order. Plain loopback first: it is
+ * whitelisted by default and inside Docker it is the container. The address
+ * the request came in on is the last resort (IPv6-only or odd binds).
+ */
+function loopbackHosts(req, configured) {
+    if (Array.isArray(configured) && configured.length) return configured;
+    const hosts = ['127.0.0.1', '::1'];
     let address = req?.socket?.localAddress;
-    if (typeof address !== 'string' || !address) return '127.0.0.1';
-    if (address.startsWith('::ffff:')) address = address.slice(7);
-    return address;
+    if (typeof address === 'string' && address) {
+        if (address.startsWith('::ffff:')) address = address.slice(7);
+        if (!hosts.includes(address)) hosts.push(address);
+    }
+    return hosts;
 }
 
 /* ------------------------------------------------------------------ */
@@ -288,9 +306,9 @@ export function createRelay(userOptions = {}) {
         };
     }
 
-    function createJob(user, meta, stream) {
+    function createJob(user, meta, stream, requestedId = null) {
         const job = {
-            id: crypto.randomUUID(),
+            id: requestedId && !jobs.has(requestedId) ? requestedId : crypto.randomUUID(),
             user,
             meta,
             stream,
@@ -303,6 +321,7 @@ export function createRelay(userOptions = {}) {
             tail: '',
             startedAt: Date.now(),
             endedAt: 0,
+            lastWrite: Date.now(),
             error: null,
             consumed: false,
             subscribers: new Set(),
@@ -375,10 +394,10 @@ export function createRelay(userOptions = {}) {
             abortJob(job, 'error', `response exceeded ${options.maxBodyBytes} bytes`);
             return;
         }
+        job.lastWrite = Date.now();
         for (const sub of job.subscribers) {
             try {
                 sub.res.write(chunk);
-                sub.lastWrite = Date.now();
             } catch { /* client gone */ }
         }
     }
@@ -396,29 +415,44 @@ export function createRelay(userOptions = {}) {
             if (req.headers?.[name] !== undefined) headers[name] = req.headers[name];
         }
         const lib = encrypted ? https : http;
-        const upstream = lib.request({
-            host: loopbackHost(req),
-            port,
-            path: GENERATE_PATH,
-            method: 'POST',
-            headers,
-            rejectUnauthorized: false,
-        }, (res) => {
-            job.statusCode = res.statusCode;
-            job.statusMessage = res.statusMessage || null;
-            job.contentType = res.headers['content-type'] || null;
-            notifyHeaders(job);
-            res.on('data', (chunk) => appendChunk(job, chunk));
-            res.on('end', () => finishJob(job, 'done'));
-            res.on('error', (e) => finishJob(job, 'error', `upstream connection failed: ${e.message}`));
-            res.on('close', () => {
-                if (!FINISHED.has(job.status)) finishJob(job, 'error', 'upstream connection closed early');
-            });
-        });
-        upstream.on('error', (e) => finishJob(job, 'error', `loopback request failed: ${e.message}`));
-        job.upstream = upstream;
+        const hosts = loopbackHosts(req, options.loopbackHosts);
         job.timer = setTimeout(() => abortJob(job, 'error', `generation exceeded ${Math.round(options.maxJobDurationMs / 60000)} minutes`), options.maxJobDurationMs);
-        upstream.end(payload);
+
+        const attempt = (index) => {
+            if (FINISHED.has(job.status)) return;
+            const host = hosts[index];
+            const upstream = lib.request({
+                host,
+                port,
+                path: GENERATE_PATH,
+                method: 'POST',
+                headers,
+                rejectUnauthorized: false,
+            }, (res) => {
+                job.statusCode = res.statusCode;
+                job.statusMessage = res.statusMessage || null;
+                job.contentType = res.headers['content-type'] || null;
+                notifyHeaders(job);
+                res.on('data', (chunk) => appendChunk(job, chunk));
+                res.on('end', () => finishJob(job, 'done'));
+                res.on('error', (e) => finishJob(job, 'error', `upstream connection failed: ${e.message}`));
+                res.on('close', () => {
+                    if (!FINISHED.has(job.status)) finishJob(job, 'error', 'upstream connection closed early');
+                });
+            });
+            upstream.on('error', (e) => {
+                const refused = ['ECONNREFUSED', 'EADDRNOTAVAIL', 'ENETUNREACH', 'EAFNOSUPPORT'].includes(e.code);
+                if (refused && job.upstream === upstream && index + 1 < hosts.length && !FINISHED.has(job.status)) {
+                    options.warn(`loopback ${host}:${port} refused (${e.code}); trying ${hosts[index + 1]}`);
+                    attempt(index + 1);
+                    return;
+                }
+                finishJob(job, 'error', `loopback request failed: ${e.message}`);
+            });
+            job.upstream = upstream;
+            upstream.end(payload);
+        };
+        attempt(0);
     }
 
     function waitFor(job, list, ms) {
@@ -442,18 +476,19 @@ export function createRelay(userOptions = {}) {
         return job.size === 0 || job.tail.endsWith('\n\n') || job.tail.endsWith('\r\n\r\n') || job.tail.endsWith('\r\r');
     }
 
+    /**
+     * Keeps idle streams alive through proxies (Cloudflare drops a quiet
+     * connection after ~100 s). The comment is stored like any other chunk so
+     * the byte offsets clients resume from stay exact; SillyTavern's SSE
+     * parser and DES's parseSseData both ignore comment lines.
+     */
     function heartbeat() {
         const now = Date.now();
         for (const job of jobs.values()) {
             if (job.status !== 'running' || !job.stream || job.subscribers.size === 0) continue;
+            if (now - job.lastWrite < options.heartbeatMs) continue;
             if (!atEventBoundary(job)) continue;
-            for (const sub of job.subscribers) {
-                if (now - sub.lastWrite < options.heartbeatMs) continue;
-                try {
-                    sub.res.write(': ping\n\n');
-                    sub.lastWrite = now;
-                } catch { /* client gone */ }
-            }
+            appendChunk(job, HEARTBEAT);
         }
     }
 
@@ -499,15 +534,15 @@ export function createRelay(userOptions = {}) {
             if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
                 return sendJson(res, 400, { error: 'request body must be the generate payload object' });
             }
-            const meta = parseMetaHeader(req.headers?.[META_HEADER]);
-            const job = createJob(userOf(req), meta, payload.stream === true);
+            const { meta, requestedId } = parseMetaHeader(req.headers?.[META_HEADER]);
+            const job = createJob(userOf(req), meta, payload.stream === true, requestedId);
             startForward(job, req, payload);
             sendJson(res, 200, { jobId: job.id, status: job.status });
         }));
 
         router.get('/jobs', wrap((req, res) => {
             const user = userOf(req);
-            const chatId = typeof req.query?.chatId === 'string' ? req.query.chatId : null;
+            const chatId = typeof req.query?.chatId === 'string' ? req.query.chatId.slice(0, META_MAX) : null;
             const list = [];
             for (const job of jobs.values()) {
                 if (job.user !== user || job.consumed) continue;
@@ -556,7 +591,7 @@ export function createRelay(userOptions = {}) {
                 }
                 return res.end();
             }
-            const sub = { res, sentStatus, lastWrite: Date.now() };
+            const sub = { res, sentStatus };
             job.subscribers.add(sub);
             res.on('close', () => job.subscribers.delete(sub));
         }));
