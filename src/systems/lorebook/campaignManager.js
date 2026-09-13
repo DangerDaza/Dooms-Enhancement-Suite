@@ -222,14 +222,21 @@ export function setActiveCampaign(campaignId, options = {}) {
 }
 
 /**
- * Runs reconcileActiveCampaignBooks after any in-flight switch instead of
- * interleaving with it (both await ST's World Info update and both write
- * the ledger). Use this from UI handlers that change a campaign's books.
+ * Runs a book-activation task after any in-flight switch instead of
+ * interleaving with it (every such task awaits ST's World Info update and
+ * writes a ledger). Auto-link (autoLink.js) and the Lore Library's
+ * post-edit reconcile both go through here.
+ * @param {() => Promise<any>} task
  */
-export function queueReconcile() {
-    const run = switchChain.then(() => reconcileActiveCampaignBooks());
+export function queueBookTask(task) {
+    const run = switchChain.then(() => task());
     switchChain = run.catch(() => {});
     return run;
+}
+
+/** Runs reconcileActiveCampaignBooks after any in-flight switch. */
+export function queueReconcile() {
+    return queueBookTask(() => reconcileActiveCampaignBooks());
 }
 
 async function doSetActiveCampaign(campaignId, { silent = false } = {}) {
@@ -293,8 +300,11 @@ export async function reconcileActiveCampaignBooks() {
         ? (lb.campaigns[active]?.books || []).filter(b => existing.has(b))
         : [];
     const wantedSet = new Set(wanted);
+    // A book auto-link switched on for a character still in the chat's cast
+    // (autoLink.js, lorebook.autoLinked) belongs to that feature, not to us.
+    const autoLinked = new Set(Array.isArray(lb.autoLinked) ? lb.autoLinked : []);
     const deactivate = lb.campaignActivated.filter(name =>
-        !wantedSet.has(name) && !globals.has(name) && isWorldActive(name));
+        !wantedSet.has(name) && !globals.has(name) && !autoLinked.has(name) && isWorldActive(name));
     const activate = wanted.filter(name => !isWorldActive(name));
     let turnedOn = 0;
     let turnedOff = 0;

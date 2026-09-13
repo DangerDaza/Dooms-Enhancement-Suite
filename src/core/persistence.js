@@ -925,6 +925,14 @@ export function saveCharacterRosterChange() {
     } else {
         saveSettings();
     }
+    // Auto-link by name: keep same-named lorebooks in step with the chat's
+    // cast (src/systems/lorebook/autoLink.js). Dynamic import — the lorebook
+    // cluster is deferred and must not join the eager module graph via core.
+    if (extensionSettings.lorebook?.autoLinkByName !== false) {
+        import('../systems/lorebook/autoLink.js')
+            .then((m) => m.syncAutoLinkedLorebooks())
+            .catch((e) => console.warn('[DES AutoLink] unavailable', e));
+    }
 }
 
 /**

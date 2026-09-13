@@ -1768,6 +1768,23 @@ function bindSettingsUI() {
             }
         }
     });
+    // Auto-link books by character name (autoLink.js). Turning it on runs a
+    // sync straight away so matching books for the current cast light up.
+    $('#rpg-toggle-lorebook-autolink').on('change', async function () {
+        if (!extensionSettings.lorebook) {
+            extensionSettings.lorebook = { enabled: true, campaigns: {}, campaignOrder: [], collapsedCampaigns: [], expandedBooks: [], lastActiveTab: 'all', lastFilter: 'all', lastSearch: '' };
+        }
+        extensionSettings.lorebook.autoLinkByName = $(this).prop('checked');
+        saveSettings();
+        if (extensionSettings.lorebook.autoLinkByName) {
+            try {
+                const { syncAutoLinkedLorebooks } = await import('./src/systems/lorebook/autoLink.js');
+                await syncAutoLinkedLorebooks();
+            } catch (e) {
+                console.warn('[DES AutoLink] sync failed', e);
+            }
+        }
+    });
     $('#rpg-open-lorebook').on('click', async function () {
         const { getLorebookModal } = await import('./src/systems/ui/lorebookModal.js');
         const modal = getLorebookModal();
@@ -2143,6 +2160,7 @@ function bindSettingsUI() {
     const lbEnabled = extensionSettings.lorebook?.enabled ?? true;
     $('#rpg-toggle-lorebook').prop('checked', lbEnabled);
     $('#rpg-lb-badge').text(lbEnabled ? 'on' : 'off');
+    $('#rpg-toggle-lorebook-autolink').prop('checked', extensionSettings.lorebook?.autoLinkByName !== false);
     // Bunny Mo Integration — always on, no toggle/badge to initialize.
 
     // Inline Banners

@@ -112,6 +112,7 @@ A full-featured lorebook manager that replaces SillyTavern's native World Info i
 - Bulk visibility controls
 - Drag-to-reorder libraries
 - Token count estimates
+- **Auto-link by name** — a book named exactly like a character in the chat's cast switches on while they are in the cast and off when they leave (only books it switched on itself; books a campaign keeps on, or flagged global, are left alone). Settings → Lore Library turns it off.
 - **Active campaign** — a library folder can be *set active*. Doing so switches every Workshop character to that campaign's version of themselves, turns the campaign's books on and turns the previous campaign's books off. Books you switched on by hand outside any campaign are left alone, and a book flagged **global** (the globe on its row) stays on across every switch — the place for BunnyMo-style packs. Click the active campaign again to deactivate it; with nothing active, the library is the plain folder view it always was.
 <img width="1557" height="2380" alt="image" src="https://github.com/user-attachments/assets/cad2d576-480e-446e-8d3f-bc1abd1e96b4" />
 

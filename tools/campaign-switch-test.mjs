@@ -66,6 +66,7 @@ const { extensionSettings } = await import(`${DES}/src/core/state.js`);
 const cp = await import(`${DES}/src/systems/lorebook/campaignProfiles.js`);
 const cm = await import(`${DES}/src/systems/lorebook/campaignManager.js`);
 const api = await import(`${DES}/src/systems/lorebook/lorebookAPI.js`);
+const al = await import(`${DES}/src/systems/lorebook/autoLink.js`);
 
 // Skip the DOM repaints (they are gated on enabled) — this tests data.
 extensionSettings.enabled = false;
@@ -87,6 +88,8 @@ function reset() {
         activeCampaignId: null,
         globalBooks: ['G'],
         campaignActivated: [],
+        autoLinkByName: true,
+        autoLinked: [],
     };
     extensionSettings.campaignProfiles = {};
     extensionSettings.campaignBaseShadow = {};
@@ -216,13 +219,71 @@ await test('a book name that is not a string can never be filed', async () => {
 
 await test('rename and delete bookkeeping follow the book', async () => {
     await cm.setActiveCampaign('c1', { silent: true });
+    extensionSettings.lorebook.autoLinked = ['A'];
     cm.onWorldRenamed('A', 'A2');
     assert.deepEqual(extensionSettings.lorebook.campaigns.c1.books, ['A2', 'B']);
     assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A2', 'B']);
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, ['A2']);
     cm.onWorldDeleted('B');
     assert.deepEqual(extensionSettings.lorebook.campaigns.c1.books, ['A2']);
     assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A2']);
     assert.deepEqual(extensionSettings.lorebook.campaigns.c2.books, ['C', 'Missing']);
+    cm.onWorldDeleted('A2');
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, []);
+});
+
+// ── Auto-link by name ─────────────────────────────────────────────────────
+
+await test('auto-link switches on a book named like a cast member and off when they leave', async () => {
+    let r = await al.syncAutoLinkedLorebooks({ cast: { A: {}, D: {}, Nobody: {} } });
+    assert.deepEqual(r.activated, ['A']);
+    assert.deepEqual(active(), ['A', 'B', 'D', 'G']);
+    // D was already on by hand, so it is not ours: only A is in the ledger
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, ['A']);
+    r = await al.syncAutoLinkedLorebooks({ cast: { D: {} } });
+    assert.deepEqual(r.deactivated, ['A']);
+    assert.deepEqual(active(), ['B', 'D', 'G']);
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, []);
+});
+
+await test('auto-link is a no-op when disabled or when the chat has no cast', async () => {
+    extensionSettings.lorebook.autoLinkByName = false;
+    await al.syncAutoLinkedLorebooks({ cast: { A: {} } });
+    assert.deepEqual(active(), ['B', 'D', 'G']);
+    extensionSettings.lorebook.autoLinkByName = true;
+    await al.syncAutoLinkedLorebooks({ cast: null });
+    assert.deepEqual(active(), ['B', 'D', 'G']);
+});
+
+await test('auto-link never switches off a book the active campaign keeps on, or a global', async () => {
+    await al.syncAutoLinkedLorebooks({ cast: { A: {}, G: {} } });
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, ['A']); // G was already on
+    await cm.setActiveCampaign('c1', { silent: true });          // c1 wants A and B
+    await al.syncAutoLinkedLorebooks({ cast: {} });               // A's character leaves
+    assert.deepEqual(active(), ['A', 'B', 'D', 'G']);             // A stays: the campaign owns it now
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, []);
+    await cm.setActiveCampaign(null, { silent: true });
+    assert.deepEqual(active(), ['D', 'G']);                        // and goes with the campaign
+});
+
+await test('a campaign switch never switches off a book auto-link still owns', async () => {
+    await al.syncAutoLinkedLorebooks({ cast: { A: {} } });        // auto-link owns A
+    await cm.setActiveCampaign('c1', { silent: true });          // A already on, B switched on
+    assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A', 'B']);
+    await cm.setActiveCampaign(null, { silent: true });
+    assert.deepEqual(active(), ['A', 'D', 'G']);                   // B off, A kept for the cast
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, ['A']);
+    await al.syncAutoLinkedLorebooks({ cast: {} });
+    assert.deepEqual(active(), ['D', 'G']);                        // leaves with the character
+});
+
+await test('auto-link queues behind an in-flight switch instead of interleaving', async () => {
+    const p1 = cm.setActiveCampaign('c1', { silent: true });
+    const p2 = al.syncAutoLinkedLorebooks({ cast: { C: {} } });
+    await Promise.all([p1, p2]);
+    assert.deepEqual(active(), ['A', 'B', 'C', 'D', 'G']);
+    assert.deepEqual(extensionSettings.lorebook.campaignActivated, ['A', 'B']);
+    assert.deepEqual(extensionSettings.lorebook.autoLinked, ['C']);
 });
 
 if (failures) {

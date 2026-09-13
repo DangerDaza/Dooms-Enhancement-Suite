@@ -543,6 +543,7 @@ export function renameBookEverywhere(oldName, newName) {
     };
     swap(lb.globalBooks);
     swap(lb.campaignActivated);
+    swap(lb.autoLinked);
     for (const campaign of Object.values(lb.campaigns || {})) swap(campaign?.books);
 }
 
@@ -557,6 +558,7 @@ export function forgetBook(name) {
     };
     drop(lb.globalBooks);
     drop(lb.campaignActivated);
+    drop(lb.autoLinked);
     for (const campaign of Object.values(lb.campaigns || {})) drop(campaign?.books);
 }
 
@@ -583,6 +585,8 @@ export function ensureCampaignSettings() {
         if (lb.activeCampaignId === undefined) { lb.activeCampaignId = null; changed = true; }
         if (!Array.isArray(lb.globalBooks)) { lb.globalBooks = []; changed = true; }
         if (!Array.isArray(lb.campaignActivated)) { lb.campaignActivated = []; changed = true; }
+        if (lb.autoLinkByName === undefined) { lb.autoLinkByName = true; changed = true; }
+        if (!Array.isArray(lb.autoLinked)) { lb.autoLinked = []; changed = true; }
         // A pre-campaign bug in the mobile bulk "Move to" filed `undefined`
         // in campaign folders. Book lists hold WI filenames only.
         const isBookName = (v) => typeof v === 'string' && v.length > 0;
@@ -594,6 +598,7 @@ export function ensureCampaignSettings() {
         };
         scrubList(lb.globalBooks);
         scrubList(lb.campaignActivated);
+        scrubList(lb.autoLinked);
         if (lb.campaigns && typeof lb.campaigns === 'object') {
             for (const campaign of Object.values(lb.campaigns)) {
                 if (!campaign || typeof campaign !== 'object') continue;

@@ -395,6 +395,10 @@ export let extensionSettings = {
         activeCampaignId: null, // campaign whose books + character versions are live, or null
         globalBooks: [],        // WI filenames exempt from campaign switching (BunnyMo-style packs)
         campaignActivated: [],  // ledger: the active campaign's books as of the last switch — only these get turned off (globals exempt); books outside the campaign are never touched
+        // Auto-link by name (autoLink.js): a book named exactly like a character
+        // in the chat's cast is on while they are in the cast.
+        autoLinkByName: true,   // feature toggle (Settings → Lore Library)
+        autoLinked: [],         // ledger: the books auto-link switched on — only these get switched off
     },
     // Doom Counter — tension-driven plot twist system
     // Uses its own 1-10 numeric tension scale (independent of the infoBox tension widget)
