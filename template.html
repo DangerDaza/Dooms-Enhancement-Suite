@@ -2378,6 +2378,10 @@
                 <span class="cw-user-badge" id="cw-user-badge" hidden title="This is a user (player) character">
                     <i class="fa-solid fa-user" aria-hidden="true"></i> User
                 </span>
+                <!-- Which version of the character is on the stage: Base or a
+                     campaign. Filled by renderCampaignBadge(); hidden when the
+                     install has no campaigns. -->
+                <span class="cw-campaign-badge cw-npc-only" id="cw-campaign-badge" hidden></span>
             </h3>
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
@@ -2394,35 +2398,44 @@
             </button>
         </div>
 
-        <div class="workshop-split">
+        <div class="workshop-split cw-stage-layout">
 
-            <!-- LEFT RAIL: live preview + section nav -->
-            <aside class="workshop-rail" aria-label="Preview and navigation">
-                <div class="workshop-preview">
-                    <div class="dooms-portrait-card" id="cw-preview-card" aria-label="Live portrait preview">
-                        <div class="dooms-portrait-placeholder" id="cw-preview-placeholder" aria-hidden="true">&#128100;
-                        </div>
-                        <img id="cw-preview-img" alt="" style="display:none;">
-                        <div class="dooms-portrait-card-name" id="cw-preview-card-name"></div>
-                    </div>
-                    <div class="preview-name" id="cw-preview-name"></div>
-                    <div class="preview-rel">
+            <!-- STAGE: the portrait fills the whole left column edge to edge.
+                 Two stacked <img> layers crossfade when the version changes
+                 (setStagePortrait); the overlay at the bottom carries the
+                 name, relationship and the version strip. -->
+            <aside class="cw-stage" aria-label="Portrait and versions">
+                <div class="cw-stage-art">
+                    <img id="cw-stage-a" class="cw-stage-img is-front" alt="" decoding="async">
+                    <img id="cw-stage-b" class="cw-stage-img" alt="" decoding="async">
+                    <div class="cw-stage-placeholder" id="cw-preview-placeholder" aria-hidden="true">&#128100;</div>
+                    <div class="cw-stage-vignette" aria-hidden="true"></div>
+                </div>
+                <div class="cw-stage-overlay">
+                    <div class="cw-stage-name" id="cw-preview-name"></div>
+                    <div class="cw-stage-rel">
                         <span class="color-dot" id="cw-preview-color-dot"></span>
                         <span id="cw-preview-rel"></span>
                     </div>
+                    <!-- Version strip: Base + one tile per campaign version + "+".
+                         Built by renderVersionStrip(); hidden (and in user mode)
+                         when the install has no campaigns. -->
+                    <div class="cw-version-strip cw-npc-only" id="cw-version-strip" role="tablist"
+                        aria-label="Character versions" hidden></div>
+                    <div class="cw-version-add-menu" id="cw-version-add-menu" role="menu" hidden></div>
                 </div>
-
-                <nav class="workshop-nav" aria-label="Section">
-                    <button type="button" class="active" data-pane="identity">&#128481; Identity</button>
-                    <button type="button" data-pane="appearance">&#127912; Appearance</button>
-                    <button type="button" data-pane="expressions">&#128516; Expressions</button>
-                    <button type="button" data-pane="injection">&#128137; Injection</button>
-                    <button type="button" data-pane="knives">&#128298; Knives</button>
-                </nav>
             </aside>
 
-            <!-- RIGHT PANE: currently-selected section -->
-            <main class="workshop-pane-host">
+            <!-- EDITOR: section tabs + the currently-selected section -->
+            <main class="cw-editor">
+                <nav class="workshop-nav cw-tabs" aria-label="Section">
+                    <button type="button" class="active" data-pane="identity">&#128481; <span class="cw-tab-label">Identity</span></button>
+                    <button type="button" data-pane="appearance">&#127912; <span class="cw-tab-label">Appearance</span></button>
+                    <button type="button" data-pane="expressions">&#128516; <span class="cw-tab-label">Expressions</span></button>
+                    <button type="button" data-pane="injection">&#128137; <span class="cw-tab-label">Injection</span></button>
+                    <button type="button" data-pane="knives">&#128298; <span class="cw-tab-label">Knives</span></button>
+                </nav>
+                <div class="workshop-pane-host">
 
                 <!-- IDENTITY -->
                 <section class="rpg-editor-pane active" data-pane="identity">
@@ -2493,8 +2506,8 @@
                 <section class="rpg-editor-pane" data-pane="appearance">
                     <div class="rpg-editor-section">
                         <h4>Portrait</h4>
-                        <p class="helper">Shown on the portrait bar. The preview at left updates as soon as you pick a
-                            file.</p>
+                        <p class="helper">Shown on the portrait bar. The stage at left updates as soon as you pick a
+                            file. Each campaign version keeps its own portrait.</p>
                         <div class="stack" style="max-width: 320px;">
                             <label class="rpg-btn" for="cw-portrait-file">Upload portrait&hellip;</label>
                             <input id="cw-portrait-file" type="file" accept="image/*" class="sr-only">
@@ -2708,6 +2721,7 @@
                     </div>
                 </section>
 
+                </div>
             </main>
         </div>
 
@@ -2773,6 +2787,9 @@
                 <input id="cr-search" class="rpg-input cr-search-input" type="search"
                     placeholder="Search characters&hellip;" autocomplete="off">
             </div>
+            <!-- Which campaign's versions the tiles show (renderCampaignChip);
+                 hidden when the install has no campaigns. -->
+            <span class="cr-campaign-chip" id="cr-campaign-chip" hidden></span>
             <span class="cr-count" id="cr-count" aria-live="polite"></span>
         </div>
 

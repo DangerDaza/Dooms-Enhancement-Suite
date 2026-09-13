@@ -38,5 +38,11 @@
     "infobox.recentEvents.title": "Recent Events",
     "infobox.recentEvents.addEventPlaceholder": "Add event...",
     "errors.parsingError": "Dooms Tracker parsing error! The model returned an incorrect format. If the issue persists, consider changing the model for generations.",
-    "characterWorkshop.confirmDelete": "Delete \"{name}\" from this chat's roster?\n\nThis removes the portrait, dialogue color, and known-character entry. Sheet data is kept."
+    "characterWorkshop.confirmDelete": "Delete \"{name}\" from this chat's roster?\n\nThis removes the portrait, dialogue color, and known-character entry. Sheet data is kept.",
+    "characterWorkshop.confirmDeleteVersions": "Delete \"{name}\" everywhere?\n\nThis removes the portrait, dialogue color, known-character entry AND {count} campaign version(s) of this character ({campaigns}). Sheet data is kept.",
+    "characterWorkshop.confirmSwitch": "You have unsaved changes to the {version} version of {name}.\n\nOK saves them before switching; Cancel discards them.",
+    "characterWorkshop.confirmRemoveVersion": "Remove the {version} version of {name}?\n\nThe character falls back to Base in that campaign. Portrait files still used by another version are kept.",
+    "characterWorkshop.addVersionFor": "Add {version} version",
+    "characterWorkshop.versionBase": "Base",
+    "characterWorkshop.versionLive": "Live"
 }
