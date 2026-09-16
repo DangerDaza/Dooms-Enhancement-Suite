@@ -771,7 +771,7 @@ function renderVersionStrip() {
            </button>`
         : '';
     $strip.html(html + add).prop('hidden', false);
-    const $menu = $modal.find('#cw-version-add-menu');
+    const $menu = addMenu();
     $menu.html(missing.map(m =>
         `<button type="button" role="menuitem" class="cw-version-add-item" data-campaign="${escapeHtml(m.id)}">
             <i class="fa-solid ${escapeHtml(m.icon)}" aria-hidden="true"></i> ${escapeHtml(t('characterWorkshop.addVersionFor', 'Add {version} version', { version: m.label }))}
@@ -786,18 +786,113 @@ function renderVersionStrip() {
     }
 }
 
+/**
+ * The add-version menu lives in the stage overlay, but while it is open it is
+ * moved to <body> and positioned against the "+" tile in viewport
+ * coordinates: every ancestor in the Workshop (popup content, split pane,
+ * stage) clips its overflow, and on a phone the menu opens downward over the
+ * editor — past the bottom of the popup box, where it was cut off. Looked up
+ * by id so callers find it wherever it currently sits.
+ */
+function addMenu() {
+    return $('#cw-version-add-menu');
+}
+
+let addMenuHome = null;          // { parent, next } — where the node goes back on close
+let addMenuListeners = null;     // window/document listeners active while open
+const ADD_MENU_TOKENS = ['--cw-accent', '--rpg-text', '--rpg-border', '--rpg-highlight'];
+
+function placeAddMenu() {
+    const menu = addMenu()[0];
+    if (!menu || menu.hidden) return;
+    const button = $modal ? $modal.find('#cw-version-add')[0] : null;
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    const ox = vv ? vv.offsetLeft : 0;
+    const oy = vv ? vv.offsetTop : 0;
+    const margin = 8;
+    const gap = 4;
+    const anchor = button ? button.getBoundingClientRect()
+        : { left: ox + vw / 2, right: ox + vw / 2, top: oy + vh / 2, bottom: oy + vh / 2 };
+    // Measure the natural size first, then cap it to the roomier side.
+    menu.style.maxHeight = '';
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const natural = menu.offsetHeight;
+    const spaceBelow = (oy + vh) - anchor.bottom - gap - margin;
+    const spaceAbove = anchor.top - oy - gap - margin;
+    const openDown = spaceBelow >= Math.min(natural, 160) || spaceBelow >= spaceAbove;
+    menu.style.maxHeight = `${Math.max(96, Math.floor((openDown ? spaceBelow : spaceAbove)))}px`;
+    const w = menu.offsetWidth;
+    const h = menu.offsetHeight;
+    const left = Math.max(ox + margin, Math.min(anchor.right - w, ox + vw - w - margin));
+    const wanted = openDown ? anchor.bottom + gap : anchor.top - gap - h;
+    const top = Math.max(oy + margin, Math.min(wanted, oy + vh - h - margin));
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.classList.toggle('opens-up', !openDown);
+}
+
 function openVersionAddMenu() {
-    const $menu = $modal.find('#cw-version-add-menu');
-    if (!$menu.children().length) return;
-    $menu.prop('hidden', false);
+    const $menu = addMenu();
+    if (!$menu.length || !$menu.children().length) return;
+    const menu = $menu[0];
+    if (!addMenuHome) {
+        addMenuHome = { parent: menu.parentNode, next: menu.nextSibling };
+        // Carry the Workshop's theme tokens along: the scoped theme rules no
+        // longer match once the node sits on <body>.
+        const content = $modal.find('.rpg-settings-popup-content')[0];
+        if (content && typeof getComputedStyle === 'function') {
+            const cs = getComputedStyle(content);
+            for (const token of ADD_MENU_TOKENS) {
+                const value = cs.getPropertyValue(token);
+                if (value) menu.style.setProperty(token, value.trim());
+            }
+        }
+        document.body.appendChild(menu);
+    }
+    menu.classList.add('is-floating');
+    menu.hidden = false;
     $modal.find('#cw-version-add').attr('aria-expanded', 'true');
+    placeAddMenu();
+    if (!addMenuListeners) {
+        const reposition = () => placeAddMenu();
+        const closeOnOutsideScroll = (e) => { if (!menu.contains(e.target)) closeVersionAddMenu(); };
+        window.addEventListener('resize', reposition);
+        window.visualViewport?.addEventListener('resize', reposition);
+        window.visualViewport?.addEventListener('scroll', reposition);
+        document.addEventListener('scroll', closeOnOutsideScroll, true);
+        addMenuListeners = () => {
+            window.removeEventListener('resize', reposition);
+            window.visualViewport?.removeEventListener('resize', reposition);
+            window.visualViewport?.removeEventListener('scroll', reposition);
+            document.removeEventListener('scroll', closeOnOutsideScroll, true);
+        };
+    }
     $menu.find('button').first().trigger('focus');
 }
 
 function closeVersionAddMenu() {
-    if (!$modal) return;
-    $modal.find('#cw-version-add-menu').prop('hidden', true);
-    $modal.find('#cw-version-add').attr('aria-expanded', 'false');
+    const $menu = addMenu();
+    if (!$menu.length) return;
+    const menu = $menu[0];
+    menu.hidden = true;
+    menu.classList.remove('is-floating', 'opens-up');
+    menu.style.maxHeight = '';
+    menu.style.left = '';
+    menu.style.top = '';
+    if (addMenuListeners) {
+        addMenuListeners();
+        addMenuListeners = null;
+    }
+    if (addMenuHome) {
+        const { parent, next } = addMenuHome;
+        addMenuHome = null;
+        for (const token of ADD_MENU_TOKENS) menu.style.removeProperty(token);
+        if (parent && parent.isConnected) parent.insertBefore(menu, next && next.parentNode === parent ? next : null);
+    }
+    if ($modal) $modal.find('#cw-version-add').attr('aria-expanded', 'false');
 }
 
 /**
@@ -1649,21 +1744,24 @@ function bindStaticListeners() {
     });
     $modal.on('click.cw', '#cw-version-add', function (e) {
         e.stopPropagation();
-        if ($modal.find('#cw-version-add-menu').prop('hidden')) openVersionAddMenu();
+        if (addMenu().prop('hidden')) openVersionAddMenu();
         else closeVersionAddMenu();
     });
-    $modal.on('click.cw', '.cw-version-add-item', function (e) {
+    // The open menu floats on <body> (see openVersionAddMenu), so its own
+    // events are delegated from the document, not from the modal.
+    $(document).off('.cwAddMenu');
+    $(document).on('click.cwAddMenu', '#cw-version-add-menu .cw-version-add-item', function (e) {
         e.stopPropagation();
         const id = $(this).attr('data-campaign');
         closeVersionAddMenu();
         if (id) addVersion(id);
     });
     // Click anywhere else (or Escape) closes the add menu.
-    $modal.on('click.cw', function (e) {
-        if ($modal.find('#cw-version-add-menu').prop('hidden')) return;
+    $(document).on('pointerdown.cwAddMenu', function (e) {
+        if (addMenu().prop('hidden') !== false) return;
         if ($(e.target).closest('#cw-version-add-menu, #cw-version-add').length === 0) closeVersionAddMenu();
     });
-    $modal.on('keydown.cw', '#cw-version-add-menu', function (e) {
+    $(document).on('keydown.cwAddMenu', '#cw-version-add-menu', function (e) {
         if (e.key === 'Escape') { e.stopPropagation(); closeVersionAddMenu(); $modal.find('#cw-version-add').trigger('focus'); }
     });
 

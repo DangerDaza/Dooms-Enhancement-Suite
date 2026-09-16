@@ -6018,28 +6018,37 @@
 }
 
 
-#character-workshop-popup .cw-version-add-menu {
-    position: absolute;
-    right: 1rem;
-    bottom: calc(100% - 0.5rem);
-    z-index: 3;
+/* The add-version menu is moved to <body> while open (characterWorkshop.js
+   openVersionAddMenu) and placed against the "+" tile in viewport
+   coordinates, so no Workshop container can clip it; hence unscoped
+   selectors and a z-index above the popup (10000). */
+.cw-version-add-menu {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 10050;
     display: flex;
     flex-direction: column;
     min-width: 200px;
+    max-width: calc(100vw - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
     padding: 0.3rem;
     border-radius: 8px;
     background: rgba(18, 18, 26, 0.97);
-    border: 1px solid var(--rpg-border);
+    border: 1px solid var(--rpg-border, #4a7ba7);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    color: var(--rpg-text, #eaeaea);
 }
 
-#character-workshop-popup .cw-version-add-menu[hidden] { display: none !important; }
+.cw-version-add-menu[hidden] { display: none !important; }
 
-#character-workshop-popup .cw-version-add-item {
+.cw-version-add-item {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--rpg-text);
+    color: inherit;
     text-align: left;
     padding: 0.45rem 0.6rem;
     border-radius: 6px;
@@ -6051,9 +6060,9 @@
     gap: 0.5rem;
 }
 
-#character-workshop-popup .cw-version-add-item:hover,
-#character-workshop-popup .cw-version-add-item:focus-visible {
-    background: color-mix(in srgb, var(--cw-accent) 25%, transparent);
+.cw-version-add-item:hover,
+.cw-version-add-item:focus-visible {
+    background: color-mix(in srgb, var(--cw-accent, var(--rpg-highlight, #e94560)) 25%, transparent);
     outline: none;
 }
 
@@ -6423,16 +6432,6 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     #character-workshop-popup .cw-version-thumb { height: 64px; }
     #character-workshop-popup .cw-version-add { min-height: 64px; }
     #character-workshop-popup .cw-campaign-badge { display: none !important; }
-    /* The banner is short: the add-version menu opens DOWN over the editor
-       instead of up into a clipped 40px of stage. The art layer keeps the
-       clip the crossfade needs; the stage itself must let the menu out. */
-    #character-workshop-popup .cw-stage { overflow: visible; z-index: 2; }
-    #character-workshop-popup .cw-version-add-menu {
-        bottom: auto;
-        top: calc(100% - 0.5rem);
-        max-height: 50vh;
-        overflow-y: auto;
-    }
 }
 
 /* Below the 1000px content cap the five labelled tabs no longer fit: icons
