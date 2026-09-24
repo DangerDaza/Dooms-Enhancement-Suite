@@ -3,8 +3,8 @@
     "title": "House Rules",
     "items": [
         {
-            "title": "📜 Credit where it's due",
-            "body": "Nothing changes for you here. DES is still free, and you can still use it, change it and share it. What's new is that DES now properly says who made it — the license file was incomplete, and the only name in it belonged to the older extension DES first grew out of. If you build something using DES's code (the Present Characters panel is the part people borrow most), the license asks three things: keep the credit, say what you changed, and share your version under the same open license. A thank-you in your README is lovely, but it doesn't cover those three. Want to use part of DES on different terms? Just ask — contact details are at the bottom. Everything below is what arrived in 2.5.0."
+            "title": "📜 License updated",
+            "body": "Everything below arrived in 2.5.0."
         },
         {
             "title": "✏️ You can edit the tracker prompt",
