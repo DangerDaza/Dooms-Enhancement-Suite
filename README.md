@@ -187,4 +187,14 @@ machine.
 
 ## License
 
-This program is free software under the [GNU Affero General Public License v3.0](LICENSE).
+Copyright (C) 2026 Jordan (DangerDaza). Portions copyright (C) 2024 Marysia
+(marinara_spaghetti), from the RPG Companion extension this was forked from.
+
+Doom's Enhancement Suite is free software under the
+[GNU Affero General Public License v3.0 or later](LICENSE).
+
+**If you reuse code from this project** — including the Present Characters
+Panel and its styling — the license requires you to keep the copyright notices
+intact, state what you changed, and release your version under the AGPL as
+well. Credit in a README is welcome but is not a substitute for those three
+things. If you'd like to use part of DES under different terms, ask me.

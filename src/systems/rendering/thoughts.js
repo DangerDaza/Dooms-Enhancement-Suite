@@ -1,3 +1,18 @@
+/*
+ * Doom's Enhancement Suite for SillyTavern — Character thoughts / card rendering
+ * Copyright (C) 2026 Jordan (DangerDaza)
+ *
+ * This file is part of Doom's Enhancement Suite and is licensed under the
+ * GNU Affero General Public License v3.0 or later. If you redistribute this
+ * file or a modified version of it, you must keep this notice intact, state
+ * your changes, and release your version under the same license.
+ *
+ * See the LICENSE file in the project root for the full terms and for
+ * additional copyright notices.
+ *
+ * https://github.com/DangerDaza/Dooms-Enhancement-Suite
+ */
+
 /**
  * Character Thoughts Rendering Module
  * Handles rendering of character thoughts panel and floating thought bubbles in chat
