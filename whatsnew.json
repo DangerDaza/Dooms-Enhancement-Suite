@@ -1,38 +1,42 @@
 {
-    "version": "2.5.0",
+    "version": "2.5.1",
     "title": "House Rules",
     "items": [
         {
-            "title": "✏️ You can finally edit the tracker prompt",
-            "body": "The most-requested feature in DES. Prompts Editor → Tracker Prompt now shows the complete prompt exactly as the AI receives it — the instructions AND the JSON format specification that used to be generated-only and untouchable. Edit it and your version is sent word for word; leave it alone and DES keeps building it from your field settings as before, so fields you add later still get through. There's a live token estimate, an 'edited' badge, and a Restore Default button. Rename or remove a key and it warns you which panel goes blank when you do — because DES looks values up by key, and a silently empty Scene Tracker is a miserable thing to debug."
+            "title": "📜 Credit where it's due",
+            "body": "Nothing changes for you here. DES is still free, and you can still use it, change it and share it. What's new is that DES now properly says who made it — the license file was incomplete, and the only name in it belonged to the older extension DES first grew out of. If you build something using DES's code (the Present Characters panel is the part people borrow most), the license asks three things: keep the credit, say what you changed, and share your version under the same open license. A thank-you in your README is lovely, but it doesn't cover those three. Want to use part of DES on different terms? Just ask — contact details are at the bottom. Everything below is what arrived in 2.5.0."
         },
         {
-            "title": "🧩 Custom tracker fields, now with a shape",
-            "body": "A custom Scene Tracker field used to be free text and nothing else — you described it and hoped the model answered in a usable form. Each one can now be Text, Number (with an optional range), Choice (you supply the options), List, Yes/No, or Percent, and the prompt tells the model exactly what to return instead of leaving it to chance. Custom fields also finally appear as on/off toggles in the Scene Tracker menu — that list was hardcoded before, so a field you created could never show up there. Existing fields are untouched and send exactly as they did."
+            "title": "✏️ You can edit the tracker prompt",
+            "body": "Your most-requested feature. You can now see and change the full set of instructions DES sends the AI to fill in your trackers — all of it, including the part that used to be locked. Find it in Prompts Editor → Tracker Prompt. Change whatever you like and the AI gets exactly your version. Leave it alone and it keeps updating itself as you add new fields. It shows roughly how many tokens it costs, there's a Restore Default button if you want to start over, and DES warns you if an edit would leave one of your panels with nothing to show."
+        },
+        {
+            "title": "🧩 Custom tracker fields can have a type",
+            "body": "When you add your own field to the Scene Tracker, you can now choose what kind of answer you want back: text, a number (with a range if you like), a choice from a list you write, a list, yes/no, or a percentage. The AI is told exactly what to give you, so you get tidy, usable answers instead of whatever it felt like writing. Your custom fields also now appear as on/off switches in Settings → Scene Tracker — before, they never showed up there. Fields you already have keep working exactly as they did."
         },
         {
             "title": "🛠️ New Workshop section in Settings",
-            "body": "Relationships have moved out of a cramped tab in the Edit Trackers window and into their own section in the main menu. Add, rename and remove them freely, pick each one's card emoji from a click-to-choose grid, and turn the whole thing off if you don't use it. The list is generated from your config rather than hardcoded, so what you see is exactly what the AI is offered — and there's a new Wording box that lets you tell the model what the relationship actually means, with a live preview of the exact text it will receive."
+            "body": "Relationships have their own home now: Settings → Workshop. Add your own (Sworn Rival, anyone?), rename or remove them, and pick each one's emoji by clicking from a grid instead of hunting for it on your keyboard. You can switch relationship tracking off entirely if you don't use it. There's also a new box to tell the AI what a relationship actually means — say, 'how this character feels about me' — with a preview showing exactly what gets sent."
         },
         {
-            "title": "🎭 Your relationships now show up on character cards",
-            "body": "The 'Relationship to player' row in the Character Workshop was five buttons written into the page — so a relationship you added was offered to the AI but could never be picked by hand. It's built from your list now, with your own additions on the end. Rather than growing taller with every one you add, it's a single row with arrows either side, and opening a card jumps straight to the relationship already set."
+            "title": "🎭 Your relationships show up on character cards",
+            "body": "In the Character Workshop, the 'Relationship to player' row only ever showed the original five choices, so any you'd added couldn't be picked there. Now your own relationships appear too, at the end of the row. It stays one tidy line no matter how many you have — use the arrows on either side to scroll through them."
         },
         {
-            "title": "🪟 The Edit Trackers window is a real working surface",
-            "body": "It was capped at the width of a small dialog, which crushed each field — icon, name, AI instruction, type, delete — into a column barely wider than a phone. It's now up to 1080px, grouped into titled cards instead of one long run of rows, and two columns on a desktop window while stacking cleanly on a phone. The text boxes were also plain white on every dark theme (nothing in the stylesheet ever coloured them); they take your theme now. The Widgets section is gone — its toggles live in Settings → Scene Tracker, and four of the five did nothing anyway."
+            "title": "🪟 A roomier Edit Trackers window",
+            "body": "The Edit Trackers window used to squeeze everything into a narrow column. It's now much bigger, split into clearly labelled sections, and still works on a phone. Its text boxes finally match your theme instead of glaring bright white on dark themes. The Widgets section is gone — several of its switches didn't actually do anything, and the rest now live in Settings → Scene Tracker."
         },
         {
-            "title": "🕐 The Scene Tracker stops vanishing",
-            "body": "It was never actually deleted — it was being left behind on the previous message. The tracker skips redrawing when the scene hasn't changed, and that check only asked whether a header existed somewhere on the page, not whether it was still attached to the newest message. So any time two turns shared the same location and time (most turns), it stayed pinned to the older message and scrolled out of view. Toggling the feature off and on only seemed to fix it because that clears the cache. It follows the conversation down now."
+            "title": "🕐 The Scene Tracker stays put",
+            "body": "Fixed the Scene Tracker seeming to vanish until you turned it off and on again. It was really getting stuck to an older message and scrolling out of sight whenever the scene hadn't changed between turns. It now always follows the newest message."
         },
         {
             "title": "💬 Chat bubble text wraps around the portrait",
-            "body": "The avatar used to own its own column, so anything longer than the portrait was squeezed into a narrow strip with a tall empty gutter sitting underneath it — very noticeable on phones and on long speeches. The text now runs alongside the portrait and flows underneath at full width once it clears the bottom. Both Discord and Card styles."
+            "body": "Long messages in chat bubbles no longer leave a big empty gap under the character's portrait. The text now flows around the picture and fills the full width once it's past it. Works in both the Discord and Card styles."
         },
         {
-            "title": "📱 Two mobile annoyances fixed",
-            "body": "The Mobile Compose Overlay opened on any focus of the message box — and SillyTavern focuses that box itself on page load, after sending, when a generation finishes, and whenever a popup closes. It now requires a real tap on the input, so it stops ambushing you on every reload. And the 'is this the same character?' popup was positioning itself against the wrong viewport on phones, sliding off the top of the screen with only its lower half visible; it now pins to what you can actually see and follows it as the browser chrome moves."
+            "title": "📱 Two phone fixes",
+            "body": "The mobile typing screen no longer pops open on its own when you reload the page, finish sending, or close a popup — only when you actually tap the message box. And the 'Is this the same character?' popup no longer slides off the top of the screen with only its bottom half showing."
         }
     ],
     "contact": {

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.1] - 2026-09-24
+
+### Changed
+- **DES now ships a complete license and says who made it.** The `LICENSE` file held the AGPL-3.0 preamble followed by a placeholder line instead of the license itself, so the terms DES claimed were never actually included — and the only copyright notice anywhere in the project named the author of the extension DES was originally forked from. `LICENSE` now carries the full, verbatim AGPL-3.0 text with the current copyright alongside the preserved upstream notice. The files most often reused — the Present Characters panel, Character Workshop and Roster, character-card and chat-bubble rendering, and every stylesheet — now carry a short notice of their own, so the terms travel with a file even when it's copied out on its own. `manifest.json` declares the license, and the README spells out what reusing DES code requires. No change in behaviour.
+- **The What's New screen is written in plain language.** The 2.5.0 notes leaned on terms like "JSON", "keys", "cache" and "viewport". Same features, explained for the people actually using them.
+
 ## [2.5.0] - 2026-09-06 — House Rules
 
 ### Fixed
