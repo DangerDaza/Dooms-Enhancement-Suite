@@ -35,7 +35,7 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
-import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitFromDiskByValue, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
+import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitsIfUnreferenced, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
 import { DIALOGUE_COLORS } from '../../utils/dialogueColors.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
@@ -1046,14 +1046,16 @@ function triggerPortraitUpload(characterName) {
  */
 function removePortrait(characterName) {
     if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
-        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatars[characterName]); } catch (e) {}
-        try { deletePortraitFromDiskByValue(extensionSettings.npcAvatarsFullRes?.[characterName]); } catch (e) {}
+        // Collect first, clear the entries, save, THEN delete from disk —
+        // only files no other character version still references go.
+        const candidates = [extensionSettings.npcAvatars[characterName], extensionSettings.npcAvatarsFullRes?.[characterName]];
         delete extensionSettings.npcAvatars[characterName];
         // Also remove the full-res original if stored
         if (extensionSettings.npcAvatarsFullRes && extensionSettings.npcAvatarsFullRes[characterName]) {
             delete extensionSettings.npcAvatarsFullRes[characterName];
         }
         saveSettings();
+        deletePortraitsIfUnreferenced(candidates).catch(() => {});
         portraitFileCache.delete(characterName);
         // Remove from no-portrait localStorage cache so file probing can resume for this character
         try {

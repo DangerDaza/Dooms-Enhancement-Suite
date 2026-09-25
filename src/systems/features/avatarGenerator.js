@@ -16,7 +16,8 @@ import { selected_group, getGroupMembers } from '../../../../../../group-chats.j
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
-import { deletePortraitFromDiskByValue, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
+import { deletePortraitsIfUnreferenced, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
+import { BASE_VERSION, getActiveCampaignId, hasProfile, portraitRefCount, readVersion, writeVersion } from '../lorebook/campaignProfiles.js';
 import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt, generateDescriptionPortraitPrompt } from '../generation/promptBuilder.js';
 import { getCurrentPresetName, switchToPreset, generateWithExternalAPI } from '../generation/apiClient.js';
 import { hasPendingAliasDecision } from './characterAliases.js';
@@ -90,17 +91,53 @@ function getGeneratedPortraitMeta(characterName) {
     return meta;
 }
 
-function setGeneratedPortraitMeta(characterName, prompt, stateHash, url) {
-    if (!extensionSettings.generatedPortraits || typeof extensionSettings.generatedPortraits !== 'object') {
-        extensionSettings.generatedPortraits = {};
-    }
-    extensionSettings.generatedPortraits[characterName] = {
+function buildGeneratedPortraitMeta(prompt, stateHash, url) {
+    return {
         source: AUTO_PORTRAIT_SOURCE,
         prompt,
         stateHash,
         url,
         createdAt: Date.now(),
     };
+}
+
+function setGeneratedPortraitMeta(characterName, prompt, stateHash, url) {
+    if (!extensionSettings.generatedPortraits || typeof extensionSettings.generatedPortraits !== 'object') {
+        extensionSettings.generatedPortraits = {};
+    }
+    extensionSettings.generatedPortraits[characterName] = buildGeneratedPortraitMeta(prompt, stateHash, url);
+}
+
+/**
+ * The version of `characterName` the live stores hold right now: the active
+ * campaign's when it overrides the name, else Base. Captured BEFORE a
+ * generation awaits so its result can be filed where it belongs.
+ */
+function liveVersionIdFor(characterName) {
+    const active = getActiveCampaignId();
+    return active && hasProfile(active, characterName) ? active : BASE_VERSION;
+}
+
+/**
+ * Portrait generation awaits /sd (and often an LLM prompt) for many seconds.
+ * If the user switched the active campaign meanwhile, the live stores now
+ * belong to a different campaign and the result must land in the version
+ * it was generated for instead. Returns true when it did so (the caller
+ * must then NOT write the live stores).
+ * @param {string|null} campaignAtStart - getActiveCampaignId() when the generation began
+ * @param {string} startVersionId - liveVersionIdFor(characterName) when it began — 'base'
+ *   when the campaign did not override the character, so a Base portrait never
+ *   invents a campaign version out of thin air
+ */
+function storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl, meta = null) {
+    if (getActiveCampaignId() === campaignAtStart) return false;
+    const versionId = startVersionId || BASE_VERSION;
+    const profile = readVersion(versionId, characterName) || {};
+    profile.avatar = imageUrl;
+    if (meta) profile.portraitMeta = meta;
+    writeVersion(versionId, characterName, profile);
+    console.log(`[Dooms Tracker] portrait for ${characterName} finished after a campaign switch — stored in the version it was generated for`);
+    return true;
 }
 
 function stableStringify(value) {
@@ -369,6 +406,9 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
         return null;
     }
     const previous = extensionSettings.npcAvatars?.[characterName];
+    const campaignAtStart = getActiveCampaignId();
+    const startVersionId = liveVersionIdFor(characterName);
+    const previousMeta = getGeneratedPortraitMeta(characterName);
     try {
         const result = await executeSlashCommandsOnChatInput(
             `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
@@ -382,15 +422,26 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
         if (!extensionSettings.npcAvatars) {
             extensionSettings.npcAvatars = {};
         }
-        const previousMeta = getGeneratedPortraitMeta(characterName);
         if (isDataUrl(imageUrl)) {
-            imageUrl = await persistPortrait(previous, characterName, imageUrl);
-        } else if (previous && previousMeta) {
-            try { await deletePortraitFromDiskByValue(previous); } catch (e) {}
+            // Only the previous portrait's own entry may point at its file
+            // for the upload to reuse the filename (persistPortrait
+            // overwrites in place). A campaign version cloned from Base
+            // shares Base's file — overwriting it would silently repaint the
+            // other version too. Decided NOW, not before the /sd await: a
+            // version cloned while it ran shares the file as well.
+            const reusable = previous && portraitRefCount(previous) <= 1 ? previous : null;
+            imageUrl = await persistPortrait(reusable, characterName, imageUrl);
         }
-        extensionSettings.npcAvatars[characterName] = imageUrl;
-        setGeneratedPortraitMeta(characterName, prompt, stateHash, imageUrl);
+        const meta = buildGeneratedPortraitMeta(prompt, stateHash, imageUrl);
+        if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl, meta)) {
+            extensionSettings.npcAvatars[characterName] = imageUrl;
+            setGeneratedPortraitMeta(characterName, prompt, stateHash, imageUrl);
+        }
         saveSettings();
+        // The replaced auto-portrait file goes only if nothing still references it.
+        if (previous && previousMeta && previous !== imageUrl) {
+            deletePortraitsIfUnreferenced([previous]).catch(() => {});
+        }
         return imageUrl;
     } catch (error) {
         console.error(`[DES Auto Portraits] /sd generation failed for ${characterName}:`, error);
@@ -622,6 +673,8 @@ async function generateSingleAvatar(characterName, prompt = null) {
     if (!prompt) {
         prompt = buildFallbackPrompt(characterName);
     }
+    const campaignAtStart = getActiveCampaignId();
+    const startVersionId = liveVersionIdFor(characterName);
     try {
         // Check if the /sd slash command is available (Stable Diffusion extension loaded)
         if (!SlashCommandParser.commands['sd']) {
@@ -636,11 +689,14 @@ async function generateSingleAvatar(characterName, prompt = null) {
         // Extract image URL from result
         const imageUrl = extractImageUrl(result);
         if (imageUrl) {
-            // Store the avatar
+            // Store the avatar — in the version it was generated for if the
+            // active campaign changed while /sd was running.
             if (!extensionSettings.npcAvatars) {
                 extensionSettings.npcAvatars = {};
             }
-            extensionSettings.npcAvatars[characterName] = imageUrl;
+            if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl)) {
+                extensionSettings.npcAvatars[characterName] = imageUrl;
+            }
             saveSettings();
             // Pass-2 perf: if the SD result is a data: URL (some providers
             // return base64), migrate it to disk in the background. No-op

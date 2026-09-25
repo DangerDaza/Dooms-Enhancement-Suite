@@ -18,6 +18,7 @@ import { extensionSettings, lastGeneratedData } from '../../core/state.js';
 import { chat_metadata, saveSettingsDebounced } from '../../../../../../../script.js';
 import { namesAreSimilar, normalizeName } from '../../utils/nameSimilarity.js';
 import { escapeHtml } from '../../utils/html.js';
+import { mergeVariantIntoCanonicalProfiles } from '../lorebook/campaignProfiles.js';
 
 /**
  * Builds a lowercase alias → canonical-name lookup from settings.
@@ -398,27 +399,46 @@ export async function adoptVariantAsAlias(canonical, variant) {
             if (key.toLowerCase() === lower) delete obj[key];
         }
     };
+    // Campaign versions fold first: this also parks the canonical's base
+    // entry when the active campaign overrode only the variant, which has
+    // to happen BEFORE the live merge below changes the canonical's stores.
+    const orphanedPortraitValues = [];
+    try {
+        orphanedPortraitValues.push(...mergeVariantIntoCanonicalProfiles(canonical, variant));
+    } catch (e) {
+        console.warn('[Dooms Tracker] Aliases: campaign profile merge failed', e);
+    }
     for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
-        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
+        'generatedPortraits']) {
         transferIfMissing(extensionSettings[store]);
     }
     bankColorAlias(extensionSettings.characterColors, extensionSettings.knownCharacters);
     // Portrait data that will NOT survive the scrub (the canonical already has
     // its own entry, so no transfer happened): collect the values now so their
     // image files can be removed from disk afterwards — a bare key delete
-    // would orphan them in the des-portraits folder forever.
-    const orphanedPortraitValues = [];
+    // would orphan them in the des-portraits folder forever. (Deletion is
+    // reference-counted across every campaign version, so a file another
+    // version still points at is kept.)
     for (const store of ['npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory']) {
         const obj = extensionSettings[store];
         if (!obj) continue;
         const vKey = findKey(obj, lower);
         if (vKey === undefined || findKey(obj, canonLower) === undefined) continue;
         const val = obj[vKey];
-        if (Array.isArray(val)) orphanedPortraitValues.push(...val.filter(v => typeof v === 'string'));
-        else if (typeof val === 'string') orphanedPortraitValues.push(val);
+        if (Array.isArray(val)) {
+            // npcAvatarHistory entries are { avatar, avatarFullRes, replacedAt } objects.
+            for (const entry of val) {
+                if (entry && typeof entry === 'object') orphanedPortraitValues.push(entry.avatar, entry.avatarFullRes);
+                else if (typeof entry === 'string') orphanedPortraitValues.push(entry);
+            }
+        } else if (typeof val === 'string') {
+            orphanedPortraitValues.push(val);
+        }
     }
     for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
-        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance']) {
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
+        'generatedPortraits']) {
         scrub(extensionSettings[store]);
     }
     try {
@@ -443,10 +463,8 @@ export async function adoptVariantAsAlias(canonical, variant) {
         saveChatData({ immediate: true });
         if (orphanedPortraitValues.length) {
             try {
-                const { deletePortraitFromDiskByValue } = await import('../../utils/avatars.js');
-                for (const value of orphanedPortraitValues) {
-                    try { await deletePortraitFromDiskByValue(value); } catch (e) {}
-                }
+                const { deletePortraitsIfUnreferenced } = await import('../../utils/avatars.js');
+                await deletePortraitsIfUnreferenced(orphanedPortraitValues);
             } catch (e) { /* disk cleanup is best-effort */ }
         }
         await repaintAliasSurfaces();

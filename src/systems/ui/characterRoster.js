@@ -31,7 +31,11 @@
 
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters } from '../../core/persistence.js';
-import { deletePortraitFromDiskByValue, purgePortraitHistory } from '../../utils/avatars.js';
+import { deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../utils/avatars.js';
+// Campaign versions: the chip above the grid names the campaign whose
+// versions the tiles show; tiles with extra versions get a badge; delete
+// removes every version.
+import { countVersions, deleteCharacterEverywhere, removeFromLive, getActiveCampaignId } from '../lorebook/campaignProfiles.js';
 import { clearPortraitCache, updatePortraitBar, getCharacterList } from './portraitBar.js';
 import { refreshBanPrompt } from './characterWorkshop.js';
 import { power_user } from '../../../../../../power-user.js';
@@ -143,6 +147,43 @@ export function closeCharacterRoster() {
     if (!$modal || !$modal.length) return;
     $modal.removeClass('is-open').addClass('is-closing');
     setTimeout(() => $modal.removeClass('is-closing').hide(), 200);
+}
+
+/**
+ * Repaints the grid and campaign chip if the roster is open. Called after
+ * the active campaign changes (the tiles show the live versions) and after
+ * the Workshop adds/removes a version (the badges change).
+ */
+export function refreshRosterIfOpen() {
+    if (!$modal || !$modal.hasClass('is-open')) return;
+    try { renderGrid(); } catch (e) { console.warn('[Dooms Tracker] Roster: refresh failed', e); }
+}
+
+/**
+ * "Viewing <campaign>" chip above the grid: names the campaign whose
+ * versions the tiles (and the chat) are using. Hidden when the install has
+ * no campaigns, and in user-character mode (personas are not versioned).
+ */
+function renderCampaignChip() {
+    const $chip = $modal.find('#cr-campaign-chip');
+    if (!$chip.length) return;
+    const campaigns = extensionSettings.lorebook?.campaigns || {};
+    if (rosterMode === 'users' || !Object.keys(campaigns).length) {
+        $chip.prop('hidden', true).empty();
+        return;
+    }
+    const activeId = getActiveCampaignId();
+    const campaign = activeId ? campaigns[activeId] : null;
+    const icon = campaign ? escapeAttr(campaign.icon || 'fa-folder') : 'fa-layer-group';
+    const label = campaign ? campaign.name : 'Base';
+    const color = campaign && typeof campaign.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(campaign.color) ? campaign.color : '';
+    $chip.html(`<i class="fa-solid ${icon}" aria-hidden="true"></i><span class="cr-campaign-chip-text">Viewing ${escapeHtml(label)}</span>`)
+        .attr('title', campaign
+            ? `${campaign.name} is the active campaign — tiles show its versions of each character (Base where it has none). New characters are created in Base.`
+            : 'No active campaign — tiles show the Base version of every character. Set a campaign active in the Lore Library to switch.')
+        .prop('hidden', false);
+    if (color) $chip[0].style.setProperty('--cr-campaign-accent', color);
+    else $chip[0].style.removeProperty('--cr-campaign-accent');
 }
 
 // ---------------------------------------------------------------------------
@@ -628,6 +669,7 @@ function renderGrid() {
     for (const name of filtered) {
         $grid.append(buildTile(name, activeSet.has(name.toLowerCase())));
     }
+    try { renderCampaignChip(); } catch (e) {}
 
     // Count badge — total in current scope, plus active count when any.
     const total = scopeFiltered.length;
@@ -688,6 +730,15 @@ function buildTile(name, isActive) {
     const userBadge = isUserMode
         ? `<span class="cr-tile-user-badge">${isActiveUser ? '★ Active' : 'User'}</span>`
         : '';
+    // Campaign versions besides Base.
+    let versionsBadge = '';
+    if (!isUserMode) {
+        let versions = 1;
+        try { versions = countVersions(name); } catch (e) {}
+        if (versions > 1) {
+            versionsBadge = `<span class="cr-tile-versions" title="${versions} versions (Base + ${versions - 1} campaign)" aria-hidden="true">&#x29C9; ${versions}</span>`;
+        }
+    }
     return (
         `<button type="button" class="cr-tile${activeClass}" role="listitem" data-character="${safeNameAttr}" aria-label="${safeLabel}">
             ${imgHtml}
@@ -696,6 +747,7 @@ function buildTile(name, isActive) {
             ${pinBadge}
             ${activeBadge}
             ${userBadge}
+            ${versionsBadge}
             <span class="cr-tile-name">${safeName}</span>
         </button>`
     );
@@ -730,10 +782,15 @@ function hideContextMenu() {
 }
 
 function confirmAndDelete(name) {
+    let versionsNote = '';
+    try {
+        const extra = rosterMode === 'users' ? 0 : countVersions(name) - 1;
+        if (extra > 0) versionsNote = `, and its ${extra} campaign version${extra === 1 ? '' : 's'}`;
+    } catch (e) {}
     const ok = window.confirm(
         `Delete "${name}" from this chat's roster?\n\n` +
         `Removes the portrait, dialogue color, relationship/hero position, ` +
-        `known-character entry, and any Workshop injection extras (description / lorebook). ` +
+        `known-character entry, and any Workshop injection extras (description / lorebook)${versionsNote}. ` +
         `Sheet data is kept.`
     );
     if (!ok) return;
@@ -1043,23 +1100,23 @@ function purgeCharacter(name) {
         return;
     }
     if (s.characterColors) delete s.characterColors[name];
-    // Clean up the on-disk PNG before clearing the settings reference.
-    // Best-effort — failure leaves an orphan but settings stays correct.
-    try { deletePortraitFromDiskByValue(s.npcAvatars?.[name]); } catch (e) {}
-    try { deletePortraitFromDiskByValue(s.npcAvatarsFullRes?.[name]); } catch (e) {}
-    // Banked previous portraits (from Regenerate Portrait) go too.
-    try { purgePortraitHistory(name); } catch (e) {}
-    if (s.npcAvatars) delete s.npcAvatars[name];
-    if (s.npcAvatarsFullRes) delete s.npcAvatarsFullRes[name];
+    // Portrait files: collect every value first (current, full-res, the
+    // history from Regenerate Portrait, every campaign version), remove all
+    // the settings entries, save, and only THEN delete what nothing else
+    // references (a persona copied from this NPC shares its file).
+    const portraitCandidates = [
+        s.npcAvatars?.[name],
+        s.npcAvatarsFullRes?.[name],
+        ...takePortraitHistoryValues(name),
+        ...deleteCharacterEverywhere(name),
+    ];
+    // Every version-backed store (portraits, injection extras, relationship,
+    // knives, appearance, hero position, auto-portrait meta) — the same set
+    // the Workshop's delete clears.
+    removeFromLive(name);
     if (s.knownCharacters) delete s.knownCharacters[name];
-    if (s.heroPositions) delete s.heroPositions[name];
-    if (s.characterInjection) delete s.characterInjection[name];
-    if (s.characterAppearance) delete s.characterAppearance[name];
-    if (s.characterRelationships) delete s.characterRelationships[name];
-    // Knives and aliases too — an orphaned alias entry would keep silently
-    // renaming a future, unrelated character to this deleted one, and a
-    // recreated same-name character would inherit the dead one's knives.
-    if (s.characterKnives) delete s.characterKnives[name];
+    // Aliases too — an orphaned alias entry would keep silently renaming a
+    // future, unrelated character to this deleted one.
     if (s.characterAliases) delete s.characterAliases[name];
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata, not extensionSettings. Wipe those too or the
@@ -1112,4 +1169,6 @@ function purgeCharacter(name) {
     }
     saveSettings();
     if (s.perChatCharacterTracking) saveChatData();
+    // Settings no longer reference the files — now the disk cleanup.
+    deletePortraitsIfUnreferenced(portraitCandidates).catch(() => {});
 }

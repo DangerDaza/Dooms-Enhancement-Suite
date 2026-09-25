@@ -1,42 +1,30 @@
 {
-    "version": "2.5.1",
-    "title": "House Rules",
+    "version": "2.6.0",
+    "title": "Costume Change",
     "items": [
         {
-            "title": "📜 License updated",
-            "body": "Everything below arrived in 2.5.0."
+            "title": "🎭 Campaigns you can switch between",
+            "body": "Campaign folders in the Lore Library now have a ▶ play button. Press it to make that campaign active, and your whole setup swaps at once: every character changes to their version for that campaign — portrait, description, relationship and all — the lorebooks filed under that campaign turn on, and the previous campaign's books turn off. Books you turned on yourself are left alone, and you can mark a book as global (the globe icon) so it stays on in every campaign. The button turns into a ✓ while a campaign is active; press it again to turn the campaign off, and everything works just like before."
         },
         {
-            "title": "✏️ You can edit the tracker prompt",
-            "body": "Your most-requested feature. You can now see and change the full set of instructions DES sends the AI to fill in your trackers — all of it, including the part that used to be locked. Find it in Prompts Editor → Tracker Prompt. Change whatever you like and the AI gets exactly your version. Leave it alone and it keeps updating itself as you add new fields. It shows roughly how many tokens it costs, there's a Restore Default button if you want to start over, and DES warns you if an edit would leave one of your panels with nothing to show."
+            "title": "👥 One character, many versions",
+            "body": "A character can now have a different version for each campaign, so the same cast can show up in different settings without making duplicate cards. Every character starts with a Base version. Tap the + on their card to add a version for a campaign — it copies whichever version you're looking at — then change whatever you like. It's used automatically whenever that campaign is active, and anything you change during play is saved to it for you. If you don't use campaigns, nothing changes: versions only appear once a campaign exists."
         },
         {
-            "title": "🧩 Custom tracker fields can have a type",
-            "body": "When you add your own field to the Scene Tracker, you can now choose what kind of answer you want back: text, a number (with a range if you like), a choice from a list you write, a list, yes/no, or a percentage. The AI is told exactly what to give you, so you get tidy, usable answers instead of whatever it felt like writing. Your custom fields also now appear as on/off switches in Settings → Scene Tracker — before, they never showed up there. Fields you already have keep working exactly as they did."
+            "title": "🖼️ A redesigned Character Workshop",
+            "body": "The portrait now fills the whole left side of the Workshop, with the character's name, relationship and versions shown over it, and the editing tabs on the right. Switching between versions fades smoothly from one portrait to the next. Everything you could do before is still there. On a phone, the portrait becomes a banner above the editor."
         },
         {
-            "title": "🛠️ New Workshop section in Settings",
-            "body": "Relationships have their own home now: Settings → Workshop. Add your own (Sworn Rival, anyone?), rename or remove them, and pick each one's emoji by clicking from a grid instead of hunting for it on your keyboard. You can switch relationship tracking off entirely if you don't use it. There's also a new box to tell the AI what a relationship actually means — say, 'how this character feels about me' — with a preview showing exactly what gets sent."
+            "title": "📇 The Roster shows which campaign you're in",
+            "body": "The Character Roster now says which campaign you're looking at and marks characters that have more than one version, so you can tell at a glance which one you're about to edit."
         },
         {
-            "title": "🎭 Your relationships show up on character cards",
-            "body": "In the Character Workshop, the 'Relationship to player' row only ever showed the original five choices, so any you'd added couldn't be picked there. Now your own relationships appear too, at the end of the row. It stays one tidy line no matter how many you have — use the arrows on either side to scroll through them."
+            "title": "📚 Lorebooks that follow your characters",
+            "body": "A lorebook with exactly the same name as a character now turns on by itself while that character is in the chat, and off again when they leave. It only ever turns off books it turned on, so books you switched on yourself are never touched. Don't want it? Settings → Lore Library → Auto-link books by character name."
         },
         {
-            "title": "🪟 A roomier Edit Trackers window",
-            "body": "The Edit Trackers window used to squeeze everything into a narrow column. It's now much bigger, split into clearly labelled sections, and still works on a phone. Its text boxes finally match your theme instead of glaring bright white on dark themes. The Widgets section is gone — several of its switches didn't actually do anything, and the rest now live in Settings → Scene Tracker."
-        },
-        {
-            "title": "🕐 The Scene Tracker stays put",
-            "body": "Fixed the Scene Tracker seeming to vanish until you turned it off and on again. It was really getting stuck to an older message and scrolling out of sight whenever the scene hadn't changed between turns. It now always follows the newest message."
-        },
-        {
-            "title": "💬 Chat bubble text wraps around the portrait",
-            "body": "Long messages in chat bubbles no longer leave a big empty gap under the character's portrait. The text now flows around the picture and fills the full width once it's past it. Works in both the Discord and Card styles."
-        },
-        {
-            "title": "📱 Two phone fixes",
-            "body": "The mobile typing screen no longer pops open on its own when you reload the page, finish sending, or close a popup — only when you actually tap the message box. And the 'Is this the same character?' popup no longer slides off the top of the screen with only its bottom half showing."
+            "title": "🔧 Fixes",
+            "body": "Right-click menus in the Lore Library no longer run off the edge of the screen. Moving several books at once on a phone no longer drops an empty entry into the folder. And the 'add a campaign version' menu is no longer cut off on phones."
         }
     ],
     "contact": {

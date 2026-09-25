@@ -7,7 +7,7 @@
     "css": "style.css",
     "author": "Doom",
     "license": "AGPL-3.0-or-later",
-    "version": "2.5.1",
+    "version": "2.6.0",
     "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite",
     "description": "An immersive RPG extension with character tracking, Lore Library, portrait bar, scene headers, chat bubbles, and multiple themes."
 }
