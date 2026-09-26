@@ -31,6 +31,7 @@
 import { getRequestHeaders } from '../../../../../../../script.js';
 import { oai_settings } from '../../../../../../openai.js';
 import { ST_FALLBACK_MODEL } from './voiceSettings.js';
+import { withGoogleKey } from './connection.js';
 
 const PROBE_KEY = 'dooms_voices_st_model';
 const PROBE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -110,23 +111,30 @@ export function classifyError(status, message = '') {
     return 'unknown';
 }
 
-/** The request body SillyTavern's own Google provider sends (google-native.js), minus text/voice/model. */
-function stRouteExtras() {
+/**
+ * The request body SillyTavern's own Google provider sends (google-native.js),
+ * minus text/voice/model. A connection profile's proxy preset overrides the
+ * chat connection's proxy for voice requests only.
+ * @param {{url: string, password: string}|null} profileProxy
+ */
+function stRouteExtras(profileProxy = null) {
     const s = oai_settings || {};
-    const proxy = typeof s.reverse_proxy === 'string' && /^https?:\/\//i.test(s.reverse_proxy) ? s.reverse_proxy : '';
+    const chatProxy = typeof s.reverse_proxy === 'string' && /^https?:\/\//i.test(s.reverse_proxy) ? s.reverse_proxy : '';
+    const proxy = profileProxy ? profileProxy.url : chatProxy;
+    const password = profileProxy ? profileProxy.password : (s.proxy_password || '');
     return {
         // SillyTavern's own Google TTS provider always sends AI Studio;
         // its Vertex option is disabled.
         api: 'makersuite',
         reverse_proxy: proxy,
-        proxy_password: proxy ? (s.proxy_password || '') : '',
+        proxy_password: proxy ? password : '',
         vertexai_auth_mode: s.vertexai_auth_mode,
         vertexai_region: s.vertexai_region,
         vertexai_express_project_id: s.vertexai_express_project_id,
     };
 }
 
-async function postStRoute({ text, voiceId, model, signal }) {
+async function postStRoute({ text, voiceId, model, signal, connection }) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
     const onAbort = () => timeout.abort();
@@ -136,7 +144,7 @@ async function postStRoute({ text, voiceId, model, signal }) {
         response = await fetch('/api/google/generate-native-tts', {
             method: 'POST',
             headers: getRequestHeaders(),
-            body: JSON.stringify({ text, voice: voiceId, model, ...stRouteExtras() }),
+            body: JSON.stringify({ text, voice: voiceId, model, ...stRouteExtras(connection?.proxy || null) }),
             signal: timeout.signal,
         });
     } catch (e) {
@@ -160,15 +168,29 @@ async function postStRoute({ text, voiceId, model, signal }) {
 }
 
 /**
- * Synthesises one line with a stock voice through SillyTavern's route.
- * @param {{text: string, voiceId: string, model: string, signal?: AbortSignal}} req
+ * Synthesises one line with a stock voice through SillyTavern's route,
+ * using the chosen connection profile's key/proxy (see connection.js).
+ * @param {{text: string, voiceId: string, model: string, signal?: AbortSignal,
+ *          connection?: {proxy: {url: string, password: string}|null, secretId: string|null}}} req
  * @returns {Promise<{blob: Blob, model: string}>}
  */
-export async function synthesize({ text, voiceId, model, signal }) {
+export async function synthesize(req) {
+    const secretId = req.connection?.secretId || null;
+    try {
+        return await withGoogleKey(secretId, () => synthesizeOnRoute(req));
+    } catch (e) {
+        if (e instanceof TtsError) throw e;
+        const err = new TtsError(e?.kind || 'unknown', e?.message || String(e));
+        if (err.kind === 'no-key') { routeState.status = 'no-key'; routeState.lastError = err.message; }
+        throw err;
+    }
+}
+
+async function synthesizeOnRoute({ text, voiceId, model, signal, connection }) {
     const remembered = readProbe(model);
     const first = remembered || model;
     try {
-        const blob = await postStRoute({ text, voiceId, model: first, signal });
+        const blob = await postStRoute({ text, voiceId, model: first, signal, connection });
         routeState.status = 'ok';
         routeState.effectiveModel = first;
         routeState.lastError = '';
@@ -179,7 +201,7 @@ export async function synthesize({ text, voiceId, model, signal }) {
         const canDowngrade = !remembered && first !== ST_FALLBACK_MODEL &&
             (e.kind === 'model-unavailable' || e.kind === 'argument');
         if (canDowngrade) {
-            const blob = await postStRoute({ text, voiceId, model: ST_FALLBACK_MODEL, signal });
+            const blob = await postStRoute({ text, voiceId, model: ST_FALLBACK_MODEL, signal, connection });
             console.warn(`[DES Voices] SillyTavern's Google route rejected ${first} (${e.message}); using ${ST_FALLBACK_MODEL} this session.`);
             writeProbe(model, ST_FALLBACK_MODEL);
             routeState.status = 'ok';

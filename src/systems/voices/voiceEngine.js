@@ -37,6 +37,9 @@ import { resolveVoice, describeReason, lookupByName } from './voiceResolver.js';
 import * as player from './player.js';
 import { getRouteState } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
+import { resolveConnection, holdForGeneration, endGenerationHold } from './connection.js';
+
+export { holdForGeneration, endGenerationHold };
 
 const TOAST_TITLE = 'DES Voices';
 const TRACKER_WAIT_MS = 8000;
@@ -68,7 +71,9 @@ player.configurePlayer({
     onFatal(error, job) {
         const kind = error?.kind || 'unknown';
         const messages = {
-            'no-key': 'No Google key found. Add a Google AI Studio key in SillyTavern (API Connections → Google AI Studio).',
+            'no-key': error?.message && /profile/.test(error.message)
+                ? error.message
+                : 'No Google key found. Add a Google AI Studio key in SillyTavern (API Connections \u2192 Google AI Studio).',
             'bad-key': 'Google rejected the Google AI Studio key saved in SillyTavern.',
             quota: 'Your Google quota for voices is used up.',
             rate: 'Google is rate-limiting voice requests, so a line was skipped.',
@@ -176,8 +181,21 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
     return player.newJob({ messageId, source, auto, highlightMessage, segments: jobSegments });
 }
 
+/** Attaches the Settings → Voices connection to a job; false (with a toast) if it can't be used. */
+function attachConnection(job) {
+    const conn = resolveConnection(voices().connectionProfile || '');
+    if (!conn.ok) {
+        toast('warning', conn.error, 8000);
+        if (job.auto) pauseAutoRead('connection');
+        return false;
+    }
+    job.connection = conn;
+    return true;
+}
+
 function play(job) {
     if (!job.segments.length) return;
+    if (!attachConnection(job)) return;
     stopStPlayback();
     if (job.auto) player.enqueue(job);
     else player.replaceWith(job);
@@ -253,6 +271,7 @@ export function audition(ref, text) {
         key: ref.id,
         segments: segments.map(s => ({ text: s.text, voiceId: ref.id, reason: 'audition', speaker: null, idxs: [] })),
     });
+    if (!attachConnection(job)) return;
     stopStPlayback();
     player.replaceWith(job);
 }
@@ -344,7 +363,9 @@ export function invalidate() {
 
 /** For the settings status line. */
 export function getStatus() {
+    const conn = resolveConnection(voices().connectionProfile || '');
     return {
+        connection: conn.ok ? conn.label : conn.error,
         route: getRouteState(),
         requests: player.getSessionRequestCount(),
         playing: player.isPlaying(),

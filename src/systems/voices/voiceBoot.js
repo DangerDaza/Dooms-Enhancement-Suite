@@ -73,6 +73,14 @@ export function getEngineIfLoaded() {
  * per-message buttons. Call at startup and whenever the master toggle flips.
  */
 export async function syncVoicesState() {
+    // A voice request that borrowed another connection profile's key was
+    // interrupted (page closed mid-request): put SillyTavern's key back.
+    try {
+        if (localStorage.getItem('dooms_voices_key_swap')) {
+            const { recoverKeySwap } = await import('./connection.js');
+            await recoverKeySwap();
+        }
+    } catch (e) { /* storage blocked */ }
     try {
         if (isVoicesEnabled()) {
             guardModule = guardModule || await import('./stAutoReadGuard.js');
@@ -130,12 +138,23 @@ export function unlockVoicesAudio() {
 
 // ─── Event shims (registered by index.js) ───────────────────────────────────
 
-/** GENERATION_STARTED(type, params, dryRun) */
+/**
+ * GENERATION_STARTED(type, params, dryRun). SillyTavern awaits this, so if
+ * voices are using another connection profile's key right now, the chat
+ * request waits until SillyTavern's own key is back (connection.js).
+ */
 export function onGenerationStartedVoices(type, _params, dryRun) {
-    if (!isAutoReadOn()) return;
-    if (dryRun || type === 'quiet' || type === 'impersonate') return;
-    armed = Math.min(armed + 1, 8);
-    armedAt = Date.now();
+    if (dryRun) return;
+    if (isAutoReadOn() && type !== 'quiet' && type !== 'impersonate') {
+        armed = Math.min(armed + 1, 8);
+        armedAt = Date.now();
+    }
+    return engine?.holdForGeneration?.();
+}
+
+/** GENERATION_ENDED */
+export function onGenerationEndedVoices() {
+    engine?.endGenerationHold?.();
 }
 
 /** MESSAGE_RECEIVED(messageId, type) — bind an arm to the reply it produced. */
@@ -150,6 +169,7 @@ export function onMessageReceivedVoices(messageId, type) {
 
 /** GENERATION_STOPPED — the user pressed Stop; don't read the partial reply. */
 export function onGenerationStoppedVoices() {
+    engine?.endGenerationHold?.();
     if (!isVoicesEnabled()) return;
     // Stop fires before SillyTavern saves the partial reply, so clearing the
     // arms here means a stopped reply is never auto-read.

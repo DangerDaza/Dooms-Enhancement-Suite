@@ -39,6 +39,9 @@ export function defaultVoiceSettings() {
         autoRead: false,
         model: VOICE_MODELS[0].id,
         narratorVoice: { source: 'stock', id: NARRATOR_FALLBACK_VOICE },
+        // A SillyTavern connection profile whose Google key/proxy voices
+        // use; '' = SillyTavern's currently active Google key.
+        connectionProfile: '',
         readUserMessages: false,
         playbackRate: 1,
         maxSegmentsPerMessage: 24,
@@ -83,6 +86,10 @@ export function ensureVoiceSettings(saved, live) {
         }
         if (!isValidVoiceRef(live.voices.narratorVoice)) {
             live.voices.narratorVoice = defaults.narratorVoice;
+            changed = true;
+        }
+        if (typeof live.voices.connectionProfile !== 'string') {
+            live.voices.connectionProfile = '';
             changed = true;
         }
         if (!VOICE_MODELS.some(m => m.id === live.voices.model)) {

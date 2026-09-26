@@ -8002,3 +8002,7 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-voices-narrator .rpg-voices-preview {
     flex: 0 0 auto;
 }
+/* .rpg-accordion-action-btn sets display, which would override [hidden]. */
+#rpg-voices-resume[hidden] {
+    display: none;
+}

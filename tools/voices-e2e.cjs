@@ -8,7 +8,11 @@
  * checks which voice each line gets (scene rule, Narrator fallback),
  * auto-read timing (once, after bubbles; never on re-render, stop, or chat
  * load; continue reads only the new part), the SillyTavern auto-read guard,
- * the Workshop Voice tab, the settings accordion, and the 3.8 → 3.1 fallback.
+ * the Workshop Voice tab, the settings accordion, the 3.8 → 3.1 fallback,
+ * and the Connection setting (a profile's saved Google key is used for the
+ * voice request only, never for a chat generation, and is switched back).
+ * It writes two throwaway Google keys ("DES e2e chat key", "DES e2e voices
+ * key") and two connection profiles to that SillyTavern — use a test install.
  *
  * Setup: a local SillyTavern with this repo linked (or installed) as
  *   public/scripts/extensions/third-party/Dooms-Enhancement-Suite
@@ -49,13 +53,20 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
 
   let requests = [];
   let reject38 = false;
+  let trackKey = false;
+  let ttsDelay = 60;
+  const activeKeyLabel = () => page.evaluate(async () => {
+    const r = await fetch('/api/secrets/read', { method: 'POST', headers: SillyTavern.getContext().getRequestHeaders() });
+    return ((await r.json()).api_key_makersuite || []).find(s => s.active)?.label || null;
+  });
   await page.route('**/api/google/generate-native-tts', async (route) => {
     const body = JSON.parse(route.request().postData());
+    if (trackKey) body.activeKey = await activeKeyLabel();
     requests.push(body);
     if (reject38 && body.model.startsWith('gemini-3.8')) {
       return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: `models/${body.model} is not found for API version v1beta, or is not supported for generateContent.` }) });
     }
-    await new Promise(r => setTimeout(r, 60));
+    await new Promise(r => setTimeout(r, ttsDelay));
     return route.fulfill({ status: 200, contentType: 'audio/wav', body: silentWav() });
   });
 
@@ -314,6 +325,128 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.ok(models.slice(1).every(m => m === 'gemini-3.1-flash-tts-preview'));
     assert.strictEqual(models.filter(m => m.startsWith('gemini-3.8')).length, 1);
   });
+
+  // ── Connection profiles ──
+  reject38 = false;
+  // The simulated generations above never sent GENERATION_ENDED; real
+  // SillyTavern always does. Without it the first key swap waits out the
+  // 2 s idle fallback.
+  await page.evaluate(async () => { const ctx = SillyTavern.getContext(); await ctx.eventSource.emit(ctx.eventTypes.GENERATION_ENDED, ctx.chat.length); });
+  await page.evaluate(() => sessionStorage.removeItem('dooms_voices_st_model'));
+  const ids = await page.evaluate(async () => {
+    const ctx = SillyTavern.getContext();
+    const write = async (value, label) => (await (await fetch('/api/secrets/write', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', value, label }) })).json()).id;
+    const chatId = await write('AIzaFAKE-chat-key-000000000000', 'DES e2e chat key');
+    const voicesId = await write('AIzaFAKE-voices-key-00000000000', 'DES e2e voices key');
+    await fetch('/api/secrets/rotate', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: chatId }) });
+    const ext = ctx.extensionSettings;
+    ext.connectionManager = ext.connectionManager || { profiles: [] };
+    ext.connectionManager.profiles = (ext.connectionManager.profiles || []).filter(p => !/^DES e2e/.test(p.name));
+    ext.connectionManager.profiles.push(
+      { id: 'des-e2e-voices', mode: 'cc', name: 'DES e2e Voices', api: 'google', 'secret-id': voicesId },
+      { id: 'des-e2e-openai', mode: 'cc', name: 'DES e2e OpenAI', api: 'openai' },
+    );
+    return { chatId, voicesId };
+  });
+  const opts = await page.evaluate(async (DES) => {
+    const ui = await import(`${DES}/src/systems/ui/voicesSettingsUI.js`);
+    await ui.refreshVoicesConnectionOptions();
+    return [...document.querySelectorAll('#rpg-voices-connection option')].map(o => ({ v: o.value, d: o.disabled }));
+  }, DES);
+  check('Connection dropdown lists Google profiles, disables others', () => {
+    assert.deepStrictEqual(opts.find(o => o.v === 'DES e2e Voices'), { v: 'DES e2e Voices', d: false });
+    assert.deepStrictEqual(opts.find(o => o.v === 'DES e2e OpenAI'), { v: 'DES e2e OpenAI', d: true });
+    assert.strictEqual(opts[0].v, '');
+  });
+
+  const speak = (text) => page.evaluate(async ({ DES, id, text }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.onChatChanged();
+    engine.audition({ source: 'stock', id: 'Kore' }, text);
+  }, { DES, id: mesId, text });
+
+  requests = []; trackKey = true;
+  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = ''; }, DES);
+  await speak('Default connection.');
+  await page.waitForTimeout(1200);
+  check('default connection uses the active key', () => assert.deepStrictEqual(requests.map(r => r.activeKey), ['DES e2e chat key']));
+
+  requests = [];
+  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = 'DES e2e Voices'; }, DES);
+  await speak('Profile connection.');
+  await page.waitForTimeout(1500);
+  check('profile connection uses the profile\'s key for the voice request', () => assert.deepStrictEqual(requests.map(r => r.activeKey), ['DES e2e voices key']));
+  const afterKey = await activeKeyLabel();
+  check('the chat key is active again afterwards', () => assert.strictEqual(afterKey, 'DES e2e chat key'));
+  const marker = await page.evaluate(() => localStorage.getItem('dooms_voices_key_swap'));
+  check('no crash marker left behind', () => assert.strictEqual(marker, null));
+
+  // A chat generation that starts while a voice request holds the profile key
+  // waits for the swap-back, and no new swap starts until it has finished.
+  requests = []; ttsDelay = 1500;
+  const holdResult = await page.evaluate(async ({ DES, id }) => {
+    const ctx = SillyTavern.getContext();
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    const readActive = async () => ((await (await fetch('/api/secrets/read', { method: 'POST', headers: ctx.getRequestHeaders() })).json()).api_key_makersuite || []).find(s => s.active)?.label;
+    engine.onChatChanged();
+    engine.speakMessage(id);
+    await new Promise(r => setTimeout(r, 700)); // first line is in flight on the profile key
+    const during = await readActive();
+    const t0 = Date.now();
+    await ctx.eventSource.emit(ctx.eventTypes.GENERATION_STARTED, 'normal', {}, false);
+    document.body.dataset.generating = 'true';
+    const waited = Date.now() - t0;
+    const atSend = await readActive();
+    await new Promise(r => setTimeout(r, 2500)); // "generating": the next line must not swap
+    const midGeneration = await readActive();
+    delete document.body.dataset.generating;
+    await ctx.eventSource.emit(ctx.eventTypes.GENERATION_ENDED, ctx.chat.length);
+    return { during, waited, atSend, midGeneration };
+  }, { DES, id: mesId });
+  const beforeEnd = requests.length;
+  await page.waitForTimeout(6000);
+  console.log('hold:', JSON.stringify(holdResult), 'requests before end:', beforeEnd, 'after:', requests.length);
+  check('during a voice request the profile key is active', () => assert.strictEqual(holdResult.during, 'DES e2e voices key'));
+  check('a chat generation waits for the swap-back', () => { assert.ok(holdResult.waited >= 300, 'waited ' + holdResult.waited); assert.strictEqual(holdResult.atSend, 'DES e2e chat key'); });
+  check('no key swap while generating', () => { assert.strictEqual(holdResult.midGeneration, 'DES e2e chat key'); assert.strictEqual(beforeEnd, 1); });
+  check('voices resume after the generation ends', () => assert.ok(requests.length > 1 && requests.every(r => r.activeKey === 'DES e2e voices key')));
+  ttsDelay = 60;
+  await page.waitForTimeout(500);
+  const restored = await activeKeyLabel();
+  check('chat key restored after the hold test', () => assert.strictEqual(restored, 'DES e2e chat key'));
+
+  // Crash mid-swap: the next load puts the chat key back.
+  const recovered = await page.evaluate(async ({ DES, ids }) => {
+    const ctx = SillyTavern.getContext();
+    await fetch('/api/secrets/rotate', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: ids.voicesId }) });
+    localStorage.setItem('dooms_voices_key_swap', JSON.stringify({ key: 'api_key_makersuite', originalId: ids.chatId, at: Date.now() }));
+    const boot = await import(`${DES}/src/systems/voices/voiceBoot.js`);
+    await boot.syncVoicesState();
+    return { marker: localStorage.getItem('dooms_voices_key_swap') };
+  }, { DES, ids });
+  const recoveredKey = await activeKeyLabel();
+  check('interrupted swap is undone on the next load', () => { assert.strictEqual(recoveredKey, 'DES e2e chat key'); assert.strictEqual(recovered.marker, null); });
+
+  // A profile that no longer exists: nothing is sent, the user is told.
+  requests = [];
+  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = 'DES e2e Gone'; }, DES);
+  await speak('Missing profile.');
+  await page.waitForTimeout(800);
+  const toastText = await page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
+  check('a missing profile sends nothing and says why', () => { assert.strictEqual(requests.length, 0); assert.match(toastText, /no longer exists/); });
+  trackKey = false;
+
+  // Clean up the throwaway keys and profiles.
+  await page.evaluate(async (DES) => {
+    const ctx = SillyTavern.getContext();
+    (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = '';
+    const state = await (await fetch('/api/secrets/read', { method: 'POST', headers: ctx.getRequestHeaders() })).json();
+    for (const sec of (state.api_key_makersuite || []).filter(s => /^DES e2e/.test(s.label || ''))) {
+      await fetch('/api/secrets/delete', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: sec.id }) });
+    }
+    const ext = ctx.extensionSettings;
+    ext.connectionManager.profiles = ext.connectionManager.profiles.filter(p => !/^DES e2e/.test(p.name));
+  }, DES);
 
   // ── Voices off: bullhorn goes back to /speak, guard removed ──
   const offState = await page.evaluate(async (DES) => {

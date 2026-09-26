@@ -156,6 +156,7 @@ import {
     onMessageDecorated,
     onGenerationStartedVoices,
     onGenerationStoppedVoices,
+    onGenerationEndedVoices,
     onMessageReceivedVoices,
     onUserMessageRenderedVoices,
     onMessageSentVoices,
@@ -3051,7 +3052,13 @@ jQuery(async () => {
             // registerAllEvents so unregisterAllEvents can tear everything down.
 
             // Re-populate connection profile dropdown when profiles are created/deleted/updated
-            const onConnectionProfilesChanged = () => populateConnectionProfileDropdown();
+            const onConnectionProfilesChanged = () => {
+                populateConnectionProfileDropdown();
+                // Settings → Voices → Connection lists the same profiles.
+                if (document.getElementById('rpg-voices-connection')) {
+                    import('./src/systems/ui/voicesSettingsUI.js').then(m => m.refreshVoicesConnectionOptions()).catch(() => {});
+                }
+            };
 
             // TTS compatibility: remove any stale display_text that prior versions
             // may have saved to chat messages.  SillyTavern uses display_text for
@@ -3463,7 +3470,7 @@ jQuery(async () => {
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices],
-                [event_types.GENERATION_ENDED]: onGenerationEnded,
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGenerationEndedVoices],
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onChatChangedVoices],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices],

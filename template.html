@@ -1107,6 +1107,15 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Connection</span>
+                            <span class="rpg-setting-hint">Which Google key voices use. Pick a SillyTavern connection
+                                profile to use its Google AI Studio key (and proxy) for voices only &mdash; your chat
+                                connection isn't switched.</span>
+                        </div>
+                        <select id="rpg-voices-connection" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Voice model</span>
                             <span class="rpg-setting-hint">About 54 cents per hour of speech on Flash-Lite (about
                                 81 cents on Flash) until the end of 2026; Google doubles these on 1 January 2027.
@@ -1146,9 +1155,11 @@
                     <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-resume" hidden>
                         <i class="fa-solid fa-play"></i> Resume auto-read
                     </button>
-                    <p class="rpg-note-text" style="margin-top:6px;">Voices use the Google AI Studio key saved in
+                    <p class="rpg-note-text" style="margin-top:6px;">Voices use a Google AI Studio key saved in
                         SillyTavern (API Connections &rarr; Google AI Studio); the key stays on your SillyTavern
-                        server. The text of each line read is sent to Google.</p>
+                        server. You don't need to pick a Gemini 3.8 model in API Connections &mdash; that list only
+                        shows chat models; DES picks the voice model above. The text of each line read is sent to
+                        Google.</p>
                 </div>
             </div>
 
