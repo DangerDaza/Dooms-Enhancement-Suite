@@ -25,6 +25,28 @@ plays twice. Voices follow campaign versions the same way portraits do.
 
 ---
 
+## Implementation status (branch `TTS-Trial`)
+
+**M1 and M2 are built**: DES voices with the Narrator voice, auto-read, SillyTavern's auto-read
+paused by the guard, per-character standard voices in the Workshop Voice tab, the Present Characters
+scene rule, and campaign-versioned voices. **M0 has not been run** (no Google key in the build
+environment), so nothing has been tested against Google itself; the SillyTavern route was exercised in
+a real SillyTavern with Google's endpoint stubbed. M3–M7 are not started.
+
+Where the build differs from this plan:
+
+| Plan | Built | Why |
+|---|---|---|
+| `voiceSettings.js` lazy | Eager (pure, ~100 lines, no imports) | `state.js` takes its defaults and `persistence.js` repairs settings at load. |
+| Separate `capabilityProbe.js` with a "Ready." request | Folded into `transport.js`: the first real line is the probe | Saves a request; same downgrade rule (only a model/argument error drops to 3.1; result in `sessionStorage`, 6 h). |
+| `data-tts-idx` stamped on bubbles | Bubble index = DOM order among the message's bubbles, resolved at play time | No change to bubble markup; highlights still survive the +800 ms rebuild. |
+| Segments merged by `(speaker, kind)` | Also merged when neighbours resolve to the **same voice** | Narration → unvoiced character → narration becomes one request instead of three. |
+| Presence: own tracker → walk back → live tracker | Own tracker → live tracker (newest AI message only) → walk back | Walking back first would use the *previous* scene for the newest reply in separate mode. |
+| Narrator picker popup | A dropdown of the 30 standard voices + ▶ | Only standard voices exist until M3. |
+| Several `tools/voice-*-test.mjs` | One `tools/voice-logic-test.mjs` + `tools/lazy-graph-test.mjs` | Same coverage. |
+| Icons-only tabs "shorten labels" | Breakpoint moved from ≤1000px to ≤1080px, tab font 0.8rem | Labels were already one word; six fit once the modal reaches its 1000px cap. |
+| `.mes_narrate` intercept (optional) | Not built | DES's own message bullhorn covers it. |
+
 ## 0. What already exists (read this first)
 
 | Thing | Where | Relevance |

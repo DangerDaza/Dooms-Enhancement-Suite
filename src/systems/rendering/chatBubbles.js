@@ -33,6 +33,7 @@ import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
+import { getEngine as getVoiceEngine, unlockVoicesAudio, isVoicesEnabled } from '../voices/voiceBoot.js';
 
 /**
  * Extract character entries from characterThoughts data. Inlined here
@@ -505,9 +506,14 @@ function buildAttributionContext() {
 /**
  * Parse a .mes_text element's content into an ordered array of segments.
  * @param {HTMLElement} mesText - The .mes_text DOM element
+ * @param {{messageId?: number, persist?: boolean}} [opts]
+ *   messageId: the chat index being parsed. Needed because callers usually
+ *     pass a DETACHED container, where closest('.mes') finds nothing.
+ *   persist: false = read-only (TTS reads must never write colours).
  * @returns {Array<{type: string, speaker: string|null, color: string|null, html: string}>}
  */
-function parseMessageIntoBubbles(mesText) {
+function parseMessageIntoBubbles(mesText, opts = {}) {
+    const persist = opts.persist !== false;
     const colorMap = buildColorToSpeakerMap();
     const nameLookup = buildNameLookup();
     _attribCtx = buildAttributionContext();
@@ -526,8 +532,11 @@ function parseMessageIntoBubbles(mesText) {
     // the current scene would bind an old one-off speaker's color to
     // whichever character happens to be colorless now, then persist it.
     {
-        const mesEl = mesText.closest && mesText.closest('.mes');
-        const mesId = mesEl ? parseInt(mesEl.getAttribute('mesid'), 10) : NaN;
+        let mesId = Number.isInteger(opts.messageId) ? opts.messageId : NaN;
+        if (!Number.isFinite(mesId)) {
+            const mesEl = mesText.closest && mesText.closest('.mes');
+            mesId = mesEl ? parseInt(mesEl.getAttribute('mesid'), 10) : NaN;
+        }
         _attribCtx.isLatest = Number.isFinite(mesId) &&
             Array.isArray(chat) && mesId === chat.length - 1;
     }
@@ -566,7 +575,7 @@ function parseMessageIntoBubbles(mesText) {
         // parse (high-confidence: there was exactly one possible speaker), so
         // the mapping survives into future messages and the next generation's
         // reserved-colors list. Fuzzy narration matches are NOT persisted.
-        if (_attribCtx && _attribCtx.newlyResolved.size > 0) {
+        if (persist && _attribCtx && _attribCtx.newlyResolved.size > 0) {
             const colors = getActiveCharacterColors() || {};
             let wrote = false;
             for (const [color, name] of _attribCtx.newlyResolved) {
@@ -583,6 +592,48 @@ function parseMessageIntoBubbles(mesText) {
     }
 
     return mergeConsecutiveNarration(allSegments);
+}
+
+/**
+ * Read-only speaker split for TTS (voices/segmenter.js). Same attribution
+ * the bubbles use, but never writes colours or the roster's colour map.
+ * @param {HTMLElement} container - a detached copy of the message HTML
+ * @param {number} messageId
+ * @returns {Array<{narrator: boolean, speaker: string|null, html: string}>}
+ */
+export function parseSegmentsForTts(container, messageId) {
+    return parseMessageIntoBubbles(container, { messageId, persist: false })
+        .map(seg => ({ narrator: seg.type === 'narrator', speaker: seg.speaker || null, html: seg.html }));
+}
+
+/**
+ * Removes graphics blocks (the parts bubbles leave un-bubbled: content
+ * between GFX_START/GFX_END comments, or styled boxes when "skip styled
+ * divs" is on) so TTS doesn't read status boxes aloud.
+ * @param {HTMLElement} container - a detached element; modified in place
+ */
+export function removeGfxBlocks(container) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_COMMENT);
+    const markers = [];
+    while (walker.nextNode()) markers.push(walker.currentNode);
+    for (const start of markers) {
+        if (!/\bGFX_START\b/i.test(start.nodeValue || '') || !start.parentNode) continue;
+        let node = start.nextSibling;
+        while (node && !(node.nodeType === Node.COMMENT_NODE && /\bGFX_END\b/i.test(node.nodeValue || ''))) {
+            const next = node.nextSibling;
+            node.remove();
+            node = next;
+        }
+    }
+    const cbs = extensionSettings.chatBubbleSettings || {};
+    if (cbs.skipStyledDivs === false) return;
+    container.querySelectorAll('div[style*="background"], div[style*="border"], div[style*="padding"]').forEach(div => {
+        const style = div.getAttribute('style') || '';
+        if ((style.includes('background') || style.includes('color')) &&
+            (style.includes('padding') || style.includes('border') || style.includes('margin'))) {
+            div.remove();
+        }
+    });
 }
 
 /**
@@ -1115,8 +1166,10 @@ export function applyChatBubbles(messageElement, style) {
     // Belt-and-suspenders: callers also guard, but applyAllChatBubbles
     // iterates the whole DOM and could hit one without checking.
     const mesIdAttr = messageElement.getAttribute && messageElement.getAttribute('mesid');
+    const parseOpts = {};
     if (mesIdAttr) {
         const idx = parseInt(mesIdAttr, 10);
+        if (Number.isFinite(idx)) parseOpts.messageId = idx;
         if (Number.isFinite(idx) && Array.isArray(chat)) {
             if (isSyntheticTrackerMessage(chat[idx])) return;
         }
@@ -1240,7 +1293,7 @@ export function applyChatBubbles(messageElement, style) {
 
         // If no GFX blocks found, process normally
         if (gfxDivs.length === 0) {
-            const segments = parseMessageIntoBubbles(tempContainer);
+            const segments = parseMessageIntoBubbles(tempContainer, parseOpts);
 
             const bubblesHtml = style === 'discord'
                 ? renderDiscordBubbles(segments)
@@ -1276,7 +1329,7 @@ export function applyChatBubbles(messageElement, style) {
         }
         flushPending();
     } else {
-        const segments = parseMessageIntoBubbles(tempContainer);
+        const segments = parseMessageIntoBubbles(tempContainer, parseOpts);
 
         const bubblesHtml = style === 'discord'
             ? renderDiscordBubbles(segments)
@@ -1300,7 +1353,7 @@ export function applyChatBubbles(messageElement, style) {
             // HTML section: apply bubbles
             const div = document.createElement('div');
             div.innerHTML = part.content;
-            const segments = parseMessageIntoBubbles(div);
+            const segments = parseMessageIntoBubbles(div, parseOpts);
 
             const bubblesHtml = style === 'discord'
                 ? renderDiscordBubbles(segments)
@@ -1522,7 +1575,46 @@ function getTextFromBubbleForward(bubbleEl) {
 }
 
 /**
- * Initializes the delegated click handler for bubble TTS buttons.
+ * Escapes text for SillyTavern's /speak command: an unescaped "|" ends the
+ * command (the rest ran as another command) and "{{" is read as a macro.
+ */
+export function escapeForSpeak(text) {
+    return String(text)
+        .replace(/\|/g, '\\|')
+        .replace(/\{\{/g, '\\{\\{');
+}
+
+/** SillyTavern's own TTS (the path used while DES voices are off). */
+async function speakWithSillyTavern(text, mesEl, what) {
+    // Add .tts-speaking class to the parent .mes so the TTS highlight system
+    // can find the correct message via _findCurrentTtsMessage()
+    if (mesEl) {
+        document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
+            el.classList.remove('dooms-bubble-tts-speaking');
+            el.classList.remove('tts-speaking');
+        });
+        mesEl.classList.add('tts-speaking');
+        mesEl.classList.add('dooms-bubble-tts-speaking');
+    }
+    // Use /speak without voice arg — SillyTavern's TTS will look up the voice
+    // internally from its own voice map. Passing voice= causes errors when the
+    // speaker name doesn't have a mapped voice in the TTS extension settings.
+    try {
+        await executeSlashCommandsOnChatInput(`/speak ${escapeForSpeak(text)}`, { quiet: true });
+    } catch (err) {
+        console.error(`[Dooms Tracker] ${what} TTS failed:`, err);
+        toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
+    }
+}
+
+function voicesOn() {
+    return isVoicesEnabled();
+}
+
+/**
+ * Initializes the delegated click handlers for the bullhorn buttons. While
+ * DES voices are on they read with per-character voices; otherwise they go
+ * to SillyTavern's own TTS as before.
  * Should be called once during extension initialization.
  */
 export function initBubbleTtsHandlers() {
@@ -1533,32 +1625,16 @@ export function initBubbleTtsHandlers() {
         const bubble = $(this).closest('.dooms-bubble, .dooms-card')[0];
         if (!bubble) return;
 
+        if (voicesOn()) {
+            unlockVoicesAudio();
+            const engine = await getVoiceEngine();
+            engine.speakFromBubble(bubble);
+            return;
+        }
+
         const text = getTextFromBubbleForward(bubble);
         if (!text) return;
-
-        const mesEl = $(bubble).closest('.mes')[0];
-
-        // Add .tts-speaking class to the parent .mes so the TTS highlight system
-        // can find the correct message via _findCurrentTtsMessage()
-        if (mesEl) {
-            // Remove from any other message first
-            document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
-                el.classList.remove('dooms-bubble-tts-speaking');
-                el.classList.remove('tts-speaking');
-            });
-            mesEl.classList.add('tts-speaking');
-            mesEl.classList.add('dooms-bubble-tts-speaking');
-        }
-
-        // Use /speak without voice arg — SillyTavern's TTS will look up the voice
-        // internally from its own voice map. Passing voice= causes errors when the
-        // speaker name doesn't have a mapped voice in the TTS extension settings.
-        try {
-            await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
-        } catch (err) {
-            console.error('[Dooms Tracker] TTS speak failed:', err);
-            toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
-        }
+        await speakWithSillyTavern(text, $(bubble).closest('.mes')[0], 'Bubble');
     });
 
     // ── Inline thought TTS button ──
@@ -1570,25 +1646,16 @@ export function initBubbleTtsHandlers() {
         const $thought = $(this).closest('.dooms-inline-thought');
         if (!$thought.length) return;
 
+        if (voicesOn()) {
+            unlockVoicesAudio();
+            const engine = await getVoiceEngine();
+            engine.speakThought($thought[0]);
+            return;
+        }
+
         const text = $thought.find('.dooms-inline-thought-content').text().trim();
         if (!text) return;
-
-        const mesEl = $(this).closest('.mes')[0];
-        if (mesEl) {
-            document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
-                el.classList.remove('dooms-bubble-tts-speaking');
-                el.classList.remove('tts-speaking');
-            });
-            mesEl.classList.add('tts-speaking');
-            mesEl.classList.add('dooms-bubble-tts-speaking');
-        }
-
-        try {
-            await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
-        } catch (err) {
-            console.error('[Dooms Tracker] Thought TTS failed:', err);
-            toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
-        }
+        await speakWithSillyTavern(text, $(this).closest('.mes')[0], 'Thought');
     });
 
     // ── Reasoning / thinking panel TTS button ──
@@ -1603,23 +1670,52 @@ export function initBubbleTtsHandlers() {
         const text = $details.find('.mes_reasoning').text().trim();
         if (!text) return;
 
-        const mesEl = $(this).closest('.mes')[0];
-        if (mesEl) {
-            document.querySelectorAll('#chat .mes.dooms-bubble-tts-speaking').forEach(el => {
-                el.classList.remove('dooms-bubble-tts-speaking');
-                el.classList.remove('tts-speaking');
-            });
-            mesEl.classList.add('tts-speaking');
-            mesEl.classList.add('dooms-bubble-tts-speaking');
+        if (voicesOn()) {
+            const mesId = parseInt($(this).closest('.mes').attr('mesid'), 10);
+            unlockVoicesAudio();
+            const engine = await getVoiceEngine();
+            engine.speakReasoning(Number.isFinite(mesId) ? mesId : null, text);
+            return;
         }
 
-        try {
-            await executeSlashCommandsOnChatInput(`/speak ${text}`, { quiet: true });
-        } catch (err) {
-            console.error('[Dooms Tracker] Reasoning TTS failed:', err);
-            toastr.info('TTS is not available. Make sure a TTS extension is enabled.', "Doom's Tracker");
-        }
+        await speakWithSillyTavern(text, $(this).closest('.mes')[0], 'Reasoning');
     });
+
+    // ── Whole-message button (DES voices only) ──
+    $(document).on('click', '.dooms-message-tts', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const mesId = parseInt($(this).closest('.mes').attr('mesid'), 10);
+        if (!Number.isFinite(mesId) || !voicesOn()) return;
+        unlockVoicesAudio();
+        const engine = await getVoiceEngine();
+        engine.speakMessage(mesId);
+    });
+}
+
+/**
+ * Adds a "Read with DES voices" button to each message's action bar while
+ * DES voices are on (works with chat bubbles on or off), and removes them
+ * when voices are off. Safe to call repeatedly.
+ * @param {HTMLElement|Document} [scope=document]
+ */
+export function injectMessageTtsButtons(scope = document) {
+    if (!voicesOn()) {
+        scope.querySelectorAll('.dooms-message-tts').forEach(el => el.remove());
+        return;
+    }
+    const mesList = scope.matches?.('.mes') ? [scope] : scope.querySelectorAll('#chat .mes');
+    for (const mes of mesList) {
+        if (mes.getAttribute('is_system') === 'true') continue;
+        const bar = mes.querySelector('.mes_buttons');
+        if (!bar || bar.querySelector('.dooms-message-tts')) continue;
+        const btn = document.createElement('div');
+        btn.className = 'dooms-message-tts mes_button fa-solid fa-bullhorn';
+        btn.title = 'Read with DES voices';
+        const extra = bar.querySelector('.extraMesButtonsHint');
+        if (extra && extra.parentNode === bar) bar.insertBefore(btn, extra);
+        else bar.prepend(btn);
+    }
 }
 
 /**

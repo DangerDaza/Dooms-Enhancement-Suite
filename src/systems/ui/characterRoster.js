@@ -43,6 +43,7 @@ import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 import { addCharacterAlias } from '../features/characterAliases.js';
+import { canonicalStockId } from '../voices/voiceCatalog.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -1073,6 +1074,13 @@ function importCharacterPayload(payload) {
             if (tpl) entry.promptTemplate = tpl;
             extensionSettings.characterInjection[targetName] = entry;
         }
+    }
+
+    // Only standard voices are exported; anything else is ignored.
+    const voiceId = payload.voice && typeof payload.voice === 'object' ? canonicalStockId(payload.voice.id) : null;
+    if (voiceId) {
+        if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
+        extensionSettings.characterVoices[targetName] = { source: 'stock', id: voiceId };
     }
 
     saveSettings();

@@ -44,6 +44,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
+import { isOffScene } from '../../utils/offScene.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -1248,9 +1249,6 @@ export function getCharacterList() {
     const data = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     let presentChars = [];
 
-    // Pattern to detect off-scene characters from their thoughts
-    const offScenePatterns = /\b(not\s+(currently\s+)?(in|at|present\s+in|present\s+at)\s+(the\s+)?(scene|area|room|location|vicinity))\b|\b(off[\s-]?scene)\b|\b(not\s+physically\s+present)\b|\b(absent\s+from\s+(the\s+)?(scene|room|area|location))\b|\b(away\s+from\s+(the\s+)?scene)\b/i;
-
     if (data) {
         try {
             // Memoized shared parse — read-only. Null (non-JSON) throws on the
@@ -1260,8 +1258,8 @@ export function getCharacterList() {
             presentChars = characters
                 .filter(c => {
                     // Filter out characters whose thoughts indicate they're off-scene
-                    const thoughts = c.thoughts?.content || c.thoughts || '';
-                    if (thoughts && offScenePatterns.test(thoughts)) {
+                    // (shared with the voices so the panel and TTS agree).
+                    if (isOffScene(c.thoughts)) {
                         debugLog(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
                         return false;
                     }

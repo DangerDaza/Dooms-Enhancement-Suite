@@ -73,6 +73,7 @@ import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 import { escapeHtml } from '../../utils/html.js';
 import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
+import { invalidateVoices, getEngineIfLoaded } from '../voices/voiceBoot.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -453,6 +454,7 @@ export function closeCharacterWorkshop() {
     }, 200);
     draft = null;
     closeVersionAddMenu();
+    try { getEngineIfLoaded()?.stopAudition(); } catch (e) {}
 }
 
 // ─── Versions (Base + campaigns) ────────────────────────────────────────────
@@ -514,6 +516,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     renderInjection();
     renderKnives();
     renderAliases();
+    renderVoice();
     renderVersionStrip();
     if (fullReset) {
         $modal.find('#cw-knife-input').val('');
@@ -558,7 +561,7 @@ function pushPendingInputs() {
 function hasVersionedEdits() {
     if (!draft) return false;
     const d = draft.dirty || {};
-    if (d.avatar || d.injection || d.relationship || d.knives || d.appearance) return true;
+    if (d.avatar || d.injection || d.relationship || d.knives || d.appearance || d.voice) return true;
     // A half-typed knife or alias lives only in the input until Add is
     // clicked; count it so a switch never silently drops it.
     if (String($modal.find('#cw-knife-input').val() || '').trim()) return true;
@@ -620,6 +623,16 @@ async function addVersion(campaignId) {
         commitDraft();
     }
     addProfile(campaignId, name, { from: draft.versionId });
+    // A new campaign version always starts with Base's voice, even when it
+    // was cloned from another campaign's version (every other field copies
+    // the version on the stage).
+    if (draft.versionId !== BASE_VERSION) {
+        const created = readVersion(campaignId, name) || {};
+        const baseVoice = readVersion(BASE_VERSION, name)?.voice;
+        if (baseVoice) created.voice = { ...baseVoice };
+        else delete created.voice;
+        writeVersion(campaignId, name, created);
+    }
     saveOrWarn(saveSettings, 'settings');
     await switchVersion(campaignId);
     try { refreshRosterBadges(); } catch (e) {}
@@ -654,6 +667,7 @@ async function removeVersion(campaignId) {
         $modal.toggleClass('cw-version-readonly-portrait', !draft.isLive);
         renderCampaignBadge();
         renderAppearance();
+        renderVoice();
         renderVersionStrip();
     }
 }
@@ -1174,10 +1188,13 @@ function buildDraft(name, isUser = false, versionId = null) {
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
             knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
+            // Personas have no campaign versions, so their voice is stored
+            // on the userCharacters entry itself.
+            voice: cloneVoice(u.voice),
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false },
         };
     }
     const version = versionId || defaultVersionFor(name);
@@ -1202,7 +1219,7 @@ function buildDraft(name, isUser = false, versionId = null) {
         isLive: live,
         color: activeColors[name] || '',
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
-        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false },
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false },
     };
     if (live) {
         const inj = extensionSettings?.characterInjection?.[name] || {};
@@ -1219,6 +1236,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             },
             knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
             appearance: typeof extensionSettings?.characterAppearance?.[name] === 'string' ? extensionSettings.characterAppearance[name] : '',
+            voice: cloneVoice(extensionSettings?.characterVoices?.[name]),
         };
     }
     // readVersion returns null for a shadowed Base that had no entry — an
@@ -1239,7 +1257,13 @@ function buildDraft(name, isUser = false, versionId = null) {
         },
         knives: Array.isArray(p.knives) ? p.knives.map(k => ({ ...k })) : [],
         appearance: typeof p.appearance === 'string' ? p.appearance : '',
+        voice: cloneVoice(p.voice),
     };
+}
+
+/** A stored VoiceRef copied for the draft, or null. */
+function cloneVoice(ref) {
+    return ref && typeof ref === 'object' && typeof ref.id === 'string' && ref.id ? { ...ref } : null;
 }
 
 function resolveCurrentRelationship(name) {
@@ -1393,6 +1417,52 @@ function renderAliases() {
             <button type="button" class="cw-alias-remove" data-alias="${escapeHtml(a)}" title="Remove alias">&times;</button>
         </span>
     `).join(''));
+}
+
+// ─── Voice tab (src/systems/ui/voicePane.js, loaded on first open) ─────────
+
+let voicePaneModule = null;
+
+/** Re-renders the Voice tab from the draft. No-op until the tab has been opened once. */
+function renderVoice() {
+    if (!voicePaneModule || !draft || !$modal) return;
+    const host = $modal.find('#cw-voice-pane')[0];
+    if (!host) return;
+    let isCardCharacter = false;
+    try { isCardCharacter = !draft.isUser && String(getContext()?.name2 || '').toLowerCase() === String(draft.name).toLowerCase(); } catch (e) {}
+    const colors = getActiveCharacterColors() || {};
+    const myColor = String(draft.color || colors[draft.name] || '').toLowerCase();
+    const sharesColorWith = myColor
+        ? Object.entries(colors).filter(([n, c]) => n !== draft.name && String(c || '').toLowerCase() === myColor).map(([n]) => n)
+        : [];
+    voicePaneModule.renderVoicePane(host, {
+        name: draft.name,
+        isUser: draft.isUser,
+        isLive: draft.isLive,
+        versionLabel: draft.isUser ? '' : versionLabel(draft.versionId),
+        isBase: draft.versionId === BASE_VERSION,
+        voice: draft.voice,
+        isCardCharacter,
+        sharesColorWith,
+        onChange(ref) {
+            if (!draft) return;
+            draft.voice = ref ? { ...ref } : null;
+            draft.dirty.voice = true;
+            renderVoice();
+        },
+    });
+}
+
+async function openVoicePane() {
+    if (!voicePaneModule) {
+        try {
+            voicePaneModule = await import('./voicePane.js');
+        } catch (e) {
+            console.error('[DES Workshop] Voice tab failed to load', e);
+            return;
+        }
+    }
+    renderVoice();
 }
 
 function renderIdentity() {
@@ -1710,6 +1780,7 @@ function bindStaticListeners() {
         const pane = $(this).attr('data-pane');
         if (!pane) return;
         activatePane(pane);
+        if (pane === 'voice') openVoicePane();
         if (pane === 'expressions') {
             // Lazy-load on first activation per character — re-renders if
             // the user already has it but the character changed.
@@ -2530,7 +2601,10 @@ function commitDraft() {
             injection: { description: desc, lorebook: book, ...(tpl ? { promptTemplate: tpl } : {}) },
             knives: Array.isArray(draft.knives) ? draft.knives.map(k => ({ ...k })) : [],
         };
+        if (draft.voice) next.voice = { ...draft.voice };
+        else delete next.voice;
         extensionSettings.userCharacters[name] = next;
+        invalidateVoices();
         saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
         // Pass-2 perf: catch a just-saved data:URL avatar and migrate it to
@@ -2714,7 +2788,14 @@ function commitDraft() {
             }
             changed = true;
         }
-    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.knives || draft.dirty.appearance || draft.dirty.injection) {
+
+        if (draft.dirty.voice) {
+            if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
+            if (draft.voice) extensionSettings.characterVoices[name] = { ...draft.voice };
+            else delete extensionSettings.characterVoices[name];
+            changed = true;
+        }
+    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.knives || draft.dirty.appearance || draft.dirty.injection || draft.dirty.voice) {
         // A saved copy (shadowed Base or an inactive campaign): merge the
         // dirty fields into the stored version and write it back whole.
         const profile = readVersion(draft.versionId, name) || {};
@@ -2746,6 +2827,10 @@ function commitDraft() {
             if (entry) profile.injection = entry;
             else delete profile.injection;
         }
+        if (draft.dirty.voice) {
+            if (draft.voice) profile.voice = { ...draft.voice };
+            else delete profile.voice;
+        }
         writeVersion(draft.versionId, name, profile);
         changed = true;
     }
@@ -2753,6 +2838,7 @@ function commitDraft() {
     if (!changed) return;
     saveSettings();
     clearDirtyFlags();
+    invalidateVoices();
     // Now that the settings no longer point at the replaced files, drop
     // the ones nothing else references (a version cloned from Base shares
     // Base's file — that one stays).
@@ -2828,6 +2914,8 @@ function copyNpcToUserCharacter(name) {
             // a different default flow.
         },
     };
+    const voiceToCopy = fromDraft ? fromDraft.voice : extensionSettings.characterVoices?.[trimmed];
+    if (voiceToCopy && voiceToCopy.id) extensionSettings.userCharacters[trimmed].voice = { ...voiceToCopy };
     saveOrWarn(saveSettings, 'settings');
     try {
         if (window.toastr) window.toastr.success(
@@ -2888,6 +2976,10 @@ function copyUserToNpcCharacter(name) {
     if (avatarFullRes) extensionSettings.npcAvatarsFullRes[trimmed] = avatarFullRes;
     const desc = typeof u.injection?.description === 'string' ? u.injection.description : '';
     if (desc) extensionSettings.characterInjection[trimmed] = { description: desc, lorebook: '' };
+    if (u.voice && typeof u.voice.id === 'string' && u.voice.id) {
+        if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
+        extensionSettings.characterVoices[trimmed] = { ...u.voice };
+    }
     saveOrWarn(saveSettings, 'settings');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try {
@@ -3395,6 +3487,9 @@ function exportDraft() {
             promptTemplate: draft.injection?.promptTemplate || '',
         },
     };
+    // Standard voices travel with the export; other voice kinds belong to
+    // one Google project and are left out.
+    if (draft.voice && (draft.voice.source || 'stock') === 'stock') payload.voice = { source: 'stock', id: draft.voice.id };
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

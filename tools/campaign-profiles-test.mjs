@@ -54,6 +54,7 @@ function reset() {
     extensionSettings.characterKnives = { Hex: [{ id: 'k1', text: 'owes money', used: false }] };
     extensionSettings.heroPositions = { Hex: { x: 40, y: 10 } };
     extensionSettings.generatedPortraits = {};
+    extensionSettings.characterVoices = { Hex: { source: 'stock', id: 'Kore' } };
     extensionSettings.userCharacters = {};
 }
 
@@ -377,6 +378,63 @@ test('alias merge under an active campaign survives a round-trip switch without 
     assert.equal(Object.prototype.hasOwnProperty.call(extensionSettings.campaignBaseShadow, 'Hexley'), false);
     // the canonical's base was parked and comes back intact
     assert.equal(extensionSettings.characterInjection.Hex.description, 'base hex');
+});
+
+// ─── DES voices: the voice is versioned like the portrait ───────────────────
+
+test('voice: a new campaign version clones base\'s voice', () => {
+    const p = cp.addProfile('c1', 'Hex');
+    assert.deepEqual(p.voice, { source: 'stock', id: 'Kore' });
+    assert.deepEqual(cp.readVersion('c1', 'Hex').voice, { source: 'stock', id: 'Kore' });
+});
+
+test('voice: switching campaigns switches the live voice and back', () => {
+    cp.addProfile('c1', 'Hex');
+    const v = cp.readVersion('c1', 'Hex');
+    v.voice = { source: 'stock', id: 'Puck' };
+    cp.writeVersion('c1', 'Hex', v);
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'Kore', 'inactive edit does not touch live');
+    activate('c1');
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'Puck');
+    activate(null);
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'Kore');
+});
+
+test('voice: an edit made while a campaign is active is banked into that campaign', () => {
+    cp.addProfile('c1', 'Hex');
+    activate('c1');
+    extensionSettings.characterVoices.Hex = { source: 'stock', id: 'Leda' };
+    cp.bankActiveCampaign();
+    activate(null);
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'Kore');
+    assert.equal(cp.readVersion('c1', 'Hex').voice.id, 'Leda');
+});
+
+test('voice: removing a campaign\'s voice leaves the key absent (Narrator), not null', () => {
+    cp.addProfile('c1', 'Hex');
+    const v = cp.readVersion('c1', 'Hex');
+    delete v.voice;
+    cp.writeVersion('c1', 'Hex', v);
+    activate('c1');
+    assert.equal(Object.prototype.hasOwnProperty.call(extensionSettings.characterVoices, 'Hex'), false);
+    activate(null);
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'Kore');
+});
+
+test('voice: deleteCharacterEverywhere + removeFromLive clear every copy', () => {
+    cp.addProfile('c1', 'Hex');
+    cp.deleteCharacterEverywhere('Hex');
+    cp.removeFromLive('Hex');
+    assert.equal(extensionSettings.characterVoices.Hex, undefined);
+    assert.equal(cp.hasProfile('c1', 'Hex'), false);
+});
+
+test('voice: alias merge carries the variant\'s campaign voice to the canonical', () => {
+    extensionSettings.characterVoices.Hexley = { source: 'stock', id: 'Fenrir' };
+    extensionSettings.characterInjection.Hexley = { description: 'variant', lorebook: '' };
+    cp.addProfile('c2', 'Hexley');
+    cp.mergeVariantIntoCanonicalProfiles('Hex', 'Hexley');
+    assert.equal(cp.readVersion('c2', 'Hex').voice.id, 'Fenrir');
 });
 
 if (failures) {

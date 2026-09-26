@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — Voices (trial)
+
+### Added
+- **Every character can have their own voice.** A new **Voice** tab in the Character Workshop lets you pick one of Google's 30 Gemini voices for each character, with a ▶ button to hear it first. When DES reads a message aloud, each line is spoken in the voice of whoever said it — as long as that character is on the Present Characters panel. Narration, and lines from anyone who isn't in the scene or has no voice, are read by a **Narrator voice** you choose in **Settings → Voices**. Voices follow campaign versions like portraits do: a new campaign version starts with Base's voice and can have its own.
+- **Settings → Voices.** Turn on **Use DES voices**, and optionally **Read new messages automatically**. Each new reply is read once, after its colours and chat bubbles are in place, and group-chat replies are read in order. You can also choose the Gemini 3.8 model (Flash-Lite is cheaper, Flash is richer), the speed, whether your own messages are read, and a limit on how many Google requests auto-read may make in a session.
+- **A "read this message" bullhorn** on every message while DES voices are on, which works whether chat bubbles are on or off. The existing bubble, thought and reasoning bullhorns use the character voices too; clicking the one that's playing stops it.
+- Voices use the **Google AI Studio key you already saved in SillyTavern** — the key never leaves your SillyTavern server. If your SillyTavern can't send Gemini 3.8 requests yet, DES uses Gemini 3.1 for the session and says so in the status line.
+
+### Changed
+- **SillyTavern's own auto-read is paused while DES voices are on**, so nothing is read twice. Your SillyTavern setting itself isn't changed: turn DES voices off and SillyTavern reads again.
+- The Workshop's section tabs switch to icons a little sooner (below 1080px wide) so the sixth tab fits.
+
+### Fixed
+- **Dialogue containing `|` or `{{` broke the bullhorn buttons.** The text was sent to SillyTavern's `/speak` unescaped, so a `|` split it into two commands. It's escaped now.
+- **The "strip colour tags before reading" setup could overwrite your own SillyTavern TTS regex** and ticked a checkbox that doesn't exist. It now fills the regex only when yours is empty, and uses the right checkbox.
+- **Colour attribution for the newest message never used its "only one character left" rule when bubbles were drawn**, because the check looked for the message on a detached copy. It now runs as intended.
+
 ## [2.6.0] - 2026-09-25 — Costume Change
 
 ### Added

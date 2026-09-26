@@ -24,6 +24,7 @@ import { scheduleAvatarMigration, retireAvatarBackupIfComplete, hasPendingPortra
 import { parseQuests } from '../systems/generation/parser.js';
 import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { bankActiveCampaign, ensureCampaignSettings } from '../systems/lorebook/campaignProfiles.js';
+import { ensureVoiceSettings } from '../systems/voices/voiceSettings.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -465,6 +466,11 @@ export function loadSettings() {
             // keys (the shallow merge above replaces the whole lorebook object,
             // so a pre-campaign blob lacks them), and a dangling active id.
             if (ensureCampaignSettings()) {
+                settingsChanged = true;
+            }
+            // DES voices: fill new voices.* sub-keys and repair broken
+            // voice refs (the shallow merge would hide missing sub-keys).
+            if (ensureVoiceSettings(savedSettings, extensionSettings)) {
                 settingsChanged = true;
             }
 

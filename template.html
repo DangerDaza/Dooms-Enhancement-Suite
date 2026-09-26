@@ -1056,6 +1056,102 @@
                 </div>
             </div>
 
+            <!-- ═══════ VOICES ═══════ -->
+            <!-- Per-character Gemini voices (docs/google-tts-voices-plan.md §6.2).
+                 Bound by src/systems/ui/voicesSettingsUI.js. -->
+            <div class="rpg-accordion-section" data-accordion="voices">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-microphone-lines rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Voices</span>
+                    <span class="rpg-accordion-badge" id="rpg-voices-badge">off</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Use DES voices</span>
+                            <span class="rpg-setting-hint">Reads chat aloud with a different Google voice for each
+                                character in the scene. Pick voices in the Character Workshop's Voice tab. While
+                                this is on, SillyTavern's own auto-read is paused (your SillyTavern setting isn't
+                                changed).</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-voices-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Read new messages automatically</span>
+                            <span class="rpg-setting-hint">Each new AI reply is read once, after its colours and
+                                bubbles are in place. The bullhorn buttons work either way.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-voices-autoread" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Narrator voice</span>
+                            <span class="rpg-setting-hint">Reads narration, and anyone who isn't on the Present
+                                Characters panel or has no voice.</span>
+                        </div>
+                        <div class="rpg-voices-narrator">
+                            <select id="rpg-voices-narrator" class="rpg-accordion-select"></select>
+                            <button type="button" class="rpg-btn rpg-voices-preview" id="rpg-voices-narrator-preview"
+                                title="Preview the Narrator voice" aria-label="Preview the Narrator voice">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Voice model</span>
+                            <span class="rpg-setting-hint">About 54 cents per hour of speech on Flash-Lite (about
+                                81 cents on Flash) until the end of 2026; Google doubles these on 1 January 2027.
+                                On Google's free tier your text may be used to improve Google's products.</span>
+                        </div>
+                        <select id="rpg-voices-model" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <span class="rpg-setting-label">Speed</span>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-voices-rate" class="rpg-range-slider" min="0.75" max="1.5"
+                                step="0.05" value="1" />
+                            <span id="rpg-voices-rate-value" class="rpg-slider-value">1.00×</span>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Also read my own messages</span>
+                            <span class="rpg-setting-hint">Uses your persona's voice while "Show me in Present
+                                Characters" is on; otherwise the Narrator's.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-voices-read-user" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Stop auto-reading after</span>
+                            <span class="rpg-setting-hint">Google requests per session. Each line with a new
+                                speaker is one request. 0 = no limit.</span>
+                        </div>
+                        <input type="number" id="rpg-voices-budget" class="rpg-accordion-input" min="0" max="10000"
+                            step="10" />
+                    </div>
+                    <p class="rpg-note-text" id="rpg-voices-status" aria-live="polite"></p>
+                    <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-resume" hidden>
+                        <i class="fa-solid fa-play"></i> Resume auto-read
+                    </button>
+                    <p class="rpg-note-text" style="margin-top:6px;">Voices use the Google AI Studio key saved in
+                        SillyTavern (API Connections &rarr; Google AI Studio); the key stays on your SillyTavern
+                        server. The text of each line read is sent to Google.</p>
+                </div>
+            </div>
+
             <!-- ═══════ BUNNY MO INTEGRATION ═══════ -->
             <div class="rpg-accordion-section" data-accordion="bunny-mo">
                 <div class="rpg-accordion-header">
@@ -2446,6 +2542,7 @@
                     <button type="button" data-pane="expressions" title="Expressions">&#128516; <span class="cw-tab-label">Expressions</span></button>
                     <button type="button" data-pane="injection" title="Injection">&#128137; <span class="cw-tab-label">Injection</span></button>
                     <button type="button" data-pane="knives" title="Knives">&#128298; <span class="cw-tab-label">Knives</span></button>
+                    <button type="button" data-pane="voice" title="Voice">&#127908; <span class="cw-tab-label">Voice</span></button>
                 </nav>
                 <div class="workshop-pane-host">
 
@@ -2730,6 +2827,14 @@
                                 separate API request.</span>
                         </div>
                         <div id="cw-knife-suggestions" hidden></div>
+                    </div>
+                </section>
+
+                <!-- VOICE (rendered by src/systems/ui/voicePane.js on first open) -->
+                <section class="rpg-editor-pane" data-pane="voice">
+                    <div class="rpg-editor-section" id="cw-voice-pane">
+                        <h4>&#127908; Voice</h4>
+                        <p class="helper">Loading voices&hellip;</p>
                     </div>
                 </section>
 

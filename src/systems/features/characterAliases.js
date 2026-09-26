@@ -153,6 +153,24 @@ function resolveStructuralVariant(name, canonMap) {
     return null;
 }
 
+/**
+ * Read-only canonical name: alias lookup, then the Tier-1 structural fold
+ * ("Nine (Nine-Coins)" → "Nine", "Gardener" → "The Gardener"). Unlike
+ * applyCharacterAliases it records nothing and changes nothing, so it is
+ * safe to call when re-reading old messages (voices use it for speakers).
+ * @param {string} name
+ * @returns {string}
+ */
+export function structuralCanonical(name) {
+    if (!name) return name;
+    const aliased = resolveCharacterAlias(name);
+    try {
+        return resolveStructuralVariant(aliased, buildCanonicalNameMap()) || aliased;
+    } catch (e) {
+        return aliased;
+    }
+}
+
 // Tier 2: pairs currently showing (or queued to show) their yes/no popup.
 const _pendingDecisions = new Set();
 // Decision dialogs are SERIALIZED through this chain — two shown at once
@@ -410,7 +428,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
     }
     for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
-        'generatedPortraits']) {
+        'generatedPortraits', 'characterVoices']) {
         transferIfMissing(extensionSettings[store]);
     }
     bankColorAlias(extensionSettings.characterColors, extensionSettings.knownCharacters);
@@ -438,7 +456,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
     }
     for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
-        'generatedPortraits']) {
+        'generatedPortraits', 'characterVoices']) {
         scrub(extensionSettings[store]);
     }
     try {

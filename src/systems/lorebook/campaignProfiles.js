@@ -45,6 +45,7 @@ export const PROFILE_FIELDS = Object.freeze([
     { field: 'knives',        store: 'characterKnives' },
     { field: 'heroPosition',  store: 'heroPositions' },
     { field: 'portraitMeta',  store: 'generatedPortraits' },
+    { field: 'voice',         store: 'characterVoices' },
 ]);
 
 /** The version id of the flat stores themselves. */

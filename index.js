@@ -150,6 +150,18 @@ import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMe
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
+import {
+    isVoicesEnabled,
+    syncVoicesState,
+    onMessageDecorated,
+    onGenerationStartedVoices,
+    onGenerationStoppedVoices,
+    onMessageReceivedVoices,
+    onUserMessageRenderedVoices,
+    onMessageSentVoices,
+    onMessageChangedVoices,
+    onChatChangedVoices,
+} from './src/systems/voices/voiceBoot.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
 // Context Inspector — see what DES is injecting into the prompt
@@ -2393,6 +2405,11 @@ function bindSettingsUI() {
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();
+
+    // Voices accordion (binders live with the feature)
+    import('./src/systems/ui/voicesSettingsUI.js')
+        .then(m => m.bindVoicesSettingsUI())
+        .catch(e => console.error('[DES Voices] settings UI failed to load', e));
 }
 
 /**
@@ -3102,18 +3119,22 @@ jQuery(async () => {
                 }
                 // Auto-configure TTS regex to strip <font> tags at narration time.
                 // This keeps colours visible in the chat while giving TTS clean text.
-                if (extensionSettings.enableDialogueColoring && st_extension_settings?.tts) {
+                // Not needed while DES voices read the chat (DES strips tags itself).
+                if (extensionSettings.enableDialogueColoring && st_extension_settings?.tts && !isVoicesEnabled()) {
                     const fontRegex = '/<\\/?font[^>]*>/gi';
-                    if (!st_extension_settings.tts.apply_regex) {
+                    const pattern = st_extension_settings.tts.regex_pattern;
+                    if (!pattern) {
                         st_extension_settings.tts.apply_regex = true;
-                        $('#tts_regex').prop('checked', true);
-                    }
-                    if (!st_extension_settings.tts.regex_pattern ||
-                        !st_extension_settings.tts.regex_pattern.includes('font')) {
-                        // Set or append our font-stripping regex
+                        $('#tts_apply_regex').prop('checked', true);
                         st_extension_settings.tts.regex_pattern = fontRegex;
                         $('#tts_regex_pattern').val(fontRegex);
                         console.log('[Dooms Tracker] Set TTS regex to strip <font> tags for dialogue coloring');
+                    } else if (!pattern.includes('font')) {
+                        // The user wrote their own pattern — never overwrite it.
+                        console.log('[Dooms Tracker] Your SillyTavern TTS regex doesn\'t strip <font> tags; add |<\\/?font[^>]*> to it if TTS reads colour tags aloud.');
+                    } else if (!st_extension_settings.tts.apply_regex) {
+                        st_extension_settings.tts.apply_regex = true;
+                        $('#tts_apply_regex').prop('checked', true);
                     }
                 }
             };
@@ -3167,7 +3188,7 @@ jQuery(async () => {
                 }
             };
             // ── Chat Bubbles: apply per-character bubbles to messages ──
-            const onCharacterMessageRenderedDecorations = (messageId) => {
+            const onCharacterMessageRenderedDecorations = (messageId, type) => {
                 if (!extensionSettings.enabled) return;
                 // Skip GG's synthetic tracker/note messages — they get
                 // is_user=false but their .mes is HTML, not real model
@@ -3183,27 +3204,32 @@ jQuery(async () => {
                     injectReasoningTtsButtons(messageElement);
                 }
 
-                // Apply chat bubbles if active
-                if (extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off') {
-                    if (messageElement) {
-                        const mesText = messageElement.querySelector('.mes_text');
-                        if (mesText) {
-                            // Clear stale bubble data — content was just (re)rendered.
-                            // Without this, applyChatBubbles sees the old style attribute
-                            // and early-returns, skipping bubble re-application.
-                            clearBubbleState(mesText);
-                        }
-                        // Wait for colored-dialogues to finish adding <font color> tags
-                        // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED).
-                        // Also hold for any open duplicate-character decision —
-                        // attributing dialogue before the user answers bakes the
-                        // wrong speaker onto bubbles when they pick "same character".
-                        setTimeout(async () => {
-                            await waitForAliasDecisions();
-                            const freshEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
-                            if (freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
-                        }, 800);
+                // Apply chat bubbles if active, then hand the decorated message
+                // to DES voices (auto-read must see the same colours and
+                // bubbles the user sees — docs/google-tts-voices-plan.md D4).
+                const bubblesOn = !!extensionSettings.chatBubbleMode && extensionSettings.chatBubbleMode !== 'off';
+                const voicesOn = isVoicesEnabled();
+                if (messageElement && bubblesOn) {
+                    const mesText = messageElement.querySelector('.mes_text');
+                    if (mesText) {
+                        // Clear stale bubble data — content was just (re)rendered.
+                        // Without this, applyChatBubbles sees the old style attribute
+                        // and early-returns, skipping bubble re-application.
+                        clearBubbleState(mesText);
                     }
+                }
+                if (messageElement && (bubblesOn || voicesOn)) {
+                    // Wait for colored-dialogues to finish adding <font color> tags
+                    // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED).
+                    // Also hold for any open duplicate-character decision —
+                    // attributing dialogue before the user answers bakes the
+                    // wrong speaker onto bubbles when they pick "same character".
+                    setTimeout(async () => {
+                        await waitForAliasDecisions();
+                        const freshEl = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                        if (bubblesOn && freshEl) applyChatBubbles(freshEl, extensionSettings.chatBubbleMode);
+                        onMessageDecorated(messageId, type);
+                    }, 800);
                 }
                 // Update scene tracker (new data may be available after message render)
                 setTimeout(() => updateChatSceneHeaders(), 100);
@@ -3433,18 +3459,18 @@ jQuery(async () => {
             // Single tracked registration point. Array order preserves the
             // original relative registration order within each event type.
             registerAllEvents({
-                [event_types.MESSAGE_SENT]: onMessageSent,
-                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert],
-                [event_types.MESSAGE_RECEIVED]: onMessageReceived,
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
+                [event_types.MESSAGE_SENT]: [onMessageSent, onMessageSentVoices],
+                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices],
+                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage],
-                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onChatChangedVoices],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices],
+                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,
                 [event_types.MESSAGE_UPDATED]: onMessageUpdatedDecorations,
-                [event_types.MESSAGE_DELETED]: onMessageDeletedDecorations,
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
@@ -3464,6 +3490,8 @@ jQuery(async () => {
         if (chat && chat.length > 0) {
             onCharacterChanged();
         }
+        // DES voices: pause SillyTavern's own auto-read if voices are on.
+        syncVoicesState();
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
         // ── What's New screen (desktop, once per release, opt-out) ──
         // The gate is three cheap checks; the module, its CSS, and the

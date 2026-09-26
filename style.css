@@ -10682,6 +10682,23 @@ body.dooms-hide-st-topbar .openDrawer {
 }
 
 
+/* ── DES voices: the line being read (voices/player.js) ── */
+.dooms-bubble.dooms-tts-speaking,
+.dooms-card.dooms-tts-speaking {
+    box-shadow: inset 0 0 0 2px var(--rpg-highlight, #e94560);
+}
+.dooms-bubble.dooms-tts-loading,
+.dooms-card.dooms-tts-loading {
+    box-shadow: inset 0 0 0 1px rgba(233, 69, 96, 0.4);
+}
+.mes.dooms-tts-speaking {
+    box-shadow: inset 3px 0 0 var(--rpg-highlight, #e94560);
+}
+.dooms-message-tts {
+    cursor: pointer;
+}
+
+
 /* ── Reasoning / Thinking Panel TTS button ── */
 .dooms-reasoning-tts {
     cursor: pointer;

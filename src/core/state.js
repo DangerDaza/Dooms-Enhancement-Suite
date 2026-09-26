@@ -2,6 +2,7 @@
  * Core State Management Module
  * Centralizes all extension state variables
  */
+import { defaultVoiceSettings } from '../systems/voices/voiceSettings.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -257,6 +258,12 @@ export let extensionSettings = {
     //   - "data:image/png;base64,..." (legacy v1.10.x — auto-migrates on next boot)
     npcAvatars: {},
     npcAvatarsFullRes: {},
+    // Per-character DES voice (docs/google-tts-voices-plan.md §4.1) — a
+    // VoiceRef {source, id}. Versioned per campaign like the portrait
+    // (campaignProfiles PROFILE_FIELDS). Absent = the Narrator reads them.
+    characterVoices: {},
+    // DES voices settings (master toggle, auto-read, Narrator voice, model).
+    voices: defaultVoiceSettings(),
     knownCharacters: {}, // Persistent roster of all characters ever seen (key: name, value: { emoji })
     removedCharacters: [], // Blacklist of character names explicitly removed by the user
     characterColors: {}, // Per-character dialogue colors (key: character name, value: hex color string e.g. "#C71585")
