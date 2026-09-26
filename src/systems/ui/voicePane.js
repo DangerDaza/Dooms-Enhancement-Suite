@@ -19,9 +19,10 @@
  * only renders it and reports a pick through ctx.onChange, so choosing a
  * voice is an ordinary draft edit committed by the Workshop's Save.
  *
- * Two views: Standard (Google's 30 voices, filterable by gender) and Design
- * (voiceStudio.js — describe a voice and create it on Google; loaded on
- * first use).
+ * Three views: Standard (Google's 30 voices, filterable by gender), Design
+ * (voiceStudio.js — describe a voice and create it on Google) and Clone
+ * (voiceCloner.js — record a sample and Google's consent statement). The
+ * last two load on first use.
  */
 import { extensionSettings } from '../../core/state.js';
 import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId } from '../voices/voiceCatalog.js';
@@ -35,6 +36,7 @@ const FILTER_KEY = 'dooms_voices_gender_filter';
 /** 'standard' | 'design' — per character, this session. */
 const views = new Map();
 let studio = null; // voiceStudio.js once loaded
+let cloner = null; // voiceCloner.js once loaded
 
 function readFilter() {
     try {
@@ -118,7 +120,8 @@ function currentVoiceText(ctx) {
     const source = v.source || 'stock';
     if (source === 'stock') return { label: stockLabel(canonicalStockId(v.id) || v.id), note: '' };
     const entry = registryEntry(v.id);
-    const label = `${entry?.label || v.label || 'Designed voice'} (designed)`;
+    const kind = (entry?.source || v.source) === 'cloned' ? 'cloned' : 'designed';
+    const label = `${entry?.label || v.label || 'Custom voice'} (${kind})`;
     if (!extensionSettings.voices?.googleApiKey) {
         return { label, note: `Needs your Google key in Settings → Voices; until then ${v.fallbackStock || 'a standard voice'} reads their lines.` };
     }
@@ -169,8 +172,8 @@ function stockGrid(ctx) {
 
 function viewFor(ctx) {
     if (!views.has(ctx.name)) {
-        const designed = ctx.voice && (ctx.voice.source === 'designed' || (!ctx.voice.id && ctx.voice.pendingDesign));
-        views.set(ctx.name, designed ? 'design' : 'standard');
+        const custom = ctx.voice && (ctx.voice.source === 'designed' || ctx.voice.source === 'cloned' || (!ctx.voice.id && ctx.voice.pendingDesign));
+        views.set(ctx.name, custom ? 'design' : 'standard');
     }
     return views.get(ctx.name);
 }
@@ -185,6 +188,10 @@ function render(host, ctx) {
         body = studio
             ? studio.renderStudio({ ...ctx, testLine: () => testLineFor(ctx.name) }, isPlaying)
             : '<p class="helper">Loading the voice designer…</p>';
+    } else if (view === 'clone') {
+        body = cloner
+            ? cloner.renderCloner({ ...ctx, testLine: () => testLineFor(ctx.name) }, isPlaying)
+            : '<p class="helper">Loading…</p>';
     } else {
         body = stockGrid(ctx);
     }
@@ -208,6 +215,7 @@ function render(host, ctx) {
         <div class="cw-voice-views" role="tablist" aria-label="Kind of voice">
             <button type="button" class="cw-voice-view${view === 'standard' ? ' is-active' : ''}" data-view="standard" role="tab" aria-selected="${view === 'standard'}">Standard voices</button>
             <button type="button" class="cw-voice-view${view === 'design' ? ' is-active' : ''}" data-view="design" role="tab" aria-selected="${view === 'design'}">Design a voice</button>
+            <button type="button" class="cw-voice-view${view === 'clone' ? ' is-active' : ''}" data-view="clone" role="tab" aria-selected="${view === 'clone'}">Clone a voice</button>
         </div>
         <div class="cw-voice-body">${body}</div>
     `;
@@ -217,6 +225,26 @@ async function ensureStudio() {
     if (studio) return studio;
     studio = await import('./voiceStudio.js');
     return studio;
+}
+
+async function ensureCloner() {
+    if (cloner) return cloner;
+    cloner = await import('./voiceCloner.js');
+    return cloner;
+}
+
+async function ensureView(view) {
+    try {
+        if (view === 'design') await ensureStudio();
+        if (view === 'clone') await ensureCloner();
+    } catch (err) {
+        console.error('[DES Voices] voice tools failed to load', err);
+    }
+}
+
+/** The Workshop closed: drop any clone recordings still in memory. */
+export function onWorkshopClosed() {
+    cloner?.clearClonerRecordings();
 }
 
 async function audition(ref, name) {
@@ -256,9 +284,9 @@ function bindOnce(host) {
             e.preventDefault();
             const view = viewBtn.getAttribute('data-view');
             views.set(ctx.name, view);
-            if (view === 'design' && !studio) {
+            if ((view === 'design' && !studio) || (view === 'clone' && !cloner)) {
                 render(host, ctx);
-                try { await ensureStudio(); } catch (err) { console.error('[DES Voices] designer failed to load', err); }
+                await ensureView(view);
             }
             rerender();
             return;
@@ -296,8 +324,14 @@ function bindOnce(host) {
             ctx.onChange(null);
             return;
         }
+        const toolCtx = { ...ctx, testLine: () => testLineFor(ctx.name) };
         if (studio && viewFor(ctx) === 'design') {
-            const handled = await studio.handleStudioClick(target, host, { ...ctx, testLine: () => testLineFor(ctx.name) }, rerender);
+            const handled = await studio.handleStudioClick(target, host, toolCtx, rerender);
+            if (handled) e.preventDefault();
+        } else if (cloner && viewFor(ctx) === 'clone') {
+            // Let the file picker's <label> open the dialog.
+            if (target.closest('.cw-clone-upload-label')) return;
+            const handled = await cloner.handleClonerClick(target, host, toolCtx, rerender, isPlaying);
             if (handled) e.preventDefault();
         }
     });
@@ -308,10 +342,16 @@ function bindOnce(host) {
             testLines.set(last.ctx.name, /** @type {HTMLInputElement} */ (input).value);
             return;
         }
-        if (studio) studio.handleStudioInput(input, last.ctx);
+        if (studio && viewFor(last.ctx) === 'design') studio.handleStudioInput(input, last.ctx);
     };
     host.addEventListener('input', onInput);
     host.addEventListener('change', onInput);
+    // The clone wizard's checkbox, selects and file picker act on "change" only
+    // (a file input fires both events; handling both would read the file twice).
+    host.addEventListener('change', (e) => {
+        if (!last || !cloner || viewFor(last.ctx) !== 'clone') return;
+        cloner.handleClonerInput(/** @type {HTMLElement} */ (e.target), last.ctx, rerender);
+    });
 }
 
 /**
@@ -321,9 +361,10 @@ function bindOnce(host) {
 export async function renderVoicePane(host, ctx) {
     last = { host, ctx };
     bindOnce(host);
-    if (viewFor(ctx) === 'design' && !studio) {
+    const view = viewFor(ctx);
+    if ((view === 'design' && !studio) || (view === 'clone' && !cloner)) {
         render(host, ctx);
-        try { await ensureStudio(); } catch (err) { console.error('[DES Voices] designer failed to load', err); }
+        await ensureView(view);
     }
     render(host, ctx);
     if (!stateListenerBound) {

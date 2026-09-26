@@ -14,7 +14,10 @@
  * through SillyTavern), and voice design (M4): the gender filter, creating
  * a voice from a description, using it in chat, discard, the Settings
  * manager (used-by, slot count, recreate, delete), and a voice Google
- * no longer has falling back to a standard voice mid-read.
+ * no longer has falling back to a standard voice mid-read; and voice
+ * cloning (M5): the permission gate, sample length checks, recording from a
+ * (fake) microphone, the verbatim consent statement per locale, the 24 kHz
+ * mono WAVs sent to Google, a rejected consent, and using the clone.
  *
  * Setup: a local SillyTavern with this repo linked (or installed) as
  *   public/scripts/extensions/third-party/Dooms-Enhancement-Suite
@@ -41,13 +44,32 @@ function silentWav(ms = 150) {
   return Buffer.concat([h, data]);
 }
 const DES = '/scripts/extensions/third-party/Dooms-Enhancement-Suite';
+
+/** A 440 Hz tone as 44.1 kHz STEREO WAV (the clone wizard must resample it to 24 kHz mono). */
+function toneWav(seconds) {
+  const sr = 44100, ch = 2, n = Math.floor(sr * seconds), data = Buffer.alloc(n * ch * 2);
+  for (let i = 0; i < n; i++) {
+    const v = Math.round(Math.sin(2 * Math.PI * 440 * i / sr) * 12000);
+    data.writeInt16LE(v, i * 4); data.writeInt16LE(v, i * 4 + 2);
+  }
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVE', 8); h.write('fmt ', 12);
+  h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(ch, 22); h.writeUInt32LE(sr, 24);
+  h.writeUInt32LE(sr * ch * 2, 28); h.writeUInt16LE(ch * 2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
+/** Reads the sample rate, channel count and duration of a base64 WAV. */
+function wavInfo(b64) {
+  const b = Buffer.from(b64, 'base64');
+  return { riff: b.toString('ascii', 0, 4), rate: b.readUInt32LE(24), channels: b.readUInt16LE(22), bits: b.readUInt16LE(34), seconds: b.readUInt32LE(40) / (b.readUInt32LE(24) * 2) };
+}
 const results = [];
 const SHOTS = process.env.SHOT_DIR || require('os').tmpdir();
 const shot = (name) => require('path').join(SHOTS, name);
 function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e) { results.push('FAIL ' + name + ': ' + e.message); } }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: CHROME_PATH, args: ['--autoplay-policy=no-user-gesture-required'] });
+  const browser = await chromium.launch({ executablePath: CHROME_PATH, args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -333,7 +355,8 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   let google = [];
   let googleMode = 'ok'; // 'ok' | 'reject-voice-field' | 'reject-model' | 'bad-key'
   const pcm = Buffer.alloc(2400).toString('base64');
-  // Fake Google Voices API state (M4).
+  // Fake Google Voices API state (M4/M5).
+  let cloneFail = false;
   const designed = new Map(); // id -> voice
   const goneVoices = new Set();
   let voiceCalls = [];
@@ -349,10 +372,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
       voiceCalls.push({ method: req.method(), id: idPart || null, body: req.postData() ? JSON.parse(req.postData()) : null, query: url.search });
       if (req.method() === 'POST') {
         const b = JSON.parse(req.postData());
+        if (b.voice.type === 'replicated' && cloneFail) {
+          return json(400, { error: { code: 400, message: 'Consent verification failed: the consent audio does not match the required statement.', status: 'INVALID_ARGUMENT' } });
+        }
         const id = `voice_e2e_${nextVoice++}`;
-        const v = { id, display_name: b.voice.display_name, gender: b.voice.gender || '', type: 'prompted', expire_time: new Date(Date.now() + 365 * 864e5).toISOString() };
+        const v = { id, display_name: b.voice.display_name, gender: b.voice.gender || '', type: b.voice.type, expire_time: new Date(Date.now() + 365 * 864e5).toISOString() };
         designed.set(id, v);
-        return json(200, { ...v, sample_audio: { mime_type: 'audio/wav', data: wavB64 } });
+        return json(200, b.voice.type === 'prompted' ? { ...v, sample_audio: { mime_type: 'audio/wav', data: wavB64 } } : v);
       }
       if (req.method() === 'DELETE') {
         if (!designed.has(idPart)) return json(404, { error: { code: 404, message: `Voice voices/${idPart} not found`, status: 'NOT_FOUND' } });
@@ -483,7 +509,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   // Design view
   await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="design"]').click());
   await page.waitForSelector('#cw-voice-pane .cw-studio-desc', { timeout: 5000 });
-  voiceCalls = [];
+  voiceCalls = []; google = [];
   await page.evaluate(() => {
     const d = document.querySelector('#cw-voice-pane .cw-studio-desc');
     d.value = 'A gravelly, low-pitched man in his fifties with a slow Scottish accent.';
@@ -507,8 +533,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   });
   const reg1 = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices, DES);
   check('the new voice is registered right away', () => { assert.ok(reg1.voice_e2e_1); assert.strictEqual(reg1.voice_e2e_1.gender, 'male'); assert.strictEqual(reg1.voice_e2e_1.status, 'ok'); });
-  const sampleSrc = await page.evaluate(() => document.getElementById('dooms-tts-audio')?.src || '');
-  check('Google\'s sample plays straight away (no extra request)', () => assert.match(sampleSrc, /^blob:/));
+  await page.waitForTimeout(800);
+  check('the new voice reads its own description aloud right after it is made', () => {
+    const read = google.find(g => g.voice === 'voice_e2e_1');
+    assert.ok(read, JSON.stringify(google));
+    assert.strictEqual(read.text, 'A gravelly, low-pitched man in his fifties with a slow Scottish accent.');
+    assert.strictEqual(read.shape, 'voice');
+  });
   await page.screenshot({ path: shot('workshop-voice-design.png') });
 
   // Use it + Save
@@ -570,7 +601,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     narratorGroups: [...document.querySelectorAll('#rpg-voices-narrator optgroup')].map(g => g.label),
   }));
   check('Settings lists the designed voice and who uses it', () => { assert.strictEqual(mgr.rows.length, 1); assert.match(mgr.rows[0], /Used by Tom/); });
-  check('a designed voice can be picked as the Narrator', () => assert.deepStrictEqual(mgr.narratorGroups, ['Standard voices', 'Your designed voices']));
+  check('a designed voice can be picked as the Narrator', () => assert.deepStrictEqual(mgr.narratorGroups, ['Standard voices', 'Your custom voices']));
   await page.evaluate(() => document.querySelector('#rpg-voices-count-slots').click());
   await page.waitForTimeout(600);
   const slots = await page.evaluate(() => document.querySelector('#rpg-voices-slots').textContent);
@@ -631,6 +662,124 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.strictEqual(deleted.tom, null);
     assert.deepStrictEqual(deleted.reg, []);
   });
+
+  // ── M5: voice cloning ──
+  const os = require('os'); const fs = require('fs'); const path = require('path');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'des-clone-'));
+  const clip = (name, secs) => { const f = path.join(tmp, name); fs.writeFileSync(f, toneWav(secs)); return f; };
+  const short5 = clip('short.wav', 5), long35 = clip('long.wav', 35), good12 = clip('good.wav', 12);
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: 'Mara' } })));
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click());
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="clone"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-clone-agree-box', { timeout: 5000 });
+  const gate = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-next[data-to="2"]').disabled);
+  check('clone: Continue is blocked until the permission box is ticked', () => assert.strictEqual(gate, true));
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-agree-box').click());
+  await page.waitForTimeout(150);
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-next[data-to="2"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-clone-upload[data-which="sample"]', { state: 'attached', timeout: 5000 });
+  const sampleState = async (file) => {
+    await page.setInputFiles('#cw-voice-pane .cw-clone-upload[data-which="sample"]', file);
+    await page.waitForFunction(() => !!document.querySelector('#cw-voice-pane .cw-clone-status'), null, { timeout: 15000 });
+    await page.waitForTimeout(200);
+    return page.evaluate(() => ({
+      status: document.querySelector('#cw-voice-pane .cw-clone-status')?.textContent || '',
+      canContinue: !document.querySelector('#cw-voice-pane .cw-clone-next[data-to="3"]').disabled,
+    }));
+  };
+  const s5 = await sampleState(short5);
+  check('clone: a 5 s sample is refused as too short', () => { assert.match(s5.status, /too short/); assert.strictEqual(s5.canContinue, false); });
+  const s35 = await sampleState(long35);
+  check('clone: a 35 s sample is refused as too long', () => { assert.match(s35.status, /too long/); assert.strictEqual(s35.canContinue, false); });
+  const s12 = await sampleState(good12);
+  check('clone: a 12 s sample is accepted', () => { assert.match(s12.status, /12\.0 s — good/); assert.strictEqual(s12.canContinue, true); });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-next[data-to="3"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-clone-phrase', { timeout: 5000 });
+  const enPhrase = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-phrase').textContent);
+  await page.evaluate(() => { const s = document.querySelector('#cw-voice-pane .cw-clone-locale'); s.value = 'fr-FR'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.waitForTimeout(200);
+  const frPhrase = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-phrase').textContent);
+  check('clone: the consent statement is Google\'s exact wording, per language', () => {
+    assert.strictEqual(enPhrase, 'I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.');
+    assert.strictEqual(frPhrase, "Je suis le propriétaire de cette voix et j'autorise Google à utiliser cette voix pour créer un modèle de voix synthétique.");
+  });
+  // Record the consent from the (fake) microphone.
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-record[data-which="consent"]').click());
+  await page.waitForTimeout(3300);
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-stop')?.click());
+  await page.waitForFunction(() => /good/.test(document.querySelector('#cw-voice-pane .cw-clone-status')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
+  const recorded = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-status')?.textContent || document.querySelector('#cw-voice-pane .cw-studio-error')?.textContent || '');
+  check('clone: the consent can be recorded from the microphone', () => assert.match(recorded, /good/));
+  await page.screenshot({ path: shot('workshop-voice-clone-consent.png') });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-next[data-to="4"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-clone-create', { timeout: 5000 });
+  await page.evaluate(() => { const g = document.querySelector('#cw-voice-pane .cw-clone-gender'); g.value = 'female'; g.dispatchEvent(new Event('change', { bubbles: true })); });
+
+  // Google rejects the consent first.
+  cloneFail = true; voiceCalls = [];
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-create').click());
+  await page.waitForFunction(() => !!document.querySelector('#cw-voice-pane .cw-studio-error'), null, { timeout: 10000 });
+  const failUi = await page.evaluate(() => ({
+    error: document.querySelector('#cw-voice-pane .cw-studio-error').textContent,
+    rerecord: !!document.querySelector('#cw-voice-pane .cw-clone-next[data-to="3"]'),
+  }));
+  check('clone: a rejected consent shows Google\'s reason and a Re-record option', () => { assert.match(failUi.error, /Consent verification failed/); assert.strictEqual(failUi.rerecord, true); });
+
+  cloneFail = false; voiceCalls = [];
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-create').click());
+  await page.waitForSelector('#cw-voice-pane .cw-voice-result', { timeout: 10000 });
+  const post = voiceCalls.find(c => c.method === 'POST')?.body;
+  const src = post && wavInfo(post.voice.replicated.source_audio.data);
+  const con = post && wavInfo(post.voice.replicated.consent_audio.data);
+  console.log('clone post:', JSON.stringify({ type: post?.voice.type, model: post?.voice.model, src, con }));
+  check('clone: Google gets a replicated voice with both clips as 24 kHz mono 16-bit WAV', () => {
+    assert.strictEqual(post.store, true);
+    assert.strictEqual(post.voice.type, 'replicated');
+    assert.strictEqual(post.voice.display_name, "Mara's voice");
+    assert.strictEqual(post.voice.replicated.source_audio.mime_type, 'audio/wav');
+    assert.deepStrictEqual({ riff: src.riff, rate: src.rate, channels: src.channels, bits: src.bits }, { riff: 'RIFF', rate: 24000, channels: 1, bits: 16 });
+    assert.ok(Math.abs(src.seconds - 12) < 0.1, 'sample ' + src.seconds);
+    assert.deepStrictEqual({ rate: con.rate, channels: con.channels }, { rate: 24000, channels: 1 });
+    assert.ok(con.seconds > 2 && con.seconds < 5, 'consent ' + con.seconds);
+  });
+  const cloneEntry = await page.evaluate(async (DES) => Object.values((await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices).find(e => e.source === 'cloned'), DES);
+  check('clone: registered as a cloned voice with its gender and language', () => { assert.ok(cloneEntry); assert.strictEqual(cloneEntry.gender, 'female'); assert.strictEqual(cloneEntry.languageCode, 'fr-FR'); });
+  const stored = await page.evaluate(() => JSON.stringify(localStorage).length + JSON.stringify(sessionStorage).length);
+  const settingsSize = await page.evaluate(async (DES) => JSON.stringify((await import(`${DES}/src/core/state.js`)).extensionSettings).length, DES);
+  check('clone: the recordings are not kept in settings or browser storage', () => {
+    // A 12 s 24 kHz clip is ~770 KB of base64; nothing close to that is stored anywhere.
+    assert.ok(stored < 200000, 'browser storage ' + stored);
+    assert.ok(settingsSize < 400000, 'settings ' + settingsSize);
+  });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-use').click());
+  await page.waitForTimeout(200);
+  await page.evaluate(() => document.querySelector('#cw-save').click());
+  await page.waitForTimeout(600);
+  const maraVoice = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.characterVoices.Mara, DES);
+  check('clone: Use this voice + Save stores it with a same-gender fallback', () => assert.deepStrictEqual(maraVoice, { source: 'cloned', id: cloneEntry.id, label: "Mara's voice", fallbackStock: 'Kore' }));
+  google = [];
+  await page.evaluate(async ({ DES, id }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.onChatChanged();
+    engine.speakMessage(id);
+    await new Promise(r => setTimeout(r, 2500));
+  }, { DES, id: mesId });
+  check('clone: Mara\'s lines are read in the cloned voice', () => {
+    const line = google.find(g => /Come in, quickly/.test(g.text));
+    assert.ok(line, JSON.stringify(google));
+    assert.strictEqual(line.voice, cloneEntry.id);
+    assert.strictEqual(line.shape, 'voice');
+  });
+  const mgrClone = await page.evaluate(() => [...document.querySelectorAll('#rpg-voices-designed .rpg-voices-designed-row')].map(r => ({ text: r.textContent.replace(/\s+/g, ' '), recreate: !!r.querySelector('.rpg-voices-designed-recreate') })));
+  check('clone: Settings lists it as Cloned, used by Mara, without a Recreate button', () => {
+    const row = mgrClone.find(r => /Cloned/.test(r.text));
+    assert.ok(row, JSON.stringify(mgrClone));
+    assert.match(row.text, /Used by Mara/);
+    assert.strictEqual(row.recreate, false);
+  });
+  fs.rmSync(tmp, { recursive: true, force: true });
 
   // ── Voices off: bullhorn goes back to /speak, guard removed ──
   const offState = await page.evaluate(async (DES) => {

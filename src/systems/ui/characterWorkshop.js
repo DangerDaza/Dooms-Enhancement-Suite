@@ -455,6 +455,7 @@ export function closeCharacterWorkshop() {
     draft = null;
     closeVersionAddMenu();
     try { getEngineIfLoaded()?.stopAudition(); } catch (e) {}
+    try { voicePaneModule?.onWorkshopClosed?.(); } catch (e) {}
 }
 
 // ─── Versions (Base + campaigns) ────────────────────────────────────────────

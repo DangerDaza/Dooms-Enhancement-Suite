@@ -8249,3 +8249,57 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     font-size: 0.8em;
     color: var(--rpg-highlight, #e94560);
 }
+
+/* Workshop Voice tab: clone wizard (src/systems/ui/voiceCloner.js) */
+#character-workshop-popup .cw-clone-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+    list-style: none;
+    padding: 0;
+    margin: 0.25rem 0 0.75rem;
+    font-size: 0.85em;
+    opacity: 0.6;
+}
+#character-workshop-popup .cw-clone-steps .is-current {
+    color: var(--rpg-highlight, #e94560);
+    opacity: 1;
+    font-weight: 600;
+}
+#character-workshop-popup .cw-clone-steps .is-done {
+    opacity: 0.9;
+}
+#character-workshop-popup .cw-clone-rights {
+    padding: 0.6rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+#character-workshop-popup .cw-clone-agree {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    cursor: pointer;
+}
+#character-workshop-popup .cw-clone-phrase {
+    margin: 0.5rem 0;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--rpg-highlight, #e94560);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 1.15em;
+    line-height: 1.5;
+}
+#character-workshop-popup .cw-clone-upload-label {
+    cursor: pointer;
+}
+#character-workshop-popup .cw-clone-status {
+    margin: 0.25rem 0;
+    font-size: 0.9em;
+}
+#character-workshop-popup .cw-clone-status.is-ok {
+    color: #4caf7a;
+}
+#character-workshop-popup .cw-clone-status.is-bad {
+    color: #e0a030;
+}

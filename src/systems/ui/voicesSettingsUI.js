@@ -64,13 +64,13 @@ function fillNarratorOptions() {
         `<option value="${escapeHtml(voice.id)}">${escapeHtml(stockLabel(voice.id))} · ${voice.gender === 'female' ? 'Female' : 'Male'}</option>`).join('');
     const designed = listRegistered().filter(e => health(e) !== 'gone');
     $narrator.html(designed.length
-        ? `<optgroup label="Standard voices">${stock}</optgroup><optgroup label="Your designed voices">${designed.map(e =>
+        ? `<optgroup label="Standard voices">${stock}</optgroup><optgroup label="Your custom voices">${designed.map(e =>
             `<option value="designed:${escapeHtml(e.id)}">${escapeHtml(e.label || 'Designed voice')}</option>`).join('')}</optgroup>`
         : stock);
     $narrator.val(narratorValue());
 }
 
-// ─── My designed voices ─────────────────────────────────────────────────────
+// ─── My custom voices (designed + cloned) ─────────────────────────────────────────────────────
 
 function renderDesigned() {
     const $host = $('#rpg-voices-designed');
@@ -92,15 +92,17 @@ function renderDesigned() {
         return `
             <div class="rpg-voices-designed-row" data-voice="${escapeHtml(e.id)}">
                 <div class="rpg-voices-designed-main">
-                    <span class="rpg-voices-designed-name">${escapeHtml(e.label || 'Designed voice')} ${e.gender ? `<span class="rpg-voices-designed-meta">· ${e.gender === 'female' ? 'Female' : 'Male'}</span>` : ''} ${badge}</span>
+                    <span class="rpg-voices-designed-name">${escapeHtml(e.label || 'Custom voice')} <span class="rpg-voices-designed-meta">· ${e.source === 'cloned' ? 'Cloned' : 'Designed'}${e.gender ? ` · ${e.gender === 'female' ? 'Female' : 'Male'}` : ''}</span> ${badge}</span>
                     <span class="rpg-voices-designed-meta">${used ? `Used by ${escapeHtml(used)}` : 'Not used by anyone'}</span>
-                    <span class="rpg-voices-designed-meta">${escapeHtml(e.designPrompt || '')}</span>
+                    <span class="rpg-voices-designed-meta">${escapeHtml(e.source === 'cloned'
+                        ? (h === 'ok' ? '' : 'Record it again in the Workshop (Voice → Clone a voice) to renew it.')
+                        : (e.designPrompt || ''))}</span>
                 </div>
                 <div class="rpg-voices-designed-buttons">
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-play" title="Preview" ${h === 'gone' ? 'disabled' : ''}>
                         <i class="fa-solid ${playing ? 'fa-stop' : 'fa-play'}"></i>
                     </button>
-                    ${h !== 'ok' ? '<button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-recreate" title="Design a fresh copy from its description">Recreate</button>' : ''}
+                    ${h !== 'ok' && e.source !== 'cloned' ? '<button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-recreate" title="Design a fresh copy from its description">Recreate</button>' : ''}
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-delete" title="Delete from Google"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </div>`;

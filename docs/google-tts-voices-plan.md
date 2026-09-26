@@ -27,11 +27,18 @@ plays twice. Voices follow campaign versions the same way portraits do.
 
 ## Implementation status (branch `TTS-Trial`)
 
-**M1, M2 and M4 are built**, plus the key half of M3: DES voices with the Narrator voice, auto-read,
+**M1, M2, M4 and M5 are built**, plus the key half of M3: DES voices with the Narrator voice, auto-read,
 SillyTavern's auto-read paused by the guard, per-character standard voices (filterable by gender) in the
 Workshop Voice tab, the Present Characters scene rule, campaign-versioned voices, an optional Google key
-in DES that calls Google directly, and voice design with the custom-voice manager. The Extended Voice
-Library (rest of M3) and cloning (M5) are not built.
+in DES that calls Google directly, voice design and voice cloning with the custom-voice manager. The Extended Voice Library (rest of
+M3) and M6–M7 are not built.
+
+M5 follows §8.4. The consent statements in `consentPhrases.js` are generated verbatim from Google's
+table, which now lists 30 locales (the plan noted 29 rows). Clips are converted in the browser with
+Web Audio (`audioPrep.js`: decode → OfflineAudioContext mixdown/resample → 24 kHz mono 16-bit WAV).
+The request is `POST /v1beta/voices {store:true, voice:{model, type:'replicated', display_name,
+replicated:{source_audio, consent_audio}}}` per the voice-replication docs (fetched 2026-09-26). The
+wizard lives in `src/systems/ui/voiceCloner.js` rather than inside `voiceStudio.js`.
 
 M4 follows §8.3–8.7 with these differences: `model` is sent inside `voice` when creating (Google's
 voice-design docs, fetched 2026-09-26, say it's required — §8.3 said to omit it); the chosen model is

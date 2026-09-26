@@ -96,7 +96,7 @@ function badge(entry) {
 export function renderStudio(ctx, isPlaying) {
     const st = stateFor(ctx);
     const hasKey = !!getDesKey();
-    const currentId = ctx.voice && ctx.voice.source === 'designed' ? ctx.voice.id : null;
+    const currentId = ctx.voice && (ctx.voice.source === 'designed' || ctx.voice.source === 'cloned') ? ctx.voice.id : null;
 
     if (!hasKey) {
         return `
@@ -119,6 +119,7 @@ export function renderStudio(ctx, isPlaying) {
             </div>
             <div class="cw-voice-result-actions">
                 ${result.sample ? `<button type="button" class="rpg-btn cw-studio-sample"><i class="fa-solid ${isPlaying(`sample:${result.entry.id}`) ? 'fa-stop' : 'fa-play'}"></i> Google's sample</button>` : ''}
+                <button type="button" class="rpg-btn cw-studio-read-desc" data-voice="${escapeAttr(result.entry.id)}"><i class="fa-solid fa-play"></i> Read description</button>
                 <button type="button" class="rpg-btn cw-studio-try-line" data-voice="${escapeAttr(result.entry.id)}"><i class="fa-solid fa-play"></i> Test line</button>
                 <button type="button" class="rpg-btn rpg-btn-primary cw-studio-use" data-voice="${escapeAttr(result.entry.id)}">Use this voice</button>
                 <button type="button" class="rpg-btn cw-studio-again">Try again</button>
@@ -129,7 +130,7 @@ export function renderStudio(ctx, isPlaying) {
 
     const mine = listRegistered();
     const mineHtml = mine.length ? `
-        <h4 class="cw-voice-subhead">Your designed voices</h4>
+        <h4 class="cw-voice-subhead">Your custom voices</h4>
         <div class="cw-voice-mine">
             ${mine.map((entry) => {
                 const selected = entry.id === currentId;
@@ -138,10 +139,10 @@ export function renderStudio(ctx, isPlaying) {
                 return `
                 <div class="cw-voice-mine-row${selected ? ' is-selected' : ''}">
                     <div class="cw-voice-mine-main">
-                        <span class="cw-voice-name">${escapeHtml(entry.label || 'Designed voice')}</span>
-                        ${entry.gender ? `<span class="cw-voice-gender">${genderWord(entry.gender)}</span>` : ''}
+                        <span class="cw-voice-name">${escapeHtml(entry.label || 'Custom voice')}</span>
+                        <span class="cw-voice-gender">${entry.source === 'cloned' ? 'Cloned' : 'Designed'}${entry.gender ? ` · ${genderWord(entry.gender)}` : ''}</span>
                         ${badge(entry)}
-                        <span class="cw-voice-mine-desc">${escapeHtml(entry.designPrompt || '')}</span>
+                        <span class="cw-voice-mine-desc">${escapeHtml(entry.source === 'cloned' ? (health(entry) === 'ok' ? '' : 'Record it again in Clone a voice to renew it.') : (entry.designPrompt || ''))}</span>
                         <span class="cw-voice-mine-used">${used ? `Used by ${escapeHtml(used)}` : 'Not used by anyone yet'}</span>
                     </div>
                     <div class="cw-voice-mine-actions">
@@ -149,7 +150,7 @@ export function renderStudio(ctx, isPlaying) {
                             aria-label="Preview ${escapeAttr(entry.label || '')}" title="Preview" ${gone ? 'disabled' : ''}>
                             <i class="fa-solid ${isPlaying(entry.id) ? 'fa-stop' : 'fa-play'}"></i>
                         </button>
-                        ${gone || health(entry) === 'expiring'
+                        ${(gone || health(entry) === 'expiring') && entry.source !== 'cloned'
                             ? `<button type="button" class="rpg-btn cw-studio-recreate" data-voice="${escapeAttr(entry.id)}">Recreate</button>`
                             : ''}
                         ${selected ? '<span class="cw-voice-inuse">In use</span>'
@@ -220,7 +221,7 @@ function describeError(e) {
     if (!e) return 'Something went wrong.';
     if (e.kind === 'no-key') return e.message;
     if (e.kind === 'bad-key') return 'Google rejected the key in Settings → Voices.';
-    if (e.kind === 'quota') return 'Your Google project is out of quota, or already has 200 custom voices. Delete some in Settings → Voices → My designed voices.';
+    if (e.kind === 'quota') return 'Your Google project is out of quota, or already has 200 custom voices. Delete some in Settings → Voices → My custom voices.';
     if (e.kind === 'rate') return 'Google is rate-limiting requests. Wait a moment and try again.';
     return `Google said: ${e.message || e}`;
 }
@@ -268,7 +269,9 @@ export async function handleStudioClick(target, host, ctx, rerender) {
                 gender: st.gender,
                 languageCode: st.languageCode,
             });
-            if (st.result.sample) (await getEngine()).playSample(`sample:${st.result.entry.id}`, st.result.sample);
+            // The new voice reads the description it was made from, so you
+            // hear it saying what you asked for (not Google's stock sample).
+            (await getEngine()).audition(refFor(st.result.entry), st.result.entry.designPrompt);
         } catch (e) {
             st.error = describeError(e);
         }
@@ -280,6 +283,14 @@ export async function handleStudioClick(target, host, ctx, rerender) {
         unlockVoicesAudio();
         (await getEngine()).playSample(`sample:${st.result.entry.id}`, st.result.sample);
         rerender();
+        return true;
+    }
+
+    const readDesc = btn('.cw-studio-read-desc');
+    if (readDesc) {
+        unlockVoicesAudio();
+        const entry = getRegistered(readDesc.getAttribute('data-voice'));
+        if (entry) (await getEngine()).audition(refFor(entry), entry.designPrompt || ctx.testLine());
         return true;
     }
 
@@ -324,7 +335,7 @@ export async function handleStudioClick(target, host, ctx, rerender) {
             const { entry, sample } = await recreateDesignedVoice(id);
             // The open card holds a copy of the old ref; point it at the new voice too.
             if (ctx.voice?.id === id) ctx.onChange(refFor(entry));
-            if (sample) (await getEngine()).playSample(`sample:${entry.id}`, sample);
+            (await getEngine()).audition(refFor(entry), entry.designPrompt);
         } catch (e) {
             st.error = describeError(e);
         }

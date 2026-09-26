@@ -35,7 +35,7 @@ import { getCampaignsInOrder } from '../lorebook/campaignManager.js';
 import { DEFAULT_VOICE_DESIGN_PROMPT } from '../generation/defaultPrompts.js';
 import { defaultStockFor } from './voiceCatalog.js';
 import { getDesKey } from './transport.js';
-import { createDesignedVoice, deleteVoice } from './voicesApi.js';
+import { createDesignedVoice, createClonedVoice, deleteVoice } from './voicesApi.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -63,7 +63,7 @@ export function getRegistered(id) {
 /** The VoiceRef stored on a character for a designed voice. */
 export function refFor(entry) {
     return {
-        source: 'designed',
+        source: entry.source === 'cloned' ? 'cloned' : 'designed',
         id: entry.id,
         label: entry.label || 'Designed voice',
         // A standard voice of the same gender reads their lines if the key is
@@ -135,6 +135,34 @@ export async function designVoice({ description, label, gender, languageCode }) 
         designPrompt: String(description || '').trim(),
         gender: gender === 'female' || gender === 'male' ? gender : (voice.gender === 'female' || voice.gender === 'male' ? voice.gender : ''),
         languageCode: languageCode || voice.languageCode || '',
+        createdAt: Date.now(),
+        expireTime: voice.expireTime || new Date(Date.now() + 365 * DAY_MS).toISOString(),
+        keyTag: key ? key.slice(-4) : '',
+        status: 'ok',
+    };
+    registry()[entry.id] = entry;
+    changed();
+    return { entry, sample: voice.sample };
+}
+
+/**
+ * Clones a voice on Google from two prepared recordings and registers it.
+ * The recordings are not kept anywhere — a cloned voice can't be recreated
+ * later without recording again.
+ * @param {{label: string, gender?: string, locale: string, sourceBase64: string, consentBase64: string}} spec
+ * @returns {Promise<{entry: object, sample: object|null}>}
+ */
+export async function cloneVoice({ label, gender, locale, sourceBase64, consentBase64 }) {
+    const voice = await createClonedVoice({ displayName: label, sourceBase64, consentBase64 });
+    if (!voice.id) throw new Error('Google didn\u2019t return an id for the new voice.');
+    const key = getDesKey();
+    const entry = {
+        id: voice.id,
+        source: 'cloned',
+        label: label || voice.label || 'Cloned voice',
+        designPrompt: '',
+        gender: gender === 'female' || gender === 'male' ? gender : '',
+        languageCode: locale || '',
         createdAt: Date.now(),
         expireTime: voice.expireTime || new Date(Date.now() + 365 * DAY_MS).toISOString(),
         keyTag: key ? key.slice(-4) : '',

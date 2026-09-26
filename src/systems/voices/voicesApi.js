@@ -126,6 +126,37 @@ export async function createDesignedVoice({ description, displayName, gender, la
     }
 }
 
+/**
+ * Clones a voice from two recordings of the same adult speaker: a 10–30 s
+ * sample and the consent statement (voice-replication docs, fetched
+ * 2026-09-26). Both are 24 kHz mono 16-bit WAV, base64. Google checks that
+ * the consent recording says the statement and matches the sample.
+ * @param {{displayName: string, sourceBase64: string, consentBase64: string}} spec
+ */
+export async function createClonedVoice({ displayName, sourceBase64, consentBase64 }) {
+    const chosen = extensionSettings.voices?.model || DESIGN_FALLBACK_MODEL;
+    const body = (model) => ({
+        store: true,
+        voice: {
+            model,
+            type: 'replicated',
+            display_name: String(displayName || 'DES voice').slice(0, 60),
+            replicated: {
+                source_audio: { mime_type: 'audio/wav', data: sourceBase64 },
+                consent_audio: { mime_type: 'audio/wav', data: consentBase64 },
+            },
+        },
+    });
+    try {
+        return normalizeVoice(await call('POST', '/voices', body(chosen)));
+    } catch (e) {
+        if (chosen !== DESIGN_FALLBACK_MODEL && e.kind === 'model-unavailable') {
+            return normalizeVoice(await call('POST', '/voices', body(DESIGN_FALLBACK_MODEL)));
+        }
+        throw e;
+    }
+}
+
 /** Deletes a voice from the user's Google project. A voice that's already gone counts as deleted. */
 export async function deleteVoice(id) {
     try {

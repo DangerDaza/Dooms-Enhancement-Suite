@@ -66,3 +66,28 @@ export function base64ToBytes(b64) {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes;
 }
+
+/**
+ * Float samples (-1…1) → 16-bit little-endian PCM bytes, clipped.
+ * @param {Float32Array} samples
+ * @returns {Uint8Array}
+ */
+export function floatToPcm16(samples) {
+    const out = new Uint8Array(samples.length * 2);
+    const view = new DataView(out.buffer);
+    for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(i * 2, s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7fff), true);
+    }
+    return out;
+}
+
+/** Bytes → base64 in chunks (String.fromCharCode on a whole clip overflows the stack). */
+export function bytesToBase64(bytes) {
+    let binary = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+}

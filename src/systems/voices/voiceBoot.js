@@ -233,4 +233,6 @@ export function onChatChangedVoices() {
 /** Called from campaign switches and Workshop saves: voices may have changed. */
 export function invalidateVoices() {
     engine?.invalidate();
+    // Who-uses-which-voice may have changed (Settings → Voices → My custom voices).
+    try { document.dispatchEvent(new CustomEvent('dooms:voices-registry')); } catch (e) {}
 }

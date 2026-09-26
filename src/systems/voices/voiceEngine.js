@@ -114,7 +114,7 @@ player.configurePlayer({
         if (!goneToasts.has(voiceId)) {
             goneToasts.add(voiceId);
             const label = entry?.label ? `"${entry.label}"` : 'A designed voice';
-            toast('warning', `${label} no longer exists on Google, so a standard voice is reading those lines. Recreate it from Settings \u2192 Voices \u2192 My designed voices.`, 9000);
+            toast('warning', `${label} no longer exists on Google, so a standard voice is reading those lines. Recreate or re-record it from Settings \u2192 Voices \u2192 My custom voices.`, 9000);
         }
         const { ref } = resolveVoice({
             seg: { kind: 'dialogue', speaker: seg?.speaker || 'x' },

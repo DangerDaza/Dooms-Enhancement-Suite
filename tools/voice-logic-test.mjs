@@ -23,6 +23,7 @@ const settings = await import('../src/systems/voices/voiceSettings.js');
 const guard = await import('../src/systems/voices/stAutoReadGuard.js');
 const catalog = await import('../src/systems/voices/voiceCatalog.js');
 const wav = await import('../src/systems/voices/wav.js');
+const consent = await import('../src/systems/voices/consentPhrases.js');
 
 let failures = 0;
 let passes = 0;
@@ -402,6 +403,23 @@ test('wav: header describes 24 kHz mono 16-bit PCM and carries the samples', () 
 test('wav: odd byte counts are trimmed to whole samples', () => {
     const out = wav.pcm16ToWav(new Uint8Array([1, 2, 3]), 16000);
     assert.equal(out.length, 44 + 2);
+});
+
+test('wav: float samples become clipped 16-bit PCM, base64 round-trips', () => {
+    const pcm = wav.floatToPcm16(new Float32Array([0, 1, -1, 2, -2, 0.5]));
+    const v = new DataView(pcm.buffer);
+    assert.deepEqual([0, 1, 2, 3, 4, 5].map(i => v.getInt16(i * 2, true)), [0, 32767, -32768, 32767, -32768, 16384]);
+    const big = new Uint8Array(100000).map((_, i) => i % 256);
+    assert.deepEqual([...wav.base64ToBytes(wav.bytesToBase64(big))].slice(0, 300), [...big].slice(0, 300));
+    assert.equal(wav.base64ToBytes(wav.bytesToBase64(big)).length, 100000);
+});
+
+test('consent: Google\'s 30 locales, verbatim English, unique locales', () => {
+    assert.equal(consent.CONSENT_PHRASES.length, 30);
+    assert.equal(new Set(consent.CONSENT_PHRASES.map(p => p.locale)).size, 30);
+    assert.equal(consent.consentPhraseFor('en-GB').text, 'I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.');
+    assert.equal(consent.consentPhraseFor('xx-XX').locale, 'en-US');
+    assert.ok(consent.CONSENT_PHRASES.every(p => p.text.length > 20 && /^[a-z]{2}-[A-Z]{2}$/.test(p.locale)));
 });
 
 test('wav: mime helpers', () => {
