@@ -1169,6 +1169,20 @@
                         <input type="number" id="rpg-voices-budget" class="rpg-accordion-input" min="0" max="10000"
                             step="10" />
                     </div>
+                    <div class="rpg-subsection-label" style="margin-top:10px;">My designed voices</div>
+                    <p class="rpg-note-text">Voices you designed in the Character Workshop (Voice tab &rarr; Design a
+                        voice). Google keeps each one for a year and allows 200 per Google project; deleting a
+                        character never deletes its voice here.</p>
+                    <div id="rpg-voices-designed"></div>
+                    <div class="rpg-voices-designed-actions">
+                        <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-count-slots">
+                            <i class="fa-solid fa-calculator"></i> Count slots used on Google
+                        </button>
+                        <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-remove-unused" hidden>
+                            <i class="fa-solid fa-broom"></i> Remove unused voices
+                        </button>
+                    </div>
+                    <p class="rpg-note-text" id="rpg-voices-slots" aria-live="polite"></p>
                     <p class="rpg-note-text" id="rpg-voices-status" aria-live="polite"></p>
                     <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-resume" hidden>
                         <i class="fa-solid fa-play"></i> Resume auto-read

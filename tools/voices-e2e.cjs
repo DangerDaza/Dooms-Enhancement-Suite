@@ -9,9 +9,12 @@
  * auto-read timing (once, after bubbles; never on re-render, stop, or chat
  * load; continue reads only the new part), the SillyTavern auto-read guard,
  * the Workshop Voice tab, the settings accordion, the 3.8 → 3.1 fallback,
- * and the Google key box (with a key, voices call Google directly — Google
+ * the Google key box (with a key, voices call Google directly — Google
  * is stubbed there too, so any key string works; without one they go
- * through SillyTavern).
+ * through SillyTavern), and voice design (M4): the gender filter, creating
+ * a voice from a description, using it in chat, discard, the Settings
+ * manager (used-by, slot count, recreate, delete), and a voice Google
+ * no longer has falling back to a standard voice mid-read.
  *
  * Setup: a local SillyTavern with this repo linked (or installed) as
  *   public/scripts/extensions/third-party/Dooms-Enhancement-Suite
@@ -330,9 +333,35 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   let google = [];
   let googleMode = 'ok'; // 'ok' | 'reject-voice-field' | 'reject-model' | 'bad-key'
   const pcm = Buffer.alloc(2400).toString('base64');
+  // Fake Google Voices API state (M4).
+  const designed = new Map(); // id -> voice
+  const goneVoices = new Set();
+  let voiceCalls = [];
+  let nextVoice = 1;
+  const wavB64 = silentWav(120).toString('base64');
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const req = route.request();
-    if (req.method() === 'OPTIONS') return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' } });
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } });
+    const url = new URL(req.url());
+    const json = (status, obj) => route.fulfill({ status, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify(obj) });
+    if (url.pathname.startsWith('/v1beta/voices')) {
+      const idPart = url.pathname.split('/')[3];
+      voiceCalls.push({ method: req.method(), id: idPart || null, body: req.postData() ? JSON.parse(req.postData()) : null, query: url.search });
+      if (req.method() === 'POST') {
+        const b = JSON.parse(req.postData());
+        const id = `voice_e2e_${nextVoice++}`;
+        const v = { id, display_name: b.voice.display_name, gender: b.voice.gender || '', type: 'prompted', expire_time: new Date(Date.now() + 365 * 864e5).toISOString() };
+        designed.set(id, v);
+        return json(200, { ...v, sample_audio: { mime_type: 'audio/wav', data: wavB64 } });
+      }
+      if (req.method() === 'DELETE') {
+        if (!designed.has(idPart)) return json(404, { error: { code: 404, message: `Voice voices/${idPart} not found`, status: 'NOT_FOUND' } });
+        designed.delete(idPart);
+        return json(200, {});
+      }
+      if (req.method() === 'GET' && !idPart) return json(200, { voices: [...designed.values(), { id: 'voice_outside_1', display_name: 'Made in AI Studio', type: 'prompted' }] });
+      return json(404, { error: { code: 404, message: 'not found', status: 'NOT_FOUND' } });
+    }
     const body = JSON.parse(req.postData());
     const model = /models\/([^:]+):generateContent/.exec(req.url())[1];
     const vc = body.generationConfig.speechConfig.voiceConfig;
@@ -341,6 +370,9 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     const cors = { 'access-control-allow-origin': '*' };
     const fail = (status, message, st) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { code: status, message, status: st } }) });
     if (googleMode === 'bad-key') return fail(400, 'API key not valid. Please pass a valid API key.', 'INVALID_ARGUMENT');
+    if (/^voice_/.test(vc.voice || '') && (goneVoices.has(vc.voice) || !designed.has(vc.voice))) {
+      return fail(404, `Voice voices/${vc.voice} not found.`, 'NOT_FOUND');
+    }
     if (googleMode === 'reject-voice-field' && shape === 'voice') return fail(400, 'Invalid JSON payload received. Unknown name "voice" at \'generation_config.speech_config.voice_config\'', 'INVALID_ARGUMENT');
     if (googleMode === 'reject-model' && model.startsWith('gemini-3.8')) return fail(404, `models/${model} is not found for API version v1beta`, 'NOT_FOUND');
     return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: pcm } }] } }] }) });
@@ -423,6 +455,182 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   await page.evaluate(() => { const sec = document.querySelector('.rpg-accordion-section[data-accordion="voices"]'); sec.style.width = '420px'; });
   await (await page.$('.rpg-accordion-section[data-accordion="voices"]')).screenshot({ path: shot('voices-settings-narrow.png') });
   await page.evaluate(() => { document.querySelector('.rpg-accordion-section[data-accordion="voices"]').style.width = ''; });
+
+  // ── M4: gender filter and voice design ──
+  googleMode = 'ok';
+  await setKey('AIzaFAKE-direct-key');
+  await page.evaluate(async (DES) => {
+    await (await import(`${DES}/src/core/lazyUI.js`)).ensureSettingsUI();
+    window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: 'Tom' } }));
+  }, DES);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-voice-filter', { timeout: 5000 });
+  const counts = {};
+  for (const f of ['female', 'male', 'all']) {
+    await page.evaluate((f) => document.querySelector(`#cw-voice-pane .cw-voice-filter[data-filter="${f}"]`).click(), f);
+    await page.waitForTimeout(150);
+    counts[f] = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('#cw-voice-pane .cw-voice-card')];
+      return { n: cards.length, genders: [...new Set(cards.map(c => c.dataset.gender))].sort().join(','), groups: document.querySelectorAll('#cw-voice-pane .cw-voice-group').length };
+    });
+  }
+  check('gender filter: Female shows only female voices', () => assert.deepStrictEqual(counts.female, { n: 14, genders: 'female', groups: 0 }));
+  check('gender filter: Male shows only male voices', () => assert.deepStrictEqual(counts.male, { n: 16, genders: 'male', groups: 0 }));
+  check('gender filter: All shows 30, grouped Female then Male', () => assert.deepStrictEqual(counts.all, { n: 30, genders: 'female,male', groups: 2 }));
+  await page.screenshot({ path: shot('workshop-voice-filter.png') });
+
+  // Design view
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="design"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-studio-desc', { timeout: 5000 });
+  voiceCalls = [];
+  await page.evaluate(() => {
+    const d = document.querySelector('#cw-voice-pane .cw-studio-desc');
+    d.value = 'A gravelly, low-pitched man in his fifties with a slow Scottish accent.';
+    d.dispatchEvent(new Event('input', { bubbles: true }));
+    const g = document.querySelector('#cw-voice-pane .cw-studio-gender');
+    g.value = 'male'; g.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#cw-voice-pane .cw-studio-create').click();
+  });
+  await page.waitForSelector('#cw-voice-pane .cw-voice-result', { timeout: 8000 }).catch(async (e) => {
+    console.log('studio state:', await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-error')?.textContent || document.querySelector('#cw-voice-pane .cw-voice-body')?.textContent.slice(0, 400)), JSON.stringify(voiceCalls));
+    throw e;
+  });
+  const created = voiceCalls.find(c => c.method === 'POST');
+  check('Create sends a prompted voice with the description, model and gender', () => {
+    assert.strictEqual(created.body.store, true);
+    assert.strictEqual(created.body.voice.type, 'prompted');
+    assert.strictEqual(created.body.voice.prompted.input, 'A gravelly, low-pitched man in his fifties with a slow Scottish accent.');
+    assert.strictEqual(created.body.voice.gender, 'male');
+    assert.strictEqual(created.body.voice.model, 'gemini-3.8-flash-lite-tts');
+    assert.strictEqual(created.body.voice.display_name, "Tom's voice");
+  });
+  const reg1 = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices, DES);
+  check('the new voice is registered right away', () => { assert.ok(reg1.voice_e2e_1); assert.strictEqual(reg1.voice_e2e_1.gender, 'male'); assert.strictEqual(reg1.voice_e2e_1.status, 'ok'); });
+  const sampleSrc = await page.evaluate(() => document.getElementById('dooms-tts-audio')?.src || '');
+  check('Google\'s sample plays straight away (no extra request)', () => assert.match(sampleSrc, /^blob:/));
+  await page.screenshot({ path: shot('workshop-voice-design.png') });
+
+  // Use it + Save
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-use').click());
+  await page.waitForTimeout(200);
+  const curLabel = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-current-value').textContent);
+  check('Use this voice sets it as the current voice', () => assert.match(curLabel, /Tom's voice \(designed\)/));
+  await page.evaluate(() => document.querySelector('#cw-save').click());
+  await page.waitForTimeout(600);
+  const tomVoice = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.characterVoices.Tom, DES);
+  check('Save stores the designed voice with a same-gender fallback', () => assert.deepStrictEqual(tomVoice, { source: 'designed', id: 'voice_e2e_1', label: "Tom's voice", fallbackStock: 'Charon' }));
+
+  // Chat reading uses it
+  google = [];
+  await page.evaluate(async ({ DES, id }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.onChatChanged();
+    engine.speakMessage(id);
+    await new Promise(r => setTimeout(r, 2500));
+  }, { DES, id: mesId });
+  check('Tom\'s lines are read in the designed voice via voiceConfig.voice', () => {
+    const tom = google.find(g => /Right behind you/.test(g.text));
+    assert.ok(tom, JSON.stringify(google));
+    assert.strictEqual(tom.voice, 'voice_e2e_1');
+    assert.strictEqual(tom.shape, 'voice');
+  });
+
+  // Discard a second design
+  voiceCalls = [];
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: 'Mara' } })));
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click());
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="design"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-studio-desc', { timeout: 5000 });
+  page.once('dialog', d => d.accept());
+  await page.evaluate(() => {
+    const d = document.querySelector('#cw-voice-pane .cw-studio-desc');
+    d.value = 'A bright young woman with a quick, amused way of talking.';
+    d.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#cw-voice-pane .cw-studio-create').click();
+  });
+  await page.waitForSelector('#cw-voice-pane .cw-voice-result', { timeout: 8000 });
+  const mineRows = await page.evaluate(() => document.querySelectorAll('#cw-voice-pane .cw-voice-mine-row').length);
+  check('the designer lists every designed voice for reuse', () => assert.strictEqual(mineRows, 2));
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-discard').click());
+  await page.waitForTimeout(600);
+  const afterDiscard = await page.evaluate(async (DES) => Object.keys((await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices), DES);
+  check('Discard deletes the voice from Google and the registry', () => {
+    assert.ok(voiceCalls.some(c => c.method === 'DELETE' && c.id === 'voice_e2e_2'));
+    assert.deepStrictEqual(afterDiscard, ['voice_e2e_1']);
+  });
+  await page.evaluate(() => document.querySelector('#cw-cancel')?.click());
+  await page.waitForTimeout(300);
+
+  // Settings manager
+  const mgr = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll('#rpg-voices-designed .rpg-voices-designed-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
+    narratorGroups: [...document.querySelectorAll('#rpg-voices-narrator optgroup')].map(g => g.label),
+  }));
+  check('Settings lists the designed voice and who uses it', () => { assert.strictEqual(mgr.rows.length, 1); assert.match(mgr.rows[0], /Used by Tom/); });
+  check('a designed voice can be picked as the Narrator', () => assert.deepStrictEqual(mgr.narratorGroups, ['Standard voices', 'Your designed voices']));
+  await page.evaluate(() => document.querySelector('#rpg-voices-count-slots').click());
+  await page.waitForTimeout(600);
+  const slots = await page.evaluate(() => document.querySelector('#rpg-voices-slots').textContent);
+  check('slot counter counts every custom voice in the project', () => assert.match(slots, /2 of 200 .*\(1 made outside DES\)/));
+
+  // Voice gone mid-read: falls back to the same-gender standard voice
+  goneVoices.add('voice_e2e_1'); google = [];
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await page.evaluate(async ({ DES, id }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.onChatChanged();
+    engine.speakMessage(id);
+    await new Promise(r => setTimeout(r, 2500));
+  }, { DES, id: mesId });
+  const goneState = await page.evaluate(async (DES) => ({
+    status: (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices.voice_e2e_1.status,
+    toast: [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '),
+    badge: document.querySelector('#rpg-voices-designed .rpg-voices-badge')?.textContent || '',
+  }), DES);
+  check('a voice Google lost falls back to Charon for that line', () => {
+    const tomLines = google.filter(g => /Right behind you/.test(g.text)).map(g => g.voice);
+    assert.deepStrictEqual(tomLines, ['voice_e2e_1', 'Charon']);
+  });
+  check('it is marked gone, the user is told once, and Settings shows it', () => {
+    assert.strictEqual(goneState.status, 'gone');
+    assert.match(goneState.toast, /no longer exists on Google/);
+    assert.match(goneState.badge, /No longer on Google/);
+  });
+
+  // Recreate from the manager: new id everywhere, old one deleted
+  voiceCalls = [];
+  page.once('dialog', d => d.accept());
+  await page.evaluate(() => document.querySelector('#rpg-voices-designed .rpg-voices-designed-recreate').click());
+  await page.waitForTimeout(1200);
+  const recreated = await page.evaluate(async (DES) => {
+    const s = (await import(`${DES}/src/core/state.js`)).extensionSettings;
+    return { tom: s.characterVoices.Tom, reg: Object.keys(s.voices.customVoices) };
+  }, DES);
+  check('Recreate designs a fresh copy from the description and repoints Tom', () => {
+    const post = voiceCalls.find(c => c.method === 'POST');
+    assert.strictEqual(post.body.voice.prompted.input, 'A gravelly, low-pitched man in his fifties with a slow Scottish accent.');
+    assert.strictEqual(recreated.tom.id, 'voice_e2e_3');
+    assert.deepStrictEqual(recreated.reg, ['voice_e2e_3']);
+    assert.ok(voiceCalls.some(c => c.method === 'DELETE' && c.id === 'voice_e2e_1'));
+  });
+
+  // Delete from the manager: Tom goes back to the Narrator
+  voiceCalls = [];
+  page.once('dialog', d => d.accept());
+  await page.evaluate(() => document.querySelector('#rpg-voices-designed .rpg-voices-designed-delete').click());
+  await page.waitForTimeout(800);
+  const deleted = await page.evaluate(async (DES) => {
+    const s = (await import(`${DES}/src/core/state.js`)).extensionSettings;
+    return { tom: s.characterVoices.Tom || null, reg: Object.keys(s.voices.customVoices) };
+  }, DES);
+  check('Delete removes it from Google and from Tom (Narrator again)', () => {
+    assert.ok(voiceCalls.some(c => c.method === 'DELETE' && c.id === 'voice_e2e_3'));
+    assert.strictEqual(deleted.tom, null);
+    assert.deepStrictEqual(deleted.reg, []);
+  });
 
   // ── Voices off: bullhorn goes back to /speak, guard removed ──
   const offState = await page.evaluate(async (DES) => {

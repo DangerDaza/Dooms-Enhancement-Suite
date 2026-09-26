@@ -37,6 +37,8 @@ import { resolveVoice, describeReason, lookupByName } from './voiceResolver.js';
 import * as player from './player.js';
 import { getRouteState, getDesKey } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
+import { saveSettings } from '../../core/persistence.js';
+import { base64ToBytes } from './wav.js';
 
 
 const TOAST_TITLE = 'DES Voices';
@@ -80,6 +82,8 @@ player.configurePlayer({
             content: 'Google returned no audio for a line, so it was skipped.',
             'model-unavailable': 'SillyTavern couldn’t use the chosen Gemini voice model.',
             argument: `Google refused the request: ${error?.message || ''}`,
+            'needs-key': 'Designed voices need your Google AI Studio key in Settings \u2192 Voices.',
+            'voice-gone': 'That designed voice no longer exists on Google.',
         };
         toast(kind === 'rate' || kind === 'network' || kind === 'content' ? 'info' : 'warning',
             messages[kind] || `Couldn’t read that line: ${error?.message || kind}`);
@@ -95,7 +99,53 @@ player.configurePlayer({
     onStateChange() {
         try { document.dispatchEvent(new CustomEvent('dooms:voices-state')); } catch (e) {}
     },
+    /**
+     * Google no longer has a designed voice (expired or deleted elsewhere):
+     * mark it gone so every later line resolves to its fallback, tell the
+     * user once, and hand the player the fallback for this line.
+     */
+    onVoiceGone(voiceId, seg) {
+        const entry = voices().customVoices?.[voiceId];
+        if (entry && entry.status !== 'gone') {
+            entry.status = 'gone';
+            try { saveSettings(); } catch (e) {}
+            try { document.dispatchEvent(new CustomEvent('dooms:voices-registry')); } catch (e) {}
+        }
+        if (!goneToasts.has(voiceId)) {
+            goneToasts.add(voiceId);
+            const label = entry?.label ? `"${entry.label}"` : 'A designed voice';
+            toast('warning', `${label} no longer exists on Google, so a standard voice is reading those lines. Recreate it from Settings \u2192 Voices \u2192 My designed voices.`, 9000);
+        }
+        const { ref } = resolveVoice({
+            seg: { kind: 'dialogue', speaker: seg?.speaker || 'x' },
+            present: true,
+            ref: findRefFor(voiceId),
+            narrator: voices().narratorVoice,
+            caps: caps(),
+        });
+        return { voiceId: ref.id, voiceSource: ref.source || 'stock' };
+    },
 });
+
+/** Designed voices already reported gone this session. */
+const goneToasts = new Set();
+
+/** What this device can play: the DES key, and which designed voices still exist. */
+function caps() {
+    return { direct: !!getDesKey(), registry: voices().customVoices || {} };
+}
+
+/** A stored ref using this voice id (for its fallbackStock), or a bare one. */
+function findRefFor(voiceId) {
+    const pools = [extensionSettings.characterVoices, ...Object.values(extensionSettings.userCharacters || {}).map(u => ({ v: u?.voice }))];
+    for (const pool of pools) {
+        for (const ref of Object.values(pool || {})) if (ref && ref.id === voiceId) return ref;
+    }
+    const narrator = voices().narratorVoice;
+    if (narrator && narrator.id === voiceId) return narrator;
+    const gender = voices().customVoices?.[voiceId]?.gender;
+    return { source: 'designed', id: voiceId, fallbackStock: gender === 'female' ? 'Kore' : 'Charon' };
+}
 
 // ─── Names, presence and voices ─────────────────────────────────────────────
 
@@ -157,11 +207,12 @@ function voiceFor(speaker) {
 function buildJob(segments, { messageId = null, source, auto = false, highlightMessage = true }) {
     const presence = presenceFor(messageId);
     const narrator = voices().narratorVoice;
+    const deviceCaps = caps();
     const jobSegments = [];
     for (const seg of segments) {
         const speaker = seg.speaker ? canonicalName(seg.speaker) : null;
         const present = speaker ? isPresentOnPanel(speaker, presence) : false;
-        const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: voiceFor(speaker), narrator });
+        const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: voiceFor(speaker), narrator, caps: deviceCaps });
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
         // unvoiced character, then narration) are one Google request.
@@ -170,7 +221,7 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
             prev.idxs.push(...(seg.idxs || []));
             continue;
         }
-        jobSegments.push({ text: seg.text, voiceId: ref.id, reason, speaker, idxs: [...(seg.idxs || [])] });
+        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
         console.debug('[DES Voices] job', source, messageId,
@@ -243,7 +294,7 @@ export function speakReasoning(messageId, text) {
 /**
  * Plays a sample in a given voice (Workshop and settings previews). Works
  * whether or not DES voices are switched on.
- * @param {{id: string}} ref
+ * @param {{id: string, source?: string}} ref
  * @param {string} text
  */
 export function audition(ref, text) {
@@ -254,7 +305,28 @@ export function audition(ref, text) {
     const job = player.newJob({
         source: 'audition',
         key: ref.id,
-        segments: segments.map(s => ({ text: s.text, voiceId: ref.id, reason: 'audition', speaker: null, idxs: [] })),
+        segments: segments.map(s => ({ text: s.text, voiceId: ref.id, voiceSource: ref.source || 'stock', reason: 'audition', speaker: null, idxs: [] })),
+    });
+    stopStPlayback();
+    player.replaceWith(job);
+}
+
+/**
+ * Plays audio Google already returned (a designed voice's sample) — no
+ * request. Toggles off when the same sample is playing.
+ * @param {string} key - usually the voice id
+ * @param {{mimeType: string, data: string}} sample - base64 audio
+ */
+export function playSample(key, sample) {
+    if (!sample || !sample.data) return;
+    const cur = player.getCurrentJob();
+    if (cur && cur.source === 'audition' && cur.key === key) { player.stop(); return; }
+    const blob = new Blob([base64ToBytes(sample.data)], { type: sample.mimeType || 'audio/wav' });
+    const url = player.urlForBlob(blob, `sample:${key}`);
+    const job = player.newJob({
+        source: 'audition',
+        key,
+        segments: [{ text: '', voiceId: key, voiceSource: 'designed', reason: 'audition', speaker: null, idxs: [], url }],
     });
     stopStPlayback();
     player.replaceWith(job);

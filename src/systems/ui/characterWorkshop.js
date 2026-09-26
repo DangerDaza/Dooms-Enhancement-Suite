@@ -1263,7 +1263,11 @@ function buildDraft(name, isUser = false, versionId = null) {
 
 /** A stored VoiceRef copied for the draft, or null. */
 function cloneVoice(ref) {
-    return ref && typeof ref === 'object' && typeof ref.id === 'string' && ref.id ? { ...ref } : null;
+    if (!ref || typeof ref !== 'object') return null;
+    if (typeof ref.id === 'string' && ref.id) return { ...ref };
+    // An imported designed voice not created yet: kept so the Voice tab can offer "Create voice".
+    if (ref.id === null && typeof ref.pendingDesign === 'string' && ref.pendingDesign) return { ...ref };
+    return null;
 }
 
 function resolveCurrentRelationship(name) {
@@ -1444,6 +1448,11 @@ function renderVoice() {
         voice: draft.voice,
         isCardCharacter,
         sharesColorWith,
+        // For "Draft from card" in the voice designer.
+        card: {
+            appearance: typeof draft.appearance === 'string' ? draft.appearance : '',
+            description: draft.injection?.description || '',
+        },
         onChange(ref) {
             if (!draft) return;
             draft.voice = ref ? { ...ref } : null;
@@ -3487,9 +3496,23 @@ function exportDraft() {
             promptTemplate: draft.injection?.promptTemplate || '',
         },
     };
-    // Standard voices travel with the export; other voice kinds belong to
-    // one Google project and are left out.
-    if (draft.voice && (draft.voice.source || 'stock') === 'stock') payload.voice = { source: 'stock', id: draft.voice.id };
+    // Standard voices travel as-is. A designed voice belongs to one Google
+    // project, so it travels as its description and is re-created on import.
+    if (draft.voice && (draft.voice.source || 'stock') === 'stock') {
+        payload.voice = { source: 'stock', id: draft.voice.id };
+    } else if (draft.voice && draft.voice.source === 'designed') {
+        const entry = draft.voice.id ? extensionSettings.voices?.customVoices?.[draft.voice.id] : null;
+        const designPrompt = entry?.designPrompt || draft.voice.pendingDesign || '';
+        if (designPrompt) {
+            payload.voice = {
+                source: 'designed',
+                label: entry?.label || draft.voice.label || '',
+                designPrompt,
+                gender: entry?.gender || '',
+                fallbackStock: draft.voice.fallbackStock || '',
+            };
+        }
+    }
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

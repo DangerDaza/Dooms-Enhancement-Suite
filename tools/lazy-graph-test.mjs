@@ -26,6 +26,9 @@ const MUST_BE_LAZY = [
     'src/systems/voices/presence.js',
     'src/systems/voices/voiceResolver.js',
     'src/systems/voices/stAutoReadGuard.js',
+    'src/systems/voices/voicesApi.js',
+    'src/systems/voices/voiceRegistry.js',
+    'src/systems/ui/voiceStudio.js',
     'src/systems/ui/voicePane.js',
     'src/systems/ui/voicesSettingsUI.js',
 ];

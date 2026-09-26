@@ -25,7 +25,9 @@
  *   when it ends, stops or fails.
  * - Audio is cached in memory, so re-reading a line costs nothing.
  *
- * @typedef {{text: string, voiceId: string, reason: string, speaker: string|null, idxs: number[]}} JobSegment
+ * @typedef {{text: string, voiceId: string, voiceSource?: string, reason: string, speaker: string|null, idxs: number[],
+ *            url?: string}} JobSegment
+ *   url: audio already in hand (a designed voice's sample) — played without a request.
  * @typedef {{id: number, messageId: number|null, source: string, auto: boolean, segments: JobSegment[],
  *            highlightMessage?: boolean, controller?: AbortController}} Job
  */
@@ -47,7 +49,7 @@ let sessionRequests = 0;
 let budgetStart = 0; // the auto-read budget counts from here (reset on resume)
 let consecutiveRateGiveUps = 0;
 const cache = new Map(); // key -> {url, audition}
-const hooks = { onFatal: null, onBudget: null, onStateChange: null };
+const hooks = { onFatal: null, onBudget: null, onStateChange: null, onVoiceGone: null };
 
 export function configurePlayer(options) {
     Object.assign(hooks, options || {});
@@ -163,7 +165,17 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
     signal?.addEventListener?.('abort', () => { clearTimeout(t); reject(new TtsError('aborted', 'Stopped')); }, { once: true });
 });
 
+/**
+ * Wraps audio already in hand (e.g. a designed voice's sample) as a
+ * playable URL. Kept with the auditions so a chat change doesn't drop it.
+ */
+export function urlForBlob(blob, key) {
+    const k = `blob\u0001${key}`;
+    return cacheGet(k) || cachePut(k, blob, true);
+}
+
 async function fetchSegment(job, seg, signal) {
+    if (seg.url) return seg.url;
     const model = voices().model;
     const key = cacheKey(model, seg.voiceId, seg.text);
     const hit = cacheGet(key);
@@ -178,8 +190,9 @@ async function fetchSegment(job, seg, signal) {
         if (signal.aborted) throw new TtsError('aborted', 'Stopped');
         sessionRequests++;
         hooks.onStateChange?.();
+        const usedVoiceId = seg.voiceId;
         try {
-            const { blob } = await synthesize({ text: seg.text, voiceId: seg.voiceId, model, signal });
+            const { blob } = await synthesize({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', model, signal });
             consecutiveRateGiveUps = 0;
             return cachePut(key, blob, job.source === 'audition');
         } catch (e) {
@@ -188,6 +201,23 @@ async function fetchSegment(job, seg, signal) {
                 continue;
             }
             if (e instanceof TtsError && e.kind === 'rate') consecutiveRateGiveUps++;
+            // A designed voice Google no longer has: switch this line (and
+            // later lines in the same voice) to the fallback and try again.
+            if (e instanceof TtsError && e.kind === 'voice-gone' && hooks.onVoiceGone) {
+                // Another line already switched this one over (prefetch race).
+                if (seg.voiceId !== usedVoiceId) return fetchSegment(job, seg, signal);
+                const fallback = hooks.onVoiceGone(seg.voiceId, seg);
+                if (fallback && fallback.voiceId && fallback.voiceId !== seg.voiceId) {
+                    const goneId = seg.voiceId;
+                    for (const other of job.segments) {
+                        if (other.voiceId === goneId) {
+                            other.voiceId = fallback.voiceId;
+                            other.voiceSource = fallback.voiceSource || 'stock';
+                        }
+                    }
+                    return fetchSegment(job, seg, signal);
+                }
+            }
             throw e;
         }
     }

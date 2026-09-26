@@ -68,3 +68,20 @@ Draw from these narrative directions when generating options — pick what fits 
 - A moral dilemma where {{user}} or {{char}} must make a difficult choice that directly affects the other
 - An environmental disruption that forces a change of setting or circumstances (stranded, sudden weather, forced relocation)
 </twist_categories>`;
+
+/**
+ * DES voices — "Draft from card" in the Workshop's voice designer
+ * (docs/google-tts-voices-plan.md §8.3). Produces the 1–2 sentence
+ * description Google's voice design asks for: age, gender, timbre, texture,
+ * accent. {name}, {appearance} and {description} are filled from the card.
+ */
+export const DEFAULT_VOICE_DESIGN_PROMPT = `Write a description of how {name} sounds when they speak, for a text-to-speech voice designer.
+
+Character appearance: {appearance}
+Character description: {description}
+
+Rules:
+- One or two sentences, at most 45 words.
+- Describe only the voice: apparent age, gender, pitch, timbre, vocal texture, pace, and accent or dialect.
+- Use plain descriptive words (e.g. "a husky, low-pitched woman in her forties with a slow Southern drawl"). No names, no story, no quotation marks.
+- Output only the description.`;

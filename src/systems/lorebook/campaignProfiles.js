@@ -531,6 +531,97 @@ export function unreferencedPortraits(candidates) {
     return out;
 }
 
+// ─── Voice reference counting (DES voices) ──────────────────────────────────
+
+/**
+ * @typedef {{kind: 'character'|'persona'|'narrator', name: string|null, versionId: string|null}} VoiceUse
+ *   versionId: BASE_VERSION or a campaign id for characters; null otherwise.
+ */
+
+/**
+ * Visits every place a voice id is used: live characterVoices (as the
+ * version it currently is), the shadowed base entries, every INACTIVE
+ * campaign bucket, persona voices and the Narrator. As with portraits the
+ * active bucket is skipped — live IS that version and its banked copy lags.
+ * @param {(id: string, use: VoiceUse) => void} visit
+ */
+export function forEachVoiceRef(visit) {
+    const active = getActiveCampaignId();
+    const add = (ref, use) => { if (ref && typeof ref === 'object' && typeof ref.id === 'string' && ref.id) visit(ref.id, use); };
+    const live = extensionSettings.characterVoices;
+    if (live && typeof live === 'object') {
+        for (const [name, ref] of Object.entries(live)) {
+            add(ref, { kind: 'character', name, versionId: active && hasProfile(active, name) ? active : BASE_VERSION });
+        }
+    }
+    const shadow = shadowRoot();
+    for (const [name, profile] of Object.entries(shadow)) add(profile?.voice, { kind: 'character', name, versionId: BASE_VERSION });
+    const root = profilesRoot();
+    for (const [campaignId, b] of Object.entries(root)) {
+        if (campaignId === active || !b || typeof b !== 'object') continue;
+        for (const [name, profile] of Object.entries(b)) add(profile?.voice, { kind: 'character', name, versionId: campaignId });
+    }
+    const users = extensionSettings.userCharacters;
+    if (users && typeof users === 'object') {
+        for (const [name, u] of Object.entries(users)) add(u?.voice, { kind: 'persona', name, versionId: null });
+    }
+    add(extensionSettings.voices?.narratorVoice, { kind: 'narrator', name: null, versionId: null });
+}
+
+/** Where a voice id is used (see forEachVoiceRef). */
+export function voiceUses(id) {
+    const out = [];
+    if (!id) return out;
+    forEachVoiceRef((refId, use) => { if (refId === id) out.push(use); });
+    return out;
+}
+
+/** How many places use a voice id. */
+export function voiceRefCount(id) {
+    return voiceUses(id).length;
+}
+
+/**
+ * Replaces (or, with newId null, removes) every reference to a voice id —
+ * live stores, the shadow, EVERY campaign bucket (the active one too, so it
+ * can't resurrect a stale id), personas and the Narrator. A removed
+ * character/persona voice falls back to the Narrator; a removed Narrator
+ * voice falls back to the built-in default. Caller saves.
+ * @param {string} oldId
+ * @param {string|null} newId
+ * @param {object} [patch] - extra fields for the replacement ref (e.g. label)
+ * @returns {number} references changed
+ */
+export function rewriteVoiceRefs(oldId, newId, patch = {}) {
+    if (!oldId) return 0;
+    let n = 0;
+    const next = (ref) => (newId ? { ...ref, ...patch, id: newId } : null);
+    const fix = (holder, key) => {
+        const ref = holder?.[key];
+        if (!ref || typeof ref !== 'object' || ref.id !== oldId) return;
+        const repl = next(ref);
+        if (repl) holder[key] = repl;
+        else delete holder[key];
+        n++;
+    };
+    const live = extensionSettings.characterVoices;
+    if (live && typeof live === 'object') for (const name of Object.keys(live)) fix(live, name);
+    const shadow = shadowRoot();
+    for (const profile of Object.values(shadow)) if (profile && typeof profile === 'object') fix(profile, 'voice');
+    for (const b of Object.values(profilesRoot())) {
+        if (!b || typeof b !== 'object') continue;
+        for (const profile of Object.values(b)) if (profile && typeof profile === 'object') fix(profile, 'voice');
+    }
+    const users = extensionSettings.userCharacters;
+    if (users && typeof users === 'object') for (const u of Object.values(users)) if (u && typeof u === 'object') fix(u, 'voice');
+    const v = extensionSettings.voices;
+    if (v && v.narratorVoice && v.narratorVoice.id === oldId) {
+        v.narratorVoice = newId ? { ...v.narratorVoice, ...patch, id: newId } : { source: 'stock', id: 'Charon' };
+        n++;
+    }
+    return n;
+}
+
 // ─── Book bookkeeping shared with campaignManager ───────────────────────────
 
 /** A lorebook was renamed: keep the global list, the ledger and campaign folders pointing at it. */

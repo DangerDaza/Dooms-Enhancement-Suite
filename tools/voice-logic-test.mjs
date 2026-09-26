@@ -252,6 +252,30 @@ test('resolve: a non-stock voice without the direct route falls back (fallbackSt
     assert.equal(without.reason, 'needs-key');
 });
 
+test('resolve: a designed voice plays with the DES key, falls back when Google deleted it', () => {
+    const ref = { source: 'designed', id: 'voice_abc', fallbackStock: 'Leda' };
+    const ok = resolver.resolveVoice({ seg: { kind: 'dialogue', speaker: 'Mara' }, present: true, ref, narrator, caps: { direct: true, registry: {} } });
+    assert.deepEqual(ok, { ref, reason: 'character' });
+    const gone = resolver.resolveVoice({ seg: { kind: 'dialogue', speaker: 'Mara' }, present: true, ref, narrator, caps: { direct: true, registry: { voice_abc: { status: 'gone' } } } });
+    assert.deepEqual(gone, { ref: { source: 'stock', id: 'Leda' }, reason: 'voice-gone' });
+    const pending = resolver.resolveVoice({ seg: { kind: 'dialogue', speaker: 'Mara' }, present: true, ref: { source: 'designed', id: null, pendingDesign: 'x' }, narrator, caps: { direct: true } });
+    assert.equal(pending.reason, 'no-voice');
+});
+
+test('resolve: a designed Narrator plays with the key, else its fallback', () => {
+    const designed = { source: 'designed', id: 'voice_n', fallbackStock: 'Kore' };
+    assert.equal(resolver.resolveVoice({ seg: { kind: 'narration' }, present: false, ref: null, narrator: designed, caps: { direct: true } }).ref.id, 'voice_n');
+    assert.equal(resolver.resolveVoice({ seg: { kind: 'narration' }, present: false, ref: null, narrator: designed, caps: {} }).ref.id, 'Kore');
+});
+
+test('catalog: every stock voice has a gender', () => {
+    assert.ok(catalog.STOCK_VOICES.every(v => v.gender === 'female' || v.gender === 'male'));
+    assert.equal(catalog.STOCK_VOICES.filter(v => v.gender === 'female').length, 14);
+    assert.equal(catalog.stockGender('kore'), 'female');
+    assert.equal(catalog.stockGender('Puck'), 'male');
+    assert.equal(catalog.defaultStockFor('female'), 'Kore');
+});
+
 test('resolve: an unplayable Narrator falls back to Charon', () => {
     const r = resolver.resolveVoice({ seg: { kind: 'narration' }, present: false, ref: null, narrator: { source: 'stock', id: 'NotAVoice' } });
     assert.equal(r.ref.id, 'Charon');

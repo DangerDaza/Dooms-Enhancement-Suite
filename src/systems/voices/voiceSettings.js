@@ -47,7 +47,17 @@ export function defaultVoiceSettings() {
         playbackRate: 1,
         maxSegmentsPerMessage: 24,
         sessionRequestBudget: 300,
+        // Designed (and later cloned) voices made through DES, keyed by
+        // Google's voice id. Plan §4.2: {id, source, label, designPrompt,
+        // gender, languageCode, createdAt, expireTime, keyTag, status}.
+        customVoices: {},
     };
+}
+
+/** A registry entry is usable when it is an object with a Google voice id. */
+function isValidCustomVoice(entry, id) {
+    return isPlainObject(entry) && typeof id === 'string' && id.length > 0 &&
+        (entry.id === undefined || entry.id === id);
 }
 
 function isPlainObject(v) {
@@ -56,8 +66,10 @@ function isPlainObject(v) {
 
 /** A stored VoiceRef is usable when it is an object with a string id. */
 export function isValidVoiceRef(ref) {
-    return isPlainObject(ref) && typeof ref.id === 'string' && ref.id.length > 0 &&
-        (ref.source === undefined || typeof ref.source === 'string');
+    if (!isPlainObject(ref) || (ref.source !== undefined && typeof ref.source !== 'string')) return false;
+    if (typeof ref.id === 'string' && ref.id.length > 0) return true;
+    // An imported designed voice waiting to be re-created: no id yet.
+    return ref.id === null && typeof ref.pendingDesign === 'string' && ref.pendingDesign.length > 0;
 }
 
 /**
@@ -97,6 +109,17 @@ export function ensureVoiceSettings(saved, live) {
         if ('connectionProfile' in live.voices) {
             delete live.voices.connectionProfile;
             changed = true;
+        }
+        if (!isPlainObject(live.voices.customVoices)) {
+            live.voices.customVoices = {};
+            changed = true;
+        } else {
+            for (const [id, entry] of Object.entries(live.voices.customVoices)) {
+                if (!isValidCustomVoice(entry, id)) {
+                    delete live.voices.customVoices[id];
+                    changed = true;
+                }
+            }
         }
         if (!VOICE_MODELS.some(m => m.id === live.voices.model)) {
             live.voices.model = defaults.model;

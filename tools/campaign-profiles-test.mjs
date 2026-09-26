@@ -437,6 +437,56 @@ test('voice: alias merge carries the variant\'s campaign voice to the canonical'
     assert.equal(cp.readVersion('c2', 'Hex').voice.id, 'Fenrir');
 });
 
+test('voice refs: counted across live, shadow, inactive buckets, personas and the Narrator', () => {
+    extensionSettings.characterVoices = { Hex: { source: 'designed', id: 'voice_A' }, Lucy: { source: 'designed', id: 'voice_A' } };
+    cp.addProfile('c1', 'Hex');           // inactive c1 clones voice_A
+    const c2 = cp.addProfile('c2', 'Hex'); // then give c2 a different voice
+    cp.writeVersion('c2', 'Hex', { ...c2, voice: { source: 'designed', id: 'voice_B' } });
+    extensionSettings.userCharacters = { Me: { voice: { source: 'designed', id: 'voice_A' } } };
+    extensionSettings.voices = { narratorVoice: { source: 'designed', id: 'voice_B' } };
+    assert.equal(cp.voiceRefCount('voice_A'), 4); // Hex base, Lucy, Hex c1, persona
+    assert.equal(cp.voiceRefCount('voice_B'), 2); // Hex c2, Narrator
+    const uses = cp.voiceUses('voice_B').map(u => `${u.kind}:${u.name}:${u.versionId}`).sort();
+    assert.deepEqual(uses, ['character:Hex:c2', 'narrator:null:null']);
+});
+
+test('voice refs: the active bucket is not double-counted and live reports its campaign', () => {
+    extensionSettings.characterVoices = { Hex: { source: 'designed', id: 'voice_A' } };
+    cp.addProfile('c1', 'Hex');
+    activate('c1');
+    const uses = cp.voiceUses('voice_A').map(u => `${u.name}:${u.versionId}`).sort();
+    assert.deepEqual(uses, ['Hex:base', 'Hex:c1']); // live (= c1) + shadowed base
+});
+
+test('voice refs: rewrite replaces every copy, including the active bucket, and survives a switch', () => {
+    extensionSettings.characterVoices = { Hex: { source: 'designed', id: 'voice_A', label: 'Old' } };
+    cp.addProfile('c1', 'Hex');
+    cp.addProfile('c2', 'Hex');
+    activate('c1');
+    extensionSettings.voices = { narratorVoice: { source: 'designed', id: 'voice_A' } };
+    const n = cp.rewriteVoiceRefs('voice_A', 'voice_NEW', { label: 'New' });
+    assert.ok(n >= 4, 'changed ' + n);
+    assert.equal(cp.voiceRefCount('voice_A'), 0);
+    activate('c2');
+    assert.deepEqual(extensionSettings.characterVoices.Hex, { source: 'designed', id: 'voice_NEW', label: 'New' });
+    activate(null);
+    assert.equal(extensionSettings.characterVoices.Hex.id, 'voice_NEW');
+    assert.equal(extensionSettings.voices.narratorVoice.id, 'voice_NEW');
+});
+
+test('voice refs: rewrite to null removes the voice (Narrator fallback) everywhere', () => {
+    extensionSettings.characterVoices = { Hex: { source: 'designed', id: 'voice_A' }, Lucy: { source: 'stock', id: 'Kore' } };
+    cp.addProfile('c1', 'Hex');
+    extensionSettings.userCharacters = { Me: { voice: { source: 'designed', id: 'voice_A' } } };
+    extensionSettings.voices = { narratorVoice: { source: 'designed', id: 'voice_A' } };
+    cp.rewriteVoiceRefs('voice_A', null);
+    assert.equal(extensionSettings.characterVoices.Hex, undefined);
+    assert.equal(extensionSettings.characterVoices.Lucy.id, 'Kore');
+    assert.equal(cp.readVersion('c1', 'Hex').voice, undefined);
+    assert.equal(extensionSettings.userCharacters.Me.voice, undefined);
+    assert.deepEqual(extensionSettings.voices.narratorVoice, { source: 'stock', id: 'Charon' });
+});
+
 if (failures) {
     console.error(`\n${failures} failed, ${passes} passed`);
     process.exit(1);

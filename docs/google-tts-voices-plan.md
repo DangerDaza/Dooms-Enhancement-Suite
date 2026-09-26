@@ -27,9 +27,18 @@ plays twice. Voices follow campaign versions the same way portraits do.
 
 ## Implementation status (branch `TTS-Trial`)
 
-**M1 and M2 are built**: DES voices with the Narrator voice, auto-read, SillyTavern's auto-read
-paused by the guard, per-character standard voices in the Workshop Voice tab, the Present Characters
-scene rule, and campaign-versioned voices. **M0 has not been run** (no Google key in the build
+**M1, M2 and M4 are built**, plus the key half of M3: DES voices with the Narrator voice, auto-read,
+SillyTavern's auto-read paused by the guard, per-character standard voices (filterable by gender) in the
+Workshop Voice tab, the Present Characters scene rule, campaign-versioned voices, an optional Google key
+in DES that calls Google directly, and voice design with the custom-voice manager. The Extended Voice
+Library (rest of M3) and cloning (M5) are not built.
+
+M4 follows §8.3–8.7 with these differences: `model` is sent inside `voice` when creating (Google's
+voice-design docs, fetched 2026-09-26, say it's required — §8.3 said to omit it); the chosen model is
+tried first and `gemini-3.8-flash-tts` on a model/argument error. A voice is registered as soon as
+Google creates it (so an un-picked design is visible under "not used by anyone"). The designed voice's
+fallback is a standard voice of the same gender (Kore / Charon) rather than a user-picked one. Stock
+voice genders come from Google Cloud's Chirp 3 HD list (same voice names). **M0 has not been run** (no Google key in the build
 environment), so nothing has been tested against Google itself; the SillyTavern route was exercised in
 a real SillyTavern with Google's endpoint stubbed. M3–M7 are not started.
 

@@ -51,7 +51,11 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] **Auto-read** reads each new AI reply once, after colours and bubbles are applied, in order in group chats; stops on swipe, delete, chat change and the user sending; continue reads only the new part; Stop mid-stream reads nothing; separate/external tracker mode waits for the tracker (≤8 s)
 - [ ] **Google AI Studio key** (Settings → Voices): pasting a key saves it (trimmed) and voices call Google directly (no /api/google/generate-native-tts requests); Test reads a line in the Narrator voice; a bad key gives one message pointing at the key box; the trash button clears it and voices go back to SillyTavern's saved key; the rows wrap cleanly in a narrow settings panel
 - [ ] **No Google key in SillyTavern**: one clear toast, auto-read pauses, bullhorns keep explaining; if SillyTavern's route rejects Gemini 3.8, voices fall back to 3.1 for the session and the status line says so
-- [ ] Export/import carries a standard voice; alias merges and NPC↔persona copies carry the voice
+- [ ] **Gender filter** (Workshop → Voice → Standard voices): All / Female / Male chips (14 / 16), "All" grouped Female then Male, choice remembered on this device
+- [ ] **Design a voice** (needs the DES key; locked message without it): Draft from card fills the description from the chat AI; Create voice sends a prompted voice and plays Google's sample; the voice is registered immediately; Use this voice → Save stores it with a same-gender standard fallback; Try again deletes the previous draft; Discard deletes it from Google and the registry; "Your designed voices" lists every designed voice for reuse
+- [ ] **My designed voices** (Settings → Voices): used-by names every character/version/persona/Narrator; expiring (≤30 days) and gone badges; Recreate repoints every reference and deletes the old voice; Delete removes it from Google and every reference (Narrator back to Charon); Remove unused; Count slots shows N of 200 incl. voices made outside DES; designed voices selectable as the Narrator
+- [ ] A designed voice Google no longer has: the line is re-read in its fallback standard voice, it's marked gone, one toast
+- [ ] Export/import carries a standard voice, and a designed voice as its description ("Create voice" after import); alias merges and NPC↔persona copies carry the voice
 
 ## Present Characters Panel (portrait bar)
 - [ ] Cards render for present characters; absent grey-out option works

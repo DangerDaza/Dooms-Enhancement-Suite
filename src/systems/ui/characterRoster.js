@@ -1076,11 +1076,25 @@ function importCharacterPayload(payload) {
         }
     }
 
-    // Only standard voices are exported; anything else is ignored.
-    const voiceId = payload.voice && typeof payload.voice === 'object' ? canonicalStockId(payload.voice.id) : null;
+    // Standard voices import as-is. A designed voice arrives as its
+    // description only (its Google voice belongs to someone else's project):
+    // the Voice tab offers a one-click "Create voice" for it. Imports never
+    // create anything on Google by themselves.
+    const pv = payload.voice && typeof payload.voice === 'object' ? payload.voice : null;
+    const voiceId = pv && (pv.source || 'stock') === 'stock' ? canonicalStockId(pv.id) : null;
     if (voiceId) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
         extensionSettings.characterVoices[targetName] = { source: 'stock', id: voiceId };
+    } else if (pv && pv.source === 'designed' && typeof pv.designPrompt === 'string' && pv.designPrompt.trim()) {
+        if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
+        const fallback = canonicalStockId(pv.fallbackStock) || (pv.gender === 'female' ? 'Kore' : 'Charon');
+        extensionSettings.characterVoices[targetName] = {
+            source: 'designed',
+            id: null,
+            label: String(pv.label || '').slice(0, 60),
+            pendingDesign: pv.designPrompt.trim().slice(0, 600),
+            fallbackStock: fallback,
+        };
     }
 
     saveSettings();

@@ -18,24 +18,30 @@
  * Pure. The `reason` is shown in tooltips and the debug log so every choice
  * is explainable ("Narrator: Tom is not in the scene").
  *
- * Only stock voices are playable in this release; a library, designed or
- * cloned voice (a later milestone) falls back to its fallbackStock or the
- * Narrator until the direct route exists.
+ * Stock voices play on either route. A designed voice needs the Google key
+ * in DES (caps.direct) and must still exist on Google (registry status
+ * isn't 'gone'); otherwise it falls back to its fallbackStock (a standard
+ * voice of the same gender, chosen when it was designed) or the Narrator.
  */
 import { isStockVoice, canonicalStockId } from './voiceCatalog.js';
 import { NARRATOR_FALLBACK_VOICE } from './voiceSettings.js';
 
 /**
  * @typedef {{source?: string, id: string, fallbackStock?: string}} VoiceRef
- * @typedef {'narration'|'unattributed'|'not-in-scene'|'no-voice'|'needs-key'|'character'} VoiceReason
+ * @typedef {'narration'|'unattributed'|'not-in-scene'|'no-voice'|'needs-key'|'voice-gone'|'character'} VoiceReason
+ * @typedef {{direct?: boolean, registry?: Record<string, {status?: string}>}} Caps
  */
+
+function isGone(ref, caps) {
+    return !!ref && (ref.source || 'stock') !== 'stock' && caps.registry?.[ref.id]?.status === 'gone';
+}
 
 /** Can this device play the ref right now? */
 export function isPlayable(ref, caps = {}) {
     if (!ref || typeof ref.id !== 'string' || !ref.id) return false;
     const source = ref.source || 'stock';
     if (source === 'stock') return isStockVoice(ref.id);
-    return !!caps.direct;
+    return !!caps.direct && !isGone(ref, caps);
 }
 
 function stock(id) {
@@ -65,8 +71,9 @@ export function resolveVoice({ seg, present, ref, narrator, caps = {} }) {
     if (!present) return { ref: narr, reason: 'not-in-scene' };
     if (!ref || !ref.id) return { ref: narr, reason: 'no-voice' };
     if (!isPlayable(ref, caps)) {
-        if (ref.fallbackStock && isStockVoice(ref.fallbackStock)) return { ref: stock(ref.fallbackStock), reason: 'needs-key' };
-        return { ref: narr, reason: 'needs-key' };
+        const reason = isGone(ref, caps) ? 'voice-gone' : 'needs-key';
+        if (ref.fallbackStock && isStockVoice(ref.fallbackStock)) return { ref: stock(ref.fallbackStock), reason };
+        return { ref: narr, reason };
     }
     const source = ref.source || 'stock';
     return { ref: source === 'stock' ? stock(ref.id) : ref, reason: 'character' };
@@ -80,7 +87,8 @@ export function describeReason(reason, speaker) {
         case 'unattributed': return 'Narrator: DES couldn’t tell who said this';
         case 'not-in-scene': return `Narrator: ${who} is not on the Present Characters panel`;
         case 'no-voice': return `Narrator: ${who} has no voice set`;
-        case 'needs-key': return `${who}’s voice can’t be played on this device`;
+        case 'needs-key': return `${who}’s designed voice needs the Google key in Settings → Voices`;
+        case 'voice-gone': return `${who}’s designed voice no longer exists on Google`;
         case 'character': return `${who}’s voice`;
         default: return '';
     }

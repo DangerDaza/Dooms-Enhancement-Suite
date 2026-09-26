@@ -8042,3 +8042,210 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-accordion-section[data-accordion="voices"] .rpg-voices-stack .rpg-setting-label-group {
     flex: 0 0 auto;
 }
+
+/* Settings → Voices → My designed voices */
+#rpg-voices-designed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0;
+}
+.rpg-voices-designed-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.15);
+}
+.rpg-voices-designed-main {
+    flex: 1 1 220px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.rpg-voices-designed-name {
+    font-weight: 600;
+}
+.rpg-voices-designed-meta {
+    font-size: 0.8em;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+}
+.rpg-voices-designed-buttons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.rpg-voices-designed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+#rpg-voices-remove-unused[hidden],
+#rpg-voices-count-slots[hidden] {
+    display: none;
+}
+.rpg-voices-badge,
+#character-workshop-popup .cw-voice-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+}
+.rpg-voices-badge.is-expiring,
+#character-workshop-popup .cw-voice-badge.is-expiring {
+    color: #e0a030;
+}
+.rpg-voices-badge.is-gone,
+#character-workshop-popup .cw-voice-badge.is-gone {
+    color: #e05050;
+}
+
+/* Workshop Voice tab: view switch, gender chips, designer */
+#character-workshop-popup .cw-voice-views,
+#character-workshop-popup .cw-voice-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0.75rem 0 0.5rem;
+}
+#character-workshop-popup .cw-voice-view,
+#character-workshop-popup .cw-voice-filter {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--rpg-text, #eaeaea);
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+    font: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+#character-workshop-popup .cw-voice-view.is-active,
+#character-workshop-popup .cw-voice-filter.is-active {
+    border-color: var(--rpg-highlight, #e94560);
+    background: rgba(233, 69, 96, 0.15);
+}
+#character-workshop-popup .cw-voice-count {
+    opacity: 0.6;
+    margin-left: 2px;
+}
+#character-workshop-popup .cw-voice-group {
+    margin: 0.6rem 0 0.2rem;
+    font-size: 0.85em;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+#character-workshop-popup .cw-voice-gender {
+    font-size: 0.75em;
+    opacity: 0.7;
+    margin-left: 6px;
+}
+#character-workshop-popup .cw-voice-note {
+    color: #e0a030;
+}
+#character-workshop-popup .cw-voice-locked {
+    padding: 0.6rem 0.8rem;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+}
+#character-workshop-popup .cw-studio-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+#character-workshop-popup .cw-studio-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+#character-workshop-popup .cw-studio-field > span {
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+#character-workshop-popup .cw-studio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.5rem;
+}
+#character-workshop-popup .cw-studio-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+#character-workshop-popup .cw-studio-row .helper {
+    flex: 1 1 200px;
+    margin: 0;
+}
+#character-workshop-popup .cw-studio-error {
+    color: #e05050;
+    margin: 0;
+}
+#character-workshop-popup .cw-voice-result {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--rpg-highlight, #e94560);
+    border-radius: 6px;
+    background: rgba(233, 69, 96, 0.06);
+}
+#character-workshop-popup .cw-voice-result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.5rem 0;
+}
+#character-workshop-popup .cw-voice-mine {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+#character-workshop-popup .cw-voice-mine-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+}
+#character-workshop-popup .cw-voice-mine-row.is-selected {
+    border-color: var(--rpg-highlight, #e94560);
+    background: rgba(233, 69, 96, 0.08);
+}
+#character-workshop-popup .cw-voice-mine-main {
+    flex: 1 1 240px;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.4rem;
+}
+#character-workshop-popup .cw-voice-mine-desc,
+#character-workshop-popup .cw-voice-mine-used {
+    flex-basis: 100%;
+    font-size: 0.8em;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+}
+#character-workshop-popup .cw-voice-mine-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+#character-workshop-popup .cw-voice-mine-actions .cw-voice-play {
+    width: 2.2rem;
+    align-self: stretch;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+}
+#character-workshop-popup .cw-voice-inuse {
+    font-size: 0.8em;
+    color: var(--rpg-highlight, #e94560);
+}

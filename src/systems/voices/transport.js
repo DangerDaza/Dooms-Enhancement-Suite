@@ -117,6 +117,7 @@ export class TtsError extends Error {
 /**
  * Buckets an HTTP status + Google's error text into something DES can act on.
  * @returns {'no-key'|'bad-key'|'quota'|'rate'|'model-unavailable'|'argument'|'content'|'network'|'aborted'|'unknown'}
+ *   (synthesizeCustom adds 'voice-gone' and 'needs-key' for designed voices)
  */
 export function classifyError(status, message = '') {
     const text = String(message || '').toLowerCase();
@@ -237,6 +238,40 @@ async function synthesizeDirect({ text, voiceId, model, signal, key }) {
     throw lastError;
 }
 
+// ─── Designed / custom voices (key in DES only) ─────────────────────────────
+
+/** Model used for designed voices when the chosen one refuses them. */
+const CUSTOM_FALLBACK_MODEL = 'gemini-3.8-flash-tts';
+
+/**
+ * A designed voice id ('voice_…') only works on the direct route with
+ * speechConfig.voiceConfig.voice (voice-design docs). Never downgraded to
+ * 3.1 — designed voices are a 3.8 feature.
+ */
+async function synthesizeCustom({ text, voiceId, model, signal, key }) {
+    if (!key) {
+        throw new TtsError('needs-key', 'Designed voices need your Google AI Studio key in Settings \u2192 Voices.');
+    }
+    const models = [model];
+    if (model !== CUSTOM_FALLBACK_MODEL) models.push(CUSTOM_FALLBACK_MODEL);
+    let lastError = null;
+    for (const m of models) {
+        try {
+            const blob = await postDirect({ text, voiceId, model: m, shape: 'voice', key, signal });
+            return { blob, model: m };
+        } catch (e) {
+            if (!(e instanceof TtsError)) throw e;
+            // "Voice not found" means Google deleted it (expired, or removed elsewhere).
+            if ((e.status === 404 || /not.?found/i.test(e.message)) && /voice/i.test(e.message)) {
+                throw new TtsError('voice-gone', e.message, e.status);
+            }
+            lastError = e;
+            if (e.kind !== 'model-unavailable' && e.kind !== 'argument') throw e;
+        }
+    }
+    throw lastError;
+}
+
 // ─── SillyTavern route (key saved in SillyTavern) ───────────────────────────
 
 /** The request body SillyTavern's own Google provider sends (google-native.js), minus text/voice/model. */
@@ -289,12 +324,17 @@ async function synthesizeSt({ text, voiceId, model, signal }) {
 // ─── Entry point ────────────────────────────────────────────────────────────
 
 /**
- * Synthesises one line with a stock voice.
- * @param {{text: string, voiceId: string, model: string, signal?: AbortSignal}} req
+ * Synthesises one line. Stock voices use either route; designed voices
+ * (voiceSource other than 'stock') need the DES key.
+ * @param {{text: string, voiceId: string, voiceSource?: string, model: string, signal?: AbortSignal}} req
  * @returns {Promise<{blob: Blob, model: string}>}
  */
-export async function synthesize({ text, voiceId, model, signal }) {
+export async function synthesize({ text, voiceId, voiceSource = 'stock', model, signal }) {
     const key = getDesKey();
+    if (voiceSource && voiceSource !== 'stock') {
+        // Kept out of routeState: a custom voice failing says nothing about the route.
+        return synthesizeCustom({ text, voiceId, model, signal, key });
+    }
     const route = key ? 'direct' : 'st';
     if (routeState.route !== route) {
         routeState.route = route;
