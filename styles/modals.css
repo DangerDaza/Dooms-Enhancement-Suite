@@ -8006,3 +8006,39 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #rpg-voices-resume[hidden] {
     display: none;
 }
+
+/* Settings → Voices: controls wrap under their label on narrow panels
+   instead of squeezing the label into a one-word column. */
+.rpg-accordion-section[data-accordion="voices"] .rpg-setting-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+}
+.rpg-accordion-section[data-accordion="voices"] .rpg-setting-label-group {
+    flex: 1 1 220px;
+}
+.rpg-accordion-section[data-accordion="voices"] .rpg-accordion-select {
+    max-width: 100%;
+    min-width: 0;
+}
+.rpg-accordion-section[data-accordion="voices"] .rpg-voices-stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+.rpg-voices-key {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.rpg-voices-key .rpg-accordion-input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+/* In a stacked row the 220px basis would become a height. */
+.rpg-accordion-section[data-accordion="voices"] .rpg-voices-stack .rpg-setting-label-group {
+    flex: 0 0 auto;
+}

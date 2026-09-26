@@ -23,7 +23,6 @@ import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId } from '../voices/
 import { VOICE_MODELS, NARRATOR_FALLBACK_VOICE } from '../voices/voiceSettings.js';
 import { syncVoicesState, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import { escapeHtml } from '../../utils/html.js';
-import { getAvailableConnectionProfiles } from '../generation/apiClient.js';
 
 let bound = false;
 
@@ -49,17 +48,21 @@ function renderStatus() {
     } else {
         const st = engine.getStatus();
         const route = st.route;
-        parts.push(`Using ${st.connection}.`);
+        parts.push(route.route === 'direct' || (!route.route && v().googleApiKey)
+            ? 'Using the key above, directly with Google.'
+            : 'Using the Google key saved in SillyTavern.');
         if (route.status === 'ok') {
             const chosen = v().model;
             const used = route.effectiveModel;
             parts.push(used && used !== chosen
-                ? `Your SillyTavern can’t send ${chosen} yet, so voices use ${used} through SillyTavern.`
+                ? (route.route === 'direct'
+                    ? `Google didn’t accept ${chosen} with this key, so voices use ${used}.`
+                    : `Your SillyTavern can’t send ${chosen} yet, so voices use ${used}. Paste a key above to call Google directly.`)
                 : `${used || chosen}: working.`);
         } else if (route.status === 'no-key') {
-            parts.push('No Google key found in SillyTavern. Add one under API Connections → Google AI Studio.');
+            parts.push('No Google key found. Paste one above, or add one in SillyTavern under API Connections → Google AI Studio.');
         } else if (route.status === 'bad-key') {
-            parts.push('Google rejected the key saved in SillyTavern.');
+            parts.push(route.route === 'direct' ? 'Google rejected the key above.' : 'Google rejected the key saved in SillyTavern.');
         } else if (route.status === 'error') {
             parts.push(`Last request failed: ${route.lastError}`);
         } else {
@@ -75,36 +78,6 @@ function renderStatus() {
     $status.text(parts.join(' '));
 }
 
-/**
- * Fills Settings → Voices → Connection from SillyTavern's connection
- * profiles. Only Google AI Studio profiles can be picked; others are listed
- * disabled so it's clear why they're missing. A saved profile that no longer
- * exists stays selected (marked missing) instead of silently switching keys.
- */
-export async function refreshVoicesConnectionOptions() {
-    const $select = $('#rpg-voices-connection');
-    if (!$select.length) return;
-    let profiles = [];
-    try {
-        const { listProfiles } = await import('../voices/connection.js');
-        profiles = listProfiles();
-    } catch (e) {
-        // connection.js failed to load; fall back to names only
-        profiles = getAvailableConnectionProfiles().map(name => ({ name, usable: true, why: '' }));
-    }
-    const current = v().connectionProfile || '';
-    const options = ['<option value="">Current SillyTavern connection (active Google key)</option>'];
-    for (const p of profiles) {
-        options.push(`<option value="${escapeHtml(p.name)}"${p.usable ? '' : ' disabled'}>${escapeHtml(p.name)}${p.usable ? '' : ` \u2014 ${escapeHtml(p.why)}`}</option>`);
-    }
-    if (current && !profiles.some(p => p.name === current)) {
-        options.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)} \u2014 missing</option>`);
-    }
-    $select.html(options.join(''));
-    $select.val(current);
-    renderStatus();
-}
-
 function populate() {
     const $narrator = $('#rpg-voices-narrator');
     $narrator.html(STOCK_VOICES.map(voice =>
@@ -116,7 +89,7 @@ function populate() {
     $('#rpg-voices-autoread').prop('checked', !!v().autoRead);
     $narrator.val(narratorId());
     $('#rpg-voices-model').val(v().model);
-    refreshVoicesConnectionOptions();
+    $('#rpg-voices-key').val(v().googleApiKey || '').attr('type', 'password');
     const rate = Number(v().playbackRate) || 1;
     $('#rpg-voices-rate').val(rate);
     $('#rpg-voices-rate-value').text(`${rate.toFixed(2)}×`);
@@ -155,9 +128,34 @@ export function bindVoicesSettingsUI() {
         const engine = await getEngine();
         engine.audition(stockRef(narratorId()), 'The rain had not stopped for three days, and the city was starting to forget what the sun looked like.');
     });
-    $('#rpg-voices-connection').on('change', function () {
-        v().connectionProfile = String($(this).val() || '');
+    // Google key: saved on change/blur (not per keystroke), trimmed.
+    const saveKey = async (value) => {
+        const key = String(value || '').trim();
+        if (key === (v().googleApiKey || '')) return;
+        v().googleApiKey = key;
         saveSettings();
+        try {
+            const { clearRouteProbe } = await import('../voices/transport.js');
+            clearRouteProbe();
+        } catch (e) { /* engine not loaded yet */ }
+        renderStatus();
+    };
+    $('#rpg-voices-key').on('change', function () { saveKey($(this).val()); });
+    $('#rpg-voices-key-toggle').on('click', function () {
+        const $input = $('#rpg-voices-key');
+        const show = $input.attr('type') === 'password';
+        $input.attr('type', show ? 'text' : 'password');
+        $(this).find('i').toggleClass('fa-eye', !show).toggleClass('fa-eye-slash', show);
+    });
+    $('#rpg-voices-key-clear').on('click', function () {
+        $('#rpg-voices-key').val('');
+        saveKey('');
+    });
+    $('#rpg-voices-key-test').on('click', async function () {
+        unlockVoicesAudio();
+        await saveKey($('#rpg-voices-key').val());
+        const engine = await getEngine();
+        engine.audition(stockRef(narratorId()), 'Your Google voice key works.');
         renderStatus();
     });
     $('#rpg-voices-model').on('change', function () {

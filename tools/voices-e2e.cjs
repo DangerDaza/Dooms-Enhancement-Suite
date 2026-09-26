@@ -9,10 +9,9 @@
  * auto-read timing (once, after bubbles; never on re-render, stop, or chat
  * load; continue reads only the new part), the SillyTavern auto-read guard,
  * the Workshop Voice tab, the settings accordion, the 3.8 → 3.1 fallback,
- * and the Connection setting (a profile's saved Google key is used for the
- * voice request only, never for a chat generation, and is switched back).
- * It writes two throwaway Google keys ("DES e2e chat key", "DES e2e voices
- * key") and two connection profiles to that SillyTavern — use a test install.
+ * and the Google key box (with a key, voices call Google directly — Google
+ * is stubbed there too, so any key string works; without one they go
+ * through SillyTavern).
  *
  * Setup: a local SillyTavern with this repo linked (or installed) as
  *   public/scripts/extensions/third-party/Dooms-Enhancement-Suite
@@ -312,7 +311,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   requests = [];
   reject38 = true;
   await page.evaluate(async ({ DES, id }) => {
-    sessionStorage.removeItem('dooms_voices_st_model');
+    sessionStorage.removeItem('dooms_voices_probe');
     const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
     engine.onChatChanged();
     engine.speakMessage(id);
@@ -326,127 +325,104 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.strictEqual(models.filter(m => m.startsWith('gemini-3.8')).length, 1);
   });
 
-  // ── Connection profiles ──
+  // ── Google key box: direct calls to Google ──
   reject38 = false;
-  // The simulated generations above never sent GENERATION_ENDED; real
-  // SillyTavern always does. Without it the first key swap waits out the
-  // 2 s idle fallback.
-  await page.evaluate(async () => { const ctx = SillyTavern.getContext(); await ctx.eventSource.emit(ctx.eventTypes.GENERATION_ENDED, ctx.chat.length); });
-  await page.evaluate(() => sessionStorage.removeItem('dooms_voices_st_model'));
-  const ids = await page.evaluate(async () => {
-    const ctx = SillyTavern.getContext();
-    const write = async (value, label) => (await (await fetch('/api/secrets/write', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', value, label }) })).json()).id;
-    const chatId = await write('AIzaFAKE-chat-key-000000000000', 'DES e2e chat key');
-    const voicesId = await write('AIzaFAKE-voices-key-00000000000', 'DES e2e voices key');
-    await fetch('/api/secrets/rotate', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: chatId }) });
-    const ext = ctx.extensionSettings;
-    ext.connectionManager = ext.connectionManager || { profiles: [] };
-    ext.connectionManager.profiles = (ext.connectionManager.profiles || []).filter(p => !/^DES e2e/.test(p.name));
-    ext.connectionManager.profiles.push(
-      { id: 'des-e2e-voices', mode: 'cc', name: 'DES e2e Voices', api: 'google', 'secret-id': voicesId },
-      { id: 'des-e2e-openai', mode: 'cc', name: 'DES e2e OpenAI', api: 'openai' },
-    );
-    return { chatId, voicesId };
+  let google = [];
+  let googleMode = 'ok'; // 'ok' | 'reject-voice-field' | 'reject-model' | 'bad-key'
+  const pcm = Buffer.alloc(2400).toString('base64');
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' } });
+    const body = JSON.parse(req.postData());
+    const model = /models\/([^:]+):generateContent/.exec(req.url())[1];
+    const vc = body.generationConfig.speechConfig.voiceConfig;
+    const shape = vc.voice ? 'voice' : 'prebuilt';
+    google.push({ model, shape, key: req.headers()['x-goog-api-key'], text: body.contents[0].parts[0].text, voice: vc.voice || vc.prebuiltVoiceConfig.voiceName });
+    const cors = { 'access-control-allow-origin': '*' };
+    const fail = (status, message, st) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { code: status, message, status: st } }) });
+    if (googleMode === 'bad-key') return fail(400, 'API key not valid. Please pass a valid API key.', 'INVALID_ARGUMENT');
+    if (googleMode === 'reject-voice-field' && shape === 'voice') return fail(400, 'Invalid JSON payload received. Unknown name "voice" at \'generation_config.speech_config.voice_config\'', 'INVALID_ARGUMENT');
+    if (googleMode === 'reject-model' && model.startsWith('gemini-3.8')) return fail(404, `models/${model} is not found for API version v1beta`, 'NOT_FOUND');
+    return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: pcm } }] } }] }) });
   });
-  const opts = await page.evaluate(async (DES) => {
-    const ui = await import(`${DES}/src/systems/ui/voicesSettingsUI.js`);
-    await ui.refreshVoicesConnectionOptions();
-    return [...document.querySelectorAll('#rpg-voices-connection option')].map(o => ({ v: o.value, d: o.disabled }));
-  }, DES);
-  check('Connection dropdown lists Google profiles, disables others', () => {
-    assert.deepStrictEqual(opts.find(o => o.v === 'DES e2e Voices'), { v: 'DES e2e Voices', d: false });
-    assert.deepStrictEqual(opts.find(o => o.v === 'DES e2e OpenAI'), { v: 'DES e2e OpenAI', d: true });
-    assert.strictEqual(opts[0].v, '');
+  const setKey = (key) => page.evaluate(async ({ DES, key }) => {
+    (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.googleApiKey = key;
+    (await import(`${DES}/src/systems/voices/transport.js`)).clearRouteProbe();
+  }, { DES, key });
+  let n = 0;
+  const say = async () => { n++; await page.evaluate(async ({ DES, n }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.audition({ source: 'stock', id: 'Kore' }, `Key test line ${n}.`);
+  }, { DES, n }); await page.waitForTimeout(1200); };
+
+  // The key box saves into DES settings.
+  await page.evaluate(() => {
+    const el = document.querySelector('#rpg-voices-key');
+    el.value = '  AIzaFAKE-direct-key  ';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  const savedKey = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.googleApiKey, DES);
+  check('key box saves the trimmed key to DES settings', () => assert.strictEqual(savedKey, 'AIzaFAKE-direct-key'));
+
+  requests = []; google = [];
+  await setKey('AIzaFAKE-direct-key');
+  await say();
+  check('with a key, voices call Google directly (not SillyTavern)', () => { assert.strictEqual(requests.length, 0); assert.strictEqual(google.length, 1); });
+  check('the key is sent as x-goog-api-key and 3.8 uses voiceConfig.voice', () => {
+    assert.strictEqual(google[0].key, 'AIzaFAKE-direct-key');
+    assert.strictEqual(google[0].model, 'gemini-3.8-flash-lite-tts');
+    assert.strictEqual(google[0].shape, 'voice');
+    assert.strictEqual(google[0].voice, 'Kore');
+  });
+  const played = await page.evaluate(() => { const a = document.getElementById('dooms-tts-audio'); return a && a.error ? 'error ' + a.error.code : 'ok'; });
+  check('Google\'s raw PCM is wrapped so the browser can play it', () => assert.strictEqual(played, 'ok'));
+
+  google = []; googleMode = 'reject-voice-field';
+  await setKey('AIzaFAKE-direct-key');
+  await say(); await say();
+  check('if 3.8 rejects voiceConfig.voice, prebuiltVoiceConfig is tried and remembered', () => {
+    assert.deepStrictEqual(google.map(g => g.shape), ['voice', 'prebuilt', 'prebuilt']);
+    assert.ok(google.every(g => g.model === 'gemini-3.8-flash-lite-tts'));
   });
 
-  const speak = (text) => page.evaluate(async ({ DES, id, text }) => {
-    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
-    engine.onChatChanged();
-    engine.audition({ source: 'stock', id: 'Kore' }, text);
-  }, { DES, id: mesId, text });
+  google = []; googleMode = 'reject-model';
+  await setKey('AIzaFAKE-direct-key');
+  await say(); await say();
+  check('if Google rejects 3.8, voices fall back to 3.1 and remember it', () => {
+    assert.deepStrictEqual(google.map(g => g.model), ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.1-flash-tts-preview', 'gemini-3.1-flash-tts-preview']);
+  });
+  const statusDowngrade = await page.evaluate(() => document.querySelector('#rpg-voices-status')?.textContent || '');
+  check('status line says the key is used directly and names the fallback', () => { assert.match(statusDowngrade, /key above/); assert.match(statusDowngrade, /3\.1/); });
 
-  requests = []; trackKey = true;
-  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = ''; }, DES);
-  await speak('Default connection.');
-  await page.waitForTimeout(1200);
-  check('default connection uses the active key', () => assert.deepStrictEqual(requests.map(r => r.activeKey), ['DES e2e chat key']));
+  google = []; googleMode = 'bad-key';
+  await setKey('AIzaFAKE-bad-key');
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await say();
+  const badToast = await page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
+  check('a bad key is not retried and the message points at the key box', () => { assert.strictEqual(google.length, 1); assert.match(badToast, /Settings → Voices/); });
 
-  requests = [];
-  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = 'DES e2e Voices'; }, DES);
-  await speak('Profile connection.');
-  await page.waitForTimeout(1500);
-  check('profile connection uses the profile\'s key for the voice request', () => assert.deepStrictEqual(requests.map(r => r.activeKey), ['DES e2e voices key']));
-  const afterKey = await activeKeyLabel();
-  check('the chat key is active again afterwards', () => assert.strictEqual(afterKey, 'DES e2e chat key'));
-  const marker = await page.evaluate(() => localStorage.getItem('dooms_voices_key_swap'));
-  check('no crash marker left behind', () => assert.strictEqual(marker, null));
+  requests = []; google = []; googleMode = 'ok';
+  await page.evaluate(() => document.querySelector('#rpg-voices-key-clear').click());
+  await page.waitForTimeout(300);
+  await say();
+  check('clearing the key goes back to SillyTavern\'s saved key', () => { assert.strictEqual(google.length, 0); assert.strictEqual(requests.length, 1); });
 
-  // A chat generation that starts while a voice request holds the profile key
-  // waits for the swap-back, and no new swap starts until it has finished.
-  requests = []; ttsDelay = 1500;
-  const holdResult = await page.evaluate(async ({ DES, id }) => {
-    const ctx = SillyTavern.getContext();
-    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
-    const readActive = async () => ((await (await fetch('/api/secrets/read', { method: 'POST', headers: ctx.getRequestHeaders() })).json()).api_key_makersuite || []).find(s => s.active)?.label;
-    engine.onChatChanged();
-    engine.speakMessage(id);
-    await new Promise(r => setTimeout(r, 700)); // first line is in flight on the profile key
-    const during = await readActive();
-    const t0 = Date.now();
-    await ctx.eventSource.emit(ctx.eventTypes.GENERATION_STARTED, 'normal', {}, false);
-    document.body.dataset.generating = 'true';
-    const waited = Date.now() - t0;
-    const atSend = await readActive();
-    await new Promise(r => setTimeout(r, 2500)); // "generating": the next line must not swap
-    const midGeneration = await readActive();
-    delete document.body.dataset.generating;
-    await ctx.eventSource.emit(ctx.eventTypes.GENERATION_ENDED, ctx.chat.length);
-    return { during, waited, atSend, midGeneration };
-  }, { DES, id: mesId });
-  const beforeEnd = requests.length;
-  await page.waitForTimeout(6000);
-  console.log('hold:', JSON.stringify(holdResult), 'requests before end:', beforeEnd, 'after:', requests.length);
-  check('during a voice request the profile key is active', () => assert.strictEqual(holdResult.during, 'DES e2e voices key'));
-  check('a chat generation waits for the swap-back', () => { assert.ok(holdResult.waited >= 300, 'waited ' + holdResult.waited); assert.strictEqual(holdResult.atSend, 'DES e2e chat key'); });
-  check('no key swap while generating', () => { assert.strictEqual(holdResult.midGeneration, 'DES e2e chat key'); assert.strictEqual(beforeEnd, 1); });
-  check('voices resume after the generation ends', () => assert.ok(requests.length > 1 && requests.every(r => r.activeKey === 'DES e2e voices key')));
-  ttsDelay = 60;
-  await page.waitForTimeout(500);
-  const restored = await activeKeyLabel();
-  check('chat key restored after the hold test', () => assert.strictEqual(restored, 'DES e2e chat key'));
-
-  // Crash mid-swap: the next load puts the chat key back.
-  const recovered = await page.evaluate(async ({ DES, ids }) => {
-    const ctx = SillyTavern.getContext();
-    await fetch('/api/secrets/rotate', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: ids.voicesId }) });
-    localStorage.setItem('dooms_voices_key_swap', JSON.stringify({ key: 'api_key_makersuite', originalId: ids.chatId, at: Date.now() }));
-    const boot = await import(`${DES}/src/systems/voices/voiceBoot.js`);
-    await boot.syncVoicesState();
-    return { marker: localStorage.getItem('dooms_voices_key_swap') };
-  }, { DES, ids });
-  const recoveredKey = await activeKeyLabel();
-  check('interrupted swap is undone on the next load', () => { assert.strictEqual(recoveredKey, 'DES e2e chat key'); assert.strictEqual(recovered.marker, null); });
-
-  // A profile that no longer exists: nothing is sent, the user is told.
-  requests = [];
-  await page.evaluate(async (DES) => { (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = 'DES e2e Gone'; }, DES);
-  await speak('Missing profile.');
-  await page.waitForTimeout(800);
-  const toastText = await page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
-  check('a missing profile sends nothing and says why', () => { assert.strictEqual(requests.length, 0); assert.match(toastText, /no longer exists/); });
-  trackKey = false;
-
-  // Clean up the throwaway keys and profiles.
-  await page.evaluate(async (DES) => {
-    const ctx = SillyTavern.getContext();
-    (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.connectionProfile = '';
-    const state = await (await fetch('/api/secrets/read', { method: 'POST', headers: ctx.getRequestHeaders() })).json();
-    for (const sec of (state.api_key_makersuite || []).filter(s => /^DES e2e/.test(s.label || ''))) {
-      await fetch('/api/secrets/delete', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({ key: 'api_key_makersuite', id: sec.id }) });
-    }
-    const ext = ctx.extensionSettings;
-    ext.connectionManager.profiles = ext.connectionManager.profiles.filter(p => !/^DES e2e/.test(p.name));
-  }, DES);
+  // Narrow settings panel: labels keep a readable width.
+  const layout = await page.evaluate(() => {
+    const sec = document.querySelector('.rpg-accordion-section[data-accordion="voices"]');
+    let el = sec; while (el && el !== document.body) { if (getComputedStyle(el).display === 'none') el.style.display = 'block'; el = el.parentElement; }
+    sec.classList.add('rpg-accordion-open');
+    const prev = sec.style.width; sec.style.width = '380px';
+    const widths = [...sec.querySelectorAll('.rpg-setting-label-group')].map(g => Math.round(g.getBoundingClientRect().width));
+    const overflow = [...sec.querySelectorAll('select, input, button')].some(c => c.getBoundingClientRect().right > sec.getBoundingClientRect().right + 1);
+    sec.style.width = prev;
+    return { min: Math.min(...widths.filter(w => w > 0)), overflow };
+  });
+  check('Voices settings: labels stay readable in a narrow panel and nothing overflows', () => { assert.ok(layout.min >= 150, 'narrowest label ' + layout.min + 'px'); assert.strictEqual(layout.overflow, false); });
+  await page.evaluate(() => { const sec = document.querySelector('.rpg-accordion-section[data-accordion="voices"]'); sec.style.width = '420px'; });
+  await (await page.$('.rpg-accordion-section[data-accordion="voices"]')).screenshot({ path: shot('voices-settings-narrow.png') });
+  await page.evaluate(() => { document.querySelector('.rpg-accordion-section[data-accordion="voices"]').style.width = ''; });
 
   // ── Voices off: bullhorn goes back to /speak, guard removed ──
   const offState = await page.evaluate(async (DES) => {

@@ -1105,14 +1105,32 @@
                             </button>
                         </div>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-voices-stack">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Connection</span>
-                            <span class="rpg-setting-hint">Which Google key voices use. Pick a SillyTavern connection
-                                profile to use its Google AI Studio key (and proxy) for voices only &mdash; your chat
-                                connection isn't switched.</span>
+                            <span class="rpg-setting-label">Google AI Studio key</span>
+                            <span class="rpg-setting-hint">Optional. Paste a key from
+                                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+                                and voices call Google directly with it. Leave empty to use the Google key saved in
+                                SillyTavern (API Connections &rarr; Google AI Studio).</span>
                         </div>
-                        <select id="rpg-voices-connection" class="rpg-accordion-select"></select>
+                        <div class="rpg-voices-key">
+                            <input type="password" id="rpg-voices-key" class="rpg-accordion-input" autocomplete="off"
+                                spellcheck="false" placeholder="AIza&hellip;" />
+                            <button id="rpg-voices-key-toggle" class="rpg-accordion-mini-btn" type="button"
+                                title="Show/Hide" aria-label="Show or hide the key">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <button id="rpg-voices-key-test" class="rpg-accordion-mini-btn" type="button"
+                                title="Test: reads a short line in the Narrator voice">Test</button>
+                            <button id="rpg-voices-key-clear" class="rpg-accordion-mini-btn" type="button"
+                                title="Remove the key" aria-label="Remove the key">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <span class="rpg-setting-hint">Saved with your DES settings, so every device you use
+                            SillyTavern on gets it. It's stored as plain text in SillyTavern's settings file on your
+                            server (and in its backups); restrict the key to the Generative Language API in Google
+                            Cloud to limit what it can do.</span>
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
@@ -1155,11 +1173,9 @@
                     <button type="button" class="rpg-accordion-action-btn" id="rpg-voices-resume" hidden>
                         <i class="fa-solid fa-play"></i> Resume auto-read
                     </button>
-                    <p class="rpg-note-text" style="margin-top:6px;">Voices use a Google AI Studio key saved in
-                        SillyTavern (API Connections &rarr; Google AI Studio); the key stays on your SillyTavern
-                        server. You don't need to pick a Gemini 3.8 model in API Connections &mdash; that list only
-                        shows chat models; DES picks the voice model above. The text of each line read is sent to
-                        Google.</p>
+                    <p class="rpg-note-text" style="margin-top:6px;">Gemini 3.8 won't appear in SillyTavern's API
+                        Connections model list &mdash; that list only has chat models. DES picks the voice model
+                        above. The text of each line read is sent to Google.</p>
                 </div>
             </div>
 

@@ -179,7 +179,7 @@ async function fetchSegment(job, seg, signal) {
         sessionRequests++;
         hooks.onStateChange?.();
         try {
-            const { blob } = await synthesize({ text: seg.text, voiceId: seg.voiceId, model, signal, connection: job.connection });
+            const { blob } = await synthesize({ text: seg.text, voiceId: seg.voiceId, model, signal });
             consecutiveRateGiveUps = 0;
             return cachePut(key, blob, job.source === 'audition');
         } catch (e) {

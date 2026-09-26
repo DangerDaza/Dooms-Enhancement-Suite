@@ -7,6 +7,7 @@
  *   voiceResolver.js  — which voice reads each line, and why
  *   voiceSettings.js  — load-time defaults and repair
  *   stAutoReadGuard.js — pausing SillyTavern's auto-read without changing its saved setting
+ *   wav.js            — wrapping Gemini's raw PCM so browsers can play it
  *
  * None of these modules import SillyTavern, so this runs in plain Node.
  *
@@ -21,6 +22,7 @@ const resolver = await import('../src/systems/voices/voiceResolver.js');
 const settings = await import('../src/systems/voices/voiceSettings.js');
 const guard = await import('../src/systems/voices/stAutoReadGuard.js');
 const catalog = await import('../src/systems/voices/voiceCatalog.js');
+const wav = await import('../src/systems/voices/wav.js');
 
 let failures = 0;
 let passes = 0;
@@ -351,6 +353,40 @@ test('guard: install is idempotent and survives a missing tts object', () => {
     assert.equal(JSON.parse(JSON.stringify(tts)).auto_generation, true);
     guard.uninstallStAutoReadGuard();
     assert.equal(tts.auto_generation, true);
+});
+
+// ─── wav.js ─────────────────────────────────────────────────────────────────
+
+test('wav: header describes 24 kHz mono 16-bit PCM and carries the samples', () => {
+    const pcm = new Uint8Array([1, 0, 2, 0, 3, 0]);
+    const out = wav.pcm16ToWav(pcm, 24000);
+    const view = new DataView(out.buffer);
+    const str = (o, n) => String.fromCharCode(...out.slice(o, o + n));
+    assert.equal(str(0, 4), 'RIFF');
+    assert.equal(view.getUint32(4, true), 36 + 6);
+    assert.equal(str(8, 4), 'WAVE');
+    assert.equal(view.getUint16(20, true), 1);
+    assert.equal(view.getUint16(22, true), 1);
+    assert.equal(view.getUint32(24, true), 24000);
+    assert.equal(view.getUint32(28, true), 48000);
+    assert.equal(view.getUint16(34, true), 16);
+    assert.equal(str(36, 4), 'data');
+    assert.equal(view.getUint32(40, true), 6);
+    assert.deepEqual([...out.slice(44)], [1, 0, 2, 0, 3, 0]);
+});
+
+test('wav: odd byte counts are trimmed to whole samples', () => {
+    const out = wav.pcm16ToWav(new Uint8Array([1, 2, 3]), 16000);
+    assert.equal(out.length, 44 + 2);
+});
+
+test('wav: mime helpers', () => {
+    assert.equal(wav.sampleRateFromMime('audio/L16;codec=pcm;rate=24000'), 24000);
+    assert.equal(wav.sampleRateFromMime('audio/L16;rate=16000'), 16000);
+    assert.equal(wav.sampleRateFromMime('audio/wav'), 24000);
+    assert.equal(wav.isRawPcm('audio/L16;codec=pcm;rate=24000'), true);
+    assert.equal(wav.isRawPcm('audio/wav'), false);
+    assert.deepEqual([...wav.base64ToBytes(Buffer.from([0, 255, 7]).toString('base64'))], [0, 255, 7]);
 });
 
 console.log(`voice-logic-test: ${passes} passed${failures ? `, ${failures} FAILED` : ''}`);
