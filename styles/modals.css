@@ -6426,6 +6426,26 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 /* Footer spacer expands to push primary actions right */
 #character-workshop-popup .rpg-settings-popup-footer .spacer { flex: 1; }
 
+/* Footer: the secondary actions sit in .cw-footer-more so phones can fold
+   them into a fly-out. On wider screens the wrapper is display: contents
+   and these orders keep the usual layout (Delete, Export | Cancel, the
+   scene actions, Save). The "More" toggle only shows on phones. */
+#character-workshop-popup .cw-footer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+#character-workshop-popup .cw-footer-more { display: contents; }
+#character-workshop-popup .cw-footer .cw-more-toggle { display: none; }
+#character-workshop-popup .cw-footer #cw-delete,
+#character-workshop-popup .cw-footer #cw-export { order: 0; }
+#character-workshop-popup .cw-footer .spacer { order: 1; }
+#character-workshop-popup .cw-footer #cw-cancel { order: 2; }
+#character-workshop-popup .cw-footer .cw-footer-more > .rpg-btn:not(#cw-delete):not(#cw-export) { order: 3; }
+#character-workshop-popup .cw-footer #cw-save { order: 4; }
+
 
 /* Mobile: the Workshop fills the screen, and the big portrait is dropped so
    the editor gets the room. The stage shrinks to just the version strip
@@ -6471,6 +6491,42 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     #character-workshop-popup .cw-stage:not(:has(.cw-version-strip:not([hidden]))),
     #character-workshop-popup[data-mode="user"] .cw-stage { display: none; }
     #character-workshop-popup .cw-stage-overlay { padding: 0.45rem 0.8rem 0.4rem; }
+    /* Footer: More · Cancel · Save on one row; the rest fly out above. */
+    #character-workshop-popup .cw-footer {
+        position: relative;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+    }
+    #character-workshop-popup .cw-footer .cw-more-toggle { display: inline-flex; }
+    #character-workshop-popup .cw-footer.is-more-open .cw-more-toggle {
+        border-color: var(--cw-accent);
+        color: var(--cw-accent);
+    }
+    #character-workshop-popup .cw-footer-more {
+        display: none;
+        position: absolute;
+        left: 0.75rem;
+        bottom: calc(100% + 6px);
+        z-index: 5;
+        flex-direction: column;
+        gap: 0.35rem;
+        min-width: 230px;
+        max-width: calc(100% - 1.5rem);
+        padding: 0.45rem;
+        border-radius: 8px;
+        background: rgba(18, 18, 26, 0.98);
+        border: 1px solid var(--rpg-border, #4a7ba7);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        animation: slideInUp 0.18s ease-out;
+    }
+    #character-workshop-popup .cw-footer.is-more-open .cw-footer-more { display: flex; }
+    #character-workshop-popup .cw-footer-more > .rpg-btn {
+        width: 100%;
+        justify-content: flex-start;
+    }
     #character-workshop-popup .cw-version-tile,
     #character-workshop-popup .cw-version-thumb { width: 56px; }
     #character-workshop-popup .cw-version-thumb { height: 64px; }

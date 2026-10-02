@@ -440,8 +440,16 @@ export function openCharacterWorkshop(characterName, options = {}) {
     }
 }
 
+/** Opens or closes the phone footer's "More" fly-out. */
+function setFooterMoreOpen(open) {
+    if (!$modal) return;
+    $modal.find('.cw-footer').toggleClass('is-more-open', !!open);
+    $modal.find('#cw-more-toggle').attr('aria-expanded', open ? 'true' : 'false');
+}
+
 export function closeCharacterWorkshop() {
     if (!$modal || !$modal.length) return;
+    setFooterMoreOpen(false);
     $modal.removeClass('is-open').addClass('is-closing');
     if (_pendingCloseTimeout) clearTimeout(_pendingCloseTimeout);
     // Clear the Expressions tab's lazy-load cache so the next open
@@ -1806,6 +1814,16 @@ function bindStaticListeners() {
     bindExpressionHandlers();
 
     $modal.on('click.cw', '#cw-close, #cw-cancel', () => closeCharacterWorkshop());
+
+    // Phones: the secondary footer actions live in a fly-out behind "More".
+    $modal.on('click.cw', '#cw-more-toggle', (e) => {
+        e.stopPropagation();
+        setFooterMoreOpen(!$modal.find('.cw-footer').hasClass('is-more-open'));
+    });
+    $modal.on('click.cw', '#cw-footer-more .rpg-btn', () => setFooterMoreOpen(false));
+    $modal.on('click.cw', (e) => {
+        if (!$(e.target).closest('#cw-footer-more, #cw-more-toggle').length) setFooterMoreOpen(false);
+    });
     $modal.on('click.cw', '#cw-hidden-restore', () => restoreCharacterToPanel());
 
     // Version strip — tiles are role=tab divs with a roving tabindex.
