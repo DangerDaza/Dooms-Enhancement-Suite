@@ -353,7 +353,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   // ── Google key box: direct calls to Google ──
   reject38 = false;
   let google = [];
-  let googleMode = 'ok'; // 'ok' | 'reject-voice-field' | 'reject-model' | 'bad-key'
+  let googleMode = 'ok'; // 'ok' | 'reject-voice-field' | 'reject-model' | 'bad-key' | 'drop-once' | 'drop'
   const pcm = Buffer.alloc(2400).toString('base64');
   // Fake Google Voices API state (M4/M5).
   let cloneFail = false;
@@ -395,6 +395,10 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     google.push({ model, shape, key: req.headers()['x-goog-api-key'], text: body.contents[0].parts[0].text, voice: vc.voice || vc.prebuiltVoiceConfig.voiceName });
     const cors = { 'access-control-allow-origin': '*' };
     const fail = (status, message, st) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { code: status, message, status: st } }) });
+    if (googleMode === 'drop' || googleMode === 'drop-once') {
+      if (googleMode === 'drop-once') googleMode = 'ok';
+      return route.abort('connectionreset');
+    }
     if (googleMode === 'bad-key') return fail(400, 'API key not valid. Please pass a valid API key.', 'INVALID_ARGUMENT');
     if (/^voice_/.test(vc.voice || '') && (goneVoices.has(vc.voice) || !designed.has(vc.voice))) {
       return fail(404, `Voice voices/${vc.voice} not found.`, 'NOT_FOUND');
@@ -452,6 +456,22 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   });
   const statusDowngrade = await page.evaluate(() => document.querySelector('#rpg-voices-status')?.textContent || '');
   check('status line says the key is used directly and names the fallback', () => { assert.match(statusDowngrade, /key above/); assert.match(statusDowngrade, /3\.1/); });
+
+  // A dropped connection is retried once; a second drop skips the line.
+  google = []; googleMode = 'drop-once';
+  await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  await say(); await page.waitForTimeout(1500);
+  const dropOnceToast = await page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
+  check('a dropped connection is retried once and the line still plays', () => { assert.strictEqual(google.length, 2); assert.doesNotMatch(dropOnceToast, /reach Google/); });
+  google = []; googleMode = 'drop';
+  await say(); await page.waitForTimeout(1500);
+  const dropToast = await page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
+  check('a connection that keeps dropping is tried twice, then skipped with a clear message', () => { assert.strictEqual(google.length, 2); assert.match(dropToast, /even after a retry/); });
+  const timeouts = await page.evaluate(async (DES) => {
+    const { timeoutFor } = await import(`${DES}/src/systems/voices/transport.js`);
+    return [timeoutFor('Hi.'), timeoutFor('x'.repeat(1000)), timeoutFor('x'.repeat(2500)), timeoutFor('x'.repeat(10000))];
+  }, DES);
+  check('the request timeout grows with line length (30 s floor, 2 min cap)', () => assert.deepStrictEqual(timeouts, [30075, 55000, 92500, 120000]));
 
   google = []; googleMode = 'bad-key';
   await setKey('AIzaFAKE-bad-key');

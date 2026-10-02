@@ -37,6 +37,8 @@ import { getVoicesAudioElement } from './voiceBoot.js';
 
 const CACHE_MAX_ENTRIES = 150;
 const RATE_BACKOFF_MS = [2000, 4000, 8000];
+/** One quick retry when the request never got an answer (a dropped connection). */
+const NETWORK_RETRY_MS = 1500;
 
 /** @type {Job[]} */
 let queue = [];
@@ -186,6 +188,7 @@ async function fetchSegment(job, seg, signal) {
             throw new TtsError('budget', 'Session request budget reached');
         }
     }
+    let networkRetried = false;
     for (let attempt = 0; ; attempt++) {
         if (signal.aborted) throw new TtsError('aborted', 'Stopped');
         sessionRequests++;
@@ -201,6 +204,11 @@ async function fetchSegment(job, seg, signal) {
                 continue;
             }
             if (e instanceof TtsError && e.kind === 'rate') consecutiveRateGiveUps++;
+            if (e instanceof TtsError && e.kind === 'network' && !networkRetried) {
+                networkRetried = true;
+                await sleep(NETWORK_RETRY_MS, signal);
+                continue;
+            }
             // A designed voice Google no longer has: switch this line (and
             // later lines in the same voice) to the fallback and try again.
             if (e instanceof TtsError && e.kind === 'voice-gone' && hooks.onVoiceGone) {

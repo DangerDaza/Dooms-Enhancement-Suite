@@ -41,7 +41,18 @@ import { pcm16ToWav, base64ToBytes, isRawPcm, sampleRateFromMime } from './wav.j
 
 const PROBE_KEY = 'dooms_voices_probe';
 const PROBE_TTL_MS = 6 * 60 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 20000;
+// Google renders the whole clip before answering, so a long line can take
+// most of a minute. The timeout grows with the text: 30 s plus 25 ms per
+// character, capped at two minutes.
+const TIMEOUT_BASE_MS = 30000;
+const TIMEOUT_PER_CHAR_MS = 25;
+const TIMEOUT_MAX_MS = 120000;
+
+/** How long to wait for Google to voice `text`. */
+export function timeoutFor(text) {
+    const chars = String(text || '').length;
+    return Math.min(TIMEOUT_MAX_MS, TIMEOUT_BASE_MS + chars * TIMEOUT_PER_CHAR_MS);
+}
 const GOOGLE_API = 'https://generativelanguage.googleapis.com/v1beta';
 
 /** Last known state of the route in use, for the status line. */
@@ -116,7 +127,7 @@ export class TtsError extends Error {
 
 /**
  * Buckets an HTTP status + Google's error text into something DES can act on.
- * @returns {'no-key'|'bad-key'|'quota'|'rate'|'model-unavailable'|'argument'|'content'|'network'|'aborted'|'unknown'}
+ * @returns {'no-key'|'bad-key'|'quota'|'rate'|'model-unavailable'|'argument'|'content'|'network'|'timeout'|'aborted'|'unknown'}
  *   (synthesizeCustom adds 'voice-gone' and 'needs-key' for designed voices)
  */
 export function classifyError(status, message = '') {
@@ -138,16 +149,19 @@ export function classifyError(status, message = '') {
 }
 
 /** fetch with the caller's abort signal plus a timeout. */
-async function fetchWithTimeout(url, init, signal, unreachable) {
+async function fetchWithTimeout(url, init, signal, unreachable, timeoutMs) {
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => timeout.abort(), timeoutMs);
     const onAbort = () => timeout.abort();
     signal?.addEventListener?.('abort', onAbort, { once: true });
     try {
         return await fetch(url, { ...init, signal: timeout.signal });
     } catch (e) {
         if (signal?.aborted) throw new TtsError('aborted', 'Stopped');
-        throw new TtsError('network', timeout.signal.aborted ? 'Google took too long to answer' : unreachable, 0);
+        if (timeout.signal.aborted) {
+            throw new TtsError('timeout', `Google took longer than ${Math.round(timeoutMs / 1000)} s to answer`, 0);
+        }
+        throw new TtsError('network', unreachable, 0);
     } finally {
         clearTimeout(timer);
         signal?.removeEventListener?.('abort', onAbort);
@@ -194,6 +208,7 @@ async function postDirect({ text, voiceId, model, shape, key, signal }) {
         },
         signal,
         'Couldn’t reach Google (check your connection, or whether something is blocking requests to googleapis.com)',
+        timeoutFor(text),
     );
     if (!response.ok) throw await errorFrom(response);
     const json = await response.json();
@@ -295,7 +310,7 @@ async function postStRoute({ text, voiceId, model, signal }) {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({ text, voice: voiceId, model, ...stRouteExtras() }),
-    }, signal, 'Couldn’t reach SillyTavern');
+    }, signal, 'Couldn’t reach SillyTavern', timeoutFor(text));
     if (!response.ok) throw await errorFrom(response);
     const blob = await response.blob();
     if (!blob || blob.size === 0) throw new TtsError('content', 'Google returned no audio', response.status);

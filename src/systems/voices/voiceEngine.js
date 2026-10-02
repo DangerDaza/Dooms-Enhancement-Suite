@@ -78,14 +78,15 @@ player.configurePlayer({
             quota: 'Your Google quota for voices is used up.',
             rate: 'Google is rate-limiting voice requests, so a line was skipped.',
             autoplay: 'Your browser blocked audio. Tap any bullhorn once to allow auto-read on this device.',
-            network: 'Couldn’t reach Google, so a line was skipped.',
+            network: 'Couldn’t reach Google, even after a retry, so a line was skipped. Check your connection, or whether something is blocking googleapis.com.',
+            timeout: `${error?.message || 'Google took too long to answer'}, so a line was skipped. Long lines take the longest.`,
             content: 'Google returned no audio for a line, so it was skipped.',
             'model-unavailable': 'SillyTavern couldn’t use the chosen Gemini voice model.',
             argument: `Google refused the request: ${error?.message || ''}`,
             'needs-key': 'Designed voices need your Google AI Studio key in Settings \u2192 Voices.',
             'voice-gone': 'That designed voice no longer exists on Google.',
         };
-        toast(kind === 'rate' || kind === 'network' || kind === 'content' ? 'info' : 'warning',
+        toast(kind === 'rate' || kind === 'network' || kind === 'timeout' || kind === 'content' ? 'info' : 'warning',
             messages[kind] || `Couldn’t read that line: ${error?.message || kind}`);
         console.warn('[DES Voices]', kind, error?.message || error);
         if (job?.auto && ['no-key', 'bad-key', 'quota', 'autoplay'].includes(kind)) {

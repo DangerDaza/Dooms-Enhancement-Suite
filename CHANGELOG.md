@@ -20,6 +20,7 @@
 ### Changed
 - **SillyTavern's own auto-read is paused while DES voices are on**, so nothing is read twice. Your SillyTavern setting itself isn't changed: turn DES voices off and SillyTavern reads again.
 - The Workshop's section tabs switch to icons a little sooner (below 1080px wide) so the sixth tab fits.
+- **Long lines no longer give up after 20 seconds.** Google makes the whole clip before it answers, so a long line could take longer than DES waited, and you'd see "Couldn't reach Google, so a line was skipped". DES now waits 30 seconds plus a little more for each character of the line, up to 2 minutes. A dropped connection is retried once before the line is skipped, and the message now says whether Google was slow or couldn't be reached at all.
 
 ### Fixed
 - **Dialogue containing `|` or `{{` broke the bullhorn buttons.** The text was sent to SillyTavern's `/speak` unescaped, so a `|` split it into two commands. It's escaped now.
