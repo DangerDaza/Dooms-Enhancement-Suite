@@ -6427,21 +6427,50 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #character-workshop-popup .rpg-settings-popup-footer .spacer { flex: 1; }
 
 
-/* Mobile: the stage becomes a banner on top, the editor scrolls under it. */
+/* Mobile: the Workshop fills the screen, and the big portrait is dropped so
+   the editor gets the room. The stage shrinks to just the version strip
+   (its thumbnails still show each version's portrait); the name is already
+   in the header. With no versions to show, the stage is hidden entirely. */
 @media (max-width: 640px) {
-    #character-workshop-popup .workshop-split {
-        grid-template-columns: 1fr;
-        /* A banner tall enough to read the portrait and the version strip,
-           but never so tall that the editor underneath cannot breathe. */
-        grid-template-rows: clamp(200px, 32vh, 300px) minmax(0, 1fr);
+    /* The popup's containing block can collapse to zero height on phones
+       (inset: 0 alone left it 0px tall in SillyTavern's mobile layout), so
+       size it to the viewport explicitly. */
+    #character-workshop-popup {
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
     }
+    /* The content box is translucent by design; on a phone the chat behind
+       it showed through, so the backdrop goes solid. */
+    #character-workshop-popup::before { background: #000; }
+    #character-workshop-popup .rpg-settings-popup-content {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        margin: 0;
+        border-radius: 0;
+    }
+    #character-workshop-popup .workshop-split {
+        display: flex;
+        flex-direction: column;
+    }
+    #character-workshop-popup .cw-editor { flex: 1 1 auto; }
     #character-workshop-popup .cw-stage {
+        flex: 0 0 auto;
         border-right: none;
         border-bottom: 1px solid var(--rpg-border, #4a7ba7);
         box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--cw-accent) 35%, transparent);
     }
-    #character-workshop-popup .cw-stage-overlay { padding: 0.6rem 0.8rem 0.6rem; }
-    #character-workshop-popup .cw-stage-name { font-size: 1.1rem; }
+    #character-workshop-popup .cw-stage-art,
+    #character-workshop-popup .cw-stage-name,
+    #character-workshop-popup .cw-stage-rel { display: none; }
+    #character-workshop-popup .cw-stage:not(:has(.cw-version-strip:not([hidden]))),
+    #character-workshop-popup[data-mode="user"] .cw-stage { display: none; }
+    #character-workshop-popup .cw-stage-overlay { padding: 0.45rem 0.8rem 0.4rem; }
     #character-workshop-popup .cw-version-tile,
     #character-workshop-popup .cw-version-thumb { width: 56px; }
     #character-workshop-popup .cw-version-thumb { height: 64px; }
@@ -8183,6 +8212,9 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #character-workshop-popup .cw-studio-row .helper {
     flex: 1 1 200px;
     margin: 0;
+    color: rgba(234, 234, 234, 0.65);
+    font-size: var(--modal-font-small, 0.8rem);
+    line-height: 1.4;
 }
 #character-workshop-popup .cw-studio-error {
     color: #e05050;

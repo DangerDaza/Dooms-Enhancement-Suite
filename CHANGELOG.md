@@ -20,6 +20,7 @@
 ### Changed
 - **SillyTavern's own auto-read is paused while DES voices are on**, so nothing is read twice. Your SillyTavern setting itself isn't changed: turn DES voices off and SillyTavern reads again.
 - The Workshop's section tabs switch to icons a little sooner (below 1080px wide) so the sixth tab fits.
+- **The Character Workshop on phones** fills the whole screen and drops the big portrait, so the editor gets the room. The version strip (Base, campaign versions and "+") stays at the top with its thumbnails; with no campaigns it's hidden too. The chat no longer shows through behind the window, and the small print beside **Draft from card** and **Create voice** is small again.
 - **Long lines no longer give up after 20 seconds.** Google makes the whole clip before it answers, so a long line could take longer than DES waited, and you'd see "Couldn't reach Google, so a line was skipped". DES now waits 30 seconds plus a little more for each character of the line, up to 2 minutes. A dropped connection is retried once before the line is skipped, and the message now says whether Google was slow or couldn't be reached at all.
 
 ### Fixed
