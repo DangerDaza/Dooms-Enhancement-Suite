@@ -88,3 +88,21 @@ export function stockRef(id) {
     const canonical = canonicalStockId(id) || id;
     return { source: 'stock', id: canonical };
 }
+
+/** Languages / accents offered when designing a voice: [BCP-47 code, label]. '' lets Google infer it. */
+export const DESIGN_LANGUAGES = [
+    ['', 'Any / from the description'],
+    ['en-US', 'English (US)'],
+    ['en-GB', 'English (UK)'],
+    ['en-AU', 'English (Australia)'],
+    ['en-IN', 'English (India)'],
+    ['es-ES', 'Spanish (Spain)'],
+    ['es-MX', 'Spanish (Mexico)'],
+    ['fr-FR', 'French (France)'],
+    ['fr-CA', 'French (Canada)'],
+    ['de-DE', 'German'],
+    ['it-IT', 'Italian'],
+    ['pt-BR', 'Portuguese (Brazil)'],
+    ['ja-JP', 'Japanese'],
+    ['ko-KR', 'Korean'],
+];

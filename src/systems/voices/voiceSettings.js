@@ -33,6 +33,25 @@ export const ST_FALLBACK_MODEL = 'gemini-3.1-flash-tts-preview';
 /** Stock voice used when the Narrator voice is missing or unplayable. */
 export const NARRATOR_FALLBACK_VOICE = 'Charon';
 
+/**
+ * What the "Design a narrator voice" box (Settings → Voices) starts with:
+ * an old wizard telling the tale by the fire. Written for Google's voice
+ * designer: who is speaking, the sound of the voice, then how they pace and
+ * colour a story, then what to avoid.
+ */
+export const DEFAULT_NARRATOR_DESIGN = Object.freeze({
+    label: 'Old Wizard',
+    gender: 'male',
+    languageCode: 'en-GB',
+    description: 'An ancient wizard telling a long tale by firelight to listeners he is fond of. '
+        + 'A very old man\u2019s voice: a deep, warm baritone worn thin and papery with age, with a soft gravelly rasp '
+        + 'and a little breath at the ends of phrases. He speaks slowly, in an unhurried storyteller\u2019s rhythm, '
+        + 'lingering on vivid words, pausing as if remembering, dropping almost to a whisper for secrets and omens, '
+        + 'and swelling with quiet grandeur for great deeds. Wry and knowing, with a twinkle of dry humour and the '
+        + 'gravity of someone who has watched kingdoms rise and fall. Clear, careful diction with a faint old-world '
+        + 'English lilt. He never shouts and never rushes.',
+});
+
 export function defaultVoiceSettings() {
     return {
         enabled: false,
@@ -51,6 +70,8 @@ export function defaultVoiceSettings() {
         // Google's voice id. Plan §4.2: {id, source, label, designPrompt,
         // gender, languageCode, createdAt, expireTime, keyTag, status}.
         customVoices: {},
+        // The "Design a narrator voice" box, so edits survive a reload.
+        narratorDesign: { ...DEFAULT_NARRATOR_DESIGN },
     };
 }
 
@@ -120,6 +141,12 @@ export function ensureVoiceSettings(saved, live) {
                     changed = true;
                 }
             }
+        }
+        const nd = live.voices.narratorDesign;
+        if (!isPlainObject(nd) || typeof nd.description !== 'string' || typeof nd.label !== 'string'
+            || typeof nd.gender !== 'string' || typeof nd.languageCode !== 'string') {
+            live.voices.narratorDesign = { ...DEFAULT_NARRATOR_DESIGN };
+            changed = true;
         }
         if (!VOICE_MODELS.some(m => m.id === live.voices.model)) {
             live.voices.model = defaults.model;

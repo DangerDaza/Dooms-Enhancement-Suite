@@ -333,6 +333,23 @@ test('settings: broken shapes are repaired', () => {
     assert.deepEqual(live2.characterVoices, {});
 });
 
+test('settings: the narrator design box starts as the old wizard and keeps edits', () => {
+    const fresh = settings.defaultVoiceSettings();
+    assert.deepEqual(fresh.narratorDesign, { ...settings.DEFAULT_NARRATOR_DESIGN });
+    assert.equal(fresh.narratorDesign.gender, 'male');
+    assert.match(fresh.narratorDesign.description, /wizard/);
+    assert.notEqual(fresh.narratorDesign, settings.DEFAULT_NARRATOR_DESIGN, 'a copy, so edits never touch the default');
+    const edited = { label: 'Bard', gender: '', languageCode: 'en-US', description: 'A cheerful bard.' };
+    const saved = { voices: { narratorDesign: edited } };
+    const live = { voices: saved.voices };
+    settings.ensureVoiceSettings(saved, live);
+    assert.deepEqual(live.voices.narratorDesign, edited);
+    const broken = { voices: { narratorDesign: { description: 42 } } };
+    const live2 = { voices: broken.voices };
+    assert.equal(settings.ensureVoiceSettings(broken, live2), true);
+    assert.deepEqual(live2.voices.narratorDesign, { ...settings.DEFAULT_NARRATOR_DESIGN });
+});
+
 // ─── stAutoReadGuard.js ─────────────────────────────────────────────────────
 
 test('guard: SillyTavern sees false while active, the real value otherwise', () => {

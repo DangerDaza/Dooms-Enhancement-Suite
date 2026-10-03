@@ -683,6 +683,76 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.deepStrictEqual(deleted.reg, []);
   });
 
+  // ── Design a narrator voice (Settings → Voices) ──
+  const ndDefaults = await page.evaluate(() => ({
+    desc: document.querySelector('#rpg-voices-nd-desc').value,
+    label: document.querySelector('#rpg-voices-nd-label').value,
+    gender: document.querySelector('#rpg-voices-nd-gender').value,
+    lang: document.querySelector('#rpg-voices-nd-lang').value,
+  }));
+  check('narrator design box starts with the old wizard', () => {
+    assert.match(ndDefaults.desc, /ancient wizard telling a long tale by firelight/);
+    assert.strictEqual(ndDefaults.label, 'Old Wizard');
+    assert.strictEqual(ndDefaults.gender, 'male');
+    assert.strictEqual(ndDefaults.lang, 'en-GB');
+  });
+  voiceCalls = []; google = [];
+  await page.evaluate(() => document.querySelector('#rpg-voices-nd-create').click());
+  await page.waitForFunction(() => !document.querySelector('#rpg-voices-nd-result').hidden, null, { timeout: 8000 });
+  await page.waitForTimeout(1200);
+  const ndMade = await page.evaluate(async (DES) => {
+    const s = (await import(`${DES}/src/core/state.js`)).extensionSettings;
+    return {
+      narrator: s.voices.narratorVoice,
+      select: document.querySelector('#rpg-voices-narrator').value,
+      result: document.querySelector('#rpg-voices-nd-result').textContent.replace(/\s+/g, ' ').trim(),
+      used: document.querySelector(`#rpg-voices-designed .rpg-voices-designed-row[data-voice="${s.voices.narratorVoice.id}"]`)?.textContent || '',
+    };
+  }, DES);
+  check('Create narrator voice designs it on Google from the box and makes it the Narrator', () => {
+    const post = voiceCalls.find(c => c.method === 'POST');
+    assert.ok(post, 'no POST /voices');
+    assert.strictEqual(post.body.voice.type, 'prompted');
+    assert.match(post.body.voice.prompted.input, /ancient wizard/);
+    assert.strictEqual(post.body.voice.display_name, 'Old Wizard');
+    assert.strictEqual(post.body.voice.gender, 'male');
+    assert.strictEqual(post.body.voice.language_code, 'en-GB');
+    assert.strictEqual(ndMade.narrator.source, 'designed');
+    assert.strictEqual(ndMade.select, `designed:${ndMade.narrator.id}`);
+    assert.match(ndMade.result, /The Narrator is now Old Wizard/);
+    assert.match(ndMade.used, /the Narrator/);
+  });
+  check('the new narrator reads a storyteller line in its own voice', () => {
+    assert.ok(google.some(g => g.voice === ndMade.narrator.id && /Gather close/.test(g.text)), JSON.stringify(google));
+  });
+  await page.evaluate(() => document.querySelector('.rpg-accordion-section[data-accordion="voices"]').scrollIntoView());
+  await page.evaluate(() => { const d = document.querySelector('#rpg-voices-nd'); d.open = true; d.scrollIntoView(); });
+  try { await (await page.$('#rpg-voices-nd')).screenshot({ path: shot('narrator-design.png') }); } catch (e) { /* hidden panel */ }
+
+  // Edits are kept; Undo deletes the voice and restores the old Narrator.
+  await page.evaluate(() => { const t = document.querySelector('#rpg-voices-nd-desc'); t.value = 'A cheerful bard.'; t.dispatchEvent(new Event('change', { bubbles: true })); });
+  const keptEdit = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.narratorDesign.description, DES);
+  check('edits to the narrator description are saved', () => assert.strictEqual(keptEdit, 'A cheerful bard.'));
+  voiceCalls = [];
+  page.once('dialog', d => d.accept());
+  await page.evaluate(() => document.querySelector('#rpg-voices-nd-undo').click());
+  await page.waitForTimeout(800);
+  const ndUndone = await page.evaluate(async (DES) => {
+    const s = (await import(`${DES}/src/core/state.js`)).extensionSettings;
+    return { narrator: s.voices.narratorVoice, reg: Object.keys(s.voices.customVoices), hidden: document.querySelector('#rpg-voices-nd-result').hidden };
+  }, DES);
+  check('Undo deletes the narrator voice from Google and restores the previous Narrator', () => {
+    assert.ok(voiceCalls.some(c => c.method === 'DELETE' && c.id === ndMade.narrator.id));
+    assert.deepStrictEqual(ndUndone.narrator, { source: 'stock', id: 'Charon' });
+    assert.deepStrictEqual(ndUndone.reg, []);
+    assert.strictEqual(ndUndone.hidden, true);
+  });
+  page.once('dialog', d => d.accept());
+  await page.evaluate(() => document.querySelector('#rpg-voices-nd-reset').click());
+  await page.waitForTimeout(200);
+  const resetDesc = await page.evaluate(() => document.querySelector('#rpg-voices-nd-desc').value);
+  check('Reset puts the old wizard back', () => assert.match(resetDesc, /ancient wizard/));
+
   // ── M5: voice cloning ──
   const os = require('os'); const fs = require('fs'); const path = require('path');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'des-clone-'));

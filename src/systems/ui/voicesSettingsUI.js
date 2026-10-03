@@ -19,8 +19,8 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId } from '../voices/voiceCatalog.js';
-import { VOICE_MODELS, NARRATOR_FALLBACK_VOICE } from '../voices/voiceSettings.js';
+import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId, DESIGN_LANGUAGES } from '../voices/voiceCatalog.js';
+import { VOICE_MODELS, NARRATOR_FALLBACK_VOICE, DEFAULT_NARRATOR_DESIGN, isValidVoiceRef } from '../voices/voiceSettings.js';
 import { syncVoicesState, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import {
     listRegistered,
@@ -31,6 +31,7 @@ import {
     usedByText,
     deleteDesignedVoice,
     recreateDesignedVoice,
+    designVoice,
 } from '../voices/voiceRegistry.js';
 import { voiceRefCount } from '../lorebook/campaignProfiles.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -224,6 +225,178 @@ function renderStatus() {
     $status.text(parts.join(' '));
 }
 
+/** Saves the Google key box (trimmed). Called on change/blur, not per keystroke. */
+async function saveKey(value) {
+    const key = String(value || '').trim();
+    if (key === (v().googleApiKey || '')) return;
+    v().googleApiKey = key;
+    saveSettings();
+    try {
+        const { clearRouteProbe } = await import('../voices/transport.js');
+        clearRouteProbe();
+    } catch (e) { /* engine not loaded yet */ }
+    renderStatus();
+}
+
+// ─── Design a narrator voice ────────────────────────────────────────────────
+
+/** What a newly designed narrator reads first: a storyteller's opening. */
+const NARRATOR_SAMPLE = 'Gather close, and mind the fire. This tale is older than the road outside, '
+    + 'and it begins, as the best of them do, with a knock at the door on a night when no one should have been travelling.';
+
+/** The voice made in this box this session, and the Narrator it replaced (for Undo). */
+let ndLast = null;
+let ndBusy = false;
+
+function nd() {
+    if (!v().narratorDesign || typeof v().narratorDesign !== 'object') v().narratorDesign = { ...DEFAULT_NARRATOR_DESIGN };
+    return v().narratorDesign;
+}
+
+function fillNarratorDesign() {
+    const d = nd();
+    $('#rpg-voices-nd-lang').html(DESIGN_LANGUAGES.map(([code, label]) =>
+        `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`).join(''));
+    $('#rpg-voices-nd-desc').val(d.description);
+    $('#rpg-voices-nd-label').val(d.label);
+    $('#rpg-voices-nd-gender').val(d.gender);
+    $('#rpg-voices-nd-lang').val(d.languageCode);
+    renderNarratorDesign();
+}
+
+/** Copies the form into voices.narratorDesign. */
+function readNarratorDesign() {
+    const d = nd();
+    d.description = String($('#rpg-voices-nd-desc').val() || '');
+    d.label = String($('#rpg-voices-nd-label').val() || '');
+    d.gender = String($('#rpg-voices-nd-gender').val() || '');
+    d.languageCode = String($('#rpg-voices-nd-lang').val() || '');
+    saveSettings();
+    return d;
+}
+
+function describeDesignError(e) {
+    if (!e) return 'Something went wrong.';
+    if (e.kind === 'no-key') return e.message;
+    if (e.kind === 'bad-key') return 'Google rejected the key below.';
+    if (e.kind === 'quota') return 'Your Google project is out of quota, or already has 200 custom voices. Delete some under My custom voices.';
+    if (e.kind === 'rate') return 'Google is rate-limiting requests. Wait a moment and try again.';
+    return `Google said: ${e.message || e}`;
+}
+
+function renderNarratorDesign(error) {
+    const $create = $('#rpg-voices-nd-create');
+    $create.prop('disabled', ndBusy).html(ndBusy
+        ? '<i class="fa-solid fa-spinner fa-spin"></i> Creating… (this can take a little while)'
+        : '<i class="fa-solid fa-wand-magic-sparkles"></i> Create narrator voice');
+    $('#rpg-voices-nd-reset').prop('disabled', ndBusy);
+    const $result = $('#rpg-voices-nd-result');
+    const entry = ndLast && getRegistered(ndLast.id);
+    if (error) {
+        $result.prop('hidden', false).html(`<p class="rpg-voices-nd-error">${escapeHtml(error)}</p>`);
+        return;
+    }
+    if (!entry || ndBusy) {
+        $result.prop('hidden', true).empty();
+        return;
+    }
+    const playing = getEngineIfLoaded()?.isAuditioning(entry.id);
+    $result.prop('hidden', false).html(`
+        <span>The Narrator is now <strong>${escapeHtml(entry.label || 'your designed voice')}</strong>.</span>
+        <div class="rpg-voices-nd-actions">
+            <button type="button" class="rpg-accordion-mini-btn" id="rpg-voices-nd-hear"><i class="fa-solid ${playing ? 'fa-stop' : 'fa-play'}"></i> Hear it</button>
+            <button type="button" class="rpg-accordion-mini-btn" id="rpg-voices-nd-again" title="Delete this one and design a new one from the description">Try again</button>
+            <button type="button" class="rpg-accordion-mini-btn" id="rpg-voices-nd-undo" title="Delete this voice and go back to the previous Narrator">Undo</button>
+        </div>`);
+}
+
+/** Designs a narrator voice from the form and makes it the Narrator. */
+async function createNarratorVoice({ replace = false } = {}) {
+    const d = readNarratorDesign();
+    if (!d.description.trim()) { renderNarratorDesign('Describe how the narrator sounds first (or reset to the old wizard).'); return; }
+    // The key box saves itself on change (which fires before this click).
+    if (!(v().googleApiKey || '').trim()) {
+        renderNarratorDesign('Paste your Google AI Studio key in the box below first. Designing a voice needs it.');
+        return;
+    }
+    unlockVoicesAudio();
+    const previous = ndLast ? ndLast.previous : { ...v().narratorVoice };
+    if (replace && ndLast) {
+        const old = ndLast.id;
+        ndLast = null;
+        try { await deleteDesignedVoice(old); } catch (e) { console.warn('[DES Voices] could not delete the previous narrator draft', e); }
+    }
+    ndBusy = true;
+    renderNarratorDesign();
+    try {
+        const { entry } = await designVoice({
+            description: d.description.trim(),
+            label: d.label.trim() || 'Narrator',
+            gender: d.gender,
+            languageCode: d.languageCode,
+        });
+        v().narratorVoice = refFor(entry);
+        saveSettings();
+        getEngineIfLoaded()?.invalidate();
+        ndLast = { id: entry.id, previous };
+        ndBusy = false;
+        fillNarratorOptions();
+        renderDesigned();
+        renderNarratorDesign();
+        (await getEngine()).audition(refFor(entry), NARRATOR_SAMPLE);
+    } catch (e) {
+        ndBusy = false;
+        renderNarratorDesign(describeDesignError(e));
+    }
+}
+
+function bindNarratorDesign() {
+    $('#rpg-voices-nd-desc, #rpg-voices-nd-label, #rpg-voices-nd-gender, #rpg-voices-nd-lang')
+        .on('change', () => readNarratorDesign());
+    $('#rpg-voices-nd-reset').on('click', function () {
+        const d = nd();
+        if (d.description.trim() && d.description !== DEFAULT_NARRATOR_DESIGN.description
+            && !window.confirm('Replace your description with the old wizard?')) return;
+        v().narratorDesign = { ...DEFAULT_NARRATOR_DESIGN };
+        saveSettings();
+        fillNarratorDesign();
+    });
+    $('#rpg-voices-nd-create').on('click', () => createNarratorVoice());
+    $('#rpg-voices-nd-result').on('click', '#rpg-voices-nd-hear', async () => {
+        const entry = ndLast && getRegistered(ndLast.id);
+        if (!entry) return;
+        unlockVoicesAudio();
+        (await getEngine()).audition(refFor(entry), NARRATOR_SAMPLE);
+    });
+    $('#rpg-voices-nd-result').on('click', '#rpg-voices-nd-again', () => {
+        if (!window.confirm('Try again? The narrator voice you just made will be deleted from your Google project.')) return;
+        createNarratorVoice({ replace: true });
+    });
+    $('#rpg-voices-nd-result').on('click', '#rpg-voices-nd-undo', async () => {
+        if (!ndLast) return;
+        if (!window.confirm('Undo? This narrator voice will be deleted from your Google project, and the Narrator goes back to what it was.')) return;
+        const { id, previous } = ndLast;
+        ndLast = null;
+        getEngineIfLoaded()?.stopAudition();
+        try { await deleteDesignedVoice(id); } catch (e) { console.warn('[DES Voices] could not delete the narrator voice', e); }
+        const back = previous && isValidVoiceRef(previous)
+            && (previous.source !== 'designed' && previous.source !== 'cloned' || getRegistered(previous.id));
+        v().narratorVoice = back ? previous : stockRef(NARRATOR_FALLBACK_VOICE);
+        saveSettings();
+        getEngineIfLoaded()?.invalidate();
+        fillNarratorOptions();
+        renderDesigned();
+        renderNarratorDesign();
+    });
+    document.addEventListener('dooms:voices-state', () => {
+        if (ndLast && !ndBusy) renderNarratorDesign();
+    });
+    document.addEventListener('dooms:voices-registry', () => {
+        if (ndLast && !getRegistered(ndLast.id)) ndLast = null;
+        if (!ndBusy) renderNarratorDesign();
+    });
+}
+
 function populate() {
     fillNarratorOptions();
     $('#rpg-voices-model').html(VOICE_MODELS.map(m =>
@@ -232,6 +405,7 @@ function populate() {
     $('#rpg-voices-enabled').prop('checked', !!v().enabled);
     $('#rpg-voices-autoread').prop('checked', !!v().autoRead);
     renderDesigned();
+    fillNarratorDesign();
     $('#rpg-voices-model').val(v().model);
     $('#rpg-voices-key').val(v().googleApiKey || '').attr('type', 'password');
     const rate = Number(v().playbackRate) || 1;
@@ -247,6 +421,7 @@ export function bindVoicesSettingsUI() {
     if (!extensionSettings.voices) return;
     bound = true;
     bindDesigned();
+    bindNarratorDesign();
     populate();
 
     $('#rpg-voices-enabled').on('change', async function () {
@@ -275,18 +450,6 @@ export function bindVoicesSettingsUI() {
         const engine = await getEngine();
         engine.audition(narratorRef(), 'The rain had not stopped for three days, and the city was starting to forget what the sun looked like.');
     });
-    // Google key: saved on change/blur (not per keystroke), trimmed.
-    const saveKey = async (value) => {
-        const key = String(value || '').trim();
-        if (key === (v().googleApiKey || '')) return;
-        v().googleApiKey = key;
-        saveSettings();
-        try {
-            const { clearRouteProbe } = await import('../voices/transport.js');
-            clearRouteProbe();
-        } catch (e) { /* engine not loaded yet */ }
-        renderStatus();
-    };
     $('#rpg-voices-key').on('change', function () { saveKey($(this).val()); });
     $('#rpg-voices-key-toggle').on('click', function () {
         const $input = $('#rpg-voices-key');

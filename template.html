@@ -1105,6 +1105,47 @@
                             </button>
                         </div>
                     </div>
+                    <!-- Design a narrator voice: a designed voice made here becomes the
+                         Narrator. Filled by voicesSettingsUI.js; the text is saved in
+                         voices.narratorDesign so edits survive a reload. -->
+                    <details class="rpg-voices-nd" id="rpg-voices-nd">
+                        <summary><i class="fa-solid fa-wand-magic-sparkles"></i> Design a narrator voice</summary>
+                        <p class="rpg-note-text">Describe the storyteller and Google makes a voice to match, then it
+                            becomes your Narrator. It starts as an old wizard &mdash; change anything you like. Uses
+                            one of your Google project's 200 custom-voice slots, and needs the Google AI Studio key
+                            below.</p>
+                        <label class="rpg-voices-nd-field">
+                            <span class="rpg-setting-label">How the narrator sounds</span>
+                            <textarea id="rpg-voices-nd-desc" class="rpg-accordion-input" rows="7"
+                                spellcheck="true"></textarea>
+                        </label>
+                        <div class="rpg-voices-nd-grid">
+                            <label class="rpg-voices-nd-field">
+                                <span class="rpg-setting-label">Name</span>
+                                <input type="text" id="rpg-voices-nd-label" class="rpg-accordion-input" maxlength="60" />
+                            </label>
+                            <label class="rpg-voices-nd-field">
+                                <span class="rpg-setting-label">Gender</span>
+                                <select id="rpg-voices-nd-gender" class="rpg-accordion-select">
+                                    <option value="">Any</option>
+                                    <option value="female">Female</option>
+                                    <option value="male">Male</option>
+                                </select>
+                            </label>
+                            <label class="rpg-voices-nd-field">
+                                <span class="rpg-setting-label">Language / accent</span>
+                                <select id="rpg-voices-nd-lang" class="rpg-accordion-select"></select>
+                            </label>
+                        </div>
+                        <div class="rpg-voices-nd-actions">
+                            <button type="button" class="rpg-btn rpg-btn-primary" id="rpg-voices-nd-create">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Create narrator voice
+                            </button>
+                            <button type="button" class="rpg-accordion-mini-btn" id="rpg-voices-nd-reset"
+                                title="Put the old wizard description back">Reset to the old wizard</button>
+                        </div>
+                        <div class="rpg-voices-nd-result" id="rpg-voices-nd-result" hidden></div>
+                    </details>
                     <div class="rpg-setting-row rpg-voices-stack">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Google AI Studio key</span>

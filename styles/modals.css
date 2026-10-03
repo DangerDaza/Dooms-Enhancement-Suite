@@ -8087,6 +8087,80 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-voices-narrator .rpg-voices-preview {
     flex: 0 0 auto;
 }
+/* Settings → Voices → Design a narrator voice */
+.rpg-voices-nd {
+    margin: 0.25rem 0 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.18);
+}
+.rpg-voices-nd > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--rpg-highlight, #e94560);
+    list-style-position: inside;
+}
+.rpg-voices-nd[open] > summary { margin-bottom: 0.45rem; }
+.rpg-voices-nd .rpg-note-text { margin: 0 0 0.5rem; color: rgba(234, 234, 234, 0.6); }
+.rpg-voices-nd-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    margin-bottom: 0.5rem;
+}
+.rpg-voices-nd-field textarea {
+    width: 100%;
+    min-height: 8.5em;
+    resize: vertical;
+    line-height: 1.45;
+    box-sizing: border-box;
+}
+.rpg-voices-nd-field .rpg-accordion-input,
+.rpg-voices-nd-field .rpg-accordion-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.rpg-voices-nd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0 0.5rem;
+}
+.rpg-voices-nd-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rpg-voices-nd-result {
+    margin-top: 0.55rem;
+    padding: 0.5rem 0.6rem;
+    border-left: 3px solid var(--rpg-highlight, #e94560);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.rpg-voices-nd-result[hidden] { display: none; }
+/* The mini buttons are 28px icon squares by default; these carry words. */
+.rpg-voices-nd-actions .rpg-accordion-mini-btn {
+    width: auto;
+    height: auto;
+    min-height: 28px;
+    padding: 0.25rem 0.6rem;
+    gap: 0.35rem;
+    white-space: nowrap;
+    color: var(--rpg-text, #ddd);
+}
+.rpg-voices-nd-actions .rpg-btn-primary {
+    width: auto;
+    flex: 0 0 auto;
+}
+.rpg-voices-nd-error { margin: 0; color: #e05050; }
+
 /* .rpg-accordion-action-btn sets display, which would override [hidden]. */
 #rpg-voices-resume[hidden] {
     display: none;

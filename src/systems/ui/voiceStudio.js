@@ -37,24 +37,7 @@ import {
     draftDescriptionFromCard,
 } from '../voices/voiceRegistry.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
-
-/** Accents Google's voice design understands as a language code (optional). */
-const LANGUAGES = [
-    ['', 'Any / from the description'],
-    ['en-US', 'English (US)'],
-    ['en-GB', 'English (UK)'],
-    ['en-AU', 'English (Australia)'],
-    ['en-IN', 'English (India)'],
-    ['es-ES', 'Spanish (Spain)'],
-    ['es-MX', 'Spanish (Mexico)'],
-    ['fr-FR', 'French (France)'],
-    ['fr-CA', 'French (Canada)'],
-    ['de-DE', 'German'],
-    ['it-IT', 'Italian'],
-    ['pt-BR', 'Portuguese (Brazil)'],
-    ['ja-JP', 'Japanese'],
-    ['ko-KR', 'Korean'],
-];
+import { DESIGN_LANGUAGES } from '../voices/voiceCatalog.js';
 
 /**
  * Per-character designer state (this session only).
@@ -192,7 +175,7 @@ export function renderStudio(ctx, isPlaying) {
                 <label class="cw-studio-field">
                     <span>Language / accent</span>
                     <select class="rpg-accordion-select cw-studio-lang">
-                        ${LANGUAGES.map(([code, label]) => `<option value="${code}"${st.languageCode === code ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+                        ${DESIGN_LANGUAGES.map(([code, label]) => `<option value="${code}"${st.languageCode === code ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
                     </select>
                 </label>
             </div>
