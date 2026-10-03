@@ -7985,14 +7985,56 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
    DES VOICES — Workshop Voice tab (src/systems/ui/voicePane.js) and the
    Settings → Voices accordion (src/systems/ui/voicesSettingsUI.js)
    ═══════════════════════════════════════════════════════════════════════════ */
+/* "Current voice" card at the top of the tab */
 #character-workshop-popup .cw-voice-current {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    margin: 0.5rem 0 0.75rem;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    margin: 0.5rem 0 0.6rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--cw-accent, var(--rpg-highlight, #e94560));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--cw-accent, #e94560) 8%, transparent);
+}
+#character-workshop-popup .cw-voice-current.is-empty {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.02);
+}
+#character-workshop-popup .cw-voice-current-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
 }
 #character-workshop-popup .cw-voice-current-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.65;
+}
+#character-workshop-popup .cw-voice-current-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 1.05em;
+}
+#character-workshop-popup .cw-voice-kind {
+    font-size: 0.72em;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    opacity: 0.85;
+}
+#character-workshop-popup .cw-voice-current-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+#character-workshop-popup .cw-voice-test-hint {
+    font-size: 0.9em;
     opacity: 0.75;
 }
 #character-workshop-popup .cw-voice-test {
@@ -8282,8 +8324,64 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     color: #e05050;
 }
 
-/* Workshop Voice tab: view switch, gender chips, designer */
-#character-workshop-popup .cw-voice-views,
+/* Workshop Voice tab: the three tabs (Standard · My voices · Create new) */
+#character-workshop-popup .cw-voice-views {
+    display: flex;
+    margin: 0.9rem 0 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+#character-workshop-popup .cw-voice-views .cw-voice-view {
+    flex: 1 1 0;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    padding: 0.5rem 0.4rem;
+    font-size: 0.95em;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+#character-workshop-popup .cw-voice-views .cw-voice-view.is-active {
+    opacity: 1;
+    background: none;
+    border-bottom-color: var(--cw-accent, var(--rpg-highlight, #e94560));
+    color: var(--cw-accent, var(--rpg-highlight, #e94560));
+    font-weight: 600;
+}
+/* Create new: Describe it / Clone a recording */
+#character-workshop-popup .cw-voice-modes {
+    display: inline-flex;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+}
+#character-workshop-popup .cw-voice-mode {
+    border: none;
+    background: none;
+    color: var(--rpg-text, #eaeaea);
+    padding: 0.35rem 0.9rem;
+    font: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+    opacity: 0.75;
+}
+#character-workshop-popup .cw-voice-mode.is-active {
+    opacity: 1;
+    background: rgba(233, 69, 96, 0.15);
+    box-shadow: inset 0 0 0 1px var(--rpg-highlight, #e94560);
+    border-radius: 999px;
+}
+#character-workshop-popup .cw-voice-mode-hint { margin: 0 0 0.6rem; }
+#character-workshop-popup .cw-voice-empty {
+    text-align: center;
+    padding: 1.2rem 0.5rem;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+}
+#character-workshop-popup .cw-voice-empty p { margin: 0 0 0.6rem; opacity: 0.8; }
+
+/* Gender chips */
 #character-workshop-popup .cw-voice-filters {
     display: flex;
     flex-wrap: wrap;
@@ -8363,17 +8461,37 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     font-size: var(--modal-font-small, 0.8rem);
     line-height: 1.4;
 }
-#character-workshop-popup .cw-studio-ref {
+/* "Or let your chat AI write it": from the card, or sound like… */
+#character-workshop-popup .cw-studio-assist {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
 }
-#character-workshop-popup .cw-studio-ref .cw-studio-field {
-    flex: 1 1 220px;
-    margin: 0;
+#character-workshop-popup .cw-studio-assist-label {
+    flex-basis: 100%;
+    font-size: 0.8em;
+    opacity: 0.75;
 }
+#character-workshop-popup .cw-studio-ref {
+    display: flex;
+    flex: 1 1 260px;
+    gap: 0.4rem;
+    min-width: 0;
+}
+#character-workshop-popup .cw-studio-ref .cw-studio-ref-input { flex: 1 1 auto; min-width: 0; }
 #character-workshop-popup .cw-studio-ref .cw-studio-ref-go { flex: 0 0 auto; }
+#character-workshop-popup .cw-studio-more > summary {
+    cursor: pointer;
+    font-size: 0.9em;
+    opacity: 0.85;
+    margin: 0.2rem 0;
+}
+#character-workshop-popup .cw-studio-more[open] > summary { margin-bottom: 0.45rem; }
+#character-workshop-popup .cw-studio-more-hint { opacity: 0.6; font-size: 0.9em; margin-left: 0.25rem; }
 #character-workshop-popup .cw-studio-error {
     color: #e05050;
     margin: 0;
@@ -8398,7 +8516,7 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 }
 #character-workshop-popup .cw-voice-mine-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.4rem 0.8rem;
     padding: 0.45rem 0.6rem;
@@ -8424,8 +8542,22 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     opacity: 0.75;
     overflow-wrap: anywhere;
 }
+/* Long descriptions: two lines here, the full text on hover. */
+#character-workshop-popup .cw-voice-mine-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+#character-workshop-popup .cw-voice-mine-row > .cw-voice-play {
+    flex: 0 0 2.2rem;
+    align-self: stretch;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+}
 #character-workshop-popup .cw-voice-mine-actions {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 0.4rem;
 }

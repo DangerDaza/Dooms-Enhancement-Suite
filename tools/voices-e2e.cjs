@@ -526,9 +526,23 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   check('gender filter: All shows 30, grouped Female then Male', () => assert.deepStrictEqual(counts.all, { n: 30, genders: 'female,male', groups: 2 }));
   await page.screenshot({ path: shot('workshop-voice-filter.png') });
 
-  // Design view
-  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="design"]').click());
+  // Create new → Describe it
+  const tabs = await page.evaluate(() => [...document.querySelectorAll('#cw-voice-pane .cw-voice-view')].map(b => b.textContent.trim()));
+  check('the Voice tab has three tabs: Standard, My voices, Create new', () => assert.deepStrictEqual(tabs, ['Standard', 'My voices', '➕ Create new']));
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="mine"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-voice-empty', { timeout: 5000 });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-goto-create').click());
   await page.waitForSelector('#cw-voice-pane .cw-studio-desc', { timeout: 5000 });
+  const describeUi = await page.evaluate(() => ({
+    mode: document.querySelector('#cw-voice-pane .cw-voice-mode.is-active')?.getAttribute('data-mode'),
+    moreOpen: document.querySelector('#cw-voice-pane .cw-studio-more').open,
+    assist: [...document.querySelectorAll('#cw-voice-pane .cw-studio-assist button')].map(b => b.textContent.trim()),
+  }));
+  check('My voices starts empty with a shortcut to Create new → Describe it', () => assert.strictEqual(describeUi.mode, 'describe'));
+  check('Describe it: name/gender/accent tucked under More options; AI helpers are labelled for what they do', () => {
+    assert.strictEqual(describeUi.moreOpen, false);
+    assert.deepStrictEqual(describeUi.assist, ["From Tom's card", 'Write it']);
+  });
   voiceCalls = []; google = [];
   await page.evaluate(() => {
     const d = document.querySelector('#cw-voice-pane .cw-studio-desc');
@@ -565,8 +579,11 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   // Use it + Save
   await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-use').click());
   await page.waitForTimeout(200);
-  const curLabel = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-current-value').textContent);
-  check('Use this voice sets it as the current voice', () => assert.match(curLabel, /Tom's voice \(designed\)/));
+  const curLabel = await page.evaluate(() => ({
+    name: document.querySelector('#cw-voice-pane .cw-voice-current-value').textContent,
+    kind: document.querySelector('#cw-voice-pane .cw-voice-kind')?.textContent,
+  }));
+  check('Use for Tom sets it as the current voice', () => { assert.strictEqual(curLabel.name, "Tom's voice"); assert.strictEqual(curLabel.kind, 'Designed'); });
   await page.evaluate(() => document.querySelector('#cw-save').click());
   await page.waitForTimeout(600);
   const tomVoice = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.characterVoices.Tom, DES);
@@ -593,7 +610,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   await page.waitForTimeout(1000);
   await page.evaluate(() => document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click());
   await page.waitForTimeout(300);
-  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="design"]').click());
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="create"]').click());
   await page.waitForSelector('#cw-voice-pane .cw-studio-desc', { timeout: 5000 });
   page.once('dialog', d => d.accept());
   await page.evaluate(() => {
@@ -603,8 +620,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     document.querySelector('#cw-voice-pane .cw-studio-create').click();
   });
   await page.waitForSelector('#cw-voice-pane .cw-voice-result', { timeout: 8000 });
-  const mineRows = await page.evaluate(() => document.querySelectorAll('#cw-voice-pane .cw-voice-mine-row').length);
-  check('the designer lists every designed voice for reuse', () => assert.strictEqual(mineRows, 2));
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="mine"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-voice-mine-row', { timeout: 5000 });
+  const mineRows = await page.evaluate(() => [...document.querySelectorAll('#cw-voice-pane .cw-voice-mine-row')].map(r => r.querySelector('.cw-studio-use')?.textContent.trim() || r.querySelector('.cw-voice-inuse')?.textContent.trim()));
+  check('My voices lists every designed voice for reuse, each with Use', () => assert.deepStrictEqual(mineRows, ['Use', 'Use']));
+  await page.screenshot({ path: shot('workshop-voice-mine.png') });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="create"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-studio-discard', { timeout: 5000 });
   await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-studio-discard').click());
   await page.waitForTimeout(600);
   const afterDiscard = await page.evaluate(async (DES) => Object.keys((await import(`${DES}/src/core/state.js`)).extensionSettings.voices.customVoices), DES);
@@ -796,7 +818,9 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   await page.waitForTimeout(1000);
   await page.evaluate(() => document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click());
   await page.waitForTimeout(300);
-  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="clone"]').click());
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-view[data-view="create"]').click());
+  await page.waitForSelector('#cw-voice-pane .cw-voice-mode[data-mode="clone"]', { timeout: 5000 });
+  await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-voice-mode[data-mode="clone"]').click());
   await page.waitForSelector('#cw-voice-pane .cw-clone-agree-box', { timeout: 5000 });
   const gate = await page.evaluate(() => document.querySelector('#cw-voice-pane .cw-clone-next[data-to="2"]').disabled);
   check('clone: Continue is blocked until the permission box is ticked', () => assert.strictEqual(gate, true));

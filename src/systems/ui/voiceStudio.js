@@ -53,6 +53,7 @@ function stateFor(ctx) {
         states.set(ctx.name, {
             description: ctx.voice?.pendingDesign || '',
             reference: '',
+            moreOpen: false,
             gender: '',
             languageCode: '',
             label: `${ctx.name}'s voice`,
@@ -78,72 +79,41 @@ function badge(entry) {
     return '';
 }
 
-/** HTML for the Design view. */
+/** The "needs a key" panel shared by the designer and My voices. */
+function lockedHtml(what) {
+    return `
+        <div class="cw-voice-locked">
+            <p><strong>${what} needs your Google AI Studio key.</strong></p>
+            <p class="helper">Paste it in <strong>Settings → Voices → Google AI Studio key</strong>. SillyTavern has no way to design voices, so DES talks to Google directly for this.</p>
+        </div>`;
+}
+
+/** HTML for Create new → Describe it. */
 export function renderStudio(ctx, isPlaying) {
     const st = stateFor(ctx);
-    const hasKey = !!getDesKey();
-    const currentId = ctx.voice && (ctx.voice.source === 'designed' || ctx.voice.source === 'cloned') ? ctx.voice.id : null;
-
-    if (!hasKey) {
-        return `
-            <div class="cw-voice-locked">
-                <p><strong>Designing voices needs your Google AI Studio key.</strong></p>
-                <p class="helper">Paste it in <strong>Settings → Voices → Google AI Studio key</strong>. SillyTavern has no way to design voices, so DES talks to Google directly for this.</p>
-            </div>`;
-    }
+    if (!getDesKey()) return lockedHtml('Making voices');
 
     const pending = ctx.voice && !ctx.voice.id && ctx.voice.pendingDesign
-        ? `<p class="helper cw-voice-pending">This character was imported with a designed voice that doesn't exist in your Google project yet. The description is filled in below &mdash; press <strong>Create voice</strong> to make it.</p>`
+        ? `<p class="helper cw-voice-pending">This character was imported with a designed voice that doesn't exist in your Google project yet. Its description is filled in below &mdash; press <strong>Create voice</strong> to make it.</p>`
         : '';
 
     const result = st.result;
     const resultHtml = result ? `
         <div class="cw-voice-result">
             <div class="cw-voice-result-head">
-                <strong>${escapeHtml(result.entry.label)}</strong>
+                <strong>${escapeHtml(result.entry.label)}</strong> is ready
                 ${result.entry.gender ? `<span class="cw-voice-gender">${genderWord(result.entry.gender)}</span>` : ''}
             </div>
             <div class="cw-voice-result-actions">
-                ${result.sample ? `<button type="button" class="rpg-btn cw-studio-sample"><i class="fa-solid ${isPlaying(`sample:${result.entry.id}`) ? 'fa-stop' : 'fa-play'}"></i> Google's sample</button>` : ''}
-                <button type="button" class="rpg-btn cw-studio-read-desc" data-voice="${escapeAttr(result.entry.id)}"><i class="fa-solid fa-play"></i> Read description</button>
-                <button type="button" class="rpg-btn cw-studio-try-line" data-voice="${escapeAttr(result.entry.id)}"><i class="fa-solid fa-play"></i> Test line</button>
-                <button type="button" class="rpg-btn rpg-btn-primary cw-studio-use" data-voice="${escapeAttr(result.entry.id)}">Use this voice</button>
-                <button type="button" class="rpg-btn cw-studio-again">Try again</button>
-                <button type="button" class="rpg-btn rpg-btn-danger cw-studio-discard">Discard</button>
+                <button type="button" class="rpg-btn cw-studio-read-desc" data-voice="${escapeAttr(result.entry.id)}" title="It reads the description you wrote"><i class="fa-solid fa-play"></i> Hear description</button>
+                <button type="button" class="rpg-btn cw-studio-try-line" data-voice="${escapeAttr(result.entry.id)}" title="It says the test line above"><i class="fa-solid fa-play"></i> Hear test line</button>
             </div>
-            <p class="helper">The voice is saved in your Google project now. It's attached to ${escapeHtml(ctx.name)} when you press <strong>Save</strong>.</p>
-        </div>` : '';
-
-    const mine = listRegistered();
-    const mineHtml = mine.length ? `
-        <h4 class="cw-voice-subhead">Your custom voices</h4>
-        <div class="cw-voice-mine">
-            ${mine.map((entry) => {
-                const selected = entry.id === currentId;
-                const gone = health(entry) === 'gone';
-                const used = usedByText(entry.id);
-                return `
-                <div class="cw-voice-mine-row${selected ? ' is-selected' : ''}">
-                    <div class="cw-voice-mine-main">
-                        <span class="cw-voice-name">${escapeHtml(entry.label || 'Custom voice')}</span>
-                        <span class="cw-voice-gender">${entry.source === 'cloned' ? 'Cloned' : 'Designed'}${entry.gender ? ` · ${genderWord(entry.gender)}` : ''}</span>
-                        ${badge(entry)}
-                        <span class="cw-voice-mine-desc">${escapeHtml(entry.source === 'cloned' ? (health(entry) === 'ok' ? '' : 'Record it again in Clone a voice to renew it.') : (entry.designPrompt || ''))}</span>
-                        <span class="cw-voice-mine-used">${used ? `Used by ${escapeHtml(used)}` : 'Not used by anyone yet'}</span>
-                    </div>
-                    <div class="cw-voice-mine-actions">
-                        <button type="button" class="cw-voice-play" data-voice="${escapeAttr(entry.id)}" data-source="designed"
-                            aria-label="Preview ${escapeAttr(entry.label || '')}" title="Preview" ${gone ? 'disabled' : ''}>
-                            <i class="fa-solid ${isPlaying(entry.id) ? 'fa-stop' : 'fa-play'}"></i>
-                        </button>
-                        ${(gone || health(entry) === 'expiring') && entry.source !== 'cloned'
-                            ? `<button type="button" class="rpg-btn cw-studio-recreate" data-voice="${escapeAttr(entry.id)}">Recreate</button>`
-                            : ''}
-                        ${selected ? '<span class="cw-voice-inuse">In use</span>'
-                            : `<button type="button" class="rpg-btn cw-studio-use" data-voice="${escapeAttr(entry.id)}" ${gone ? 'disabled' : ''}>Use for ${escapeHtml(ctx.name)}</button>`}
-                    </div>
-                </div>`;
-            }).join('')}
+            <div class="cw-voice-result-actions">
+                <button type="button" class="rpg-btn rpg-btn-primary cw-studio-use" data-voice="${escapeAttr(result.entry.id)}"><i class="fa-solid fa-check"></i> Use for ${escapeHtml(ctx.name)}</button>
+                <button type="button" class="rpg-btn cw-studio-again" title="Delete this one and make a new one from the description"><i class="fa-solid fa-rotate"></i> Try again</button>
+                <button type="button" class="rpg-btn rpg-btn-danger cw-studio-discard" title="Delete this voice from your Google project"><i class="fa-solid fa-trash"></i> Discard</button>
+            </div>
+            <p class="helper">It's saved in your Google project and listed under My voices. Press <strong>Use</strong>, then <strong>Save</strong>, to give it to ${escapeHtml(ctx.name)}.</p>
         </div>` : '';
 
     const busy = st.busy;
@@ -151,59 +121,106 @@ export function renderStudio(ctx, isPlaying) {
         ${pending}
         <div class="cw-studio-form">
             <label class="cw-studio-field">
-                <span>Describe the voice</span>
+                <span>How do they sound?</span>
                 <textarea class="rpg-textarea cw-studio-desc" rows="4" maxlength="${MAX_DESIGN_DESCRIPTION}"
-                    placeholder="e.g. A husky, low-pitched woman in her forties with a slow Southern drawl and a wry, tired warmth.">${escapeHtml(st.description)}</textarea>
+                    placeholder="Age, gender, pitch, texture, pace, accent and attitude. e.g. A husky, low-pitched woman in her forties with a slow Southern drawl and a wry, tired warmth.">${escapeHtml(st.description)}</textarea>
             </label>
-            <div class="cw-studio-row">
-                <button type="button" class="rpg-btn cw-studio-draft" ${busy ? 'disabled' : ''}>
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> ${busy === 'draft' ? 'Drafting…' : 'Draft from card'}
+            <div class="cw-studio-assist">
+                <span class="cw-studio-assist-label">Or let your chat AI write it:</span>
+                <button type="button" class="rpg-btn cw-studio-draft" ${busy ? 'disabled' : ''} title="Uses ${escapeAttr(ctx.name)}'s appearance and description">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> ${busy === 'draft' ? 'Writing…' : `From ${escapeHtml(ctx.name)}'s card`}
                 </button>
-                <span class="helper">Asks your chat AI to describe ${escapeHtml(ctx.name)}'s voice from their appearance and description. You can edit it before creating.</span>
-            </div>
-            <div class="cw-studio-ref">
-                <label class="cw-studio-field">
-                    <span>I'm thinking of&hellip;</span>
+                <div class="cw-studio-ref">
                     <input type="text" class="rpg-input cw-studio-ref-input" maxlength="200" value="${escapeAttr(st.reference)}"
-                        placeholder="A character from a game, film, book or show, e.g. Withers from Baldur's Gate 3" />
-                </label>
-                <button type="button" class="rpg-btn cw-studio-ref-go" ${busy ? 'disabled' : ''}>
-                    <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Describing…' : 'Describe their voice'}
-                </button>
+                        aria-label="Sound like a character" placeholder="Sound like… e.g. Withers from Baldur's Gate 3" />
+                    <button type="button" class="rpg-btn cw-studio-ref-go" ${busy ? 'disabled' : ''} title="Your chat AI describes how that character sounds">
+                        <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Writing…' : 'Write it'}
+                    </button>
+                </div>
             </div>
-            <p class="helper">Your chat AI describes how that character sounds and puts it in the box above for you to edit.</p>
-            <p class="helper">Best results: a few sentences covering age, gender, pitch, texture, pace and accent. Don't name real people.</p>
-            <div class="cw-studio-grid">
-                <label class="cw-studio-field">
-                    <span>Name</span>
-                    <input type="text" class="rpg-input cw-studio-label" maxlength="60" value="${escapeAttr(st.label)}" />
-                </label>
-                <label class="cw-studio-field">
-                    <span>Gender</span>
-                    <select class="rpg-accordion-select cw-studio-gender">
-                        <option value=""${st.gender === '' ? ' selected' : ''}>From the description</option>
-                        <option value="female"${st.gender === 'female' ? ' selected' : ''}>Female</option>
-                        <option value="male"${st.gender === 'male' ? ' selected' : ''}>Male</option>
-                    </select>
-                </label>
-                <label class="cw-studio-field">
-                    <span>Language / accent</span>
-                    <select class="rpg-accordion-select cw-studio-lang">
-                        ${DESIGN_LANGUAGES.map(([code, label]) => `<option value="${code}"${st.languageCode === code ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
-                    </select>
-                </label>
-            </div>
+            <details class="cw-studio-more"${st.moreOpen ? ' open' : ''}>
+                <summary>More options <span class="cw-studio-more-hint">name, gender, accent</span></summary>
+                <div class="cw-studio-grid">
+                    <label class="cw-studio-field">
+                        <span>Name</span>
+                        <input type="text" class="rpg-input cw-studio-label" maxlength="60" value="${escapeAttr(st.label)}" />
+                    </label>
+                    <label class="cw-studio-field">
+                        <span>Gender</span>
+                        <select class="rpg-accordion-select cw-studio-gender">
+                            <option value=""${st.gender === '' ? ' selected' : ''}>From the description</option>
+                            <option value="female"${st.gender === 'female' ? ' selected' : ''}>Female</option>
+                            <option value="male"${st.gender === 'male' ? ' selected' : ''}>Male</option>
+                        </select>
+                    </label>
+                    <label class="cw-studio-field">
+                        <span>Language / accent</span>
+                        <select class="rpg-accordion-select cw-studio-lang">
+                            ${DESIGN_LANGUAGES.map(([code, label]) => `<option value="${code}"${st.languageCode === code ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+                        </select>
+                    </label>
+                </div>
+            </details>
             <div class="cw-studio-row">
                 <button type="button" class="rpg-btn rpg-btn-primary cw-studio-create" ${busy || result ? 'disabled' : ''}>
-                    ${busy === 'create' ? 'Creating… (this can take a little while)' : 'Create voice'}
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> ${busy === 'create' ? 'Creating… (this can take a little while)' : 'Create voice'}
                 </button>
-                <span class="helper">Each voice uses one of your Google project's 200 custom-voice slots until it's deleted. Discard ones you don't keep.</span>
+                <span class="helper">Uses 1 of your 200 Google voice slots. Google may reject descriptions that name people.</span>
             </div>
             ${st.error ? `<p class="cw-studio-error">${escapeHtml(st.error)}</p>` : ''}
         </div>
         ${resultHtml}
-        ${mineHtml}
     `;
+}
+
+/** HTML for the My voices tab: every designed and cloned voice. */
+export function renderMine(ctx, isPlaying) {
+    const st = stateFor(ctx);
+    const currentId = ctx.voice && (ctx.voice.source === 'designed' || ctx.voice.source === 'cloned') ? ctx.voice.id : null;
+    const mine = listRegistered();
+    if (!mine.length) {
+        return `
+            <div class="cw-voice-empty">
+                <p>You haven't made any voices yet.</p>
+                <button type="button" class="rpg-btn rpg-btn-primary cw-voice-goto-create"><i class="fa-solid fa-plus"></i> Create a voice</button>
+            </div>`;
+    }
+    const keyNote = getDesKey() ? '' : '<p class="helper cw-voice-note">Your voices need the Google key in Settings → Voices to play.</p>';
+    return `
+        ${keyNote}
+        <div class="cw-voice-mine">
+            ${mine.map((entry) => {
+                const selected = entry.id === currentId;
+                const gone = health(entry) === 'gone';
+                const used = usedByText(entry.id);
+                const desc = entry.source === 'cloned'
+                    ? (health(entry) === 'ok' ? '' : 'Record it again in Create new → Clone a recording to renew it.')
+                    : (entry.designPrompt || '');
+                return `
+                <div class="cw-voice-mine-row${selected ? ' is-selected' : ''}">
+                    <button type="button" class="cw-voice-play" data-voice="${escapeAttr(entry.id)}" data-source="designed"
+                        aria-label="Preview ${escapeAttr(entry.label || '')}" title="Preview (says the test line)" ${gone ? 'disabled' : ''}>
+                        <i class="fa-solid ${isPlaying(entry.id) ? 'fa-stop' : 'fa-play'}"></i>
+                    </button>
+                    <div class="cw-voice-mine-main">
+                        <span class="cw-voice-name">${escapeHtml(entry.label || 'Custom voice')}</span>
+                        <span class="cw-voice-gender">${entry.source === 'cloned' ? 'Cloned' : 'Designed'}${entry.gender ? ` · ${genderWord(entry.gender)}` : ''}</span>
+                        ${badge(entry)}
+                        ${desc ? `<span class="cw-voice-mine-desc" title="${escapeAttr(desc)}">${escapeHtml(desc)}</span>` : ''}
+                        <span class="cw-voice-mine-used">${used ? `Used by ${escapeHtml(used)}` : 'Not used by anyone yet'}</span>
+                    </div>
+                    <div class="cw-voice-mine-actions">
+                        ${(gone || health(entry) === 'expiring') && entry.source !== 'cloned'
+                            ? `<button type="button" class="rpg-btn cw-studio-recreate" data-voice="${escapeAttr(entry.id)}" title="Make a fresh copy from its description">Recreate</button>`
+                            : ''}
+                        ${selected ? '<span class="cw-voice-inuse"><i class="fa-solid fa-check"></i> In use</span>'
+                            : `<button type="button" class="rpg-btn cw-studio-use" data-voice="${escapeAttr(entry.id)}" ${gone ? 'disabled' : ''}>Use</button>`}
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
+        ${st.error ? `<p class="cw-studio-error">${escapeHtml(st.error)}</p>` : ''}
+        <p class="helper">Delete voices you no longer need in Settings → Voices → My custom voices.</p>`;
 }
 
 function readForm(host, st) {
@@ -234,6 +251,13 @@ function describeError(e) {
 export async function handleStudioClick(target, host, ctx, rerender) {
     const st = stateFor(ctx);
     const btn = (sel) => target.closest(sel);
+
+    // Remember whether "More options" is open across re-renders. The click
+    // still toggles the <details> itself (not handled → no preventDefault).
+    if (btn('.cw-studio-more > summary')) {
+        st.moreOpen = !target.closest('.cw-studio-more').open;
+        return false;
+    }
 
     if (btn('.cw-studio-draft')) {
         readForm(host, st);
@@ -290,13 +314,6 @@ export async function handleStudioClick(target, host, ctx, rerender) {
             st.error = describeError(e);
         }
         st.busy = ''; rerender();
-        return true;
-    }
-
-    if (btn('.cw-studio-sample') && st.result?.sample) {
-        unlockVoicesAudio();
-        (await getEngine()).playSample(`sample:${st.result.entry.id}`, st.result.sample);
-        rerender();
         return true;
     }
 

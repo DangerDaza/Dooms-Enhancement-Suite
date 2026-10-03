@@ -19,10 +19,11 @@
  * only renders it and reports a pick through ctx.onChange, so choosing a
  * voice is an ordinary draft edit committed by the Workshop's Save.
  *
- * Three views: Standard (Google's 30 voices, filterable by gender), Design
- * (voiceStudio.js — describe a voice and create it on Google) and Clone
- * (voiceCloner.js — record a sample and Google's consent statement). The
- * last two load on first use.
+ * A "current voice" card on top, then three tabs: Standard (Google's 30
+ * voices, filterable by gender), My voices (designed and cloned voices,
+ * from voiceStudio.js) and Create new, which is either Describe it
+ * (voiceStudio.js) or Clone a recording (voiceCloner.js). The tools load on
+ * first use.
  */
 import { extensionSettings } from '../../core/state.js';
 import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId } from '../voices/voiceCatalog.js';
@@ -33,8 +34,10 @@ import { escapeHtml, escapeAttr } from '../../utils/html.js';
 const testLines = new Map();
 let stateListenerBound = false;
 const FILTER_KEY = 'dooms_voices_gender_filter';
-/** 'standard' | 'design' — per character, this session. */
+/** 'standard' | 'mine' | 'create' — per character, this session. */
 const views = new Map();
+/** Create new: 'describe' | 'clone' — per character, this session. */
+const createModes = new Map();
 let studio = null; // voiceStudio.js once loaded
 let cloner = null; // voiceCloner.js once loaded
 
@@ -115,20 +118,20 @@ function registryEntry(id) {
 
 function currentVoiceText(ctx) {
     const v = ctx.voice;
-    if (!v) return { label: 'None — the Narrator reads their lines', note: '' };
-    if (!v.id && v.pendingDesign) return { label: `${v.label || 'Designed voice'} (not created yet)`, note: 'Open Design to create it.' };
+    if (!v) return { label: 'None', kind: '', note: 'The Narrator reads their lines. Pick a voice below.' };
+    if (!v.id && v.pendingDesign) return { label: v.label || 'Designed voice', kind: 'Not created yet', note: 'Open Create new → Describe it and press Create voice to make it.' };
     const source = v.source || 'stock';
-    if (source === 'stock') return { label: stockLabel(canonicalStockId(v.id) || v.id), note: '' };
+    if (source === 'stock') return { label: stockLabel(canonicalStockId(v.id) || v.id), kind: 'Standard', note: '' };
     const entry = registryEntry(v.id);
-    const kind = (entry?.source || v.source) === 'cloned' ? 'cloned' : 'designed';
-    const label = `${entry?.label || v.label || 'Custom voice'} (${kind})`;
+    const kind = (entry?.source || v.source) === 'cloned' ? 'Cloned' : 'Designed';
+    const label = entry?.label || v.label || 'Custom voice';
     if (!extensionSettings.voices?.googleApiKey) {
-        return { label, note: `Needs your Google key in Settings → Voices; until then ${v.fallbackStock || 'a standard voice'} reads their lines.` };
+        return { label, kind, note: `Needs your Google key in Settings → Voices; until then ${v.fallbackStock || 'a standard voice'} reads their lines.` };
     }
     if (entry?.status === 'gone') {
-        return { label, note: `This voice no longer exists on Google, so ${v.fallbackStock || 'a standard voice'} reads their lines. Recreate it in Design.` };
+        return { label, kind, note: `This voice no longer exists on Google, so ${v.fallbackStock || 'a standard voice'} reads their lines. Recreate it in My voices.` };
     }
-    return { label, note: '' };
+    return { label, kind, note: '' };
 }
 
 function stockGrid(ctx) {
@@ -167,55 +170,89 @@ function stockGrid(ctx) {
             ${chip('all', 'All', STOCK_VOICES.length)}${chip('female', 'Female', female.length)}${chip('male', 'Male', male.length)}
         </div>
         ${grid}
-        <p class="helper">Click a voice to use it, then <strong>Save</strong>.</p>`;
+        <p class="helper">Tap a voice to use it (you'll hear it), then press <strong>Save</strong>. &#9654; only previews.</p>`;
 }
 
 function viewFor(ctx) {
     if (!views.has(ctx.name)) {
-        const custom = ctx.voice && (ctx.voice.source === 'designed' || ctx.voice.source === 'cloned' || (!ctx.voice.id && ctx.voice.pendingDesign));
-        views.set(ctx.name, custom ? 'design' : 'standard');
+        const v = ctx.voice;
+        const pending = v && !v.id && v.pendingDesign;
+        const custom = v && (v.source === 'designed' || v.source === 'cloned');
+        views.set(ctx.name, pending ? 'create' : custom ? 'mine' : 'standard');
     }
     return views.get(ctx.name);
 }
 
+function createModeFor(ctx) {
+    return createModes.get(ctx.name) === 'clone' ? 'clone' : 'describe';
+}
+
+/** Which lazily loaded tool the current view needs: 'studio', 'cloner' or null. */
+function toolFor(ctx) {
+    const view = viewFor(ctx);
+    if (view === 'mine') return 'studio';
+    if (view === 'create') return createModeFor(ctx) === 'clone' ? 'cloner' : 'studio';
+    return null;
+}
+
+function toolLoaded(tool) {
+    return tool === 'studio' ? !!studio : tool === 'cloner' ? !!cloner : true;
+}
+
 function render(host, ctx) {
     const current = ctx.voice && (ctx.voice.id || ctx.voice.pendingDesign) ? ctx.voice : null;
-    const { label: currentLabel, note } = currentVoiceText(ctx);
+    const { label: currentLabel, kind: currentKind, note } = currentVoiceText(ctx);
     const testLine = testLines.get(ctx.name) ?? defaultTestLine(ctx.name);
     const view = viewFor(ctx);
+    const mode = createModeFor(ctx);
+    const toolCtx = { ...ctx, testLine: () => testLineFor(ctx.name) };
     let body;
-    if (view === 'design') {
-        body = studio
-            ? studio.renderStudio({ ...ctx, testLine: () => testLineFor(ctx.name) }, isPlaying)
-            : '<p class="helper">Loading the voice designer…</p>';
-    } else if (view === 'clone') {
-        body = cloner
-            ? cloner.renderCloner({ ...ctx, testLine: () => testLineFor(ctx.name) }, isPlaying)
-            : '<p class="helper">Loading…</p>';
+    if (view === 'mine') {
+        body = studio ? studio.renderMine(toolCtx, isPlaying) : '<p class="helper">Loading your voices…</p>';
+    } else if (view === 'create') {
+        const modeBtn = (value, icon, label) =>
+            `<button type="button" class="cw-voice-mode${mode === value ? ' is-active' : ''}" data-mode="${value}" role="radio" aria-checked="${mode === value}">${icon} ${label}</button>`;
+        const tool = mode === 'clone'
+            ? (cloner ? cloner.renderCloner(toolCtx, isPlaying) : '<p class="helper">Loading…</p>')
+            : (studio ? studio.renderStudio(toolCtx, isPlaying) : '<p class="helper">Loading the voice designer…</p>');
+        body = `
+            <div class="cw-voice-modes" role="radiogroup" aria-label="How to make the voice">
+                ${modeBtn('describe', '&#9997;&#65039;', 'Describe it')}${modeBtn('clone', '&#127897;&#65039;', 'Clone a recording')}
+            </div>
+            <p class="helper cw-voice-mode-hint">${mode === 'clone'
+                ? 'Copy a real person’s voice from a short recording. They have to record a consent statement too.'
+                : 'Google makes a brand-new voice from a written description.'}</p>
+            ${tool}`;
     } else {
         body = stockGrid(ctx);
     }
     const canPreview = current && current.id;
+    const tab = (value, label) =>
+        `<button type="button" class="cw-voice-view${view === value ? ' is-active' : ''}" data-view="${value}" role="tab" aria-selected="${view === value}">${label}</button>`;
 
     host.innerHTML = `
         <h4>&#127908; Voice</h4>
         ${statusLines(ctx).map(line => `<p class="helper">${line}</p>`).join('')}
-        <div class="cw-voice-current">
-            <span class="cw-voice-current-label">Current voice:</span>
-            <strong class="cw-voice-current-value">${escapeHtml(currentLabel)}</strong>
-            ${canPreview ? `<button type="button" class="rpg-btn cw-voice-play-current" title="Preview"><i class="fa-solid fa-play"></i> Preview</button>` : ''}
-            ${current ? `<button type="button" class="rpg-btn cw-voice-clear">Use Narrator (no voice)</button>` : ''}
+        <div class="cw-voice-current${current ? '' : ' is-empty'}">
+            <div class="cw-voice-current-text">
+                <span class="cw-voice-current-label">Current voice</span>
+                <span class="cw-voice-current-name">
+                    <strong class="cw-voice-current-value">${escapeHtml(currentLabel)}</strong>
+                    ${currentKind ? `<span class="cw-voice-kind">${escapeHtml(currentKind)}</span>` : ''}
+                </span>
+            </div>
+            <div class="cw-voice-current-actions">
+                ${canPreview ? `<button type="button" class="rpg-btn cw-voice-play-current" title="Say the test line in this voice"><i class="fa-solid ${isPlaying(current.id) ? 'fa-stop' : 'fa-play'}"></i> Play</button>` : ''}
+                ${current ? `<button type="button" class="rpg-btn cw-voice-clear" title="Take this voice off ${escapeAttr(ctx.name)}; the Narrator reads their lines"><i class="fa-solid fa-xmark"></i> Remove</button>` : ''}
+            </div>
         </div>
         ${note ? `<p class="helper cw-voice-note">${escapeHtml(note)}</p>` : ''}
         <label class="cw-voice-test">
-            <span>Test line</span>
+            <span>Test line <span class="cw-voice-test-hint">— what previews say. Each new line is one short Google request; replays are free.</span></span>
             <input type="text" class="rpg-input cw-voice-test-input" value="${escapeAttr(testLine)}" maxlength="300" />
         </label>
-        <p class="helper cw-voice-cost">Each preview is a short Google request. Replaying the same line is free.</p>
-        <div class="cw-voice-views" role="tablist" aria-label="Kind of voice">
-            <button type="button" class="cw-voice-view${view === 'standard' ? ' is-active' : ''}" data-view="standard" role="tab" aria-selected="${view === 'standard'}">Standard voices</button>
-            <button type="button" class="cw-voice-view${view === 'design' ? ' is-active' : ''}" data-view="design" role="tab" aria-selected="${view === 'design'}">Design a voice</button>
-            <button type="button" class="cw-voice-view${view === 'clone' ? ' is-active' : ''}" data-view="clone" role="tab" aria-selected="${view === 'clone'}">Clone a voice</button>
+        <div class="cw-voice-views" role="tablist" aria-label="Voices">
+            ${tab('standard', 'Standard')}${tab('mine', 'My voices')}${tab('create', '&#10133; Create new')}
         </div>
         <div class="cw-voice-body">${body}</div>
     `;
@@ -233,10 +270,10 @@ async function ensureCloner() {
     return cloner;
 }
 
-async function ensureView(view) {
+async function ensureTool(tool) {
     try {
-        if (view === 'design') await ensureStudio();
-        if (view === 'clone') await ensureCloner();
+        if (tool === 'studio') await ensureStudio();
+        if (tool === 'cloner') await ensureCloner();
     } catch (err) {
         console.error('[DES Voices] voice tools failed to load', err);
     }
@@ -266,6 +303,9 @@ function refreshPlayButtons() {
         const icon = btn.querySelector('i');
         if (icon) icon.className = `fa-solid ${playing ? 'fa-stop' : 'fa-play'}`;
     });
+    const currentId = last.ctx.voice?.id;
+    const currentIcon = last.host.querySelector('.cw-voice-play-current i');
+    if (currentIcon && currentId) currentIcon.className = `fa-solid ${isPlaying(currentId) ? 'fa-stop' : 'fa-play'}`;
 }
 
 function rerender() {
@@ -279,14 +319,21 @@ function bindOnce(host) {
         const ctx = last?.ctx;
         if (!ctx) return;
         const target = /** @type {HTMLElement} */ (e.target);
-        const viewBtn = target.closest('.cw-voice-view');
+        const viewBtn = target.closest('.cw-voice-view, .cw-voice-mode, .cw-voice-goto-create');
         if (viewBtn) {
             e.preventDefault();
-            const view = viewBtn.getAttribute('data-view');
-            views.set(ctx.name, view);
-            if ((view === 'design' && !studio) || (view === 'clone' && !cloner)) {
+            if (viewBtn.classList.contains('cw-voice-mode')) {
+                views.set(ctx.name, 'create');
+                createModes.set(ctx.name, viewBtn.getAttribute('data-mode'));
+            } else if (viewBtn.classList.contains('cw-voice-goto-create')) {
+                views.set(ctx.name, 'create');
+            } else {
+                views.set(ctx.name, viewBtn.getAttribute('data-view'));
+            }
+            const tool = toolFor(ctx);
+            if (!toolLoaded(tool)) {
                 render(host, ctx);
-                await ensureView(view);
+                await ensureTool(tool);
             }
             rerender();
             return;
@@ -325,10 +372,11 @@ function bindOnce(host) {
             return;
         }
         const toolCtx = { ...ctx, testLine: () => testLineFor(ctx.name) };
-        if (studio && viewFor(ctx) === 'design') {
+        const tool = toolFor(ctx);
+        if (studio && tool === 'studio') {
             const handled = await studio.handleStudioClick(target, host, toolCtx, rerender);
             if (handled) e.preventDefault();
-        } else if (cloner && viewFor(ctx) === 'clone') {
+        } else if (cloner && tool === 'cloner') {
             // Let the file picker's <label> open the dialog.
             if (target.closest('.cw-clone-upload-label')) return;
             const handled = await cloner.handleClonerClick(target, host, toolCtx, rerender, isPlaying);
@@ -342,7 +390,7 @@ function bindOnce(host) {
             testLines.set(last.ctx.name, /** @type {HTMLInputElement} */ (input).value);
             return;
         }
-        if (studio && viewFor(last.ctx) === 'design') studio.handleStudioInput(input, last.ctx);
+        if (studio && toolFor(last.ctx) === 'studio') studio.handleStudioInput(input, last.ctx);
     };
     host.addEventListener('input', onInput);
     // Enter in "I'm thinking of…" asks the AI, like the button next to it.
@@ -355,7 +403,7 @@ function bindOnce(host) {
     // The clone wizard's checkbox, selects and file picker act on "change" only
     // (a file input fires both events; handling both would read the file twice).
     host.addEventListener('change', (e) => {
-        if (!last || !cloner || viewFor(last.ctx) !== 'clone') return;
+        if (!last || !cloner || toolFor(last.ctx) !== 'cloner') return;
         cloner.handleClonerInput(/** @type {HTMLElement} */ (e.target), last.ctx, rerender);
     });
 }
@@ -367,10 +415,10 @@ function bindOnce(host) {
 export async function renderVoicePane(host, ctx) {
     last = { host, ctx };
     bindOnce(host);
-    const view = viewFor(ctx);
-    if ((view === 'design' && !studio) || (view === 'clone' && !cloner)) {
+    const tool = toolFor(ctx);
+    if (!toolLoaded(tool)) {
         render(host, ctx);
-        await ensureView(view);
+        await ensureTool(tool);
     }
     render(host, ctx);
     if (!stateListenerBound) {
