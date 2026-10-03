@@ -8251,6 +8251,12 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     gap: 6px;
     min-width: 0;
 }
+/* Mini buttons that carry a word rather than an icon. */
+.rpg-voices-key .rpg-voices-wordbtn {
+    width: auto;
+    padding: 0 0.6rem;
+    white-space: nowrap;
+}
 .rpg-voices-key .rpg-accordion-input {
     flex: 1 1 auto;
     width: auto;

@@ -35,6 +35,7 @@ import {
     draftDescriptionFromReference,
 } from '../voices/voiceRegistry.js';
 import { referenceProblem } from '../voices/drafts.js';
+import { DEFAULT_DELIVERY_NOTE } from '../voices/delivery.js';
 import { voiceRefCount } from '../lorebook/campaignProfiles.js';
 import { escapeHtml } from '../../utils/html.js';
 
@@ -433,6 +434,7 @@ function populate() {
     renderDesigned();
     fillNarratorDesign();
     $('#rpg-voices-model').val(v().model);
+    $('#rpg-voices-delivery').val(v().deliveryNote || '');
     $('#rpg-voices-key').val(v().googleApiKey || '').attr('type', 'password');
     const rate = Number(v().playbackRate) || 1;
     $('#rpg-voices-rate').val(rate);
@@ -494,6 +496,14 @@ export function bindVoicesSettingsUI() {
         engine.audition(stockRef(narratorValue().startsWith('designed:') ? NARRATOR_FALLBACK_VOICE : narratorValue()), 'Your Google voice key works.');
         renderStatus();
     });
+    // Delivery note: saved on change (not per keystroke); new lines use it.
+    const saveDelivery = (value) => {
+        v().deliveryNote = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+        $('#rpg-voices-delivery').val(v().deliveryNote);
+        saveSettings();
+    };
+    $('#rpg-voices-delivery').on('change', function () { saveDelivery($(this).val()); });
+    $('#rpg-voices-delivery-reset').on('click', () => saveDelivery(DEFAULT_DELIVERY_NOTE));
     $('#rpg-voices-model').on('change', function () {
         v().model = String($(this).val());
         saveSettings();

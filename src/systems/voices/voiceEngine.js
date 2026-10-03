@@ -39,6 +39,7 @@ import { getRouteState, getDesKey } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
+import { styleForSegment } from './delivery.js';
 
 
 const TOAST_TITLE = 'DES Voices';
@@ -210,19 +211,25 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
     const narrator = voices().narratorVoice;
     const deviceCaps = caps();
     const jobSegments = [];
-    for (const seg of segments) {
+    // Only the direct route can carry a delivery note; through SillyTavern
+    // it would only split requests for nothing.
+    const note = deviceCaps.direct ? voices().deliveryNote : '';
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const style = styleForSegment(segments, i, note);
         const speaker = seg.speaker ? canonicalName(seg.speaker) : null;
         const present = speaker ? isPresentOnPanel(speaker, presence) : false;
         const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: voiceFor(speaker), narrator, caps: deviceCaps });
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
-        // unvoiced character, then narration) are one Google request.
-        if (prev && prev.voiceId === ref.id && prev.text.length + seg.text.length < 2500) {
+        // unvoiced character, then narration) are one Google request —
+        // unless one of them is whispered and the other isn't.
+        if (prev && prev.voiceId === ref.id && prev.style === style && prev.text.length + seg.text.length < 2500) {
             prev.text = `${prev.text} ${seg.text}`;
             prev.idxs.push(...(seg.idxs || []));
             continue;
         }
-        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', reason, speaker, idxs: [...(seg.idxs || [])] });
+        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', style, reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
         console.debug('[DES Voices] job', source, messageId,
@@ -306,7 +313,8 @@ export function audition(ref, text) {
     const job = player.newJob({
         source: 'audition',
         key: ref.id,
-        segments: segments.map(s => ({ text: s.text, voiceId: ref.id, voiceSource: ref.source || 'stock', reason: 'audition', speaker: null, idxs: [] })),
+        // Previews use the delivery note too, so they sound like chat will.
+        segments: segments.map(s => ({ text: s.text, voiceId: ref.id, voiceSource: ref.source || 'stock', style: getDesKey() ? String(voices().deliveryNote || '').trim() : '', reason: 'audition', speaker: null, idxs: [] })),
     });
     stopStPlayback();
     player.replaceWith(job);

@@ -187,10 +187,18 @@ function shapesFor(model) {
     return /gemini-3\.8/i.test(model) ? ['voice', 'prebuilt'] : ['prebuilt', 'voice'];
 }
 
-function directBody(text, voiceId, shape) {
+/**
+ * Set when Google rejects speech_metadata (an older model, or a change on
+ * Google's side): lines go without a style note for the rest of the session.
+ */
+let styleRejected = false;
+
+function directBody(text, voiceId, shape, style) {
     const voiceConfig = shape === 'voice' ? { voice: voiceId } : { prebuiltVoiceConfig: { voiceName: voiceId } };
+    const part = { text };
+    if (style && !styleRejected) part.speech_metadata = { style };
     return {
-        contents: [{ role: 'user', parts: [{ text }] }],
+        contents: [{ role: 'user', parts: [part] }],
         generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: { voiceConfig },
@@ -198,13 +206,29 @@ function directBody(text, voiceId, shape) {
     };
 }
 
-async function postDirect({ text, voiceId, model, shape, key, signal }) {
+/** True when Google's complaint is about the style note, not the voice or model. */
+function isStyleError(e, style) {
+    return !!style && !styleRejected && e instanceof TtsError && e.kind === 'argument' && /speech_metadata|style/i.test(e.message);
+}
+
+async function postDirect({ text, voiceId, model, shape, key, signal, style }) {
+    try {
+        return await postDirectOnce({ text, voiceId, model, shape, key, signal, style });
+    } catch (e) {
+        if (!isStyleError(e, style)) throw e;
+        styleRejected = true;
+        console.warn(`[DES Voices] Google rejected the delivery note (${e.message}); sending lines without it this session.`);
+        return postDirectOnce({ text, voiceId, model, shape, key, signal, style: '' });
+    }
+}
+
+async function postDirectOnce({ text, voiceId, model, shape, key, signal, style }) {
     const response = await fetchWithTimeout(
         `${GOOGLE_API}/models/${encodeURIComponent(model)}:generateContent`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-            body: JSON.stringify(directBody(text, voiceId, shape)),
+            body: JSON.stringify(directBody(text, voiceId, shape, style)),
         },
         signal,
         'Couldn’t reach Google (check your connection, or whether something is blocking requests to googleapis.com)',
@@ -225,7 +249,7 @@ async function postDirect({ text, voiceId, model, shape, key, signal }) {
     return new Blob([bytes], { type: audio.mimeType });
 }
 
-async function synthesizeDirect({ text, voiceId, model, signal, key }) {
+async function synthesizeDirect({ text, voiceId, model, signal, key, style }) {
     const remembered = readProbe('direct', model);
     const attempts = [];
     if (remembered) {
@@ -237,7 +261,7 @@ async function synthesizeDirect({ text, voiceId, model, signal, key }) {
     let lastError = null;
     for (const attempt of attempts) {
         try {
-            const blob = await postDirect({ text, voiceId, model: attempt.model, shape: attempt.shape, key, signal });
+            const blob = await postDirect({ text, voiceId, model: attempt.model, shape: attempt.shape, key, signal, style });
             if (!remembered) writeProbe('direct', model, attempt.model, attempt.shape);
             if (attempt.model !== model) {
                 console.warn(`[DES Voices] Google rejected ${model} (${lastError?.message}); using ${attempt.model} this session.`);
@@ -263,7 +287,7 @@ const CUSTOM_FALLBACK_MODEL = 'gemini-3.8-flash-tts';
  * speechConfig.voiceConfig.voice (voice-design docs). Never downgraded to
  * 3.1 — designed voices are a 3.8 feature.
  */
-async function synthesizeCustom({ text, voiceId, model, signal, key }) {
+async function synthesizeCustom({ text, voiceId, model, signal, key, style }) {
     if (!key) {
         throw new TtsError('needs-key', 'Designed voices need your Google AI Studio key in Settings \u2192 Voices.');
     }
@@ -272,7 +296,7 @@ async function synthesizeCustom({ text, voiceId, model, signal, key }) {
     let lastError = null;
     for (const m of models) {
         try {
-            const blob = await postDirect({ text, voiceId, model: m, shape: 'voice', key, signal });
+            const blob = await postDirect({ text, voiceId, model: m, shape: 'voice', key, signal, style });
             return { blob, model: m };
         } catch (e) {
             if (!(e instanceof TtsError)) throw e;
@@ -340,15 +364,17 @@ async function synthesizeSt({ text, voiceId, model, signal }) {
 
 /**
  * Synthesises one line. Stock voices use either route; designed voices
- * (voiceSource other than 'stock') need the DES key.
- * @param {{text: string, voiceId: string, voiceSource?: string, model: string, signal?: AbortSignal}} req
+ * (voiceSource other than 'stock') need the DES key. `style` (the delivery
+ * note) is sent on the direct route only — SillyTavern's route has no field
+ * for it.
+ * @param {{text: string, voiceId: string, voiceSource?: string, model: string, signal?: AbortSignal, style?: string}} req
  * @returns {Promise<{blob: Blob, model: string}>}
  */
-export async function synthesize({ text, voiceId, voiceSource = 'stock', model, signal }) {
+export async function synthesize({ text, voiceId, voiceSource = 'stock', model, signal, style = '' }) {
     const key = getDesKey();
     if (voiceSource && voiceSource !== 'stock') {
         // Kept out of routeState: a custom voice failing says nothing about the route.
-        return synthesizeCustom({ text, voiceId, model, signal, key });
+        return synthesizeCustom({ text, voiceId, model, signal, key, style });
     }
     const route = key ? 'direct' : 'st';
     if (routeState.route !== route) {
@@ -359,7 +385,7 @@ export async function synthesize({ text, voiceId, voiceSource = 'stock', model, 
     }
     try {
         const result = key
-            ? await synthesizeDirect({ text, voiceId, model, signal, key })
+            ? await synthesizeDirect({ text, voiceId, model, signal, key, style })
             : await synthesizeSt({ text, voiceId, model, signal });
         routeState.status = 'ok';
         routeState.effectiveModel = result.model;

@@ -70,6 +70,10 @@ export function defaultVoiceSettings() {
         // Google's voice id. Plan §4.2: {id, source, label, designPrompt,
         // gender, languageCode, createdAt, expireTime, keyTag, status}.
         customVoices: {},
+        // Style note sent with every line on the direct route (Gemini 3.8
+        // speech_metadata.style) so voices don't drift into whispering.
+        // '' = send none. Mirrors DEFAULT_DELIVERY_NOTE in delivery.js.
+        deliveryNote: 'clear, natural speaking voice at a normal, steady volume',
         // The "Design a narrator voice" box, so edits survive a reload.
         narratorDesign: { ...DEFAULT_NARRATOR_DESIGN },
     };
@@ -141,6 +145,10 @@ export function ensureVoiceSettings(saved, live) {
                     changed = true;
                 }
             }
+        }
+        if (typeof live.voices.deliveryNote !== 'string') {
+            live.voices.deliveryNote = defaults.deliveryNote;
+            changed = true;
         }
         const nd = live.voices.narratorDesign;
         if (!isPlainObject(nd) || typeof nd.description !== 'string' || typeof nd.label !== 'string'

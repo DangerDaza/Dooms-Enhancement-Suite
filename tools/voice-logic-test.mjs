@@ -25,6 +25,7 @@ const catalog = await import('../src/systems/voices/voiceCatalog.js');
 const wav = await import('../src/systems/voices/wav.js');
 const consent = await import('../src/systems/voices/consentPhrases.js');
 const drafts = await import('../src/systems/voices/drafts.js');
+const delivery = await import('../src/systems/voices/delivery.js');
 
 let failures = 0;
 let passes = 0;
@@ -374,6 +375,52 @@ test('drafts: each failed draft gets a message that tells the user what to do', 
     assert.match(drafts.referenceProblem('unknown', 'Bob'), /doesn’t know “Bob”/);
     assert.match(drafts.referenceProblem('empty', 'X'), /returned nothing/);
     assert.equal(drafts.referenceProblem('ok', 'X'), '');
+});
+
+// ─── delivery.js ────────────────────────────────────────────────────────────
+
+test('delivery: every line gets the delivery note; settings ship the same default', () => {
+    assert.equal(settings.defaultVoiceSettings().deliveryNote, delivery.DEFAULT_DELIVERY_NOTE);
+    const segs = [{ kind: 'narration', text: 'The rain fell.' }, { kind: 'dialogue', text: 'Come in.' }];
+    assert.equal(delivery.styleForSegment(segs, 0, 'normal voice'), 'normal voice');
+    assert.equal(delivery.styleForSegment(segs, 1, 'normal voice'), 'normal voice');
+    assert.equal(delivery.styleForSegment(segs, 1, '   '), '', 'empty note = let Gemini decide');
+});
+
+test('delivery: a spoken line next to "whispered" narration is whispered; the narration is not', () => {
+    const segs = [
+        { kind: 'dialogue', text: 'Come in, quickly.' },
+        { kind: 'narration', text: 'Mara whispered.' },
+        { kind: 'dialogue', text: 'Right behind you.' },
+        { kind: 'narration', text: 'Tom said loudly.' },
+        { kind: 'narration', text: 'He leaned in and murmured:' },
+        { kind: 'dialogue', text: 'Not here.' },
+    ];
+    const note = 'normal voice';
+    assert.equal(delivery.styleForSegment(segs, 0, note), delivery.WHISPER_NOTE, 'cue after the line');
+    assert.equal(delivery.styleForSegment(segs, 1, note), note, 'narration stays at full voice');
+    assert.equal(delivery.styleForSegment(segs, 2, note), delivery.WHISPER_NOTE, 'cue before the line');
+    assert.equal(delivery.styleForSegment(segs, 5, note), delivery.WHISPER_NOTE, '"murmured" counts');
+    assert.equal(delivery.styleForSegment([{ kind: 'dialogue', text: 'Hi.' }, { kind: 'narration', text: 'she said.' }], 0, note), note);
+});
+
+test('delivery: whisper cues are words, not fragments', () => {
+    assert.ok(delivery.hasWhisperCue('she whispered'));
+    assert.ok(delivery.hasWhisperCue('under his breath'));
+    assert.ok(delivery.hasWhisperCue('in a hushed voice'));
+    assert.ok(!delivery.hasWhisperCue('the whisperwood forest'), 'part of a longer word');
+    assert.ok(!delivery.hasWhisperCue('she shouted'));
+});
+
+test('settings: a missing or broken delivery note is restored', () => {
+    const saved = { voices: { deliveryNote: 7 } };
+    const live = { voices: saved.voices };
+    assert.equal(settings.ensureVoiceSettings(saved, live), true);
+    assert.equal(live.voices.deliveryNote, delivery.DEFAULT_DELIVERY_NOTE);
+    const kept = { voices: { deliveryNote: '' } };
+    const live2 = { voices: kept.voices };
+    settings.ensureVoiceSettings(kept, live2);
+    assert.equal(live2.voices.deliveryNote, '', 'an empty note (off) is kept');
 });
 
 // ─── stAutoReadGuard.js ─────────────────────────────────────────────────────

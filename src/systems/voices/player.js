@@ -127,8 +127,8 @@ function setHighlight(job, seg, cls) {
 
 // ─── Cache ──────────────────────────────────────────────────────────────────
 
-function cacheKey(model, voiceId, text) {
-    return `${model}\u0001${voiceId}\u0001${text}`;
+function cacheKey(model, voiceId, text, style = '') {
+    return `${model}\u0001${voiceId}\u0001${style}\u0001${text}`;
 }
 
 function cacheGet(key) {
@@ -179,7 +179,7 @@ export function urlForBlob(blob, key) {
 async function fetchSegment(job, seg, signal) {
     if (seg.url) return seg.url;
     const model = voices().model;
-    const key = cacheKey(model, seg.voiceId, seg.text);
+    const key = cacheKey(model, seg.voiceId, seg.text, seg.style || '');
     const hit = cacheGet(key);
     if (hit) return hit;
     if (job.auto) {
@@ -195,7 +195,7 @@ async function fetchSegment(job, seg, signal) {
         hooks.onStateChange?.();
         const usedVoiceId = seg.voiceId;
         try {
-            const { blob } = await synthesize({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', model, signal });
+            const { blob } = await synthesize({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', model, signal, style: seg.style || '' });
             consecutiveRateGiveUps = 0;
             return cachePut(key, blob, job.source === 'audition');
         } catch (e) {

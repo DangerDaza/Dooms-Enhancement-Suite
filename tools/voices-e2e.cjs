@@ -392,7 +392,7 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     const model = /models\/([^:]+):generateContent/.exec(req.url())[1];
     const vc = body.generationConfig.speechConfig.voiceConfig;
     const shape = vc.voice ? 'voice' : 'prebuilt';
-    google.push({ model, shape, key: req.headers()['x-goog-api-key'], text: body.contents[0].parts[0].text, voice: vc.voice || vc.prebuiltVoiceConfig.voiceName });
+    google.push({ model, shape, key: req.headers()['x-goog-api-key'], text: body.contents[0].parts[0].text, voice: vc.voice || vc.prebuiltVoiceConfig.voiceName, style: body.contents[0].parts[0].speech_metadata?.style || '' });
     const cors = { 'access-control-allow-origin': '*' };
     const fail = (status, message, st) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { code: status, message, status: st } }) });
     if (googleMode === 'drop' || googleMode === 'drop-once') {
@@ -602,6 +602,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.ok(tom, JSON.stringify(google));
     assert.strictEqual(tom.voice, 'voice_e2e_1');
     assert.strictEqual(tom.shape, 'voice');
+  });
+  check('every line carries the delivery note; the line the story says is whispered gets the whisper note', () => {
+    const line = (re) => google.find(g => re.test(g.text));
+    assert.strictEqual(line(/The rain hammered/).style, 'clear, natural speaking voice at a normal, steady volume');
+    assert.strictEqual(line(/Come in, quickly/).style, 'clear, natural speaking voice at a normal, steady volume');
+    assert.strictEqual(line(/I'm not even here/).style, 'hushed, quiet whisper', JSON.stringify(google.map(g => [g.text.slice(0, 25), g.style])));
+    assert.strictEqual(line(/whispered from the radio/).style, 'clear, natural speaking voice at a normal, steady volume', 'the narration itself stays at full voice');
   });
 
   // Discard a second design

@@ -1105,6 +1105,21 @@
                             </button>
                         </div>
                     </div>
+                    <div class="rpg-setting-row rpg-voices-stack">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Delivery note</span>
+                            <span class="rpg-setting-hint">Sent with every line so voices speak at a normal volume
+                                instead of drifting into a whisper. Lines the story says are whispered ("&hellip;," she
+                                whispered) are still whispered. Leave empty to let Gemini decide. Works with the Google
+                                AI Studio key below.</span>
+                        </div>
+                        <div class="rpg-voices-key">
+                            <input type="text" id="rpg-voices-delivery" class="rpg-accordion-input" maxlength="160"
+                                spellcheck="false" placeholder="Empty: Gemini decides how each line is delivered" />
+                            <button id="rpg-voices-delivery-reset" class="rpg-accordion-mini-btn rpg-voices-wordbtn" type="button"
+                                title="Put the default note back">Reset</button>
+                        </div>
+                    </div>
                     <!-- Design a narrator voice: a designed voice made here becomes the
                          Narrator. Filled by voicesSettingsUI.js; the text is saved in
                          voices.narratorDesign so edits survive a reload. -->
