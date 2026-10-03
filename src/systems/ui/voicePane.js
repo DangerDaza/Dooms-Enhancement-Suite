@@ -345,6 +345,12 @@ function bindOnce(host) {
         if (studio && viewFor(last.ctx) === 'design') studio.handleStudioInput(input, last.ctx);
     };
     host.addEventListener('input', onInput);
+    // Enter in "I'm thinking of…" asks the AI, like the button next to it.
+    host.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !e.target.classList?.contains('cw-studio-ref-input')) return;
+        e.preventDefault();
+        host.querySelector('.cw-studio-ref-go')?.click();
+    });
     host.addEventListener('change', onInput);
     // The clone wizard's checkbox, selects and file picker act on "change" only
     // (a file input fires both events; handling both would read the file twice).

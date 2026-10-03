@@ -85,3 +85,24 @@ Rules:
 - Describe only the voice: apparent age, gender, pitch, timbre, vocal texture, pace, and accent or dialect.
 - Use plain descriptive words (e.g. "a husky, low-pitched woman in her forties with a slow Southern drawl"). No names, no story, no quotation marks.
 - Output only the description.`;
+
+/**
+ * DES voices — "I'm thinking of…" in the voice designers (Workshop → Voice →
+ * Design, and Settings → Voices → Design a narrator voice). The user names a
+ * fictional character; the chat AI describes how that character sounds, in
+ * words only, so Google's voice design can make something with the same
+ * feel. Real people are refused (REAL_PERSON): describing a real person's
+ * voice to clone its sound is not something DES helps with, and Google
+ * refuses such descriptions anyway. {reference} is what the user typed.
+ */
+export const DEFAULT_VOICE_REFERENCE_PROMPT = `Someone wants a text-to-speech voice that feels like this character: {reference}
+
+Describe how this character's voice sounds, so a voice designer can make a voice with the same feel.
+
+Rules:
+- If "{reference}" is a real person (an actor, singer, streamer, politician or anyone else who exists in real life) rather than a fictional character, reply with exactly: REAL_PERSON
+- If you don't know this character, reply with exactly: UNKNOWN
+- Otherwise write 3 to 5 sentences, at most 110 words.
+- Cover: apparent age and gender; pitch and timbre; texture (raspy, breathy, smooth, hollow...); pace and rhythm; accent or dialect; attitude and emotional colour; anything distinctive (an echo, a growl, a lilt).
+- Describe the sound only, in plain descriptive words. Never name the character, the work they come from, or any actor or real person. No quotation marks, no story.
+- Output only the description.`;

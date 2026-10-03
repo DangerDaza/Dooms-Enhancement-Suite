@@ -32,7 +32,8 @@ import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { voiceUses, rewriteVoiceRefs, BASE_VERSION } from '../lorebook/campaignProfiles.js';
 import { getCampaignsInOrder } from '../lorebook/campaignManager.js';
-import { DEFAULT_VOICE_DESIGN_PROMPT } from '../generation/defaultPrompts.js';
+import { DEFAULT_VOICE_DESIGN_PROMPT, DEFAULT_VOICE_REFERENCE_PROMPT } from '../generation/defaultPrompts.js';
+import { cleanDraft, interpretReferenceDraft } from './drafts.js';
 import { defaultStockFor } from './voiceCatalog.js';
 import { getDesKey } from './transport.js';
 import { createDesignedVoice, createClonedVoice, deleteVoice } from './voicesApi.js';
@@ -226,11 +227,24 @@ export async function draftDescriptionFromCard({ name, appearance, description }
         // Room for reasoning models to think and still answer.
         responseLength: 2000,
     });
-    return String(response || '')
-        .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
-        .replace(/<think(?:ing)?>[\s\S]*$/gi, '')
-        .replace(/^["'\s]+|["'\s]+$/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 600);
+    return cleanDraft(response, 600);
+}
+
+/**
+ * "I'm thinking of…": asks the chat AI how a named fictional character
+ * sounds (Workshop → Voice → Design, and the narrator designer). Never
+ * creates anything; the text lands in the description box to edit.
+ * @param {string} reference - what the user typed, e.g. "Withers from Baldur's Gate 3"
+ * @returns {Promise<{status: 'ok', text: string} | {status: 'real-person'|'unknown'|'empty'}>}
+ */
+export async function draftDescriptionFromReference(reference) {
+    const who = String(reference || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!who) return { status: 'empty' };
+    const response = await generateRaw({
+        prompt: DEFAULT_VOICE_REFERENCE_PROMPT.replace(/\{reference\}/g, who),
+        systemPrompt: 'You describe how fictional characters sound, for a text-to-speech voice designer. Output only the description, or the exact word you were told to reply with.',
+        instructOverride: false,
+        responseLength: 2000,
+    });
+    return interpretReferenceDraft(response);
 }

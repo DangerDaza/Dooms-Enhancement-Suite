@@ -32,7 +32,9 @@ import {
     deleteDesignedVoice,
     recreateDesignedVoice,
     designVoice,
+    draftDescriptionFromReference,
 } from '../voices/voiceRegistry.js';
+import { referenceProblem } from '../voices/drafts.js';
 import { voiceRefCount } from '../lorebook/campaignProfiles.js';
 import { escapeHtml } from '../../utils/html.js';
 
@@ -362,6 +364,30 @@ function bindNarratorDesign() {
         fillNarratorDesign();
     });
     $('#rpg-voices-nd-create').on('click', () => createNarratorVoice());
+    // "I'm thinking of…": the chat AI describes a named character's voice.
+    const describeReference = async () => {
+        const who = String($('#rpg-voices-nd-ref').val() || '').trim();
+        if (!who) { renderNarratorDesign('Type the character you have in mind first (for example “Withers from Baldur’s Gate 3”).'); return; }
+        const $go = $('#rpg-voices-nd-ref-go');
+        const html = $go.html();
+        $go.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Describing…');
+        try {
+            const out = await draftDescriptionFromReference(who);
+            if (out.status === 'ok') {
+                $('#rpg-voices-nd-desc').val(out.text);
+                readNarratorDesign();
+                renderNarratorDesign();
+            } else {
+                renderNarratorDesign(referenceProblem(out.status, who));
+            }
+        } catch (e) {
+            renderNarratorDesign(`Couldn't describe that voice: ${e?.message || e}`);
+        } finally {
+            $go.prop('disabled', false).html(html);
+        }
+    };
+    $('#rpg-voices-nd-ref-go').on('click', describeReference);
+    $('#rpg-voices-nd-ref').on('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); describeReference(); } });
     $('#rpg-voices-nd-result').on('click', '#rpg-voices-nd-hear', async () => {
         const entry = ndLast && getRegistered(ndLast.id);
         if (!entry) return;

@@ -747,6 +747,45 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.deepStrictEqual(ndUndone.reg, []);
     assert.strictEqual(ndUndone.hidden, true);
   });
+  // "I'm thinking of…": the chat AI (stubbed) describes a named character.
+  let aiReply = 'An ancient, hollow male voice with a dry rasp and slow, formal, archaic diction, calm and faintly amused.';
+  let aiPrompts = [];
+  await page.route('**/api/backends/**/generate', async (route) => {
+    const body = route.request().postData() || '';
+    aiPrompts.push(body);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { role: 'assistant', content: aiReply }, text: aiReply }], results: [{ text: aiReply }] }) });
+  });
+  // A fresh SillyTavern is on AI Horde; switch to Chat Completion so the
+  // request goes to the stubbed /api/backends/chat-completions/generate.
+  await page.evaluate(() => { $('#main_api').val('openai').trigger('change'); });
+  await page.waitForTimeout(500);
+  const askAi = async (who) => {
+    await page.evaluate((who) => { document.querySelector('#rpg-voices-nd-ref').value = who; document.querySelector('#rpg-voices-nd-ref-go').click(); }, who);
+    await page.waitForFunction(() => !document.querySelector('#rpg-voices-nd-ref-go').disabled, null, { timeout: 8000 });
+    await page.waitForTimeout(150);
+    return page.evaluate(() => ({
+      desc: document.querySelector('#rpg-voices-nd-desc').value,
+      error: document.querySelector('#rpg-voices-nd-result .rpg-voices-nd-error')?.textContent || '',
+    }));
+  };
+  const refOk = await askAi('Withers from Baldur\'s Gate 3');
+  check('"I\'m thinking of" asks the chat AI about the named character and fills the narrator box', () => {
+    assert.ok(aiPrompts.some(p => /Withers from Baldur/.test(p) && /REAL_PERSON/.test(p)), 'prompt not sent');
+    assert.match(refOk.desc, /ancient, hollow male voice/);
+    assert.strictEqual(refOk.error, '');
+  });
+  const refSaved = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.narratorDesign.description, DES);
+  check('the AI-written narrator description is saved like a typed one', () => assert.match(refSaved, /ancient, hollow male voice/));
+  aiReply = 'REAL_PERSON';
+  const refReal = await askAi('A famous actor');
+  check('a real person is refused and the description is left alone', () => {
+    assert.match(refReal.error, /fictional characters/);
+    assert.match(refReal.desc, /ancient, hollow male voice/);
+  });
+  aiReply = 'UNKNOWN';
+  const refUnknown = await askAi('Zorblax');
+  check('a character the AI doesn\'t know gets a hint to say where they are from', () => assert.match(refUnknown.error, /doesn’t know “Zorblax”/));
+
   page.once('dialog', d => d.accept());
   await page.evaluate(() => document.querySelector('#rpg-voices-nd-reset').click());
   await page.waitForTimeout(200);

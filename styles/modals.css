@@ -8123,6 +8123,23 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     max-width: 100%;
     box-sizing: border-box;
 }
+.rpg-voices-nd-ref {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+.rpg-voices-nd-ref .rpg-voices-nd-field { flex: 1 1 200px; margin: 0; }
+.rpg-voices-nd-ref .rpg-accordion-mini-btn {
+    width: auto;
+    height: auto;
+    min-height: 28px;
+    padding: 0.3rem 0.6rem;
+    gap: 0.35rem;
+    white-space: nowrap;
+    color: var(--rpg-text, #ddd);
+}
 .rpg-voices-nd-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -8346,6 +8363,17 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     font-size: var(--modal-font-small, 0.8rem);
     line-height: 1.4;
 }
+#character-workshop-popup .cw-studio-ref {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+#character-workshop-popup .cw-studio-ref .cw-studio-field {
+    flex: 1 1 220px;
+    margin: 0;
+}
+#character-workshop-popup .cw-studio-ref .cw-studio-ref-go { flex: 0 0 auto; }
 #character-workshop-popup .cw-studio-error {
     color: #e05050;
     margin: 0;

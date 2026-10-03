@@ -24,6 +24,7 @@ const guard = await import('../src/systems/voices/stAutoReadGuard.js');
 const catalog = await import('../src/systems/voices/voiceCatalog.js');
 const wav = await import('../src/systems/voices/wav.js');
 const consent = await import('../src/systems/voices/consentPhrases.js');
+const drafts = await import('../src/systems/voices/drafts.js');
 
 let failures = 0;
 let passes = 0;
@@ -348,6 +349,34 @@ test('settings: the narrator design box starts as the old wizard and keeps edits
     const live2 = { voices: broken.voices };
     assert.equal(settings.ensureVoiceSettings(broken, live2), true);
     assert.deepEqual(live2.voices.narratorDesign, { ...settings.DEFAULT_NARRATOR_DESIGN });
+});
+
+// ─── drafts.js ──────────────────────────────────────────────────────────────
+
+test('drafts: reasoning blocks, quotes and extra spaces are stripped', () => {
+    assert.equal(drafts.cleanDraft('<think>hmm\nok</think>\n  "A hollow,   ancient voice."  '), 'A hollow, ancient voice.');
+    assert.equal(drafts.cleanDraft('<thinking>never closed'), '');
+    assert.equal(drafts.cleanDraft('x'.repeat(2000)).length, drafts.MAX_DESIGN_DESCRIPTION);
+    assert.equal(drafts.cleanDraft('abcdef', 3), 'abc');
+});
+
+test('drafts: "I\'m thinking of" answers are read, including the refusal markers', () => {
+    assert.deepEqual(drafts.interpretReferenceDraft('A deep, hollow voice with a dry rasp.'), { status: 'ok', text: 'A deep, hollow voice with a dry rasp.' });
+    assert.deepEqual(drafts.interpretReferenceDraft('REAL_PERSON'), { status: 'real-person' });
+    assert.deepEqual(drafts.interpretReferenceDraft('  real_person. '), { status: 'real-person' });
+    assert.deepEqual(drafts.interpretReferenceDraft('<think>who is this</think>UNKNOWN'), { status: 'unknown' });
+    assert.deepEqual(drafts.interpretReferenceDraft('Answer: UNKNOWN'), { status: 'unknown' });
+    assert.deepEqual(drafts.interpretReferenceDraft(''), { status: 'empty' });
+    // A real description that merely contains the word is not a refusal.
+    const long = 'Unknown to most, this voice is an ancient, hollow baritone with a dry rasp and slow, formal, archaic diction.';
+    assert.equal(drafts.interpretReferenceDraft(long).status, 'ok');
+});
+
+test('drafts: each refusal gets a message that tells the user what to do', () => {
+    assert.match(drafts.referenceProblem('real-person', 'X'), /fictional characters/);
+    assert.match(drafts.referenceProblem('unknown', 'Bob'), /doesn’t know “Bob”/);
+    assert.match(drafts.referenceProblem('empty', 'X'), /returned nothing/);
+    assert.equal(drafts.referenceProblem('ok', 'X'), '');
 });
 
 // ─── stAutoReadGuard.js ─────────────────────────────────────────────────────

@@ -35,13 +35,15 @@ import {
     deleteDesignedVoice,
     recreateDesignedVoice,
     draftDescriptionFromCard,
+    draftDescriptionFromReference,
 } from '../voices/voiceRegistry.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { DESIGN_LANGUAGES } from '../voices/voiceCatalog.js';
+import { MAX_DESIGN_DESCRIPTION, referenceProblem } from '../voices/drafts.js';
 
 /**
  * Per-character designer state (this session only).
- * @type {Map<string, {description: string, gender: string, languageCode: string, label: string,
+ * @type {Map<string, {description: string, reference: string, gender: string, languageCode: string, label: string,
  *   busy: string, error: string, result: {entry: object, sample: object|null}|null}>}
  */
 const states = new Map();
@@ -50,6 +52,7 @@ function stateFor(ctx) {
     if (!states.has(ctx.name)) {
         states.set(ctx.name, {
             description: ctx.voice?.pendingDesign || '',
+            reference: '',
             gender: '',
             languageCode: '',
             label: `${ctx.name}'s voice`,
@@ -149,7 +152,7 @@ export function renderStudio(ctx, isPlaying) {
         <div class="cw-studio-form">
             <label class="cw-studio-field">
                 <span>Describe the voice</span>
-                <textarea class="rpg-textarea cw-studio-desc" rows="3" maxlength="600"
+                <textarea class="rpg-textarea cw-studio-desc" rows="4" maxlength="${MAX_DESIGN_DESCRIPTION}"
                     placeholder="e.g. A husky, low-pitched woman in her forties with a slow Southern drawl and a wry, tired warmth.">${escapeHtml(st.description)}</textarea>
             </label>
             <div class="cw-studio-row">
@@ -158,7 +161,18 @@ export function renderStudio(ctx, isPlaying) {
                 </button>
                 <span class="helper">Asks your chat AI to describe ${escapeHtml(ctx.name)}'s voice from their appearance and description. You can edit it before creating.</span>
             </div>
-            <p class="helper">Best results: one or two sentences covering age, gender, pitch, texture and accent. Don't name real people.</p>
+            <div class="cw-studio-ref">
+                <label class="cw-studio-field">
+                    <span>I'm thinking of&hellip;</span>
+                    <input type="text" class="rpg-input cw-studio-ref-input" maxlength="200" value="${escapeAttr(st.reference)}"
+                        placeholder="A character from a game, film, book or show, e.g. Withers from Baldur's Gate 3" />
+                </label>
+                <button type="button" class="rpg-btn cw-studio-ref-go" ${busy ? 'disabled' : ''}>
+                    <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Describing…' : 'Describe their voice'}
+                </button>
+            </div>
+            <p class="helper">Your chat AI describes how that character sounds and puts it in the box above for you to edit. Fictional characters only.</p>
+            <p class="helper">Best results: a few sentences covering age, gender, pitch, texture, pace and accent. Don't name real people.</p>
             <div class="cw-studio-grid">
                 <label class="cw-studio-field">
                     <span>Name</span>
@@ -195,6 +209,7 @@ export function renderStudio(ctx, isPlaying) {
 function readForm(host, st) {
     const q = (sel) => host.querySelector(sel);
     if (q('.cw-studio-desc')) st.description = q('.cw-studio-desc').value;
+    if (q('.cw-studio-ref-input')) st.reference = q('.cw-studio-ref-input').value;
     if (q('.cw-studio-label')) st.label = q('.cw-studio-label').value;
     if (q('.cw-studio-gender')) st.gender = q('.cw-studio-gender').value;
     if (q('.cw-studio-lang')) st.languageCode = q('.cw-studio-lang').value;
@@ -229,6 +244,22 @@ export async function handleStudioClick(target, host, ctx, rerender) {
             else st.error = 'Your chat AI returned nothing. Try again, or write the description yourself.';
         } catch (e) {
             st.error = `Couldn't draft a description: ${e?.message || e}`;
+        }
+        st.busy = ''; rerender();
+        return true;
+    }
+
+    if (btn('.cw-studio-ref-go')) {
+        readForm(host, st);
+        const who = st.reference.trim();
+        if (!who) { st.error = 'Type the character you have in mind first (for example “Withers from Baldur’s Gate 3”).'; rerender(); return true; }
+        st.busy = 'reference'; st.error = ''; rerender();
+        try {
+            const out = await draftDescriptionFromReference(who);
+            if (out.status === 'ok') st.description = out.text;
+            else st.error = referenceProblem(out.status, who);
+        } catch (e) {
+            st.error = `Couldn't describe that voice: ${e?.message || e}`;
         }
         st.busy = ''; rerender();
         return true;
@@ -332,6 +363,7 @@ export async function handleStudioClick(target, host, ctx, rerender) {
 export function handleStudioInput(target, ctx) {
     const st = stateFor(ctx);
     if (target.classList.contains('cw-studio-desc')) st.description = target.value;
+    else if (target.classList.contains('cw-studio-ref-input')) st.reference = target.value;
     else if (target.classList.contains('cw-studio-label')) st.label = target.value;
     else if (target.classList.contains('cw-studio-gender')) st.gender = target.value;
     else if (target.classList.contains('cw-studio-lang')) st.languageCode = target.value;
