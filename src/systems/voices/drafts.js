@@ -40,15 +40,14 @@ export function cleanDraft(response, max = MAX_DESIGN_DESCRIPTION) {
 /**
  * Reads the AI's answer to the "I'm thinking of…" prompt.
  * @param {string} response
- * @returns {{status: 'ok', text: string} | {status: 'real-person'|'unknown'|'empty'}}
+ * @returns {{status: 'ok', text: string} | {status: 'unknown'|'empty'}}
  */
 export function interpretReferenceDraft(response) {
     const text = cleanDraft(response);
     if (!text) return { status: 'empty' };
-    // A marker is a short reply; it may come with a full stop or a word of
+    // UNKNOWN is a short reply; it may come with a full stop or a word of
     // preamble ("Answer: UNKNOWN"). A real description is never that short.
     if (text.length < 80) {
-        if (/\bREAL[_ ]PERSON\b/i.test(text)) return { status: 'real-person' };
         if (/\bUNKNOWN\b/.test(text) || /^unknown\W*$/i.test(text)) return { status: 'unknown' };
     }
     return { status: 'ok', text };
@@ -56,7 +55,6 @@ export function interpretReferenceDraft(response) {
 
 /** What to tell the user when "I'm thinking of…" didn't produce a description. */
 export function referenceProblem(status, reference) {
-    if (status === 'real-person') return 'DES only describes the voices of fictional characters. Describe the sound you want in your own words instead.';
     if (status === 'unknown') return `Your chat AI doesn’t know “${reference}”. Add where they’re from (for example “Withers from Baldur’s Gate 3”), or describe the voice yourself.`;
     if (status === 'empty') return 'Your chat AI returned nothing. Try again, or write the description yourself.';
     return '';

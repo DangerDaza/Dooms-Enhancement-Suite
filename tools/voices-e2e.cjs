@@ -770,18 +770,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   };
   const refOk = await askAi('Withers from Baldur\'s Gate 3');
   check('"I\'m thinking of" asks the chat AI about the named character and fills the narrator box', () => {
-    assert.ok(aiPrompts.some(p => /Withers from Baldur/.test(p) && /REAL_PERSON/.test(p)), 'prompt not sent');
+    assert.ok(aiPrompts.some(p => /Withers from Baldur/.test(p) && /Never name the character/.test(p)), 'prompt not sent');
+    assert.ok(!aiPrompts.some(p => /REAL_PERSON/.test(p)), 'DES must not ask the AI to screen real people');
     assert.match(refOk.desc, /ancient, hollow male voice/);
     assert.strictEqual(refOk.error, '');
   });
   const refSaved = await page.evaluate(async (DES) => (await import(`${DES}/src/core/state.js`)).extensionSettings.voices.narratorDesign.description, DES);
   check('the AI-written narrator description is saved like a typed one', () => assert.match(refSaved, /ancient, hollow male voice/));
-  aiReply = 'REAL_PERSON';
-  const refReal = await askAi('A famous actor');
-  check('a real person is refused and the description is left alone', () => {
-    assert.match(refReal.error, /fictional characters/);
-    assert.match(refReal.desc, /ancient, hollow male voice/);
-  });
   aiReply = 'UNKNOWN';
   const refUnknown = await askAi('Zorblax');
   check('a character the AI doesn\'t know gets a hint to say where they are from', () => assert.match(refUnknown.error, /doesn’t know “Zorblax”/));

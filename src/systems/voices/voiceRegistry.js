@@ -231,18 +231,18 @@ export async function draftDescriptionFromCard({ name, appearance, description }
 }
 
 /**
- * "I'm thinking of…": asks the chat AI how a named fictional character
+ * "I'm thinking of…": asks the chat AI how a named character
  * sounds (Workshop → Voice → Design, and the narrator designer). Never
  * creates anything; the text lands in the description box to edit.
  * @param {string} reference - what the user typed, e.g. "Withers from Baldur's Gate 3"
- * @returns {Promise<{status: 'ok', text: string} | {status: 'real-person'|'unknown'|'empty'}>}
+ * @returns {Promise<{status: 'ok', text: string} | {status: 'unknown'|'empty'}>}
  */
 export async function draftDescriptionFromReference(reference) {
     const who = String(reference || '').replace(/\s+/g, ' ').trim().slice(0, 200);
     if (!who) return { status: 'empty' };
     const response = await generateRaw({
         prompt: DEFAULT_VOICE_REFERENCE_PROMPT.replace(/\{reference\}/g, who),
-        systemPrompt: 'You describe how fictional characters sound, for a text-to-speech voice designer. Output only the description, or the exact word you were told to reply with.',
+        systemPrompt: 'You describe how characters sound, for a text-to-speech voice designer. Output only the description, or UNKNOWN if you were told to.',
         instructOverride: false,
         responseLength: 2000,
     });

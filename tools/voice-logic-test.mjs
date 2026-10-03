@@ -360,10 +360,8 @@ test('drafts: reasoning blocks, quotes and extra spaces are stripped', () => {
     assert.equal(drafts.cleanDraft('abcdef', 3), 'abc');
 });
 
-test('drafts: "I\'m thinking of" answers are read, including the refusal markers', () => {
+test('drafts: "I\'m thinking of" answers are read, including UNKNOWN', () => {
     assert.deepEqual(drafts.interpretReferenceDraft('A deep, hollow voice with a dry rasp.'), { status: 'ok', text: 'A deep, hollow voice with a dry rasp.' });
-    assert.deepEqual(drafts.interpretReferenceDraft('REAL_PERSON'), { status: 'real-person' });
-    assert.deepEqual(drafts.interpretReferenceDraft('  real_person. '), { status: 'real-person' });
     assert.deepEqual(drafts.interpretReferenceDraft('<think>who is this</think>UNKNOWN'), { status: 'unknown' });
     assert.deepEqual(drafts.interpretReferenceDraft('Answer: UNKNOWN'), { status: 'unknown' });
     assert.deepEqual(drafts.interpretReferenceDraft(''), { status: 'empty' });
@@ -372,8 +370,7 @@ test('drafts: "I\'m thinking of" answers are read, including the refusal markers
     assert.equal(drafts.interpretReferenceDraft(long).status, 'ok');
 });
 
-test('drafts: each refusal gets a message that tells the user what to do', () => {
-    assert.match(drafts.referenceProblem('real-person', 'X'), /fictional characters/);
+test('drafts: each failed draft gets a message that tells the user what to do', () => {
     assert.match(drafts.referenceProblem('unknown', 'Bob'), /doesn’t know “Bob”/);
     assert.match(drafts.referenceProblem('empty', 'X'), /returned nothing/);
     assert.equal(drafts.referenceProblem('ok', 'X'), '');

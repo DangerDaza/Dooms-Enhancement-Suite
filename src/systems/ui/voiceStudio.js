@@ -171,7 +171,7 @@ export function renderStudio(ctx, isPlaying) {
                     <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Describing…' : 'Describe their voice'}
                 </button>
             </div>
-            <p class="helper">Your chat AI describes how that character sounds and puts it in the box above for you to edit. Fictional characters only.</p>
+            <p class="helper">Your chat AI describes how that character sounds and puts it in the box above for you to edit.</p>
             <p class="helper">Best results: a few sentences covering age, gender, pitch, texture, pace and accent. Don't name real people.</p>
             <div class="cw-studio-grid">
                 <label class="cw-studio-field">
