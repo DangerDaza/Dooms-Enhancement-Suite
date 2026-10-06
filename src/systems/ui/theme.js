@@ -3,6 +3,64 @@
  * Handles theme application, custom colors, and animations
  */
 import { extensionSettings, $panelContainer } from '../../core/state.js';
+import { ensureCss } from '../../core/cssLoader.js';
+
+/**
+ * The five overhaul themes. Unlike the classic themes (which recolour the
+ * panels through --rpg-* variables), these restyle every DES surface from
+ * styles/overhaul.css, hung off <body data-dooms-overhaul="...">, and each
+ * loads its own web fonts (with local fallbacks in the CSS stacks, so an
+ * offline SillyTavern still gets the shapes, just in system fonts).
+ */
+export const OVERHAUL_THEMES = {
+    grimoire: { label: 'Grimoire',    fonts: 'family=Cinzel:wght@500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600' },
+    console:  { label: 'Ops Console', fonts: 'family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;700' },
+    lumen:    { label: 'Lumen',       fonts: 'family=Manrope:wght@400;500;600;700;800' },
+    arcade:   { label: 'Arcade',      fonts: 'family=Bebas+Neue&family=Barlow:ital,wght@0,400;0,500;0,700;1,400' },
+    inked:    { label: 'Inked',       fonts: 'family=Archivo+Black&family=Nunito:ital,wght@0,500;0,700;0,800;1,500' },
+};
+
+/**
+ * @param {string} theme
+ * @returns {boolean} true when the theme is one of the five overhauls
+ */
+export function isOverhaulTheme(theme) {
+    return Object.prototype.hasOwnProperty.call(OVERHAUL_THEMES, theme);
+}
+
+const FONT_LINK_ID = 'dooms-overhaul-fonts';
+
+/**
+ * Stamps (or clears) the overhaul attribute on <body>, loads the overhaul
+ * stylesheet on first use and swaps the web-font link for the theme's set.
+ * Safe to call on every applyTheme(): it is idempotent.
+ * @param {string} theme
+ */
+export function applyOverhaulTheme(theme) {
+    const body = document.body;
+    if (!body) return;
+    const existingLink = document.getElementById(FONT_LINK_ID);
+    if (!isOverhaulTheme(theme)) {
+        body.removeAttribute('data-dooms-overhaul');
+        if (existingLink) existingLink.remove();
+        return;
+    }
+    // Stylesheet first so the attribute never shows unstyled surfaces.
+    ensureCss('overhaul').catch(() => { });
+    body.setAttribute('data-dooms-overhaul', theme);
+    const href = `https://fonts.googleapis.com/css2?${OVERHAUL_THEMES[theme].fonts}&display=swap`;
+    if (existingLink && existingLink.getAttribute('href') === href) return;
+    if (existingLink) existingLink.remove();
+    const link = document.createElement('link');
+    link.id = FONT_LINK_ID;
+    link.rel = 'stylesheet';
+    link.href = href;
+    // A blocked or offline font host must not surface as an error: the CSS
+    // stacks fall back to local serif / sans / mono faces.
+    link.onerror = () => { };
+    document.head.appendChild(link);
+}
+
 /**
  * Converts hex color and opacity percentage to rgba string
  * @param {string} hex - Hex color (e.g., '#ff0000')
@@ -20,10 +78,12 @@ export function hexToRgba(hex, opacity = 100) {
  * Applies the selected theme to the panel.
  */
 export function applyTheme() {
+    const theme = extensionSettings.theme;
+    // The overhaul themes live on <body>, independent of any panel existing.
+    try { applyOverhaulTheme(theme); } catch (e) { console.error('[Dooms Tracker] applyOverhaulTheme failed:', e); }
     // Find the panel element — use cached ref if available, otherwise query DOM
     const $panel = $panelContainer || $('.rpg-panel');
     if (!$panel || !$panel.length) return;
-    const theme = extensionSettings.theme;
     // Remove all theme attributes first
     $panel.removeAttr('data-theme');
     // Clear any inline CSS variable overrides

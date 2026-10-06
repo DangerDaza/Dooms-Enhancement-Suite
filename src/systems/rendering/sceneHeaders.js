@@ -165,6 +165,14 @@ const THEME_COLORS = {
     'volcanic':      { bg: '#1a1210', accent: '#2b1e18', text: '#f0dcc8', highlight: '#e8651a', border: '#b84a0f' },
     'dracula':       { bg: '#282a36', accent: '#343746', text: '#f8f8f2', highlight: '#ff5555', border: '#6272a4' },
     'ocean-depths':  { bg: '#0a1628', accent: '#0f2038', text: '#b8d8e8', highlight: '#00e5c8', border: '#1a6b8a' },
+    // Overhaul themes (styles/overhaul.css). The sheet restyles the tracker
+    // directly, so these only matter for the colour pickers' derived values
+    // and anything that reads the palette outside the themed selectors.
+    'grimoire':      { bg: '#14100c', accent: '#1b150f', text: '#e9dfc6', highlight: '#c9a24a', border: '#6b5436' },
+    'console':       { bg: '#0b0f10', accent: '#0e1415', text: '#cfe3d6', highlight: '#f2b134', border: '#2d3d36' },
+    'lumen':         { bg: '#0f1420', accent: '#1a2030', text: '#f3f5f9', highlight: '#8b7cf6', border: '#3a4257' },
+    'arcade':        { bg: '#0a0a0c', accent: '#15151a', text: '#f4f4f4', highlight: '#ff2e4d', border: '#2a2a32' },
+    'inked':         { bg: '#f4efe6', accent: '#ffffff', text: '#15130f', highlight: '#1d3fbf', border: '#15130f' },
 };
 
 /**

@@ -149,6 +149,15 @@ Captures every SillyTavern toast notification (API errors, system messages, warn
 ### Themes
 Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create your own with full color picker controls for background, accent, text, highlight, stat bars, and per-element opacity.
 
+Below those sit five **Overhauls**, which restyle every DES surface at once rather than recolouring it — scene tracker, chat bubbles, the Present Characters shelf, the Doom Counter, every window and the message box:
+- **Grimoire** — a tabletop ledger: serif small caps, gilt on ink, hairline double rules, portraits as framed miniatures.
+- **Ops Console** — a monospace readout: bracketed labels, square corners, amber and cyan status, ID-badge portraits.
+- **Lumen** — frosted glass over your SillyTavern background, pill controls, a presence ring on whoever is speaking.
+- **Arcade** — a visual-novel HUD: white status ribbon, chamfered textboxes, nameplates filled with each character's dialogue colour.
+- **Inked** — the light one: graphic-novel paper, ink outlines, yellow caption boxes, speech bubbles with tails.
+
+Each overhaul loads its fonts from Google Fonts and falls back to your system fonts when offline. Chat bubble portraits stay beside the text in every overhaul.
+
 ### Settings Panel
 <img width="813" height="252" alt="image" src="https://github.com/user-attachments/assets/8449e4f8-edd6-49d2-b5a9-22311637adae" />
 

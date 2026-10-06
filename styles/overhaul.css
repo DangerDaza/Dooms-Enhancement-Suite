@@ -1,0 +1,1747 @@
+/* ============================================================================
+   OVERHAUL THEMES — Grimoire, Ops Console, Lumen, Arcade, Inked
+   ----------------------------------------------------------------------------
+   Loaded on demand (ensureCss('overhaul')) the first time one of the five
+   overhaul themes is selected. theme.js stamps <body data-dooms-overhaul="x">
+   and everything here hangs off that attribute, so the thirteen classic
+   themes and the default look are untouched when none is active.
+
+   Layout: one shared block that restyles every DES surface from a small set
+   of --ov-* tokens, then one block per theme that sets the tokens and adds
+   the shapes that make it that theme (ledger rules, chamfers, tails...).
+
+   Surfaces covered: scene tracker (grid/stacked/compact/banner/HUD/ticker),
+   chat bubbles (Discord + Card), portrait bar, Doom Counter (badge, inline
+   twist cards, trap badge), inline thoughts, every DES modal built on
+   .rpg-settings-popup-content (Settings, Workshop, Roster, Tracker Editor,
+   Prompts, Character Sheet), the Lore Library, the FAB and the composer.
+   ============================================================================ */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Shared: tokens → surfaces
+   ──────────────────────────────────────────────────────────────────────────── */
+
+body[data-dooms-overhaul] {
+    --ov-ground: #14100c;
+    --ov-panel: #1b150f;
+    --ov-panel2: #110d0a;
+    --ov-text: #e9dfc6;
+    --ov-muted: #a8956f;
+    --ov-accent: #c9a24a;
+    --ov-accent2: #e3c070;
+    --ov-on-accent: #14100c;
+    --ov-line: #6b5436;
+    --ov-line2: #2b2218;
+    --ov-radius: 0px;
+    --ov-radius-sm: 0px;
+    --ov-display: Georgia, serif;
+    --ov-body: Georgia, serif;
+    --ov-mono: ui-monospace, Menlo, Consolas, monospace;
+    --ov-shadow: none;
+    --ov-border-w: 1px;
+    --ov-chat-bg: rgba(0, 0, 0, 0.18);
+}
+
+/* Palette for everything that already reads the classic --rpg-* variables
+   (380 rules across the modals alone). Stamped on every DES root. */
+body[data-dooms-overhaul] .rpg-settings-popup-content,
+body[data-dooms-overhaul] .rpg-lb-modal,
+body[data-dooms-overhaul] .rpg-lb-modal-content,
+body[data-dooms-overhaul] #rpg-thought-panel,
+body[data-dooms-overhaul] #rpg-thought-icon,
+body[data-dooms-overhaul] .rpg-mobile-toggle,
+body[data-dooms-overhaul] #dooms-settings-fab,
+body[data-dooms-overhaul] .rpg-panel,
+body[data-dooms-overhaul] .dooms-bubbles,
+body[data-dooms-overhaul] .dooms-inline-thought,
+body[data-dooms-overhaul] .dooms-dc-inline,
+body[data-dooms-overhaul] .dooms-pb-context-menu {
+    --rpg-bg: var(--ov-ground);
+    --rpg-accent: var(--ov-panel2);
+    --rpg-text: var(--ov-text);
+    --rpg-highlight: var(--ov-accent);
+    --rpg-border: var(--ov-line);
+    --rpg-shadow: rgba(0, 0, 0, 0.5);
+    --cw-accent: var(--ov-accent);
+}
+
+/* ── Modals (Settings, Workshop, Roster, Tracker Editor, Prompts, Sheet) ── */
+body[data-dooms-overhaul] .rpg-settings-popup-content {
+    background: var(--ov-panel);
+    color: var(--ov-text);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+}
+body[data-dooms-overhaul] .rpg-settings-popup-header {
+    background: var(--ov-panel2);
+    border-bottom: var(--ov-border-w) solid var(--ov-line);
+}
+body[data-dooms-overhaul] .rpg-settings-popup-header h3 {
+    font-family: var(--ov-display);
+    color: var(--ov-accent2);
+    font-weight: 600;
+}
+body[data-dooms-overhaul] .rpg-settings-popup-footer {
+    background: var(--ov-panel2);
+    border-top: var(--ov-border-w) solid var(--ov-line);
+}
+body[data-dooms-overhaul] .rpg-popup-close {
+    color: var(--ov-muted);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .rpg-popup-close:hover {
+    color: var(--ov-accent2);
+    background: var(--ov-line2);
+}
+
+/* Accordion sections → flat ruled groups */
+body[data-dooms-overhaul] .rpg-accordion-section {
+    border: var(--ov-border-w) solid var(--ov-line2);
+    border-radius: var(--ov-radius-sm);
+    background: transparent;
+    margin-bottom: 6px;
+}
+body[data-dooms-overhaul] .rpg-accordion-header {
+    background: var(--ov-panel2);
+    padding: 10px 14px;
+}
+body[data-dooms-overhaul] .rpg-accordion-header:hover {
+    background: var(--ov-line2);
+}
+body[data-dooms-overhaul] .rpg-accordion-open > .rpg-accordion-header {
+    border-bottom: var(--ov-border-w) solid var(--ov-line2);
+}
+body[data-dooms-overhaul] .rpg-accordion-title {
+    font-family: var(--ov-display);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .rpg-accordion-icon {
+    color: var(--ov-accent);
+}
+body[data-dooms-overhaul] .rpg-accordion-chevron {
+    color: var(--ov-muted);
+}
+body[data-dooms-overhaul] .rpg-accordion-badge {
+    background: transparent;
+    border: 1px solid var(--ov-line);
+    color: var(--ov-accent2);
+    border-radius: var(--ov-radius-sm);
+    font-family: var(--ov-mono);
+}
+body[data-dooms-overhaul] .rpg-accordion-body {
+    background: transparent;
+    border-top: none;
+}
+body[data-dooms-overhaul] .rpg-setting-row {
+    border-bottom: 1px solid var(--ov-line2);
+    padding-bottom: 6px;
+}
+body[data-dooms-overhaul] .rpg-setting-row:last-child {
+    border-bottom: none;
+}
+body[data-dooms-overhaul] .rpg-setting-label {
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .rpg-setting-hint,
+body[data-dooms-overhaul] .rpg-note-text {
+    color: var(--ov-muted);
+}
+body[data-dooms-overhaul] .rpg-subsection-label {
+    font-family: var(--ov-display);
+    color: var(--ov-accent);
+    border-color: var(--ov-line2);
+}
+
+/* Inputs */
+body[data-dooms-overhaul] .rpg-accordion-select,
+body[data-dooms-overhaul] .rpg-accordion-input,
+body[data-dooms-overhaul] .rpg-input,
+body[data-dooms-overhaul] .rpg-select,
+body[data-dooms-overhaul] .rpg-prompt-textarea,
+body[data-dooms-overhaul] .rpg-lb-input,
+body[data-dooms-overhaul] .rpg-lb-select,
+body[data-dooms-overhaul] .rpg-lb-textarea,
+body[data-dooms-overhaul] .rpg-settings-popup-content textarea,
+body[data-dooms-overhaul] .rpg-settings-popup-content input[type="text"],
+body[data-dooms-overhaul] .rpg-settings-popup-content input[type="number"],
+body[data-dooms-overhaul] .rpg-settings-popup-content input[type="password"],
+body[data-dooms-overhaul] .rpg-settings-popup-content select {
+    background: var(--ov-ground);
+    color: var(--ov-text);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    font-family: var(--ov-body);
+    box-shadow: none;
+}
+body[data-dooms-overhaul] .rpg-settings-popup-content select:focus,
+body[data-dooms-overhaul] .rpg-settings-popup-content input:focus,
+body[data-dooms-overhaul] .rpg-settings-popup-content textarea:focus,
+body[data-dooms-overhaul] .rpg-select:focus,
+body[data-dooms-overhaul] .rpg-input:focus {
+    border-color: var(--ov-accent);
+    box-shadow: none;
+    outline: none;
+}
+
+/* Buttons */
+body[data-dooms-overhaul] .rpg-btn,
+body[data-dooms-overhaul] .rpg-accordion-action-btn,
+body[data-dooms-overhaul] .rpg-accordion-mini-btn,
+body[data-dooms-overhaul] .rpg-lb-toolbar-btn,
+body[data-dooms-overhaul] .rpg-settings-popup-content .menu_button {
+    background: transparent;
+    color: var(--ov-text);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    font-family: var(--ov-display);
+    box-shadow: none;
+    text-shadow: none;
+}
+body[data-dooms-overhaul] .rpg-btn:hover,
+body[data-dooms-overhaul] .rpg-accordion-action-btn:hover,
+body[data-dooms-overhaul] .rpg-accordion-mini-btn:hover,
+body[data-dooms-overhaul] .rpg-lb-toolbar-btn:hover,
+body[data-dooms-overhaul] .rpg-settings-popup-content .menu_button:hover {
+    background: var(--ov-line2);
+    border-color: var(--ov-accent);
+    color: var(--ov-accent2);
+    transform: none;
+}
+body[data-dooms-overhaul] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger) {
+    background: var(--ov-accent);
+    color: var(--ov-on-accent);
+    border-color: var(--ov-accent);
+}
+body[data-dooms-overhaul] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger):hover {
+    background: var(--ov-accent2);
+    border-color: var(--ov-accent2);
+    color: var(--ov-on-accent);
+}
+
+/* Toggles */
+body[data-dooms-overhaul] .rpg-toggle-slider {
+    background: var(--ov-ground);
+    border: 1px solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .rpg-toggle-slider::before {
+    background: var(--ov-muted);
+    border-radius: var(--ov-radius-sm);
+    top: 1px;
+    left: 1px;
+}
+body[data-dooms-overhaul] .rpg-toggle-switch input:checked + .rpg-toggle-slider {
+    background: var(--ov-ground);
+    border-color: var(--ov-accent);
+}
+body[data-dooms-overhaul] .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
+    background: var(--ov-accent);
+    left: 17px;
+}
+
+/* Sliders */
+body[data-dooms-overhaul] .rpg-range-slider {
+    background: var(--ov-line);
+    border-radius: 0;
+    height: 2px;
+}
+body[data-dooms-overhaul] .rpg-range-slider::-webkit-slider-thumb {
+    background: var(--ov-accent);
+    border-radius: var(--ov-radius-sm);
+    width: 12px;
+    height: 14px;
+}
+body[data-dooms-overhaul] .rpg-range-slider::-moz-range-thumb {
+    background: var(--ov-accent);
+    border-radius: var(--ov-radius-sm);
+    border: none;
+    width: 12px;
+    height: 14px;
+}
+body[data-dooms-overhaul] .rpg-slider-value {
+    font-family: var(--ov-mono);
+    color: var(--ov-muted);
+}
+
+/* Lore Library */
+body[data-dooms-overhaul] .rpg-lb-modal-content {
+    background: var(--ov-panel);
+    color: var(--ov-text);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+}
+body[data-dooms-overhaul] .rpg-lb-modal-header {
+    background: var(--ov-panel2);
+    border-bottom: var(--ov-border-w) solid var(--ov-line);
+    font-family: var(--ov-display);
+}
+
+/* Workshop: stage accent follows the theme accent */
+body[data-dooms-overhaul] #character-workshop-popup .rpg-settings-popup-content {
+    --cw-accent: var(--ov-accent);
+}
+
+/* ── Scene tracker: grid / stacked / compact / banner ── */
+body[data-dooms-overhaul] .dooms-scene-header,
+body[data-dooms-overhaul] .dooms-info-banner {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-left-width: var(--ov-border-w);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-scene-row,
+body[data-dooms-overhaul] .dooms-scene-events,
+body[data-dooms-overhaul] .dooms-ip-item,
+body[data-dooms-overhaul] .dooms-ip-value,
+body[data-dooms-overhaul] .dooms-ip-events-text,
+body[data-dooms-overhaul] .dooms-scene-value {
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-scene-label,
+body[data-dooms-overhaul] .dooms-ip-label {
+    color: var(--ov-muted);
+    font-family: var(--ov-display);
+}
+body[data-dooms-overhaul] .dooms-scene-row i,
+body[data-dooms-overhaul] .dooms-scene-events i,
+body[data-dooms-overhaul] .dooms-ip-item i,
+body[data-dooms-overhaul] .dooms-ip-quest i,
+body[data-dooms-overhaul] .dooms-ip-events i {
+    color: var(--ov-accent);
+}
+body[data-dooms-overhaul] .dooms-ip-quest .dooms-ip-value,
+body[data-dooms-overhaul] .dooms-scene-quest .dooms-scene-value {
+    color: var(--ov-accent2);
+}
+body[data-dooms-overhaul] .dooms-ip-divider {
+    background: var(--ov-line);
+}
+body[data-dooms-overhaul] .dooms-scene-char-badge,
+body[data-dooms-overhaul] .dooms-ip-char {
+    background: var(--ov-ground);
+    border: 1px solid var(--ov-line2);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-text);
+}
+
+/* HUD (floating) and ticker */
+body[data-dooms-overhaul] .dooms-info-hud {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-ip-hud-title {
+    font-family: var(--ov-display);
+    color: var(--ov-accent2);
+    border-bottom: 1px solid var(--ov-line2);
+}
+body[data-dooms-overhaul] .dooms-ip-hud-label { color: var(--ov-muted); }
+body[data-dooms-overhaul] .dooms-ip-hud-value { color: var(--ov-text); }
+body[data-dooms-overhaul] .dooms-ip-hud-row i { color: var(--ov-accent); }
+body[data-dooms-overhaul] .dooms-ip-hud-divider { background: var(--ov-line2); }
+body[data-dooms-overhaul] .dooms-info-ticker-wrapper {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-info-ticker-panel {
+    background: var(--ov-panel2);
+    border-top: 1px solid var(--ov-line2);
+}
+body[data-dooms-overhaul] .dooms-ip-ticker-icon,
+body[data-dooms-overhaul] .dooms-ip-ticker-item i { color: var(--ov-accent); }
+
+/* ── Doom Counter ── */
+body[data-dooms-overhaul] .dooms-dc-debug-badge {
+    background: var(--ov-ground);
+    border: 1px solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-text);
+    font-family: var(--ov-mono);
+}
+body[data-dooms-overhaul] .dooms-dc-debug-badge > i { color: var(--ov-accent); }
+body[data-dooms-overhaul] .dooms-dc-trap-badge {
+    background: var(--ov-ground);
+    border: 1px solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-accent2);
+    font-family: var(--ov-display);
+}
+body[data-dooms-overhaul] .dooms-dc-inline {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-dc-inline-header {
+    font-family: var(--ov-display);
+    color: var(--ov-accent2);
+    border-bottom: 1px solid var(--ov-line2);
+    padding-bottom: 8px;
+}
+body[data-dooms-overhaul] .dooms-dc-card {
+    background: var(--ov-ground);
+    border: var(--ov-border-w) solid var(--ov-line2);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-dc-card:hover,
+body[data-dooms-overhaul] .dooms-dc-card:focus-visible {
+    border-color: var(--ov-accent);
+    background: var(--ov-panel2);
+    box-shadow: none;
+    transform: none;
+}
+body[data-dooms-overhaul] .dooms-dc-card-selected,
+body[data-dooms-overhaul] .dooms-dc-card-knife.dooms-dc-card-selected {
+    border-color: var(--ov-accent);
+    background: var(--ov-panel2);
+    box-shadow: inset 0 0 0 1px var(--ov-accent);
+}
+body[data-dooms-overhaul] .dooms-dc-card-title {
+    font-family: var(--ov-display);
+    color: var(--ov-accent2);
+}
+body[data-dooms-overhaul] .dooms-dc-card-desc { color: var(--ov-muted); }
+body[data-dooms-overhaul] .dooms-dc-action-btn {
+    background: transparent;
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-text);
+    font-family: var(--ov-display);
+}
+body[data-dooms-overhaul] .dooms-dc-action-btn:hover {
+    border-color: var(--ov-accent);
+    color: var(--ov-accent2);
+    background: var(--ov-line2);
+}
+body[data-dooms-overhaul] .dooms-dc-chosen-title { font-family: var(--ov-display); color: var(--ov-accent2); }
+body[data-dooms-overhaul] .dooms-dc-chosen-hint { color: var(--ov-muted); }
+
+/* ── Chat bubbles ── */
+body[data-dooms-overhaul] .dooms-bubble,
+body[data-dooms-overhaul] .dooms-card {
+    font-family: var(--ov-body);
+}
+body[data-dooms-overhaul] .dooms-bubble-author,
+body[data-dooms-overhaul] .dooms-card-author {
+    font-family: var(--ov-display);
+}
+body[data-dooms-overhaul] .dooms-card {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line2);
+    border-left-width: 3px;
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+}
+body[data-dooms-overhaul] .dooms-bubble.dooms-bubble-new-speaker {
+    border-top-color: var(--ov-line2);
+}
+body[data-dooms-overhaul] .dooms-bubble:hover {
+    background: color-mix(in srgb, var(--ov-panel) 60%, transparent);
+}
+body[data-dooms-overhaul] .dooms-bubble-avatar,
+body[data-dooms-overhaul] .dooms-card-avatar,
+body[data-dooms-overhaul] .dooms-bubble-avatar img,
+body[data-dooms-overhaul] .dooms-card-avatar img {
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .dooms-bubble-avatar,
+body[data-dooms-overhaul] .dooms-card-avatar {
+    border: 1px solid var(--ov-line);
+    background: var(--ov-ground);
+}
+body[data-dooms-overhaul] .dooms-bubble-tts {
+    background: var(--ov-panel2);
+    color: var(--ov-muted);
+    border: 1px solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .dooms-bubble-tts:hover {
+    color: var(--ov-accent2);
+    background: var(--ov-ground);
+}
+
+/* ── Inline thoughts ── */
+body[data-dooms-overhaul] .dooms-inline-thought {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line2);
+    border-left: 3px solid var(--ov-accent);
+    border-radius: var(--ov-radius-sm);
+    font-family: var(--ov-body);
+}
+body[data-dooms-overhaul] .dooms-inline-thought[open] { background: var(--ov-panel2); }
+body[data-dooms-overhaul] .dooms-inline-thought-content { border-top-color: var(--ov-line2); color: var(--ov-text); }
+body[data-dooms-overhaul] .dooms-thought-name { font-family: var(--ov-display); }
+
+/* ── Portrait bar ── */
+body[data-dooms-overhaul] .dooms-portrait-bar {
+    background: var(--ov-chat-bg);
+    font-family: var(--ov-body);
+}
+body[data-dooms-overhaul] .dooms-pb-toggle {
+    background: var(--ov-chat-bg);
+    border-top: 1px solid var(--ov-line2);
+}
+body[data-dooms-overhaul] .dooms-pb-toggle-dot { background: var(--ov-line); }
+body[data-dooms-overhaul] .dooms-pb-toggle:hover .dooms-pb-toggle-dot { background: var(--ov-accent); }
+body[data-dooms-overhaul] .dooms-pb-toggle-label { color: var(--ov-muted); font-family: var(--ov-display); }
+body[data-dooms-overhaul] .dooms-pb-title {
+    font-family: var(--ov-display);
+    color: var(--ov-accent);
+}
+body[data-dooms-overhaul] .dooms-pb-count {
+    background: transparent;
+    border: 1px solid var(--ov-line2);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-muted);
+    font-family: var(--ov-mono);
+}
+body[data-dooms-overhaul] .dooms-portrait-card {
+    background: var(--ov-ground);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .dooms-portrait-card:hover {
+    border-color: var(--ov-accent);
+    box-shadow: none;
+    transform: none;
+}
+body[data-dooms-overhaul] .dooms-portrait-card.dooms-pb-speaking {
+    border-color: var(--ov-accent2);
+    box-shadow: 0 0 0 1px var(--ov-accent2);
+}
+body[data-dooms-overhaul] .dooms-portrait-card-name {
+    background: var(--ov-panel2);
+    padding: 4px 5px;
+    color: var(--ov-text);
+    font-family: var(--ov-display);
+    font-size: 0.68em;
+    line-height: 1.4; /* the bar wrapper zeroes line-height */
+}
+body[data-dooms-overhaul] .dooms-pb-arrow {
+    background: var(--ov-panel);
+    border: 1px solid var(--ov-line);
+    color: var(--ov-text);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .dooms-pb-context-menu {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    box-shadow: var(--ov-shadow);
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] .dooms-pb-ctx-item:hover { background: var(--ov-line2); color: var(--ov-accent2); }
+body[data-dooms-overhaul] .dooms-pb-ctx-divider { background: var(--ov-line2); }
+body[data-dooms-overhaul] .dooms-pb-card-back {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-overhaul] .dooms-pb-back-label { color: var(--ov-muted); font-family: var(--ov-display); }
+
+/* ── FAB ── */
+body[data-dooms-overhaul] .dooms-fab-btn {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-accent2);
+}
+body[data-dooms-overhaul] .dooms-fab-btn:hover {
+    border-color: var(--ov-accent);
+}
+
+/* ── Composer (SillyTavern's own form, lightly dressed) ── */
+body[data-dooms-overhaul] #send_form {
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+}
+body[data-dooms-overhaul] #send_textarea {
+    font-family: var(--ov-body);
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul] #send_textarea::placeholder {
+    color: var(--ov-muted);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1 · GRIMOIRE — tabletop ledger
+   Ink ground, parchment text, gilt accents, hairline double rules, zero glow.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-overhaul="grimoire"] {
+    --ov-ground: #14100c;
+    --ov-panel: #1b150f;
+    --ov-panel2: #110d0a;
+    --ov-text: #e9dfc6;
+    --ov-muted: #a8956f;
+    --ov-accent: #c9a24a;
+    --ov-accent2: #e3c070;
+    --ov-on-accent: #14100c;
+    --ov-line: #6b5436;
+    --ov-line2: #2b2218;
+    --ov-radius: 0px;
+    --ov-radius-sm: 0px;
+    --ov-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+    --ov-body: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
+    --ov-shadow: none;
+    --ov-chat-bg: rgba(20, 16, 12, 0.55);
+}
+body[data-dooms-overhaul="grimoire"] .rpg-settings-popup-header h3,
+body[data-dooms-overhaul="grimoire"] .rpg-accordion-title,
+body[data-dooms-overhaul="grimoire"] .rpg-subsection-label,
+body[data-dooms-overhaul="grimoire"] .dooms-pb-title,
+body[data-dooms-overhaul="grimoire"] .dooms-pb-toggle-label,
+body[data-dooms-overhaul="grimoire"] .dooms-scene-label,
+body[data-dooms-overhaul="grimoire"] .dooms-ip-label,
+body[data-dooms-overhaul="grimoire"] .dooms-ip-hud-title,
+body[data-dooms-overhaul="grimoire"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="grimoire"] .dooms-dc-card-title,
+body[data-dooms-overhaul="grimoire"] .dooms-bubble-author,
+body[data-dooms-overhaul="grimoire"] .dooms-card-author,
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card-name,
+body[data-dooms-overhaul="grimoire"] .rpg-btn,
+body[data-dooms-overhaul="grimoire"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="grimoire"] .dooms-dc-action-btn {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.78em;
+    font-weight: 500;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-bubble-text,
+body[data-dooms-overhaul="grimoire"] .dooms-card-text,
+body[data-dooms-overhaul="grimoire"] .dooms-scene-value,
+body[data-dooms-overhaul="grimoire"] .dooms-ip-value,
+body[data-dooms-overhaul="grimoire"] .dooms-inline-thought-content {
+    font-size: 1.08em;
+    line-height: 1.55;
+}
+/* The ledger: an outer hairline a few pixels outside the inner rule */
+body[data-dooms-overhaul="grimoire"] .dooms-scene-header,
+body[data-dooms-overhaul="grimoire"] .dooms-info-banner,
+body[data-dooms-overhaul="grimoire"] .dooms-dc-inline,
+body[data-dooms-overhaul="grimoire"] .rpg-settings-popup-content,
+body[data-dooms-overhaul="grimoire"] .rpg-lb-modal-content,
+body[data-dooms-overhaul="grimoire"] #send_form {
+    outline: 1px solid var(--ov-line2);
+    outline-offset: 3px;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-scene-header,
+body[data-dooms-overhaul="grimoire"] .dooms-info-banner {
+    margin: 12px 4px 16px 4px;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-scene-label {
+    font-family: var(--ov-body);
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 1em;
+    min-width: 5.5em;
+}
+/* Nameplate: small caps followed by a hairline that runs to the edge */
+body[data-dooms-overhaul="grimoire"] .dooms-bubble-header,
+body[data-dooms-overhaul="grimoire"] .dooms-card-header {
+    gap: 12px;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-bubble-header::after,
+body[data-dooms-overhaul="grimoire"] .dooms-card-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--ov-line2);
+    align-self: center;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-bubble {
+    border-left: none;
+    padding-left: 10px;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-card {
+    border-left-width: var(--ov-border-w);
+}
+/* Framed miniature: inner rule + outer hairline, gilt diamond over the speaker */
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-bar.dooms-pb-expanded {
+    padding-top: 14px;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card {
+    outline: 1px solid var(--ov-line2);
+    outline-offset: 2px;
+    border-color: #8c7244;
+    overflow: visible;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card img {
+    border-radius: 0;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card.dooms-pb-speaking {
+    border-color: var(--ov-accent2);
+    outline-color: #8c7244;
+    box-shadow: none;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card.dooms-pb-speaking::before {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: 50%;
+    width: 9px;
+    height: 9px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--ov-accent2);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+    opacity: 1;
+    right: auto;
+    bottom: auto;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-portrait-card-name {
+    background: rgba(17, 13, 10, 0.92);
+}
+body[data-dooms-overhaul="grimoire"] .dooms-pb-title::before,
+body[data-dooms-overhaul="grimoire"] .dooms-pb-title::after {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--ov-line);
+}
+/* Omen: the tension badge in roman spirit — serif numerals on gilt */
+body[data-dooms-overhaul="grimoire"] .dooms-dc-debug-badge {
+    font-family: var(--ov-display);
+    letter-spacing: 0.08em;
+}
+body[data-dooms-overhaul="grimoire"] .dooms-dc-card-emoji { font-size: 1.6em; }
+/* Toggle: ink square with a gilt fill */
+body[data-dooms-overhaul="grimoire"] .rpg-toggle-switch { width: 34px; height: 18px; }
+/* Codex index chapter numbers on accordion headers */
+body[data-dooms-overhaul="grimoire"] .rpg-accordion-section { counter-increment: dooms-chapter; }
+body[data-dooms-overhaul="grimoire"] .rpg-settings-popup-body { counter-reset: dooms-chapter; }
+body[data-dooms-overhaul="grimoire"] #rpg-settings-popup .rpg-accordion-title::before {
+    content: counter(dooms-chapter, upper-roman) '\00a0\00a0';
+    color: var(--ov-muted);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2 · OPS CONSOLE — information-first HUD
+   Monospace, 1px lines, zero radius, bracketed labels, amber + cyan.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-overhaul="console"] {
+    --ov-ground: #0b0f10;
+    --ov-panel: #0e1415;
+    --ov-panel2: #101818;
+    --ov-text: #cfe3d6;
+    --ov-muted: #6f8a7d;
+    --ov-accent: #f2b134;
+    --ov-accent2: #ffd27a;
+    --ov-on-accent: #0b0f10;
+    --ov-line: #2d3d36;
+    --ov-line2: #233029;
+    --ov-radius: 0px;
+    --ov-radius-sm: 0px;
+    --ov-display: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    --ov-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --ov-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    --ov-shadow: none;
+    --ov-chat-bg: rgba(11, 15, 16, 0.7);
+}
+body[data-dooms-overhaul="console"] .rpg-settings-popup-header h3,
+body[data-dooms-overhaul="console"] .rpg-accordion-title,
+body[data-dooms-overhaul="console"] .rpg-subsection-label,
+body[data-dooms-overhaul="console"] .rpg-setting-label,
+body[data-dooms-overhaul="console"] .rpg-setting-hint,
+body[data-dooms-overhaul="console"] .rpg-accordion-select,
+body[data-dooms-overhaul="console"] .rpg-accordion-input,
+body[data-dooms-overhaul="console"] .rpg-btn,
+body[data-dooms-overhaul="console"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="console"] .dooms-pb-title,
+body[data-dooms-overhaul="console"] .dooms-pb-toggle-label,
+body[data-dooms-overhaul="console"] .dooms-portrait-card-name,
+body[data-dooms-overhaul="console"] .dooms-scene-label,
+body[data-dooms-overhaul="console"] .dooms-scene-value,
+body[data-dooms-overhaul="console"] .dooms-ip-label,
+body[data-dooms-overhaul="console"] .dooms-ip-value,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-title,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-label,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-value,
+body[data-dooms-overhaul="console"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="console"] .dooms-dc-card-title,
+body[data-dooms-overhaul="console"] .dooms-dc-action-btn,
+body[data-dooms-overhaul="console"] .dooms-bubble-author,
+body[data-dooms-overhaul="console"] .dooms-card-author,
+body[data-dooms-overhaul="console"] .dooms-thought-name {
+    font-family: var(--ov-mono);
+}
+body[data-dooms-overhaul="console"] .rpg-accordion-title,
+body[data-dooms-overhaul="console"] .rpg-subsection-label,
+body[data-dooms-overhaul="console"] .dooms-pb-title,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-title,
+body[data-dooms-overhaul="console"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="console"] .dooms-scene-label,
+body[data-dooms-overhaul="console"] .dooms-ip-label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74em;
+    font-weight: 500;
+}
+body[data-dooms-overhaul="console"] .dooms-bubble-author,
+body[data-dooms-overhaul="console"] .dooms-card-author {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+/* [BRACKETED] section labels */
+body[data-dooms-overhaul="console"] .rpg-accordion-title::before,
+body[data-dooms-overhaul="console"] .dooms-pb-title::before,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-title::before,
+body[data-dooms-overhaul="console"] .dooms-dc-inline-header::before {
+    content: '[';
+    color: var(--ov-muted);
+    margin-right: 2px;
+}
+body[data-dooms-overhaul="console"] .rpg-accordion-title::after,
+body[data-dooms-overhaul="console"] .dooms-pb-title::after,
+body[data-dooms-overhaul="console"] .dooms-ip-hud-title::after,
+body[data-dooms-overhaul="console"] .dooms-dc-inline-header::after {
+    content: ']';
+    color: var(--ov-muted);
+    margin-left: 2px;
+}
+body[data-dooms-overhaul="console"] .dooms-scene-header,
+body[data-dooms-overhaul="console"] .dooms-info-banner {
+    gap: 2px 20px;
+    padding: 8px 12px;
+}
+body[data-dooms-overhaul="console"] .dooms-scene-row i,
+body[data-dooms-overhaul="console"] .dooms-ip-item i {
+    display: none;
+}
+body[data-dooms-overhaul="console"] .dooms-scene-label,
+body[data-dooms-overhaul="console"] .dooms-ip-label {
+    min-width: 6em;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    font-size: 0.86em;
+}
+body[data-dooms-overhaul="console"] .dooms-scene-value,
+body[data-dooms-overhaul="console"] .dooms-ip-value {
+    font-size: 0.86em;
+}
+/* Transcript: speaker column fixed width, dashed group rules */
+body[data-dooms-overhaul="console"] .dooms-bubble {
+    border-left: none;
+    padding: 5px 12px;
+}
+body[data-dooms-overhaul="console"] .dooms-bubble.dooms-bubble-new-speaker {
+    border-top: 1px dashed var(--ov-line2);
+}
+body[data-dooms-overhaul="console"] .dooms-card {
+    border-left-width: 1px;
+}
+body[data-dooms-overhaul="console"] .dooms-bubble-avatar,
+body[data-dooms-overhaul="console"] .dooms-card-avatar,
+body[data-dooms-overhaul="console"] .dooms-bubble-avatar img,
+body[data-dooms-overhaul="console"] .dooms-card-avatar img,
+body[data-dooms-overhaul="console"] .dooms-portrait-card img {
+    border-radius: 0;
+}
+/* ID badges: status strip under the name */
+body[data-dooms-overhaul="console"] .dooms-portrait-card-name {
+    background: var(--ov-panel2);
+    border-top: 1px solid var(--ov-line2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.62em;
+    text-align: left;
+    padding-left: 7px;
+}
+body[data-dooms-overhaul="console"] .dooms-portrait-card.dooms-pb-speaking {
+    border-color: var(--ov-accent);
+    box-shadow: inset 0 0 0 1px var(--ov-accent);
+}
+body[data-dooms-overhaul="console"] .dooms-portrait-card.dooms-pb-speaking::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
+    background: #52d1c2;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+    left: auto;
+    bottom: auto;
+    opacity: 1;
+}
+/* Segment bar look for toggles */
+body[data-dooms-overhaul="console"] .rpg-toggle-switch input:checked + .rpg-toggle-slider {
+    border-color: #52d1c2;
+}
+body[data-dooms-overhaul="console"] .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
+    background: #52d1c2;
+}
+body[data-dooms-overhaul="console"] .dooms-dc-debug-badge {
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+}
+body[data-dooms-overhaul="console"] .dooms-dc-debug-tension { color: #52d1c2 !important; }
+body[data-dooms-overhaul="console"] #send_textarea {
+    font-family: var(--ov-mono);
+    font-size: 0.95em;
+}
+body[data-dooms-overhaul="console"] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger) {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   3 · LUMEN — frosted modern OS
+   Translucent panels over the user's background, large radii, pills, rings.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-overhaul="lumen"] {
+    --ov-ground: rgba(15, 20, 32, 0.55);
+    --ov-panel: rgba(26, 32, 48, 0.62);
+    --ov-panel2: rgba(255, 255, 255, 0.06);
+    --ov-text: #f3f5f9;
+    --ov-muted: #8b93a7;
+    --ov-accent: #8b7cf6;
+    --ov-accent2: #b4aaff;
+    --ov-on-accent: #ffffff;
+    --ov-line: rgba(255, 255, 255, 0.14);
+    --ov-line2: rgba(255, 255, 255, 0.08);
+    --ov-radius: 20px;
+    --ov-radius-sm: 12px;
+    --ov-display: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+    --ov-body: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+    --ov-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
+    --ov-chat-bg: rgba(15, 20, 32, 0.35);
+    --ov-presence: #5ad8a4;
+}
+body[data-dooms-overhaul="lumen"] .rpg-settings-popup-content,
+body[data-dooms-overhaul="lumen"] .rpg-lb-modal-content,
+body[data-dooms-overhaul="lumen"] .dooms-scene-header,
+body[data-dooms-overhaul="lumen"] .dooms-info-banner,
+body[data-dooms-overhaul="lumen"] .dooms-info-hud,
+body[data-dooms-overhaul="lumen"] .dooms-info-ticker-wrapper,
+body[data-dooms-overhaul="lumen"] .dooms-dc-inline,
+body[data-dooms-overhaul="lumen"] .dooms-pb-context-menu,
+body[data-dooms-overhaul="lumen"] #send_form,
+body[data-dooms-overhaul="lumen"] .dooms-portrait-bar {
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+body[data-dooms-overhaul="lumen"] .rpg-settings-popup-header h3,
+body[data-dooms-overhaul="lumen"] .rpg-accordion-title,
+body[data-dooms-overhaul="lumen"] .dooms-bubble-author,
+body[data-dooms-overhaul="lumen"] .dooms-card-author,
+body[data-dooms-overhaul="lumen"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="lumen"] .dooms-dc-card-title,
+body[data-dooms-overhaul="lumen"] .dooms-ip-hud-title {
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+body[data-dooms-overhaul="lumen"] .rpg-setting-label { font-weight: 600; }
+body[data-dooms-overhaul="lumen"] .dooms-scene-label,
+body[data-dooms-overhaul="lumen"] .dooms-ip-label,
+body[data-dooms-overhaul="lumen"] .dooms-pb-title,
+body[data-dooms-overhaul="lumen"] .rpg-subsection-label {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+/* Scene rows as chips */
+body[data-dooms-overhaul="lumen"] .dooms-scene-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-scene-row,
+body[data-dooms-overhaul="lumen"] .dooms-scene-events,
+body[data-dooms-overhaul="lumen"] .dooms-ip-item {
+    background: var(--ov-panel2);
+    border: 1px solid var(--ov-line2);
+    border-radius: 999px;
+    padding: 5px 12px;
+    gap: 7px;
+    line-height: 1.3;
+}
+body[data-dooms-overhaul="lumen"] .dooms-scene-events {
+    border-radius: 16px;
+    flex-basis: 100%;
+}
+body[data-dooms-overhaul="lumen"] .dooms-scene-label,
+body[data-dooms-overhaul="lumen"] .dooms-ip-label {
+    display: none;
+}
+body[data-dooms-overhaul="lumen"] .dooms-scene-row i,
+body[data-dooms-overhaul="lumen"] .dooms-ip-item i { color: var(--ov-accent2); }
+body[data-dooms-overhaul="lumen"] .dooms-ip-divider { display: none; }
+/* Bubbles: soft cards, ringed avatars, user tinted violet */
+body[data-dooms-overhaul="lumen"] .dooms-bubble {
+    border-left: none;
+    padding: 6px 12px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble.dooms-bubble-new-speaker { border-top: none; margin-top: 8px; }
+body[data-dooms-overhaul="lumen"] .dooms-bubble:hover { background: transparent; }
+/* The portrait floats at the left of the content; the soft card wraps the
+   text block only (flow-root keeps it beside the float, never under it). */
+body[data-dooms-overhaul="lumen"] .dooms-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 6px 12px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-text,
+body[data-dooms-overhaul="lumen"] .dooms-card-text {
+    display: flow-root;
+    background: var(--ov-panel2);
+    border: 1px solid var(--ov-line2);
+    border-radius: 18px;
+    border-top-left-radius: 6px;
+    padding: 10px 14px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-header,
+body[data-dooms-overhaul="lumen"] .dooms-card-header {
+    margin-bottom: 4px;
+    padding-left: 4px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-user .dooms-bubble-text,
+body[data-dooms-overhaul="lumen"] .dooms-card-user .dooms-card-text {
+    background: color-mix(in srgb, var(--ov-accent) 22%, transparent);
+    border-color: color-mix(in srgb, var(--ov-accent) 35%, transparent);
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-continuation .dooms-bubble-text,
+body[data-dooms-overhaul="lumen"] .dooms-card-continuation .dooms-card-text {
+    border-top-left-radius: 18px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-avatar,
+body[data-dooms-overhaul="lumen"] .dooms-card-avatar,
+body[data-dooms-overhaul="lumen"] .dooms-bubble-avatar img,
+body[data-dooms-overhaul="lumen"] .dooms-card-avatar img {
+    border-radius: 14px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-avatar,
+body[data-dooms-overhaul="lumen"] .dooms-card-avatar {
+    border: none;
+    box-shadow: 0 0 0 2px rgba(15, 20, 32, 0.9), 0 0 0 4px var(--ov-line);
+    margin-right: 14px;
+    margin-top: 2px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-bubble-tts { border-radius: 50%; }
+/* Portrait dock: rounded avatars with a presence ring on the speaker */
+body[data-dooms-overhaul="lumen"] .dooms-portrait-bar.dooms-pb-expanded {
+    padding: 12px 16px;
+}
+body[data-dooms-overhaul="lumen"] .dooms-portrait-card {
+    border-radius: 22px;
+    border: none;
+    background: var(--ov-panel2);
+    overflow: hidden;
+}
+body[data-dooms-overhaul="lumen"] .dooms-portrait-card:hover {
+    box-shadow: 0 0 0 2px rgba(15, 20, 32, 0.9), 0 0 0 4px var(--ov-line);
+}
+body[data-dooms-overhaul="lumen"] .dooms-portrait-card.dooms-pb-speaking {
+    box-shadow: 0 0 0 2px rgba(15, 20, 32, 0.9), 0 0 0 4px var(--ov-presence);
+    border: none;
+}
+body[data-dooms-overhaul="lumen"] .dooms-portrait-card.dooms-pb-speaking::before {
+    content: '';
+    position: absolute;
+    right: 8px;
+    bottom: 26px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ov-presence);
+    border: 3px solid rgba(15, 20, 32, 0.95);
+    box-shadow: none;
+    animation: none;
+    top: auto;
+    left: auto;
+    opacity: 1;
+}
+body[data-dooms-overhaul="lumen"] .dooms-portrait-card-name {
+    background: linear-gradient(to top, rgba(15, 20, 32, 0.9), rgba(15, 20, 32, 0));
+    padding: 16px 6px 6px;
+    font-weight: 600;
+    font-size: 0.72em;
+}
+body[data-dooms-overhaul="lumen"] .dooms-pb-count { border-radius: 999px; }
+/* Pills */
+body[data-dooms-overhaul="lumen"] .rpg-btn,
+body[data-dooms-overhaul="lumen"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="lumen"] .rpg-accordion-mini-btn,
+body[data-dooms-overhaul="lumen"] .dooms-dc-action-btn,
+body[data-dooms-overhaul="lumen"] .rpg-accordion-badge,
+body[data-dooms-overhaul="lumen"] .dooms-dc-debug-badge,
+body[data-dooms-overhaul="lumen"] .dooms-dc-trap-badge,
+body[data-dooms-overhaul="lumen"] .rpg-popup-close {
+    border-radius: 999px;
+    font-weight: 600;
+}
+body[data-dooms-overhaul="lumen"] .rpg-btn,
+body[data-dooms-overhaul="lumen"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="lumen"] .dooms-dc-action-btn {
+    background: var(--ov-panel2);
+}
+body[data-dooms-overhaul="lumen"] .rpg-toggle-switch { width: 38px; height: 22px; }
+body[data-dooms-overhaul="lumen"] .rpg-toggle-slider {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    border: none;
+}
+body[data-dooms-overhaul="lumen"] .rpg-toggle-slider::before {
+    border-radius: 50%;
+    background: #fff;
+    width: 16px;
+    height: 16px;
+    top: 3px;
+    left: 3px;
+}
+body[data-dooms-overhaul="lumen"] .rpg-toggle-switch input:checked + .rpg-toggle-slider {
+    background: var(--ov-presence);
+    border: none;
+}
+body[data-dooms-overhaul="lumen"] .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
+    background: #fff;
+    left: 19px;
+}
+body[data-dooms-overhaul="lumen"] .rpg-range-slider { height: 4px; border-radius: 999px; }
+body[data-dooms-overhaul="lumen"] .rpg-range-slider::-webkit-slider-thumb {
+    border-radius: 50%;
+    background: #fff;
+    width: 16px;
+    height: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+body[data-dooms-overhaul="lumen"] .rpg-range-slider::-moz-range-thumb {
+    border-radius: 50%;
+    background: #fff;
+    width: 16px;
+    height: 16px;
+}
+body[data-dooms-overhaul="lumen"] .rpg-accordion-section { border-radius: 16px; }
+body[data-dooms-overhaul="lumen"] .rpg-accordion-header { border-radius: 16px; }
+body[data-dooms-overhaul="lumen"] .rpg-accordion-open > .rpg-accordion-header {
+    border-radius: 16px 16px 0 0;
+}
+body[data-dooms-overhaul="lumen"] .dooms-inline-thought { border-radius: 14px; border-left-width: 1px; }
+body[data-dooms-overhaul="lumen"] .dooms-dc-inline-header { border-bottom: none; }
+body[data-dooms-overhaul="lumen"] .dooms-dc-card { border-radius: 16px; }
+body[data-dooms-overhaul="lumen"] #send_form { border-radius: 24px; }
+body[data-dooms-overhaul="lumen"] .dooms-fab-btn { border-radius: 50%; background: var(--ov-accent); color: #fff; border: none; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   4 · ARCADE — visual-novel HUD
+   Chamfered panels, diagonal stripes, condensed display type, nameplates.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-overhaul="arcade"] {
+    --ov-ground: #0a0a0c;
+    --ov-panel: #15151a;
+    --ov-panel2: #0f0f12;
+    --ov-text: #f4f4f4;
+    --ov-muted: #8a8a94;
+    --ov-accent: #ff2e4d;
+    --ov-accent2: #ffd21f;
+    --ov-on-accent: #ffffff;
+    --ov-line: #2a2a32;
+    --ov-line2: #1b1b21;
+    --ov-radius: 0px;
+    --ov-radius-sm: 0px;
+    --ov-border-w: 2px;
+    --ov-display: 'Bebas Neue', 'Oswald', 'Impact', 'Arial Narrow', sans-serif;
+    --ov-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    --ov-shadow: none;
+    --ov-chat-bg: rgba(10, 10, 12, 0.6);
+    --ov-chamfer: 14px;
+}
+body[data-dooms-overhaul="arcade"] .rpg-settings-popup-header h3,
+body[data-dooms-overhaul="arcade"] .rpg-accordion-title,
+body[data-dooms-overhaul="arcade"] .rpg-subsection-label,
+body[data-dooms-overhaul="arcade"] .dooms-pb-title,
+body[data-dooms-overhaul="arcade"] .dooms-pb-toggle-label,
+body[data-dooms-overhaul="arcade"] .dooms-ip-hud-title,
+body[data-dooms-overhaul="arcade"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="arcade"] .dooms-dc-card-title,
+body[data-dooms-overhaul="arcade"] .dooms-bubble-author,
+body[data-dooms-overhaul="arcade"] .dooms-card-author,
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card-name,
+body[data-dooms-overhaul="arcade"] .rpg-btn,
+body[data-dooms-overhaul="arcade"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="arcade"] .dooms-dc-action-btn,
+body[data-dooms-overhaul="arcade"] .dooms-dc-debug-badge,
+body[data-dooms-overhaul="arcade"] .dooms-dc-trap-badge,
+body[data-dooms-overhaul="arcade"] .dooms-scene-label,
+body[data-dooms-overhaul="arcade"] .dooms-ip-label {
+    font-family: var(--ov-display);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 400;
+}
+body[data-dooms-overhaul="arcade"] .rpg-settings-popup-header h3 { font-size: 1.5em; }
+body[data-dooms-overhaul="arcade"] .rpg-accordion-title { font-size: 1.15em; }
+body[data-dooms-overhaul="arcade"] .dooms-bubble-author,
+body[data-dooms-overhaul="arcade"] .dooms-card-author { font-size: 1.2em; }
+body[data-dooms-overhaul="arcade"] .rpg-setting-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    font-size: 0.86em;
+}
+/* Stripes on the panel grounds */
+body[data-dooms-overhaul="arcade"] .dooms-portrait-bar,
+body[data-dooms-overhaul="arcade"] .rpg-settings-popup-body,
+body[data-dooms-overhaul="arcade"] .dooms-dc-inline {
+    background-image: repeating-linear-gradient(135deg, #131317 0 10px, #0f0f12 10px 20px);
+}
+body[data-dooms-overhaul="arcade"] .rpg-settings-popup-body { background-color: transparent; }
+body[data-dooms-overhaul="arcade"] .rpg-accordion-section { background: var(--ov-panel); }
+/* Chamfers */
+/* (Not on the modals or the composer: fly-outs and menus overflow those.) */
+body[data-dooms-overhaul="arcade"] .dooms-dc-inline,
+body[data-dooms-overhaul="arcade"] .dooms-dc-card,
+body[data-dooms-overhaul="arcade"] .dooms-info-hud {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ov-chamfer)), calc(100% - var(--ov-chamfer)) 100%, 0 100%);
+}
+body[data-dooms-overhaul="arcade"] .rpg-settings-popup-content,
+body[data-dooms-overhaul="arcade"] .rpg-lb-modal-content,
+body[data-dooms-overhaul="arcade"] #send_form {
+    border-bottom-right-radius: var(--ov-chamfer);
+}
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, var(--ov-chamfer) 100%, 0 calc(100% - var(--ov-chamfer)));
+}
+body[data-dooms-overhaul="arcade"] .rpg-btn,
+body[data-dooms-overhaul="arcade"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="arcade"] .dooms-dc-action-btn {
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+    padding-left: 18px;
+    padding-right: 18px;
+    font-size: 1.05em;
+}
+/* Status ribbon: white strip, red lead cell, angled end */
+body[data-dooms-overhaul="arcade"] .dooms-scene-header,
+body[data-dooms-overhaul="arcade"] .dooms-info-banner {
+    background: #f4f4f4;
+    color: #0a0a0c;
+    border: none;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
+    padding: 0 30px 0 0;
+    gap: 0;
+    margin: 10px 0 16px 0;
+}
+body[data-dooms-overhaul="arcade"] .dooms-scene-header {
+    display: flex;
+    flex-wrap: wrap;
+}
+body[data-dooms-overhaul="arcade"] .dooms-scene-row,
+body[data-dooms-overhaul="arcade"] .dooms-scene-events,
+body[data-dooms-overhaul="arcade"] .dooms-ip-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 6px 16px;
+    border-right: 2px solid #0a0a0c;
+    color: #0a0a0c;
+    line-height: 1.1;
+}
+body[data-dooms-overhaul="arcade"] .dooms-scene-row i,
+body[data-dooms-overhaul="arcade"] .dooms-scene-events i,
+body[data-dooms-overhaul="arcade"] .dooms-ip-item i { display: none; }
+body[data-dooms-overhaul="arcade"] .dooms-scene-label,
+body[data-dooms-overhaul="arcade"] .dooms-ip-label {
+    font-family: var(--ov-body);
+    font-size: 0.62em;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: #6a6a70;
+}
+body[data-dooms-overhaul="arcade"] .dooms-scene-value,
+body[data-dooms-overhaul="arcade"] .dooms-ip-value {
+    font-family: var(--ov-display);
+    font-size: 1.35em;
+    letter-spacing: 0.04em;
+    color: #0a0a0c;
+}
+body[data-dooms-overhaul="arcade"] .dooms-ip-quest .dooms-ip-value,
+body[data-dooms-overhaul="arcade"] .dooms-scene-quest .dooms-scene-value { color: var(--ov-accent); }
+body[data-dooms-overhaul="arcade"] .dooms-scene-events { flex-basis: 100%; border-right: none; border-top: 2px solid #0a0a0c; }
+body[data-dooms-overhaul="arcade"] .dooms-scene-events .dooms-scene-value { font-family: var(--ov-body); font-size: 0.9em; font-weight: 500; }
+body[data-dooms-overhaul="arcade"] .dooms-ip-divider { display: none; }
+body[data-dooms-overhaul="arcade"] .dooms-scene-char-badge,
+body[data-dooms-overhaul="arcade"] .dooms-ip-char { background: #0a0a0c; color: #f4f4f4; border: none; }
+/* Doom badge on the ribbon: red block, big numeral */
+body[data-dooms-overhaul="arcade"] .dooms-scene-header .dooms-dc-debug-badge,
+body[data-dooms-overhaul="arcade"] .dooms-info-banner .dooms-dc-debug-badge {
+    background: var(--ov-accent);
+    color: #fff;
+    border: none;
+    font-size: 1em;
+    padding: 6px 14px;
+    align-self: stretch;
+}
+body[data-dooms-overhaul="arcade"] .dooms-dc-debug-badge > i { color: #fff; }
+/* VN textboxes: skewed nameplate filled with the dialogue colour */
+body[data-dooms-overhaul="arcade"] .dooms-bubble {
+    border-left: none;
+    padding: 6px 12px;
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble.dooms-bubble-new-speaker { border-top: none; margin-top: 12px; }
+body[data-dooms-overhaul="arcade"] .dooms-bubble:hover { background: transparent; }
+body[data-dooms-overhaul="arcade"] .dooms-bubble-header,
+body[data-dooms-overhaul="arcade"] .dooms-card-header {
+    margin-bottom: 0;
+    position: relative;
+    z-index: 1;
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble-author,
+body[data-dooms-overhaul="arcade"] .dooms-card-author {
+    display: inline-block;
+    background: currentColor;
+    padding: 2px 18px 2px 12px;
+    margin-left: 10px;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+    transform: skewX(-8deg);
+    transform-origin: left bottom;
+    line-height: 1.2;
+}
+/* The plate paints with the author's inline dialogue colour (currentColor);
+   the glyphs read black on it without touching `color`, which the fill needs. */
+body[data-dooms-overhaul="arcade"] .dooms-bubble-author,
+body[data-dooms-overhaul="arcade"] .dooms-card-author {
+    -webkit-text-fill-color: #0a0a0c;
+}
+/* The portrait floats at the left; flow-root keeps the textbox beside it. */
+body[data-dooms-overhaul="arcade"] .dooms-bubble-text,
+body[data-dooms-overhaul="arcade"] .dooms-card-text {
+    display: flow-root;
+    background: var(--ov-panel);
+    border: 2px solid var(--ov-line);
+    border-left: 6px solid currentColor;
+    padding: 10px 16px;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+    font-weight: 500;
+    font-size: 0.98em;
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble-text q,
+body[data-dooms-overhaul="arcade"] .dooms-card-text q { font-weight: 600; }
+body[data-dooms-overhaul="arcade"] .dooms-card {
+    background: transparent;
+    border: none;
+    clip-path: none;
+    padding: 6px 12px;
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble-narrator .dooms-bubble-text,
+body[data-dooms-overhaul="arcade"] .dooms-card-narrator .dooms-card-text {
+    border-left-color: var(--ov-line);
+    font-style: italic;
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble-user .dooms-bubble-text,
+body[data-dooms-overhaul="arcade"] .dooms-card-user .dooms-card-text {
+    border-left: 2px solid var(--ov-line);
+    border-right: 6px solid var(--ov-accent2);
+}
+body[data-dooms-overhaul="arcade"] .dooms-bubble-author-user { color: var(--ov-accent2); }
+/* Cutouts with skewed name tags */
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card {
+    border: none;
+    background: var(--ov-line2);
+}
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card.dooms-pb-speaking {
+    outline: 3px solid var(--ov-accent2);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card-name {
+    background: #f4f4f4;
+    color: #0a0a0c;
+    left: -4px;
+    right: auto;
+    bottom: 20px;
+    width: max-content;
+    max-width: calc(100% - 8px);
+    padding: 3px 12px;
+    line-height: 1.3;
+    transform: skewX(-8deg);
+    font-size: 0.72em;
+    letter-spacing: 0.1em;
+}
+body[data-dooms-overhaul="arcade"] .dooms-portrait-card.dooms-pb-speaking .dooms-portrait-card-name {
+    background: var(--ov-accent2);
+}
+body[data-dooms-overhaul="arcade"] .dooms-pb-title::before {
+    content: '';
+    width: 22px;
+    height: 3px;
+    background: var(--ov-accent2);
+}
+/* Skewed tabs for accordion headers, chunky ON/OFF toggles */
+body[data-dooms-overhaul="arcade"] .rpg-accordion-header {
+    background: var(--ov-panel2);
+    border-left: 6px solid var(--ov-line);
+}
+body[data-dooms-overhaul="arcade"] .rpg-accordion-open > .rpg-accordion-header {
+    border-left-color: var(--ov-accent2);
+}
+body[data-dooms-overhaul="arcade"] .rpg-toggle-switch { width: 44px; height: 20px; }
+body[data-dooms-overhaul="arcade"] .rpg-toggle-slider {
+    transform: skewX(-10deg);
+    border: 2px solid var(--ov-line);
+    background: var(--ov-line2);
+}
+body[data-dooms-overhaul="arcade"] .rpg-toggle-slider::before {
+    width: 18px;
+    height: 12px;
+    top: 2px;
+    left: 2px;
+    background: #3a3a44;
+}
+body[data-dooms-overhaul="arcade"] .rpg-toggle-switch input:checked + .rpg-toggle-slider {
+    border-color: var(--ov-accent2);
+    background: var(--ov-line2);
+}
+body[data-dooms-overhaul="arcade"] .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
+    background: var(--ov-accent2);
+    left: 20px;
+}
+body[data-dooms-overhaul="arcade"] .rpg-range-slider { height: 6px; border: 2px solid var(--ov-line); background: var(--ov-line2); }
+body[data-dooms-overhaul="arcade"] .rpg-range-slider::-webkit-slider-thumb { background: var(--ov-accent2); width: 12px; height: 20px; }
+body[data-dooms-overhaul="arcade"] .rpg-range-slider::-moz-range-thumb { background: var(--ov-accent2); width: 12px; height: 20px; }
+body[data-dooms-overhaul="arcade"] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger) { background: var(--ov-accent); border-color: var(--ov-accent); }
+body[data-dooms-overhaul="arcade"] .dooms-dc-inline-header { font-size: 1.6em; color: var(--ov-accent); border-bottom-color: var(--ov-line); }
+body[data-dooms-overhaul="arcade"] .dooms-dc-card-title { font-size: 1.3em; color: var(--ov-text); }
+body[data-dooms-overhaul="arcade"] .dooms-dc-card-selected,
+body[data-dooms-overhaul="arcade"] .dooms-dc-card-knife.dooms-dc-card-selected { box-shadow: inset 0 0 0 3px var(--ov-accent2); border-color: var(--ov-accent2); }
+body[data-dooms-overhaul="arcade"] .dooms-fab-btn { background: var(--ov-accent); color: #fff; border: none; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+body[data-dooms-overhaul="arcade"] #send_textarea::placeholder { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; font-size: 0.85em; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   5 · INKED — graphic-novel paper
+   The light one. Thick ink outlines, hard offset shadows, halftone, tails.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-overhaul="inked"] {
+    --ov-ground: #f4efe6;
+    --ov-panel: #ffffff;
+    --ov-panel2: #ece5d6;
+    --ov-text: #15130f;
+    --ov-muted: #5a5245;
+    --ov-accent: #1d3fbf;
+    --ov-accent2: #c0392b;
+    --ov-on-accent: #ffffff;
+    --ov-line: #15130f;
+    --ov-line2: #c9c0ad;
+    --ov-radius: 0px;
+    --ov-radius-sm: 0px;
+    --ov-border-w: 2.5px;
+    --ov-display: 'Archivo Black', 'Arial Black', 'Helvetica Neue', sans-serif;
+    --ov-body: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+    --ov-shadow: 5px 5px 0 #15130f;
+    --ov-chat-bg: rgba(244, 239, 230, 0.92);
+    --ov-caption: #ffe37a;
+}
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content,
+body[data-dooms-overhaul="inked"] .rpg-lb-modal-content {
+    background: var(--ov-panel2);
+}
+/* The windows were drawn for dark grounds, with plenty of hard-coded light
+   greys. On paper every piece of text reads ink unless a rule below says
+   otherwise; the popup ids give this enough weight to beat the modal sheet's
+   own id-prefixed rules. Buttons keep their own colours. */
+body[data-dooms-overhaul="inked"] :is(#rpg-settings-popup, #character-workshop-popup, #character-roster-popup, #rpg-tracker-editor-popup, #rpg-prompts-editor-popup, #rpg-character-data-editor-popup, #rpg-character-sheet-popup, .rpg-lb-modal) :is(span, label, p, small, div, li, td, th, h1, h2, h3, h4, h5, h6, summary, legend, i):not(.rpg-btn *):not(button *):not(.fa-solid):not(.fa-regular) {
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content .rpg-setting-hint,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content .rpg-note-text,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content small {
+    color: var(--ov-muted);
+}
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content .rpg-accordion-icon,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content .rpg-subsection-label {
+    color: var(--ov-accent);
+}
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-header,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-footer,
+body[data-dooms-overhaul="inked"] .rpg-lb-modal-header { background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-header h3 { color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-header h3,
+body[data-dooms-overhaul="inked"] .rpg-accordion-title,
+body[data-dooms-overhaul="inked"] .rpg-subsection-label,
+body[data-dooms-overhaul="inked"] .dooms-pb-title,
+body[data-dooms-overhaul="inked"] .dooms-ip-hud-title,
+body[data-dooms-overhaul="inked"] .dooms-dc-inline-header,
+body[data-dooms-overhaul="inked"] .dooms-dc-card-title,
+body[data-dooms-overhaul="inked"] .dooms-bubble-author,
+body[data-dooms-overhaul="inked"] .dooms-card-author,
+body[data-dooms-overhaul="inked"] .dooms-portrait-card-name,
+body[data-dooms-overhaul="inked"] .rpg-btn,
+body[data-dooms-overhaul="inked"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="inked"] .dooms-dc-action-btn,
+body[data-dooms-overhaul="inked"] .dooms-scene-label,
+body[data-dooms-overhaul="inked"] .dooms-ip-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.78em;
+}
+body[data-dooms-overhaul="inked"] .rpg-setting-label { font-weight: 700; }
+body[data-dooms-overhaul="inked"] .rpg-accordion-section { background: var(--ov-panel); border: var(--ov-border-w) solid var(--ov-line); box-shadow: 3px 3px 0 var(--ov-line); margin-bottom: 10px; }
+body[data-dooms-overhaul="inked"] .rpg-accordion-header { background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .rpg-accordion-header:hover { background: var(--ov-caption); }
+body[data-dooms-overhaul="inked"] .rpg-accordion-open > .rpg-accordion-header { background: var(--ov-caption); border-bottom: var(--ov-border-w) solid var(--ov-line); }
+body[data-dooms-overhaul="inked"] .rpg-setting-row { border-bottom: 2px dotted var(--ov-line2); }
+body[data-dooms-overhaul="inked"] .rpg-accordion-select,
+body[data-dooms-overhaul="inked"] .rpg-accordion-input,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content select,
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content input[type="text"],
+body[data-dooms-overhaul="inked"] .rpg-settings-popup-content textarea {
+    background: var(--ov-panel);
+    box-shadow: 3px 3px 0 var(--ov-line);
+}
+body[data-dooms-overhaul="inked"] .rpg-btn,
+body[data-dooms-overhaul="inked"] .rpg-accordion-action-btn,
+body[data-dooms-overhaul="inked"] .dooms-dc-action-btn {
+    background: var(--ov-panel);
+    box-shadow: 3px 3px 0 var(--ov-line);
+}
+body[data-dooms-overhaul="inked"] .rpg-btn:hover,
+body[data-dooms-overhaul="inked"] .rpg-accordion-action-btn:hover,
+body[data-dooms-overhaul="inked"] .dooms-dc-action-btn:hover {
+    background: var(--ov-caption);
+    color: var(--ov-text);
+    border-color: var(--ov-line);
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0 var(--ov-line);
+}
+body[data-dooms-overhaul="inked"] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger) { background: var(--ov-accent); color: #fff; border-color: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .rpg-toggle-switch { width: 42px; height: 22px; }
+body[data-dooms-overhaul="inked"] .rpg-toggle-slider { border-radius: 999px; border: var(--ov-border-w) solid var(--ov-line); background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .rpg-toggle-slider::before { border-radius: 50%; background: var(--ov-line); width: 12px; height: 12px; top: 3px; left: 3px; }
+body[data-dooms-overhaul="inked"] .rpg-toggle-switch input:checked + .rpg-toggle-slider { background: var(--ov-accent); border-color: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .rpg-toggle-switch input:checked + .rpg-toggle-slider::before { background: #fff; left: 21px; }
+body[data-dooms-overhaul="inked"] .rpg-range-slider { height: 4px; background: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .rpg-range-slider::-webkit-slider-thumb { border-radius: 50%; background: #fff; border: 2.5px solid var(--ov-line); width: 16px; height: 16px; }
+body[data-dooms-overhaul="inked"] .rpg-range-slider::-moz-range-thumb { border-radius: 50%; background: #fff; border: 2.5px solid var(--ov-line); width: 16px; height: 16px; }
+body[data-dooms-overhaul="inked"] .rpg-accordion-badge { background: var(--ov-caption); color: var(--ov-text); border-color: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .rpg-setting-hint { color: var(--ov-muted); }
+/* Caption boxes: "Meanwhile, at..." */
+body[data-dooms-overhaul="inked"] .dooms-scene-header,
+body[data-dooms-overhaul="inked"] .dooms-info-banner {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 6px 10px 6px;
+}
+body[data-dooms-overhaul="inked"] .dooms-scene-row,
+body[data-dooms-overhaul="inked"] .dooms-scene-events,
+body[data-dooms-overhaul="inked"] .dooms-ip-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    background: var(--ov-caption);
+    border: var(--ov-border-w) solid var(--ov-line);
+    box-shadow: 4px 4px 0 var(--ov-line);
+    padding: 6px 12px;
+    color: var(--ov-text);
+    line-height: 1.25;
+}
+body[data-dooms-overhaul="inked"] .dooms-scene-row:nth-of-type(even),
+body[data-dooms-overhaul="inked"] .dooms-ip-item:nth-of-type(even) { background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .dooms-scene-events { flex-basis: 100%; background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .dooms-scene-row i,
+body[data-dooms-overhaul="inked"] .dooms-scene-events i,
+body[data-dooms-overhaul="inked"] .dooms-ip-item i { display: none; }
+body[data-dooms-overhaul="inked"] .dooms-scene-label,
+body[data-dooms-overhaul="inked"] .dooms-ip-label {
+    font-family: var(--ov-body);
+    font-weight: 800;
+    font-size: 0.62em;
+    letter-spacing: 0.14em;
+    color: var(--ov-muted);
+}
+body[data-dooms-overhaul="inked"] .dooms-scene-value,
+body[data-dooms-overhaul="inked"] .dooms-ip-value {
+    font-weight: 800;
+    font-size: 0.95em;
+    color: var(--ov-text);
+}
+body[data-dooms-overhaul="inked"] .dooms-ip-quest .dooms-ip-value,
+body[data-dooms-overhaul="inked"] .dooms-scene-quest .dooms-scene-value { color: var(--ov-accent); }
+body[data-dooms-overhaul="inked"] .dooms-ip-divider { display: none; }
+body[data-dooms-overhaul="inked"] .dooms-scene-char-badge,
+body[data-dooms-overhaul="inked"] .dooms-ip-char { background: var(--ov-panel); border: 2px solid var(--ov-line); color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .dooms-info-hud { background: var(--ov-panel); color: var(--ov-text); box-shadow: 5px 5px 0 var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-info-ticker-wrapper { background: var(--ov-caption); color: var(--ov-text); }
+/* Speech bubbles with ink tails */
+body[data-dooms-overhaul="inked"] .dooms-bubble {
+    border-left: none;
+    padding: 8px 12px 8px 12px;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble.dooms-bubble-new-speaker { border-top: none; margin-top: 14px; }
+body[data-dooms-overhaul="inked"] .dooms-bubble:hover { background: transparent; }
+/* The portrait floats at the left; the speech bubble is the text block,
+   kept beside the float with flow-root, its tail pointing at the portrait. */
+body[data-dooms-overhaul="inked"] .dooms-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 8px 12px;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-header,
+body[data-dooms-overhaul="inked"] .dooms-card-header {
+    margin-bottom: 4px;
+    padding-left: 14px;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-text,
+body[data-dooms-overhaul="inked"] .dooms-card-text {
+    display: flow-root;
+    position: relative;
+    background: var(--ov-panel);
+    border: var(--ov-border-w) solid var(--ov-line);
+    border-radius: 22px;
+    padding: 10px 16px;
+    box-shadow: 4px 4px 0 var(--ov-line);
+    color: var(--ov-text) !important;
+    font-weight: 500;
+    margin-left: 10px;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-new-speaker .dooms-bubble-text::before,
+body[data-dooms-overhaul="inked"] .dooms-card-new-speaker .dooms-card-text::before {
+    content: '';
+    position: absolute;
+    left: -19px;
+    top: 14px;
+    border-style: solid;
+    border-width: 10px 18px 10px 0;
+    border-color: transparent var(--ov-line) transparent transparent;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-new-speaker .dooms-bubble-text::after,
+body[data-dooms-overhaul="inked"] .dooms-card-new-speaker .dooms-card-text::after {
+    content: '';
+    position: absolute;
+    left: -13px;
+    top: 17px;
+    border-style: solid;
+    border-width: 7px 14px 7px 0;
+    border-color: transparent var(--ov-panel) transparent transparent;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-text q,
+body[data-dooms-overhaul="inked"] .dooms-card-text q { color: inherit; font-weight: 700; }
+body[data-dooms-overhaul="inked"] .dooms-bubble-narrator .dooms-bubble-text,
+body[data-dooms-overhaul="inked"] .dooms-card-narrator .dooms-card-text { color: var(--ov-muted) !important; font-style: italic; }
+body[data-dooms-overhaul="inked"] .dooms-bubble-user .dooms-bubble-text,
+body[data-dooms-overhaul="inked"] .dooms-card-user .dooms-card-text {
+    background: var(--ov-text);
+    color: #fff !important;
+    box-shadow: 4px 4px 0 var(--ov-accent);
+}
+/* The name sits on the chat background, which may be dark: use the accent */
+body[data-dooms-overhaul="inked"] .dooms-bubble-user .dooms-bubble-author,
+body[data-dooms-overhaul="inked"] .dooms-card-user .dooms-card-author { color: var(--ov-accent) !important; }
+body[data-dooms-overhaul="inked"] .dooms-bubble-user .dooms-bubble-text::after,
+body[data-dooms-overhaul="inked"] .dooms-card-user .dooms-card-text::after { border-right-color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .dooms-bubble-avatar,
+body[data-dooms-overhaul="inked"] .dooms-card-avatar,
+body[data-dooms-overhaul="inked"] .dooms-bubble-avatar img,
+body[data-dooms-overhaul="inked"] .dooms-card-avatar img { border-radius: 10px; }
+body[data-dooms-overhaul="inked"] .dooms-bubble-avatar,
+body[data-dooms-overhaul="inked"] .dooms-card-avatar {
+    border: 2.5px solid var(--ov-line);
+    box-shadow: 3px 3px 0 var(--ov-line);
+    background: var(--ov-panel);
+    margin-top: 4px;
+    margin-right: 16px;
+}
+body[data-dooms-overhaul="inked"] .dooms-bubble-tts { background: var(--ov-panel); border: 2px solid var(--ov-line); color: var(--ov-text); border-radius: 50%; }
+/* Comic panels: halftone screen, blue frame on the speaker */
+body[data-dooms-overhaul="inked"] .dooms-portrait-bar.dooms-pb-expanded { padding: 12px 14px 14px; }
+body[data-dooms-overhaul="inked"] .dooms-portrait-card {
+    border: var(--ov-border-w) solid var(--ov-line);
+    box-shadow: 4px 4px 0 var(--ov-line);
+    background: var(--ov-panel);
+    overflow: hidden;
+}
+body[data-dooms-overhaul="inked"] .dooms-portrait-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(#15130f 1px, transparent 1.2px);
+    background-size: 6px 6px;
+    opacity: 0.1;
+    pointer-events: none;
+}
+body[data-dooms-overhaul="inked"] .dooms-portrait-card:hover { transform: translate(1px, 1px); box-shadow: 3px 3px 0 var(--ov-line); border-color: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-portrait-card.dooms-pb-speaking { border-color: var(--ov-accent); box-shadow: 4px 4px 0 var(--ov-accent); }
+body[data-dooms-overhaul="inked"] .dooms-portrait-card.dooms-pb-absent { filter: grayscale(100%) contrast(1.1); }
+body[data-dooms-overhaul="inked"] .dooms-portrait-card-name {
+    background: var(--ov-line);
+    color: #fff;
+    padding: 3px 6px;
+    font-size: 0.66em;
+    letter-spacing: 0.08em;
+}
+body[data-dooms-overhaul="inked"] .dooms-portrait-card.dooms-pb-speaking .dooms-portrait-card-name { background: var(--ov-accent); }
+body[data-dooms-overhaul="inked"] .dooms-pb-toggle { border-top: var(--ov-border-w) solid var(--ov-line); background: var(--ov-ground); }
+body[data-dooms-overhaul="inked"] .dooms-pb-toggle-dot { background: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-pb-title { color: var(--ov-muted); }
+body[data-dooms-overhaul="inked"] .dooms-pb-context-menu { box-shadow: 5px 5px 0 var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-pb-ctx-item:hover { background: var(--ov-caption); color: var(--ov-text); }
+/* SFX Doom Counter */
+body[data-dooms-overhaul="inked"] .dooms-dc-debug-badge {
+    background: var(--ov-accent2);
+    color: #fff;
+    border: var(--ov-border-w) solid var(--ov-line);
+    box-shadow: 3px 3px 0 var(--ov-line);
+    font-family: var(--ov-display);
+    font-size: 0.74em;
+}
+body[data-dooms-overhaul="inked"] .dooms-dc-debug-badge > i,
+body[data-dooms-overhaul="inked"] .dooms-dc-debug-tension { color: #fff !important; }
+body[data-dooms-overhaul="inked"] .dooms-dc-trap-badge { background: var(--ov-caption); color: var(--ov-text); box-shadow: 3px 3px 0 var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-dc-inline { background: var(--ov-panel); color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .dooms-dc-inline-header { color: var(--ov-accent2); border-bottom: var(--ov-border-w) solid var(--ov-line); font-size: 1.2em; }
+body[data-dooms-overhaul="inked"] .dooms-dc-card { background: var(--ov-panel); border: var(--ov-border-w) solid var(--ov-line); box-shadow: 4px 4px 0 var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-dc-card:hover { background: var(--ov-caption); transform: translate(1px, 1px); box-shadow: 3px 3px 0 var(--ov-line); border-color: var(--ov-line); }
+body[data-dooms-overhaul="inked"] .dooms-dc-card-selected,
+body[data-dooms-overhaul="inked"] .dooms-dc-card-knife.dooms-dc-card-selected { background: var(--ov-caption); border-color: var(--ov-accent); box-shadow: 4px 4px 0 var(--ov-accent); }
+body[data-dooms-overhaul="inked"] .dooms-dc-card-title { color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .dooms-inline-thought { background: var(--ov-panel); color: var(--ov-text); border: var(--ov-border-w) dashed var(--ov-line); border-radius: 14px; }
+body[data-dooms-overhaul="inked"] .dooms-inline-thought[open] { background: var(--ov-panel); }
+body[data-dooms-overhaul="inked"] .dooms-inline-thought-summary { color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] .dooms-fab-btn { background: var(--ov-panel); color: var(--ov-text); box-shadow: 3px 3px 0 var(--ov-line); }
+body[data-dooms-overhaul="inked"] #send_form { background: var(--ov-panel); color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] #send_textarea { color: var(--ov-text); }
+body[data-dooms-overhaul="inked"] #send_textarea::placeholder { font-style: italic; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Reduced motion / performance mode: nothing here animates, but the blur in
+   Lumen is the one expensive effect. Performance mode already strips
+   backdrop-filter globally; honour the OS preference too.
+   ──────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-transparency: reduce) {
+    body[data-dooms-overhaul="lumen"] {
+        --ov-ground: #0f1420;
+        --ov-panel: #1a2030;
+    }
+}
