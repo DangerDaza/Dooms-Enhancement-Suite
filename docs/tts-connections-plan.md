@@ -1,6 +1,10 @@
 # DES Voices — more connection options (plan)
 
-Status: **decided, not built** (decisions in §7). Branch: `TTS-Trial`. Builds on
+Status: **C1 + C2 built** on `TTS-Trial` (connection layer, "How DES voices work",
+"nothing connected" handling, OpenRouter for standard Gemini voices with the
+browser → SillyTavern-server fallback). Not built yet: Kokoro in the browser (C3), local
+server (C4), Library tab / Connections list redesign (C5), SillyTavern bridge (C6),
+ElevenLabs (C7), per-request cloning (C8). Decisions in §7. Branch: `TTS-Trial`. Builds on
 `docs/google-tts-voices-plan.md` (the Google-only design that is built).
 Researched 2026-10-06; prices and limits change, so re-check them before release.
 

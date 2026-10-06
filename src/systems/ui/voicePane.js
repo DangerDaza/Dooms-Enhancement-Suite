@@ -29,6 +29,8 @@ import { extensionSettings } from '../../core/state.js';
 import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId } from '../voices/voiceCatalog.js';
 import { getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
+import { secret_state } from '../../../../../../secrets.js';
+import { anyConnected } from '../voices/connections.js';
 
 /** Per-character test lines typed this session (not saved). */
 const testLines = new Map();
@@ -99,6 +101,9 @@ function statusLines(ctx) {
         lines.push(`⚠️ ${who} shares a dialogue colour with ${ctx.sharesColorWith.map(escapeHtml).join(', ')}, so some lines may be read in the wrong voice. Give them different colours in Appearance.`);
     }
     const v = extensionSettings.voices || {};
+    if (!anyConnected(v, secret_state)) {
+        lines.unshift('<strong>No voice service connected.</strong> Settings → Voices explains the options (OpenRouter, Google). Until then nothing plays.');
+    }
     if (!v.enabled) {
         lines.push('DES voices are off. Turn them on in <strong>Settings → Voices</strong> to hear these voices in chat. Previews work either way.');
     } else if (!extensionSettings.enableDialogueColoring) {

@@ -40,6 +40,9 @@ import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
 import { styleForSegment } from './delivery.js';
+import { providerForRef, isProviderConnected, anyProviderConnected } from './providers.js';
+import { PROVIDER_LABELS } from './connections.js';
+import { getOpenRouterState } from './openrouter.js';
 
 
 const TOAST_TITLE = 'DES Voices';
@@ -71,6 +74,25 @@ function pauseAutoRead(reason) {
 player.configurePlayer({
     onFatal(error, job) {
         const kind = error?.kind || 'unknown';
+        if (error?.provider === 'openrouter') {
+            const orMessages = {
+                'no-key': error?.message || 'Paste your OpenRouter key in Settings \u2192 Voices.',
+                'bad-key': 'OpenRouter rejected the key in Settings \u2192 Voices.',
+                quota: 'Your OpenRouter credits have run out. Add credits at openrouter.ai, then try again.',
+                rate: 'OpenRouter is rate-limiting voice requests, so a line was skipped.',
+                network: 'Couldn’t reach OpenRouter, even after a retry, so a line was skipped.',
+                'openrouter-blocked': 'Your browser couldn’t reach OpenRouter directly. In Settings \u2192 Voices \u2192 OpenRouter, press \u201cSave key to SillyTavern\u201d so DES can go through SillyTavern’s server.',
+                timeout: `${error?.message || 'OpenRouter took too long to answer'}, so a line was skipped.`,
+                content: 'OpenRouter returned no audio for a line, so it was skipped.',
+                'model-unavailable': 'OpenRouter doesn’t offer the chosen voice model right now. Pick the other model in Settings \u2192 Voices.',
+                argument: `OpenRouter refused the request. ${error?.message || ''}`,
+            };
+            toast(['rate', 'network', 'timeout', 'content'].includes(kind) ? 'info' : 'warning',
+                orMessages[kind] || `Couldn’t read that line. ${error?.message || kind}`, kind === 'openrouter-blocked' ? 12000 : 6000);
+            console.warn('[DES Voices] OpenRouter', kind, error?.message || error);
+            if (job?.auto && ['no-key', 'bad-key', 'quota', 'autoplay', 'openrouter-blocked'].includes(kind)) pauseAutoRead(kind);
+            return;
+        }
         const messages = {
             'no-key': 'No Google key found. Paste one in Settings \u2192 Voices, or add a Google AI Studio key in SillyTavern (API Connections \u2192 Google AI Studio).',
             'bad-key': getDesKey()
@@ -125,9 +147,42 @@ player.configurePlayer({
             narrator: voices().narratorVoice,
             caps: caps(),
         });
-        return { voiceId: ref.id, voiceSource: ref.source || 'stock' };
+        return { voiceId: ref.id, voiceSource: ref.source || 'stock', provider: routeFor(ref) };
     },
 });
+
+/** "No voice service connected" is said once per session. */
+let toldNotConnected = false;
+
+/** False (and says why, once) when no voice service is set up. */
+function ensureConnected() {
+    if (anyProviderConnected()) return true;
+    if (!toldNotConnected) {
+        toldNotConnected = true;
+        toast('info', 'No voice service is connected yet. Settings \u2192 Voices explains the options (OpenRouter, Google and more).', 9000);
+    }
+    return false;
+}
+
+/**
+ * The service that plays this ref. If that service isn't set up here but
+ * the other one is, standard Gemini voices use the other one — both carry
+ * the same 30 voices.
+ */
+function routeFor(ref) {
+    const provider = providerForRef(ref);
+    if (isProviderConnected(provider)) return provider;
+    if ((ref?.source || 'stock') === 'stock') {
+        const other = provider === 'google' ? 'openrouter' : 'google';
+        if (isProviderConnected(other)) return other;
+    }
+    return provider;
+}
+
+/** Can this service carry the delivery note? (Google: only with the key in DES.) */
+function styleCapable(provider) {
+    return provider === 'openrouter' ? true : !!getDesKey();
+}
 
 /** Designed voices already reported gone this session. */
 const goneToasts = new Set();
@@ -211,29 +266,31 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
     const narrator = voices().narratorVoice;
     const deviceCaps = caps();
     const jobSegments = [];
-    // Only the direct route can carry a delivery note; through SillyTavern
-    // it would only split requests for nothing.
-    const note = deviceCaps.direct ? voices().deliveryNote : '';
+    const note = voices().deliveryNote;
+    if (!ensureConnected()) return player.newJob({ messageId, source, auto, highlightMessage, segments: [] });
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
-        const style = styleForSegment(segments, i, note);
         const speaker = seg.speaker ? canonicalName(seg.speaker) : null;
         const present = speaker ? isPresentOnPanel(speaker, presence) : false;
         const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: voiceFor(speaker), narrator, caps: deviceCaps });
+        const provider = routeFor(ref);
+        // Only some routes can carry a delivery note; elsewhere it would
+        // only split requests for nothing.
+        const style = styleCapable(provider) ? styleForSegment(segments, i, note) : '';
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
         // unvoiced character, then narration) are one Google request —
         // unless one of them is whispered and the other isn't.
-        if (prev && prev.voiceId === ref.id && prev.style === style && prev.text.length + seg.text.length < 2500) {
+        if (prev && prev.voiceId === ref.id && prev.provider === provider && prev.style === style && prev.text.length + seg.text.length < 2500) {
             prev.text = `${prev.text} ${seg.text}`;
             prev.idxs.push(...(seg.idxs || []));
             continue;
         }
-        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', style, reason, speaker, idxs: [...(seg.idxs || [])] });
+        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
         console.debug('[DES Voices] job', source, messageId,
-            jobSegments.map(s => `${s.voiceId} — ${describeReason(s.reason, s.speaker)}: ${s.text.slice(0, 40)}`));
+            jobSegments.map(s => `${PROVIDER_LABELS[s.provider] || s.provider}/${s.voiceId} — ${describeReason(s.reason, s.speaker)}: ${s.text.slice(0, 40)}`));
     }
     return player.newJob({ messageId, source, auto, highlightMessage, segments: jobSegments });
 }
@@ -305,16 +362,22 @@ export function speakReasoning(messageId, text) {
  * @param {{id: string, source?: string}} ref
  * @param {string} text
  */
-export function audition(ref, text) {
+export function audition(ref, text, { provider: forced = null } = {}) {
     if (!ref || !ref.id) return;
     const cur = player.getCurrentJob();
     if (cur && cur.source === 'audition' && cur.key === ref.id) { player.stop(); return; }
+    if (!forced && !ensureConnected()) return;
+    // A designed voice previews in its own voice when the Google key is
+    // here; otherwise the same stand-in chat would use.
+    const { ref: playable } = resolveVoice({ seg: { kind: 'dialogue', speaker: 'x' }, present: true, ref, narrator: voices().narratorVoice, caps: caps() });
+    const provider = forced || routeFor(playable);
+    const style = styleCapable(provider) ? String(voices().deliveryNote || '').trim() : '';
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text: text || `Hello, I'm ${ref.id}.` }]);
     const job = player.newJob({
         source: 'audition',
         key: ref.id,
         // Previews use the delivery note too, so they sound like chat will.
-        segments: segments.map(s => ({ text: s.text, voiceId: ref.id, voiceSource: ref.source || 'stock', style: getDesKey() ? String(voices().deliveryNote || '').trim() : '', reason: 'audition', speaker: null, idxs: [] })),
+        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, reason: 'audition', speaker: null, idxs: [] })),
     });
     stopStPlayback();
     player.replaceWith(job);
@@ -430,6 +493,9 @@ export function invalidate() {
 export function getStatus() {
     return {
         route: getRouteState(),
+        openrouter: getOpenRouterState(),
+        connected: { google: isProviderConnected('google'), openrouter: isProviderConnected('openrouter') },
+        geminiVia: routeFor({ source: 'stock', id: 'Kore' }),
         requests: player.getSessionRequestCount(),
         playing: player.isPlaying(),
         autoReadPaused,
