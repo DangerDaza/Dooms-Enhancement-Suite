@@ -50,7 +50,7 @@ Ship in this order; each step stands on its own.
    and the route to unlimited cloned voices.
 4. **SillyTavern bridge.** Reuse whatever TTS provider the user already set up in
    SillyTavern (ElevenLabs, Edge, XTTS…), with DES's per-character voices. Wide
-   coverage for little code, but each provider needs testing (§6).
+   coverage for little code; only providers on an allow-list (§6.1).
 5. **ElevenLabs** (decided): huge library, voice design and instant cloning; the
    most expensive option.
 
@@ -140,13 +140,12 @@ description as a standing style note) for users without Google voice design.
 
 | # | Milestone | Size |
 |---|---|---|
-| C0 | Spikes (§6), then lock decisions | S |
-| C1 | Provider layer: refactor Google into a provider; `provider` on refs; stand-ins; "Connect a voice service" panel when nothing is connected; tests | M |
+| C1 | Provider layer + the user-facing guide (§6.2): refactor Google into a provider; `provider` on refs; stand-ins; "Connect a voice service" panel when nothing is connected; tests | M |
 | C2 | **OpenRouter**: key box + Test, model picker (Gemini Lite/Flash, Kokoro, others), voice lists, delivery note via `provider.options`, "Gemini voices via" | M |
 | C3 | **Kokoro in the browser**: worker from ST's `kokoro-worker.js`, download and progress UI, voice list, device check (WebGPU/CPU) | M |
 | C4 | **Local server (OpenAI-compatible)**: URL + optional key, model and voice lists (`/v1/models`, `/v1/audio/voices` where offered, else typed), presets for Kokoro-FastAPI / Chatterbox / AllTalk | S–M |
 | C5 | Workshop **Library** tab with the provider switcher; Settings **Connections** list | M |
-| C6 | **SillyTavern bridge** for the providers that pass the spike | M |
+| C6 | **SillyTavern bridge** for the allow-listed providers (§6.1) | M |
 | C7 | **ElevenLabs**: key, library, Voice Design, instant clone | M |
 | C8 | Per-request cloning on OpenRouter models that support it | S–M |
 
@@ -154,24 +153,54 @@ The loudness work (even-out, per-character volume, master volume) slots in anywh
 It's provider-independent and becomes more useful once voices come from several
 providers.
 
-## 6. Spikes (answer before building)
+## 6. No pre-testing: plan for the worst, say so up front
 
-1. **OpenRouter from the browser**: does `POST /api/v1/audio/speech` allow CORS
-   from a SillyTavern origin? If not, use SillyTavern's **OpenAI Compatible** route
-   (`/api/openai/custom/generate-voice`, key kept on the ST server). That route drops
-   `provider.options`, so no delivery note.
-2. **OpenRouter + Google designed voices**: does `voice: 'voice_…'` work for a voice
-   made in your own Google project? Expect **no** (voices are project-bound). If no,
-   designed voices stay Google-direct only.
-3. **Kokoro in the browser**: model size and speed on a mid-range phone and on a
-   desktop without WebGPU; whether ST's worker can be created from DES without
-   touching ST's own TTS settings.
-4. **SillyTavern bridge**: per provider, can DES create its own instance with the
-   saved settings and call `generateTts(text, voiceId)` without SillyTavern's
-   settings page side effects? (`loadSettings` binds to SillyTavern's settings DOM.)
-   Start with ElevenLabs, OpenAI-compatible, AllTalk, XTTS and Edge.
-5. **Rate limits in practice**: OpenRouter's Gemini TTS upstream may still throttle.
-   Measure a 20-line auto-read.
+Decision (2026-10-06): no spikes and no manual testing before release. Each open
+question is answered with its **worst case**, and DES is built so the worst case
+still works, or at least fails clearly. DES tells users plainly how voices are meant
+to be used, and they report anything that's broken or disappointing.
+
+### 6.1 Worst-case assumptions and how DES handles each
+
+| Unknown | Assume | Built so that… |
+|---|---|---|
+| OpenRouter blocks speech calls from the browser (CORS) | **Blocked** | DES tries the browser call once. If it fails with a network/CORS error, it switches to SillyTavern's **OpenAI Compatible** server route (`/api/openai/custom/generate-voice`) for the session. That needs the OpenRouter key saved in SillyTavern's *OpenAI Compatible* TTS key slot, and DES offers a button that saves it there (it warns first if a different key is already saved). On that route the delivery note can't be sent; the status line says so. |
+| Google designed/cloned voices through OpenRouter | **Don't work** | Designed and cloned Google voices are **Google-key only**, stated in the UI. Characters with one use their stand-in (same-gender stock voice) when only OpenRouter is connected. |
+| OpenRouter's upstream still throttles Gemini TTS | **Throttles sometimes** | Existing backoff (2/4/8 s), the "line skipped" message and the session budget apply to every provider. The status line names the provider. |
+| Kokoro in the browser on phones | **Too slow / too big on most phones** | Labelled "best on a computer". DES checks the device first (WebGPU, memory) and warns before the download. The download shows progress, can be cancelled, and is never started automatically. |
+| Kokoro worker from SillyTavern can't be reused | **Can't** | DES ships its own small worker that loads the same open model from the same CDN SillyTavern uses. No dependency on SillyTavern's TTS settings. |
+| SillyTavern bridge per provider | **Only some providers work** | Ship an allow-list of providers whose `generateTts` needs no settings-page DOM (start: OpenAI-compatible, ElevenLabs, AllTalk, XTTS, Edge). Others are listed as "not supported yet", never half-working. |
+| Local servers differ (voice lists, formats) | **No voice list, odd formats** | If `/v1/audio/voices` or a voice list isn't offered, the user types voice names. Any audio type the browser can play is accepted. Presets fill the URL and model for known servers. |
+| Per-request cloning on OpenRouter models | **Unreliable** | Marked *experimental* in the UI (C8), off unless chosen per voice. |
+| Provider prices/limits change | **They will** | The UI shows approximate costs as "about", with a link to the provider's pricing page, and no numbers are hard-coded into logic. |
+
+General rule: any provider error becomes a plain one-line message naming the
+provider and what to check (key, credits, server running). The line is skipped, never
+retried in a loop, and the console keeps the full error for bug reports.
+
+### 6.2 Telling users how it's meant to be used
+
+Shown in three places: a **"How DES voices work"** panel at the top of Settings →
+Voices (collapsible, open until first dismissed), the What's New entry, and the
+README. Draft text:
+
+> **How DES voices work**
+> DES reads your chat aloud and gives each character their own voice, but only while they're on the Present Characters panel. Everyone else is read by the Narrator.
+>
+> **You bring the voice service.** DES doesn't include one. Connect at least one:
+> - **OpenRouter**: recommended. Gemini voices and many others, pay as you go (about a cent a minute for Gemini), with no daily caps. One key from openrouter.ai.
+> - **Google**: the same Gemini voices, and the only way to *design* or *clone* voices from text or a recording. Google's free and Tier 1 limits are low (about 100 lines a day). Higher limits need $100 spent with Google.
+> - **Kokoro (in your browser)**: free, private, no account. Best on a computer; phones may be slow.
+> - **Your own server**: Kokoro-FastAPI, Chatterbox, AllTalk and others. Free and unlimited if you have the hardware.
+> - **ElevenLabs** or **SillyTavern's TTS setup**: if you already use them.
+>
+> **Good to know**
+> - Designed and cloned voices only work with a Google key, in the same Google project you made them in.
+> - Each line costs one request. Auto-read uses more than the bullhorn buttons.
+> - Voices are an early feature. If something sounds wrong or breaks, tell us what you were doing and which service you use.
+
+The Workshop's Voice tab shows a one-line version when nothing is connected:
+"No voice service connected. Settings → Voices explains the options."
 
 ## 7. Decisions (2026-10-06)
 
@@ -182,6 +211,8 @@ providers.
 3. **SillyTavern bridge**: yes (C6).
 4. **Premium**: ElevenLabs yes (C7); Hume not planned.
 5. **Cheap described voices**: not planned.
+6. **No pre-testing**: build for the worst case (§6.1) and tell users up front how
+   voices are meant to be used (§6.2). Fix things as users report them.
 
 ## 8. Sources
 
