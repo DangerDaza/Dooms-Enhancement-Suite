@@ -1,6 +1,6 @@
 # DES Voices — more connection options (plan)
 
-Status: **proposal**, nothing built yet. Branch: `TTS-Trial`. Builds on
+Status: **decided, not built** (decisions in §7). Branch: `TTS-Trial`. Builds on
 `docs/google-tts-voices-plan.md` (the Google-only design that is built).
 Researched 2026-10-06; prices and limits change, so re-check them before release.
 
@@ -51,8 +51,10 @@ Ship in this order; each step stands on its own.
 4. **SillyTavern bridge.** Reuse whatever TTS provider the user already set up in
    SillyTavern (ElevenLabs, Edge, XTTS…), with DES's per-character voices. Wide
    coverage for little code, but each provider needs testing (§6).
-5. **Optional premium:** Hume (voice design from a description, generous free tier)
-   and/or ElevenLabs, if users ask.
+5. **ElevenLabs** (decided): huge library, voice design and instant cloning; the
+   most expensive option.
+
+Not planned for now (decided): Hume, and "cheap described voices" (§4.6).
 
 Google direct stays as an option for people who already have Tier 2 or want
 Google's designed and cloned voices.
@@ -98,6 +100,12 @@ DES uses a **stand-in voice** instead of going silent: the same gender from the
 user's default provider, then the Narrator. It shows the existing "voice not
 available here" note. This generalises today's `fallbackStock`.
 
+**No connection at all** (decided): DES doesn't ship a default provider. Until the
+user connects one, voices stay off. The Voices settings and the Workshop Voice tab
+show a short "Connect a voice service" panel listing the options with one-line
+costs (OpenRouter, Google, Kokoro in the browser, local server, ElevenLabs,
+SillyTavern's TTS), and the bullhorns keep using SillyTavern's own TTS.
+
 ### 4.4 Same Gemini voice, two connections
 
 Stock Gemini voices (Kore, Charon…) are the same on Google and OpenRouter. A
@@ -119,31 +127,28 @@ server route exists.
 Kokoro · Local · …) and the same All/Female/Male filter and grid. **My voices** and
 **Create new** stay. Create new offers only what the connected providers can do:
 
-- **Describe it**: Google design (Google key); Hume design (Hume key); or the
-  **cheap path** below.
-- **Clone a recording**: Google (Google key); a local cloning server (stores the
-  clip on that server); or OpenRouter models that clone per request (DES keeps the
-  clip and sends it each time, costing more per line).
+- **Describe it**: Google design (Google key) or ElevenLabs Voice Design
+  (ElevenLabs key).
+- **Clone a recording**: Google (Google key); ElevenLabs instant clone; a local
+  cloning server (stores the clip on that server); or OpenRouter models that clone
+  per request (DES keeps the clip and sends it each time, costing more per line).
 
-**Cheap "described" voices without voice design.** For Gemini via OpenRouter, a
-described voice can be **a stock voice plus the description as a standing style
-note**: "Kore, delivered as: an ancient, hollow voice…". No voice-design API, no
-project lock-in, works with any OpenRouter key. It's weaker than true design, but
-it's free to make and never expires. Spike needed (§6).
+*Not planned (decided):* "cheap described voices" (a stock voice plus the
+description as a standing style note) for users without Google voice design.
 
 ## 5. Milestones
 
 | # | Milestone | Size |
 |---|---|---|
 | C0 | Spikes (§6), then lock decisions | S |
-| C1 | Provider layer: refactor Google into a provider; `provider` on refs; stand-ins; tests | M |
+| C1 | Provider layer: refactor Google into a provider; `provider` on refs; stand-ins; "Connect a voice service" panel when nothing is connected; tests | M |
 | C2 | **OpenRouter**: key box + Test, model picker (Gemini Lite/Flash, Kokoro, others), voice lists, delivery note via `provider.options`, "Gemini voices via" | M |
 | C3 | **Kokoro in the browser**: worker from ST's `kokoro-worker.js`, download and progress UI, voice list, device check (WebGPU/CPU) | M |
 | C4 | **Local server (OpenAI-compatible)**: URL + optional key, model and voice lists (`/v1/models`, `/v1/audio/voices` where offered, else typed), presets for Kokoro-FastAPI / Chatterbox / AllTalk | S–M |
 | C5 | Workshop **Library** tab with the provider switcher; Settings **Connections** list | M |
 | C6 | **SillyTavern bridge** for the providers that pass the spike | M |
-| C7 | Cheap described voices (style-note voices) and per-request cloning where supported | M |
-| C8 | Optional Hume / ElevenLabs | M each |
+| C7 | **ElevenLabs**: key, library, Voice Design, instant clone | M |
+| C8 | Per-request cloning on OpenRouter models that support it | S–M |
 
 The loudness work (even-out, per-character volume, master volume) slots in anywhere.
 It's provider-independent and becomes more useful once voices come from several
@@ -158,28 +163,25 @@ providers.
 2. **OpenRouter + Google designed voices**: does `voice: 'voice_…'` work for a voice
    made in your own Google project? Expect **no** (voices are project-bound). If no,
    designed voices stay Google-direct only.
-3. **Style-note voices** (§4.6): how consistent does "stock voice + description as
-   style" sound across lines? Decide if it's good enough to offer.
-4. **Kokoro in the browser**: model size and speed on a mid-range phone and on a
+3. **Kokoro in the browser**: model size and speed on a mid-range phone and on a
    desktop without WebGPU; whether ST's worker can be created from DES without
    touching ST's own TTS settings.
-5. **SillyTavern bridge**: per provider, can DES create its own instance with the
+4. **SillyTavern bridge**: per provider, can DES create its own instance with the
    saved settings and call `generateTts(text, voiceId)` without SillyTavern's
    settings page side effects? (`loadSettings` binds to SillyTavern's settings DOM.)
    Start with ElevenLabs, OpenAI-compatible, AllTalk, XTTS and Edge.
-6. **Rate limits in practice**: OpenRouter's Gemini TTS upstream may still throttle.
+5. **Rate limits in practice**: OpenRouter's Gemini TTS upstream may still throttle.
    Measure a 20-line auto-read.
 
-## 7. Open questions for you
+## 7. Decisions (2026-10-06)
 
-1. **Order**: OpenRouter first, then free Kokoro-in-browser? Or free first?
-2. **Default for new users**: Kokoro in the browser (free, no account, lower
-   quality) or "connect OpenRouter" (paid, Gemini quality)?
-3. **SillyTavern bridge**: worth it, or is OpenRouter + local + Kokoro enough?
-4. **Premium**: Hume (design from a description, generous free tier), ElevenLabs, both,
-   or neither for now?
-5. **Cheap described voices** (stock + style note): offer them as "Describe it" when
-   there's no Google key, clearly labelled as lighter-weight?
+1. **Order**: OpenRouter first (C1 → C2). Kokoro in the browser and the local server
+   follow; the SillyTavern bridge and ElevenLabs come after.
+2. **Default for new users**: no default provider. Users connect a service before
+   DES voices play (§4.3 "No connection at all").
+3. **SillyTavern bridge**: yes (C6).
+4. **Premium**: ElevenLabs yes (C7); Hume not planned.
+5. **Cheap described voices**: not planned.
 
 ## 8. Sources
 
