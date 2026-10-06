@@ -120,24 +120,28 @@ export function renderStudio(ctx, isPlaying) {
     return `
         ${pending}
         <div class="cw-studio-form">
-            <label class="cw-studio-field">
-                <span>How do they sound?</span>
-                <textarea class="rpg-textarea cw-studio-desc" rows="4" maxlength="${MAX_DESIGN_DESCRIPTION}"
-                    placeholder="Age, gender, pitch, texture, pace, accent and attitude. e.g. A husky, low-pitched woman in her forties with a slow Southern drawl and a wry, tired warmth.">${escapeHtml(st.description)}</textarea>
-            </label>
             <div class="cw-studio-assist">
-                <span class="cw-studio-assist-label">Or let your chat AI write it:</span>
-                <button type="button" class="rpg-btn cw-studio-draft" ${busy ? 'disabled' : ''} title="Uses ${escapeAttr(ctx.name)}'s appearance and description">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> ${busy === 'draft' ? 'Writing…' : `From ${escapeHtml(ctx.name)}'s card`}
-                </button>
-                <div class="cw-studio-ref">
-                    <input type="text" class="rpg-input cw-studio-ref-input" maxlength="200" value="${escapeAttr(st.reference)}"
-                        aria-label="Sound like a character" placeholder="Sound like… e.g. Withers from Baldur's Gate 3" />
-                    <button type="button" class="rpg-btn cw-studio-ref-go" ${busy ? 'disabled' : ''} title="Your chat AI describes how that character sounds">
-                        <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Writing…' : 'Write it'}
+                <span class="cw-studio-step">1. Start from a character <span class="cw-studio-step-hint">optional &mdash; your chat AI writes the description in step 2</span></span>
+                <label class="cw-studio-field">
+                    <span>I'm thinking of&hellip;</span>
+                    <textarea class="rpg-textarea cw-studio-ref-input" rows="2" maxlength="200"
+                        placeholder="A character from a game, film, book or show, e.g. Withers from Baldur's Gate 3">${escapeHtml(st.reference)}</textarea>
+                </label>
+                <div class="cw-studio-assist-actions">
+                    <button type="button" class="rpg-btn cw-studio-ref-go" ${busy ? 'disabled' : ''} title="Your chat AI describes how that character sounds (Enter)">
+                        <i class="fa-solid fa-lightbulb"></i> ${busy === 'reference' ? 'Writing…' : 'Describe their voice'}
+                    </button>
+                    <span class="cw-studio-or">or</span>
+                    <button type="button" class="rpg-btn cw-studio-draft" ${busy ? 'disabled' : ''} title="Uses ${escapeAttr(ctx.name)}'s appearance and description">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> ${busy === 'draft' ? 'Writing…' : `From ${escapeHtml(ctx.name)}'s card`}
                     </button>
                 </div>
             </div>
+            <label class="cw-studio-field">
+                <span class="cw-studio-step">2. How do they sound?</span>
+                <textarea class="rpg-textarea cw-studio-desc" rows="5" maxlength="${MAX_DESIGN_DESCRIPTION}"
+                    placeholder="Write it yourself, or fill it from step 1. Cover age, gender, pitch, texture, pace, accent and attitude. e.g. A husky, low-pitched woman in her forties with a slow Southern drawl and a wry, tired warmth.">${escapeHtml(st.description)}</textarea>
+            </label>
             <details class="cw-studio-more"${st.moreOpen ? ' open' : ''}>
                 <summary>More options <span class="cw-studio-more-hint">name, gender, accent</span></summary>
                 <div class="cw-studio-grid">

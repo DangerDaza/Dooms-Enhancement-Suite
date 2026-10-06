@@ -1113,11 +1113,11 @@
                                 whispered) are still whispered. Leave empty to let Gemini decide. Works with the Google
                                 AI Studio key below.</span>
                         </div>
-                        <div class="rpg-voices-key">
-                            <input type="text" id="rpg-voices-delivery" class="rpg-accordion-input" maxlength="160"
-                                spellcheck="false" placeholder="Empty: Gemini decides how each line is delivered" />
+                        <div class="rpg-voices-delivery">
+                            <textarea id="rpg-voices-delivery" class="rpg-accordion-input" rows="3" maxlength="160"
+                                placeholder="Empty: Gemini decides how each line is delivered"></textarea>
                             <button id="rpg-voices-delivery-reset" class="rpg-accordion-mini-btn rpg-voices-wordbtn" type="button"
-                                title="Put the default note back">Reset</button>
+                                title="Put the default note back">Reset to default</button>
                         </div>
                     </div>
                     <!-- Design a narrator voice: a designed voice made here becomes the
@@ -1131,16 +1131,16 @@
                             below.</p>
                         <div class="rpg-voices-nd-ref">
                             <label class="rpg-voices-nd-field">
-                                <span class="rpg-setting-label">I'm thinking of&hellip;</span>
-                                <input type="text" id="rpg-voices-nd-ref" class="rpg-accordion-input" maxlength="200"
-                                    placeholder="A character from a game, film, book or show" />
+                                <span class="rpg-setting-label">1. I'm thinking of&hellip; <span class="rpg-voices-nd-hint">optional &mdash; your chat AI fills in step 2</span></span>
+                                <textarea id="rpg-voices-nd-ref" class="rpg-accordion-input" rows="2" maxlength="200"
+                                    placeholder="A character from a game, film, book or show, e.g. Withers from Baldur's Gate 3"></textarea>
                             </label>
                             <button type="button" class="rpg-accordion-mini-btn" id="rpg-voices-nd-ref-go"
-                                title="Your chat AI describes how that character sounds, in the box below">
+                                title="Your chat AI describes how that character sounds, in the box below (Enter)">
                                 <i class="fa-solid fa-lightbulb"></i> Describe their voice</button>
                         </div>
                         <label class="rpg-voices-nd-field">
-                            <span class="rpg-setting-label">How the narrator sounds</span>
+                            <span class="rpg-setting-label">2. How the narrator sounds</span>
                             <textarea id="rpg-voices-nd-desc" class="rpg-accordion-input" rows="7"
                                 spellcheck="true"></textarea>
                         </label>

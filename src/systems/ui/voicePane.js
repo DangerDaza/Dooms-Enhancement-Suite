@@ -393,9 +393,10 @@ function bindOnce(host) {
         if (studio && toolFor(last.ctx) === 'studio') studio.handleStudioInput(input, last.ctx);
     };
     host.addEventListener('input', onInput);
-    // Enter in "I'm thinking of…" asks the AI, like the button next to it.
+    // Enter in "I'm thinking of…" asks the AI, like the button under it
+    // (Shift+Enter still starts a new line).
     host.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || !e.target.classList?.contains('cw-studio-ref-input')) return;
+        if (e.key !== 'Enter' || e.shiftKey || !e.target.classList?.contains('cw-studio-ref-input')) return;
         e.preventDefault();
         host.querySelector('.cw-studio-ref-go')?.click();
     });

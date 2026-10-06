@@ -539,9 +539,18 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assist: [...document.querySelectorAll('#cw-voice-pane .cw-studio-assist button')].map(b => b.textContent.trim()),
   }));
   check('My voices starts empty with a shortcut to Create new → Describe it', () => assert.strictEqual(describeUi.mode, 'describe'));
+  const order = await page.evaluate(() => {
+    const form = document.querySelector('#cw-voice-pane .cw-studio-form');
+    const pos = (sel) => [...form.querySelectorAll('*')].indexOf(form.querySelector(sel));
+    return { ref: pos('.cw-studio-ref-input'), desc: pos('.cw-studio-desc'), refTag: form.querySelector('.cw-studio-ref-input').tagName };
+  });
+  check('Describe it flows down: "I\'m thinking of" (a text box) comes before the description it fills', () => {
+    assert.ok(order.ref < order.desc, JSON.stringify(order));
+    assert.strictEqual(order.refTag, 'TEXTAREA');
+  });
   check('Describe it: name/gender/accent tucked under More options; AI helpers are labelled for what they do', () => {
     assert.strictEqual(describeUi.moreOpen, false);
-    assert.deepStrictEqual(describeUi.assist, ["From Tom's card", 'Write it']);
+    assert.deepStrictEqual(describeUi.assist, ['Describe their voice', "From Tom's card"]);
   });
   voiceCalls = []; google = [];
   await page.evaluate(() => {

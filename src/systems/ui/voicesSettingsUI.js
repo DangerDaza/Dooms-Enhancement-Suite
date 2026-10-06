@@ -388,7 +388,8 @@ function bindNarratorDesign() {
         }
     };
     $('#rpg-voices-nd-ref-go').on('click', describeReference);
-    $('#rpg-voices-nd-ref').on('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); describeReference(); } });
+    // Enter asks the AI; Shift+Enter starts a new line.
+    $('#rpg-voices-nd-ref').on('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); describeReference(); } });
     $('#rpg-voices-nd-result').on('click', '#rpg-voices-nd-hear', async () => {
         const entry = ndLast && getRegistered(ndLast.id);
         if (!entry) return;

@@ -8167,12 +8167,36 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 }
 .rpg-voices-nd-ref {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 0.4rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.6rem;
 }
-.rpg-voices-nd-ref .rpg-voices-nd-field { flex: 1 1 200px; margin: 0; }
+.rpg-voices-nd-ref .rpg-voices-nd-field { width: 100%; margin: 0; }
+.rpg-voices-nd-hint { font-weight: 400; font-size: 0.85em; opacity: 0.6; margin-left: 0.25rem; }
+.rpg-voices-nd-ref textarea,
+.rpg-voices-delivery textarea {
+    width: 100%;
+    min-height: 3.4em;
+    resize: vertical;
+    line-height: 1.4;
+    box-sizing: border-box;
+}
+.rpg-voices-delivery {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    width: 100%;
+}
+.rpg-voices-delivery .rpg-voices-wordbtn {
+    width: auto;
+    height: auto;
+    min-height: 26px;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+    color: var(--rpg-text, #ddd);
+}
 .rpg-voices-nd-ref .rpg-accordion-mini-btn {
     width: auto;
     height: auto;
@@ -8467,29 +8491,39 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     font-size: var(--modal-font-small, 0.8rem);
     line-height: 1.4;
 }
-/* "Or let your chat AI write it": from the card, or sound like… */
+/* Describe it: step 1 (start from a character) feeds step 2 (the description). */
 #character-workshop-popup .cw-studio-assist {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.6rem 0.7rem;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+}
+#character-workshop-popup .cw-studio-step {
+    font-weight: 600;
+    opacity: 1;
+}
+#character-workshop-popup .cw-studio-step-hint {
+    font-weight: 400;
+    font-size: 0.85em;
+    opacity: 0.65;
+    margin-left: 0.25rem;
+}
+#character-workshop-popup .cw-studio-ref-input {
+    width: 100%;
+    min-height: 3.2em;
+    resize: vertical;
+    box-sizing: border-box;
+}
+#character-workshop-popup .cw-studio-assist-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.55rem 0.65rem;
-    border: 1px dashed rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
 }
-#character-workshop-popup .cw-studio-assist-label {
-    flex-basis: 100%;
-    font-size: 0.8em;
-    opacity: 0.75;
-}
-#character-workshop-popup .cw-studio-ref {
-    display: flex;
-    flex: 1 1 260px;
-    gap: 0.4rem;
-    min-width: 0;
-}
-#character-workshop-popup .cw-studio-ref .cw-studio-ref-input { flex: 1 1 auto; min-width: 0; }
-#character-workshop-popup .cw-studio-ref .cw-studio-ref-go { flex: 0 0 auto; }
+#character-workshop-popup .cw-studio-or { font-size: 0.85em; opacity: 0.6; }
+#character-workshop-popup .cw-studio-desc { min-height: 7em; }
 #character-workshop-popup .cw-studio-more > summary {
     cursor: pointer;
     font-size: 0.9em;
