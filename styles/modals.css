@@ -9346,3 +9346,48 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
    Auto button has nothing to do */
 .cw-bubble-color.is-auto input[type="color"] { opacity: 0.55; }
 .cw-bubble-color.is-auto .cw-bubble-auto { visibility: hidden; }
+
+/* ── Glint Words editor (Settings → Theme → Glint Words) ── */
+.rpg-glint-help { display: block; margin: 2px 0 10px; }
+.rpg-glint-groups { display: flex; flex-direction: column; gap: 10px; }
+.rpg-glint-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--rpg-border, #4a7ba7) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--rpg-accent, #16213e) 30%, transparent);
+}
+.rpg-glint-group.is-off { opacity: 0.55; }
+.rpg-glint-group-head { display: flex; align-items: center; gap: 8px; }
+.rpg-glint-group-head .rpg-glint-name { flex: 1 1 auto; min-width: 0; width: auto; }
+.rpg-glint-group-head .rpg-toggle-switch { flex: 0 0 auto; margin: 0; }
+.rpg-glint-preview { flex: 0 0 auto; }
+.rpg-glint-words {
+    display: block;
+    width: 100%;
+    min-height: 2.8em;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.4;
+}
+.rpg-glint-options { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.rpg-glint-option {
+    display: flex;
+    flex: 1 1 130px;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    font-size: 0.8em;
+}
+.rpg-glint-option[hidden] { display: none; }
+.rpg-glint-option > span { opacity: 0.75; }
+.rpg-glint-option .rpg-accordion-select { width: 100%; min-width: 0; }
+.rpg-glint-color-wrap { flex: 0 0 auto; }
+.rpg-glint-color { width: 46px; height: 30px; padding: 0; border: none; background: none; cursor: pointer; }
+.rpg-glint-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.rpg-glint-add .rpg-accordion-select { flex: 1 1 200px; min-width: 0; }
+.rpg-glint-muted { opacity: 0.55; }
+.rpg-glint-empty { margin: 0; }

@@ -70,6 +70,9 @@ Splits multi-character AI messages into individual styled chat bubbles per speak
 
 Works automatically by detecting speaker changes through dialogue coloring.
 
+### Glint Words
+List words that should stand out in the story, and they light up in chat messages. Words go in groups, and each group picks a **look** (Gold, Silver, Bronze, Crimson, Ember, Arcane, Frost, Ocean, Toxic, Radiant, Shadow, Rose, Prism or any colour you choose), an effect for **when it appears** (a flash of light, a sparkle burst, a shockwave ring, a pop, or nothing) and what it does **afterwards** (a passing shine, a pulsing glow, flowing colour, or nothing). When a new message finishes loading, each listed word in it plays its effect, then keeps its look in every message from then on. Ten preset groups (Treasure, Magic, Danger, Holy and more) get you started. Only your screen changes: the saved message, what the AI sees, copying and voices all use the plain text. Settings → Theme → Glint Words.
+
 ### Doom Counter (Plot Twist Generator)
 A tension-driven plot twist system that keeps your story from stagnating. The AI rates each scene's tension on a 1–10 scale behind the scenes. When things stay too calm for too long, a countdown activates — and when it hits zero, you're presented with a set of AI-generated plot twist cards to choose from. Pick one and it gets woven into the next response.
 
@@ -169,7 +172,7 @@ The **Settings window** can use a rail layout: sections as icons down the left, 
 
 The settings panel (accessed via the **D** icon) is organized into sections:
 1. **Display & Features** — Toggle every feature on/off individually
-2. **Theme** — Colors, animations, stat bar gradients
+2. **Theme** — Colors, animations, stat bar gradients, Glint Words
 3. **Present Characters Panel** — Portrait bar layout, card sizing, colors, effects, per-chat tracking, expression sync
 4. **Bunny Mo Integration** — Character sheet support with fullsheet/quicksheet import
 5. **Scene Tracker** — Field visibility, layout mode (grid/stacked/compact/banner/HUD/ticker), sizing, colors

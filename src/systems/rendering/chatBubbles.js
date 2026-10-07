@@ -31,6 +31,7 @@ import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { stripGlintHtml } from './glintWords.js';
 import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { getEngine as getVoiceEngine, unlockVoicesAudio, isVoicesEnabled } from '../voices/voiceBoot.js';
@@ -82,6 +83,7 @@ export function clearBubbleState(mesText) {
     originalHtmlMap.delete(mesText);
     mesText.removeAttribute('data-dooms-bubbles-applied');
     mesText.removeAttribute('data-dooms-bubbles-style');
+    mesText.removeAttribute('data-dooms-bubbles-at');
 }
 
 // ─────────────────────────────────────────────
@@ -1189,14 +1191,19 @@ export function applyChatBubbles(messageElement, style) {
         revertSingleMessage(mesText);
     }
 
-    // Store original HTML for clean revert
+    // Store original HTML for clean revert. Glint Words spans are display
+    // only, so the copy (rebuilt from, and restored before a Continue)
+    // leaves them out; the glint pass re-wraps the bubbles afterwards.
     if (!originalHtmlMap.has(mesText)) {
-        originalHtmlMap.set(mesText, mesText.innerHTML);
+        originalHtmlMap.set(mesText, stripGlintHtml(mesText.innerHTML));
     }
     const originalHtml = originalHtmlMap.get(mesText);
 
     mesText.setAttribute('data-dooms-bubbles-applied', 'true');
     mesText.setAttribute('data-dooms-bubbles-style', style);
+    // When the bubbles were built: Glint Words waits for this before playing
+    // a new message's entrances, so the bubble rewrite can't cut them off.
+    mesText.setAttribute('data-dooms-bubbles-at', String(Date.now()));
 
     if (isUser) {
         mesText.innerHTML = style === 'discord'

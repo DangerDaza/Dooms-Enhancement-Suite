@@ -1,0 +1,263 @@
+/*
+ * Doom's Enhancement Suite for SillyTavern — Glint Words stylesheet
+ * Copyright (C) 2026 Jordan (DangerDaza)
+ *
+ * This file is part of Doom's Enhancement Suite and is licensed under the
+ * GNU Affero General Public License v3.0 or later. If you redistribute this
+ * file or a modified version of it, you must keep this notice intact, state
+ * your changes, and release your version under the same license.
+ *
+ * See the LICENSE file in the project root for the full terms and for
+ * additional copyright notices.
+ *
+ * https://github.com/DangerDaza/Dooms-Enhancement-Suite
+ */
+
+/* Loaded only while Glint Words has words to show (src/systems/rendering/
+   glintWords.js). Markup, per matched word:
+
+     <span class="dooms-glint dooms-glint-look-gold dooms-glint-idle-shine">
+       <span class="dooms-glint-text">word</span>
+     </span>
+
+   The outer span carries the look's colours and the entrance (burst, ring,
+   sparkles, pop); the inner one is the lettering and its idle effect. The
+   two are separate so an entrance and an idle animation never fight over
+   one element's animation list. Works the same under every UI setup. */
+
+/* ── Looks: a → b → c is the metal across the letters, glow the halo ── */
+.dooms-glint {
+    position: relative;
+    --glint-a: #fff4c2;
+    --glint-b: #f2c230;
+    --glint-c: #a8740a;
+    --glint-glow: rgba(255, 196, 48, 0.55);
+    /* The hairline round the letters: keeps a look readable on light themes. */
+    --glint-edge: rgba(0, 0, 0, 0.55);
+}
+.dooms-glint-look-silver  { --glint-a: #ffffff; --glint-b: #c9d3da; --glint-c: #6f7d88; --glint-glow: rgba(220, 232, 240, 0.55); --glint-edge: rgba(30, 40, 50, 0.85); }
+.dooms-glint-look-bronze  { --glint-a: #ffd9b0; --glint-b: #cd7f32; --glint-c: #7a4419; --glint-glow: rgba(205, 127, 50, 0.5); }
+.dooms-glint-look-crimson { --glint-a: #ffc2c2; --glint-b: #e3263a; --glint-c: #7d0a16; --glint-glow: rgba(227, 38, 58, 0.55); }
+.dooms-glint-look-ember   { --glint-a: #fff2a6; --glint-b: #ff8a1f; --glint-c: #c0300a; --glint-glow: rgba(255, 120, 30, 0.6); }
+.dooms-glint-look-arcane  { --glint-a: #f3dcff; --glint-b: #b468ff; --glint-c: #5a1fb0; --glint-glow: rgba(180, 104, 255, 0.6); }
+.dooms-glint-look-frost   { --glint-a: #ffffff; --glint-b: #8fe6ff; --glint-c: #2b86c4; --glint-glow: rgba(143, 230, 255, 0.6); --glint-edge: rgba(10, 50, 90, 0.75); }
+.dooms-glint-look-ocean   { --glint-a: #d6fff6; --glint-b: #2fd3c0; --glint-c: #0b6f8a; --glint-glow: rgba(47, 211, 192, 0.55); }
+.dooms-glint-look-toxic   { --glint-a: #efffb5; --glint-b: #7ff23d; --glint-c: #2c8c10; --glint-glow: rgba(127, 242, 61, 0.55); }
+.dooms-glint-look-radiant { --glint-a: #ffffff; --glint-b: #fff3b8; --glint-c: #f2b81c; --glint-glow: rgba(255, 250, 220, 0.85); --glint-edge: rgba(110, 75, 0, 0.9); }
+.dooms-glint-look-shadow  { --glint-a: #ddd2ff; --glint-b: #7a66d6; --glint-c: #2c2160; --glint-glow: rgba(122, 102, 214, 0.7); }
+.dooms-glint-look-rose    { --glint-a: #ffe1ee; --glint-b: #ff5d9e; --glint-c: #b0175a; --glint-glow: rgba(255, 93, 158, 0.55); }
+.dooms-glint-look-prism   { --glint-a: #ffffff; --glint-b: #ffd36e; --glint-c: #a77bff; --glint-glow: rgba(255, 255, 255, 0.5); }
+.dooms-glint-look-custom {
+    --glint-a: color-mix(in srgb, var(--glint-color, #f2c230) 35%, #ffffff);
+    --glint-b: var(--glint-color, #f2c230);
+    --glint-c: color-mix(in srgb, var(--glint-color, #f2c230) 55%, #000000);
+    --glint-glow: color-mix(in srgb, var(--glint-color, #f2c230) 60%, transparent);
+}
+
+/* ── The lettering ── */
+.dooms-glint-text {
+    --glint-fill: linear-gradient(180deg, var(--glint-a) 0%, var(--glint-b) 46%, var(--glint-c) 64%, var(--glint-b) 100%);
+    background-image: var(--glint-fill);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+    -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+    font-weight: 700;
+    /* A hairline keeps pale looks readable on light themes; the halo is the look's glow. */
+    filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow));
+}
+.dooms-glint-look-prism > .dooms-glint-text {
+    --glint-fill: linear-gradient(90deg, #ff5f6d, #ffc371, #f9f871, #6cf0a5, #4fc3ff, #a77bff, #ff5f6d);
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .dooms-glint-text { -webkit-text-fill-color: currentColor; color: var(--glint-b); background: none; }
+}
+
+/* ── Idle effects ── */
+/* Shine: a bright band sweeps across now and then. */
+.dooms-glint-idle-shine > .dooms-glint-text {
+    background-image:
+        linear-gradient(105deg, transparent 0%, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%, transparent 100%),
+        var(--glint-fill);
+    background-size: 300% 100%, 100% 100%;
+    background-position: 100% 0, 0 0;
+    animation: dooms-glint-shine 5.2s ease-in-out infinite;
+    animation-delay: var(--glint-phase, 0s);
+}
+@keyframes dooms-glint-shine {
+    0%, 64% { background-position: 100% 0, 0 0; }
+    100%    { background-position: 0% 0, 0 0; }
+}
+/* Glow pulse: the halo breathes. */
+.dooms-glint-idle-pulse > .dooms-glint-text {
+    animation: dooms-glint-pulse 2.8s ease-in-out infinite;
+    animation-delay: var(--glint-phase, 0s);
+}
+@keyframes dooms-glint-pulse {
+    0%, 100% { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 3px var(--glint-glow)); }
+    50%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 9px var(--glint-glow)) drop-shadow(0 0 2px var(--glint-glow)); }
+}
+/* Flowing colour: the metal slides through the letters. */
+.dooms-glint-idle-flow > .dooms-glint-text {
+    background-image: linear-gradient(90deg, var(--glint-c), var(--glint-b), var(--glint-a), var(--glint-b), var(--glint-c));
+    background-size: 200% 100%;
+    background-repeat: repeat-x;
+    animation: dooms-glint-flow 4.5s linear infinite;
+    animation-delay: var(--glint-phase, 0s);
+}
+.dooms-glint-look-prism.dooms-glint-idle-flow > .dooms-glint-text { background-image: var(--glint-fill); }
+@keyframes dooms-glint-flow {
+    from { background-position: 0% 0; }
+    to   { background-position: -200% 0; }
+}
+
+/* Only the latest messages keep moving; older ones hold still, so a long
+   chat full of glints costs nothing while you read. */
+#chat > .mes:nth-last-of-type(n+21) .dooms-glint-text { animation: none; }
+
+/* ── Entrances (played once, when a new message finishes loading) ── */
+/* Every entrance: the word lights up white-hot from its normal colour, then
+   settles into its look. The fill fades from the text's own colour so it
+   reads as the word turning gold, not a gold word appearing. */
+.dooms-glint-enter > .dooms-glint-text {
+    animation: dooms-glint-ignite 1.05s ease-out var(--glint-enter-delay, 0ms) both;
+}
+@keyframes dooms-glint-ignite {
+    0%   { -webkit-text-fill-color: currentColor; filter: none; }
+    28%  { -webkit-text-fill-color: #ffffff; filter: brightness(1.6) drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 12px var(--glint-glow)); }
+    55%  { -webkit-text-fill-color: transparent; filter: brightness(1.45) drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 10px var(--glint-glow)); }
+    100% { -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)); }
+}
+
+/* Pseudo-elements are invisible unless an entrance animates them, so a
+   stopped animation (Performance Mode, reduced motion) never leaves a
+   blob behind. */
+.dooms-glint::before,
+.dooms-glint::after {
+    content: none;
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+}
+
+/* Flash of light: a burst the width of the word. */
+.dooms-glint-enter-flash::after {
+    content: '';
+    left: -0.7em;
+    right: -0.7em;
+    top: 50%;
+    height: 2.8em;
+    margin-top: -1.4em;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95) 0%, var(--glint-glow) 38%, transparent 70%);
+    mix-blend-mode: screen;
+    animation: dooms-glint-burst 0.9s ease-out var(--glint-enter-delay, 0ms) both;
+}
+@keyframes dooms-glint-burst {
+    0%   { opacity: 0; transform: scale(0.25); }
+    22%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.7); }
+}
+
+/* Sparkle burst: two volleys of star points flying outwards. */
+.dooms-glint-enter-sparkle::before,
+.dooms-glint-enter-sparkle::after {
+    content: '';
+    inset: -1em -0.8em;
+    background:
+        radial-gradient(circle at 8% 32%, #ffffff 0 1.6px, transparent 2.6px),
+        radial-gradient(circle at 88% 18%, #ffffff 0 2px, transparent 3px),
+        radial-gradient(circle at 72% 88%, var(--glint-a) 0 1.6px, transparent 2.6px),
+        radial-gradient(circle at 22% 84%, var(--glint-b) 0 2px, transparent 3px),
+        radial-gradient(circle at 50% 4%, #ffffff 0 1.6px, transparent 2.6px),
+        radial-gradient(circle at 97% 58%, var(--glint-a) 0 1.6px, transparent 2.6px);
+    animation: dooms-glint-sparkle 1s ease-out var(--glint-enter-delay, 0ms) both;
+}
+.dooms-glint-enter-sparkle::after {
+    transform: rotate(30deg);
+    background:
+        radial-gradient(circle at 15% 12%, var(--glint-a) 0 1.4px, transparent 2.4px),
+        radial-gradient(circle at 60% 96%, #ffffff 0 1.8px, transparent 2.8px),
+        radial-gradient(circle at 92% 82%, var(--glint-b) 0 1.4px, transparent 2.4px),
+        radial-gradient(circle at 3% 66%, #ffffff 0 1.8px, transparent 2.8px),
+        radial-gradient(circle at 78% 6%, #ffffff 0 1.4px, transparent 2.4px);
+    animation-name: dooms-glint-sparkle-late;
+}
+@keyframes dooms-glint-sparkle {
+    0%   { opacity: 0; transform: scale(0.35); }
+    30%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.35); }
+}
+@keyframes dooms-glint-sparkle-late {
+    0%, 15% { opacity: 0; transform: rotate(30deg) scale(0.35); }
+    45%     { opacity: 1; }
+    100%    { opacity: 0; transform: rotate(30deg) scale(1.45); }
+}
+
+/* Shockwave ring: a ring of the look's light expands from the word. */
+.dooms-glint-enter-ring::after {
+    content: '';
+    left: 50%;
+    top: 50%;
+    width: 1em;
+    height: 1em;
+    margin: -0.5em 0 0 -0.5em;
+    border-radius: 50%;
+    border: 2px solid var(--glint-a);
+    box-shadow: 0 0 8px var(--glint-glow), inset 0 0 6px var(--glint-glow);
+    animation: dooms-glint-ring 0.95s ease-out var(--glint-enter-delay, 0ms) both;
+}
+@keyframes dooms-glint-ring {
+    0%   { opacity: 0; transform: scale(0.3); }
+    15%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(4.2); }
+}
+
+/* Pop: the word swells and settles. Inline-block only while it plays. */
+.dooms-glint-enter-pop {
+    display: inline-block;
+    animation: dooms-glint-pop 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) var(--glint-enter-delay, 0ms) both;
+}
+@keyframes dooms-glint-pop {
+    0%   { transform: scale(0.65); }
+    60%  { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+/* ── Motion off: gold stays, movement goes ── */
+@media (prefers-reduced-motion: reduce) {
+    .dooms-glint,
+    .dooms-glint::before,
+    .dooms-glint::after,
+    .dooms-glint-text {
+        animation: none !important;
+    }
+}
+body.dooms-perf-mode .dooms-glint::before,
+body.dooms-perf-mode .dooms-glint::after {
+    content: none;
+}
+
+/* ── Settings preview chip ── */
+.rpg-glint-preview {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 5.5em;
+    min-height: 2em;
+    padding: 0.2em 0.7em;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    font-size: 1.05em;
+    user-select: none;
+}
+.rpg-glint-preview:hover { background: rgba(0, 0, 0, 0.5); }
+.rpg-glint-preview-empty {
+    opacity: 0.5;
+    font-style: italic;
+    font-size: 0.85em;
+}

@@ -646,6 +646,39 @@
                             </div>
                         </div>
                     </details>
+                    <details class="rpg-subsection-collapse" id="rpg-glint-subsection">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span><i class="fa-solid fa-wand-sparkles" aria-hidden="true"></i> Glint Words <span class="rpg-accordion-badge" id="rpg-glint-badge">off</span></span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Enable Glint Words</span>
+                                    <span class="rpg-setting-hint">Words you list light up in chat messages. When a new
+                                        message finishes loading, each one plays its effect, then keeps its colour for
+                                        good. Only your screen changes; the AI sees the same text.</span>
+                                </div>
+                                <label class="rpg-toggle-switch">
+                                    <input type="checkbox" id="rpg-glint-toggle" />
+                                    <span class="rpg-toggle-slider"></span>
+                                </label>
+                            </div>
+                            <p class="rpg-setting-hint rpg-glint-help">Separate words with commas. A phrase such as
+                                <em>the Iron Crown</em> counts as one. Matching ignores capitals and only catches whole
+                                words, so list each form you want (<em>flame, flames</em>). Click a preview to replay its
+                                effect.</p>
+                            <div id="rpg-glint-groups" class="rpg-glint-groups"></div>
+                            <div class="rpg-glint-add">
+                                <button type="button" class="rpg-btn" id="rpg-glint-add-group">
+                                    <i class="fa-solid fa-plus" aria-hidden="true"></i> New group
+                                </button>
+                                <select id="rpg-glint-add-preset" class="rpg-accordion-select" aria-label="Add a preset group">
+                                    <option value="">Add a preset group&hellip;</option>
+                                </select>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
 

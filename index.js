@@ -109,6 +109,15 @@ import {
     clearBubbleState,
     injectReasoningTtsButtons
 } from './src/systems/rendering/chatBubbles.js';
+import {
+    initGlintWords,
+    refreshGlintWords,
+    onGlintMessageRendered,
+    onGlintUserMessageRendered,
+    onGlintGenerationStarted,
+    onGlintGenerationEnded,
+    onGlintChatChanged,
+} from './src/systems/rendering/glintWords.js';
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
 // Lorebook Manager modules
 // Feature modules
@@ -313,12 +322,14 @@ async function addExtensionSettings() {
             updateChatSceneHeaders(); // Remove scene headers (handles enabled check internally)
             clearExpressionSyncCache();
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
+            refreshGlintWords(); // unwraps every glint while DES is off
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
             loadChatData(); // Load chat data for current chat
             updateChatThoughts(); // Create thought bubbles if data exists
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
+            refreshGlintWords();
             if (extensionSettings.syncExpressionsToPresentCharacters && (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions') {
                 initExpressionSync();
                 syncExpressionFromLatestMessage();
@@ -2463,6 +2474,11 @@ function bindSettingsUI() {
     import('./src/systems/ui/voicesSettingsUI.js')
         .then(m => m.bindVoicesSettingsUI())
         .catch(e => console.error('[DES Voices] settings UI failed to load', e));
+
+    // Glint Words (Theme page)
+    import('./src/systems/ui/glintSettingsUI.js')
+        .then(m => m.bindGlintSettingsUI())
+        .catch(e => console.error('[Dooms Tracker] Glint Words settings failed to load', e));
 }
 
 /**
@@ -2902,6 +2918,7 @@ async function initUI() {
         try { applyTheme(); } catch (_) { }
     }
     try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch (e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
+    try { initGlintWords(); } catch (e) { console.error('[Dooms Tracker] initGlintWords() FAILED:', e); }
     console.log('[Dooms Tracker] initUI() rendering complete');
 }
 /**
@@ -3520,15 +3537,15 @@ jQuery(async () => {
             // original relative registration order within each event type.
             registerAllEvents({
                 [event_types.MESSAGE_SENT]: [onMessageSent, onMessageSentVoices],
-                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices],
+                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices],
-                [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onChatChangedVoices],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices],
-                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices],
+                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
-                [event_types.CHARACTER_MESSAGE_RENDERED]: onCharacterMessageRenderedDecorations,
+                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onGlintMessageRendered],
                 [event_types.MESSAGE_UPDATED]: onMessageUpdatedDecorations,
                 [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,

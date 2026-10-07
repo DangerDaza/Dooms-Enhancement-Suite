@@ -23,6 +23,10 @@
             "body": "Workshop → Appearance → Dialogue color → Bubble Fill paints that character's speech bubbles. On Auto the fill is their dialogue colour and the words its opposite (blue gives yellow); or pick any fill and text colour you like. Handy when two characters share a colour. Off for everyone until you turn it on."
         },
         {
+            "title": "✨ Glint Words",
+            "body": "List words that matter in your story and they light up in chat. When a new message arrives, each one plays a flash of light, a sparkle burst, a shockwave ring or a pop, then keeps its look for good: gold, silver, crimson, arcane, frost, prism and more, or your own colour. Start from a preset group like Treasure or Magic in Settings → Theme → Glint Words."
+        },
+        {
             "title": "🔊 Every character can have a voice",
             "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices (through your Google key or an OpenRouter key), or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices. Designed and cloned voices can be renamed from Settings → Voices → My custom voices."
         },

@@ -69,6 +69,8 @@ export const defaultSettings = {
     uiSetupBackground: true,
     uiComposer: true,
     settingsLayout: 'rail',
+    // Glint Words: on, but empty, so nothing changes until the player lists words.
+    glintWords: { enabled: true, groups: [] },
     customColors: {
         bg: '#1a1a2e',
         accent: '#16213e',
