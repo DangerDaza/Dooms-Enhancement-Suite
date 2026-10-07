@@ -132,6 +132,14 @@
     100% { -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)); }
 }
 
+/* A new word waiting to scroll into view: its normal colour, still, so its
+   entrance can turn it when the player gets there. */
+.dooms-glint-waiting > .dooms-glint-text {
+    -webkit-text-fill-color: currentColor;
+    filter: none;
+    animation: none;
+}
+
 /* Pseudo-elements are invisible unless an entrance animates them, so a
    stopped animation (Performance Mode, reduced motion) never leaves a
    blob behind. */

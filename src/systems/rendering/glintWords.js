@@ -33,15 +33,17 @@
  * When the entrance plays: CHARACTER_MESSAGE_RENDERED / USER_MESSAGE_RENDERED
  * mark the message as new. Its pass waits until the bubbles have been built
  * (or, with bubbles off, until colored-dialogues has had time to recolour),
- * so the effect isn't wiped half-way by the next rewrite. A Continue only
- * plays it on words past the ones the message already had. Loading a chat
- * plays nothing.
+ * so the effect isn't wiped half-way by the next rewrite. Each new word then
+ * keeps its normal colour until it scrolls into view, and plays its entrance
+ * there. A Continue only plays it on words past the ones the message already
+ * had. Loading a chat plays nothing.
  */
 
 import { extensionSettings } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { isAliasDecisionOpen } from '../features/characterAliases.js';
 import {
     normalizeGlintSettings,
     buildGlintMatcher,
@@ -56,8 +58,15 @@ const PASS_BUDGET_MS = 12;
 /** Bubbles off: how long a new message is left to settle (colored-dialogues recolours ~600 ms in). */
 const QUIET_AI_MS = 900;
 const QUIET_USER_MS = 350;
-/** Play the entrance anyway after this long (bubbles held up by a duplicate-name question, say). */
-const SETTLE_DEADLINE_MS = 5000;
+/**
+ * Bubbles normally land ~1 s after a message renders. If they haven't after
+ * this long they aren't coming (the message was skipped, say), so the words
+ * are wrapped anyway. An open "same character?" question holds the bubbles
+ * and is waited out separately, with no limit here.
+ */
+const SETTLE_DEADLINE_MS = 15000;
+/** A word's entrance plays once this much of it is on screen. */
+const SIGHT_THRESHOLD = 0.9;
 /** How long an entrance runs, and the stagger between words in one message. */
 const ENTER_MS = 1100;
 const ENTER_STAGGER_MS = 140;
@@ -162,6 +171,71 @@ export function playGlintEntrance(span, entrance, delayMs = 0) {
     }, ENTER_MS + delayMs + 120);
 }
 
+// ─── Entrances wait until the word is seen ──────────────────────────────────
+
+/** Spans whose entrance is waiting for them to scroll into view. */
+const waiting = new Set();
+let sightObserver = null;
+
+/** Performance Mode and reduced motion skip entrances: the word is simply gold. */
+function motionAllowed() {
+    if (document.body?.classList.contains('dooms-perf-mode')) return false;
+    try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false; } catch (e) { /* old browser */ }
+    return typeof IntersectionObserver === 'function';
+}
+
+/**
+ * Holds a new word in its normal colour until it is on screen, then plays
+ * its entrance and lets it turn. A long reply's lower words flash when the
+ * player scrolls to them, not unseen while they read the top.
+ */
+function queueEntrance(span, entrance) {
+    if (!motionAllowed()) return;
+    span.dataset.glintEntrance = entrance;
+    span.classList.add('dooms-glint-waiting');
+    waiting.add(span);
+    if (!sightObserver) {
+        // Root: the viewport, clipped by #chat's scroll box, so a word
+        // scrolled out of the chat doesn't count as seen.
+        sightObserver = new IntersectionObserver(onSight, { threshold: SIGHT_THRESHOLD, rootMargin: '0px 0px -6% 0px' });
+    }
+    sightObserver.observe(span);
+}
+
+function onSight(entries) {
+    const now = [];
+    for (const entry of entries) {
+        const span = entry.target;
+        if (!span.isConnected || !waiting.has(span)) {
+            sightObserver?.unobserve(span);
+            waiting.delete(span);
+            continue;
+        }
+        if (entry.isIntersecting && entry.intersectionRatio >= SIGHT_THRESHOLD - 0.01) now.push(span);
+    }
+    // Words that come into view together go off in reading order, one after another.
+    now.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    now.forEach((span, i) => {
+        sightObserver?.unobserve(span);
+        waiting.delete(span);
+        const entrance = span.dataset.glintEntrance || 'flash';
+        delete span.dataset.glintEntrance;
+        span.classList.remove('dooms-glint-waiting');
+        playGlintEntrance(span, entrance, Math.min(i, ENTER_STAGGER_MAX) * ENTER_STAGGER_MS);
+    });
+}
+
+/** Lets every waiting word turn without its entrance (settings changed, chat switched). */
+function releaseWaiting() {
+    if (sightObserver) sightObserver.disconnect();
+    sightObserver = null;
+    for (const span of waiting) {
+        span.classList.remove('dooms-glint-waiting');
+        delete span.dataset.glintEntrance;
+    }
+    waiting.clear();
+}
+
 // ─── Wrapping and unwrapping ────────────────────────────────────────────────
 
 function textNodesToWrap(root) {
@@ -191,7 +265,6 @@ function wrapMessage(mesText, enterFrom = Infinity, mesId = '') {
     if (!matcher) return 0;
     const nodes = textNodesToWrap(mesText);
     let index = 0;
-    let entered = 0;
     for (const node of nodes) {
         const pieces = splitByGlint(node.nodeValue, matcher);
         if (!pieces || !node.parentNode) continue;
@@ -206,10 +279,7 @@ function wrapMessage(mesText, enterFrom = Infinity, mesId = '') {
             const span = buildGlintSpan(piece.text, piece.group, `${mesId}|${index}|${piece.text}`);
             ours.add(span);
             frag.appendChild(span);
-            if (index >= enterFrom && piece.group.entrance !== 'none') {
-                playGlintEntrance(span, piece.group.entrance, Math.min(entered, ENTER_STAGGER_MAX) * ENTER_STAGGER_MS);
-                entered++;
-            }
+            if (index >= enterFrom && piece.group.entrance !== 'none') queueEntrance(span, piece.group.entrance);
             index++;
         }
         ours.add(node);
@@ -269,12 +339,14 @@ function bubblesOn() {
 /** Has a new message stopped being rewritten by the decoration pipeline? */
 function isSettled(mes, p) {
     const elapsed = Date.now() - p.since;
-    if (elapsed >= SETTLE_DEADLINE_MS) return true;
     if (bubblesOn()) {
         // applyChatBubbles stamps this when it builds the bubbles; the render
         // handlers clear it first, so its presence means "built after render".
         const mesText = mes.querySelector('.mes_text');
-        return !!mesText && mesText.hasAttribute('data-dooms-bubbles-at');
+        if (mesText && mesText.hasAttribute('data-dooms-bubbles-at')) return true;
+        // The bubble pass waits for a "same character?" answer; so do we.
+        if (isAliasDecisionOpen()) return false;
+        return elapsed >= SETTLE_DEADLINE_MS;
     }
     return elapsed >= (p.user ? QUIET_USER_MS : QUIET_AI_MS);
 }
@@ -293,6 +365,11 @@ function processMessage(mes) {
     const id = mes.getAttribute('mesid') || '';
     const idx = Number(id);
     if (Number.isInteger(idx) && Array.isArray(chat) && isSyntheticTrackerMessage(chat[idx])) return;
+    // A rebuild that copied a word still waiting to be seen (bubbles keep
+    // inline thoughts by copying their HTML) leaves a copy nobody watches.
+    for (const stray of mesText.querySelectorAll('.dooms-glint-waiting')) {
+        if (!waiting.has(stray)) stray.classList.remove('dooms-glint-waiting');
+    }
     const p = pending.get(id);
     if (p) {
         if (!isSettled(mes, p)) { armSettleCheck(); return; }
@@ -348,7 +425,9 @@ function queueById(mesId) {
 function armSettleCheck() {
     if (settleTimer) return;
     const now = Date.now();
-    let wait = 120; // bubbles on: the bubble rewrite also wakes the pass
+    // Bubbles on: the bubble rewrite also wakes the pass; poll gently while
+    // a "same character?" question holds them.
+    let wait = isAliasDecisionOpen() ? 500 : 120;
     if (!bubblesOn()) {
         wait = SETTLE_DEADLINE_MS;
         for (const p of pending.values()) {
@@ -428,6 +507,7 @@ export function initGlintWords() {
 export function refreshGlintWords() {
     const s = getGlintSettings();
     matcher = s.enabled ? buildGlintMatcher(s.groups) : null;
+    releaseWaiting();
     const chatEl = document.getElementById('chat');
     if (chatEl) unwrapGlints(chatEl);
     pending.clear();
@@ -476,6 +556,7 @@ export function onGlintGenerationEnded() {
 
 /** CHAT_CHANGED: a different chat; nothing in it is new. */
 export function onGlintChatChanged() {
+    releaseWaiting();
     pending.clear();
     seen.clear();
     dirty.clear();

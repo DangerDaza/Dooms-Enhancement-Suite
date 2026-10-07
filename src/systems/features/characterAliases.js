@@ -189,6 +189,15 @@ const _pendingNames = new Set();
 const _settlementWaiters = [];
 
 /**
+ * True while any duplicate-decision popup is open or queued. The bubble
+ * pass is held until they are answered, so Glint Words waits too rather
+ * than playing a new message's entrance on text about to be rebuilt.
+ */
+export function isAliasDecisionOpen() {
+    return _pendingDecisions.size > 0;
+}
+
+/**
  * True while `name` has an open (or queued) duplicate-decision popup.
  * Ingestion consumers (PCP roster, thoughts renders, auto-portraits) skip
  * such names entirely so the maybe-duplicate never visibly spawns while
