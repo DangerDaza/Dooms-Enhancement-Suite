@@ -14,7 +14,7 @@
  * inside a wrapper the page shows and hides (the Doom Counter's options)
  * count too, as long as the wrapper is showing. A card meant to stay
  * folded at the foot of its page (data-rail-closed, like Advanced) is not
- * a group. A page gets the strip with three or more groups, or two when
+ * a group: it stays on the General tab, below everything else there. A page gets the strip with three or more groups, or two when
  * it has enough rows to be worth splitting; smaller pages stay as they are.
  *
  * applySettingsLayout() runs every time the window opens and when the
@@ -202,6 +202,10 @@ function collectGroups(body) {
             if (!(child instanceof HTMLElement)) continue;
             if (isHeading(child)) {
                 groups.push({ label: headingText(child) || 'Section', head: child, els: [child] });
+                continue;
+            }
+            if (child.dataset.railClosed) {
+                groups[0].els.push(child);
                 continue;
             }
             // A showing wrapper that holds two or more headings is opened up:
