@@ -12,8 +12,10 @@
  * it) become a strip of tabs under the hero heading, and one group shows
  * at a time. Rows before the first heading form a "General" tab. Headings
  * inside a wrapper the page shows and hides (the Doom Counter's options)
- * count too, as long as the wrapper is showing. Pages with fewer than
- * three groups stay as they are.
+ * count too, as long as the wrapper is showing. A card meant to stay
+ * folded at the foot of its page (data-rail-closed, like Advanced) is not
+ * a group. A page gets the strip with three or more groups, or two when
+ * it has enough rows to be worth splitting; smaller pages stay as they are.
  *
  * applySettingsLayout() runs every time the window opens and when the
  * layout setting changes, so sections that other code shows or hides
@@ -24,6 +26,8 @@ import { escapeHtml } from '../../utils/html.js';
 
 const RAIL_ID = 'dooms-settings-rail';
 const MIN_GROUPS = 3;
+const MIN_GROUPS_IF_LONG = 2;
+const LONG_PAGE_ROWS = 8;
 let lastTab = null; // remembered for the session only
 /** section id → the label of the sub-tab that was open there (session only) */
 const lastGroup = new Map();
@@ -150,6 +154,7 @@ const HEAD_SELECTOR = '.rpg-subsection-label, details.rpg-subsection-collapse';
  */
 function isHeading(el) {
     if (!(el instanceof HTMLElement) || el.style.display === 'none' || el.hidden) return false;
+    if (el.dataset.railClosed) return false;
     return el.matches(HEAD_SELECTOR);
 }
 
@@ -227,7 +232,9 @@ function buildSubrail(section) {
         || lastGroup.get(section.dataset.accordion);
     clearSubrail(section);
     const groups = collectGroups(body);
-    if (groups.length < MIN_GROUPS) return;
+    const rows = body.querySelectorAll('.rpg-setting-row').length;
+    const enough = groups.length >= MIN_GROUPS || (groups.length >= MIN_GROUPS_IF_LONG && rows >= LONG_PAGE_ROWS);
+    if (!enough) return;
     groups.forEach((g, i) => {
         g.els.forEach(el => { el.dataset.doomsGroup = String(i); });
         if (g.head) g.head.classList.add('dooms-group-head');
