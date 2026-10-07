@@ -510,7 +510,10 @@ body[data-dooms-ui] .dooms-pb-title {
 /* One line of chrome. The toggle strip folds into the header row, which
    carries the chevron and collapses the shelf when clicked (portraitBar.js
    routes that click to the hidden strip). Side docks keep their strip. */
-body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-toggle { display: none; }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right):not(.dooms-pb-no-header) .dooms-pb-toggle { display: none; }
+/* The arrows sit on the portraits, not at the bar's midpoint, which with
+   small portraits put them on the header line */
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-arrow { top: calc(50% + 9px); }
 body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar {
     border-top: 1px solid var(--ov-line2);
 }

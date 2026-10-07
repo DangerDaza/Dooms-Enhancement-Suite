@@ -127,7 +127,23 @@ export function applyPortraitBarSettings() {
     // Toggle visibility of header, arrows, absent characters
     const $bar = $('#dooms-portrait-bar');
     $bar.find('.dooms-pb-header').toggle(s.showHeader !== false);
+    // The UI setups fold the toggle strip into the header; with the header
+    // hidden they need the strip back, or nothing could collapse the shelf.
+    $('#dooms-portrait-bar-wrapper').toggleClass('dooms-pb-no-header', s.showHeader === false);
     $bar.toggleClass('dooms-pb-arrows-hidden', s.showScrollArrows === false);
+    updateArrowOverflow();
+}
+
+/**
+ * Scroll arrows only earn their place when the strip actually overflows:
+ * flags the bar so CSS can hide them otherwise. Cheap, so it runs on every
+ * render, resize and settings change.
+ */
+function updateArrowOverflow() {
+    const bar = document.getElementById('dooms-portrait-bar');
+    const strip = document.getElementById('dooms-pb-scroll');
+    if (!bar || !strip) return;
+    bar.classList.toggle('dooms-pb-no-overflow', strip.scrollWidth <= strip.clientWidth + 1);
 }
 
 /** Cache of portrait file-based URL existence checks */
@@ -294,7 +310,14 @@ export function initPortraitBar() {
         $(toggle).trigger('click');
     });
 
-    // ── Scroll arrows ──
+    // ── Scroll arrows: shown only while the strip overflows ──
+    const strip = document.getElementById('dooms-pb-scroll');
+    if (strip) {
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(updateArrowOverflow).observe(strip);
+        new MutationObserver(updateArrowOverflow).observe(strip, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+        window.addEventListener('resize', updateArrowOverflow);
+        updateArrowOverflow();
+    }
     $('#dooms-pb-left').on('click', function () {
         $('#dooms-pb-scroll').scrollLeft($('#dooms-pb-scroll').scrollLeft() - 200);
     });

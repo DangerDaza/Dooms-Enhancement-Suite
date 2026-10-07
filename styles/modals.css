@@ -8773,6 +8773,10 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     background: linear-gradient(180deg, color-mix(in srgb, var(--rpg-highlight) 14%, transparent), transparent);
     border: none;
     border-bottom: 1px solid var(--rail-line);
+    /* The band runs edge to edge, so a setup's rounded or chamfered
+       section-header shape would leave notches at the window's sides. */
+    border-radius: 0;
+    clip-path: none;
     gap: 14px;
     transform: none;
 }

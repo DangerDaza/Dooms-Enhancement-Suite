@@ -9648,6 +9648,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* Hidden arrows when setting is off */
 .dooms-pb-arrows-hidden .dooms-pb-arrow { display: none !important; }
+/* No overflow, no arrows (portraitBar.js keeps the flag current) */
+.dooms-portrait-bar.dooms-pb-no-overflow .dooms-pb-arrow { display: none; }
 
 
 /* Emoji fallback card (no portrait image) */
