@@ -49,6 +49,16 @@ function visibleSections(popup) {
 }
 
 /**
+ * Gives one popup the layout class only: the Workshop and the Roster call
+ * this when they open, so opening them never rebuilds the Settings window
+ * behind them (which would scroll it to the top and reopen folded cards).
+ * @param {string} id popup element id
+ */
+export function applyPopupLayout(id) {
+    document.getElementById(id)?.classList.toggle('dooms-rail', isRailLayout());
+}
+
+/**
  * Applies the strip or rail layout to #rpg-settings-popup.
  */
 export function applySettingsLayout() {
@@ -107,11 +117,15 @@ function buildRail(popup) {
         body.addEventListener('change', () => {
             requestAnimationFrame(() => {
                 const current = popup.querySelector('.rpg-settings-popup-body > .rpg-accordion-section.dooms-rail-current');
-                if (current && popup.classList.contains('dooms-rail')) buildSubrail(current);
+                if (current && popup.classList.contains('dooms-rail')) buildSubrail(current, { fromChange: true });
             });
         });
     }
-    const wanted = sections.find(s => s.dataset.accordion === lastTab) || sections[0];
+    // Coming from the strip, the section the user has open is their place;
+    // otherwise the one they were on last time in the rail, else the first.
+    const wanted = sections.find(s => s.classList.contains('rpg-accordion-open'))
+        || sections.find(s => s.dataset.accordion === lastTab)
+        || sections[0];
     if (wanted) selectSection(popup, wanted.dataset.accordion);
 }
 
@@ -228,14 +242,23 @@ function collectGroups(body) {
  * was open there if it still exists.
  * @param {HTMLElement} section
  */
-function buildSubrail(section) {
+function buildSubrail(section, { fromChange = false } = {}) {
     const body = section.querySelector(':scope > .rpg-accordion-body');
     const header = section.querySelector(':scope > .rpg-accordion-header');
     if (!body || !header) return;
-    const previous = section.querySelector(':scope > .dooms-subrail .dooms-subrail-btn.is-active')?.dataset.label
+    const existing = section.querySelector(':scope > .dooms-subrail');
+    const previous = existing?.querySelector('.dooms-subrail-btn.is-active')?.dataset.label
         || lastGroup.get(section.dataset.accordion);
-    clearSubrail(section);
     const groups = collectGroups(body);
+    // A change on the page only matters to the strip if the set of groups
+    // changed (a wrapper of headings appeared or went); otherwise leave the
+    // page exactly as the user has it.
+    if (fromChange) {
+        const signature = groups.map(g => g.label).join('\u0001');
+        if ((existing?.dataset.signature || '') === signature) return;
+        if (!existing && groups.length < MIN_GROUPS && !(groups.length >= MIN_GROUPS_IF_LONG && body.querySelectorAll('.rpg-setting-row').length >= LONG_PAGE_ROWS)) return;
+    }
+    clearSubrail(section);
     const rows = body.querySelectorAll('.rpg-setting-row').length;
     const enough = groups.length >= MIN_GROUPS || (groups.length >= MIN_GROUPS_IF_LONG && rows >= LONG_PAGE_ROWS);
     if (!enough) return;
@@ -246,12 +269,13 @@ function buildSubrail(section) {
     const strip = document.createElement('div');
     strip.className = 'dooms-subrail';
     strip.setAttribute('role', 'tablist');
+    strip.dataset.signature = groups.map(g => g.label).join('\u0001');
     strip.innerHTML = groups.map((g, i) =>
         `<button type="button" class="dooms-subrail-btn" role="tab" data-group="${i}" data-label="${escapeHtml(g.label)}">${escapeHtml(g.label)}</button>`,
     ).join('');
     header.after(strip);
     section.classList.add('dooms-subtabs-active');
-    const activate = (i) => {
+    const activate = (i, openCard = true) => {
         section.querySelectorAll('[data-dooms-group]').forEach(el => {
             el.classList.toggle('dooms-group-on', el.dataset.doomsGroup === String(i));
         });
@@ -264,7 +288,7 @@ function buildSubrail(section) {
             b.setAttribute('aria-selected', on ? 'true' : 'false');
         });
         const head = groups[i].head;
-        if (head && head.matches('details')) head.open = true;
+        if (openCard && head && head.matches('details')) head.open = true;
         lastGroup.set(section.dataset.accordion, groups[i].label);
     };
     strip.querySelectorAll('.dooms-subrail-btn').forEach(b => {
@@ -274,5 +298,5 @@ function buildSubrail(section) {
         });
     });
     const keep = groups.findIndex(g => g.label === previous);
-    activate(keep >= 0 ? keep : 0);
+    activate(keep >= 0 ? keep : 0, !fromChange);
 }

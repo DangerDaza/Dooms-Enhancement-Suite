@@ -1618,10 +1618,15 @@ export function bubbleFillFor(speaker) {
     let fills;
     try { fills = getActiveBubbleFills(); } catch (_) { return null; }
     if (!fills) return null;
+    // Matched the way getAssignedColor matches: exact, then case-insensitive,
+    // then either name contained in the other, so a speaker who gets the
+    // colour gets the fill too.
     let entry = fills[speaker];
     if (entry === undefined) {
         const lower = speaker.toLowerCase();
-        const key = Object.keys(fills).find(n => fills[n] && n.toLowerCase() === lower);
+        const names = Object.keys(fills).filter(n => fills[n]);
+        const key = names.find(n => n.toLowerCase() === lower)
+            || names.find(n => { const ln = n.toLowerCase(); return ln.includes(lower) || lower.includes(ln); });
         entry = key ? fills[key] : undefined;
     }
     if (!entry) return null;

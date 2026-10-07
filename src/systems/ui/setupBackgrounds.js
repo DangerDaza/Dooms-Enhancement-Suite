@@ -314,9 +314,30 @@ function paintInked(ctx, w, h, p, shade, dark) {
 
 /* ── SillyTavern plumbing ────────────────────────────────────────────────── */
 
-function fileNameFor(setup, theme) {
+/**
+ * @param {string} setup
+ * @param {string} theme
+ * @param {string} [variant] a palette signature, so a Custom theme gets a
+ *   file per set of colours (a named theme's colours are fixed)
+ */
+function fileNameFor(setup, theme, variant = '') {
     const t = String(theme || 'default').replace(/[^a-z0-9-]/gi, '');
-    return `${FILE_PREFIX}${SETUP_LABELS[setup] || setup} (${t}).webp`;
+    return `${FILE_PREFIX}${SETUP_LABELS[setup] || setup} (${t}${variant ? '-' + variant : ''}).webp`;
+}
+
+/** Six hex characters that change when any of the five colours does. */
+function paletteSignature() {
+    const str = JSON.stringify(readPalette());
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+    return h.toString(16).padStart(8, '0').slice(-6);
+}
+
+/** Removes a background file through SillyTavern's own endpoint (best effort). */
+async function deleteBackground(name) {
+    const res = await fetch('/api/backgrounds/delete', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify({ bg: name }) });
+    if (!res.ok) throw new Error(`background delete failed (${res.status})`);
+    try { await getBackgrounds(); } catch (_) { /* list refresh is cosmetic */ }
 }
 
 function isOurs(name) {
@@ -361,7 +382,8 @@ function setGlobalBackground(name) {
     background_settings.url = url;
     if (!isChatLocked()) $('#bg1').css('background-image', url);
     saveSettingsDebounced();
-    $('.bg_example').removeClass('selected').filter(function () { return $(this).attr('bgfile') === name; }).addClass('selected');
+    // The Backgrounds panel marks the global background with this class.
+    $('.bg_example').removeClass('selected-background').filter(function () { return $(this).attr('bgfile') === name; }).addClass('selected-background');
 }
 
 function record() {
@@ -393,28 +415,53 @@ export function syncSetupBackground(setup, theme) {
     pending = setTimeout(() => { run(setup, theme).catch(e => console.warn('[Dooms Tracker] setup background:', e)); }, 150);
 }
 
+let runSeq = 0;
+
 async function run(setup, theme) {
+    // Only the latest run may touch the background: a run still uploading
+    // when the setup changes again (or goes back to Classic) must not land
+    // its file afterwards.
+    const seq = ++runSeq;
+    const live = () => seq === runSeq;
     const enabled = extensionSettings.uiSetupBackground !== false;
     if (!enabled || !SETUP_LABELS[setup]) {
         restorePrevious();
         return;
     }
     const rec = record();
-    const fileName = fileNameFor(setup, theme);
-    if (!rec.applied && !isOurs(background_settings.name)) {
-        rec.previousName = background_settings.name;
+    const current = background_settings.name;
+    const fileName = fileNameFor(setup, theme, theme === 'custom' ? paletteSignature() : '');
+    // A background the user picked in SillyTavern's own panel while this
+    // setup was up is theirs: only our own painting is replaced, unless the
+    // setup or theme changed and a different painting is due.
+    if (rec.applied === fileName && !isOurs(current)) return;
+    // Whatever is up that is not ours is what Classic goes back to.
+    if (!isOurs(current)) rec.previousName = current;
+    const key = fileName;
+    const listedNow = () => $('.bg_example').filter(function () { return $(this).attr('bgfile') === fileName; }).length > 0;
+    if (!uploadedThisSession.has(key) && !listedNow()) {
+        // At startup the panel may not have been filled yet: refresh the list
+        // before deciding to render and upload again.
+        try { await getBackgrounds(); } catch (_) { /* the list refresh is cosmetic */ }
+        if (!live()) return;
     }
-    const key = `${fileName}`;
-    const listed = $('.bg_example').filter(function () { return $(this).attr('bgfile') === fileName; }).length > 0;
-    if (!uploadedThisSession.has(key) || !listed) {
+    if (!uploadedThisSession.has(key) || !listedNow()) {
         const blob = await renderBlob(setup);
+        if (!live()) return;
         const saved = await upload(blob, fileName);
+        if (!live()) return;
         uploadedThisSession.add(key);
         try { await getBackgrounds(); } catch (_) { /* the list refresh is cosmetic */ }
+        if (!live()) return;
         setGlobalBackground(saved || fileName);
     } else {
         setGlobalBackground(fileName);
     }
+    const superseded = rec.applied;
     rec.applied = fileName;
     saveSettings();
+    // A Custom palette's old painting is just clutter once its colours changed.
+    if (superseded && superseded !== fileName && isOurs(superseded) && /\(custom-/.test(superseded)) {
+        deleteBackground(superseded).catch(() => { });
+    }
 }

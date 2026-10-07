@@ -302,14 +302,25 @@ export function unmountComposer() {
     window.removeEventListener('resize', closeTray);
 
     if (tray) {
-        // Last corralled goes back first, so each one's remembered neighbour
-        // is already home when its turn comes and the original order holds.
-        for (const el of Array.from(tray.children).reverse()) {
+        // Back in the order they were taken. A remembered neighbour that is
+        // itself still in the tray is followed to its own neighbour, so a
+        // chain of corralled buttons lands in its original order, and two
+        // late arrivals that both sat last go back last, in order.
+        const items = Array.from(tray.children);
+        const inTray = new Set(items);
+        for (const el of items) {
             const home = homes.get(el);
             if (!home || !home.holder.isConnected) continue;
             el.classList.remove(BAR_CLASS);
-            if (home.next && home.next.parentElement === home.holder) home.holder.insertBefore(el, home.next);
+            let anchor = home.next;
+            const seen = new Set();
+            while (anchor && inTray.has(anchor) && !seen.has(anchor)) {
+                seen.add(anchor);
+                anchor = homes.get(anchor)?.next || null;
+            }
+            if (anchor && anchor.parentElement === home.holder) home.holder.insertBefore(el, anchor);
             else home.holder.appendChild(el);
+            inTray.delete(el);
             homes.delete(el);
         }
     }

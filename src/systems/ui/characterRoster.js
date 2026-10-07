@@ -30,7 +30,7 @@
  */
 
 import { extensionSettings } from '../../core/state.js';
-import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters } from '../../core/persistence.js';
+import { saveSettings, saveChatData, getActiveKnownCharacters, getActiveCharacterColors, getActiveRemovedCharacters, getActiveBannedCharacters, getActiveBubbleFills } from '../../core/persistence.js';
 import { deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../utils/avatars.js';
 // Campaign versions: the chip above the grid names the campaign whose
 // versions the tiles show; tiles with extra versions get a badge; delete
@@ -44,7 +44,7 @@ import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 import { addCharacterAlias } from '../features/characterAliases.js';
 import { canonicalStockId } from '../voices/voiceCatalog.js';
-import { applySettingsLayout } from './settingsRail.js';
+import { applyPopupLayout } from './settingsRail.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -143,7 +143,7 @@ export function openCharacterRoster() {
     // take effect (matches trackerEditor / settings popup convention).
     $modal.attr('data-theme', extensionSettings?.theme || 'default');
     // Rail or strip, following the Settings window's layout choice
-    try { applySettingsLayout(); } catch (_) { }
+    try { applyPopupLayout('character-roster-popup'); } catch (_) { }
     $modal.addClass('is-open').css('display', '');
 }
 
@@ -1030,6 +1030,18 @@ function importCharacterPayload(payload) {
         extensionSettings.knownCharacters[targetName] = { emoji: '❓' };
     }
 
+    // Bubble Fill travels with the export: on/off plus optional chosen
+    // colours (only #rrggbb is accepted, the same shape the Workshop writes).
+    if (typeof payload.bubbleFill === 'boolean') {
+        try {
+            const fills = getActiveBubbleFills();
+            const hex = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim())) ? v.trim().toLowerCase() : '';
+            const fill = hex(payload.bubbleFillColor), ink = hex(payload.bubbleInkColor);
+            if (!payload.bubbleFill) delete fills[targetName];
+            else fills[targetName] = (fill || ink) ? { fill, ink } : true;
+        } catch (e) { /* cosmetic */ }
+    }
+
     const color = typeof payload.color === 'string' ? payload.color.trim() : '';
     if (color) {
         // Chat-aware write — when perChatCharacterTracking is on the live
@@ -1153,6 +1165,7 @@ function purgeCharacter(name) {
         if (activeKnown) delete activeKnown[name];
         const activeColors = getActiveCharacterColors();
         if (activeColors) delete activeColors[name];
+        try { delete getActiveBubbleFills()[name]; } catch (e) { /* cosmetic */ }
     }
     // Drop from removedCharacters (both stores). The chat-load orphan-adopt
     // routine in persistence.js re-creates a knownCharacters entry for any

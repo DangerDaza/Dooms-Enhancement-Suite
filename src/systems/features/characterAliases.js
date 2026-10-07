@@ -426,7 +426,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
     } catch (e) {
         console.warn('[Dooms Tracker] Aliases: campaign profile merge failed', e);
     }
-    for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
+    for (const store of ['characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
         'generatedPortraits', 'characterVoices']) {
         transferIfMissing(extensionSettings[store]);
@@ -454,7 +454,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
             orphanedPortraitValues.push(val);
         }
     }
-    for (const store of ['knownCharacters', 'characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
+    for (const store of ['knownCharacters', 'characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
         'generatedPortraits', 'characterVoices']) {
         scrub(extensionSettings[store]);
@@ -463,9 +463,11 @@ export async function adoptVariantAsAlias(canonical, variant) {
         const meta = chat_metadata?.dooms_tracker;
         if (meta) {
             transferIfMissing(meta.characterColors);
+            transferIfMissing(meta.bubbleFills);
             bankColorAlias(meta.characterColors, meta.knownCharacters);
             scrub(meta.knownCharacters);
             scrub(meta.characterColors);
+            scrub(meta.bubbleFills);
             if (Array.isArray(meta.removedCharacters)) {
                 meta.removedCharacters = meta.removedCharacters.filter(n => String(n).toLowerCase() !== lower);
             }

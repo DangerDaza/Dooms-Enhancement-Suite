@@ -102,6 +102,8 @@ let middlePanelEntries = [];  // sorted entries for the middle panel
 export function renderLorebook() {
     const body = document.querySelector('#rpg-lorebook-modal .rpg-lb-modal-body');
     if (!body) return;
+    // A floating icon picker belongs to the rows being replaced.
+    document.querySelectorAll('#rpg-lorebook-modal .rpg-lb-icon-picker').forEach(p => p.remove());
 
     if (isMobileView()) {
         renderMobileLorebook();
@@ -1576,8 +1578,15 @@ export function initLorebookEventDelegation() {
         let top = r.bottom + 6;
         if (top + h > window.innerHeight - pad) top = Math.max(pad, r.top - h - 6);
         $picker.css({ top: `${Math.round(top)}px`, left: `${Math.round(left)}px`, visibility: '' }).hide().fadeIn(150);
-        // Scrolling the list would leave it floating beside nothing.
-        $modal.find('.rpg-lb-tree-list').off('scroll.lbIconPicker').one('scroll.lbIconPicker', () => $picker.remove());
+        // Scrolling anywhere in the modal, or resizing, would leave it
+        // floating beside nothing (scroll does not bubble: listen in capture).
+        const dismiss = () => {
+            $picker.remove();
+            $modal[0]?.removeEventListener('scroll', dismiss, true);
+            window.removeEventListener('resize', dismiss);
+        };
+        $modal[0]?.addEventListener('scroll', dismiss, true);
+        window.addEventListener('resize', dismiss);
     });
 
     /** The campaign row a floating picker belongs to. */

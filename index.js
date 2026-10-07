@@ -70,7 +70,8 @@ import {
     toggleAnimations,
     updateFeatureTogglesVisibility,
     updateSettingsPopupTheme,
-    applyCustomThemeToSettingsPopup
+    applyCustomThemeToSettingsPopup,
+    applyUiSetup
 } from './src/systems/ui/theme.js';
 import {
     SettingsModal,
@@ -1867,6 +1868,7 @@ function bindSettingsUI() {
         saveSettings();
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal()); // Update popup theme instantly
             updateChatThoughts(); // Update thought bubbles
         }
@@ -1877,6 +1879,7 @@ function bindSettingsUI() {
         $('#rpg-custom-bg-opacity-value').text(opacity + '%');
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
@@ -1888,6 +1891,7 @@ function bindSettingsUI() {
         saveSettings();
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal()); // Update popup theme instantly
             updateChatThoughts(); // Update thought bubbles
         }
@@ -1898,6 +1902,7 @@ function bindSettingsUI() {
         $('#rpg-custom-accent-opacity-value').text(opacity + '%');
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
@@ -1909,6 +1914,7 @@ function bindSettingsUI() {
         saveSettings();
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal()); // Update popup theme instantly
             updateChatThoughts(); // Update thought bubbles
         }
@@ -1919,6 +1925,7 @@ function bindSettingsUI() {
         $('#rpg-custom-text-opacity-value').text(opacity + '%');
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }
@@ -1930,6 +1937,7 @@ function bindSettingsUI() {
         saveSettings();
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal()); // Update popup theme instantly
             updateChatThoughts(); // Update thought bubbles
         }
@@ -1940,6 +1948,7 @@ function bindSettingsUI() {
         $('#rpg-custom-highlight-opacity-value').text(opacity + '%');
         if (extensionSettings.theme === 'custom') {
             applyCustomTheme();
+            applyUiSetup(); // the UI setup and its background read the custom palette too
             updateSettingsPopupTheme(getSettingsModal());
             updateChatThoughts();
         }

@@ -64,6 +64,9 @@ export class LorebookModal {
         this._isOpen = false;
         this.modal.classList.add('is-closing');
         this.modal.classList.remove('is-open');
+        // A campaign icon picker floats from the modal root; it must not
+        // outlive the modal (Escape closes without a click to dismiss it).
+        this.modal.querySelectorAll('.rpg-lb-icon-picker').forEach(p => p.remove());
 
         // Restore background scroll
         document.body.style.overflow = '';

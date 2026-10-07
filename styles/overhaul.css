@@ -34,13 +34,16 @@ body[data-dooms-ui] {
     --ui-highlight: var(--dooms-ui-highlight, #e94560);
     --ui-border: var(--dooms-ui-border, #4a7ba7);
 }
+/* A window that carries no --rpg-* of its own (the Default theme stamps
+   none on the Lore Library) falls back to the palette applyUiSetup()
+   publishes on <body>, which is the same theme resolved. */
 body[data-dooms-ui] .rpg-settings-popup-content,
 body[data-dooms-ui] .rpg-lb-modal-content {
-    --ui-bg: var(--rpg-bg);
-    --ui-accent: var(--rpg-accent);
-    --ui-text: var(--rpg-text);
-    --ui-highlight: var(--rpg-highlight);
-    --ui-border: var(--rpg-border);
+    --ui-bg: var(--rpg-bg, var(--dooms-ui-bg));
+    --ui-accent: var(--rpg-accent, var(--dooms-ui-accent));
+    --ui-text: var(--rpg-text, var(--dooms-ui-text));
+    --ui-highlight: var(--rpg-highlight, var(--dooms-ui-highlight));
+    --ui-border: var(--rpg-border, var(--dooms-ui-border));
 }
 body[data-dooms-ui],
 body[data-dooms-ui] .rpg-settings-popup-content,
@@ -648,8 +651,8 @@ body[data-dooms-ui] #rightSendForm {
     align-items: center;
     padding: 0;
 }
-body[data-dooms-ui] #rightSendForm > div:not(.mes_stop),
-body[data-dooms-ui] #leftSendForm > div,
+body[data-dooms-ui] #rightSendForm > div:not(.mes_stop):is(.fa-solid, .fa-regular, .interactable, .stscript_btn),
+body[data-dooms-ui] #leftSendForm > div:is(.fa-solid, .fa-regular, .interactable),
 body[data-dooms-ui] #options_button,
 body[data-dooms-ui] #extensionsMenuButton {
     width: 34px;
@@ -666,8 +669,8 @@ body[data-dooms-ui] #extensionsMenuButton {
     text-shadow: none;
     transition: opacity 0.15s, background 0.15s;
 }
-body[data-dooms-ui] #rightSendForm > div:not(.mes_stop):hover,
-body[data-dooms-ui] #leftSendForm > div:hover,
+body[data-dooms-ui] #rightSendForm > div:not(.mes_stop):is(.fa-solid, .fa-regular, .interactable, .stscript_btn):hover,
+body[data-dooms-ui] #leftSendForm > div:is(.fa-solid, .fa-regular, .interactable):hover,
 body[data-dooms-ui] #options_button:hover,
 body[data-dooms-ui] #extensionsMenuButton:hover {
     opacity: 1;
@@ -1801,18 +1804,18 @@ body[data-dooms-ui="inked"] .dooms-ip-label {
 }
 body[data-dooms-ui="inked"] .rpg-setting-label { font-weight: 700; }
 /* Every piece of window text reads in the ink colour unless a rule below
-   says otherwise; the popup ids give this enough weight to beat the modal
-   sheet's own id-prefixed greys. Buttons keep their own colours. */
-body[data-dooms-ui="inked"] :is(#rpg-settings-popup, #character-workshop-popup, #character-roster-popup, #rpg-tracker-editor-popup, #rpg-prompts-editor-popup, #rpg-character-data-editor-popup, #rpg-character-sheet-popup, .rpg-lb-modal) :is(span, label, p, small, div, li, td, th, h1, h2, h3, h4, h5, h6, summary, legend, i):not(.rpg-btn *):not(button *):not(.fa-solid):not(.fa-regular) {
+   says otherwise. The popup ids give this one id of weight, enough to beat
+   the modal sheet's own id-prefixed greys; the exclusions sit in :where()
+   so they add none, which leaves the exceptions below (one id, two
+   classes) and the rail's heading rules in modals.css ahead of it.
+   Buttons keep their own colours. */
+body[data-dooms-ui="inked"] :is(#rpg-settings-popup, #character-workshop-popup, #character-roster-popup, #rpg-tracker-editor-popup, #rpg-prompts-editor-popup, #rpg-character-data-editor-popup, #rpg-character-sheet-popup, .rpg-lb-modal) :is(span, label, p, small, div, li, td, th, h1, h2, h3, h4, h5, h6, summary, legend, i):where(:not(.rpg-btn *):not(button *):not(.fa-solid):not(.fa-regular)) {
     color: var(--ov-ink);
 }
-body[data-dooms-ui="inked"] .rpg-settings-popup-content .rpg-setting-hint,
-body[data-dooms-ui="inked"] .rpg-settings-popup-content .rpg-note-text,
-body[data-dooms-ui="inked"] .rpg-settings-popup-content small {
+body[data-dooms-ui="inked"] :is(#rpg-settings-popup, #character-workshop-popup, #character-roster-popup, #rpg-tracker-editor-popup, #rpg-prompts-editor-popup, #rpg-character-data-editor-popup, #rpg-character-sheet-popup, .rpg-lb-modal) :is(.rpg-setting-hint, .rpg-note-text, small) {
     color: var(--ov-muted);
 }
-body[data-dooms-ui="inked"] .rpg-settings-popup-content .rpg-accordion-icon,
-body[data-dooms-ui="inked"] .rpg-settings-popup-content .rpg-subsection-label {
+body[data-dooms-ui="inked"] :is(#rpg-settings-popup, #character-workshop-popup, #character-roster-popup, #rpg-tracker-editor-popup, #rpg-prompts-editor-popup, #rpg-character-data-editor-popup, #rpg-character-sheet-popup, .rpg-lb-modal) :is(.rpg-accordion-icon, .rpg-subsection-label) {
     color: var(--ov-accent);
 }
 body[data-dooms-ui="inked"] .rpg-accordion-section { background: var(--ov-paper); border: var(--ov-border-w) solid var(--ov-ink); box-shadow: none; margin-bottom: 10px; }
@@ -2085,8 +2088,8 @@ body[data-dooms-ui="lumen"] #chat .mes {
     border-radius: 20px;
     margin: 10px 12px;
     padding: 12px 16px;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    /* no per-message backdrop blur: one compositing layer per message is
+       too much for phones and integrated GPUs; the tint alone reads as glass */
 }
 /* Arcade: chamfered panels on the striped ground, lead edge in the highlight */
 body[data-dooms-ui="arcade"] #chat {
