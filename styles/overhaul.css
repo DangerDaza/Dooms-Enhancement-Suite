@@ -1571,16 +1571,23 @@ body[data-dooms-ui="inked"] .dooms-card-header {
     margin-bottom: 4px;
     padding-left: 14px;
 }
+/* The bubble takes its speaker's dialogue colour (set inline on the text
+   element, so it is currentColor here): the text keeps it, the paper is
+   tinted with it, and a halftone screen fades in from the right edge. */
 body[data-dooms-ui="inked"] .dooms-bubble-text,
 body[data-dooms-ui="inked"] .dooms-card-text {
     display: flow-root;
     position: relative;
-    background: var(--ov-paper);
+    --ov-bubble-paper: color-mix(in srgb, currentColor 11%, var(--ov-paper));
+    background:
+        linear-gradient(to right, var(--ov-bubble-paper) 55%, color-mix(in srgb, var(--ov-bubble-paper) 62%, transparent) 100%),
+        radial-gradient(color-mix(in srgb, currentColor 70%, var(--ov-ink)) 1px, transparent 1.4px) 0 0 / 7px 7px,
+        var(--ov-bubble-paper);
     border: var(--ov-border-w) solid var(--ov-ink);
     border-radius: 22px;
     padding: 10px 16px;
     box-shadow: 4px 4px 0 var(--ov-ink);
-    color: var(--ov-ink) !important;
+    color: var(--ov-ink); /* the inline dialogue colour wins over this */
     font-weight: 500;
     margin-left: 10px;
 }
@@ -1602,12 +1609,13 @@ body[data-dooms-ui="inked"] .dooms-card-new-speaker .dooms-card-text::after {
     top: 17px;
     border-style: solid;
     border-width: 7px 14px 7px 0;
-    border-color: transparent var(--ov-paper) transparent transparent;
+    border-color: transparent var(--ov-bubble-paper, var(--ov-paper)) transparent transparent;
 }
 body[data-dooms-ui="inked"] .dooms-bubble-text q,
 body[data-dooms-ui="inked"] .dooms-card-text q { color: inherit; font-weight: 700; }
+/* Narration keeps the colour the Chat Bubbles settings give it */
 body[data-dooms-ui="inked"] .dooms-bubble-narrator .dooms-bubble-text,
-body[data-dooms-ui="inked"] .dooms-card-narrator .dooms-card-text { color: var(--ov-muted) !important; font-style: italic; }
+body[data-dooms-ui="inked"] .dooms-card-narrator .dooms-card-text { color: var(--cb-narrator-color, var(--ov-muted)); font-style: italic; }
 body[data-dooms-ui="inked"] .dooms-bubble-user .dooms-bubble-text,
 body[data-dooms-ui="inked"] .dooms-card-user .dooms-card-text {
     background: var(--ov-ink);
