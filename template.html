@@ -434,16 +434,6 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Bubble Fill</span>
-                            <span class="rpg-setting-hint">Character colour fills each bubble with the speaker's dialogue colour and sets the words in its opposite: blue gives yellow, red gives cyan.</span>
-                        </div>
-                        <select id="rpg-cb-fill" class="rpg-accordion-select">
-                            <option value="panel">Panel</option>
-                            <option value="character">Character colour, opposite text</option>
-                        </select>
-                    </div>
 
                     <div class="rpg-subsection-label">Bubble Colors</div>
                     <div class="rpg-setting-row">
@@ -2822,6 +2812,16 @@
                             </button>
                             <input type="color" id="cw-color-custom-input" class="sr-only" value="#e94560"
                                 aria-label="Custom dialogue color">
+                        </div>
+                        <div class="rpg-setting-row cw-npc-only" style="margin-top: 0.8rem;">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Bubble Fill</span>
+                                <span class="rpg-setting-hint">This character's bubbles take the dialogue colour, with the words in its opposite (blue gives yellow). Use it to tell apart two characters who share a colour.</span>
+                            </div>
+                            <label class="rpg-toggle-switch">
+                                <input type="checkbox" id="cw-bubble-fill" />
+                                <span class="rpg-toggle-slider"></span>
+                            </label>
                         </div>
                     </div>
                     <div class="rpg-editor-section">

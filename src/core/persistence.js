@@ -922,6 +922,26 @@ export function getActiveCharacterColors() {
 }
 
 /**
+ * Which characters have Bubble Fill on (Workshop → Appearance → Dialogue
+ * color): name → true. Lives beside the colour map in the same scope (per
+ * chat when per-chat tracking is on, global otherwise) and is saved by the
+ * same roster saver.
+ * @returns {Object<string, boolean>}
+ */
+export function getActiveBubbleFills() {
+    if (extensionSettings.perChatCharacterTracking && chat_metadata?.dooms_tracker) {
+        if (!chat_metadata.dooms_tracker.bubbleFills) {
+            chat_metadata.dooms_tracker.bubbleFills = {};
+        }
+        return chat_metadata.dooms_tracker.bubbleFills;
+    }
+    if (!extensionSettings.bubbleFills) {
+        extensionSettings.bubbleFills = {};
+    }
+    return extensionSettings.bubbleFills;
+}
+
+/**
  * Persists a character roster change to the correct storage location.
  * When perChatCharacterTracking is ON, saves to chat_metadata; otherwise to extensionSettings.
  */

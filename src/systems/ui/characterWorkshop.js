@@ -35,6 +35,7 @@ import {
     getActiveRemovedCharacters,
     getActiveBannedCharacters,
     getActiveCharacterColors,
+    getActiveBubbleFills,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
@@ -513,6 +514,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     draft = buildDraft(name, isUser, versionId);
     if (carry) {
         if (carry.dirty?.color) { draft.color = carry.color; draft.dirty.color = true; }
+        if (carry.dirty?.bubbleFill) { draft.bubbleFill = !!carry.bubbleFill; draft.dirty.bubbleFill = true; }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
@@ -604,7 +606,7 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases } };
+    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
     const name = draft.name;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
@@ -708,7 +710,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases } };
+    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
     loadVersion(name, false, null, { carry });
 }
 
@@ -1230,8 +1232,9 @@ function buildDraft(name, isUser = false, versionId = null) {
         versionId: version,
         isLive: live,
         color: activeColors[name] || '',
+        bubbleFill: !!(getActiveBubbleFills() || {})[name],
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
-        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false },
+        dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false },
     };
     if (live) {
         const inj = extensionSettings?.characterInjection?.[name] || {};
@@ -1647,6 +1650,7 @@ function renderAppearance() {
     $render.attr('title', (!draft.isUser && !draft.isLive)
         ? 'Portraits render for the live version only — make this campaign active in the Lore Library first, or switch to the Live tile.'
         : 'Step 2: render a new portrait with the prompt above (or the automatic LLM prompt if the field is empty). The current portrait is kept and restorable.');
+    $modal.find('#cw-bubble-fill').prop('checked', !!draft.bubbleFill);
     const $palette = $modal.find('#cw-palette').empty();
     for (const { hex, name } of DIALOGUE_COLOR_LIST) {
         const isSelected = (draft.color || '').toLowerCase() === hex.toLowerCase();
@@ -2162,6 +2166,14 @@ function bindStaticListeners() {
         const hex = String($(this).val() || '').toLowerCase();
         if (!/^#[0-9a-f]{6}$/.test(hex)) return;
         commitColorSelection(hex);
+    });
+    // Bubble Fill: this character's bubbles take the dialogue colour, the
+    // words its opposite. Per character, so two who share a colour can be
+    // told apart.
+    $modal.on('change.cw', '#cw-bubble-fill', function () {
+        if (!draft) return;
+        draft.bubbleFill = $(this).prop('checked');
+        draft.dirty.bubbleFill = true;
     });
 
     $modal.on('change.cw', '#cw-portrait-file', async function () {
@@ -2709,6 +2721,10 @@ function commitDraft() {
         } else {
             delete colors[name];
         }
+        try {
+            const fills = getActiveBubbleFills();
+            if (draft.bubbleFill) fills[name] = true; else delete fills[name];
+        } catch (e) { /* the fill flag is cosmetic */ }
         // Persist via the matching saver (saveChatData when per-chat,
         // saveSettings otherwise) — saveCharacterRosterChange picks
         // the right one. The trailing saveSettings() at the end of
@@ -3509,6 +3525,7 @@ function exportDraft() {
         // name). Informational; import ignores it.
         version: draft.isUser ? undefined : versionLabel(draft.versionId),
         color: draft.color || '',
+        bubbleFill: !!draft.bubbleFill,
         avatar: draft.avatar || '',
         avatarFullRes: draft.avatarFullRes || '',
         relationship: draft.relationship || '',

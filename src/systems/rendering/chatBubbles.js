@@ -25,7 +25,7 @@
  * unlike a data attribute which doubled every message's DOM footprint).
  */
 import { extensionSettings } from '../../core/state.js';
-import { getActiveCharacterColors, getActiveKnownCharacters, saveCharacterRosterChange } from '../../core/persistence.js';
+import { getActiveCharacterColors, getActiveKnownCharacters, saveCharacterRosterChange, getActiveBubbleFills } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
@@ -1014,8 +1014,8 @@ function renderDiscordBubbles(segments) {
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
-        const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const textStyle = bubbleTextStyle(color);
+        const borderStyle = bubbleStyle(color, seg.speaker);
+        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
 
         const typeClass = isNarrator ? 'dooms-bubble-narrator' :
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
@@ -1101,8 +1101,8 @@ function renderCardBubbles(segments) {
 
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
-        const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const textStyle = bubbleTextStyle(color);
+        const borderStyle = bubbleStyle(color, seg.speaker);
+        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
         const typeClass = isNarrator ? 'dooms-card-narrator' :
             (seg.speaker ? 'dooms-card-character' : 'dooms-card-unknown');
         const contClass = isContinuation ? 'dooms-card-continuation' : 'dooms-card-new-speaker';
@@ -1576,15 +1576,32 @@ export function contrastInkFor(color) {
 }
 
 /**
- * Inline style for a bubble's text block: the dialogue colour, plus the fill
- * variables when the Character fill option is on.
+ * Whether a speaker has Bubble Fill on (Workshop → Appearance → Dialogue
+ * color), matched the way colours are: exact, then case-insensitive.
+ * @param {string} speaker
+ * @returns {boolean}
+ */
+function isBubbleFilled(speaker) {
+    if (!speaker) return false;
+    let fills;
+    try { fills = getActiveBubbleFills(); } catch (_) { return false; }
+    if (!fills) return false;
+    if (fills[speaker]) return true;
+    const lower = speaker.toLowerCase();
+    return Object.keys(fills).some(n => fills[n] && n.toLowerCase() === lower);
+}
+
+/**
+ * Inline style for the bubble element: its dialogue colour as the left
+ * border, plus the fill variables when the speaker has Bubble Fill on.
  * @param {string} color
+ * @param {string} speaker
  * @returns {string} ` style="..."` or ''
  */
-function bubbleTextStyle(color) {
+function bubbleStyle(color, speaker) {
     if (!color) return '';
-    const parts = [`color: ${escapeHtml(color)}`];
-    if (extensionSettings.chatBubbleSettings?.fill === 'character') {
+    const parts = [`border-left-color: ${escapeHtml(color)}`];
+    if (isBubbleFilled(speaker)) {
         const ink = contrastInkFor(color);
         if (ink) parts.push(`--cb-fill: ${escapeHtml(color)}`, `--cb-ink: ${ink}`);
     }
@@ -1600,7 +1617,6 @@ export function applyChatBubbleSettings() {
     root.style.setProperty('--cb-unknown-color', s.unknownSpeakerColor || '#aaaaaa');
     root.style.setProperty('--cb-accent', s.accentColor || '#e94560');
     root.style.setProperty('--cb-narrator-font-style', (s.narratorItalic !== false) ? 'italic' : 'normal');
-    document.body.classList.toggle('dooms-cb-fill-character', s.fill === 'character');
 
     // Background tint — decompose into RGB for rgba()
     const tintRgb = hexToRgb(s.backgroundTint || '#1a1a2e');

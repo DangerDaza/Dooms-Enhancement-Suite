@@ -13157,38 +13157,54 @@ body > .dooms-mobile-quick-jump {
 
 
 /* ============================================
-   CHAT BUBBLES — Character fill
-   Settings → Chat Bubbles → Bubble Fill → "Character colour, opposite text".
-   The renderer puts --cb-fill (the speaker's dialogue colour) and --cb-ink
-   (its opposite hue, light or dark for contrast) on the text block; these
-   rules paint them. Works in Classic and in every UI setup: the setups
-   shape the same text block, so the fill takes their shape.
+   CHAT BUBBLES — Bubble Fill (per character)
+   Workshop → Appearance → Dialogue color → Bubble Fill. The renderer puts
+   --cb-fill (the dialogue colour) and --cb-ink (its opposite hue, light or
+   dark for contrast) on that speaker's bubble elements; these rules paint
+   them. In Classic, Grimoire and Ops Console the whole bubble row is the
+   bubble, so the row fills; in Lumen, Arcade and Inked the text block is
+   the bubble, so it fills and keeps the setup's shape.
    ============================================ */
-body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"],
-body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] {
-    background: var(--cb-fill) !important;
+.dooms-bubble[style*="--cb-fill"] .dooms-bubble-text,
+.dooms-card[style*="--cb-fill"] .dooms-card-text {
     color: var(--cb-ink) !important;
 }
-body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] q,
-body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] q,
-body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] em,
-body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] em {
+/* Where the whole row fills, the name and the read-aloud button sit on the
+   fill too; in the shaped setups they sit outside the bubble and keep the
+   dialogue colour. */
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubble[style*="--cb-fill"] .dooms-bubble-author,
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubble[style*="--cb-fill"] .dooms-bubble-tts,
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-card[style*="--cb-fill"] .dooms-card-author,
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-card[style*="--cb-fill"] .dooms-bubble-tts {
+    color: var(--cb-ink) !important;
+}
+.dooms-bubble[style*="--cb-fill"] .dooms-bubble-text q,
+.dooms-bubble[style*="--cb-fill"] .dooms-bubble-text em,
+.dooms-card[style*="--cb-fill"] .dooms-card-text q,
+.dooms-card[style*="--cb-fill"] .dooms-card-text em {
     color: inherit !important;
 }
-/* Where the text block has no shape of its own (Classic, Grimoire, Console)
-   the fill gets padding and the bubble radius */
-body.dooms-cb-fill-character:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubble-text[style*="--cb-fill"],
-body.dooms-cb-fill-character:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-card-text[style*="--cb-fill"] {
-    padding: 8px 12px;
+/* The whole row (Classic, Grimoire, Ops Console) */
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubble[style*="--cb-fill"],
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-card[style*="--cb-fill"] {
+    background: var(--cb-fill) !important;
     border-radius: var(--cb-border-radius, 6px);
-    margin-top: 4px;
+}
+body:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubbles-discord .dooms-bubble[style*="--cb-fill"] {
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
+/* The text block (Lumen, Arcade, Inked) */
+body[data-dooms-ui="lumen"] .dooms-bubble[style*="--cb-fill"] .dooms-bubble-text,
+body[data-dooms-ui="lumen"] .dooms-card[style*="--cb-fill"] .dooms-card-text,
+body[data-dooms-ui="arcade"] .dooms-bubble[style*="--cb-fill"] .dooms-bubble-text,
+body[data-dooms-ui="arcade"] .dooms-card[style*="--cb-fill"] .dooms-card-text,
+body[data-dooms-ui="inked"] .dooms-bubble[style*="--cb-fill"] .dooms-bubble-text,
+body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
+    background: var(--cb-fill) !important;
 }
 /* Inked's tail is painted from the bubble paper token: match the fill */
-body.dooms-cb-fill-character[data-dooms-ui="inked"] .dooms-bubble-text[style*="--cb-fill"],
-body.dooms-cb-fill-character[data-dooms-ui="inked"] .dooms-card-text[style*="--cb-fill"] {
+body[data-dooms-ui="inked"] .dooms-bubble[style*="--cb-fill"] .dooms-bubble-text,
+body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
     --ov-bubble-paper: var(--cb-fill);
-}
-/* The read-aloud button sits on the fill */
-body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] ~ .dooms-bubble-tts {
-    color: var(--cb-ink);
 }
