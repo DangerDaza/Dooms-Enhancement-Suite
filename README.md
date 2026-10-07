@@ -160,7 +160,7 @@ Any setup works with any theme, including Custom. Each loads its fonts from Goog
 
 Under every setup but Classic, DES also re-hosts SillyTavern's message box as one calm row: Options and the extensions wand on the left, the message in the middle, Continue and Send on the right. Buttons other extensions add, and whole bars such as Guided Generations' row, wait in a tray behind one "⋯" button, so the row never clutters. Every control is SillyTavern's own, just moved, so everything keeps working; Settings → Theme → Enhanced composer turns it off.
 
-The **Settings window** itself uses a rail layout: sections as icons down the left, one page at a time. Settings → Theme → Settings window switches back to the stacked strip.
+The **Settings window** itself uses a rail layout: sections as icons down the left, one page at a time, and a long page splits into sub-menus under its heading. Advanced lives at the bottom of Generation and Inline Banners under Theme. Settings → Theme → Settings window switches back to the stacked strip.
 
 ### Settings Panel
 <img width="813" height="252" alt="image" src="https://github.com/user-attachments/assets/8449e4f8-edd6-49d2-b5a9-22311637adae" />

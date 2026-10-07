@@ -135,6 +135,47 @@
                             style="margin-top:6px; padding:6px; border-radius:4px; display:none; font-size:0.82em;">
                         </div>
                     </div>
+                    <details class="rpg-subsection-collapse" id="rpg-advanced-subsection" data-rail-closed="1">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span><i class="fa-solid fa-wrench" aria-hidden="true"></i> Advanced</span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                            <div class="rpg-setting-row" title="Terser tracker instructions (~40% fewer prompt tokens). Turn off to restore the original verbose phrasing if your model's tracker output degrades.">
+                                <span class="rpg-setting-label">Compact Tracker Prompt</span>
+                                <label class="rpg-toggle-switch">
+                                    <input type="checkbox" id="rpg-toggle-compact-prompts" />
+                                    <span class="rpg-toggle-slider"></span>
+                                </label>
+                            </div>
+                            <button id="rpg-restore-defaults" class="rpg-accordion-action-btn" type="button"
+                                title="Reset feature toggles and layout to the out-of-box experience. Keeps your characters, colors, avatars, presets, and lorebook organization.">
+                                <i class="fa-solid fa-rotate-left"></i> Restore Default Settings
+                            </button>
+                            <p class="rpg-note-text" style="margin-top:4px;">Back to the out-of-box setup — your data is kept.</p>
+
+                            <button id="rpg-open-prompts-editor" class="rpg-accordion-action-btn" type="button" style="margin-top:12px;">
+                                <i class="fa-solid fa-file-lines"></i> Customize Prompts
+                            </button>
+                            <p class="rpg-note-text" style="margin-top:4px;">Edit all AI prompts used for generation.</p>
+
+                            <div style="margin-top:12px;">
+                                <button id="rpg-edit-character-thoughts" class="rpg-accordion-action-btn" type="button">
+                                    <i class="fa-solid fa-user-pen"></i> Edit Character Data
+                                </button>
+                                <p class="rpg-note-text" style="margin-top:4px;">Directly edit the raw character
+                                    thoughts/present characters JSON data.</p>
+                            </div>
+
+                            <div style="margin-top:12px;">
+                                <button id="rpg-clear-cache" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
+                                    <i class="fa-solid fa-trash"></i> Clear Extension Cache
+                                </button>
+                                <p class="rpg-note-text" style="margin-top:4px;">Clears committed and displayed tracker data for
+                                    your currently active chat.</p>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
 
@@ -520,6 +561,41 @@
                     <button id="rpg-cb-reset" class="rpg-accordion-action-btn" type="button">
                         <i class="fa-solid fa-rotate-left"></i> Restore Chat Bubbles Defaults
                     </button>
+                        </div>
+                    </details>
+                    <details class="rpg-subsection-collapse" id="rpg-ib-subsection">
+                        <summary class="rpg-subsection-collapse-header">
+                            <span><i class="fa-solid fa-film" aria-hidden="true"></i> Inline Banners <span class="rpg-accordion-badge" id="rpg-ib-badge">off</span></span>
+                            <i class="fa-solid fa-chevron-down rpg-subsection-chevron"></i>
+                        </summary>
+                        <div class="rpg-subsection-collapse-body">
+                            <div class="rpg-setting-row">
+                                <div class="rpg-setting-label-group">
+                                    <span class="rpg-setting-label">Enable Inline Banners</span>
+                                    <span class="rpg-setting-hint">Show cinematic transition cards in the chat when the story
+                                        moves to a new location or makes a time jump between messages. No API calls — reads
+                                        existing tracker data.</span>
+                                </div>
+                                <label class="rpg-toggle-switch">
+                                    <input type="checkbox" id="rpg-ib-toggle" />
+                                    <span class="rpg-toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <div id="rpg-ib-options">
+                                <div class="rpg-subsection-label">Style</div>
+                                <div class="rpg-setting-row">
+                                    <div class="rpg-setting-label-group">
+                                        <span class="rpg-setting-label">Banner Style</span>
+                                        <span class="rpg-setting-hint">Choose how transition cards look between messages</span>
+                                    </div>
+                                    <select id="rpg-ib-style" class="rpg-accordion-select">
+                                        <option value="cinematic">Cinematic (Full-Width Banner)</option>
+                                        <option value="minimal">Minimal (Centered Lines)</option>
+                                        <option value="hybrid">Hybrid (Rounded Pill)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </details>
                 </div>
@@ -1474,45 +1550,6 @@
                 </div>
             </div>
 
-            <!-- ═══════ INLINE BANNERS ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="inline-banners">
-                <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-film rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title">Inline Banners</span>
-                    <span class="rpg-accordion-badge" id="rpg-ib-badge">off</span>
-                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
-                </div>
-                <div class="rpg-accordion-body">
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Enable Inline Banners</span>
-                            <span class="rpg-setting-hint">Show cinematic transition cards in the chat when the story
-                                moves to a new location or makes a time jump between messages. No API calls — reads
-                                existing tracker data.</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-ib-toggle" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-
-                    <div id="rpg-ib-options">
-                        <div class="rpg-subsection-label">Style</div>
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Banner Style</span>
-                                <span class="rpg-setting-hint">Choose how transition cards look between messages</span>
-                            </div>
-                            <select id="rpg-ib-style" class="rpg-accordion-select">
-                                <option value="cinematic">Cinematic (Full-Width Banner)</option>
-                                <option value="minimal">Minimal (Centered Lines)</option>
-                                <option value="hybrid">Hybrid (Rounded Pill)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ═══════ DOOM COUNTER ═══════ -->
             <div class="rpg-accordion-section" data-accordion="doom-counter">
                 <div class="rpg-accordion-header">
@@ -1859,50 +1896,6 @@
                         <button id="rpg-fab-reset-position" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-rotate-left"></i> Reset button position
                         </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════ ADVANCED ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="advanced">
-                <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-wrench rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title">Advanced</span>
-                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
-                </div>
-                <div class="rpg-accordion-body">
-                    <div class="rpg-setting-row" title="Terser tracker instructions (~40% fewer prompt tokens). Turn off to restore the original verbose phrasing if your model's tracker output degrades.">
-                        <span class="rpg-setting-label">Compact Tracker Prompt</span>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-toggle-compact-prompts" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <button id="rpg-restore-defaults" class="rpg-accordion-action-btn" type="button"
-                        title="Reset feature toggles and layout to the out-of-box experience. Keeps your characters, colors, avatars, presets, and lorebook organization.">
-                        <i class="fa-solid fa-rotate-left"></i> Restore Default Settings
-                    </button>
-                    <p class="rpg-note-text" style="margin-top:4px;">Back to the out-of-box setup — your data is kept.</p>
-
-                    <button id="rpg-open-prompts-editor" class="rpg-accordion-action-btn" type="button" style="margin-top:12px;">
-                        <i class="fa-solid fa-file-lines"></i> Customize Prompts
-                    </button>
-                    <p class="rpg-note-text" style="margin-top:4px;">Edit all AI prompts used for generation.</p>
-
-                    <div style="margin-top:12px;">
-                        <button id="rpg-edit-character-thoughts" class="rpg-accordion-action-btn" type="button">
-                            <i class="fa-solid fa-user-pen"></i> Edit Character Data
-                        </button>
-                        <p class="rpg-note-text" style="margin-top:4px;">Directly edit the raw character
-                            thoughts/present characters JSON data.</p>
-                    </div>
-
-                    <div style="margin-top:12px;">
-                        <button id="rpg-clear-cache" class="rpg-accordion-action-btn rpg-btn-danger" type="button">
-                            <i class="fa-solid fa-trash"></i> Clear Extension Cache
-                        </button>
-                        <p class="rpg-note-text" style="margin-top:4px;">Clears committed and displayed tracker data for
-                            your currently active chat.</p>
                     </div>
                 </div>
             </div>

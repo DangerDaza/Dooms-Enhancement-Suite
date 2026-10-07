@@ -8829,6 +8829,46 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     padding: 11px 14px;
     margin: 8px 0;
 }
+/* Sub-menus: a strip of tabs under the page heading; one group shows at a
+   time (settingsRail.js marks the groups) */
+#rpg-settings-popup.dooms-rail .dooms-subrail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: -6px 0 14px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--rail-line);
+}
+#rpg-settings-popup.dooms-rail .dooms-subrail-btn {
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--ov-radius-sm, 12px);
+    background: transparent;
+    color: var(--rpg-text);
+    opacity: 0.7;
+    font-size: 0.74em;
+    font-family: var(--ov-display, inherit);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+#rpg-settings-popup.dooms-rail .dooms-subrail-btn:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--rpg-text) 7%, transparent);
+}
+#rpg-settings-popup.dooms-rail .dooms-subrail-btn.is-active {
+    opacity: 1;
+    color: var(--rpg-highlight);
+    background: color-mix(in srgb, var(--rpg-highlight) 16%, transparent);
+    border-color: color-mix(in srgb, var(--rpg-highlight) 45%, transparent);
+}
+#rpg-settings-popup.dooms-rail .dooms-subtabs-active .rpg-accordion-body [data-dooms-group]:not(.dooms-group-on) { display: none !important; }
+#rpg-settings-popup.dooms-rail .dooms-subtabs-active .rpg-accordion-body [data-dooms-group-wrap]:not(.dooms-group-open) { display: none !important; }
+/* The tab names the group, so a plain heading is redundant (a heading that
+   is itself a control, like the Doom Counter's Advanced toggle, stays) */
+#rpg-settings-popup.dooms-rail .dooms-subtabs-active .rpg-accordion-body .rpg-subsection-label.dooms-group-head:not([class*="toggle"]) { display: none !important; }
+#rpg-settings-popup.dooms-rail .dooms-subtabs-active .rpg-accordion-body details.dooms-group-head { margin-top: 0; }
 #rpg-settings-popup.dooms-rail .rpg-accordion-body > .rpg-subsection-label {
     margin: 22px 0 8px;
     padding-top: 0;
