@@ -1736,6 +1736,16 @@
 }
 
 
+/* A row's control sits on the row's centre line. The generic
+   ".rpg-setting-row label" rule gives a toggle's <label> a bottom margin,
+   and selects carry one too, which pushed every control ~2.5px above the
+   label it belongs to. */
+.rpg-accordion-body .rpg-setting-row > label.rpg-toggle-switch,
+.rpg-accordion-body .rpg-setting-row > .rpg-accordion-select,
+.rpg-accordion-body .rpg-setting-row > .rpg-accordion-input,
+.rpg-accordion-body .rpg-setting-row > .rpg-slider-group {
+    margin-bottom: 0;
+}
 .rpg-accordion-body .rpg-setting-row + .rpg-setting-row {
     border-top: 1px solid rgba(255, 255, 255, 0.025);
 }
