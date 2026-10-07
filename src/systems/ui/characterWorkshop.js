@@ -74,6 +74,7 @@ import { power_user } from '../../../../../../power-user.js';
 import { escapeHtml } from '../../utils/html.js';
 import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
 import { invalidateVoices, getEngineIfLoaded } from '../voices/voiceBoot.js';
+import { applySettingsLayout } from './settingsRail.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -429,6 +430,8 @@ export function openCharacterWorkshop(characterName, options = {}) {
     }
 
     $modal.attr('data-theme', extensionSettings?.theme || 'default');
+    // Rail or strip, following the Settings window's layout choice
+    try { applySettingsLayout(); } catch (_) { }
     $modal.addClass('is-open').css('display', '');
 
     // Only now does the relationship strip have a width to measure, so this

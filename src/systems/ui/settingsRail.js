@@ -37,9 +37,15 @@ function visibleSections(popup) {
  * Applies the strip or rail layout to #rpg-settings-popup.
  */
 export function applySettingsLayout() {
+    const rail = isRailLayout();
+    // The Workshop and the Roster follow the same layout choice; their rails
+    // are their own tab and mode buttons, restyled by CSS, so a class is all
+    // they need.
+    for (const id of ['character-workshop-popup', 'character-roster-popup']) {
+        document.getElementById(id)?.classList.toggle('dooms-rail', rail);
+    }
     const popup = document.getElementById('rpg-settings-popup');
     if (!popup) return;
-    const rail = isRailLayout();
     popup.classList.toggle('dooms-rail', rail);
     if (!rail) {
         document.getElementById(RAIL_ID)?.remove();

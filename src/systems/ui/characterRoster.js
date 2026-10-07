@@ -44,6 +44,7 @@ import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 import { addCharacterAlias } from '../features/characterAliases.js';
 import { canonicalStockId } from '../voices/voiceCatalog.js';
+import { applySettingsLayout } from './settingsRail.js';
 
 let contextMenuTarget = ''; // character name currently under right-click
 
@@ -141,6 +142,8 @@ export function openCharacterRoster() {
     // Apply the active DES theme so the theme-specific token overrides
     // take effect (matches trackerEditor / settings popup convention).
     $modal.attr('data-theme', extensionSettings?.theme || 'default');
+    // Rail or strip, following the Settings window's layout choice
+    try { applySettingsLayout(); } catch (_) { }
     $modal.addClass('is-open').css('display', '');
 }
 
