@@ -507,6 +507,39 @@ body[data-dooms-ui] .dooms-pb-title {
     font-family: var(--ov-display);
     color: var(--ov-accent);
 }
+/* One line of chrome. The toggle strip folds into the header row, which
+   carries the chevron and collapses the shelf when clicked (portraitBar.js
+   routes that click to the hidden strip). Side docks keep their strip. */
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-toggle { display: none; }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar {
+    border-top: 1px solid var(--ov-line2);
+}
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar.dooms-pb-expanded {
+    padding: 3px 10px 8px;
+}
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar.dooms-pb-collapsed {
+    max-height: 40px;
+    opacity: 1;
+    padding: 3px 10px;
+}
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-collapsed .dooms-pb-scroll,
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-collapsed .dooms-pb-arrow { display: none; }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-header {
+    min-height: 22px;
+    margin-bottom: 4px;
+    padding: 0 2px;
+    cursor: pointer;
+}
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-collapsed .dooms-pb-header { margin-bottom: 0; }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-header-chevron {
+    display: inline-block;
+    margin-left: 2px;
+    font-size: 0.6em;
+    color: var(--ov-muted);
+    transition: transform 0.3s, color 0.15s;
+}
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-header:hover .dooms-pb-header-chevron { color: var(--ov-text); }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-expanded .dooms-pb-header-chevron { transform: rotate(180deg); }
 body[data-dooms-ui] .dooms-pb-count {
     background: transparent;
     border: 1px solid var(--ov-line2);
@@ -681,35 +714,35 @@ body[data-dooms-ui] #qr--bar .qr--button:hover {
     filter: none;
 }
 
-/* ── DES composer: SillyTavern's box re-hosted in two tiers ──
-   composer.js keeps every node SillyTavern made and moves it: the textarea
-   gets a full-width tier of its own, the toolbar sits under it on a hairline,
-   and buttons other extensions add wait in a tray behind one "⋯" button. */
+/* ── DES composer: SillyTavern's box re-hosted as one calm row ──
+   composer.js keeps every node SillyTavern made and only wraps and re-orders
+   it: Options and the wand, the tray button, the message, Continue and Send.
+   Buttons and bars other extensions add wait in a tray behind "⋯". */
 body[data-dooms-ui] #send_form.dooms-composer {
-    padding: 6px 8px 6px;
+    padding: 4px 8px;
     row-gap: 0;
 }
-body[data-dooms-ui] #send_form.dooms-composer .dooms-composer-field {
-    display: flex;
-    align-items: flex-start;
-    width: 100%;
-    order: 20;
-}
-body[data-dooms-ui] #send_form.dooms-composer #send_textarea {
-    width: 100%;
-    padding: 8px 8px 6px;
-    min-height: 44px;
-}
 body[data-dooms-ui] #send_form.dooms-composer #nonQRFormItems {
-    margin-top: 2px;
-    padding-top: 4px;
-    border-top: 1px solid var(--ov-line2);
+    align-items: center;
     column-gap: 2px;
     flex-wrap: nowrap;
 }
-body[data-dooms-ui] #send_form.dooms-composer #leftSendForm { order: 1; }
-body[data-dooms-ui] #send_form.dooms-composer #dooms-composer-tray-btn { order: 2; }
-body[data-dooms-ui] #send_form.dooms-composer #rightSendForm { order: 3; margin-left: auto; }
+body[data-dooms-ui] #send_form.dooms-composer #leftSendForm { order: 1; flex-wrap: nowrap; }
+body[data-dooms-ui] #send_form.dooms-composer #dooms-composer-tray-btn { order: 1; }
+body[data-dooms-ui] #send_form.dooms-composer .dooms-composer-field {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    order: 2;
+    margin: 0 4px;
+}
+body[data-dooms-ui] #send_form.dooms-composer #send_textarea {
+    width: 100%;
+    padding: 9px 10px;
+    min-height: 40px;
+}
+body[data-dooms-ui] #send_form.dooms-composer #rightSendForm { order: 3; flex-wrap: nowrap; }
 body[data-dooms-ui] #send_form.dooms-composer #options_button { margin-left: 0; }
 body[data-dooms-ui] #send_form.dooms-composer #qr--bar {
     margin-bottom: 0;
@@ -954,9 +987,10 @@ body[data-dooms-ui="grimoire"] .dooms-bubble {
 body[data-dooms-ui="grimoire"] .dooms-card {
     border-left-width: var(--ov-border-w);
 }
-/* Framed miniature: inner rule + outer hairline, a diamond over the speaker */
-body[data-dooms-ui="grimoire"] .dooms-portrait-bar.dooms-pb-expanded {
-    padding-top: 14px;
+/* Framed miniature: inner rule + outer hairline, a diamond over the speaker
+   (the strip clips vertically, so it gets room for the diamond) */
+body[data-dooms-ui="grimoire"] .dooms-pb-scroll {
+    padding-top: 11px;
 }
 body[data-dooms-ui="grimoire"] .dooms-portrait-card {
     outline: 1px solid var(--ov-line2);
@@ -1166,10 +1200,10 @@ body[data-dooms-ui="console"] #send_textarea {
 body[data-dooms-ui="console"] #send_form.dooms-composer .dooms-composer-field::before {
     content: '>';
     flex: none;
-    padding: 8px 0 0 6px;
+    padding: 0 0 0 6px;
     font-family: var(--ov-mono);
     font-weight: 700;
-    line-height: 1.45;
+    line-height: 1;
     color: var(--ov-accent);
 }
 body[data-dooms-ui="console"] #dooms-composer-tray { border-radius: 0; }
@@ -1317,9 +1351,10 @@ body[data-dooms-ui="lumen"] .dooms-card-avatar {
     margin-top: 2px;
 }
 body[data-dooms-ui="lumen"] .dooms-bubble-tts { border-radius: 50%; }
-/* Portrait dock: rounded cards with a presence ring on the speaker */
-body[data-dooms-ui="lumen"] .dooms-portrait-bar.dooms-pb-expanded {
-    padding: 12px 16px;
+/* Portrait dock: rounded cards with a presence ring on the speaker (the
+   strip clips vertically, so it gets room for the ring) */
+body[data-dooms-ui="lumen"] .dooms-pb-scroll {
+    padding: 5px 4px 6px;
 }
 body[data-dooms-ui="lumen"] .dooms-portrait-card {
     border-radius: 22px;
@@ -1425,7 +1460,7 @@ body[data-dooms-ui="lumen"] #leftSendForm > div,
 body[data-dooms-ui="lumen"] #options_button,
 body[data-dooms-ui="lumen"] #extensionsMenuButton { border-radius: 50%; }
 body[data-dooms-ui="lumen"] #qr--bar .qr--button { border-radius: 999px; }
-body[data-dooms-ui="lumen"] #send_form.dooms-composer { border-radius: 22px; padding: 8px 12px 8px; }
+body[data-dooms-ui="lumen"] #send_form.dooms-composer { border-radius: 26px; padding: 6px 10px; }
 body[data-dooms-ui="lumen"] #dooms-composer-tray-btn { border-radius: 50%; }
 body[data-dooms-ui="lumen"] #dooms-composer-tray { border-radius: 18px; padding: 8px; background: color-mix(in srgb, var(--ov-panel) 55%, var(--ui-bg)); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 body[data-dooms-ui="lumen"] #dooms-composer-tray > * { border-radius: 999px; }
@@ -1945,7 +1980,6 @@ body[data-dooms-ui="inked"] .dooms-card-avatar {
 }
 body[data-dooms-ui="inked"] .dooms-bubble-tts { background: var(--ov-paper); border: 2px solid var(--ov-ink); color: var(--ov-ink); border-radius: 50%; }
 /* Comic panels: halftone screen, highlight frame on the speaker */
-body[data-dooms-ui="inked"] .dooms-portrait-bar.dooms-pb-expanded { padding: 12px 14px 14px; }
 body[data-dooms-ui="inked"] .dooms-portrait-card {
     border: var(--ov-border-w) solid var(--ov-ink);
     box-shadow: none;

@@ -6,11 +6,12 @@
  * keeps a module-level reference to #send_textarea, and the Options menu and
  * the extensions wand are anchored with Popper to their original buttons. A
  * lookalike with the same ids would therefore be a dead box. So DES keeps
- * every node SillyTavern made and moves it instead: the textarea becomes a
- * full-width tier of its own above a slim toolbar, and the two holders every
- * extension appends its buttons into (#leftSendForm, #rightSendForm) stay
- * the real holders, so those buttons land in the DES composer whether they
- * were added before or after it mounted.
+ * every node SillyTavern made and only wraps and re-orders it: one calm row,
+ * Options and the wand, the overflow tray button, the message, then
+ * Continue and Send. The two holders every extension appends its buttons
+ * into (#leftSendForm, #rightSendForm) stay the real holders, so those
+ * buttons land in the DES composer whether they were added before or after
+ * it mounted.
  *
  * Buttons that are not SillyTavern's own are swept out of the holders into
  * an overflow tray behind a single "⋯" button, so the toolbar stays five
@@ -235,9 +236,11 @@ export function mountComposer() {
         return false;
     }
 
+    // The textarea keeps its place in the row, inside a wrapper the setups
+    // can decorate (Ops Console puts a prompt glyph in front of it).
     field = document.createElement('div');
     field.className = 'dooms-composer-field';
-    items.before(field);
+    textarea.replaceWith(field);
     field.appendChild(textarea);
 
     trayBtn = document.createElement('div');
@@ -313,7 +316,9 @@ export function unmountComposer() {
     const items = document.getElementById('nonQRFormItems');
     const right = document.getElementById('rightSendForm');
     const textarea = document.getElementById('send_textarea');
-    if (items && textarea) {
+    if (field && field.isConnected && textarea && textarea.parentElement === field) {
+        field.replaceWith(textarea);
+    } else if (items && textarea) {
         if (right && right.parentElement === items) items.insertBefore(textarea, right);
         else items.appendChild(textarea);
     }

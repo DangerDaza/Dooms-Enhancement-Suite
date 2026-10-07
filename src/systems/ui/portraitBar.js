@@ -201,6 +201,7 @@ export function initPortraitBar() {
                     <button class="dooms-pb-restore-btn dooms-pb-roster-btn" id="dooms-pb-open-roster" title="Open Character Roster" type="button">
                         <i class="fa-solid fa-users-rectangle"></i>
                     </button>
+                    <i class="fa-solid fa-chevron-up dooms-pb-header-chevron" aria-hidden="true"></i>
                 </div>
                 <button class="dooms-pb-arrow dooms-pb-left" id="dooms-pb-left"><i class="fa-solid fa-chevron-left"></i></button>
                 <button class="dooms-pb-arrow dooms-pb-right" id="dooms-pb-right"><i class="fa-solid fa-chevron-right"></i></button>
@@ -281,6 +282,16 @@ export function initPortraitBar() {
             // and rotate the chevron to point toward the open direction.
             $wrapper.addClass('dooms-pb-collapsed-side');
         }
+    });
+
+    // Under a UI setup the toggle strip is folded into the header row (CSS
+    // hides the strip and shows the header's chevron); the header then
+    // collapses and expands the shelf. Its buttons keep their own jobs.
+    $('#dooms-portrait-bar').on('click', '.dooms-pb-header', function (e) {
+        if ($(e.target).closest('button, a, input').length) return;
+        const toggle = document.getElementById('dooms-pb-toggle');
+        if (!toggle || getComputedStyle(toggle).display !== 'none') return;
+        $(toggle).trigger('click');
     });
 
     // ── Scroll arrows ──
