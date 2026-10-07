@@ -1776,6 +1776,46 @@ body[data-dooms-ui="inked"] #chat .mes {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   The D: one glyph per setup, cut from the setup's own display face
+   (icons/d-<setup>.svg), applied as a mask so it tints to the theme highlight.
+   Covers the floating button and the window headers alike.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-ui="grimoire"] .doom-icon,
+body[data-dooms-ui="console"] .doom-icon,
+body[data-dooms-ui="lumen"] .doom-icon,
+body[data-dooms-ui="arcade"] .doom-icon,
+body[data-dooms-ui="inked"] .doom-icon {
+    background-image: none;
+    background-color: var(--ov-accent);
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+}
+body[data-dooms-ui="grimoire"] .doom-icon, body[data-dooms-ui="grimoire"] .dooms-fab-btn .doom-icon::after { -webkit-mask-image: url('../icons/d-grimoire.svg'); mask-image: url('../icons/d-grimoire.svg'); }
+body[data-dooms-ui="console"] .doom-icon, body[data-dooms-ui="console"] .dooms-fab-btn .doom-icon::after { -webkit-mask-image: url('../icons/d-console.svg'); mask-image: url('../icons/d-console.svg'); }
+body[data-dooms-ui="lumen"] .doom-icon, body[data-dooms-ui="lumen"] .dooms-fab-btn .doom-icon::after { -webkit-mask-image: url('../icons/d-lumen.svg'); mask-image: url('../icons/d-lumen.svg'); }
+body[data-dooms-ui="arcade"] .doom-icon, body[data-dooms-ui="arcade"] .dooms-fab-btn .doom-icon::after { -webkit-mask-image: url('../icons/d-arcade.svg'); mask-image: url('../icons/d-arcade.svg'); }
+body[data-dooms-ui="inked"] .doom-icon, body[data-dooms-ui="inked"] .dooms-fab-btn .doom-icon::after { -webkit-mask-image: url('../icons/d-inked.svg'); mask-image: url('../icons/d-inked.svg'); }
+/* The hover flash masks to the same glyph */
+body[data-dooms-ui] .dooms-fab-btn .doom-icon::after {
+    -webkit-mask-size: contain;
+            mask-size: contain;
+}
+/* The floating button itself stays a plain plate; the glyph carries the look */
+body[data-dooms-ui] .dooms-fab-btn {
+    background: transparent;
+    border: none;
+}
+body[data-dooms-ui="lumen"] .dooms-fab-btn,
+body[data-dooms-ui="arcade"] .dooms-fab-btn {
+    background: transparent;
+    color: var(--ov-accent);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    Reduced transparency: Lumen's glass becomes solid panels. Performance mode
    already strips backdrop-filter globally.
    ──────────────────────────────────────────────────────────────────────────── */

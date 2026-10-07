@@ -87,39 +87,84 @@ export function paintBackground(ctx, w, h, setup, p) {
     }
 }
 
-/** Grimoire: a dark vellum page, ledger rules, a double-ruled frame with gilt corners. */
+/** A small seeded generator so a background repaints the same way each time. */
+function seeded(seed) {
+    let t = seed >>> 0;
+    return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+}
+
+/** Grimoire: an arcane chart on mottled vellum — a great sigil circle, a
+ *  constellation, corner flourishes, and a double-ruled frame. */
 function paintGrimoire(ctx, w, h, p, shade) {
-    ctx.fillStyle = rgba(shade(p.bg, 0.35), 1);
+    const rnd = seeded(7);
+    ctx.fillStyle = rgba(shade(p.bg, 0.3), 1);
     ctx.fillRect(0, 0, w, h);
-    // Vignette toward the edges
-    const vg = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, w * 0.75);
-    vg.addColorStop(0, rgba(p.bg, 0.35));
-    vg.addColorStop(1, rgba(shade(p.bg, 0.6), 0.9));
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, w, h);
-    // Ledger rules
-    ctx.strokeStyle = rgba(p.border, 0.07);
-    ctx.lineWidth = 1;
-    for (let y = 120; y < h - 80; y += 36) {
-        ctx.beginPath(); ctx.moveTo(140, y); ctx.lineTo(w - 140, y); ctx.stroke();
+    // Mottled vellum: soft pools of light and shade
+    for (let i = 0; i < 90; i++) {
+        const x = rnd() * w, y = rnd() * h, r = 80 + rnd() * 260;
+        const light = rnd() > 0.5;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, rgba(light ? p.text : [0, 0, 0], light ? 0.035 : 0.06));
+        g.addColorStop(1, rgba(light ? p.text : [0, 0, 0], 0));
+        ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
-    // Double-ruled frame
-    const inset = 44;
-    ctx.strokeStyle = rgba(p.highlight, 0.45);
-    ctx.lineWidth = 1.5;
+    // Vignette
+    const vg = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, w * 0.7);
+    vg.addColorStop(0, rgba([0, 0, 0], 0));
+    vg.addColorStop(1, rgba([0, 0, 0], 0.55));
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+    // The sigil: rings, tick marks, a seven-pointed star, nodes
+    const cx = w * 0.72, cy = h * 0.52, R = h * 0.44;
+    const gilt = (a) => rgba(p.highlight, a);
+    ctx.lineWidth = 2.5; ctx.strokeStyle = gilt(0.32);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = gilt(0.26);
+    ctx.beginPath(); ctx.arc(cx, cy, R - 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.64, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.6, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 72; i++) {
+        const a = (i / 72) * Math.PI * 2, long = i % 6 === 0;
+        const r1 = R - 16, r2 = long ? R - 4 : R - 10;
+        ctx.strokeStyle = gilt(long ? 0.5 : 0.28); ctx.lineWidth = long ? 2 : 1;
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); ctx.stroke();
+    }
+    const pts = [];
+    for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i / 7) * Math.PI * 2; pts.push([cx + Math.cos(a) * R * 0.6, cy + Math.sin(a) * R * 0.6]); }
+    ctx.strokeStyle = gilt(0.22); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < 7; i++) { const [x, y] = pts[(i * 3) % 7]; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.closePath(); ctx.stroke();
+    for (const [x, y] of pts) {
+        ctx.fillStyle = rgba(shade(p.bg, 0.3), 1); ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = gilt(0.6); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = gilt(0.7); ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = gilt(0.5); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = gilt(0.7); ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+    // A constellation on the left
+    const stars = [];
+    for (let i = 0; i < 9; i++) stars.push([w * (0.08 + rnd() * 0.3), h * (0.12 + rnd() * 0.76)]);
+    ctx.strokeStyle = rgba(p.text, 0.18); ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < stars.length; i++) { const [x, y] = stars[i]; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.stroke();
+    for (const [x, y] of stars) {
+        ctx.fillStyle = rgba(p.text, 0.65); ctx.beginPath(); ctx.arc(x, y, 2 + rnd() * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = gilt(0.5); ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
+    }
+    // Double-ruled frame and corner flourishes
+    const inset = 40;
+    ctx.strokeStyle = gilt(0.5); ctx.lineWidth = 1.5;
     ctx.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
-    ctx.strokeStyle = rgba(p.border, 0.3);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(inset + 8, inset + 8, w - (inset + 8) * 2, h - (inset + 8) * 2);
-    // Gilt diamonds at the corners
-    ctx.fillStyle = rgba(p.highlight, 0.8);
-    for (const [x, y] of [[inset, inset], [w - inset, inset], [inset, h - inset], [w - inset, h - inset]]) {
-        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4); ctx.fillRect(-7, -7, 14, 14); ctx.restore();
+    ctx.strokeStyle = gilt(0.25); ctx.lineWidth = 1;
+    ctx.strokeRect(inset + 7, inset + 7, w - (inset + 7) * 2, h - (inset + 7) * 2);
+    ctx.strokeStyle = gilt(0.6); ctx.lineWidth = 2;
+    for (const [x, y, sx, sy] of [[inset, inset, 1, 1], [w - inset, inset, -1, 1], [inset, h - inset, 1, -1], [w - inset, h - inset, -1, -1]]) {
+        ctx.beginPath(); ctx.moveTo(x, y + sy * 70); ctx.quadraticCurveTo(x, y + sy * 18, x + sx * 18, y + sy * 18); ctx.quadraticCurveTo(x + sx * 40, y + sy * 18, x + sx * 40, y + sy * 36); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + sx * 70, y); ctx.quadraticCurveTo(x + sx * 18, y, x + sx * 18, y + sy * 18); ctx.quadraticCurveTo(x + sx * 18, y + sy * 40, x + sx * 36, y + sy * 40); ctx.stroke();
+        ctx.save(); ctx.translate(x + sx * 18, y + sy * 18); ctx.rotate(Math.PI / 4); ctx.fillStyle = gilt(0.85); ctx.fillRect(-5, -5, 10, 10); ctx.restore();
     }
-    // Centre ornament: a long hairline with a diamond, low on the page
-    ctx.strokeStyle = rgba(p.highlight, 0.25);
-    ctx.beginPath(); ctx.moveTo(w * 0.3, h - 90); ctx.lineTo(w * 0.7, h - 90); ctx.stroke();
-    ctx.save(); ctx.translate(w / 2, h - 90); ctx.rotate(Math.PI / 4); ctx.fillStyle = rgba(p.highlight, 0.6); ctx.fillRect(-5, -5, 10, 10); ctx.restore();
 }
 
 /** Ops Console: a dark readout, grid, radar arcs, corner brackets, scanlines. */
@@ -190,77 +235,81 @@ function paintLumen(ctx, w, h, p, shade) {
     ctx.fillRect(0, 0, w, h);
 }
 
-/** Arcade: diagonal stripes, a chamfered field in the highlight, a bold slash. */
+/** Arcade: a stage — one great diagonal band with a highlight edge, speed marks,
+ *  a target ring, and a hazard strip along the foot. */
 function paintArcade(ctx, w, h, p, shade) {
-    ctx.fillStyle = rgba(shade(p.bg, 0.35), 1);
+    ctx.fillStyle = rgba(shade(p.bg, 0.4), 1);
     ctx.fillRect(0, 0, w, h);
-    // Diagonal stripes
+    // Faint stripes
     ctx.save();
-    ctx.fillStyle = rgba(p.text, 0.035);
+    ctx.fillStyle = rgba(p.text, 0.025);
     ctx.translate(w / 2, h / 2); ctx.rotate(-Math.PI / 4);
     for (let x = -w; x < w; x += 28) ctx.fillRect(x, -w, 14, w * 2);
     ctx.restore();
-    // Chamfered field, lower right
-    const cham = 90;
-    ctx.fillStyle = rgba(p.accent, 0.85);
-    ctx.beginPath();
-    ctx.moveTo(w * 0.55 + cham, h * 0.55); ctx.lineTo(w, h * 0.55); ctx.lineTo(w, h); ctx.lineTo(w * 0.55, h); ctx.lineTo(w * 0.55, h * 0.55 + cham); ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = rgba(p.highlight, 0.9); ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(w * 0.55 + cham, h * 0.55); ctx.lineTo(w, h * 0.55); ctx.stroke();
-    // Bold slash
+    // The band, down the left, with a highlight edge and a hairline beyond it
+    const k = 0.42; // slant: x shifts k * h over the height
+    const band = (x0, x1, style) => { ctx.fillStyle = style; ctx.beginPath(); ctx.moveTo(x0 + k * h, 0); ctx.lineTo(x1 + k * h, 0); ctx.lineTo(x1, h); ctx.lineTo(x0, h); ctx.closePath(); ctx.fill(); };
+    band(-w, w * 0.16, rgba(p.accent, 0.95));
+    band(w * 0.16, w * 0.16 + 22, rgba(p.highlight, 1));
+    band(w * 0.16 + 36, w * 0.16 + 40, rgba(p.text, 0.35));
+    // Speed marks, top right
+    ctx.fillStyle = rgba(p.text, 0.28);
+    for (let i = 0; i < 3; i++) { const x = w * 0.72 + i * 54; ctx.beginPath(); ctx.moveTo(x + 40, 40); ctx.lineTo(x + 54, 40); ctx.lineTo(x + 14, 140); ctx.lineTo(x, 140); ctx.closePath(); ctx.fill(); }
+    // Target ring, lower right
+    const cx = w * 0.84, cy = h * 0.66;
+    ctx.strokeStyle = rgba(p.highlight, 0.35); ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(cx, cy, h * 0.26, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = rgba(p.text, 0.18); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, h * 0.21, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = rgba(p.highlight, 0.6); ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(cx, cy, h * 0.26, Math.PI * 1.1, Math.PI * 1.45); ctx.stroke();
+    // Hazard strip along the foot
     ctx.save();
-    ctx.fillStyle = rgba(p.highlight, 0.9);
-    ctx.transform(1, 0, -0.35, 1, 0, 0);
-    ctx.fillRect(w * 0.42, 0, 26, h);
-    ctx.fillStyle = rgba(p.text, 0.25);
-    ctx.fillRect(w * 0.42 + 40, 0, 8, h);
+    ctx.beginPath(); ctx.rect(0, h - 16, w, 16); ctx.clip();
+    ctx.fillStyle = rgba(p.highlight, 0.85);
+    for (let x = -40; x < w + 40; x += 48) { ctx.beginPath(); ctx.moveTo(x, h); ctx.lineTo(x + 24, h); ctx.lineTo(x + 40, h - 16); ctx.lineTo(x + 16, h - 16); ctx.closePath(); ctx.fill(); }
     ctx.restore();
-    // Top-left title block
-    ctx.fillStyle = rgba(p.text, 0.9);
-    ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(w * 0.22, 0); ctx.lineTo(w * 0.22 - 30, 60); ctx.lineTo(0, 60); ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = rgba(p.highlight, 1);
-    ctx.fillRect(0, 60, w * 0.22 - 30, 8);
+    ctx.fillStyle = rgba(p.text, 0.5);
+    ctx.fillRect(0, h - 18, w, 2);
 }
 
-/** Inked: a comic page, empty panels with ink borders and gutters, speed lines. */
+/** Inked: manga focus lines — tapered ink strokes rushing out from a clear
+ *  centre, a hand-ruled double frame, a few ink splatters in the corners. */
 function paintInked(ctx, w, h, p, shade, dark) {
+    const rnd = seeded(11);
     const ink = p.text;
-    const gutter = mix(p.bg, ink, 0.14);
-    ctx.fillStyle = rgba(gutter, 1);
+    ctx.fillStyle = rgba(p.bg, 1);
     ctx.fillRect(0, 0, w, h);
-    // Panels
-    const panels = [
-        [0.04, 0.06, 0.38, 0.42], [0.45, 0.06, 0.51, 0.26], [0.45, 0.35, 0.24, 0.13], [0.72, 0.35, 0.24, 0.13],
-        [0.04, 0.52, 0.22, 0.42], [0.29, 0.52, 0.67, 0.42],
-    ];
-    for (const [fx, fy, fw, fh] of panels) {
-        const x = w * fx, y = h * fy, pw = w * fw, ph = h * fh;
-        ctx.fillStyle = rgba(ink, 0.9);
-        ctx.fillRect(x + 8, y + 8, pw, ph);
-        ctx.fillStyle = rgba(p.bg, 1);
-        ctx.fillRect(x, y, pw, ph);
-        ctx.strokeStyle = rgba(ink, 0.9); ctx.lineWidth = 4;
-        ctx.strokeRect(x, y, pw, ph);
+    const cx = w / 2, cy = h / 2, rx = w * 0.27, ry = h * 0.32, reach = w * 0.9;
+    for (let i = 0; i < 260; i++) {
+        const a = rnd() * Math.PI * 2;
+        const start = 1 + rnd() * 0.35, len = 0.55 + rnd() * 0.45;
+        const x0 = cx + Math.cos(a) * rx * start, y0 = cy + Math.sin(a) * ry * start;
+        const x1 = cx + Math.cos(a) * reach * len, y1 = cy + Math.sin(a) * reach * len;
+        const half = (0.8 + rnd() * 2.6);
+        const nx = -Math.sin(a) * half, ny = Math.cos(a) * half;
+        ctx.fillStyle = rgba(ink, dark ? 0.35 + rnd() * 0.4 : 0.5 + rnd() * 0.45);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 + nx, y1 + ny); ctx.lineTo(x1 - nx, y1 - ny); ctx.closePath(); ctx.fill();
     }
-    // Speed lines from the top-right corner, across the big lower panel
-    ctx.save();
-    ctx.beginPath(); ctx.rect(w * 0.29, h * 0.52, w * 0.67, h * 0.42); ctx.clip();
-    ctx.strokeStyle = rgba(ink, dark ? 0.18 : 0.22); ctx.lineWidth = 2;
-    for (let i = 0; i < 40; i++) {
-        const a = Math.PI * 0.55 + (i / 40) * Math.PI * 0.4;
-        ctx.beginPath(); ctx.moveTo(w, h * 0.52); ctx.lineTo(w + Math.cos(a) * w * 1.4, h * 0.52 + Math.sin(a) * w * 1.4); ctx.stroke();
-    }
-    ctx.restore();
-    // A highlight caption box
-    ctx.fillStyle = rgba(ink, 0.9);
-    ctx.fillRect(w * 0.06 + 6, h * 0.08 + 6, 300, 56);
-    ctx.fillStyle = rgba(mix(p.highlight, p.bg, 0.65), 1);
-    ctx.fillRect(w * 0.06, h * 0.08, 300, 56);
-    ctx.strokeStyle = rgba(ink, 0.9); ctx.lineWidth = 4;
-    ctx.strokeRect(w * 0.06, h * 0.08, 300, 56);
+    // Hand-ruled double frame (a little jitter on every edge)
+    const frame = (inset, width, alpha) => {
+        ctx.strokeStyle = rgba(ink, alpha); ctx.lineWidth = width; ctx.lineJoin = 'round';
+        const j = () => (rnd() - 0.5) * 3;
+        const pts = [[inset, inset], [w - inset, inset], [w - inset, h - inset], [inset, h - inset]];
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => {
+            const [nx2, ny2] = pts[(i + 1) % 4];
+            if (i === 0) ctx.moveTo(x + j(), y + j());
+            for (let t = 0.2; t <= 1.0001; t += 0.2) ctx.lineTo(x + (nx2 - x) * t + j(), y + (ny2 - y) * t + j());
+        });
+        ctx.closePath(); ctx.stroke();
+    };
+    frame(22, 7, 0.95);
+    frame(36, 2, 0.8);
+    // Ink splatters in two corners
+    const splat = (x, y, n) => { for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, d = rnd() * rnd() * 90, r = 1 + rnd() * rnd() * 14; ctx.fillStyle = rgba(ink, 0.9); ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, r, 0, Math.PI * 2); ctx.fill(); } };
+    splat(w * 0.1, h * 0.12, 36);
+    splat(w * 0.9, h * 0.88, 28);
 }
 
 /* ── SillyTavern plumbing ────────────────────────────────────────────────── */
