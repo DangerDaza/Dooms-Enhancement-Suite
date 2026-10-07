@@ -603,6 +603,7 @@ function loadChatBubbleSettingsUI() {
     $('#rpg-cb-show-author-names').prop('checked', cbs.showAuthorNames !== false);
     $('#rpg-cb-show-narrator-label').prop('checked', cbs.showNarratorLabel !== false);
     $('#rpg-cb-narrator-italic').prop('checked', cbs.narratorItalic !== false);
+    $('#rpg-cb-fill').val(cbs.fill || 'panel');
     $('#rpg-cb-hide-st-avatar').prop('checked', cbs.hideStAvatar === true);
 
     // Bubble colors
@@ -1619,6 +1620,7 @@ function bindSettingsUI() {
     $('#rpg-cb-show-author-names').on('change', function () { _cbSettings().showAuthorNames = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-show-narrator-label').on('change', function () { _cbSettings().showNarratorLabel = $(this).prop('checked'); _saveCbRerender(); });
     $('#rpg-cb-narrator-italic').on('change', function () { _cbSettings().narratorItalic = $(this).prop('checked'); _saveCb(); });
+    $('#rpg-cb-fill').on('change', function () { _cbSettings().fill = String($(this).val()); _saveCbRerender(); });
     $('#rpg-cb-hide-st-avatar').on('change', function () {
         _cbSettings().hideStAvatar = $(this).prop('checked');
         _saveCb();

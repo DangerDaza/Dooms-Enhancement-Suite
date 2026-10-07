@@ -1015,7 +1015,7 @@ function renderDiscordBubbles(segments) {
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
+        const textStyle = bubbleTextStyle(color);
 
         const typeClass = isNarrator ? 'dooms-bubble-narrator' :
             (seg.speaker ? 'dooms-bubble-character' : 'dooms-bubble-unknown');
@@ -1102,7 +1102,7 @@ function renderCardBubbles(segments) {
         const assignedColor = seg.speaker && getAssignedColor(seg.speaker);
         const color = seg.color || assignedColor || '';
         const borderStyle = color ? ` style="border-left-color: ${escapeHtml(color)}"` : '';
-        const textStyle = color ? ` style="color: ${escapeHtml(color)}"` : '';
+        const textStyle = bubbleTextStyle(color);
         const typeClass = isNarrator ? 'dooms-card-narrator' :
             (seg.speaker ? 'dooms-card-character' : 'dooms-card-unknown');
         const contClass = isContinuation ? 'dooms-card-continuation' : 'dooms-card-new-speaker';
@@ -1525,6 +1525,72 @@ export function refreshBubbleAvatars() {
  * Apply chat bubble CSS custom properties to :root for live theming.
  * Called when chatBubbleSettings change so the CSS vars update in real-time.
  */
+// ─────────────────────────────────────────────
+//  Character fill — the bubble in the speaker's colour, the words opposite
+// ─────────────────────────────────────────────
+
+/**
+ * Parses a CSS colour into [r, g, b]. Hex (#rgb, #rrggbb) and rgb()/rgba()
+ * are what dialogue colours are stored as; anything else returns null.
+ * @param {string} c
+ * @returns {number[]|null}
+ */
+function parseColorRgb(c) {
+    const v = String(c || '').trim();
+    let m = v.match(/^#([0-9a-f]{3})$/i);
+    if (m) return m[1].split('').map(x => parseInt(x + x, 16));
+    m = v.match(/^#([0-9a-f]{6})/i);
+    if (m) return [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+    m = v.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+    if (m) return [1, 2, 3].map(i => Number(m[i]));
+    return null;
+}
+
+/**
+ * The text colour for a bubble filled with `color`: the opposite hue, kept
+ * saturated, light on a dark fill and dark on a light one. Blue gives a
+ * warm yellow, red gives cyan.
+ * @param {string} color - the speaker's dialogue colour
+ * @returns {string|null} a CSS colour, or null when the colour can't be read
+ */
+export function contrastInkFor(color) {
+    const rgb = parseColorRgb(color);
+    if (!rgb) return null;
+    const [r, g, b] = rgb.map(x => x / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0, sat = 0;
+    if (max !== min) {
+        const d = max - min;
+        sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+        else if (max === g) h = ((b - r) / d + 2) * 60;
+        else h = ((r - g) / d + 4) * 60;
+    }
+    const lin = (x) => (x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+    const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const darkFill = luminance < 0.36;
+    const hue = Math.round((h + 180) % 360);
+    const s = Math.round(Math.max(sat * 100, 65));
+    return `hsl(${hue} ${s}% ${darkFill ? 88 : 16}%)`;
+}
+
+/**
+ * Inline style for a bubble's text block: the dialogue colour, plus the fill
+ * variables when the Character fill option is on.
+ * @param {string} color
+ * @returns {string} ` style="..."` or ''
+ */
+function bubbleTextStyle(color) {
+    if (!color) return '';
+    const parts = [`color: ${escapeHtml(color)}`];
+    if (extensionSettings.chatBubbleSettings?.fill === 'character') {
+        const ink = contrastInkFor(color);
+        if (ink) parts.push(`--cb-fill: ${escapeHtml(color)}`, `--cb-ink: ${ink}`);
+    }
+    return ` style="${parts.join('; ')}"`;
+}
+
 export function applyChatBubbleSettings() {
     const s = extensionSettings.chatBubbleSettings || {};
     const root = document.documentElement;
@@ -1534,6 +1600,7 @@ export function applyChatBubbleSettings() {
     root.style.setProperty('--cb-unknown-color', s.unknownSpeakerColor || '#aaaaaa');
     root.style.setProperty('--cb-accent', s.accentColor || '#e94560');
     root.style.setProperty('--cb-narrator-font-style', (s.narratorItalic !== false) ? 'italic' : 'normal');
+    document.body.classList.toggle('dooms-cb-fill-character', s.fill === 'character');
 
     // Background tint — decompose into RGB for rgba()
     const tintRgb = hexToRgb(s.backgroundTint || '#1a1a2e');

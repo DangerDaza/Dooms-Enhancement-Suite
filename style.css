@@ -13154,3 +13154,41 @@ body > .dooms-mobile-quick-jump {
         display: none !important;
     }
 }
+
+
+/* ============================================
+   CHAT BUBBLES — Character fill
+   Settings → Chat Bubbles → Bubble Fill → "Character colour, opposite text".
+   The renderer puts --cb-fill (the speaker's dialogue colour) and --cb-ink
+   (its opposite hue, light or dark for contrast) on the text block; these
+   rules paint them. Works in Classic and in every UI setup: the setups
+   shape the same text block, so the fill takes their shape.
+   ============================================ */
+body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"],
+body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] {
+    background: var(--cb-fill) !important;
+    color: var(--cb-ink) !important;
+}
+body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] q,
+body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] q,
+body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] em,
+body.dooms-cb-fill-character .dooms-card-text[style*="--cb-fill"] em {
+    color: inherit !important;
+}
+/* Where the text block has no shape of its own (Classic, Grimoire, Console)
+   the fill gets padding and the bubble radius */
+body.dooms-cb-fill-character:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-bubble-text[style*="--cb-fill"],
+body.dooms-cb-fill-character:not([data-dooms-ui="lumen"]):not([data-dooms-ui="arcade"]):not([data-dooms-ui="inked"]) .dooms-card-text[style*="--cb-fill"] {
+    padding: 8px 12px;
+    border-radius: var(--cb-border-radius, 6px);
+    margin-top: 4px;
+}
+/* Inked's tail is painted from the bubble paper token: match the fill */
+body.dooms-cb-fill-character[data-dooms-ui="inked"] .dooms-bubble-text[style*="--cb-fill"],
+body.dooms-cb-fill-character[data-dooms-ui="inked"] .dooms-card-text[style*="--cb-fill"] {
+    --ov-bubble-paper: var(--cb-fill);
+}
+/* The read-aloud button sits on the fill */
+body.dooms-cb-fill-character .dooms-bubble-text[style*="--cb-fill"] ~ .dooms-bubble-tts {
+    color: var(--cb-ink);
+}
