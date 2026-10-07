@@ -1561,9 +1561,32 @@ export function initLorebookEventDelegation() {
         if (!campaign) return;
         const pickerHtml = buildIconPickerHtml(campaignId, campaign.icon || 'fa-folder', campaign.color || '');
         const $picker = $(pickerHtml);
-        $icon.closest('.rpg-lb-campaign-header').append($picker);
-        $picker.hide().fadeIn(150);
+        // The campaign group clips to its rounded corners and the tree list
+        // scrolls, so a picker inside the row was cut off at the cell's
+        // edge. It floats from the modal root instead (still inside $modal,
+        // so the delegated handlers and the click-away close keep working),
+        // pinned under the icon and nudged to stay inside the viewport.
+        $modal.append($picker);
+        const r = this.getBoundingClientRect();
+        $picker.css({ position: 'fixed', top: 0, left: 0, visibility: 'hidden' });
+        const w = $picker.outerWidth() || 0;
+        const h = $picker.outerHeight() || 0;
+        const pad = 8;
+        const left = Math.max(pad, Math.min(r.left, window.innerWidth - w - pad));
+        let top = r.bottom + 6;
+        if (top + h > window.innerHeight - pad) top = Math.max(pad, r.top - h - 6);
+        $picker.css({ top: `${Math.round(top)}px`, left: `${Math.round(left)}px`, visibility: '' }).hide().fadeIn(150);
+        // Scrolling the list would leave it floating beside nothing.
+        $modal.find('.rpg-lb-tree-list').off('scroll.lbIconPicker').one('scroll.lbIconPicker', () => $picker.remove());
     });
+
+    /** The campaign row a floating picker belongs to. */
+    function pickerHeader($picker) {
+        const campaignId = $picker.data('campaign');
+        return $modal.find('.rpg-lb-campaign-header[data-campaign]').filter(function () {
+            return $(this).data('campaign') === campaignId;
+        });
+    }
 
     $modal.on('click', '.rpg-lb-icon-option', function (e) {
         e.stopPropagation();
@@ -1572,7 +1595,7 @@ export function initLorebookEventDelegation() {
         const campaignId = $picker.data('campaign');
         const newIcon = $btn.data('icon');
         campaignManager.updateCampaignIcon(campaignId, newIcon);
-        const $header = $picker.closest('.rpg-lb-campaign-header');
+        const $header = pickerHeader($picker);
         const $iconEl = $header.find('.rpg-lb-campaign-icon');
         const classes = $iconEl.attr('class').split(/\s+/).filter(c => !c.startsWith('fa-') || c === 'fa-solid');
         classes.push(newIcon, 'rpg-lb-campaign-icon');
@@ -1589,7 +1612,7 @@ export function initLorebookEventDelegation() {
         const campaignId = $picker.data('campaign');
         const newColor = $btn.data('color');
         campaignManager.updateCampaignColor(campaignId, newColor);
-        const $header = $picker.closest('.rpg-lb-campaign-header');
+        const $header = pickerHeader($picker);
         $header.find('.rpg-lb-campaign-icon').css('color', newColor || '');
         $picker.find('.rpg-lb-color-swatch').removeClass('selected');
         $btn.addClass('selected');
