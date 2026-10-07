@@ -18,7 +18,7 @@ import { resolveThemeCss } from './themePalettes.js';
  */
 export const UI_SETUPS = {
     classic:  { label: 'Classic',     fonts: null },
-    grimoire: { label: 'Grimoire',    fonts: 'family=Cinzel:wght@500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600' },
+    grimoire: { label: 'Grimoire',    fonts: 'family=Cinzel:wght@600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500' },
     console:  { label: 'Ops Console', fonts: 'family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;700' },
     lumen:    { label: 'Lumen',       fonts: 'family=Manrope:wght@400;500;600;700;800' },
     arcade:   { label: 'Arcade',      fonts: 'family=Bebas+Neue&family=Barlow:ital,wght@0,400;0,500;0,700;1,400' },
