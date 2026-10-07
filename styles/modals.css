@@ -1765,6 +1765,33 @@
 }
 
 
+/* Phones: a row wraps instead of squeezing its label. A control that does
+   not fit beside the label drops to its own line (right-aligned), the
+   label keeps the first line and may wrap instead of being cut short. */
+@media (max-width: 768px) {
+    .rpg-accordion-body .rpg-setting-row {
+        flex-wrap: wrap;
+        row-gap: 6px;
+    }
+    .rpg-accordion-body .rpg-setting-row > .rpg-setting-label-group {
+        flex: 1 1 200px;
+    }
+    .rpg-accordion-body .rpg-setting-row .rpg-setting-label {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .rpg-accordion-body .rpg-setting-row > .rpg-accordion-select,
+    .rpg-accordion-body .rpg-setting-row > .rpg-accordion-input,
+    .rpg-accordion-body .rpg-setting-row > input[type="text"],
+    .rpg-accordion-body .rpg-setting-row > input[type="number"] {
+        flex: 0 1 auto;
+        max-width: 100%;
+        min-width: 0;
+        margin-left: auto;
+    }
+}
+
 /* Select inputs */
 .rpg-accordion-select {
     padding: 3px 6px;
