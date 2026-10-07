@@ -158,6 +158,8 @@ Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create you
 
 Any setup works with any theme, including Custom. Each loads its fonts from Google Fonts and falls back to your system fonts when offline. Chat bubble portraits stay beside the text in every setup. Each setup also paints a matching SillyTavern background in the theme's colours and saves it to your Backgrounds panel (Settings → Theme → Setup background to turn that off); Classic restores the background you had.
 
+Under every setup but Classic, DES also re-hosts SillyTavern's message box in two tiers: the text field on top, a slim toolbar under it with Options and the extensions wand on the left and Continue and Send on the right. Buttons other extensions add wait in a tray behind one "⋯" button, so the toolbar never clutters. Every control is SillyTavern's own, just moved, so everything keeps working; Settings → Theme → Enhanced composer turns it off.
+
 The **Settings window** itself uses a rail layout: sections as icons down the left, one page at a time. Settings → Theme → Settings window switches back to the stacked strip.
 
 ### Settings Panel

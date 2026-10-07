@@ -67,6 +67,7 @@ export const defaultSettings = {
     theme: 'default',
     uiSetup: 'classic',
     uiSetupBackground: true,
+    uiComposer: true,
     settingsLayout: 'rail',
     customColors: {
         bg: '#1a1a2e',

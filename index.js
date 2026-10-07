@@ -1833,6 +1833,12 @@ function bindSettingsUI() {
         saveSettings();
         applyTheme();
     });
+    // ── Enhanced composer (SillyTavern's message box re-hosted in two tiers) ──
+    $('#rpg-toggle-ui-composer').on('change', function () {
+        extensionSettings.uiComposer = $(this).prop('checked');
+        saveSettings();
+        applyTheme();
+    });
     // ── Settings window layout: rail or strip ──
     $('#rpg-settings-layout-select').on('change', async function () {
         extensionSettings.settingsLayout = String($(this).val());
@@ -2158,6 +2164,7 @@ function bindSettingsUI() {
     $('#rpg-ui-setup-select').val(extensionSettings.uiSetup || 'classic');
     $('#rpg-settings-layout-select').val(extensionSettings.settingsLayout || 'rail');
     $('#rpg-toggle-setup-background').prop('checked', extensionSettings.uiSetupBackground !== false);
+    $('#rpg-toggle-ui-composer').prop('checked', extensionSettings.uiComposer !== false);
     $('#rpg-theme-badge').text(extensionSettings.theme || 'default');
     $('#rpg-toggle-animations').prop('checked', extensionSettings.enableAnimations ?? true);
     // Theme Controls Scene Tracker

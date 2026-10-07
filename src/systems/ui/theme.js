@@ -5,6 +5,7 @@
 import { extensionSettings, $panelContainer } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
 import { resolveThemeCss } from './themePalettes.js';
+import { syncComposer } from './composer.js';
 
 /**
  * UI setups are the second axis of DES's look. A theme picks the colours;
@@ -53,6 +54,13 @@ export function applyUiSetup() {
     import('./setupBackgrounds.js')
         .then(m => m.syncSetupBackground(setup, extensionSettings.theme))
         .catch(e => console.warn('[Dooms Tracker] setup backgrounds unavailable:', e));
+    // SillyTavern's message box is re-hosted in two tiers for a styled
+    // setup (and put back for Classic or when the option is off).
+    try {
+        syncComposer(setup, extensionSettings.uiComposer !== false);
+    } catch (e) {
+        console.warn('[Dooms Tracker] composer unavailable:', e);
+    }
     if (!isStyledUiSetup(setup)) {
         body.removeAttribute('data-dooms-ui');
         for (const k of UI_VARS) body.style.removeProperty(`--dooms-ui-${k}`);
