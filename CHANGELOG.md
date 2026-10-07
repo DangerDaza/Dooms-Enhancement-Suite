@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — Voices (trial)
+## [3.0.0] - 2026-10-07 — New Looks
 
 ### Added
 - **Updating changes nothing on screen.** Every new look is opt-in: the UI setup stays Classic, Bubble Fill is off for every character, the setup background and the enhanced composer only act under a setup other than Classic, and an existing install keeps the stacked Settings window it had (the rail layout is the default for fresh installs only; Settings → Theme → Settings window switches). The only things an updating user will notice are the Settings window's reorganisation (Advanced, History Persistence, Inline Banners, Bunny Mo and Chat Bubbles now live inside Generation, Theme and Lore Library) and the fixes listed below.

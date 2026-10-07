@@ -1,30 +1,34 @@
 {
-    "version": "2.6.0",
-    "title": "Costume Change",
+    "version": "3.0.0",
+    "title": "New Looks",
     "items": [
         {
-            "title": "🎭 Campaigns you can switch between",
-            "body": "Campaign folders in the Lore Library now have a ▶ play button. Press it to make that campaign active, and your whole setup swaps at once: every character changes to their version for that campaign — portrait, description, relationship and all — the lorebooks filed under that campaign turn on, and the previous campaign's books turn off. Books you turned on yourself are left alone, and you can mark a book as global (the globe icon) so it stays on in every campaign. The button turns into a ✓ while a campaign is active; press it again to turn the campaign off, and everything works just like before."
+            "title": "🎨 Five new looks, any colour theme",
+            "body": "Settings → Theme → UI Setup picks the shapes and type while your colour theme keeps picking the colours. Grimoire is a tabletop ledger, Ops Console a monospace readout, Lumen frosted glass, Arcade a visual-novel HUD, Inked graphic-novel panels. Each restyles everything DES draws at once: the scene tracker, chat bubbles, the Present Characters shelf, the Doom Counter, every window and the message box, with its own D glyph. Classic is the look DES always had, and it is still what you have until you pick another."
         },
         {
-            "title": "👥 One character, many versions",
-            "body": "A character can now have a different version for each campaign, so the same cast can show up in different settings without making duplicate cards. Every character starts with a Base version. Tap the + on their card to add a version for a campaign — it copies whichever version you're looking at — then change whatever you like. It's used automatically whenever that campaign is active, and anything you change during play is saved to it for you. If you don't use campaigns, nothing changes: versions only appear once a campaign exists."
+            "title": "🖼️ A background painted for each look",
+            "body": "With Setup background on (it is, by default), each setup paints a SillyTavern background in your theme's colours, saves it to your Backgrounds panel and selects it. Change the theme and it repaints. Pick your own background and DES leaves it alone. Go back to Classic and the background you had before comes back."
         },
         {
-            "title": "🖼️ A redesigned Character Workshop",
-            "body": "The portrait now fills the whole left side of the Workshop, with the character's name, relationship and versions shown over it, and the editing tabs on the right. Switching between versions fades smoothly from one portrait to the next. Everything you could do before is still there. On a phone, the portrait becomes a banner above the editor."
+            "title": "💬 A calmer message box",
+            "body": "Under every setup but Classic, SillyTavern's message box becomes one quiet row: Options and the wand, the message, Continue and Send. Buttons and whole toolbars that other extensions add wait behind a single ⋯ button, so the row never clutters however many extensions you run. Nothing is replaced, only rearranged, so everything keeps working. Settings → Theme → Enhanced composer turns it off."
         },
         {
-            "title": "📇 The Roster shows which campaign you're in",
-            "body": "The Character Roster now says which campaign you're looking at and marks characters that have more than one version, so you can tell at a glance which one you're about to edit."
+            "title": "🧭 A Settings window with a rail",
+            "body": "Sections sit as icons down the left and you see one page at a time; long pages split into sub-menus under their heading instead of one long scroll. Advanced and History Persistence now live at the bottom of Generation, Inline Banners and Chat Bubbles under Theme, Bunny Mo under Lore Library. If you are updating, your Settings window keeps the stacked list it had; Settings → Theme → Settings window switches to the rail."
         },
         {
-            "title": "📚 Lorebooks that follow your characters",
-            "body": "A lorebook with exactly the same name as a character now turns on by itself while that character is in the chat, and off again when they leave. It only ever turns off books it turned on, so books you switched on yourself are never touched. Don't want it? Settings → Lore Library → Auto-link books by character name."
+            "title": "🫧 Bubble Fill, per character",
+            "body": "Workshop → Appearance → Dialogue color → Bubble Fill paints that character's speech bubbles. On Auto the fill is their dialogue colour and the words its opposite (blue gives yellow); or pick any fill and text colour you like. Handy when two characters share a colour. Off for everyone until you turn it on."
+        },
+        {
+            "title": "🔊 Every character can have a voice",
+            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices, or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices."
         },
         {
             "title": "🔧 Fixes",
-            "body": "Right-click menus in the Lore Library no longer run off the edge of the screen. Moving several books at once on a phone no longer drops an empty entry into the folder. And the 'add a campaign version' menu is no longer cut off on phones."
+            "body": "Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
         }
     ],
     "contact": {
