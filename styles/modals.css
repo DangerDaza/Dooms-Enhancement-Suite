@@ -1856,6 +1856,14 @@
     justify-content: center;
     font-size: 0.8em;
 }
+/* A mini button that carries a word (Show) rather than a lone icon */
+.rpg-accordion-mini-btn.rpg-mini-wordbtn {
+    width: auto;
+    padding: 0 8px;
+    gap: 5px;
+    white-space: nowrap;
+}
+
 
 
 .rpg-accordion-mini-btn:hover {
