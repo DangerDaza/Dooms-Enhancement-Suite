@@ -584,6 +584,98 @@ body[data-dooms-ui] #send_textarea {
 body[data-dooms-ui] #send_textarea::placeholder {
     color: var(--ov-muted);
 }
+/* One calm row: the textarea is the thing; every button SillyTavern or
+   another extension hangs on the form becomes a quiet ghost square that
+   lights up on hover, and Send is the one filled button. */
+body[data-dooms-ui] #send_form {
+    padding: 4px 8px 6px;
+    row-gap: 2px;
+}
+body[data-dooms-ui] #nonQRFormItems {
+    column-gap: 2px;
+    align-items: center;
+}
+body[data-dooms-ui] #leftSendForm,
+body[data-dooms-ui] #rightSendForm {
+    gap: 2px;
+    align-items: center;
+    padding: 0;
+}
+body[data-dooms-ui] #rightSendForm > div:not(.mes_stop),
+body[data-dooms-ui] #leftSendForm > div,
+body[data-dooms-ui] #options_button,
+body[data-dooms-ui] #extensionsMenuButton {
+    width: 34px;
+    height: 34px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--ov-radius-sm);
+    background: transparent;
+    color: var(--ov-text);
+    font-size: 15px;
+    opacity: 0.55;
+    box-shadow: none;
+    text-shadow: none;
+    transition: opacity 0.15s, background 0.15s;
+}
+body[data-dooms-ui] #rightSendForm > div:not(.mes_stop):hover,
+body[data-dooms-ui] #leftSendForm > div:hover,
+body[data-dooms-ui] #options_button:hover,
+body[data-dooms-ui] #extensionsMenuButton:hover {
+    opacity: 1;
+    background: var(--ov-line2);
+    filter: none;
+}
+body[data-dooms-ui] #rightSendForm > #send_but:not(.mes_stop) {
+    opacity: 1;
+    background: var(--ov-accent);
+    color: var(--ov-on-accent);
+    margin-left: 4px;
+}
+body[data-dooms-ui] #rightSendForm > #send_but:not(.mes_stop):hover {
+    background: var(--ov-accent2);
+    filter: none;
+}
+body[data-dooms-ui] #send_textarea {
+    padding: 9px 12px;
+    min-height: 40px;
+    text-shadow: none;
+    line-height: 1.45;
+}
+/* Quick Replies (and anything else that lands above the row): a quiet
+   strip, parted from the row by a hairline */
+body[data-dooms-ui] #qr--bar {
+    opacity: 1;
+    justify-content: flex-start;
+    padding: 2px 2px 6px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--ov-line2);
+}
+body[data-dooms-ui] #qr--bar > .qr--buttons {
+    justify-content: flex-start;
+    gap: 2px;
+}
+body[data-dooms-ui] #qr--bar .qr--button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--ov-radius-sm);
+    color: var(--ov-muted);
+    font-family: var(--ov-display);
+    font-size: 0.78em;
+    padding: 4px 10px;
+    min-height: 28px;
+    box-shadow: none;
+    text-shadow: none;
+    opacity: 1;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+body[data-dooms-ui] #qr--bar .qr--button:hover {
+    color: var(--ov-text);
+    background: var(--ov-line2);
+    border-color: var(--ov-line);
+    filter: none;
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
    1 · GRIMOIRE — tabletop ledger
@@ -876,7 +968,7 @@ body[data-dooms-ui="console"] .dooms-dc-debug-badge {
 }
 body[data-dooms-ui="console"] #send_textarea {
     font-family: var(--ov-mono);
-    font-size: 0.95em;
+    font-size: var(--mainFontSize, 15px);
 }
 body[data-dooms-ui="console"] .rpg-btn:not(.rpg-btn-secondary):not(.rpg-btn-danger) {
     font-weight: 700;
@@ -1123,7 +1215,13 @@ body[data-dooms-ui="lumen"] .rpg-accordion-open > .rpg-accordion-header {
 body[data-dooms-ui="lumen"] .dooms-inline-thought { border-radius: 14px; border-left-width: 1px; }
 body[data-dooms-ui="lumen"] .dooms-dc-inline-header { border-bottom: none; }
 body[data-dooms-ui="lumen"] .dooms-dc-card { border-radius: 16px; }
-body[data-dooms-ui="lumen"] #send_form { border-radius: 24px; }
+body[data-dooms-ui="lumen"] #send_form { border-radius: 24px; padding: 6px 10px; }
+body[data-dooms-ui="lumen"] #rightSendForm > #send_but:not(.mes_stop),
+body[data-dooms-ui="lumen"] #rightSendForm > div:not(.mes_stop),
+body[data-dooms-ui="lumen"] #leftSendForm > div,
+body[data-dooms-ui="lumen"] #options_button,
+body[data-dooms-ui="lumen"] #extensionsMenuButton { border-radius: 50%; }
+body[data-dooms-ui="lumen"] #qr--bar .qr--button { border-radius: 999px; }
 body[data-dooms-ui="lumen"] .dooms-fab-btn { border-radius: 50%; background: var(--ov-accent); color: var(--ov-on-accent); border: none; }
 
 /* ────────────────────────────────────────────────────────────────────────────
