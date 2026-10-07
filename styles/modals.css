@@ -1773,22 +1773,30 @@
         flex-wrap: wrap;
         row-gap: 6px;
     }
-    .rpg-accordion-body .rpg-setting-row > .rpg-setting-label-group {
-        flex: 1 1 200px;
+    /* The label (grouped or bare) claims most of the line, so anything but
+       a toggle or a small input wraps under it */
+    .rpg-accordion-body .rpg-setting-row > .rpg-setting-label-group,
+    .rpg-accordion-body .rpg-setting-row > .rpg-setting-label {
+        flex: 1 1 240px;
     }
     .rpg-accordion-body .rpg-setting-row .rpg-setting-label {
         white-space: normal;
         overflow: visible;
         text-overflow: clip;
     }
-    .rpg-accordion-body .rpg-setting-row > .rpg-accordion-select,
-    .rpg-accordion-body .rpg-setting-row > .rpg-accordion-input,
-    .rpg-accordion-body .rpg-setting-row > input[type="text"],
-    .rpg-accordion-body .rpg-setting-row > input[type="number"] {
+    .rpg-accordion-body .rpg-setting-row > :not(.rpg-setting-label-group):not(.rpg-setting-label):not(.rpg-toggle-switch) {
         flex: 0 1 auto;
         max-width: 100%;
         min-width: 0;
         margin-left: auto;
+    }
+    /* A slider gets a whole line and stretches across it */
+    .rpg-accordion-body .rpg-setting-row > .rpg-slider-group {
+        flex: 1 1 100%;
+    }
+    .rpg-accordion-body .rpg-setting-row > .rpg-slider-group .rpg-range-slider {
+        flex: 1 1 auto;
+        width: auto;
     }
 }
 
