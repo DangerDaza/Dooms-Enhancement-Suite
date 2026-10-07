@@ -1891,47 +1891,58 @@
                 </div>
             </div>
 
-            <!-- Log buttons (below all accordion sections) -->
-            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-                <button id="rpg-open-system-log" class="rpg-accordion-action-btn" type="button">
-                    <i class="fa-solid fa-terminal"></i> System Log
-                </button>
-                <button id="rpg-open-notification-log" class="rpg-accordion-action-btn" type="button">
-                    <i class="fa-solid fa-bell"></i> Notification Log
-                </button>
-                <button id="rpg-open-inspector" class="rpg-accordion-action-btn" type="button"
-                    title="See verbatim what DES is queueing into the model's context, and a per-generation history of every injection, edit, and clear.">
-                    <i class="fa-solid fa-magnifying-glass"></i> Context Inspector
-                </button>
-            </div>
-            <p class="rpg-note-text" style="margin-top:4px; padding: 0 8px;">View extension and SillyTavern messages for
-                troubleshooting. <strong>Context Inspector</strong> shows exactly what DES is injecting into the model's context.</p>
+            <!-- ═══════ TOOLS ═══════ -->
+            <div class="rpg-accordion-section" data-accordion="tools">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-toolbox rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Tools</span>
+                    <span class="rpg-accordion-badge" id="rpg-tools-version-badge"></span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Logs</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button id="rpg-open-system-log" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-terminal"></i> System Log
+                        </button>
+                        <button id="rpg-open-notification-log" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-bell"></i> Notification Log
+                        </button>
+                        <button id="rpg-open-inspector" class="rpg-accordion-action-btn" type="button"
+                            title="See verbatim what DES is queueing into the model's context, and a per-generation history of every injection, edit, and clear.">
+                            <i class="fa-solid fa-magnifying-glass"></i> Context Inspector
+                        </button>
+                    </div>
+                    <p class="rpg-note-text" style="margin-top:4px;">View extension and SillyTavern messages for
+                        troubleshooting. <strong>Context Inspector</strong> shows exactly what DES is injecting into the model's context.</p>
 
-            <!-- Update -->
-            <div style="margin-top: 12px; padding: 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                <button id="rpg-update-extension" class="rpg-accordion-action-btn" type="button">
-                    <i class="fa-solid fa-cloud-arrow-down"></i> Update Extension
-                </button>
-                <label for="rpg-update-branch" class="muted" style="font-size: 0.85em; display: inline-flex; align-items: center; gap: 6px;">
-                    <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
-                    Branch
-                </label>
-                <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
-                    <option value="">Loading branches…</option>
-                </select>
-                <button id="rpg-switch-branch" class="rpg-accordion-action-btn" type="button" title="Check out the selected branch and reload SillyTavern">
-                    <i class="fa-solid fa-arrow-right-arrow-left"></i> Switch &amp; Reload
-                </button>
+                    <div class="rpg-subsection-label">Update</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <button id="rpg-update-extension" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-cloud-arrow-down"></i> Update Extension
+                        </button>
+                        <label for="rpg-update-branch" class="muted" style="font-size: 0.85em; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+                            Branch
+                        </label>
+                        <select id="rpg-update-branch" class="rpg-input" style="max-width: 220px; padding: 4px 8px;" title="Branches available on GitHub">
+                            <option value="">Loading branches…</option>
+                        </select>
+                        <button id="rpg-switch-branch" class="rpg-accordion-action-btn" type="button" title="Check out the selected branch and reload SillyTavern">
+                            <i class="fa-solid fa-arrow-right-arrow-left"></i> Switch &amp; Reload
+                        </button>
+                    </div>
+                    <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px;">
+                        Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version"
+                            style="opacity:0.7;"></span>
+                    </p>
+                    <p class="rpg-note-text" style="margin-top:0; opacity: 0.6; font-size: 0.78em;">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        <strong>Update Extension</strong> pulls the latest commit on the branch you're already on.
+                        <strong>Switch &amp; Reload</strong> checks out the branch picked in the dropdown and reloads SillyTavern automatically. Settings are kept; only on-disk files change.
+                    </p>
+                </div>
             </div>
-            <p class="rpg-note-text" id="rpg-update-status" style="margin-top:4px; padding: 0 8px;">
-                Pull the latest version of Doom's Enhancement Suite. <span id="rpg-current-version"
-                    style="opacity:0.7;"></span>
-            </p>
-            <p class="rpg-note-text" style="margin-top:0; padding: 0 8px; opacity: 0.6; font-size: 0.78em;">
-                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-                <strong>Update Extension</strong> pulls the latest commit on the branch you're already on.
-                <strong>Switch &amp; Reload</strong> checks out the branch picked in the dropdown and reloads SillyTavern automatically. Settings are kept; only on-disk files change.
-            </p>
 
         </div>
     </div>

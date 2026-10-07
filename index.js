@@ -2270,7 +2270,10 @@ function bindSettingsUI() {
 
     // ── Update extension (calls SillyTavern's /api/extensions/update) ──
     getExtensionVersion().then(v => {
-        if (v) $('#rpg-current-version').text(`Currently v${v}.`);
+        if (v) {
+            $('#rpg-current-version').text(`Currently v${v}.`);
+            $('#rpg-tools-version-badge').text(`v${v}`);
+        }
     });
     // Fetch branches from GitHub and populate the dropdown. Best-effort —
     // failures fall back to a static "main" entry.

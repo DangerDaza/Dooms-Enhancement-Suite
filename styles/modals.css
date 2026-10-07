@@ -8901,3 +8901,5 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #rpg-settings-popup.dooms-rail .rpg-subsection-collapse-body {
     padding-top: 4px;
 }
+/* A badge with nothing in it yet (the Tools version before it is known) */
+.rpg-accordion-badge:empty { display: none; }
