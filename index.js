@@ -1827,6 +1827,12 @@ function bindSettingsUI() {
         saveSettings();
         applyTheme();
     });
+    // ── Setup background (a SillyTavern background painted for the setup) ──
+    $('#rpg-toggle-setup-background').on('change', function () {
+        extensionSettings.uiSetupBackground = $(this).prop('checked');
+        saveSettings();
+        applyTheme();
+    });
     // ── Settings window layout: rail or strip ──
     $('#rpg-settings-layout-select').on('change', async function () {
         extensionSettings.settingsLayout = String($(this).val());
@@ -2151,6 +2157,7 @@ function bindSettingsUI() {
     $('#rpg-theme-select').val(extensionSettings.theme);
     $('#rpg-ui-setup-select').val(extensionSettings.uiSetup || 'classic');
     $('#rpg-settings-layout-select').val(extensionSettings.settingsLayout || 'rail');
+    $('#rpg-toggle-setup-background').prop('checked', extensionSettings.uiSetupBackground !== false);
     $('#rpg-theme-badge').text(extensionSettings.theme || 'default');
     $('#rpg-toggle-animations').prop('checked', extensionSettings.enableAnimations ?? true);
     // Theme Controls Scene Tracker

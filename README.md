@@ -156,7 +156,7 @@ Choose from pre-built themes (Default, Sci-Fi, Fantasy, Cyberpunk) or create you
 - **Arcade** — a visual-novel HUD: dark status ribbon, chamfered textboxes, nameplates filled with each character's dialogue colour.
 - **Inked** — graphic-novel panels: ink outlines with hard shadows, tinted caption boxes, speech bubbles with tails.
 
-Any setup works with any theme, including Custom. Each loads its fonts from Google Fonts and falls back to your system fonts when offline. Chat bubble portraits stay beside the text in every setup.
+Any setup works with any theme, including Custom. Each loads its fonts from Google Fonts and falls back to your system fonts when offline. Chat bubble portraits stay beside the text in every setup. Each setup also paints a matching SillyTavern background in the theme's colours and saves it to your Backgrounds panel (Settings → Theme → Setup background to turn that off); Classic restores the background you had.
 
 The **Settings window** itself uses a rail layout: sections as icons down the left, one page at a time. Settings → Theme → Settings window switches back to the stacked strip.
 

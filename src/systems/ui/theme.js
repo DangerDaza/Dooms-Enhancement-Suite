@@ -48,6 +48,11 @@ export function applyUiSetup() {
     if (!body) return;
     const setup = UI_SETUPS[extensionSettings.uiSetup] ? extensionSettings.uiSetup : 'classic';
     const existingLink = document.getElementById(FONT_LINK_ID);
+    // The SillyTavern background follows the setup (lazy: it pulls in
+    // SillyTavern's backgrounds module only when first needed).
+    import('./setupBackgrounds.js')
+        .then(m => m.syncSetupBackground(setup, extensionSettings.theme))
+        .catch(e => console.warn('[Dooms Tracker] setup backgrounds unavailable:', e));
     if (!isStyledUiSetup(setup)) {
         body.removeAttribute('data-dooms-ui');
         for (const k of UI_VARS) body.style.removeProperty(`--dooms-ui-${k}`);

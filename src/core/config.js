@@ -66,6 +66,7 @@ export const defaultSettings = {
     panelPosition: 'right',
     theme: 'default',
     uiSetup: 'classic',
+    uiSetupBackground: true,
     settingsLayout: 'rail',
     customColors: {
         bg: '#1a1a2e',

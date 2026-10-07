@@ -1700,12 +1700,13 @@ body[data-dooms-ui="inked"] #send_textarea::placeholder { font-style: italic; }
 /* ────────────────────────────────────────────────────────────────────────────
    The chat ground: what the bubbles sit on
    SillyTavern draws each message as a .mes block on #chat's tint. Each setup
-   gives that surface its own treatment in the theme's colours. The ground
-   stays a little translucent so a wallpaper behind the chat still shows.
+   gives that surface its own treatment in the theme's colours. The ground is
+   kept translucent so the setup's painted background (setupBackgrounds.js),
+   or the user's own wallpaper, shows through.
    ──────────────────────────────────────────────────────────────────────────── */
 /* Grimoire: a ledger page, entries parted by hairlines, double-ruled edges */
 body[data-dooms-ui="grimoire"] #chat {
-    background-color: color-mix(in srgb, var(--ui-bg) 88%, transparent);
+    background-color: color-mix(in srgb, var(--ui-bg) 55%, transparent);
     box-shadow: inset 4px 0 0 var(--ov-ground), inset 5px 0 0 var(--ov-line2), inset -4px 0 0 var(--ov-ground), inset -5px 0 0 var(--ov-line2);
 }
 body[data-dooms-ui="grimoire"] #chat .mes {
@@ -1719,7 +1720,7 @@ body[data-dooms-ui="grimoire"] #chat .mes {
 body[data-dooms-ui="grimoire"] #chat .mes:first-child { border-top: none; }
 /* Ops Console: a readout grid with dashed row separators */
 body[data-dooms-ui="console"] #chat {
-    background-color: color-mix(in srgb, var(--ui-bg) 90%, transparent);
+    background-color: color-mix(in srgb, var(--ui-bg) 60%, transparent);
     background-image:
         linear-gradient(color-mix(in srgb, var(--ui-border) 10%, transparent) 1px, transparent 1px),
         linear-gradient(90deg, color-mix(in srgb, var(--ui-border) 10%, transparent) 1px, transparent 1px);
@@ -1749,8 +1750,7 @@ body[data-dooms-ui="lumen"] #chat .mes {
 }
 /* Arcade: chamfered panels on the striped ground, lead edge in the highlight */
 body[data-dooms-ui="arcade"] #chat {
-    background-color: var(--ov-panel2);
-    background-image: var(--ov-stripes);
+    background-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
 }
 body[data-dooms-ui="arcade"] #chat .mes {
     background: var(--ov-panel);
@@ -1764,7 +1764,7 @@ body[data-dooms-ui="arcade"] #chat .mes {
 /* Inked: a comic page. Each message is a panel with an ink border and a
    hard shadow; the ground between the panels is the gutter. */
 body[data-dooms-ui="inked"] #chat {
-    background-color: color-mix(in srgb, var(--ui-bg) 86%, var(--ui-text));
+    background-color: color-mix(in srgb, color-mix(in srgb, var(--ui-bg) 86%, var(--ui-text)) 55%, transparent);
 }
 body[data-dooms-ui="inked"] #chat .mes {
     background: var(--ov-paper);
