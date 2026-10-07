@@ -14,9 +14,12 @@
  *
  * Buttons that are not SillyTavern's own are swept out of the holders into
  * an overflow tray behind a single "⋯" button, so the toolbar stays five
- * controls wide however many extensions are installed. A MutationObserver
- * catches buttons injected later. Unmounting puts every node back exactly
- * where it was, so Classic (or the toggle) gets the stock box.
+ * controls wide however many extensions are installed. Whole bars that an
+ * extension hangs directly on the form (Guided Generations puts a row of
+ * buttons there) ride in the tray too, flattened by CSS into the same list.
+ * MutationObservers catch buttons and bars injected later. Unmounting puts
+ * every node back exactly where it was, so Classic (or the toggle) gets the
+ * stock box.
  *
  * If a SillyTavern update changes the form's shape, mount refuses and the
  * stock box is left alone rather than half-moved.
@@ -28,6 +31,11 @@ const CORE_IDS = new Set([
     'send_but', 'mes_continue', 'mes_impersonate', 'mes_stop',
     'stscript_continue', 'stscript_pause', 'stscript_stop',
 ]);
+/** Children of #send_form that belong there: SillyTavern's own and DES's. */
+const KNOWN_FORM_CHILDREN = new Set(['file_form', 'nonQRFormItems', 'qr--bar']);
+const BAR_CLASS = 'dooms-ext-bar';
+/** Interactive things inside a swept bar, for the count badge. */
+const BAR_TOOL_SELECTOR = 'button, [role="button"], [class*="button"]:not([class*="container"]):not([class*="buttons"])';
 const TRAY_ID = 'dooms-composer-tray';
 const TRAY_BTN_ID = 'dooms-composer-tray-btn';
 const EDGE = 8;
@@ -37,6 +45,8 @@ let mounted = false;
 let holderObserver = null;
 /** @type {MutationObserver|null} */
 let trayObserver = null;
+/** @type {MutationObserver|null} */
+let formObserver = null;
 /** @type {HTMLElement|null} */
 let field = null;
 /** @type {HTMLElement|null} */
@@ -58,6 +68,17 @@ function isCore(el) {
 }
 
 /**
+ * @param {Element} el a direct child of #send_form
+ * @returns {boolean} true for a child that belongs on the form
+ */
+function isKnownFormChild(el) {
+    if (KNOWN_FORM_CHILDREN.has(el.id) || el.id === TRAY_BTN_ID) return true;
+    // DES's own additions (the mobile quick-jump button, widgets) stay put.
+    for (const c of el.classList) if (c.startsWith('dooms-')) return true;
+    return false;
+}
+
+/**
  * Moves every non-core child of a holder into the tray, remembering where
  * it sat so it can go back.
  * @param {HTMLElement} holder
@@ -72,6 +93,48 @@ function sweep(holder) {
     scheduleCount();
 }
 
+/**
+ * Moves every bar an extension hung directly on the form into the tray.
+ * @param {HTMLElement} form
+ */
+function sweepForm(form) {
+    if (!tray) return;
+    for (const el of Array.from(form.children)) {
+        if (!(el instanceof HTMLElement) || isKnownFormChild(el)) continue;
+        homes.set(el, { holder: form, next: el.nextElementSibling });
+        el.classList.add(BAR_CLASS);
+        tray.appendChild(el);
+    }
+    scheduleCount();
+}
+
+/**
+ * @param {Element} el
+ * @param {Element} root stop here (exclusive)
+ * @returns {boolean} true when el or an ancestor below root is display:none
+ */
+function hiddenWithin(el, root) {
+    for (let p = el; p && p !== root; p = p.parentElement) {
+        if (p instanceof HTMLElement && p.hidden) return true;
+        if (getComputedStyle(p).display === 'none') return true;
+    }
+    return false;
+}
+
+/**
+ * @param {Element} el a tray child
+ * @returns {number} how many tools it stands for
+ */
+function countTools(el) {
+    if (!tray || hiddenWithin(el, tray)) return 0;
+    if (!el.classList.contains(BAR_CLASS)) return 1;
+    let n = 0;
+    for (const b of el.querySelectorAll(BAR_TOOL_SELECTOR)) {
+        if (!hiddenWithin(b, el)) n++;
+    }
+    return n;
+}
+
 function scheduleCount() {
     if (countFrame) return;
     countFrame = requestAnimationFrame(() => {
@@ -84,11 +147,7 @@ function scheduleCount() {
 function updateCount() {
     if (!tray || !trayBtn) return;
     let n = 0;
-    for (const el of tray.children) {
-        if (el instanceof HTMLElement && el.hidden) continue;
-        if (getComputedStyle(el).display === 'none') continue;
-        n++;
-    }
+    for (const el of tray.children) n += countTools(el);
     trayBtn.hidden = n === 0;
     trayBtn.dataset.count = String(n);
     trayBtn.title = n === 1 ? '1 more tool' : `${n} more tools`;
@@ -197,6 +256,7 @@ export function mountComposer() {
     form.classList.add('dooms-composer');
     sweep(left);
     sweep(right);
+    sweepForm(form);
 
     holderObserver = new MutationObserver(() => {
         sweep(left);
@@ -204,6 +264,8 @@ export function mountComposer() {
     });
     holderObserver.observe(left, { childList: true });
     holderObserver.observe(right, { childList: true });
+    formObserver = new MutationObserver(() => sweepForm(form));
+    formObserver.observe(form, { childList: true });
     trayObserver = new MutationObserver(scheduleCount);
     trayObserver.observe(tray, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
 
@@ -222,8 +284,10 @@ export function unmountComposer() {
     if (!mounted) return;
     holderObserver?.disconnect();
     trayObserver?.disconnect();
+    formObserver?.disconnect();
     holderObserver = null;
     trayObserver = null;
+    formObserver = null;
     if (countFrame) {
         cancelAnimationFrame(countFrame);
         countFrame = 0;
@@ -240,6 +304,7 @@ export function unmountComposer() {
         for (const el of Array.from(tray.children).reverse()) {
             const home = homes.get(el);
             if (!home || !home.holder.isConnected) continue;
+            el.classList.remove(BAR_CLASS);
             if (home.next && home.next.parentElement === home.holder) home.holder.insertBefore(el, home.next);
             else home.holder.appendChild(el);
             homes.delete(el);

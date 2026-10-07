@@ -570,9 +570,13 @@ body[data-dooms-ui] .dooms-fab-btn:hover {
     border-color: var(--ov-accent);
 }
 
-/* ── Composer (SillyTavern's own form, lightly dressed) ── */
+/* ── Composer (SillyTavern's own form, lightly dressed) ──
+   The same translucent tint as the chat ground and the portrait shelf, so
+   the box sits on the setup's background instead of on a solid slab. */
 body[data-dooms-ui] #send_form {
-    background: var(--ov-panel);
+    background: var(--ov-chat-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: var(--ov-border-w) solid var(--ov-line);
     border-radius: var(--ov-radius);
     box-shadow: var(--ov-shadow);
@@ -756,8 +760,7 @@ body[data-dooms-ui] #dooms-composer-tray {
     gap: 2px;
     min-width: 200px;
     max-width: min(400px, calc(100vw - 16px));
-    max-height: 60vh;
-    overflow: auto;
+    overflow: visible;
     padding: 6px;
     background: var(--ov-panel);
     color: var(--ov-text);
@@ -787,7 +790,7 @@ body[data-dooms-ui] #dooms-composer-tray > * {
     box-shadow: none;
     text-shadow: none;
     white-space: nowrap;
-    overflow: hidden;
+    overflow: visible;
     transition: opacity 0.15s, background 0.15s;
 }
 body[data-dooms-ui] #dooms-composer-tray > *:hover {
@@ -795,7 +798,8 @@ body[data-dooms-ui] #dooms-composer-tray > *:hover {
     background: var(--ov-line2);
     filter: none;
 }
-body[data-dooms-ui] #dooms-composer-tray > [title]::after {
+body[data-dooms-ui] #dooms-composer-tray > [title]::after,
+body[data-dooms-ui] #dooms-composer-tray .dooms-ext-bar [title]:is(button, [role="button"], [class*="button"]:not([class*="container"]):not([class*="buttons"]))::after {
     content: attr(title);
     flex: 1;
     min-width: 0;
@@ -807,6 +811,62 @@ body[data-dooms-ui] #dooms-composer-tray > [title]::after {
     letter-spacing: 0;
     text-transform: none;
     color: var(--ov-text);
+}
+/* A bar an extension hung on the form (Guided Generations' row, say) rides
+   in the tray as a nested grid: its own sub-containers are flattened one
+   level, and its buttons become the same icon + title rows. A Quick
+   Replies bar it swallowed stays a strip across the top of it. */
+body[data-dooms-ui] #dooms-composer-tray > .dooms-ext-bar {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 2px;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    opacity: 1;
+    cursor: default;
+    white-space: normal;
+}
+body[data-dooms-ui] #dooms-composer-tray > .dooms-ext-bar:hover { background: transparent; }
+body[data-dooms-ui] #dooms-composer-tray > .dooms-ext-bar > :not(#qr--bar, button, [role="button"], [class*="button"]:not([class*="container"], [class*="buttons"])) {
+    display: contents;
+}
+body[data-dooms-ui] #dooms-composer-tray .dooms-ext-bar #qr--bar {
+    grid-column: 1 / -1;
+    order: -1;
+    width: auto;
+    margin: 0 0 2px;
+}
+body[data-dooms-ui] #dooms-composer-tray .dooms-ext-bar :is(button, [role="button"], [class*="button"]:not([class*="container"]):not([class*="buttons"]):not(.qr--button)) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    width: auto;
+    height: auto;
+    min-height: 34px;
+    margin: 0;
+    padding: 6px 10px;
+    border: none;
+    border-radius: var(--ov-radius-sm);
+    background: transparent;
+    color: var(--ov-text);
+    font-size: 14px;
+    opacity: 0.85;
+    cursor: pointer;
+    box-shadow: none;
+    text-shadow: none;
+    white-space: nowrap;
+    transition: opacity 0.15s, background 0.15s;
+}
+body[data-dooms-ui] #dooms-composer-tray .dooms-ext-bar :is(button, [role="button"], [class*="button"]:not([class*="container"]):not([class*="buttons"]):not(.qr--button)):hover {
+    opacity: 1;
+    background: var(--ov-line2);
+    filter: none;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
