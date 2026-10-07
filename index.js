@@ -800,6 +800,16 @@ function bindSettingsUI() {
         saveSettings();
         if (!extensionSettings.mobileComposeOverlay) closeMobileCompose();
     });
+    // Show the release notes on demand, whatever the seen version, the
+    // opt-out or the screen size: the user asked for them.
+    $('#rpg-show-whats-new').on('click', async function () {
+        try {
+            const { showWhatsNew } = await import('./src/systems/ui/whatsNew.js');
+            await showWhatsNew();
+        } catch (e) {
+            console.warn('[Dooms Tracker] What\'s New could not be shown:', e);
+        }
+    });
     $('#rpg-toggle-whats-new').on('change', function () {
         extensionSettings.whatsNewOptOut = !$(this).prop('checked');
         saveSettings();

@@ -45,6 +45,7 @@
 - **Long lines no longer give up after 20 seconds.** Google makes the whole clip before it answers, so a long line could take longer than DES waited, and you'd see "Couldn't reach Google, so a line was skipped". DES now waits 30 seconds plus a little more for each character of the line, up to 2 minutes. A dropped connection is retried once before the line is skipped, and the message now says whether Google was slow or couldn't be reached at all.
 
 ### Fixed
+- **A Show button next to What's New on Update** (Settings → Display & Features) opens the release notes any time, whether or not you have seen them and whatever the screen size.
 - **The What's New screen no longer shows as a dark screen with nothing on it.** The panel started invisible and relied on a short fade-in to appear, so with Performance Mode on (whose rules stop every DES animation) or a reduced-motion preference it never faded in, and only a click outside cleared the backdrop. It is visible by default now; the fade is an extra.
 - **Dialogue containing `|` or `{{` broke the bullhorn buttons.** The text was sent to SillyTavern's `/speak` unescaped, so a `|` split it into two commands. It's escaped now.
 - **The "strip colour tags before reading" setup could overwrite your own SillyTavern TTS regex** and ticked a checkbox that doesn't exist. It now fills the regex only when yours is empty, and uses the right checkbox.
