@@ -302,6 +302,12 @@ async function playJob(job) {
             report(new TtsError('autoplay', 'The browser blocked audio playback'));
             break;
         }
+        // The element refused the audio (a format the browser can't decode,
+        // or a URL it couldn't load): say so instead of skipping in silence.
+        if (result === 'error') {
+            const mediaError = audioEl?.error;
+            report(new TtsError('playback', `The browser couldn’t play the audio${mediaError?.code ? ` (media error ${mediaError.code})` : ''}`));
+        }
     }
     clearHighlight();
 }

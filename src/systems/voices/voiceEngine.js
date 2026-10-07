@@ -85,6 +85,7 @@ player.configurePlayer({
                 timeout: `${error?.message || 'OpenRouter took too long to answer'}, so a line was skipped.`,
                 content: 'OpenRouter returned no audio for a line, so it was skipped.',
                 'model-unavailable': 'OpenRouter doesn’t offer the chosen voice model right now. Pick the other model in Settings \u2192 Voices.',
+                playback: `${error?.message || 'Your browser couldn\u2019t play the audio'}. OpenRouter answered, but the browser refused the sound it sent back; check the browser console for details.`,
                 argument: `OpenRouter refused the request. ${error?.message || ''}`,
             };
             toast(['rate', 'network', 'timeout', 'content'].includes(kind) ? 'info' : 'warning',
@@ -101,6 +102,7 @@ player.configurePlayer({
             quota: 'Your Google quota for voices is used up.',
             rate: 'Google is rate-limiting voice requests, so a line was skipped.',
             autoplay: 'Your browser blocked audio. Tap any bullhorn once to allow auto-read on this device.',
+            playback: `${error?.message || 'Your browser couldn’t play the audio'}. The voice service answered, but the browser refused the sound it sent back; check the browser console for details.`,
             network: 'Couldn’t reach Google, even after a retry, so a line was skipped. Check your connection, or whether something is blocking googleapis.com.',
             timeout: `${error?.message || 'Google took too long to answer'}, so a line was skipped. Long lines take the longest.`,
             content: 'Google returned no audio for a line, so it was skipped.',
