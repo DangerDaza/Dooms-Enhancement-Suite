@@ -157,6 +157,14 @@ choice. Themes: Paper, Night Ink, Pulp (cream + red).
 
 ---
 
+## How it shipped
+
+All five shipped together as **UI setups** (Settings → Theme → UI Setup), a
+second axis next to the colour theme: the setup picks the shapes and type,
+the theme picks the colours, and any setup works with any theme. The
+Settings window also gained a **rail** layout (sections as icons down the
+left, one page at a time) modelled on the Megumin Suite options menu.
+
 ## How to decide
 
 - Want it done fastest: **2 · Ops Console**.

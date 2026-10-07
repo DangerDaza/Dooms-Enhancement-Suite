@@ -16,6 +16,7 @@ import { getDoomCounterState, getActiveCharacterColors, saveSettings } from '../
 import { getCustomSceneFields } from '../generation/jsonPromptHelpers.js';
 import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
+import { THEME_COLORS } from '../ui/themePalettes.js';
 import { chat } from '../../../../../../../script.js';
 
 /** Cache of last rendered scene data JSON to skip redundant DOM rebuilds */
@@ -148,32 +149,10 @@ function initHudDrag() {
 }
 
 /**
- * Theme color palettes — exact values from the CSS popup theme blocks
- * (`#rpg-settings-popup[data-theme="..."] .rpg-settings-popup-content`).
- * Used when sceneTracker.themeControlled is true so the scene tracker
- * matches the visual style of the settings popup for the active theme.
- *
- * Fields: bg, accent, text, highlight, border
+ * Theme colour palettes live in ui/themePalettes.js (shared with the UI
+ * setups). Used when sceneTracker.themeControlled is true so the scene
+ * tracker matches the settings popup for the active theme.
  */
-const THEME_COLORS = {
-    'sci-fi':        { bg: '#0a0e27', accent: '#1a1f3a', text: '#00ffff', highlight: '#ff00ff', border: '#00ffff' },
-    'fantasy':       { bg: '#2b1810', accent: '#3d2516', text: '#f4e4c1', highlight: '#d4af37', border: '#8b6914' },
-    'cyberpunk':     { bg: '#0d0221', accent: '#1a0b2e', text: '#00ff9f', highlight: '#ff00ff', border: '#ff00ff' },
-    'midnight-rose': { bg: '#1a1025', accent: '#2a1838', text: '#e8d5e8', highlight: '#e8729a', border: '#9b4dca' },
-    'emerald-grove': { bg: '#0d1f12', accent: '#1a3320', text: '#d4e8c8', highlight: '#c8a240', border: '#4a8c3f' },
-    'arctic':        { bg: '#0c1929', accent: '#132640', text: '#dce8f4', highlight: '#64b5f6', border: '#4a8db7' },
-    'volcanic':      { bg: '#1a1210', accent: '#2b1e18', text: '#f0dcc8', highlight: '#e8651a', border: '#b84a0f' },
-    'dracula':       { bg: '#282a36', accent: '#343746', text: '#f8f8f2', highlight: '#ff5555', border: '#6272a4' },
-    'ocean-depths':  { bg: '#0a1628', accent: '#0f2038', text: '#b8d8e8', highlight: '#00e5c8', border: '#1a6b8a' },
-    // Overhaul themes (styles/overhaul.css). The sheet restyles the tracker
-    // directly, so these only matter for the colour pickers' derived values
-    // and anything that reads the palette outside the themed selectors.
-    'grimoire':      { bg: '#14100c', accent: '#1b150f', text: '#e9dfc6', highlight: '#c9a24a', border: '#6b5436' },
-    'console':       { bg: '#0b0f10', accent: '#0e1415', text: '#cfe3d6', highlight: '#f2b134', border: '#2d3d36' },
-    'lumen':         { bg: '#0f1420', accent: '#1a2030', text: '#f3f5f9', highlight: '#8b7cf6', border: '#3a4257' },
-    'arcade':        { bg: '#0a0a0c', accent: '#15151a', text: '#f4f4f4', highlight: '#ff2e4d', border: '#2a2a32' },
-    'inked':         { bg: '#f4efe6', accent: '#ffffff', text: '#15130f', highlight: '#1d3fbf', border: '#15130f' },
-};
 
 /**
  * Helper: converts a hex color (#rrggbb) to an "r, g, b" string for use in rgba().

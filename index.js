@@ -744,6 +744,8 @@ function bindSettingsUI() {
     // ── Accordion toggle behavior ──
     // Use delegated handler so it doesn't block other delegated handlers (like prompts editor)
     $(document).on('click', '.rpg-accordion-header', function () {
+        // In the rail layout the Settings window's headers are page titles.
+        if ($(this).closest('#rpg-settings-popup.dooms-rail').length) return;
         const $section = $(this).closest('.rpg-accordion-section');
         $('.rpg-accordion-section').not($section).removeClass('rpg-accordion-open');
         $section.toggleClass('rpg-accordion-open');
@@ -1819,6 +1821,19 @@ function bindSettingsUI() {
             updateChatSceneHeaders();
         }
     });
+    // ── UI setup (shapes and type; colours still come from the theme) ──
+    $('#rpg-ui-setup-select').on('change', function () {
+        extensionSettings.uiSetup = String($(this).val());
+        saveSettings();
+        applyTheme();
+    });
+    // ── Settings window layout: rail or strip ──
+    $('#rpg-settings-layout-select').on('change', async function () {
+        extensionSettings.settingsLayout = String($(this).val());
+        saveSettings();
+        const { applySettingsLayout } = await import('./src/systems/ui/settingsRail.js');
+        applySettingsLayout();
+    });
     // ── Animations toggle ──
     $('#rpg-toggle-animations').on('change', function () {
         extensionSettings.enableAnimations = $(this).prop('checked');
@@ -2134,6 +2149,8 @@ function bindSettingsUI() {
     $('#rpg-toggle-auto-avatars').prop('checked', extensionSettings.autoGenerateAvatars ?? true);
     // Theme
     $('#rpg-theme-select').val(extensionSettings.theme);
+    $('#rpg-ui-setup-select').val(extensionSettings.uiSetup || 'classic');
+    $('#rpg-settings-layout-select').val(extensionSettings.settingsLayout || 'rail');
     $('#rpg-theme-badge').text(extensionSettings.theme || 'default');
     $('#rpg-toggle-animations').prop('checked', extensionSettings.enableAnimations ?? true);
     // Theme Controls Scene Tracker
@@ -2488,6 +2505,13 @@ async function initUI() {
         document.body.classList.add('dooms-hide-st-avatar');
     }
     updateSectionVisibility();
+    // Early builds of this branch offered the UI setups as themes; move such
+    // a saved value onto the setup axis so the colour theme stays valid.
+    if (['grimoire', 'console', 'lumen', 'arcade', 'inked'].includes(extensionSettings.theme)) {
+        extensionSettings.uiSetup = extensionSettings.theme;
+        extensionSettings.theme = 'default';
+        saveSettings();
+    }
     applyTheme();
     toggleCustomColors();
     toggleAnimations();

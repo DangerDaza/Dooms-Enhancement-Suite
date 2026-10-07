@@ -8665,3 +8665,239 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #character-workshop-popup .cw-clone-status.is-bad {
     color: #e0a030;
 }
+
+
+/* ============================================================================
+   SETTINGS WINDOW — RAIL LAYOUT
+   The window keeps its stacked accordion markup; with #rpg-settings-popup
+   .dooms-rail (settingsRail.js) it is presented as an icon rail down the
+   left, one section at a time as a page with a hero heading, rows grouped
+   into cards. Colours come from the --rpg-* theme variables; the radius and
+   display face follow the active UI setup's --ov-* tokens when one is on.
+   ============================================================================ */
+#rpg-settings-popup.dooms-rail {
+    --modal-max-width: min(96vw, 1040px);
+    --modal-max-height: min(92vh, 880px);
+    --rail-line: color-mix(in srgb, var(--rpg-border) 40%, transparent);
+    --rail-card: color-mix(in srgb, var(--rpg-text) 4%, transparent);
+    --rail-card-line: color-mix(in srgb, var(--rpg-text) 8%, transparent);
+}
+#rpg-settings-popup.dooms-rail .rpg-settings-popup-content {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: var(--modal-max-height);
+}
+#rpg-settings-popup.dooms-rail .rpg-settings-popup-header {
+    grid-column: 1 / -1;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail {
+    grid-row: 2;
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    border-right: 1px solid var(--rail-line);
+    background: color-mix(in srgb, var(--rpg-accent) 55%, transparent);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail::-webkit-scrollbar { display: none; }
+.dooms-rail-btn {
+    flex-shrink: 0;
+    width: 56px;
+    height: 54px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--ov-radius-sm, 12px);
+    color: var(--rpg-text);
+    opacity: 0.62;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+.dooms-rail-btn i { font-size: 1.05em; }
+.dooms-rail-btn span {
+    font-size: 0.5em;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    max-width: 52px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--ov-display, inherit);
+}
+.dooms-rail-btn:hover {
+    opacity: 0.95;
+    background: color-mix(in srgb, var(--rpg-text) 7%, transparent);
+}
+.dooms-rail-btn.is-active {
+    opacity: 1;
+    color: var(--rpg-highlight);
+    background: color-mix(in srgb, var(--rpg-highlight) 16%, transparent);
+    border-color: color-mix(in srgb, var(--rpg-highlight) 45%, transparent);
+}
+#rpg-settings-popup.dooms-rail .rpg-settings-popup-body {
+    grid-row: 2;
+    grid-column: 2;
+    padding: 0 24px 24px;
+}
+#rpg-settings-popup.dooms-rail .rpg-settings-popup-body > .rpg-accordion-section {
+    display: none;
+    border: none;
+    background: transparent;
+    border-radius: 0;
+    margin: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+#rpg-settings-popup.dooms-rail .rpg-settings-popup-body > .rpg-accordion-section.dooms-rail-current {
+    display: block;
+}
+/* Page heading: icon tile, overline, big title, badge on the right */
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header,
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header:hover {
+    cursor: default;
+    margin: 0 -24px 16px;
+    padding: 28px 24px 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--rpg-highlight) 14%, transparent), transparent);
+    border: none;
+    border-bottom: 1px solid var(--rail-line);
+    gap: 14px;
+    transform: none;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--ov-radius-sm, 12px);
+    background: var(--rpg-highlight);
+    color: var(--rpg-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-title {
+    font-size: 1.55em;
+    font-weight: 700;
+    line-height: 1.1;
+    font-family: var(--ov-display, inherit);
+}
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-title::before {
+    content: "Doom's Enhancement Suite";
+    display: block;
+    font-size: 0.42em;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--rpg-highlight);
+    margin-bottom: 4px;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-chevron {
+    display: none;
+}
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-badge {
+    padding: 4px 12px;
+    font-size: 0.78em;
+}
+#rpg-settings-popup.dooms-rail .rpg-accordion-body {
+    display: block !important;
+    padding: 0;
+    background: transparent;
+    border-top: none;
+}
+/* Rows as cards, subsections as grouped cards */
+#rpg-settings-popup.dooms-rail .rpg-accordion-body > .rpg-setting-row {
+    background: var(--rail-card);
+    border: 1px solid var(--rail-card-line);
+    border-radius: var(--ov-radius-sm, 12px);
+    padding: 11px 14px;
+    margin: 8px 0;
+}
+#rpg-settings-popup.dooms-rail .rpg-accordion-body > .rpg-subsection-label {
+    margin: 22px 0 8px;
+    padding-top: 0;
+    border-top: none;
+    font-size: 0.7em;
+    letter-spacing: 0.14em;
+    color: var(--rpg-highlight);
+}
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse {
+    background: var(--rail-card);
+    border: 1px solid var(--rail-card-line);
+    border-radius: var(--ov-radius-sm, 12px);
+    padding: 10px 14px;
+    margin: 8px 0;
+}
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse .rpg-setting-row {
+    border-bottom: 1px solid var(--rail-card-line);
+    padding: 8px 0;
+    margin: 0;
+}
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse .rpg-setting-row:last-child {
+    border-bottom: none;
+}
+#rpg-settings-popup.dooms-rail .rpg-accordion-body > .rpg-accordion-action-btn {
+    margin: 8px 0;
+    padding: 10px 14px;
+}
+/* Phones: the rail becomes a scrolling row above the page */
+@media (max-width: 768px) {
+    #rpg-settings-popup.dooms-rail .rpg-settings-popup-content {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr);
+    }
+    #rpg-settings-popup.dooms-rail .dooms-rail {
+        grid-row: 2;
+        grid-column: 1;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-right: none;
+        border-bottom: 1px solid var(--rail-line);
+        padding: 6px 8px;
+    }
+    .dooms-rail-btn { width: 52px; height: 48px; }
+    #rpg-settings-popup.dooms-rail .rpg-settings-popup-body {
+        grid-row: 3;
+        grid-column: 1;
+        padding: 0 14px 14px;
+    }
+    #rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header,
+    #rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header:hover {
+        margin: 0 -14px 12px;
+        padding: 18px 14px 12px;
+    }
+    #rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-title {
+        font-size: 1.25em;
+    }
+}
+/* A setup's decorative title brackets have no place on the page title */
+#rpg-settings-popup.dooms-rail .dooms-rail-current > .rpg-accordion-header .rpg-accordion-title::after {
+    content: none !important;
+}
+/* Group cards: the summary is the card's title line */
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse > .rpg-subsection-collapse-header {
+    font-size: 0.72em;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--rpg-highlight);
+    padding: 2px 0 6px;
+    border-bottom: 1px solid var(--rail-card-line);
+}
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse:not([open]) > .rpg-subsection-collapse-header {
+    border-bottom: none;
+    padding-bottom: 2px;
+}
+#rpg-settings-popup.dooms-rail .rpg-subsection-collapse-body {
+    padding-top: 4px;
+}

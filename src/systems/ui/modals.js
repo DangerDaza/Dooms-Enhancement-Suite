@@ -17,6 +17,7 @@ import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 // NOTE: DiceModal imports removed — dice system removed (see git history)
 import { i18n } from '../../core/i18n.js';
+import { applySettingsLayout } from './settingsRail.js';
 /**
  * SettingsModal - Manages the settings popup modal
  * Handles opening, closing, theming, and animations
@@ -39,6 +40,8 @@ export class SettingsModal {
         if (theme === 'custom') {
             this._applyCustomTheme();
         }
+        // Rail or strip layout, rebuilt each open so hidden sections drop out
+        try { applySettingsLayout(); } catch (e) { console.warn('[Dooms Tracker] settings layout failed', e); }
         // Open modal with CSS class
         this.modal.classList.add('is-open');
         this.modal.classList.remove('is-closing');

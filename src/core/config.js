@@ -65,6 +65,8 @@ export const defaultSettings = {
     saveTrackerHistory: false,
     panelPosition: 'right',
     theme: 'default',
+    uiSetup: 'classic',
+    settingsLayout: 'rail',
     customColors: {
         bg: '#1a1a2e',
         accent: '#16213e',

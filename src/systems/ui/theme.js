@@ -4,15 +4,20 @@
  */
 import { extensionSettings, $panelContainer } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
+import { resolveThemeCss } from './themePalettes.js';
 
 /**
- * The five overhaul themes. Unlike the classic themes (which recolour the
- * panels through --rpg-* variables), these restyle every DES surface from
- * styles/overhaul.css, hung off <body data-dooms-overhaul="...">, and each
- * loads its own web fonts (with local fallbacks in the CSS stacks, so an
- * offline SillyTavern still gets the shapes, just in system fonts).
+ * UI setups are the second axis of DES's look. A theme picks the colours;
+ * a setup picks the shapes and type: how the scene tracker, chat bubbles,
+ * portrait shelf, Doom Counter, windows and composer are built. 'classic'
+ * is the look DES always had. The other five live in styles/overhaul.css,
+ * hung off <body data-dooms-ui="...">, and read the active theme's palette
+ * from body-level --dooms-ui-* variables that applyUiSetup() keeps current.
+ * Each loads its own web fonts, with local fallbacks in every CSS stack so
+ * an offline SillyTavern still gets the shapes in system faces.
  */
-export const OVERHAUL_THEMES = {
+export const UI_SETUPS = {
+    classic:  { label: 'Classic',     fonts: null },
     grimoire: { label: 'Grimoire',    fonts: 'family=Cinzel:wght@500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600' },
     console:  { label: 'Ops Console', fonts: 'family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;700' },
     lumen:    { label: 'Lumen',       fonts: 'family=Manrope:wght@400;500;600;700;800' },
@@ -21,34 +26,40 @@ export const OVERHAUL_THEMES = {
 };
 
 /**
- * @param {string} theme
- * @returns {boolean} true when the theme is one of the five overhauls
+ * @param {string} setup
+ * @returns {boolean} true for one of the five styled setups (not 'classic')
  */
-export function isOverhaulTheme(theme) {
-    return Object.prototype.hasOwnProperty.call(OVERHAUL_THEMES, theme);
+export function isStyledUiSetup(setup) {
+    return setup !== 'classic' && Object.prototype.hasOwnProperty.call(UI_SETUPS, setup);
 }
 
-const FONT_LINK_ID = 'dooms-overhaul-fonts';
+const FONT_LINK_ID = 'dooms-ui-fonts';
+const UI_VARS = ['bg', 'accent', 'text', 'highlight', 'border'];
 
 /**
- * Stamps (or clears) the overhaul attribute on <body>, loads the overhaul
- * stylesheet on first use and swaps the web-font link for the theme's set.
- * Safe to call on every applyTheme(): it is idempotent.
- * @param {string} theme
+ * Applies the chosen UI setup: stamps (or clears) the body attribute,
+ * loads the setup stylesheet on first use, swaps the web-font link, and
+ * publishes the active theme's palette as --dooms-ui-* on <body> so the
+ * setup's chat-side surfaces use the same colours as the windows.
+ * Idempotent; runs from applyTheme() so a theme change re-publishes.
  */
-export function applyOverhaulTheme(theme) {
+export function applyUiSetup() {
     const body = document.body;
     if (!body) return;
+    const setup = UI_SETUPS[extensionSettings.uiSetup] ? extensionSettings.uiSetup : 'classic';
     const existingLink = document.getElementById(FONT_LINK_ID);
-    if (!isOverhaulTheme(theme)) {
-        body.removeAttribute('data-dooms-overhaul');
+    if (!isStyledUiSetup(setup)) {
+        body.removeAttribute('data-dooms-ui');
+        for (const k of UI_VARS) body.style.removeProperty(`--dooms-ui-${k}`);
         if (existingLink) existingLink.remove();
         return;
     }
     // Stylesheet first so the attribute never shows unstyled surfaces.
     ensureCss('overhaul').catch(() => { });
-    body.setAttribute('data-dooms-overhaul', theme);
-    const href = `https://fonts.googleapis.com/css2?${OVERHAUL_THEMES[theme].fonts}&display=swap`;
+    const palette = resolveThemeCss(extensionSettings.theme, extensionSettings.customColors);
+    for (const k of UI_VARS) body.style.setProperty(`--dooms-ui-${k}`, palette[k]);
+    body.setAttribute('data-dooms-ui', setup);
+    const href = `https://fonts.googleapis.com/css2?${UI_SETUPS[setup].fonts}&display=swap`;
     if (existingLink && existingLink.getAttribute('href') === href) return;
     if (existingLink) existingLink.remove();
     const link = document.createElement('link');
@@ -79,8 +90,9 @@ export function hexToRgba(hex, opacity = 100) {
  */
 export function applyTheme() {
     const theme = extensionSettings.theme;
-    // The overhaul themes live on <body>, independent of any panel existing.
-    try { applyOverhaulTheme(theme); } catch (e) { console.error('[Dooms Tracker] applyOverhaulTheme failed:', e); }
+    // The UI setup lives on <body>, independent of any panel existing, and
+    // re-reads the palette here so a theme change recolours it.
+    try { applyUiSetup(); } catch (e) { console.error('[Dooms Tracker] applyUiSetup failed:', e); }
     // Find the panel element — use cached ref if available, otherwise query DOM
     const $panel = $panelContainer || $('.rpg-panel');
     if (!$panel || !$panel.length) return;
