@@ -1572,17 +1572,14 @@ body[data-dooms-ui="inked"] .dooms-card-header {
     padding-left: 14px;
 }
 /* The bubble takes its speaker's dialogue colour (set inline on the text
-   element, so it is currentColor here): the text keeps it, the paper is
-   tinted with it, and a halftone screen fades in from the right edge. */
+   element, so it is currentColor here): the text keeps it and the paper
+   is tinted with it. */
 body[data-dooms-ui="inked"] .dooms-bubble-text,
 body[data-dooms-ui="inked"] .dooms-card-text {
     display: flow-root;
     position: relative;
     --ov-bubble-paper: color-mix(in srgb, currentColor 11%, var(--ov-paper));
-    background:
-        linear-gradient(to right, var(--ov-bubble-paper) 55%, color-mix(in srgb, var(--ov-bubble-paper) 62%, transparent) 100%),
-        radial-gradient(color-mix(in srgb, currentColor 70%, var(--ov-ink)) 1px, transparent 1.4px) 0 0 / 7px 7px,
-        var(--ov-bubble-paper);
+    background: var(--ov-bubble-paper);
     border: var(--ov-border-w) solid var(--ov-ink);
     border-radius: 22px;
     padding: 10px 16px;
@@ -1699,6 +1696,84 @@ body[data-dooms-ui="inked"] .dooms-fab-btn { background: var(--ov-paper); color:
 body[data-dooms-ui="inked"] #send_form { background: var(--ov-paper); color: var(--ov-ink); }
 body[data-dooms-ui="inked"] #send_textarea { color: var(--ov-ink); }
 body[data-dooms-ui="inked"] #send_textarea::placeholder { font-style: italic; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The chat ground: what the bubbles sit on
+   SillyTavern draws each message as a .mes block on #chat's tint. Each setup
+   gives that surface its own treatment in the theme's colours. The ground
+   stays a little translucent so a wallpaper behind the chat still shows.
+   ──────────────────────────────────────────────────────────────────────────── */
+/* Grimoire: a ledger page, entries parted by hairlines, double-ruled edges */
+body[data-dooms-ui="grimoire"] #chat {
+    background-color: color-mix(in srgb, var(--ui-bg) 88%, transparent);
+    box-shadow: inset 4px 0 0 var(--ov-ground), inset 5px 0 0 var(--ov-line2), inset -4px 0 0 var(--ov-ground), inset -5px 0 0 var(--ov-line2);
+}
+body[data-dooms-ui="grimoire"] #chat .mes {
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--ov-line2);
+    border-radius: 0;
+    margin: 0 14px;
+    padding: 16px 12px;
+}
+body[data-dooms-ui="grimoire"] #chat .mes:first-child { border-top: none; }
+/* Ops Console: a readout grid with dashed row separators */
+body[data-dooms-ui="console"] #chat {
+    background-color: color-mix(in srgb, var(--ui-bg) 90%, transparent);
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--ui-border) 10%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--ui-border) 10%, transparent) 1px, transparent 1px);
+    background-size: 100% 28px, 28px 100%;
+}
+body[data-dooms-ui="console"] #chat .mes {
+    background: color-mix(in srgb, var(--ui-bg) 70%, transparent);
+    border: none;
+    border-top: 1px dashed var(--ov-line2);
+    border-radius: 0;
+    margin: 0 10px;
+    padding: 12px 12px;
+}
+body[data-dooms-ui="console"] #chat .mes:first-child { border-top: none; }
+/* Lumen: the wallpaper shows through; each message is a glass card */
+body[data-dooms-ui="lumen"] #chat {
+    background-color: color-mix(in srgb, var(--ui-bg) 30%, transparent);
+}
+body[data-dooms-ui="lumen"] #chat .mes {
+    background: color-mix(in srgb, var(--ui-bg) 45%, transparent);
+    border: 1px solid var(--ov-line2);
+    border-radius: 20px;
+    margin: 10px 12px;
+    padding: 12px 16px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+/* Arcade: chamfered panels on the striped ground, lead edge in the highlight */
+body[data-dooms-ui="arcade"] #chat {
+    background-color: var(--ov-panel2);
+    background-image: var(--ov-stripes);
+}
+body[data-dooms-ui="arcade"] #chat .mes {
+    background: var(--ov-panel);
+    border: 2px solid var(--ov-line);
+    border-left: 6px solid var(--ov-accent);
+    border-radius: 0;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ov-chamfer)), calc(100% - var(--ov-chamfer)) 100%, 0 100%);
+    margin: 10px 12px;
+    padding: 12px 14px;
+}
+/* Inked: a comic page. Each message is a panel with an ink border and a
+   hard shadow; the ground between the panels is the gutter. */
+body[data-dooms-ui="inked"] #chat {
+    background-color: color-mix(in srgb, var(--ui-bg) 86%, var(--ui-text));
+}
+body[data-dooms-ui="inked"] #chat .mes {
+    background: var(--ov-paper);
+    border: var(--ov-border-w) solid var(--ov-ink);
+    border-radius: 0;
+    box-shadow: 5px 5px 0 var(--ov-ink);
+    margin: 16px 16px 16px 10px;
+    padding: 12px 14px;
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Reduced transparency: Lumen's glass becomes solid panels. Performance mode
