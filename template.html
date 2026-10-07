@@ -2819,12 +2819,30 @@
                         <div class="rpg-setting-row cw-npc-only" style="margin-top: 0.8rem;">
                             <div class="rpg-setting-label-group">
                                 <span class="rpg-setting-label">Bubble Fill</span>
-                                <span class="rpg-setting-hint">This character's bubbles take the dialogue colour, with the words in its opposite (blue gives yellow). Use it to tell apart two characters who share a colour.</span>
+                                <span class="rpg-setting-hint">Paint this character's bubbles. On Auto the fill is the dialogue colour and the words are its opposite (blue gives yellow); pick your own colours below instead. Handy to tell apart two characters who share a colour.</span>
                             </div>
                             <label class="rpg-toggle-switch">
                                 <input type="checkbox" id="cw-bubble-fill" />
                                 <span class="rpg-toggle-slider"></span>
                             </label>
+                        </div>
+                        <div class="rpg-setting-row cw-npc-only cw-bubble-colors-row" id="cw-bubble-colors-row" style="margin-top: 0.4rem;">
+                            <div class="rpg-setting-label-group">
+                                <span class="rpg-setting-label">Bubble colours</span>
+                                <span class="rpg-setting-hint">Auto follows the dialogue colour. Set either one to anything you like.</span>
+                            </div>
+                            <div class="cw-bubble-colors">
+                                <span class="cw-bubble-color" id="cw-bubble-fill-wrap">
+                                    <label for="cw-bubble-fill-color">Fill</label>
+                                    <input type="color" id="cw-bubble-fill-color" value="#e94560" aria-label="Bubble fill colour">
+                                    <button type="button" class="rpg-accordion-mini-btn cw-bubble-auto" id="cw-bubble-fill-auto" title="Back to the dialogue colour">Auto</button>
+                                </span>
+                                <span class="cw-bubble-color" id="cw-bubble-ink-wrap">
+                                    <label for="cw-bubble-ink-color">Text</label>
+                                    <input type="color" id="cw-bubble-ink-color" value="#ffffff" aria-label="Bubble text colour">
+                                    <button type="button" class="rpg-accordion-mini-btn cw-bubble-auto" id="cw-bubble-ink-auto" title="Back to the opposite of the fill">Auto</button>
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div class="rpg-editor-section">

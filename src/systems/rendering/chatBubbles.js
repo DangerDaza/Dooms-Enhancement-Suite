@@ -1554,6 +1554,35 @@ function parseColorRgb(c) {
  * @returns {string|null} a CSS colour, or null when the colour can't be read
  */
 export function contrastInkFor(color) {
+    const hsl = contrastInkHsl(color);
+    return hsl ? `hsl(${hsl.h} ${hsl.s}% ${hsl.l}%)` : null;
+}
+
+/**
+ * The same contrast colour as a hex string, for a colour input.
+ * @param {string} color
+ * @returns {string|null} '#rrggbb' or null when the colour cannot be read
+ */
+export function contrastInkHex(color) {
+    const hsl = contrastInkHsl(color);
+    if (!hsl) return null;
+    const s = hsl.s / 100, l = hsl.l / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((hsl.h / 60) % 2) - 1));
+    const m = l - c / 2;
+    const seg = Math.floor(hsl.h / 60) % 6;
+    const [r, g, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][seg];
+    const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/**
+ * The opposite hue of a colour, light on a dark colour and dark on a light
+ * one, as HSL parts.
+ * @param {string} color
+ * @returns {{h:number, s:number, l:number}|null}
+ */
+function contrastInkHsl(color) {
     const rgb = parseColorRgb(color);
     if (!rgb) return null;
     const [r, g, b] = rgb.map(x => x / 255);
@@ -1572,40 +1601,53 @@ export function contrastInkFor(color) {
     const darkFill = luminance < 0.36;
     const hue = Math.round((h + 180) % 360);
     const s = Math.round(Math.max(sat * 100, 65));
-    return `hsl(${hue} ${s}% ${darkFill ? 88 : 16}%)`;
+    return { h: hue, s, l: darkFill ? 88 : 16 };
 }
 
 /**
- * Whether a speaker has Bubble Fill on (Workshop → Appearance → Dialogue
- * color), matched the way colours are: exact, then case-insensitive.
+ * A speaker's Bubble Fill entry (Workshop → Appearance → Dialogue color),
+ * matched the way colours are: exact, then case-insensitive. The stored
+ * value is `true` (fill in the dialogue colour, words in its opposite) or
+ * `{ fill, ink }` with either colour chosen by the user; an empty one
+ * means "auto".
  * @param {string} speaker
- * @returns {boolean}
+ * @returns {{fill: string, ink: string}|null} null when the fill is off
  */
-function isBubbleFilled(speaker) {
-    if (!speaker) return false;
+export function bubbleFillFor(speaker) {
+    if (!speaker) return null;
     let fills;
-    try { fills = getActiveBubbleFills(); } catch (_) { return false; }
-    if (!fills) return false;
-    if (fills[speaker]) return true;
-    const lower = speaker.toLowerCase();
-    return Object.keys(fills).some(n => fills[n] && n.toLowerCase() === lower);
+    try { fills = getActiveBubbleFills(); } catch (_) { return null; }
+    if (!fills) return null;
+    let entry = fills[speaker];
+    if (entry === undefined) {
+        const lower = speaker.toLowerCase();
+        const key = Object.keys(fills).find(n => fills[n] && n.toLowerCase() === lower);
+        entry = key ? fills[key] : undefined;
+    }
+    if (!entry) return null;
+    if (entry === true) return { fill: '', ink: '' };
+    return { fill: typeof entry.fill === 'string' ? entry.fill : '', ink: typeof entry.ink === 'string' ? entry.ink : '' };
 }
 
 /**
  * Inline style for the bubble element: its dialogue colour as the left
  * border, plus the fill variables when the speaker has Bubble Fill on.
+ * The fill is the chosen colour or else the dialogue colour; the ink is
+ * the chosen colour or else the fill's contrast.
  * @param {string} color
  * @param {string} speaker
  * @returns {string} ` style="..."` or ''
  */
 function bubbleStyle(color, speaker) {
-    if (!color) return '';
-    const parts = [`border-left-color: ${escapeHtml(color)}`];
-    if (isBubbleFilled(speaker)) {
-        const ink = contrastInkFor(color);
-        if (ink) parts.push(`--cb-fill: ${escapeHtml(color)}`, `--cb-ink: ${ink}`);
+    const parts = [];
+    if (color) parts.push(`border-left-color: ${escapeHtml(color)}`);
+    const entry = bubbleFillFor(speaker);
+    if (entry) {
+        const fill = entry.fill || color;
+        const ink = entry.ink || (fill ? contrastInkFor(fill) : null);
+        if (fill && ink) parts.push(`--cb-fill: ${escapeHtml(fill)}`, `--cb-ink: ${escapeHtml(ink)}`);
     }
-    return ` style="${parts.join('; ')}"`;
+    return parts.length ? ` style="${parts.join('; ')}"` : '';
 }
 
 export function applyChatBubbleSettings() {

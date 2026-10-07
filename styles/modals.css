@@ -9213,3 +9213,34 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     #character-roster-popup.dooms-rail .cr-body { grid-column: 1; grid-row: 5; padding: 10px 14px 14px; }
     #character-roster-popup.dooms-rail .rpg-settings-popup-footer { grid-column: 1; grid-row: 6; }
 }
+
+/* ── Workshop: Bubble Fill colours (fill + text, each Auto or chosen) ── */
+.cw-bubble-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+.cw-bubble-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82em;
+}
+.cw-bubble-color label { opacity: 0.8; font-size: 0.9em; font-weight: 500; }
+.cw-bubble-color input[type="color"] {
+    width: 30px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--rpg-border, #4a7ba7);
+    border-radius: 5px;
+    background: none;
+    cursor: pointer;
+}
+.cw-bubble-color input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.cw-bubble-color input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+.cw-bubble-color .cw-bubble-auto { font-size: 0.85em; padding: 2px 7px; }
+/* On Auto the swatch shows the computed colour at half strength and the
+   Auto button has nothing to do */
+.cw-bubble-color.is-auto input[type="color"] { opacity: 0.55; }
+.cw-bubble-color.is-auto .cw-bubble-auto { visibility: hidden; }

@@ -38,6 +38,7 @@ import {
     getActiveBubbleFills,
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
+import { contrastInkHex } from '../rendering/chatBubbles.js';
 import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
@@ -514,7 +515,12 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     draft = buildDraft(name, isUser, versionId);
     if (carry) {
         if (carry.dirty?.color) { draft.color = carry.color; draft.dirty.color = true; }
-        if (carry.dirty?.bubbleFill) { draft.bubbleFill = !!carry.bubbleFill; draft.dirty.bubbleFill = true; }
+        if (carry.dirty?.bubbleFill) {
+            draft.bubbleFill = !!carry.bubbleFill;
+            draft.bubbleFillColor = carry.bubbleFillColor || '';
+            draft.bubbleInkColor = carry.bubbleInkColor || '';
+            draft.dirty.bubbleFill = true;
+        }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
@@ -606,7 +612,7 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
     const name = draft.name;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
@@ -710,7 +716,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
     loadVersion(name, false, null, { carry });
 }
 
@@ -1233,6 +1239,8 @@ function buildDraft(name, isUser = false, versionId = null) {
         isLive: live,
         color: activeColors[name] || '',
         bubbleFill: !!(getActiveBubbleFills() || {})[name],
+        bubbleFillColor: bubbleFillEntryColor((getActiveBubbleFills() || {})[name], 'fill'),
+        bubbleInkColor: bubbleFillEntryColor((getActiveBubbleFills() || {})[name], 'ink'),
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
         dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false },
     };
@@ -1651,6 +1659,7 @@ function renderAppearance() {
         ? 'Portraits render for the live version only — make this campaign active in the Lore Library first, or switch to the Live tile.'
         : 'Step 2: render a new portrait with the prompt above (or the automatic LLM prompt if the field is empty). The current portrait is kept and restorable.');
     $modal.find('#cw-bubble-fill').prop('checked', !!draft.bubbleFill);
+    syncBubbleFillControls();
     const $palette = $modal.find('#cw-palette').empty();
     for (const { hex, name } of DIALOGUE_COLOR_LIST) {
         const isSelected = (draft.color || '').toLowerCase() === hex.toLowerCase();
@@ -1785,6 +1794,59 @@ function commitColorSelection(hex) {
         $(this).attr('aria-checked', match ? 'true' : 'false');
     });
     applyPreviewColor(lower);
+    syncBubbleFillControls();
+}
+
+/**
+ * @param {true|{fill?:string, ink?:string}|undefined} entry a stored Bubble Fill value
+ * @param {'fill'|'ink'} which
+ * @returns {string} the chosen colour, or '' for Auto
+ */
+function bubbleFillEntryColor(entry, which) {
+    if (!entry || entry === true) return '';
+    const v = entry[which];
+    return typeof v === 'string' ? v : '';
+}
+
+/**
+ * Keeps the Bubble Fill colour controls in step with the draft: the row
+ * shows only while the fill is on, each swatch shows the chosen colour or
+ * (dimmed) the Auto colour it would get, and Auto buttons appear only when
+ * there is something to reset.
+ */
+function syncBubbleFillControls() {
+    if (!draft || !$modal) return;
+    const on = !!draft.bubbleFill && !draft.isUser;
+    $modal.find('#cw-bubble-colors-row').toggle(on);
+    if (!on) return;
+    const autoFill = draft.color || '#888888';
+    const fill = draft.bubbleFillColor || autoFill;
+    const autoInk = contrastInkHex(fill) || '#ffffff';
+    const ink = draft.bubbleInkColor || autoInk;
+    const $fillWrap = $modal.find('#cw-bubble-fill-wrap').toggleClass('is-auto', !draft.bubbleFillColor);
+    const $inkWrap = $modal.find('#cw-bubble-ink-wrap').toggleClass('is-auto', !draft.bubbleInkColor);
+    $fillWrap.find('#cw-bubble-fill-color').val(toHexColor(fill));
+    $inkWrap.find('#cw-bubble-ink-color').val(toHexColor(ink));
+}
+
+/**
+ * A colour input only takes #rrggbb: pass hex through, read anything else
+ * via the browser.
+ * @param {string} css
+ * @returns {string}
+ */
+function toHexColor(css) {
+    if (/^#[0-9a-f]{6}$/i.test(css)) return css.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(css)) return ('#' + css.slice(1).split('').map(ch => ch + ch).join('')).toLowerCase();
+    try {
+        const probe = document.createElement('span');
+        probe.style.color = css;
+        document.body.appendChild(probe);
+        const m = getComputedStyle(probe).color.match(/\d+/g);
+        probe.remove();
+        if (m && m.length >= 3) return '#' + m.slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
+    } catch (e) { /* fall through */ }
+    return '#888888';
 }
 
 function activatePane(paneId) {
@@ -2174,6 +2236,33 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.bubbleFill = $(this).prop('checked');
         draft.dirty.bubbleFill = true;
+        syncBubbleFillControls();
+    });
+    // Either colour can be chosen outright or left on Auto (empty): the fill
+    // follows the dialogue colour, the text the fill's opposite.
+    $modal.on('input.cw change.cw', '#cw-bubble-fill-color', function () {
+        if (!draft) return;
+        draft.bubbleFillColor = String($(this).val() || '').toLowerCase();
+        draft.dirty.bubbleFill = true;
+        syncBubbleFillControls();
+    });
+    $modal.on('input.cw change.cw', '#cw-bubble-ink-color', function () {
+        if (!draft) return;
+        draft.bubbleInkColor = String($(this).val() || '').toLowerCase();
+        draft.dirty.bubbleFill = true;
+        syncBubbleFillControls();
+    });
+    $modal.on('click.cw', '#cw-bubble-fill-auto', function () {
+        if (!draft) return;
+        draft.bubbleFillColor = '';
+        draft.dirty.bubbleFill = true;
+        syncBubbleFillControls();
+    });
+    $modal.on('click.cw', '#cw-bubble-ink-auto', function () {
+        if (!draft) return;
+        draft.bubbleInkColor = '';
+        draft.dirty.bubbleFill = true;
+        syncBubbleFillControls();
     });
 
     $modal.on('change.cw', '#cw-portrait-file', async function () {
@@ -2730,7 +2819,9 @@ function commitDraft() {
         // colour changed in the same visit.
         try {
             const fills = getActiveBubbleFills();
-            if (draft.bubbleFill) fills[name] = true; else delete fills[name];
+            if (!draft.bubbleFill) delete fills[name];
+            else if (draft.bubbleFillColor || draft.bubbleInkColor) fills[name] = { fill: draft.bubbleFillColor || '', ink: draft.bubbleInkColor || '' };
+            else fills[name] = true;
         } catch (e) { /* the fill flag is cosmetic */ }
         // Persist via the matching saver (saveChatData when per-chat,
         // saveSettings otherwise) — saveCharacterRosterChange picks
@@ -3534,6 +3625,8 @@ function exportDraft() {
         version: draft.isUser ? undefined : versionLabel(draft.versionId),
         color: draft.color || '',
         bubbleFill: !!draft.bubbleFill,
+        bubbleFillColor: draft.bubbleFillColor || '',
+        bubbleInkColor: draft.bubbleInkColor || '',
         avatar: draft.avatar || '',
         avatarFullRes: draft.avatarFullRes || '',
         relationship: draft.relationship || '',
