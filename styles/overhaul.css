@@ -514,6 +514,9 @@ body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not
 /* The arrows sit on the portraits, not at the bar's midpoint, which with
    small portraits put them on the header line */
 body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-arrow { top: calc(50% + 9px); }
+/* No overflow, no arrows (portraitBar.js keeps the flag current). Classic
+   keeps SillyTavern-era behaviour: arrows on hover whatever the width. */
+body[data-dooms-ui] .dooms-portrait-bar.dooms-pb-no-overflow .dooms-pb-arrow { display: none; }
 body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar {
     border-top: 1px solid var(--ov-line2);
 }

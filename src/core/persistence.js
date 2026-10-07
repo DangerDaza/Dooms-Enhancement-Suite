@@ -424,6 +424,16 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
+            // The Settings window's rail layout is the default for fresh
+            // installs only. An existing setup (nothing saved under
+            // settingsLayout yet) keeps the stacked strip it had, so an update
+            // changes nothing on screen. Keyed on the saved field rather than
+            // the version so it never interferes with the async v24 bump below.
+            if (savedSettings.settingsLayout === undefined) {
+                extensionSettings.settingsLayout = 'strip';
+                settingsChanged = true;
+            }
+
             // Migration to version 24: Move cropped portrait base64 data URLs
             // out of extensionSettings (npcAvatars, npcAvatarsFullRes, and
             // userCharacters[*].avatar/avatarFullRes) and onto disk under
