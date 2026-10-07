@@ -51,12 +51,15 @@
     border: 1px solid var(--rpg-border, rgba(255, 255, 255, 0.15));
     border-radius: 12px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    transform: translateY(10px);
-    animation: dooms-wn-in 180ms ease-out forwards;
+    /* Visible by default; the entry fade is an extra. With opacity 0 as the
+       base state, any rule that kills animations (Performance Mode, the
+       reduced-motion preference) left the panel invisible behind the dark
+       backdrop until a click outside dismissed it. */
+    animation: dooms-wn-in 180ms ease-out;
 }
 
 @keyframes dooms-wn-in {
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 

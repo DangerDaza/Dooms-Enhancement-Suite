@@ -28,7 +28,7 @@
         },
         {
             "title": "🔧 Fixes",
-            "body": "Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
+            "body": "This screen now appears with Performance Mode on instead of leaving a dark backdrop. Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
         }
     ],
     "contact": {
