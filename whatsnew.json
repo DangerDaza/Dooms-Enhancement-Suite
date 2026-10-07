@@ -24,7 +24,7 @@
         },
         {
             "title": "🔊 Every character can have a voice",
-            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices, or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices."
+            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices (through your Google key or an OpenRouter key), or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices."
         },
         {
             "title": "🔧 Fixes",

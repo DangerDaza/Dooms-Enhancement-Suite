@@ -36,6 +36,8 @@ import {
 } from '../voices/voiceRegistry.js';
 import { referenceProblem } from '../voices/drafts.js';
 import { DEFAULT_DELIVERY_NOTE } from '../voices/delivery.js';
+import { secret_state } from '../../../../../../secrets.js';
+import { isOpenRouterConnected, anyConnected, ST_SECRET, stHasSecret } from '../voices/connections.js';
 import { voiceRefCount } from '../lorebook/campaignProfiles.js';
 import { escapeHtml } from '../../utils/html.js';
 
@@ -191,6 +193,9 @@ function renderStatus() {
     $('#rpg-voices-badge').text(voicesOn ? 'on' : 'off');
     const engine = getEngineIfLoaded();
     const parts = [];
+    if (!anyConnected(v(), secret_state)) {
+        parts.push('No voice service connected yet. Add an OpenRouter or Google key under Connections.');
+    }
     if (!voicesOn) {
         parts.push('DES voices are off. The bullhorn buttons use SillyTavern’s own TTS.');
     } else if (!engine) {
@@ -198,25 +203,37 @@ function renderStatus() {
     } else {
         const st = engine.getStatus();
         const route = st.route;
-        parts.push(route.route === 'direct' || (!route.route && v().googleApiKey)
-            ? 'Using the key above, directly with Google.'
-            : 'Using the Google key saved in SillyTavern.');
-        if (route.status === 'ok') {
-            const chosen = v().model;
-            const used = route.effectiveModel;
-            parts.push(used && used !== chosen
-                ? (route.route === 'direct'
-                    ? `Google didn’t accept ${chosen} with this key, so voices use ${used}.`
-                    : `Your SillyTavern can’t send ${chosen} yet, so voices use ${used}. Paste a key above to call Google directly.`)
-                : `${used || chosen}: working.`);
-        } else if (route.status === 'no-key') {
-            parts.push('No Google key found. Paste one above, or add one in SillyTavern under API Connections → Google AI Studio.');
-        } else if (route.status === 'bad-key') {
-            parts.push(route.route === 'direct' ? 'Google rejected the key above.' : 'Google rejected the key saved in SillyTavern.');
-        } else if (route.status === 'error') {
-            parts.push(`Last request failed: ${route.lastError}`);
-        } else {
-            parts.push('Ready.');
+        if (st.geminiVia === 'openrouter') {
+            const or = st.openrouter || {};
+            parts.push(or.lastRoute === 'server'
+                ? 'Standard voices: OpenRouter, through SillyTavern’s server (no delivery note).'
+                : or.lastRoute === 'browser' ? 'Standard voices: OpenRouter, from the browser.' : 'Standard voices: OpenRouter.');
+            if (or.browserBlocked && !or.serverReady) parts.push('The browser couldn’t reach OpenRouter; press Save key to SillyTavern.');
+            if (or.styleRejected) parts.push('OpenRouter refused the delivery note this session.');
+        }
+        if (st.geminiVia === 'google') {
+            parts.push(route.route === 'direct' || (!route.route && v().googleApiKey)
+                ? 'Using the key above, directly with Google.'
+                : 'Using the Google key saved in SillyTavern.');
+            if (route.status === 'ok') {
+                const chosen = v().model;
+                const used = route.effectiveModel;
+                parts.push(used && used !== chosen
+                    ? (route.route === 'direct'
+                        ? `Google didn’t accept ${chosen} with this key, so voices use ${used}.`
+                        : `Your SillyTavern can’t send ${chosen} yet, so voices use ${used}. Paste a key above to call Google directly.`)
+                    : `${used || chosen}: working.`);
+            } else if (route.status === 'no-key') {
+                parts.push('No Google key found. Paste one above, or add one in SillyTavern under API Connections → Google AI Studio.');
+            } else if (route.status === 'bad-key') {
+                parts.push(route.route === 'direct' ? 'Google rejected the key above.' : 'Google rejected the key saved in SillyTavern.');
+            } else if (route.status === 'error') {
+                parts.push(`Last request failed: ${route.lastError}`);
+            } else {
+                parts.push('Ready.');
+            }
+        } else if (st.connected?.google) {
+            parts.push('Designed and cloned voices: Google.');
         }
         parts.push(`${st.requests} request${st.requests === 1 ? '' : 's'} this session.`);
         if (st.autoReadPaused) parts.push('Auto-read is paused.');
@@ -226,6 +243,38 @@ function renderStatus() {
         parts.push('Dialogue colouring is off, so DES can’t tell who is speaking — everything will be read by the Narrator.');
     }
     $status.text(parts.join(' '));
+}
+
+/** The note under the OpenRouter box: what the server route needs right now. */
+function renderOpenRouterNote() {
+    const $note = $('#rpg-voices-or-note');
+    if (!$note.length) return;
+    const saved = stHasSecret(secret_state, ST_SECRET.customTts);
+    const route = v().openrouterRoute || 'auto';
+    if (route === 'server' && !saved) {
+        $note.html('Through SillyTavern’s server only: press <strong>Save key to SillyTavern</strong> first. The delivery note can’t be sent this way.');
+    } else if (route === 'server') {
+        $note.text('Through SillyTavern’s server, with the key saved there. The delivery note can’t be sent this way.');
+    } else {
+        $note.html(`Automatic: from the browser, and if your browser can’t reach OpenRouter, through SillyTavern’s server instead${saved ? ' (a key is already saved there).' : '. For that, press <strong>Save key to SillyTavern</strong> once.'} The delivery note only works from the browser.`);
+    }
+}
+
+async function resetOpenRouter() {
+    try {
+        const { resetOpenRouterState } = await import('../voices/openrouter.js');
+        resetOpenRouterState();
+    } catch (e) { /* engine not loaded yet */ }
+}
+
+/** Saves the OpenRouter key box (trimmed). */
+async function saveOpenRouterKey(value) {
+    const key = String(value || '').trim();
+    if (key === (v().openrouterKey || '')) return;
+    v().openrouterKey = key;
+    saveSettings();
+    await resetOpenRouter();
+    renderStatus();
 }
 
 /** Saves the Google key box (trimmed). Called on change/blur, not per keystroke. */
@@ -436,6 +485,11 @@ function populate() {
     fillNarratorDesign();
     $('#rpg-voices-model').val(v().model);
     $('#rpg-voices-delivery').val(v().deliveryNote || '');
+    $('#rpg-voices-guide').prop('open', v().guideOpen !== false);
+    $('#rpg-voices-via').val(v().geminiVia === 'openrouter' ? 'openrouter' : 'google');
+    $('#rpg-voices-or-key').val(v().openrouterKey || '').attr('type', 'password');
+    $('#rpg-voices-or-route').val(v().openrouterRoute || 'auto');
+    renderOpenRouterNote();
     $('#rpg-voices-key').val(v().googleApiKey || '').attr('type', 'password');
     const rate = Number(v().playbackRate) || 1;
     $('#rpg-voices-rate').val(rate);
@@ -505,6 +559,69 @@ export function bindVoicesSettingsUI() {
     };
     $('#rpg-voices-delivery').on('change', function () { saveDelivery($(this).val()); });
     $('#rpg-voices-delivery-reset').on('click', () => saveDelivery(DEFAULT_DELIVERY_NOTE));
+    // How DES voices work: remember open/closed.
+    $('#rpg-voices-guide').on('toggle', function () {
+        v().guideOpen = !!this.open;
+        saveSettings();
+    });
+    $('#rpg-voices-via').on('change', function () {
+        v().geminiVia = $(this).val() === 'openrouter' ? 'openrouter' : 'google';
+        saveSettings();
+        getEngineIfLoaded()?.invalidate();
+        renderStatus();
+    });
+    $('#rpg-voices-or-key').on('change', function () { saveOpenRouterKey($(this).val()); });
+    $('#rpg-voices-or-key-toggle').on('click', function () {
+        const $input = $('#rpg-voices-or-key');
+        const show = $input.attr('type') === 'password';
+        $input.attr('type', show ? 'text' : 'password');
+        $(this).find('i').toggleClass('fa-eye', !show).toggleClass('fa-eye-slash', show);
+    });
+    $('#rpg-voices-or-key-clear').on('click', function () {
+        $('#rpg-voices-or-key').val('');
+        saveOpenRouterKey('');
+    });
+    $('#rpg-voices-or-route').on('change', async function () {
+        const route = String($(this).val());
+        v().openrouterRoute = ['auto', 'browser', 'server'].includes(route) ? route : 'auto';
+        saveSettings();
+        await resetOpenRouter();
+        renderOpenRouterNote();
+        renderStatus();
+    });
+    $('#rpg-voices-or-test').on('click', async function () {
+        unlockVoicesAudio();
+        await saveOpenRouterKey($('#rpg-voices-or-key').val());
+        if (!isOpenRouterConnected(v(), secret_state)) {
+            try { window.toastr?.info('Paste your OpenRouter key first (or save it to SillyTavern and choose the server route).', 'DES Voices'); } catch (e) {}
+            return;
+        }
+        const engine = await getEngine();
+        const narrator = narratorValue();
+        engine.audition(stockRef(narrator.startsWith('designed:') ? NARRATOR_FALLBACK_VOICE : narrator), 'Your OpenRouter key works.', { provider: 'openrouter' });
+        renderStatus();
+    });
+    $('#rpg-voices-or-save').on('click', async function () {
+        const key = String($('#rpg-voices-or-key').val() || v().openrouterKey || '').trim();
+        if (!key) {
+            try { window.toastr?.info('Paste your OpenRouter key in the box first.', 'DES Voices'); } catch (e) {}
+            return;
+        }
+        if (stHasSecret(secret_state, ST_SECRET.customTts)
+            && !window.confirm('SillyTavern already has a key in its "Custom OpenAI TTS" slot (used by SillyTavern\'s own OpenAI Compatible voices). Save the OpenRouter key there and make it the active one? The old key stays in SillyTavern\'s key list.')) return;
+        const $btn = $(this);
+        $btn.prop('disabled', true);
+        try {
+            const { saveKeyToSillyTavern } = await import('../voices/openrouter.js');
+            const ok = await saveKeyToSillyTavern(key);
+            try { window.toastr?.[ok ? 'success' : 'warning'](ok ? 'Saved in SillyTavern. DES can now reach OpenRouter through SillyTavern\'s server.' : 'SillyTavern didn\'t save the key.', 'DES Voices'); } catch (e) {}
+            await resetOpenRouter();
+        } finally {
+            $btn.prop('disabled', false);
+            renderOpenRouterNote();
+            renderStatus();
+        }
+    });
     $('#rpg-voices-model').on('change', function () {
         v().model = String($(this).val());
         saveSettings();

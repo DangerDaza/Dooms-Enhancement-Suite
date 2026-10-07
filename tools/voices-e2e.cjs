@@ -121,6 +121,13 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
   });
   await page.waitForTimeout(3000);
 
+  // ── A Google key saved in SillyTavern (the ST route counts as connected) ──
+  await page.evaluate(async () => {
+    const secrets = await import('/scripts/secrets.js');
+    await secrets.readSecretState();
+    if (!(secrets.secret_state.api_key_makersuite || []).length) await secrets.writeSecret('api_key_makersuite', 'e2e-fake-google-key', 'DES e2e');
+  });
+
   // ── Turn DES voices on ──
   const setup = await page.evaluate(async (DES) => {
     const st = await import(`${DES}/src/core/state.js`);
@@ -944,6 +951,158 @@ function check(name, fn) { try { fn(); results.push('PASS ' + name); } catch (e)
     assert.strictEqual(row.recreate, false);
   });
   fs.rmSync(tmp, { recursive: true, force: true });
+
+  // ── Connections: OpenRouter and "nothing connected" ──
+  let orCalls = [];
+  let orMode = 'ok'; // 'ok' | 'cors' | 'credits'
+  const orCors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+  await page.route('https://openrouter.ai/api/v1/audio/speech', async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: orCors });
+    orCalls.push({ auth: req.headers()['authorization'], body: JSON.parse(req.postData() || '{}') });
+    if (orMode === 'cors') return route.abort('failed');
+    if (orMode === 'credits') return route.fulfill({ status: 402, headers: orCors, contentType: 'application/json', body: JSON.stringify({ error: { code: 402, message: 'Insufficient credits. Add more using https://openrouter.ai/credits' } }) });
+    return route.fulfill({ status: 200, headers: { ...orCors, 'content-type': 'audio/wav' }, body: silentWav() });
+  });
+  let stCustomCalls = [];
+  await page.route('**/api/openai/custom/generate-voice', async (route) => {
+    stCustomCalls.push(JSON.parse(route.request().postData() || '{}'));
+    return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: silentWav() });
+  });
+  const voicesSet = (patch) => page.evaluate(async ({ DES, patch }) => {
+    const st = await import(`${DES}/src/core/state.js`);
+    Object.assign(st.extensionSettings.voices, patch);
+    (await import(`${DES}/src/systems/voices/openrouter.js`)).resetOpenRouterState();
+  }, { DES, patch });
+  const clearToasts = () => page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
+  const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toast-message')].map(t => t.textContent).join(' | '));
+  let orN = 0;
+  const sayKore = async (extra = '') => { orN++; await page.evaluate(async ({ DES, line }) => {
+    const engine = await import(`${DES}/src/systems/voices/voiceEngine.js`);
+    engine.stop?.('test');
+    engine.audition({ source: 'stock', id: 'Kore' }, line);
+  }, { DES, line: `OpenRouter line ${orN}${extra}` }); await page.waitForTimeout(1200); };
+  // No custom TTS key in SillyTavern to start with.
+  await page.evaluate(async () => {
+    const secrets = await import('/scripts/secrets.js');
+    for (const k of secrets.secret_state.api_key_custom_openai_tts || []) await secrets.deleteSecret('api_key_custom_openai_tts', k.id);
+    await secrets.readSecretState();
+  });
+
+  // Nothing connected: no request, one clear message.
+  await page.route('**/api/secrets/read', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.evaluate(async () => (await import('/scripts/secrets.js')).readSecretState());
+  await voicesSet({ googleApiKey: '', openrouterKey: '', geminiVia: 'google' });
+  requests = []; google = []; orCalls = [];
+  await clearToasts();
+  await sayKore();
+  const noneToast = await toasts();
+  const noneNote = await page.evaluate(async (DES) => {
+    window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName: 'Mara' } }));
+    await new Promise(r => setTimeout(r, 800));
+    document.querySelector('#character-workshop-popup .workshop-nav button[data-pane="voice"]').click();
+    await new Promise(r => setTimeout(r, 400));
+    const t = document.querySelector('#cw-voice-pane')?.textContent || '';
+    document.querySelector('#cw-close')?.click();
+    return t;
+  }, DES);
+  check('nothing connected: no request is made and the user is told once where to connect', () => {
+    assert.strictEqual(requests.length + google.length + orCalls.length, 0);
+    assert.match(noneToast, /No voice service is connected/);
+  });
+  check('nothing connected: the Workshop Voice tab says so', () => assert.match(noneNote, /No voice service connected/));
+  await page.unroute('**/api/secrets/read');
+  await page.evaluate(async () => (await import('/scripts/secrets.js')).readSecretState());
+
+  // OpenRouter from the browser.
+  await voicesSet({ openrouterKey: 'sk-or-e2e', geminiVia: 'openrouter', openrouterRoute: 'auto', model: 'gemini-3.8-flash-lite-tts' });
+  requests = []; google = []; orCalls = [];
+  await sayKore();
+  check('OpenRouter: standard voices go to OpenRouter with the key, the Gemini model and the voice', () => {
+    assert.strictEqual(requests.length + google.length, 0, 'nothing went to Google');
+    assert.strictEqual(orCalls.length, 1, JSON.stringify(orCalls));
+    assert.strictEqual(orCalls[0].auth, 'Bearer sk-or-e2e');
+    assert.strictEqual(orCalls[0].body.model, 'google/gemini-3.8-flash-lite-tts');
+    assert.strictEqual(orCalls[0].body.voice, 'Kore');
+    assert.strictEqual(orCalls[0].body.response_format, 'mp3');
+  });
+  check('OpenRouter: the delivery note rides in Google\'s provider options', () => {
+    assert.strictEqual(orCalls[0].body.provider?.options?.['google-ai-studio']?.speech_metadata?.style, 'clear, natural speaking voice at a normal, steady volume');
+  });
+  const orPlayed = await page.evaluate(() => { const a = document.getElementById('dooms-tts-audio'); return a && a.error ? 'error ' + a.error.code : 'ok'; });
+  check('OpenRouter audio plays', () => assert.strictEqual(orPlayed, 'ok'));
+
+  // "Gemini voices via: Google" but no Google connection → OpenRouter is used anyway.
+  await page.route('**/api/secrets/read', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.evaluate(async () => (await import('/scripts/secrets.js')).readSecretState());
+  await voicesSet({ geminiVia: 'google', googleApiKey: '' });
+  orCalls = []; requests = [];
+  await sayKore();
+  check('a standard voice uses the other service when the chosen one isn\'t set up', () => { assert.strictEqual(orCalls.length, 1); assert.strictEqual(requests.length, 0); });
+  await page.unroute('**/api/secrets/read');
+  await page.evaluate(async () => (await import('/scripts/secrets.js')).readSecretState());
+  await voicesSet({ geminiVia: 'openrouter' });
+
+  // Out of credits.
+  orMode = 'credits'; orCalls = [];
+  await clearToasts();
+  await sayKore();
+  const creditsToast = await toasts();
+  check('OpenRouter out of credits: a clear message, not retried', () => { assert.strictEqual(orCalls.length, 1); assert.match(creditsToast, /credits have run out/); });
+
+  // Browser blocked (CORS) with no key saved in SillyTavern.
+  orMode = 'cors'; orCalls = []; stCustomCalls = [];
+  await clearToasts();
+  await sayKore();
+  const blockedToast = await toasts();
+  check('OpenRouter blocked from the browser: says how to fix it (Save key to SillyTavern)', () => {
+    assert.match(blockedToast, /couldn’t reach OpenRouter directly/);
+    assert.match(blockedToast, /Save key to SillyTavern/);
+    assert.strictEqual(stCustomCalls.length, 0);
+  });
+
+  // Save key to SillyTavern → the server route takes over.
+  await page.evaluate(async (DES) => {
+    const lazy = await import(`${DES}/src/core/lazyUI.js`);
+    await lazy.ensureSettingsUI();
+    document.querySelector('#rpg-voices-or-key').value = 'sk-or-e2e';
+    document.querySelector('#rpg-voices-or-save').click();
+  }, DES);
+  await page.waitForTimeout(1500);
+  const savedSecret = await page.evaluate(async () => ((await import('/scripts/secrets.js')).secret_state.api_key_custom_openai_tts || []).length);
+  check('Save key to SillyTavern stores the key in the Custom OpenAI TTS slot', () => assert.ok(savedSecret >= 1));
+  stCustomCalls = []; orCalls = [];
+  await voicesSet({});
+  await sayKore();
+  check('OpenRouter blocked → DES switches to SillyTavern\'s OpenAI Compatible route for the session', () => {
+    assert.strictEqual(stCustomCalls.length, 1, JSON.stringify({ stCustomCalls, orCalls: orCalls.length }));
+    const b = stCustomCalls[0];
+    assert.strictEqual(b.provider_endpoint, 'https://openrouter.ai/api/v1/audio/speech');
+    assert.strictEqual(b.model, 'google/gemini-3.8-flash-lite-tts');
+    assert.strictEqual(b.voice, 'Kore');
+    assert.match(b.input, /OpenRouter line/);
+  });
+  stCustomCalls = []; orCalls = [];
+  await sayKore();
+  check('…and stays on the server route without retrying the browser each line', () => { assert.strictEqual(orCalls.length, 0); assert.strictEqual(stCustomCalls.length, 1); });
+
+  // Settings: the guide and the OpenRouter controls.
+  const guide = await page.evaluate(() => {
+    const g = document.querySelector('#rpg-voices-guide');
+    return { exists: !!g, text: g?.textContent || '', via: [...document.querySelectorAll('#rpg-voices-via option')].map(o => o.value) };
+  });
+  check('Settings → Voices opens with "How DES voices work" and offers OpenRouter and Google', () => {
+    assert.ok(guide.exists);
+    assert.match(guide.text, /You bring the voice service/);
+    assert.match(guide.text, /OpenRouter/);
+    assert.deepStrictEqual(guide.via, ['openrouter', 'google']);
+  });
+  orMode = 'ok';
+  await voicesSet({ geminiVia: 'google', openrouterKey: '', openrouterRoute: 'auto' });
+  await page.evaluate(async () => {
+    const secrets = await import('/scripts/secrets.js');
+    for (const k of secrets.secret_state.api_key_custom_openai_tts || []) await secrets.deleteSecret('api_key_custom_openai_tts', k.id);
+  });
 
   // ── Voices off: bullhorn goes back to /speak, guard removed ──
   const offState = await page.evaluate(async (DES) => {

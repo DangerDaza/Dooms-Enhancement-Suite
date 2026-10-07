@@ -32,7 +32,8 @@
  *            highlightMessage?: boolean, controller?: AbortController}} Job
  */
 import { extensionSettings } from '../../core/state.js';
-import { synthesize, TtsError } from './transport.js';
+import { TtsError } from './transport.js';
+import { synthesizeLine } from './providers.js';
 import { getVoicesAudioElement } from './voiceBoot.js';
 
 const CACHE_MAX_ENTRIES = 150;
@@ -179,7 +180,7 @@ export function urlForBlob(blob, key) {
 async function fetchSegment(job, seg, signal) {
     if (seg.url) return seg.url;
     const model = voices().model;
-    const key = cacheKey(model, seg.voiceId, seg.text, seg.style || '');
+    const key = cacheKey(`${seg.provider || ''}\u0002${model}`, seg.voiceId, seg.text, seg.style || '');
     const hit = cacheGet(key);
     if (hit) return hit;
     if (job.auto) {
@@ -195,7 +196,7 @@ async function fetchSegment(job, seg, signal) {
         hooks.onStateChange?.();
         const usedVoiceId = seg.voiceId;
         try {
-            const { blob } = await synthesize({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', model, signal, style: seg.style || '' });
+            const { blob } = await synthesizeLine({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', provider: seg.provider, model, signal, style: seg.style || '' });
             consecutiveRateGiveUps = 0;
             return cachePut(key, blob, job.source === 'audition');
         } catch (e) {
@@ -221,6 +222,7 @@ async function fetchSegment(job, seg, signal) {
                         if (other.voiceId === goneId) {
                             other.voiceId = fallback.voiceId;
                             other.voiceSource = fallback.voiceSource || 'stock';
+                            if (fallback.provider) other.provider = fallback.provider;
                         }
                     }
                     return fetchSegment(job, seg, signal);

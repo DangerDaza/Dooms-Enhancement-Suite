@@ -26,6 +26,7 @@ const wav = await import('../src/systems/voices/wav.js');
 const consent = await import('../src/systems/voices/consentPhrases.js');
 const drafts = await import('../src/systems/voices/drafts.js');
 const delivery = await import('../src/systems/voices/delivery.js');
+const conn = await import('../src/systems/voices/connections.js');
 
 let failures = 0;
 let passes = 0;
@@ -421,6 +422,61 @@ test('settings: a missing or broken delivery note is restored', () => {
     const live2 = { voices: kept.voices };
     settings.ensureVoiceSettings(kept, live2);
     assert.equal(live2.voices.deliveryNote, '', 'an empty note (off) is kept');
+});
+
+// ─── connections.js ─────────────────────────────────────────────────────────
+
+test('connections: what counts as connected', () => {
+    const none = {};
+    assert.equal(conn.anyConnected({}, none), false);
+    assert.equal(conn.isGoogleConnected({ googleApiKey: ' AIza ' }, none), true);
+    assert.equal(conn.isGoogleConnected({}, { api_key_makersuite: [{ id: 'x' }] }), true, "SillyTavern's saved Google key counts");
+    assert.equal(conn.isGoogleConnected({}, { api_key_makersuite: [] }), false);
+    assert.equal(conn.isOpenRouterConnected({ openrouterKey: 'sk-or-1' }, none), true);
+    assert.equal(conn.isOpenRouterConnected({ openrouterRoute: 'server' }, { api_key_custom_openai_tts: [{ id: 'y' }] }), true, 'server route with the key saved in SillyTavern');
+    assert.equal(conn.isOpenRouterConnected({ openrouterRoute: 'auto' }, { api_key_custom_openai_tts: [{ id: 'y' }] }), false, 'a stray ST key alone is not an OpenRouter connection');
+});
+
+test('connections: which service plays a voice', () => {
+    assert.equal(conn.providerFor({ source: 'stock', id: 'Kore' }, {}), 'google');
+    assert.equal(conn.providerFor({ source: 'stock', id: 'Kore' }, { geminiVia: 'openrouter' }), 'openrouter');
+    assert.equal(conn.providerFor({ id: 'Kore' }, { geminiVia: 'openrouter' }), 'openrouter', 'refs without a source are stock');
+    assert.equal(conn.providerFor({ source: 'designed', id: 'voice_1' }, { geminiVia: 'openrouter' }), 'google', 'designed voices are Google-only');
+    assert.equal(conn.providerFor({ source: 'cloned', id: 'voice_2' }, { geminiVia: 'openrouter' }), 'google');
+    assert.equal(conn.providerFor({ provider: 'openrouter', source: 'stock', id: 'Kore' }, {}), 'openrouter', 'an explicit provider wins');
+});
+
+test('connections: the OpenRouter request', () => {
+    assert.equal(conn.openRouterModel('gemini-3.8-flash-tts'), 'google/gemini-3.8-flash-tts');
+    assert.equal(conn.openRouterModel('hexgrad/kokoro-82m'), 'hexgrad/kokoro-82m');
+    assert.deepEqual(conn.openRouterBody({ text: 'Hi.', voiceId: 'Kore', model: 'gemini-3.8-flash-lite-tts', style: '' }),
+        { model: 'google/gemini-3.8-flash-lite-tts', input: 'Hi.', voice: 'Kore', response_format: 'mp3' });
+    const styled = conn.openRouterBody({ text: 'Hi.', voiceId: 'Kore', model: 'gemini-3.8-flash-lite-tts', style: 'calm' });
+    assert.deepEqual(styled.provider, { options: { 'google-ai-studio': { speech_metadata: { style: 'calm' } } } });
+});
+
+test('connections: OpenRouter errors map to DES error kinds', () => {
+    assert.equal(conn.classifyOpenRouterError(401, 'No auth credentials found'), 'bad-key');
+    assert.equal(conn.classifyOpenRouterError(402, 'Insufficient credits'), 'quota');
+    assert.equal(conn.classifyOpenRouterError(429, ''), 'rate');
+    assert.equal(conn.classifyOpenRouterError(404, 'No endpoints found for google/x'), 'model-unavailable');
+    assert.equal(conn.classifyOpenRouterError(400, 'Invalid provider options'), 'argument');
+    assert.equal(conn.classifyOpenRouterError(500, 'Insufficient credits. Add more using https://openrouter.ai/credits'), 'quota', 'SillyTavern relays errors as 500');
+    assert.equal(conn.classifyOpenRouterError(0, ''), 'network');
+    assert.ok(conn.isStyleComplaint('Unknown field provider.options.google-ai-studio.speech_metadata'));
+});
+
+test('settings: connection settings get defaults and are repaired', () => {
+    const d = settings.defaultVoiceSettings();
+    assert.equal(d.geminiVia, 'google');
+    assert.equal(d.openrouterKey, '');
+    assert.equal(d.openrouterRoute, 'auto');
+    const saved = { voices: { geminiVia: 'carrier-pigeon', openrouterKey: 5, openrouterRoute: 'tunnel' } };
+    const live = { voices: saved.voices };
+    assert.equal(settings.ensureVoiceSettings(saved, live), true);
+    assert.equal(live.voices.geminiVia, 'google');
+    assert.equal(live.voices.openrouterKey, '');
+    assert.equal(live.voices.openrouterRoute, 'auto');
 });
 
 // ─── stAutoReadGuard.js ─────────────────────────────────────────────────────

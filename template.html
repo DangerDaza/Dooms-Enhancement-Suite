@@ -1375,10 +1375,33 @@
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
+                    <!-- How DES voices work (docs/tts-connections-plan.md §6.2). Open until closed once. -->
+                    <details class="rpg-voices-guide" id="rpg-voices-guide">
+                        <summary><i class="fa-solid fa-circle-info"></i> How DES voices work</summary>
+                        <p>DES reads your chat aloud and gives each character their own voice, but only while they're
+                            on the Present Characters panel. Everyone else is read by the Narrator.</p>
+                        <p><strong>You bring the voice service.</strong> DES doesn't include one. Connect at least one below:</p>
+                        <ul>
+                            <li><strong>OpenRouter</strong> &mdash; recommended. The same Gemini voices, pay as you go
+                                (about a cent per minute of speech), no daily caps. One key from
+                                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai</a>.</li>
+                            <li><strong>Google</strong> &mdash; the same Gemini voices, and the only way to <em>design</em>
+                                or <em>clone</em> voices. Google's free and Tier 1 limits are low (about 100 lines a day
+                                per model); higher limits need $100 spent with Google.</li>
+                        </ul>
+                        <p><strong>Good to know</strong></p>
+                        <ul>
+                            <li>Designed and cloned voices only work with a Google key, in the Google project you made
+                                them in. Without it, those characters use a standard voice of the same gender.</li>
+                            <li>Each line is one request. Auto-read uses more than the bullhorn buttons.</li>
+                            <li>Voices are an early feature. If something sounds wrong or breaks, tell us what you were
+                                doing and which service you use.</li>
+                        </ul>
+                    </details>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Use DES voices</span>
-                            <span class="rpg-setting-hint">Reads chat aloud with a different Google voice for each
+                            <span class="rpg-setting-hint">Reads chat aloud with a different voice for each
                                 character in the scene. Pick voices in the Character Workshop's Voice tab. While
                                 this is on, SillyTavern's own auto-read is paused (your SillyTavern setting isn't
                                 changed).</span>
@@ -1479,6 +1502,54 @@
                         </div>
                         <div class="rpg-voices-nd-result" id="rpg-voices-nd-result" hidden></div>
                     </details>
+                    <h5 class="rpg-voices-subhead">Connections</h5>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Gemini voices via</span>
+                            <span class="rpg-setting-hint">Which service plays the 30 standard Gemini voices. If that
+                                one isn't set up, DES uses the other. Designed and cloned voices always need the
+                                Google key.</span>
+                        </div>
+                        <select id="rpg-voices-via" class="rpg-accordion-select">
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="google">Google</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row rpg-voices-stack">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">OpenRouter key</span>
+                            <span class="rpg-setting-hint">Get one at
+                                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
+                                and add a few dollars of credit. Pay as you go, no daily caps.</span>
+                        </div>
+                        <div class="rpg-voices-key">
+                            <input type="password" id="rpg-voices-or-key" class="rpg-accordion-input" autocomplete="off"
+                                spellcheck="false" placeholder="sk-or-&hellip;" />
+                            <button id="rpg-voices-or-key-toggle" class="rpg-accordion-mini-btn" type="button"
+                                title="Show/Hide" aria-label="Show or hide the OpenRouter key">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <button id="rpg-voices-or-test" class="rpg-accordion-mini-btn rpg-voices-wordbtn" type="button"
+                                title="Test: reads a short line through OpenRouter">Test</button>
+                            <button id="rpg-voices-or-key-clear" class="rpg-accordion-mini-btn" type="button"
+                                title="Remove the key" aria-label="Remove the OpenRouter key">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="rpg-voices-or-route">
+                            <label for="rpg-voices-or-route">Connect</label>
+                            <select id="rpg-voices-or-route" class="rpg-accordion-select">
+                                <option value="auto">Automatic</option>
+                                <option value="browser">Browser only</option>
+                                <option value="server">SillyTavern's server only</option>
+                            </select>
+                            <button id="rpg-voices-or-save" class="rpg-accordion-mini-btn rpg-voices-wordbtn" type="button"
+                                title="Save this key in SillyTavern's Custom OpenAI TTS slot, for the server route">Save key to SillyTavern</button>
+                        </div>
+                        <span class="rpg-setting-hint" id="rpg-voices-or-note">Automatic: from the browser, and if your
+                            browser can't reach OpenRouter, through SillyTavern's server instead. For that, press <strong>Save key to
+                            SillyTavern</strong> once. The delivery note only works from the browser.</span>
+                    </div>
                     <div class="rpg-setting-row rpg-voices-stack">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Google AI Studio key</span>
@@ -1509,9 +1580,10 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Voice model</span>
-                            <span class="rpg-setting-hint">About 54 cents per hour of speech on Flash-Lite (about
-                                81 cents on Flash) until the end of 2026; Google doubles these on 1 January 2027.
-                                On Google's free tier your text may be used to improve Google's products.</span>
+                            <span class="rpg-setting-hint">Flash-Lite is cheaper, Flash sounds richer. Roughly half a
+                                cent to a cent per minute of speech on either service; check the service's pricing page
+                                for current prices. On Google's free tier your text may be used to improve Google's
+                                products.</span>
                         </div>
                         <select id="rpg-voices-model" class="rpg-accordion-select"></select>
                     </div>

@@ -8168,6 +8168,49 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-voices-narrator .rpg-voices-preview {
     flex: 0 0 auto;
 }
+/* Settings → Voices → How DES voices work */
+.rpg-voices-guide {
+    margin: 0 0 0.75rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--rpg-highlight, #e94560);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 7%, transparent);
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+.rpg-voices-guide > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--rpg-highlight, #e94560);
+}
+.rpg-voices-guide p { margin: 0.45rem 0 0.25rem; }
+.rpg-voices-guide ul { margin: 0.2rem 0 0.3rem; padding-left: 1.2rem; }
+.rpg-voices-guide li { margin: 0.15rem 0; }
+.rpg-voices-subhead {
+    margin: 0.9rem 0 0.3rem;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.7;
+}
+.rpg-voices-or-route {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+.rpg-voices-or-route label { font-size: 0.85em; opacity: 0.8; }
+.rpg-voices-or-route .rpg-accordion-select { flex: 1 1 220px; min-width: 0; }
+.rpg-voices-or-route .rpg-voices-wordbtn,
+.rpg-voices-key .rpg-voices-wordbtn {
+    width: auto;
+    height: auto;
+    min-height: 28px;
+    padding: 0.2rem 0.6rem;
+    white-space: nowrap;
+}
+
 /* Settings → Voices → Design a narrator voice */
 .rpg-voices-nd {
     margin: 0.25rem 0 0.6rem;

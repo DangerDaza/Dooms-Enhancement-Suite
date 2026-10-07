@@ -62,6 +62,18 @@ export function defaultVoiceSettings() {
         // SillyTavern (through its server). Stored with DES settings, so it
         // syncs to every device (and sits in SillyTavern's settings file).
         googleApiKey: '',
+        // Standard Gemini voices go through 'google' or 'openrouter'
+        // (docs/tts-connections-plan.md §4.4). Designed/cloned voices are
+        // always Google's.
+        geminiVia: 'google',
+        // OpenRouter key for voices ('' = none in DES), and the route:
+        // 'auto' (browser, then SillyTavern's server if the browser is
+        // blocked), 'browser' or 'server' (key saved in SillyTavern's
+        // "Custom OpenAI TTS" slot).
+        openrouterKey: '',
+        openrouterRoute: 'auto',
+        // The "How DES voices work" guide in Settings starts open.
+        guideOpen: true,
         readUserMessages: false,
         playbackRate: 1,
         maxSegmentsPerMessage: 24,
@@ -145,6 +157,18 @@ export function ensureVoiceSettings(saved, live) {
                     changed = true;
                 }
             }
+        }
+        if (live.voices.geminiVia !== 'google' && live.voices.geminiVia !== 'openrouter') {
+            live.voices.geminiVia = defaults.geminiVia;
+            changed = true;
+        }
+        if (typeof live.voices.openrouterKey !== 'string') {
+            live.voices.openrouterKey = '';
+            changed = true;
+        }
+        if (!['auto', 'browser', 'server'].includes(live.voices.openrouterRoute)) {
+            live.voices.openrouterRoute = defaults.openrouterRoute;
+            changed = true;
         }
         if (typeof live.voices.deliveryNote !== 'string') {
             live.voices.deliveryNote = defaults.deliveryNote;

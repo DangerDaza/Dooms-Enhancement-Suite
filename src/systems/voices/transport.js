@@ -149,7 +149,7 @@ export function classifyError(status, message = '') {
 }
 
 /** fetch with the caller's abort signal plus a timeout. */
-async function fetchWithTimeout(url, init, signal, unreachable, timeoutMs) {
+export async function fetchWithTimeout(url, init, signal, unreachable, timeoutMs) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), timeoutMs);
     const onAbort = () => timeout.abort();
