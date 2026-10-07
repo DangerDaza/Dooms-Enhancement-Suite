@@ -17,14 +17,16 @@
    Only injected while performance mode is ON (src/core/cssLoader.js), so
    these broad selectors cost nothing in normal operation. Strips every DES
    animation, transition, and GPU-expensive filter; the particle canvas
-   pauses itself via the body.dooms-perf-mode class. */
+   pauses itself via the body.dooms-perf-mode class.
+   Glint Words are left to styles/glint.css, which stills them here too
+   unless the player turned on "Animate anyway" for them. */
 
 body.dooms-perf-mode [class*="rpg-"],
 body.dooms-perf-mode [class*="rpg-"]::before,
 body.dooms-perf-mode [class*="rpg-"]::after,
-body.dooms-perf-mode [class*="dooms-"],
-body.dooms-perf-mode [class*="dooms-"]::before,
-body.dooms-perf-mode [class*="dooms-"]::after,
+body.dooms-perf-mode [class*="dooms-"]:not([class*="dooms-glint"]),
+body.dooms-perf-mode [class*="dooms-"]:not([class*="dooms-glint"])::before,
+body.dooms-perf-mode [class*="dooms-"]:not([class*="dooms-glint"])::after,
 body.dooms-perf-mode [id^="rpg-"],
 body.dooms-perf-mode [id^="dooms-"],
 body.dooms-perf-mode [id^="character-"] {

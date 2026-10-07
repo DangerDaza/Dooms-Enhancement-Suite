@@ -32,9 +32,57 @@ import {
     parseWordList,
     cleanWord,
 } from '../rendering/glintCatalog.js';
-import { getGlintSettings, refreshGlintWords, buildGlintSpan, playGlintEntrance } from '../rendering/glintWords.js';
+import { getGlintSettings, refreshGlintWords, buildGlintSpan, playGlintEntrance, probeGlintMotion } from '../rendering/glintWords.js';
 
 let refreshTimer = null;
+let probeTimer = null;
+let watchingMotion = false;
+
+const MOTION_NOTES = {
+    perf: 'Glints aren\u2019t moving because DES Performance Mode is on (Display & Features \u2192 Features). Turn on Animate anyway above to keep them moving.',
+    system: 'Glints aren\u2019t moving because your system asks for reduced motion (Windows: Settings \u2192 Accessibility \u2192 Visual effects \u2192 Animation effects; Mac: System Settings \u2192 Accessibility \u2192 Display \u2192 Reduce motion). Turn on Animate anyway above to keep them moving.',
+    css: 'Glints aren\u2019t moving, and it isn\u2019t Performance Mode or your system setting. Something on the page is stopping animations: most often a theme or a rule in SillyTavern\u2019s User Settings \u2192 Custom CSS, or another extension.',
+};
+
+/**
+ * Tests whether a glint really animates in the chat and, if not, says why.
+ * Runs when the card is bound, when Performance Mode or the system setting
+ * changes, and when "Animate anyway" is switched.
+ */
+function renderMotionNote() {
+    const $note = $('#rpg-glint-motion-note');
+    if (!$note.length) return;
+    const s = getGlintSettings();
+    if (!s.enabled) { $note.prop('hidden', true); return; }
+    ensureCss('glint').then(() => {
+        let result;
+        try { result = probeGlintMotion(); } catch (e) { result = { moving: true, reason: '' }; }
+        $note.text(result.moving ? '' : (MOTION_NOTES[result.reason] || MOTION_NOTES.css)).prop('hidden', result.moving);
+    }).catch(() => { $note.prop('hidden', true); });
+}
+
+function scheduleMotionNote() {
+    clearTimeout(probeTimer);
+    probeTimer = setTimeout(renderMotionNote, 120);
+}
+
+/** Re-checks when Performance Mode flips (a body class) or the system setting changes. */
+function watchMotionSources() {
+    if (watchingMotion) return;
+    watchingMotion = true;
+    let perfOn = document.body.classList.contains('dooms-perf-mode');
+    try {
+        new MutationObserver(() => {
+            const now = document.body.classList.contains('dooms-perf-mode');
+            if (now !== perfOn) { perfOn = now; scheduleMotionNote(); }
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) { /* old browser: checked when the card opens */ }
+    try {
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        if (mq.addEventListener) mq.addEventListener('change', scheduleMotionNote);
+        else if (mq.addListener) mq.addListener(scheduleMotionNote);
+    } catch (e) { /* no matchMedia */ }
+}
 
 /** Saves, then re-applies the words to the chat once the player pauses. */
 function commit() {
@@ -152,7 +200,20 @@ export function bindGlintSettingsUI() {
     $('#rpg-glint-toggle').prop('checked', s.enabled).on('change', function () {
         getGlintSettings().enabled = $(this).prop('checked');
         commit();
+        scheduleMotionNote();
     });
+    $('#rpg-glint-animate-always').prop('checked', !!s.animateAlways).on('change', function () {
+        getGlintSettings().animateAlways = $(this).prop('checked');
+        saveSettings();
+        // Applied at once (not after the usual pause) so the note re-checks the new state.
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+        try { refreshGlintWords(); } catch (e) { console.warn('[Dooms Tracker] Glint Words refresh failed:', e); }
+        scheduleMotionNote();
+    });
+    // Opening the card re-checks too: a theme or custom CSS may have changed since.
+    $('#rpg-glint-subsection').on('toggle', function () { if (this.open) scheduleMotionNote(); });
+    watchMotionSources();
     $('#rpg-glint-add-preset').append(GLINT_PRESETS.map(p =>
         `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.words.slice(0, 3).join(', '))}…)</option>`).join(''));
 
@@ -243,4 +304,5 @@ export function bindGlintSettingsUI() {
     });
 
     renderGroups();
+    scheduleMotionNote();
 }

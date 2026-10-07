@@ -84,9 +84,13 @@ export function glintLook(id) {
     return GLINT_LOOKS.find(l => l.id === id) || GLINT_LOOKS[0];
 }
 
-/** A fresh settings block: on, no groups (so nothing changes until the player adds words). */
+/**
+ * A fresh settings block: on, no groups (so nothing changes until the player
+ * adds words). animateAlways keeps glints moving under Performance Mode and
+ * the system's reduced-motion setting.
+ */
 export function defaultGlintSettings() {
-    return { enabled: true, groups: [] };
+    return { enabled: true, animateAlways: false, groups: [] };
 }
 
 /** Collapses whitespace; '' for anything unusable. */
@@ -157,7 +161,7 @@ export function normalizeGlintSettings(raw) {
         while (ids.has(g.id)) g.id = newGlintId();
         ids.add(g.id);
     }
-    return { enabled: base.enabled !== false, groups };
+    return { enabled: base.enabled !== false, animateAlways: base.animateAlways === true, groups };
 }
 
 /** A new group from a preset (or a blank one). */

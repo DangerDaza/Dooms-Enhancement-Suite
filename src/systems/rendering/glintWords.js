@@ -177,11 +177,54 @@ export function playGlintEntrance(span, entrance, delayMs = 0) {
 const waiting = new Set();
 let sightObserver = null;
 
-/** Performance Mode and reduced motion skip entrances: the word is simply gold. */
+/** Is the system asking for reduced motion? */
+export function systemWantsReducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+}
+
+/**
+ * Performance Mode and reduced motion skip entrances (the word is simply
+ * gold), unless the player turned on "Animate anyway".
+ */
 function motionAllowed() {
+    if (typeof IntersectionObserver !== 'function') return false;
+    if (getGlintSettings().animateAlways) return true;
     if (document.body?.classList.contains('dooms-perf-mode')) return false;
-    try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false; } catch (e) { /* old browser */ }
-    return typeof IntersectionObserver === 'function';
+    return !systemWantsReducedMotion();
+}
+
+/**
+ * Does a glint actually animate in the chat right now? Drops an invisible
+ * test glint into #chat, reads what the browser decided, and takes it out.
+ * Settings uses it to say why glints aren't moving.
+ * @returns {{moving: boolean, reason: ''|'perf'|'system'|'css'}}
+ */
+export function probeGlintMotion() {
+    const host = document.getElementById('chat') || document.body;
+    const probe = buildGlintSpan('glint', { id: 'probe', look: 'gold', idle: 'flow', color: '#f2c230' }, 'probe');
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.position = 'absolute';
+    probe.style.left = '-9999px';
+    probe.style.top = '0';
+    probe.style.pointerEvents = 'none';
+    ours.add(probe);
+    let name = 'none';
+    try {
+        host.appendChild(probe);
+        name = getComputedStyle(probe.firstChild).animationName || 'none';
+    } finally {
+        probe.remove();
+    }
+    if (name !== 'none') return { moving: true, reason: '' };
+    const always = !!getGlintSettings().animateAlways;
+    if (!always && document.body?.classList.contains('dooms-perf-mode')) return { moving: false, reason: 'perf' };
+    if (!always && systemWantsReducedMotion()) return { moving: false, reason: 'system' };
+    return { moving: false, reason: 'css' };
+}
+
+/** Mirrors the "Animate anyway" choice onto <body> for styles/glint.css. */
+function syncAnimateAlways() {
+    document.body?.classList.toggle('dooms-glint-animate-always', !!getGlintSettings().animateAlways);
 }
 
 /**
@@ -506,6 +549,7 @@ export function initGlintWords() {
  */
 export function refreshGlintWords() {
     const s = getGlintSettings();
+    syncAnimateAlways();
     matcher = s.enabled ? buildGlintMatcher(s.groups) : null;
     releaseWaiting();
     const chatEl = document.getElementById('chat');

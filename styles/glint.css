@@ -235,18 +235,28 @@
     100% { transform: scale(1); }
 }
 
-/* ── Motion off: gold stays, movement goes ── */
+/* ── Motion off: gold stays, movement goes ──
+   Performance Mode (styles/perf-mode.css leaves glints to this file) and the
+   system's reduced-motion setting still the glints, unless the player has
+   turned on "Animate anyway" (body.dooms-glint-animate-always). */
+body.dooms-perf-mode:not(.dooms-glint-animate-always) .dooms-glint,
+body.dooms-perf-mode:not(.dooms-glint-animate-always) .dooms-glint-text {
+    animation: none !important;
+    transition: none !important;
+    filter: none !important;
+}
+body.dooms-perf-mode:not(.dooms-glint-animate-always) .dooms-glint::before,
+body.dooms-perf-mode:not(.dooms-glint-animate-always) .dooms-glint::after {
+    content: none !important;
+    animation: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
-    .dooms-glint,
-    .dooms-glint::before,
-    .dooms-glint::after,
-    .dooms-glint-text {
+    body:not(.dooms-glint-animate-always) .dooms-glint,
+    body:not(.dooms-glint-animate-always) .dooms-glint::before,
+    body:not(.dooms-glint-animate-always) .dooms-glint::after,
+    body:not(.dooms-glint-animate-always) .dooms-glint-text {
         animation: none !important;
     }
-}
-body.dooms-perf-mode .dooms-glint::before,
-body.dooms-perf-mode .dooms-glint::after {
-    content: none;
 }
 
 /* ── Settings preview chip ── */
@@ -269,3 +279,15 @@ body.dooms-perf-mode .dooms-glint::after {
     font-style: italic;
     font-size: 0.85em;
 }
+
+/* ── Settings: why glints aren't moving ── */
+.rpg-glint-motion-note {
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--rpg-highlight, #e94560);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--rpg-highlight, #e94560) 12%, transparent);
+    font-size: 0.85em;
+    line-height: 1.45;
+}
+.rpg-glint-motion-note[hidden] { display: none; }
