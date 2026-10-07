@@ -378,6 +378,17 @@ body[data-dooms-ui] .dooms-dc-debug-badge {
     font-family: var(--ov-mono);
 }
 body[data-dooms-ui] .dooms-dc-debug-badge > i { color: var(--ov-accent); }
+/* The red/green tension shades lean toward the theme's text colour so they
+   read on a light badge as well as a dark one; the streak and countdown
+   follow the theme instead of the Classic greys. */
+body[data-dooms-ui] .dooms-dc-debug-tension.dooms-dc-tension-low { color: color-mix(in srgb, #e94560 78%, var(--ov-text)); }
+body[data-dooms-ui] .dooms-dc-debug-tension.dooms-dc-tension-high { color: color-mix(in srgb, #4ade80 70%, var(--ov-text)); }
+body[data-dooms-ui] .dooms-dc-debug-tension.dooms-dc-tension-unknown { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-dc-debug-streak { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-dc-debug-countdown {
+    color: var(--ov-accent2);
+    background: color-mix(in srgb, var(--ov-accent) 18%, transparent);
+}
 body[data-dooms-ui] .dooms-dc-trap-badge {
     background: var(--ov-ground);
     border: 1px solid var(--ov-line);
@@ -2017,16 +2028,19 @@ body[data-dooms-ui="inked"] .dooms-pb-title { color: var(--ov-muted); }
 body[data-dooms-ui="inked"] .dooms-pb-context-menu { box-shadow: none; }
 body[data-dooms-ui="inked"] .dooms-pb-ctx-item:hover { background: var(--ov-caption); color: var(--ov-ink); }
 /* SFX Doom Counter */
+/* A paper sticker with an ink outline, so the red/green tension number,
+   the streak and the countdown stay readable (on the accent fill they
+   vanished). */
 body[data-dooms-ui="inked"] .dooms-dc-debug-badge {
-    background: var(--ov-accent);
-    color: var(--ov-on-accent);
+    background: var(--ov-paper);
+    color: var(--ov-ink);
     border: var(--ov-border-w) solid var(--ov-ink);
     box-shadow: none;
     font-family: var(--ov-display);
     font-size: 0.74em;
 }
-body[data-dooms-ui="inked"] .dooms-dc-debug-badge > i,
-body[data-dooms-ui="inked"] .dooms-dc-debug-tension { color: var(--ov-on-accent) !important; }
+body[data-dooms-ui="inked"] .dooms-dc-debug-badge > i { color: var(--ov-accent); }
+body[data-dooms-ui="inked"] .dooms-dc-debug-countdown { background: var(--ov-caption); color: var(--ov-ink); }
 body[data-dooms-ui="inked"] .dooms-dc-trap-badge { background: var(--ov-caption); color: var(--ov-ink); box-shadow: none; }
 body[data-dooms-ui="inked"] .dooms-dc-inline { background: var(--ov-paper); color: var(--ov-ink); }
 body[data-dooms-ui="inked"] .dooms-dc-inline-header { color: var(--ov-accent); border-bottom: var(--ov-border-w) solid var(--ov-ink); font-size: 1.2em; }

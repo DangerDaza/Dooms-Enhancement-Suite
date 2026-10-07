@@ -175,6 +175,23 @@ export async function cloneVoice({ label, gender, locale, sourceBase64, consentB
 }
 
 /**
+ * Renames a custom voice (Settings → Voices → My custom voices). Google keeps
+ * its own display name; the label only lives in DES, so every stored
+ * reference (characters, personas, the Narrator) is updated to match.
+ * @returns {object|null} the entry, or null when the id is unknown or the label is empty
+ */
+export function renameRegistered(id, label) {
+    const entry = getRegistered(id);
+    const next = String(label || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!entry || !next) return null;
+    if (next === entry.label) return entry;
+    entry.label = next;
+    rewriteVoiceRefs(id, id, { label: next });
+    changed();
+    return entry;
+}
+
+/**
  * Deletes a designed voice from Google and removes every reference to it
  * (characters in every version, personas, the Narrator).
  * @returns {Promise<number>} references removed

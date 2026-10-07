@@ -12214,6 +12214,9 @@ body.dooms-hide-st-topbar .openDrawer {
     font-weight: 700;
     font-size: 1.05em;
 }
+.dooms-dc-debug-tension.dooms-dc-tension-low { color: #e94560; }
+.dooms-dc-debug-tension.dooms-dc-tension-high { color: #4ade80; }
+.dooms-dc-debug-tension.dooms-dc-tension-unknown { color: #888; }
 
 
 /* Streak fraction (e.g. "3/5") */

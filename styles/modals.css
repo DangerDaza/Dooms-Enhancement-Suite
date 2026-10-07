@@ -6317,6 +6317,8 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 
 
 #character-workshop-popup .stack { display: flex; flex-direction: column; gap: 0.45rem; }
+/* Recrop portrait with nothing to crop, Render portrait while it renders */
+#character-workshop-popup .rpg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 
 #character-workshop-popup .sr-only {

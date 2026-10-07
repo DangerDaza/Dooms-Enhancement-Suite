@@ -31,6 +31,7 @@ import {
     usedByText,
     deleteDesignedVoice,
     recreateDesignedVoice,
+    renameRegistered,
     designVoice,
     draftDescriptionFromReference,
 } from '../voices/voiceRegistry.js';
@@ -108,6 +109,7 @@ function renderDesigned() {
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-play" title="Preview" ${h === 'gone' ? 'disabled' : ''}>
                         <i class="fa-solid ${playing ? 'fa-stop' : 'fa-play'}"></i>
                     </button>
+                    <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-rename" title="Rename"><i class="fa-solid fa-pen"></i></button>
                     ${h !== 'ok' && e.source !== 'cloned' ? '<button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-recreate" title="Design a fresh copy from its description">Recreate</button>' : ''}
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-delete" title="Delete from Google"><i class="fa-solid fa-trash"></i></button>
                 </div>
@@ -141,6 +143,21 @@ function bindDesigned() {
         const entry = getRegistered(id);
         if (!entry) return;
         (await getEngine()).audition(refFor(entry), 'This is how I sound when I read your story.');
+    });
+    $(document).on('click', '#rpg-voices-designed .rpg-voices-designed-rename', function () {
+        const id = $(this).closest('.rpg-voices-designed-row').attr('data-voice');
+        const entry = getRegistered(id);
+        if (!entry) return;
+        const answer = window.prompt('Rename this voice', entry.label || '');
+        if (answer === null) return;
+        const next = String(answer).replace(/\s+/g, ' ').trim();
+        if (!next) {
+            try { window.toastr?.info('A voice needs a name.', 'DES Voices'); } catch (e) {}
+            return;
+        }
+        // The registry event re-renders this list, the narrator picker and the
+        // Workshop's My voices list.
+        renameRegistered(id, next);
     });
     $(document).on('click', '#rpg-voices-designed .rpg-voices-designed-delete', function () {
         const id = $(this).closest('.rpg-voices-designed-row').attr('data-voice');

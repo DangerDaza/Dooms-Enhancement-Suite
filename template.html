@@ -2836,10 +2836,13 @@
                     <div class="rpg-editor-section">
                         <h4>Portrait</h4>
                         <p class="helper">Shown on the portrait bar. The stage at left updates as soon as you pick a
-                            file. Each campaign version keeps its own portrait.</p>
+                            file. Recrop reframes the portrait you already have. Each campaign version keeps its own
+                            portrait.</p>
                         <div class="stack" style="max-width: 320px;">
                             <label class="rpg-btn" for="cw-portrait-file">Upload portrait&hellip;</label>
                             <input id="cw-portrait-file" type="file" accept="image/*" class="sr-only">
+                            <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-portrait-recrop"
+                                title="Frame the current portrait again">Recrop portrait</button>
                             <button class="rpg-btn rpg-btn-ghost" type="button" id="cw-portrait-clear">Remove
                                 portrait</button>
                         </div>

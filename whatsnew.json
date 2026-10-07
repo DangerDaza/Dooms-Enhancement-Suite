@@ -24,11 +24,11 @@
         },
         {
             "title": "🔊 Every character can have a voice",
-            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices (through your Google key or an OpenRouter key), or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices."
+            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices (through your Google key or an OpenRouter key), or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices. Designed and cloned voices can be renamed from Settings → Voices → My custom voices."
         },
         {
-            "title": "🔧 Fixes",
-            "body": "This screen now appears with Performance Mode on instead of leaving a dark backdrop. Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
+            "title": "🔧 Fixes and small additions",
+            "body": "Workshop → Appearance has a Recrop portrait button that reframes the portrait you already have. The Doom Counter badge is readable under every look (under Inked it is a paper sticker now). This screen now appears with Performance Mode on instead of leaving a dark backdrop. Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
         }
     ],
     "contact": {

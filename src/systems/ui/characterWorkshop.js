@@ -39,7 +39,7 @@ import {
     saveCharacterRosterChange,
 } from '../../core/persistence.js';
 import { contrastInkHex } from '../rendering/chatBubbles.js';
-import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, upscaleImage } from './portraitBar.js';
+import { clearPortraitCache, updatePortraitBar, openExpressionFolder, resolvePortrait, resolveFullPortrait, upscaleImage } from './portraitBar.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { getSafeThumbnailUrl, deletePortraitsIfUnreferenced, takePortraitHistoryValues } from '../../utils/avatars.js';
@@ -944,6 +944,79 @@ function closeVersionAddMenu() {
     if ($modal) $modal.find('#cw-version-add').attr('aria-expanded', 'false');
 }
 
+/** The portrait bar's display size; every crop is redrawn at this size as PNG. */
+const PORTRAIT_W = 660;
+const PORTRAIT_H = 880;
+
+/**
+ * The image Recrop portrait starts from: the file picked in this session
+ * (uncropped, so a tight crop can be widened again), else the saved
+ * portrait, else, for an NPC, the full-size card or portraits/ folder image
+ * the bar is already showing (not its thumbnail, which would crop soft).
+ */
+function recropSource() {
+    if (!draft) return '';
+    if (draft.portraitSource) return draft.portraitSource;
+    if (draft.avatarFullRes || draft.avatar) return draft.avatarFullRes || draft.avatar;
+    if (!draft.isUser && draft.name) {
+        try { return resolveFullPortrait(draft.name) || resolvePortrait(draft.name) || ''; } catch (e) { return ''; }
+    }
+    return '';
+}
+
+function syncRecropButton() {
+    if (!$modal) return;
+    $modal.find('#cw-portrait-recrop').prop('disabled', !recropSource());
+}
+
+/** A data URL for an image, fetching it first when it is a path. */
+async function imageToDataUrl(src) {
+    if (!src) throw new Error('No portrait to crop.');
+    if (/^data:/i.test(src)) return src;
+    const res = await fetch(src, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`Couldn't load the portrait (${res.status}).`);
+    return await getBase64Async(await res.blob());
+}
+
+/**
+ * Opens SillyTavern's crop popup on an image (3:4, like the portrait bar's
+ * own Upload Portrait), redraws the crop at portrait size and puts it on
+ * stage as the draft's portrait. Shared by Upload portrait and Recrop
+ * portrait. Resolves false when the user cancels or the draft changed
+ * while the popup was open.
+ */
+async function cropPortraitOntoStage(dataUrl, { recrop = false } = {}) {
+    const startDraft = draft;
+    if (!startDraft) return false;
+    const safeName = (startDraft.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const verb = recrop ? 'Recrop' : 'Crop';
+    const titleHtml = startDraft.isUser
+        ? `<h3>${verb} portrait for user character: ${safeName}</h3>`
+        : `<h3>${verb} portrait for ${safeName}</h3>`;
+    const croppedImage = await callGenericPopup(
+        titleHtml,
+        POPUP_TYPE.CROP,
+        '',
+        { cropAspect: 3 / 4, cropImage: dataUrl },
+    );
+    if (!croppedImage) {
+        console.log(`[Dooms Tracker] Workshop: portrait ${recrop ? 'recrop' : 'crop'} cancelled`);
+        return false;
+    }
+    if (draft !== startDraft) return false;
+    // The CROP popup returns a low-res JPEG at the crop pixel size; redrawing
+    // it at portrait resolution keeps it crisp in the bar and the bubbles.
+    const hiResDataUrl = await upscaleImage(String(croppedImage), PORTRAIT_W, PORTRAIT_H);
+    if (draft !== startDraft) return false;
+    draft.avatar = hiResDataUrl;
+    draft.avatarFullRes = hiResDataUrl;
+    draft.dirty.avatar = true;
+    // Keep what the crop was cut from, so Recrop can start from it again.
+    draft.portraitSource = dataUrl;
+    setStagePortrait(hiResDataUrl);
+    return true;
+}
+
 /**
  * Puts a portrait on the stage with a crossfade: the new image loads on the
  * back layer, is decoded, and only then swaps to the front. A stale load
@@ -958,6 +1031,7 @@ function setStagePortrait(src) {
     if (!$a.length || !$b.length) return;
     const front = $a.hasClass('is-front') ? $a : $b;
     const back = front.is($a) ? $b : $a;
+    syncRecropButton();
     if (!src) {
         front.removeClass('is-front');
         back.removeClass('is-front');
@@ -2271,39 +2345,10 @@ function bindStaticListeners() {
         const file = fileInput.files && fileInput.files[0];
         if (!file) return;
         try {
+            // Same 3:4 crop + upscale pipeline as the portrait bar's
+            // right-click "Upload Portrait", so the images match in size.
             const dataUrl = await getBase64Async(file);
-
-            // Open SillyTavern's built-in crop popup so users can frame the
-            // portrait before saving. Same 3:4 aspect + upscale pipeline as
-            // the portrait-bar's right-click "Upload Portrait" path so the
-            // resulting images match in dimensions.
-            const safeName = (draft.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const titleHtml = draft.isUser
-                ? `<h3>Crop portrait for user character: ${safeName}</h3>`
-                : `<h3>Crop portrait for ${safeName}</h3>`;
-            const croppedImage = await callGenericPopup(
-                titleHtml,
-                POPUP_TYPE.CROP,
-                '',
-                { cropAspect: 3 / 4, cropImage: dataUrl },
-            );
-            if (!croppedImage) {
-                console.log('[Dooms Tracker] Workshop: portrait crop cancelled');
-                return;
-            }
-
-            // Upscale the cropped result to 660x880 PNG for crisp portrait
-            // display. The CROP popup returns a low-res JPEG at the crop
-            // pixel size; redrawing it at portrait resolution prevents
-            // softness when it's used in the bar / chat bubbles.
-            const PORTRAIT_W = 660;
-            const PORTRAIT_H = 880;
-            const hiResDataUrl = await upscaleImage(String(croppedImage), PORTRAIT_W, PORTRAIT_H);
-
-            draft.avatar = hiResDataUrl;
-            draft.avatarFullRes = hiResDataUrl;
-            draft.dirty.avatar = true;
-            setStagePortrait(hiResDataUrl);
+            await cropPortraitOntoStage(dataUrl);
         } catch (err) {
             console.warn('[Dooms Tracker] Workshop: portrait upload failed', err);
             try {
@@ -2316,6 +2361,35 @@ function bindStaticListeners() {
         } finally {
             // Always clear so the same file can be picked again.
             try { fileInput.value = ''; } catch (e) {}
+        }
+    });
+
+    // Recrop: reframe the portrait already on stage (or the file picked
+    // earlier in this session, uncropped) without picking a file again.
+    $modal.on('click.cw', '#cw-portrait-recrop', async function () {
+        if (!draft) return;
+        const $btn = $(this);
+        const source = recropSource();
+        if (!source) {
+            try { if (window.toastr) window.toastr.info('No portrait to recrop yet. Upload one first.', 'Character Workshop', { timeOut: 3000 }); } catch (e) {}
+            return;
+        }
+        $btn.prop('disabled', true);
+        try {
+            const dataUrl = await imageToDataUrl(source);
+            await cropPortraitOntoStage(dataUrl, { recrop: true });
+        } catch (err) {
+            console.warn('[Dooms Tracker] Workshop: portrait recrop failed', err);
+            try {
+                if (window.toastr) window.toastr.error(
+                    String(err?.message || err || 'Recrop failed.'),
+                    'Recrop portrait',
+                    { timeOut: 4000 },
+                );
+            } catch (e) {}
+        } finally {
+            $btn.prop('disabled', false);
+            syncRecropButton();
         }
     });
 
@@ -2528,6 +2602,7 @@ function bindStaticListeners() {
         if (!draft) return;
         draft.avatar = '';
         draft.avatarFullRes = '';
+        draft.portraitSource = '';
         draft.dirty.avatar = true;
         $modal.find('#cw-portrait-file').val('');
         setStagePortrait('');

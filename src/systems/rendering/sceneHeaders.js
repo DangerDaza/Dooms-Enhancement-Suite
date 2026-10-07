@@ -1577,13 +1577,15 @@ function buildDoomCounterBadge(doomTension) {
     const tensionStr = doomTension !== null ? `${doomTension}` : '?';
     const isLow = doomTension !== null && doomTension <= ceiling;
 
-    // Color the tension number: red if low, green if high
-    const tensionColor = doomTension === null ? '#888' : (isLow ? '#e94560' : '#4ade80');
+    // Colour the tension number: red if low, green if high. A class rather
+    // than an inline colour, so each UI setup can pick a shade that reads on
+    // its own badge.
+    const tensionClass = doomTension === null ? 'dooms-dc-tension-unknown' : (isLow ? 'dooms-dc-tension-low' : 'dooms-dc-tension-high');
 
     let badgeContent = '';
 
     // Tension value
-    badgeContent += `<span class="dooms-dc-debug-tension" style="color:${tensionColor}">${tensionStr}</span>`;
+    badgeContent += `<span class="dooms-dc-debug-tension ${tensionClass}">${tensionStr}</span>`;
 
     // Streak counter (show as fraction: 3/5)
     badgeContent += `<span class="dooms-dc-debug-streak">${state.lowStreakCount}/${threshold}</span>`;
