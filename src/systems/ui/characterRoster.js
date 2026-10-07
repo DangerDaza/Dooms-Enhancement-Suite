@@ -1125,6 +1125,7 @@ function purgeCharacter(name) {
         return;
     }
     if (s.characterColors) delete s.characterColors[name];
+    if (s.bubbleFills) delete s.bubbleFills[name];
     // Portrait files: collect every value first (current, full-res, the
     // history from Regenerate Portrait, every campaign version), remove all
     // the settings entries, save, and only THEN delete what nothing else

@@ -593,6 +593,9 @@ export function saveChatData({ immediate = false } = {}) {
         trackerData.knownCharacters = chat_metadata.dooms_tracker?.knownCharacters || {};
         trackerData.removedCharacters = chat_metadata.dooms_tracker?.removedCharacters || [];
         trackerData.characterColors = chat_metadata.dooms_tracker?.characterColors || {};
+        // Bubble Fill flags live beside the colours; this rebuild replaces
+        // the whole object, so leaving them out wiped them on every save.
+        trackerData.bubbleFills = chat_metadata.dooms_tracker?.bubbleFills || {};
         trackerData.bannedCharacters = chat_metadata.dooms_tracker?.bannedCharacters || [];
     }
     chat_metadata.dooms_tracker = trackerData;

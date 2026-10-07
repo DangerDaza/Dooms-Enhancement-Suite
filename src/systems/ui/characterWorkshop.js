@@ -2691,36 +2691,43 @@ function commitDraft() {
         return;
     }
 
-    if (draft.dirty.color) {
+    // The dialogue colour and the Bubble Fill flag live in the same store
+    // and are saved by the same saver, so either being dirty commits both.
+    if (draft.dirty.color || draft.dirty.bubbleFill) {
         // Use the chat-aware getter so colors land in the right store.
         // When perChatCharacterTracking is on, characterColors live in
         // chat_metadata.dooms_tracker, NOT extensionSettings — writing
         // to extensionSettings here meant the PCP (which renders from
         // the chat-scoped map) never saw the new color.
         const colors = getActiveCharacterColors();
-        // A MANUAL color change always overwrites the assignment (only the
-        // automatic harvest is forbidden from overwriting). Remember the
-        // replaced color as an alias on the known-character entry so
-        // historical messages — whose font tags still use the old hex —
-        // keep attributing to this character.
-        const prev = colors[name] ? String(colors[name]).toLowerCase() : '';
-        const next = draft.color ? String(draft.color).toLowerCase() : '';
-        if (prev && prev !== next) {
-            try {
-                const known = getActiveKnownCharacters();
-                if (known) {
-                    if (!known[name]) known[name] = { emoji: '👤' };
-                    const aliases = Array.isArray(known[name].previousColors) ? known[name].previousColors : [];
-                    if (!aliases.includes(prev)) aliases.push(prev);
-                    known[name].previousColors = aliases;
-                }
-            } catch (e) { /* alias bookkeeping is best-effort */ }
+        if (draft.dirty.color) {
+            // A MANUAL color change always overwrites the assignment (only the
+            // automatic harvest is forbidden from overwriting). Remember the
+            // replaced color as an alias on the known-character entry so
+            // historical messages — whose font tags still use the old hex —
+            // keep attributing to this character.
+            const prev = colors[name] ? String(colors[name]).toLowerCase() : '';
+            const next = draft.color ? String(draft.color).toLowerCase() : '';
+            if (prev && prev !== next) {
+                try {
+                    const known = getActiveKnownCharacters();
+                    if (known) {
+                        if (!known[name]) known[name] = { emoji: '👤' };
+                        const aliases = Array.isArray(known[name].previousColors) ? known[name].previousColors : [];
+                        if (!aliases.includes(prev)) aliases.push(prev);
+                        known[name].previousColors = aliases;
+                    }
+                } catch (e) { /* alias bookkeeping is best-effort */ }
+            }
+            if (draft.color) {
+                colors[name] = draft.color;
+            } else {
+                delete colors[name];
+            }
         }
-        if (draft.color) {
-            colors[name] = draft.color;
-        } else {
-            delete colors[name];
-        }
+        // Bubble Fill on its own used to be skipped here (the write sat
+        // inside the colour branch), so the toggle never saved unless the
+        // colour changed in the same visit.
         try {
             const fills = getActiveBubbleFills();
             if (draft.bubbleFill) fills[name] = true; else delete fills[name];
@@ -3056,6 +3063,7 @@ function deleteCharacter(name) {
         return;
     }
     if (extensionSettings.characterColors) delete extensionSettings.characterColors[name];
+    if (extensionSettings.bubbleFills) delete extensionSettings.bubbleFills[name];
     // Portrait files: collect every value first (current, full-res, the
     // history from Regenerate Portrait, every campaign version), remove all
     // the settings entries, save, and only THEN delete what is unreferenced.
