@@ -76,10 +76,14 @@
     .dooms-glint-text { -webkit-text-fill-color: currentColor; color: var(--glint-b); background: none; }
 }
 
-/* ── Idle effects ── */
-/* The inner span is the box for the idle effects' own pieces (stars,
-   sparks, the underline); its pseudo-elements stay hidden unless an idle
-   effect animates them. */
+/* ── Idle effects ──
+   Played in waves, not nonstop: every few seconds glintWords.js picks a few
+   on-screen glints and gives them .dooms-glint-play for one pass of their
+   effect, then everything rests. A continuously running animation anywhere
+   in the chat made the browser repaint and re-layer the whole chat every
+   frame; between waves nothing is drawn at all. Each pass starts and ends on
+   the glint's still look, so stopping is seamless. Settings previews add
+   .dooms-glint-loop to keep theirs going. */
 .dooms-glint-text { position: relative; }
 .dooms-glint-text::before,
 .dooms-glint-text::after {
@@ -89,30 +93,37 @@
     opacity: 0;
     -webkit-text-fill-color: currentColor;
 }
+.dooms-glint-play > .dooms-glint-text,
+.dooms-glint-play > .dooms-glint-text::before,
+.dooms-glint-play > .dooms-glint-text::after {
+    animation-delay: var(--glint-play-delay, 0ms);
+    animation-fill-mode: both;
+}
+.dooms-glint-loop.dooms-glint-play > .dooms-glint-text,
+.dooms-glint-loop.dooms-glint-play > .dooms-glint-text::before,
+.dooms-glint-loop.dooms-glint-play > .dooms-glint-text::after {
+    animation-iteration-count: infinite;
+}
 
-/* Shine: a bright band sweeps across now and then. */
+/* Shine: a bright band sweeps across. */
 .dooms-glint-idle-shine > .dooms-glint-text {
     background-image:
         linear-gradient(105deg, transparent 0%, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%, transparent 100%),
         var(--glint-fill);
     background-size: 300% 100%, 100% 100%;
     background-position: 100% 0, 0 0;
-    animation: dooms-glint-shine 5.2s ease-in-out infinite;
-    animation-delay: var(--glint-phase, 0s);
 }
+.dooms-glint-play.dooms-glint-idle-shine > .dooms-glint-text { animation-name: dooms-glint-shine; animation-duration: 1.6s; animation-timing-function: ease-in-out; }
 @keyframes dooms-glint-shine {
-    0%, 64% { background-position: 100% 0, 0 0; }
-    100%    { background-position: 0% 0, 0 0; }
+    from { background-position: 100% 0, 0 0; }
+    to   { background-position: 0% 0, 0 0; }
 }
 
-/* Glow pulse: the halo breathes. */
-.dooms-glint-idle-pulse > .dooms-glint-text {
-    animation: dooms-glint-pulse 2.8s ease-in-out infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+/* Glow pulse: the halo breathes in and out. */
+.dooms-glint-play.dooms-glint-idle-pulse > .dooms-glint-text { animation-name: dooms-glint-pulse; animation-duration: 2.4s; animation-timing-function: ease-in-out; }
 @keyframes dooms-glint-pulse {
-    0%, 100% { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 3px var(--glint-glow)); }
-    50%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 9px var(--glint-glow)) drop-shadow(0 0 2px var(--glint-glow)); }
+    0%, 100% { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)); }
+    50%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 10px var(--glint-glow)) drop-shadow(0 0 2px var(--glint-glow)); }
 }
 
 /* Flowing colour: the metal slides through the letters. */
@@ -120,18 +131,17 @@
     background-image: linear-gradient(90deg, var(--glint-c), var(--glint-b), var(--glint-a), var(--glint-b), var(--glint-c));
     background-size: 200% 100%;
     background-repeat: repeat-x;
-    animation: dooms-glint-flow 4.5s linear infinite;
-    animation-delay: var(--glint-phase, 0s);
 }
 .dooms-glint-look-prism.dooms-glint-idle-flow > .dooms-glint-text { background-image: var(--glint-fill); }
+.dooms-glint-play.dooms-glint-idle-flow > .dooms-glint-text { animation-name: dooms-glint-flow; animation-duration: 2.2s; animation-timing-function: linear; }
 @keyframes dooms-glint-flow {
     from { background-position: 0% 0; }
     to   { background-position: -200% 0; }
 }
 
-/* Twinkle: little four-point stars wink on and off at the word's corners. */
-.dooms-glint-idle-twinkle > .dooms-glint-text::before,
-.dooms-glint-idle-twinkle > .dooms-glint-text::after {
+/* Twinkle: little four-point stars wink at the word's corners. */
+.dooms-glint-play.dooms-glint-idle-twinkle > .dooms-glint-text::before,
+.dooms-glint-play.dooms-glint-idle-twinkle > .dooms-glint-text::after {
     content: '\2726';
     font-size: 0.6em;
     font-weight: 400;
@@ -139,63 +149,55 @@
     color: #ffffff;
     -webkit-text-fill-color: #ffffff;
     text-shadow: 0 0 4px var(--glint-glow), 0 0 8px var(--glint-glow);
-    animation: dooms-glint-twinkle 2.6s ease-in-out infinite;
-    animation-delay: var(--glint-phase, 0s);
+    animation-name: dooms-glint-twinkle;
+    animation-duration: 1.5s;
+    animation-timing-function: ease-in-out;
 }
-.dooms-glint-idle-twinkle > .dooms-glint-text::before { top: -0.45em; right: -0.55em; }
-.dooms-glint-idle-twinkle > .dooms-glint-text::after {
+.dooms-glint-play.dooms-glint-idle-twinkle > .dooms-glint-text::before { top: -0.45em; right: -0.55em; }
+.dooms-glint-play.dooms-glint-idle-twinkle > .dooms-glint-text::after {
     bottom: -0.25em;
     left: -0.5em;
     font-size: 0.45em;
-    animation-delay: calc(var(--glint-phase, 0s) - 1.3s);
+    animation-delay: calc(var(--glint-play-delay, 0ms) + 500ms);
 }
 @keyframes dooms-glint-twinkle {
-    0%, 55%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
-    70%           { opacity: 1; transform: scale(1.15) rotate(45deg); }
-    85%           { opacity: 0.6; transform: scale(0.8) rotate(80deg); }
+    0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+    45%      { opacity: 1; transform: scale(1.15) rotate(45deg); }
+    70%      { opacity: 0.6; transform: scale(0.8) rotate(80deg); }
 }
 
 /* Flicker: an unsteady candle or failing neon. */
-.dooms-glint-idle-flicker > .dooms-glint-text {
-    animation: dooms-glint-flicker 3.4s linear infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+.dooms-glint-play.dooms-glint-idle-flicker > .dooms-glint-text { animation-name: dooms-glint-flicker; animation-duration: 1.4s; animation-timing-function: linear; }
 @keyframes dooms-glint-flicker {
-    0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    0%, 12%, 26%, 31%, 62%, 70%, 100% {
         opacity: 1;
-        filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 6px var(--glint-glow));
+        filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow));
     }
-    20%, 24%, 55% {
-        opacity: 0.55;
+    18%, 28%, 66% {
+        opacity: 0.5;
         filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 1px var(--glint-glow));
     }
 }
 
-/* Heartbeat: the glow thumps twice, then rests. */
-.dooms-glint-idle-heartbeat > .dooms-glint-text {
-    animation: dooms-glint-heartbeat 2.2s ease-out infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+/* Heartbeat: the glow thumps twice. */
+.dooms-glint-play.dooms-glint-idle-heartbeat > .dooms-glint-text { animation-name: dooms-glint-heartbeat; animation-duration: 1.3s; animation-timing-function: ease-out; }
 @keyframes dooms-glint-heartbeat {
-    0%, 40%, 100% { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 3px var(--glint-glow)) brightness(1); }
-    8%            { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 11px var(--glint-glow)) brightness(1.3); }
-    16%           { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)) brightness(1.05); }
-    24%           { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 9px var(--glint-glow)) brightness(1.2); }
+    0%, 100% { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)) brightness(1); }
+    16%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 11px var(--glint-glow)) brightness(1.3); }
+    32%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)) brightness(1.05); }
+    48%      { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 9px var(--glint-glow)) brightness(1.2); }
 }
 
-/* Colour cycle: the look rolls slowly through the whole spectrum. */
-.dooms-glint-idle-colorcycle > .dooms-glint-text {
-    animation: dooms-glint-colorcycle 7s linear infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+/* Colour cycle: the look rolls once through the whole spectrum. */
+.dooms-glint-play.dooms-glint-idle-colorcycle > .dooms-glint-text { animation-name: dooms-glint-colorcycle; animation-duration: 3.5s; animation-timing-function: linear; }
 @keyframes dooms-glint-colorcycle {
     from { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)) hue-rotate(0deg); }
     to   { filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow)) hue-rotate(360deg); }
 }
 
-/* Rising sparks: embers drift up off the word and fade. */
-.dooms-glint-idle-sparks > .dooms-glint-text::before,
-.dooms-glint-idle-sparks > .dooms-glint-text::after {
+/* Rising sparks: a puff of embers drifts up off the word and fades. */
+.dooms-glint-play.dooms-glint-idle-sparks > .dooms-glint-text::before,
+.dooms-glint-play.dooms-glint-idle-sparks > .dooms-glint-text::after {
     content: '';
     left: 0;
     right: 0;
@@ -205,16 +207,16 @@
         radial-gradient(circle at 18% 90%, var(--glint-a) 0 2px, transparent 3.2px),
         radial-gradient(circle at 52% 80%, #ffffff 0 1.8px, transparent 3px),
         radial-gradient(circle at 83% 92%, var(--glint-b) 0 2.2px, transparent 3.4px);
-    filter: drop-shadow(0 0 2px var(--glint-glow));
-    animation: dooms-glint-sparks 2.4s ease-out infinite;
-    animation-delay: var(--glint-phase, 0s);
+    animation-name: dooms-glint-sparks;
+    animation-duration: 2s;
+    animation-timing-function: ease-out;
 }
-.dooms-glint-idle-sparks > .dooms-glint-text::after {
+.dooms-glint-play.dooms-glint-idle-sparks > .dooms-glint-text::after {
     background:
         radial-gradient(circle at 34% 88%, var(--glint-b) 0 1.8px, transparent 3px),
         radial-gradient(circle at 68% 94%, var(--glint-a) 0 2px, transparent 3.2px),
         radial-gradient(circle at 95% 84%, #ffffff 0 1.6px, transparent 2.8px);
-    animation-delay: calc(var(--glint-phase, 0s) - 1.2s);
+    animation-delay: calc(var(--glint-play-delay, 0ms) + 600ms);
 }
 @keyframes dooms-glint-sparks {
     0%   { opacity: 0; transform: translateY(0.2em); }
@@ -222,35 +224,31 @@
     100% { opacity: 0; transform: translateY(-1.1em); }
 }
 
-/* Glitch: every few seconds the word jolts and splits into colour ghosts. */
-.dooms-glint-idle-glitch > .dooms-glint-text {
-    animation: dooms-glint-glitch 4.2s steps(1, end) infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+/* Glitch: the word jolts and splits into colour ghosts. Moves by transform
+   (no layout per frame), so the word is one block. */
+.dooms-glint-idle-glitch > .dooms-glint-text { display: inline-block; }
+.dooms-glint-play.dooms-glint-idle-glitch > .dooms-glint-text { animation-name: dooms-glint-glitch; animation-duration: 0.6s; animation-timing-function: steps(1, end); }
 @keyframes dooms-glint-glitch {
-    0%, 86%, 100% {
-        left: 0;
-        top: 0;
+    0%, 100% {
+        transform: translate(0, 0);
         filter: drop-shadow(0 0 0.5px var(--glint-edge, rgba(0, 0, 0, 0.55))) drop-shadow(0 0 4px var(--glint-glow));
     }
-    88% {
-        left: -2px;
-        top: 1px;
+    20% {
+        transform: translate(-2px, 1px);
         filter: drop-shadow(2px 0 0 rgba(255, 0, 80, 0.85)) drop-shadow(-2px 0 0 rgba(0, 230, 255, 0.85));
     }
-    90% {
-        left: 2px;
-        top: -1px;
+    40% {
+        transform: translate(2px, -1px);
         filter: drop-shadow(-3px 0 0 rgba(255, 0, 80, 0.85)) drop-shadow(3px 0 0 rgba(0, 230, 255, 0.85));
     }
-    92% {
-        left: -1px;
-        top: 0;
+    60% {
+        transform: translate(-1px, 0);
         filter: drop-shadow(1px 0 0 rgba(255, 0, 80, 0.85)) drop-shadow(-1px 0 0 rgba(0, 230, 255, 0.85));
     }
 }
 
-/* Underline sweep: a glowing line under the word with light running along it. */
+/* Underline sweep: a glowing line under the word (always there) with light
+   running along it. */
 .dooms-glint-idle-underline > .dooms-glint-text::after {
     content: '';
     left: 0;
@@ -263,41 +261,34 @@
         linear-gradient(90deg, transparent 0%, #ffffff 50%, transparent 100%) no-repeat,
         linear-gradient(90deg, transparent, var(--glint-b) 15%, var(--glint-b) 85%, transparent);
     background-size: 40% 100%, 100% 100%;
+    background-position: -60% 0, 0 0;
     box-shadow: 0 0 6px var(--glint-glow);
-    animation: dooms-glint-underline 2.8s ease-in-out infinite;
-    animation-delay: var(--glint-phase, 0s);
 }
+.dooms-glint-play.dooms-glint-idle-underline > .dooms-glint-text::after { animation-name: dooms-glint-underline; animation-duration: 1.8s; animation-timing-function: ease-in-out; }
 @keyframes dooms-glint-underline {
-    0%   { background-position: -60% 0, 0 0; }
-    60%, 100% { background-position: 160% 0, 0 0; }
+    from { background-position: -60% 0, 0 0; }
+    to   { background-position: 160% 0, 0 0; }
 }
 
-/* Float: the word drifts gently up and down. */
-.dooms-glint-idle-float > .dooms-glint-text {
-    animation: dooms-glint-float 3.2s ease-in-out infinite;
-    animation-delay: var(--glint-phase, 0s);
-}
+/* Float: the word drifts up and settles. Moves by transform (no layout per
+   frame), so the word is one block. */
+.dooms-glint-idle-float > .dooms-glint-text { display: inline-block; }
+.dooms-glint-play.dooms-glint-idle-float > .dooms-glint-text { animation-name: dooms-glint-float; animation-duration: 2.4s; animation-timing-function: ease-in-out; }
 @keyframes dooms-glint-float {
-    0%, 100% { top: 0; }
-    50%      { top: -0.18em; }
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-0.18em); }
 }
-
-/* Only the latest messages keep moving; older ones hold still, so a long
-   chat full of glints costs nothing while you read. */
-#chat > .mes:nth-last-of-type(n+21) .dooms-glint-text,
-#chat > .mes:nth-last-of-type(n+21) .dooms-glint-text::before,
-#chat > .mes:nth-last-of-type(n+21) .dooms-glint-text::after { animation: none; }
 
 /* ── Entrances (played once, when a new message finishes loading) ── */
 /* Every entrance: the word flares white-hot from its normal colour, then
    settles into its look. The fill fades from the text's own colour so it
    reads as the word turning gold, not a gold word appearing. Built to be
    seen at chat size: a big flare, held long enough to catch the eye. */
-.dooms-glint-enter > .dooms-glint-text {
+.dooms-glint.dooms-glint-enter > .dooms-glint-text {
     animation: dooms-glint-ignite 1.5s ease-out var(--glint-enter-delay, 0ms) both;
 }
-.dooms-glint-enter > .dooms-glint-text::before,
-.dooms-glint-enter > .dooms-glint-text::after { content: none; }
+.dooms-glint.dooms-glint-enter > .dooms-glint-text::before,
+.dooms-glint.dooms-glint-enter > .dooms-glint-text::after { content: none; }
 @keyframes dooms-glint-ignite {
     0%   { -webkit-text-fill-color: currentColor; filter: none; }
     14%  { -webkit-text-fill-color: #ffffff; filter: brightness(2) drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 14px #ffffff) drop-shadow(0 0 26px var(--glint-glow)); }
@@ -308,13 +299,13 @@
 
 /* A new word waiting to scroll into view: its normal colour, still, so its
    entrance can turn it when the player gets there. */
-.dooms-glint-waiting > .dooms-glint-text {
+.dooms-glint.dooms-glint-waiting > .dooms-glint-text {
     -webkit-text-fill-color: currentColor;
     filter: none;
     animation: none;
 }
-.dooms-glint-waiting > .dooms-glint-text::before,
-.dooms-glint-waiting > .dooms-glint-text::after { content: none; }
+.dooms-glint.dooms-glint-waiting > .dooms-glint-text::before,
+.dooms-glint.dooms-glint-waiting > .dooms-glint-text::after { content: none; }
 
 /* Pseudo-elements are invisible unless an entrance animates them, so a
    stopped animation (Performance Mode, reduced motion) never leaves a
@@ -339,7 +330,6 @@
     margin-top: -1.9em;
     border-radius: 50%;
     background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 14%, var(--glint-glow) 36%, transparent 66%);
-    mix-blend-mode: screen;
     animation: dooms-glint-burst 1.3s ease-out var(--glint-enter-delay, 0ms) both;
 }
 .dooms-glint-enter-flash::before {

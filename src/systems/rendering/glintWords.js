@@ -67,6 +67,30 @@ const QUIET_USER_MS = 350;
 const SETTLE_DEADLINE_MS = 15000;
 /** A word's entrance plays once this much of it is on screen. */
 const SIGHT_THRESHOLD = 0.9;
+/**
+ * Idle effects (shine, pulse, sparks…) only ever play on glints that are on
+ * screen, chosen from at most this many, newest first. Every other glint
+ * keeps its look and holds still: dozens of words animating at 60 fps in a
+ * long chat kept the main thread busy and the GPU and memory climbing.
+ */
+const MAX_LIVE = 20;
+const LIVE_CLASS = 'dooms-glint-live';
+/**
+ * Idle effects play in waves rather than nonstop: any continuously running
+ * animation in the chat made the browser repaint and re-layer the whole chat
+ * every frame. Every wave, up to WAVE_SIZE on-screen glints each play their
+ * effect once (least recently played first), then everything rests for
+ * WAVE_REST_MS, during which nothing is drawn.
+ */
+const PLAY_CLASS = 'dooms-glint-play';
+const WAVE_SIZE = 3;
+const WAVE_REST_MS = 4000;
+const WAVE_STAGGER_MS = 260;
+/** How long one pass of each idle effect lasts (matches styles/glint.css), plus any late second part. */
+const IDLE_MS = {
+    shine: 1600, pulse: 2400, flow: 2200, twinkle: 2000, sparks: 2600, flicker: 1400,
+    heartbeat: 1300, colorcycle: 3500, underline: 1800, float: 2400, glitch: 600,
+};
 /** How long an entrance runs, and the stagger between words in one message. */
 const ENTER_MS = 1650;
 const ENTER_STAGGER_MS = 140;
@@ -203,6 +227,7 @@ export function probeGlintMotion() {
     const host = document.getElementById('chat') || document.body;
     const probe = buildGlintSpan('glint', { id: 'probe', look: 'gold', idle: 'flow', color: '#f2c230' }, 'probe');
     probe.setAttribute('aria-hidden', 'true');
+    probe.classList.add(LIVE_CLASS, PLAY_CLASS);
     probe.style.position = 'absolute';
     probe.style.left = '-9999px';
     probe.style.top = '0';
@@ -268,6 +293,120 @@ function onSight(entries) {
     });
 }
 
+// ─── Idle effects only on screen ────────────────────────────────────────────
+
+/** Every glint being watched for visibility, and the ones on screen now. */
+const tracked = new Set();
+const onScreen = new Set();
+let liveObserver = null;
+
+function trackLive(span) {
+    if (typeof IntersectionObserver !== 'function') return;
+    if (!liveObserver) liveObserver = new IntersectionObserver(onLiveChange, { rootMargin: '60px 0px' });
+    tracked.add(span);
+    liveObserver.observe(span);
+}
+
+function onLiveChange(entries) {
+    for (const entry of entries) {
+        const span = entry.target;
+        if (entry.isIntersecting && span.isConnected) {
+            onScreen.add(span);
+        } else {
+            onScreen.delete(span);
+            span.classList.remove(LIVE_CLASS);
+        }
+    }
+    relive();
+    ensureWaves();
+}
+
+// ─── Waves of idle effects ──────────────────────────────────────────────────
+
+let waveTimer = null;
+const lastPlayed = new WeakMap();
+
+function idleOf(span) {
+    for (const c of span.classList) if (c.startsWith('dooms-glint-idle-')) return c.slice(17);
+    return 'still';
+}
+
+function ensureWaves() {
+    if (!waveTimer && onScreen.size) waveTimer = setTimeout(playWave, 700);
+}
+
+function playWave() {
+    waveTimer = null;
+    if (!isActive() || !onScreen.size) return; // woken again by the next glint on screen
+    if (document.hidden || !motionAllowed()) {
+        waveTimer = setTimeout(playWave, WAVE_REST_MS);
+        return;
+    }
+    const pool = [...onScreen].filter(span => span.isConnected
+        && span.classList.contains(LIVE_CLASS)
+        && !span.classList.contains(PLAY_CLASS)
+        && !span.classList.contains('dooms-glint-enter')
+        && !span.classList.contains('dooms-glint-waiting')
+        && IDLE_MS[idleOf(span)]);
+    if (!pool.length) {
+        waveTimer = setTimeout(playWave, WAVE_REST_MS);
+        return;
+    }
+    // Least recently played first, so every word on screen gets its turn.
+    const rank = new Map(pool.map(span => [span, (lastPlayed.get(span) || 0) + Math.random() * 500]));
+    pool.sort((a, b) => rank.get(a) - rank.get(b));
+    const now = Date.now();
+    let longest = 0;
+    pool.slice(0, WAVE_SIZE).forEach((span, i) => {
+        const delay = i * WAVE_STAGGER_MS;
+        const total = IDLE_MS[idleOf(span)] + delay;
+        span.style.setProperty('--glint-play-delay', `${delay}ms`);
+        span.classList.add(PLAY_CLASS);
+        lastPlayed.set(span, now);
+        longest = Math.max(longest, total);
+        setTimeout(() => {
+            span.classList.remove(PLAY_CLASS);
+            span.style.removeProperty('--glint-play-delay');
+        }, total + 80);
+    });
+    waveTimer = setTimeout(playWave, longest + WAVE_REST_MS);
+}
+
+/** The newest on-screen glints, up to MAX_LIVE, get the live class. */
+function relive() {
+    const list = [...onScreen].filter(s => s.isConnected);
+    if (list.length > MAX_LIVE) {
+        list.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1));
+    }
+    const keep = new Set(list.slice(0, MAX_LIVE));
+    for (const span of list) span.classList.toggle(LIVE_CLASS, keep.has(span));
+}
+
+/** Lets go of glints a rewrite took out of the page, so nothing piles up over a session. */
+function pruneDetached() {
+    for (const span of tracked) {
+        if (span.isConnected) continue;
+        liveObserver?.unobserve(span);
+        tracked.delete(span);
+        onScreen.delete(span);
+    }
+    for (const span of waiting) {
+        if (span.isConnected) continue;
+        sightObserver?.unobserve(span);
+        waiting.delete(span);
+    }
+}
+
+function releaseLive() {
+    if (liveObserver) liveObserver.disconnect();
+    liveObserver = null;
+    clearTimeout(waveTimer);
+    waveTimer = null;
+    for (const span of tracked) span.classList.remove(LIVE_CLASS, PLAY_CLASS);
+    tracked.clear();
+    onScreen.clear();
+}
+
 /** Lets every waiting word turn without its entrance (settings changed, chat switched). */
 function releaseWaiting() {
     if (sightObserver) sightObserver.disconnect();
@@ -322,6 +461,7 @@ function wrapMessage(mesText, enterFrom = Infinity, mesId = '') {
             const span = buildGlintSpan(piece.text, piece.group, `${mesId}|${index}|${piece.text}`);
             ours.add(span);
             frag.appendChild(span);
+            trackLive(span);
             if (index >= enterFrom && piece.group.entrance !== 'none') queueEntrance(span, piece.group.entrance);
             index++;
         }
@@ -439,6 +579,7 @@ function runPass() {
         }
         try { processMessage(batch[i]); } catch (e) { console.warn('[Dooms Tracker] Glint Words pass failed:', e); }
     }
+    pruneDetached();
 }
 
 function schedulePass(delay = PASS_DELAY_MS) {
@@ -552,6 +693,7 @@ export function refreshGlintWords() {
     syncAnimateAlways();
     matcher = s.enabled ? buildGlintMatcher(s.groups) : null;
     releaseWaiting();
+    releaseLive();
     const chatEl = document.getElementById('chat');
     if (chatEl) unwrapGlints(chatEl);
     pending.clear();
@@ -601,6 +743,7 @@ export function onGlintGenerationEnded() {
 /** CHAT_CHANGED: a different chat; nothing in it is new. */
 export function onGlintChatChanged() {
     releaseWaiting();
+    releaseLive();
     pending.clear();
     seen.clear();
     dirty.clear();

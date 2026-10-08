@@ -158,6 +158,7 @@ function renderPreview($group, g, play = false) {
         return;
     }
     const span = buildGlintSpan(word, g, g.id);
+    span.classList.add('dooms-glint-play', 'dooms-glint-loop'); // previews keep their idle effect going
     $p[0].appendChild(span);
     if (play) playGlintEntrance(span, g.entrance === 'none' ? 'flash' : g.entrance);
 }
