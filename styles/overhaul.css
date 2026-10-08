@@ -1011,6 +1011,16 @@ body[data-dooms-ui="grimoire"] .dooms-bubble {
 body[data-dooms-ui="grimoire"] .dooms-card {
     border-left-width: var(--ov-border-w);
 }
+/* The player's own lines. Grimoire drops the bubble's side bar and marks
+   speakers with a nameplate instead, but the player's bubble has no
+   nameplate, so it was left as bare text. It reads as a marginal entry in
+   the ledger instead: a double rule in the highlight on a faint wash. */
+body[data-dooms-ui="grimoire"] .dooms-bubble-user .dooms-bubble-text,
+body[data-dooms-ui="grimoire"] .dooms-card-user .dooms-card-text {
+    border-left: 3px double var(--ov-accent);
+    background: color-mix(in srgb, var(--ov-accent) 8%, transparent);
+    padding: 6px 12px;
+}
 /* Framed miniature: inner rule + outer hairline, a diamond over the speaker
    (the strip clips vertically, so it gets room for the diamond) */
 body[data-dooms-ui="grimoire"] .dooms-pb-scroll {
@@ -1176,6 +1186,26 @@ body[data-dooms-ui="console"] .dooms-bubble.dooms-bubble-new-speaker {
 }
 body[data-dooms-ui="console"] .dooms-card {
     border-left-width: 1px;
+}
+/* The player's own lines: an input echo. Without a side bar or a name
+   they were bare text; now a highlight rule, a faint tint and a prompt. */
+body[data-dooms-ui="console"] .dooms-bubble-user .dooms-bubble-text,
+body[data-dooms-ui="console"] .dooms-card-user .dooms-card-text {
+    position: relative;
+    border-left: 2px solid var(--ov-accent);
+    background: color-mix(in srgb, var(--ov-accent) 7%, transparent);
+    padding: 4px 10px 4px 26px;
+}
+body[data-dooms-ui="console"] .dooms-bubble-user .dooms-bubble-text::before,
+body[data-dooms-ui="console"] .dooms-card-user .dooms-card-text::before {
+    content: '>';
+    position: absolute;
+    left: 10px;
+    top: 4px;
+    font-family: var(--ov-mono);
+    font-weight: 700;
+    line-height: inherit;
+    color: var(--ov-accent);
 }
 body[data-dooms-ui="console"] .dooms-bubble-avatar,
 body[data-dooms-ui="console"] .dooms-card-avatar,
