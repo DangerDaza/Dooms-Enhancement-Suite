@@ -54,21 +54,30 @@ export const GLINT_IDLES = Object.freeze([
     { id: 'shine', label: 'Shine' },
     { id: 'pulse', label: 'Glow pulse' },
     { id: 'flow', label: 'Flowing colour' },
+    { id: 'twinkle', label: 'Twinkle' },
+    { id: 'sparks', label: 'Rising sparks' },
+    { id: 'flicker', label: 'Flicker' },
+    { id: 'heartbeat', label: 'Heartbeat' },
+    { id: 'colorcycle', label: 'Colour cycle' },
+    { id: 'underline', label: 'Underline sweep' },
+    { id: 'float', label: 'Float' },
+    { id: 'glitch', label: 'Glitch' },
     { id: 'still', label: 'Still' },
 ]);
 
 /** One-click starter groups. The words are only a start; players edit them. */
 export const GLINT_PRESETS = Object.freeze([
     { id: 'treasure', name: 'Treasure', look: 'gold', entrance: 'flash', idle: 'shine', words: ['gold', 'treasure', 'coins', 'jewels', 'crown'] },
-    { id: 'magic', name: 'Magic', look: 'arcane', entrance: 'sparkle', idle: 'flow', words: ['magic', 'spell', 'mana', 'rune', 'enchanted'] },
+    { id: 'magic', name: 'Magic', look: 'arcane', entrance: 'sparkle', idle: 'twinkle', words: ['magic', 'spell', 'mana', 'rune', 'enchanted'] },
     { id: 'danger', name: 'Danger', look: 'crimson', entrance: 'ring', idle: 'pulse', words: ['blood', 'danger', 'death', 'curse'] },
     { id: 'holy', name: 'Holy', look: 'radiant', entrance: 'flash', idle: 'pulse', words: ['holy', 'divine', 'blessed', 'sacred'] },
     { id: 'frost', name: 'Frost', look: 'frost', entrance: 'sparkle', idle: 'shine', words: ['ice', 'frost', 'frozen', 'snow'] },
-    { id: 'fire', name: 'Fire', look: 'ember', entrance: 'ring', idle: 'flow', words: ['fire', 'flame', 'flames', 'burning', 'inferno'] },
+    { id: 'fire', name: 'Fire', look: 'ember', entrance: 'ring', idle: 'sparks', words: ['fire', 'flame', 'flames', 'burning', 'inferno'] },
     { id: 'poison', name: 'Poison', look: 'toxic', entrance: 'pop', idle: 'pulse', words: ['poison', 'venom', 'toxic'] },
-    { id: 'shadow', name: 'Shadow', look: 'shadow', entrance: 'ring', idle: 'pulse', words: ['shadow', 'shadows', 'darkness', 'void'] },
-    { id: 'romance', name: 'Romance', look: 'rose', entrance: 'sparkle', idle: 'pulse', words: ['love', 'heart', 'kiss', 'beloved'] },
+    { id: 'shadow', name: 'Shadow', look: 'shadow', entrance: 'ring', idle: 'flicker', words: ['shadow', 'shadows', 'darkness', 'void'] },
+    { id: 'romance', name: 'Romance', look: 'rose', entrance: 'sparkle', idle: 'heartbeat', words: ['love', 'heart', 'kiss', 'beloved'] },
     { id: 'legendary', name: 'Legendary', look: 'prism', entrance: 'flash', idle: 'flow', words: ['legendary', 'artifact', 'relic'] },
+    { id: 'tech', name: 'Tech', look: 'ocean', entrance: 'pop', idle: 'glitch', words: ['signal', 'system', 'error', 'glitch'] },
 ]);
 
 export const GLINT_MAX_GROUPS = 50;

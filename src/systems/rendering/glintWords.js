@@ -68,7 +68,7 @@ const SETTLE_DEADLINE_MS = 15000;
 /** A word's entrance plays once this much of it is on screen. */
 const SIGHT_THRESHOLD = 0.9;
 /** How long an entrance runs, and the stagger between words in one message. */
-const ENTER_MS = 1100;
+const ENTER_MS = 1650;
 const ENTER_STAGGER_MS = 140;
 const ENTER_STAGGER_MAX = 8;
 /** A generation that never reports its end stops counting as streaming after this. */
