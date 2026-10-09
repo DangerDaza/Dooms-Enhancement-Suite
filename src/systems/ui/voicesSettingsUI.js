@@ -577,7 +577,9 @@ export function bindVoicesSettingsUI() {
     };
     $('#rpg-voices-delivery').on('change', function () { saveDelivery($(this).val()); });
     $('#rpg-voices-delivery-reset').on('click', () => saveDelivery(DEFAULT_DELIVERY_NOTE));
-    // Never whisper: new lines use it; lines already cached keep their style.
+    // Never whisper: the style is part of the audio cache key, so a flipped
+    // switch re-makes a line on its next play (one request each) rather than
+    // replaying the old delivery.
     $('#rpg-voices-never-whisper').on('change', function () {
         v().neverWhisper = $(this).prop('checked');
         saveSettings();
