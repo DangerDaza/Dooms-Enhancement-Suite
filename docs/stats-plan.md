@@ -622,7 +622,7 @@ levels. Borrow from PR #38 where it fits, with credit.
 
 ---
 
-## 8. Open questions log
+## 9. Open questions log
 
 - D1–D4 above.
 - Should fixed vitals also be lockable per character from the card back (a
