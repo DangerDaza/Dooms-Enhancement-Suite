@@ -502,6 +502,7 @@ function populate() {
     fillNarratorDesign();
     $('#rpg-voices-model').val(v().model);
     $('#rpg-voices-delivery').val(v().deliveryNote || '');
+    $('#rpg-voices-never-whisper').prop('checked', !!v().neverWhisper);
     $('#rpg-voices-guide').prop('open', v().guideOpen !== false);
     $('#rpg-voices-via').val(v().geminiVia === 'openrouter' ? 'openrouter' : 'google');
     $('#rpg-voices-or-key').val(v().openrouterKey || '').attr('type', 'password');
@@ -576,6 +577,11 @@ export function bindVoicesSettingsUI() {
     };
     $('#rpg-voices-delivery').on('change', function () { saveDelivery($(this).val()); });
     $('#rpg-voices-delivery-reset').on('click', () => saveDelivery(DEFAULT_DELIVERY_NOTE));
+    // Never whisper: new lines use it; lines already cached keep their style.
+    $('#rpg-voices-never-whisper').on('change', function () {
+        v().neverWhisper = $(this).prop('checked');
+        saveSettings();
+    });
     // How DES voices work: remember open/closed.
     $('#rpg-voices-guide').on('toggle', function () {
         v().guideOpen = !!this.open;

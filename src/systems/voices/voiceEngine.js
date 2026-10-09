@@ -39,7 +39,7 @@ import { getRouteState, getDesKey } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
-import { styleForSegment } from './delivery.js';
+import { styleForSegment, baseStyle } from './delivery.js';
 import { providerForRef, isProviderConnected, anyProviderConnected } from './providers.js';
 import { PROVIDER_LABELS } from './connections.js';
 import { getOpenRouterState } from './openrouter.js';
@@ -278,7 +278,7 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
         const provider = routeFor(ref);
         // Only some routes can carry a delivery note; elsewhere it would
         // only split requests for nothing.
-        const style = styleCapable(provider) ? styleForSegment(segments, i, note) : '';
+        const style = styleCapable(provider) ? styleForSegment(segments, i, note, { neverWhisper: !!voices().neverWhisper }) : '';
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
         // unvoiced character, then narration) are one Google request —
@@ -373,7 +373,7 @@ export function audition(ref, text, { provider: forced = null } = {}) {
     // here; otherwise the same stand-in chat would use.
     const { ref: playable } = resolveVoice({ seg: { kind: 'dialogue', speaker: 'x' }, present: true, ref, narrator: voices().narratorVoice, caps: caps() });
     const provider = forced || routeFor(playable);
-    const style = styleCapable(provider) ? String(voices().deliveryNote || '').trim() : '';
+    const style = styleCapable(provider) ? baseStyle(voices().deliveryNote, { neverWhisper: !!voices().neverWhisper }) : '';
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text: text || `Hello, I'm ${ref.id}.` }]);
     const job = player.newJob({
         source: 'audition',

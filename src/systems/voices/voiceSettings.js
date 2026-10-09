@@ -86,6 +86,9 @@ export function defaultVoiceSettings() {
         // speech_metadata.style) so voices don't drift into whispering.
         // '' = send none. Mirrors DEFAULT_DELIVERY_NOTE in delivery.js.
         deliveryNote: 'clear, natural speaking voice at a normal, steady volume',
+        // Settings → Voices → Never whisper: the ban rides with the note on
+        // every line and the story's whisper cues are ignored.
+        neverWhisper: false,
         // The "Design a narrator voice" box, so edits survive a reload.
         narratorDesign: { ...DEFAULT_NARRATOR_DESIGN },
     };
@@ -172,6 +175,10 @@ export function ensureVoiceSettings(saved, live) {
         }
         if (typeof live.voices.deliveryNote !== 'string') {
             live.voices.deliveryNote = defaults.deliveryNote;
+            changed = true;
+        }
+        if (typeof live.voices.neverWhisper !== 'boolean') {
+            live.voices.neverWhisper = defaults.neverWhisper;
             changed = true;
         }
         const nd = live.voices.narratorDesign;

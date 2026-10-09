@@ -27,6 +27,9 @@ export const DEFAULT_DELIVERY_NOTE = 'clear, natural speaking voice at a normal,
 /** Sent instead of the delivery note when the story says the line is whispered. */
 export const WHISPER_NOTE = 'hushed, quiet whisper';
 
+/** Rides with the note on every line when Settings → Voices → Never whisper is on; sent alone when the note is empty. */
+export const NEVER_WHISPER_NOTE = 'never whisper; a line the story marks as whispered is spoken quietly in tone but at full, clear volume';
+
 /** Narration or dialogue that says this line is meant to be quiet. */
 const WHISPER_CUE = /\b(?:whisper(?:s|ed|ing)?|murmur(?:s|ed|ing)?|hiss(?:es|ed)? softly|breath(?:es|ed)? (?:the words|out)|under (?:his|her|their|my|your|its) breath|sotto voce|barely audible|in a hushed (?:voice|tone)|hushed)\b/i;
 
@@ -36,14 +39,30 @@ export function hasWhisperCue(text) {
 }
 
 /**
+ * The style for a line on its own (auditions, previews): the delivery note,
+ * with the whisper ban added when it is on. '' when there is nothing to say.
+ * @param {string} note - voices.deliveryNote
+ * @param {{ neverWhisper?: boolean }} [opts]
+ */
+export function baseStyle(note, { neverWhisper = false } = {}) {
+    const base = String(note || '').trim();
+    if (neverWhisper) return base ? `${base}; ${NEVER_WHISPER_NOTE}` : NEVER_WHISPER_NOTE;
+    return base;
+}
+
+/**
  * The style note for segment i: the whisper note for a spoken line when the
  * narration right next to it says it's whispered, otherwise the delivery note.
- * '' when the delivery note is empty (let Gemini decide, as before).
+ * With neverWhisper on, every line gets the note plus the ban and no line is
+ * ever whispered. '' when the delivery note is empty and the ban is off (let
+ * Gemini decide, as before).
  * @param {{text: string, kind?: string}[]} segments - in reading order
  * @param {number} i
  * @param {string} note - voices.deliveryNote
+ * @param {{ neverWhisper?: boolean }} [opts] - voices.neverWhisper
  */
-export function styleForSegment(segments, i, note) {
+export function styleForSegment(segments, i, note, { neverWhisper = false } = {}) {
+    if (neverWhisper) return baseStyle(note, { neverWhisper: true });
     const base = String(note || '').trim();
     if (!base) return '';
     const seg = segments[i];

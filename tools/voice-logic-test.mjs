@@ -413,6 +413,28 @@ test('delivery: whisper cues are words, not fragments', () => {
     assert.ok(!delivery.hasWhisperCue('she shouted'));
 });
 
+test('delivery: Never whisper bans the whisper note on every line and survives an empty note', () => {
+    const segs = [{ kind: 'dialogue', text: 'Come in, quickly.' }, { kind: 'narration', text: 'Mara whispered.' }];
+    const on = { neverWhisper: true };
+    assert.equal(delivery.styleForSegment(segs, 0, 'normal voice', on), `normal voice; ${delivery.NEVER_WHISPER_NOTE}`, 'the whispered line is not');
+    assert.equal(delivery.styleForSegment(segs, 1, 'normal voice', on), `normal voice; ${delivery.NEVER_WHISPER_NOTE}`, 'narration carries the ban too');
+    assert.equal(delivery.styleForSegment(segs, 0, '', on), delivery.NEVER_WHISPER_NOTE, 'an empty note still carries the ban');
+    assert.equal(delivery.styleForSegment(segs, 0, 'normal voice'), delivery.WHISPER_NOTE, 'off: the story\'s cue still whispers');
+    assert.equal(delivery.baseStyle('x', on), `x; ${delivery.NEVER_WHISPER_NOTE}`);
+    assert.equal(delivery.baseStyle('', {}), '');
+    assert.equal(delivery.baseStyle(' y ', {}), 'y');
+});
+
+test('settings: neverWhisper defaults off and a broken value is repaired', () => {
+    assert.equal(settings.defaultVoiceSettings().neverWhisper, false);
+    const live = { voices: { neverWhisper: 'yes', deliveryNote: 'x' } };
+    assert.equal(settings.ensureVoiceSettings({ voices: live.voices }, live), true);
+    assert.equal(live.voices.neverWhisper, false);
+    const kept = { voices: { neverWhisper: true, deliveryNote: 'x' } };
+    settings.ensureVoiceSettings({ voices: kept.voices }, kept);
+    assert.equal(kept.voices.neverWhisper, true, 'an honest true is kept');
+});
+
 test('settings: a missing or broken delivery note is restored', () => {
     const saved = { voices: { deliveryNote: 7 } };
     const live = { voices: saved.voices };
