@@ -46,6 +46,9 @@ import { getSafeThumbnailUrl, deletePortraitsIfUnreferenced, takePortraitHistory
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { renderThoughts } from '../rendering/thoughts.js';
 import { generateKnifeSuggestions } from '../generation/doomCounter.js';
+// Attribute scores (Project Short Fuse, Phase 2): one sheet per name, not
+// per version, kept in extensionSettings.characterAttributes.
+import { attributeDefs, attributesOn, getSheet, setSheet, deleteSheet } from '../../utils/d20.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 // Campaign versions of a character (Base + one per campaign). The version
@@ -522,6 +525,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
             draft.dirty.bubbleFill = true;
         }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
+        if (carry.dirty?.attributes) { draft.attributes = { ...(carry.attributes || {}) }; draft.dirty.attributes = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
     // user-only sections without a JS class-toggle on every section.
@@ -537,6 +541,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     renderKnives();
     renderAliases();
     renderVoice();
+    renderAttributes();
     renderVersionStrip();
     if (fullReset) {
         $modal.find('#cw-knife-input').val('');
@@ -612,7 +617,7 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
     const name = draft.name;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
@@ -716,7 +721,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
     loadVersion(name, false, null, { carry });
 }
 
@@ -1282,13 +1287,14 @@ function buildDraft(name, isUser = false, versionId = null) {
                 promptTemplate: typeof inj.promptTemplate === 'string' ? inj.promptTemplate : '',
             },
             knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
+            attributes: getSheet(extensionSettings, name, true, attributeDefs(extensionSettings, { all: true })),
             // Personas have no campaign versions, so their voice is stored
             // on the userCharacters entry itself.
             voice: cloneVoice(u.voice),
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false, attributes: false },
         };
     }
     const version = versionId || defaultVersionFor(name);
@@ -1316,7 +1322,9 @@ function buildDraft(name, isUser = false, versionId = null) {
         bubbleFillColor: bubbleFillEntryColor((getActiveBubbleFills() || {})[name], 'fill'),
         bubbleInkColor: bubbleFillEntryColor((getActiveBubbleFills() || {})[name], 'ink'),
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
-        dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false },
+        // Per name, like aliases: the same sheet whichever version is on the stage.
+        attributes: getSheet(extensionSettings, name, false, attributeDefs(extensionSettings, { all: true })),
+        dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false, attributes: false },
     };
     if (live) {
         const inj = extensionSettings?.characterInjection?.[name] || {};
@@ -1569,6 +1577,41 @@ async function openVoicePane() {
         }
     }
     renderVoice();
+}
+
+// ─── Attributes tab (src/systems/ui/attributesPane.js, loaded on first open) ─
+
+let attributesPaneModule = null;
+
+/** Re-renders the Attributes tab from the draft. No-op until the tab has been opened once. */
+function renderAttributes() {
+    if (!attributesPaneModule || !draft || !$modal) return;
+    const host = $modal.find('#cw-attributes-pane')[0];
+    if (!host) return;
+    attributesPaneModule.renderAttributesPane(host, {
+        name: draft.name,
+        isUser: draft.isUser,
+        defs: attributeDefs(extensionSettings, { all: true }),
+        scores: draft.attributes || {},
+        attributesOn: attributesOn(extensionSettings),
+        onChange(scores) {
+            if (!draft) return;
+            draft.attributes = { ...scores };
+            draft.dirty.attributes = true;
+        },
+    });
+}
+
+async function openAttributesPane() {
+    if (!attributesPaneModule) {
+        try {
+            attributesPaneModule = await import('./attributesPane.js');
+        } catch (e) {
+            console.error('[DES Workshop] Attributes tab failed to load', e);
+            return;
+        }
+    }
+    renderAttributes();
 }
 
 function renderIdentity() {
@@ -1942,6 +1985,7 @@ function bindStaticListeners() {
         if (!pane) return;
         activatePane(pane);
         if (pane === 'voice') openVoicePane();
+        if (pane === 'attributes') openAttributesPane();
         if (pane === 'expressions') {
             // Lazy-load on first activation per character — re-renders if
             // the user already has it but the character changed.
@@ -2811,6 +2855,7 @@ function commitDraft() {
         if (draft.voice) next.voice = { ...draft.voice };
         else delete next.voice;
         extensionSettings.userCharacters[name] = next;
+        if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes);
         invalidateVoices();
         saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
@@ -2925,6 +2970,13 @@ function commitDraft() {
         } else {
             delete extensionSettings.characterAliases[name];
         }
+        changed = true;
+    }
+
+    // Attribute scores are per name too: the sheet the dice use whichever
+    // campaign is on the stage.
+    if (draft.dirty.attributes) {
+        setSheet(extensionSettings, name, false, draft.attributes);
         changed = true;
     }
 
@@ -3136,6 +3188,7 @@ function copyNpcToUserCharacter(name) {
     };
     const voiceToCopy = fromDraft ? fromDraft.voice : extensionSettings.characterVoices?.[trimmed];
     if (voiceToCopy && voiceToCopy.id) extensionSettings.userCharacters[trimmed].voice = { ...voiceToCopy };
+    setSheet(extensionSettings, trimmed, true, fromDraft ? fromDraft.attributes : getSheet(extensionSettings, trimmed, false, attributeDefs(extensionSettings, { all: true })));
     saveOrWarn(saveSettings, 'settings');
     try {
         if (window.toastr) window.toastr.success(
@@ -3200,6 +3253,7 @@ function copyUserToNpcCharacter(name) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
         extensionSettings.characterVoices[trimmed] = { ...u.voice };
     }
+    setSheet(extensionSettings, trimmed, false, getSheet(extensionSettings, trimmed, true, attributeDefs(extensionSettings, { all: true })));
     saveOrWarn(saveSettings, 'settings');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try {
@@ -3218,6 +3272,7 @@ function deleteCharacter(name) {
         const userEntry = extensionSettings.userCharacters?.[name];
         const candidates = userEntry ? [userEntry.avatar, userEntry.avatarFullRes] : [];
         if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
+        deleteSheet(extensionSettings, name, true);
         if (extensionSettings.activeUserCharacter === name) {
             extensionSettings.activeUserCharacter = null;
         }
@@ -3248,6 +3303,7 @@ function deleteCharacter(name) {
     // Aliases too — an orphaned alias entry would keep silently renaming a
     // future, unrelated character to this deleted one.
     if (extensionSettings.characterAliases) delete extensionSettings.characterAliases[name];
+    deleteSheet(extensionSettings, name, false);
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata. Without wiping those, the Roster grid (which
     // reads via the active getters) shows the character right back after

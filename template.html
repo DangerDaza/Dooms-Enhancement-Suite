@@ -1500,6 +1500,104 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+
+                    <div class="rpg-subsection-label" style="margin-top:12px;">Attributes &amp; checks</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Attributes and dice checks</span>
+                            <span class="rpg-setting-hint">D&amp;D-style scores for your character and the NPCs, and a
+                                d20 button by the message box. You pick the attribute, your AI rules how hard the
+                                attempt is, DES rolls, and the result goes to the AI as final. Scores are set on each
+                                character's Workshop tab.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- Rows generated from the list (renderAttributesSettings). -->
+                    <div id="rpg-attr-list" class="rpg-vitals-list rpg-attr-list"></div>
+                    <div class="rpg-vitals-add-row">
+                        <button id="rpg-attr-add" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-plus"></i> Add attribute
+                        </button>
+                        <div id="rpg-attr-chips" class="rpg-vitals-chips"></div>
+                    </div>
+                    <p class="rpg-note-text" style="margin-top:4px;">The name is what the AI sees; the short form is
+                        what the popover and the roll line show. Switching one off keeps every character's score
+                        for it; removing one drops those scores.</p>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Send scores to the AI</span>
+                            <span class="rpg-setting-hint"><b>With a roll</b> adds the sheets only to a reply that
+                                answers a check. <b>Always</b> adds them to every reply, about a line per character
+                                whose scores are not all 10.</span>
+                        </div>
+                        <select id="rpg-attr-send" class="rpg-accordion-select">
+                            <option value="withRoll">With a roll</option>
+                            <option value="always">Always</option>
+                            <option value="never">Never</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">The AI sets the difficulty</span>
+                            <span class="rpg-setting-hint">One small separate request before each roll: your AI, as
+                                game master, picks Easy to Nearly impossible and advantage or disadvantage, with a
+                                reason. Off, every check uses the default difficulty below.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-ai-rates" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Messages the game master reads</span>
+                            <span class="rpg-setting-hint">How many recent messages go with that request.</span>
+                        </div>
+                        <input type="number" id="rpg-attr-context" class="rpg-accordion-input" min="1" max="30"
+                            value="6" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Default difficulty</span>
+                            <span class="rpg-setting-hint">Used when the AI is not asked, or its answer cannot be
+                                read.</span>
+                        </div>
+                        <select id="rpg-attr-default-diff" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Let me change the ruling</span>
+                            <span class="rpg-setting-hint">Shows difficulty and advantage controls in the dice popover
+                                so you can overrule the game master.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-override" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Criticals</span>
+                            <span class="rpg-setting-hint">A natural 20 always succeeds and a natural 1 always fails,
+                                whatever the difficulty.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-criticals" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Difficulty classes</span>
+                            <span class="rpg-setting-hint">What a d20 plus the modifier has to reach for each word the
+                                game master can pick.</span>
+                        </div>
+                    </div>
+                    <!-- Five labelled numbers, one per difficulty (renderAttributesSettings). -->
+                    <div id="rpg-attr-dcs" class="rpg-attr-dcs"></div>
                 </div>
             </div>
 
@@ -2915,6 +3013,7 @@
                     <button type="button" data-pane="expressions" title="Expressions">&#128516; <span class="cw-tab-label">Expressions</span></button>
                     <button type="button" data-pane="injection" title="Injection">&#128137; <span class="cw-tab-label">Injection</span></button>
                     <button type="button" data-pane="knives" title="Knives">&#128298; <span class="cw-tab-label">Knives</span></button>
+                    <button type="button" data-pane="attributes" title="Attributes">&#127922; <span class="cw-tab-label">Attributes</span></button>
                     <button type="button" data-pane="voice" title="Voice">&#127908; <span class="cw-tab-label">Voice</span></button>
                 </nav>
                 <div class="workshop-pane-host">
@@ -3231,6 +3330,13 @@
                                 separate API request.</span>
                         </div>
                         <div id="cw-knife-suggestions" hidden></div>
+                    </div>
+                </section>
+
+                <!-- ATTRIBUTES (rendered by src/systems/ui/attributesPane.js on first open) -->
+                <section class="rpg-editor-pane" data-pane="attributes">
+                    <div class="rpg-editor-section" id="cw-attributes-pane">
+                        <h4>&#127922; Attributes</h4>
                     </div>
                 </section>
 

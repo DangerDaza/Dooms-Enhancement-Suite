@@ -2295,3 +2295,17 @@ body[data-dooms-ui] .rpg-dice-die { background: var(--ov-accent); color: var(--o
 body[data-dooms-ui="lumen"] .dooms-dice-chip,
 body[data-dooms-ui="lumen"] .rpg-dice-chip-btn { border-radius: 999px; }
 body[data-dooms-ui="inked"] .dooms-dice-chip { border-color: var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); }
+
+/* ── Workshop → Attributes tab (Project Short Fuse, Phase 2) ──
+   The Stats → Attributes & checks rows reuse the vitals rows, which already
+   read the --rpg-* variables each look remaps; only the Workshop pane needs
+   its own tokens. */
+body[data-dooms-ui] #character-workshop-popup .cw-attr-row {
+    background: var(--ov-panel2);
+    border-color: var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-ui] #character-workshop-popup .cw-attr-abbr { color: var(--ov-accent); }
+body[data-dooms-ui] #character-workshop-popup .cw-attr-mod { background: var(--ov-panel); color: var(--ov-text); }
+body[data-dooms-ui] #character-workshop-popup .cw-attr-notice { border-color: var(--ov-line); color: var(--ov-muted); }
+body[data-dooms-ui="lumen"] #character-workshop-popup .cw-attr-row { border-radius: 999px; padding-left: 12px; }

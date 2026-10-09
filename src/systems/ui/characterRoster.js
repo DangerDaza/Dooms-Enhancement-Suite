@@ -43,6 +43,7 @@ import { characters } from '../../../../../../../script.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { findSimilarCharacter } from '../../utils/nameSimilarity.js';
 import { addCharacterAlias } from '../features/characterAliases.js';
+import { deleteSheet } from '../../utils/d20.js';
 import { canonicalStockId } from '../voices/voiceCatalog.js';
 import { applyPopupLayout } from './settingsRail.js';
 
@@ -1132,6 +1133,7 @@ function purgeCharacter(name) {
     // clears activeUserCharacter if it was pointing at this entry.
     if (rosterMode === 'users') {
         if (s.userCharacters) delete s.userCharacters[name];
+        deleteSheet(s, name, true);
         if (s.activeUserCharacter === name) s.activeUserCharacter = null;
         saveSettings();
         return;
@@ -1156,6 +1158,8 @@ function purgeCharacter(name) {
     // Aliases too — an orphaned alias entry would keep silently renaming a
     // future, unrelated character to this deleted one.
     if (s.characterAliases) delete s.characterAliases[name];
+    // The attribute sheet too (the Workshop's delete clears it the same way).
+    deleteSheet(s, name, false);
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata, not extensionSettings. Wipe those too or the
     // tile reappears on the next renderGrid (which reads via the active

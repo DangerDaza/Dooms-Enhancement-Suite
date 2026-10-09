@@ -1698,7 +1698,8 @@
 
 .rpg-vital-order { display: inline-flex; gap: 2px; flex: 0 0 auto; }
 
-.rpg-vital-move {
+.rpg-vital-move,
+.rpg-attr-move {
     background: transparent;
     border: 1px solid var(--rpg-border);
     border-radius: 4px;
@@ -1709,8 +1710,10 @@
     font-size: 0.75em;
 }
 
-.rpg-vital-move:hover:not(:disabled) { opacity: 1; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
-.rpg-vital-move:disabled { opacity: 0.2; cursor: default; }
+.rpg-vital-move:hover:not(:disabled),
+.rpg-attr-move:hover:not(:disabled) { opacity: 1; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
+.rpg-vital-move:disabled,
+.rpg-attr-move:disabled { opacity: 0.2; cursor: default; }
 
 .rpg-vitals-add-row {
     display: flex;
@@ -9642,3 +9645,138 @@ body.dooms-perf-mode .rpg-dice-die { animation: none; }
 .rpg-dice-result.is-failure .rpg-dice-outcome { color: #ff8a8a; }
 .rpg-dice-math { font-size: 0.85em; opacity: 0.85; font-variant-numeric: tabular-nums; }
 .rpg-dice-where { font-size: 0.8em; opacity: 0.65; }
+
+/* ── Stats → Attributes & checks (Project Short Fuse, Phase 2) ──
+   Rows share the vitals row styling (.rpg-vital-row); only the fields differ. */
+.rpg-attr-row .rpg-attr-name { flex: 1 1 120px; }
+.rpg-attr-row .rpg-attr-abbr { flex: 0 0 64px; text-transform: uppercase; text-align: center; }
+.rpg-vital-row.is-off > .rpg-attr-remove { opacity: 1; }
+
+.rpg-attr-dcs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+
+.rpg-attr-dc-field {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.78em;
+    color: var(--rpg-text);
+    opacity: 0.85;
+}
+
+.rpg-attr-dc-field input {
+    box-sizing: border-box;
+    width: 72px;
+    background: var(--rpg-bg);
+    color: var(--rpg-text);
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    padding: 5px 7px;
+    font-size: 1em;
+}
+
+.rpg-attr-dc-field input:focus { outline: none; border-color: var(--rpg-highlight); }
+
+/* ── Workshop → Attributes tab ── */
+#character-workshop-popup .cw-attr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 6px;
+}
+
+#character-workshop-popup .cw-attr-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    min-width: 0;
+}
+
+#character-workshop-popup .cw-attr-row.is-off { opacity: 0.5; }
+
+#character-workshop-popup .cw-attr-abbr {
+    flex: 0 0 40px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    font-size: 0.78em;
+    color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-attr-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9em;
+}
+
+#character-workshop-popup .cw-attr-name small { opacity: 0.6; }
+
+#character-workshop-popup .cw-attr-score {
+    flex: 0 0 64px;
+    width: 64px;
+    text-align: center;
+    padding: 4px 6px;
+}
+
+#character-workshop-popup .cw-attr-mod {
+    flex: 0 0 44px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 0.85em;
+    border-radius: 999px;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+#character-workshop-popup .cw-attr-mod.is-pos { color: #7bd88f; }
+#character-workshop-popup .cw-attr-mod.is-neg { color: #ff7b7b; }
+
+#character-workshop-popup .cw-attr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+#character-workshop-popup .cw-attr-actions[hidden] { display: none; }
+
+#character-workshop-popup .cw-attr-notice {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    margin: 0 0 10px;
+    border: 1px dashed var(--rpg-border, rgba(255, 255, 255, 0.2));
+    border-radius: 6px;
+    font-size: var(--modal-font-small, 0.8rem);
+    line-height: 1.4;
+    color: rgba(234, 234, 234, 0.75);
+}
+
+#character-workshop-popup .cw-attr-notice i { margin-top: 2px; }
+
+#character-workshop-popup .cw-attr-foot { margin-top: 8px; }
+
+/* A short brightness pulse on the modifiers after Roll 4d6. */
+@keyframes cw-attr-rolled {
+    from { filter: brightness(1.7); }
+    to { filter: brightness(1); }
+}
+
+#character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-mod { animation: cw-attr-rolled 0.6s ease-out 1; }
+
+@media (prefers-reduced-motion: reduce) {
+    #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-mod { animation: none; }
+}
+
+body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-mod { animation: none; }

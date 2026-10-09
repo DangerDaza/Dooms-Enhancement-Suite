@@ -159,7 +159,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
-import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, syncRollCardForMessage, updateRollCards } from './src/systems/features/diceRolls.js';
+import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -178,7 +178,7 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
 import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
-import { attributesOn } from './src/utils/d20.js';
+import { attributesOn, attributesConfig, migrateAttributesConfig, normalizeAttributeDef, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -316,6 +316,66 @@ function renderVitalsSettings() {
         `<button type="button" class="rpg-vital-chip" data-preset="${escapeHtml(p.id)}" title="Add ${escapeHtml(p.name)}">${escapeHtml(p.icon)} ${escapeHtml(p.name)}</button>`);
     $('#rpg-vitals-chips').html(chips.join(''));
     $('#rpg-vitals-add').prop('disabled', list.length >= MAX_VITALS);
+}
+
+// ── Stats → Attributes & checks (Project Short Fuse, Phase 2) ──
+// extensionSettings.attributes is the rules block and this page is its only
+// writer. Rows come from the list; every edit saves at once, and the d20
+// button, the chip and the FAB item follow the master switch.
+function getAttributesRules() {
+    migrateAttributesConfig(extensionSettings);
+    return extensionSettings.attributes;
+}
+function findAttrEntry(a, id) {
+    return (a.list || []).find(e => e && e.id === id) || null;
+}
+function uniqueAttrId(a, base) {
+    const taken = new Set((a.list || []).map(e => e && e.id));
+    let id = base || 'attr';
+    let n = 1;
+    while (taken.has(id)) { n++; id = `${base || 'attr'}_${n}`; }
+    return id;
+}
+function renderAttributesSettings() {
+    const $list = $('#rpg-attr-list');
+    if (!$list.length) return;
+    const a = getAttributesRules();
+    const cfg = attributesConfig(extensionSettings);
+    $('#rpg-attr-enabled').prop('checked', cfg.enabled);
+    $('#rpg-attr-send').val(cfg.sendToAI);
+    $('#rpg-attr-ai-rates').prop('checked', cfg.aiRatesDifficulty);
+    $('#rpg-attr-context').val(cfg.contextMessages);
+    $('#rpg-attr-override').prop('checked', cfg.allowOverride);
+    $('#rpg-attr-criticals').prop('checked', cfg.criticals);
+    $('#rpg-attr-default-diff')
+        .html(DIFFICULTIES.map(d => `<option value="${d.id}">${escapeHtml(d.label)} (DC ${cfg.difficulty[d.id]})</option>`).join(''))
+        .val(cfg.defaultDifficulty);
+    $('#rpg-attr-dcs').html(DIFFICULTIES.map(d =>
+        `<label class="rpg-attr-dc-field"><span>${escapeHtml(d.label)}</span><input type="number" class="rpg-attr-dc" data-diff="${d.id}" min="1" max="40" value="${cfg.difficulty[d.id]}" /></label>`).join(''));
+    const list = Array.isArray(a.list) ? a.list : [];
+    const rows = list.map((raw, i) => {
+        const d = normalizeAttributeDef(raw);
+        const id = escapeHtml(d.id);
+        return `<div class="rpg-vital-row rpg-attr-row${d.enabled ? '' : ' is-off'}" data-attr="${id}">
+            <label class="rpg-toggle-switch rpg-vital-switch" title="On or off">
+                <input type="checkbox" class="rpg-attr-enabled"${d.enabled ? ' checked' : ''} />
+                <span class="rpg-toggle-slider"></span>
+            </label>
+            <input type="text" class="rpg-attr-name" value="${escapeHtml(d.name)}" maxlength="32" placeholder="Name" title="Name (what the AI sees)" />
+            <input type="text" class="rpg-attr-abbr" value="${escapeHtml(d.abbr)}" maxlength="5" placeholder="ABBR" title="Short form (the popover and the roll line)" />
+            <span class="rpg-vital-order">
+                <button type="button" class="rpg-attr-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
+                <button type="button" class="rpg-attr-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
+            </span>
+            <button type="button" class="rpg-ws-rel-remove rpg-attr-remove" title="Remove this attribute (every character's score for it goes with it)"><i class="fa-solid fa-trash"></i></button>
+        </div>`;
+    });
+    $list.html(rows.join('') || '<p class="rpg-note-text">No attributes yet. Add one, or pick a preset below.</p>');
+    const have = new Set(list.map(e => e && e.id));
+    const chips = ATTRIBUTE_PRESETS.filter(p => !have.has(p.id)).map(p =>
+        `<button type="button" class="rpg-vital-chip rpg-attr-chip" data-preset="${escapeHtml(p.id)}" title="Add ${escapeHtml(p.name)}">${escapeHtml(p.abbr)} ${escapeHtml(p.name)}</button>`);
+    $('#rpg-attr-chips').html(chips.join(''));
+    $('#rpg-attr-add').prop('disabled', list.length >= MAX_ATTRIBUTES);
 }
 
 function renderWorkshopRelationships() {
@@ -1295,6 +1355,7 @@ function bindSettingsUI() {
         try { renderSceneCustomFieldToggles(); } catch (e) { /* non-fatal */ }
         try { renderWorkshopRelationships(); } catch (e) { /* non-fatal */ }
         try { renderVitalsSettings(); } catch (e) { /* non-fatal */ }
+        try { renderAttributesSettings(); } catch (e) { /* non-fatal */ }
     });
 
     // ── Workshop → Relationships ──
@@ -1526,6 +1587,143 @@ function bindSettingsUI() {
             $(input).val(entry.icon);
             _saveVitals({ rerender: false });
         });
+    });
+
+    // ── Stats → Attributes & checks ──
+    // Same shape as the vitals above: straight to extensionSettings.attributes,
+    // saved at once, then the d20 button, the chip and the popover told.
+    const _saveAttrs = ({ rerender = true } = {}) => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] attributes save failed', e); }
+        if (rerender) renderAttributesSettings();
+        try { refreshDiceEntryPoints(); notifyDiceChanged({ reason: 'settings' }); } catch (e) { /* non-fatal */ }
+    };
+    const _attrFromRow = (el) => {
+        const a = getAttributesRules();
+        const id = String($(el).closest('.rpg-attr-row').data('attr') || '');
+        return { a, entry: findAttrEntry(a, id) };
+    };
+    $(document).on('change', '#rpg-attr-enabled', function () {
+        getAttributesRules().enabled = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-send', function () {
+        getAttributesRules().sendToAI = String($(this).val());
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-ai-rates', function () {
+        getAttributesRules().aiRatesDifficulty = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-override', function () {
+        getAttributesRules().allowOverride = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-criticals', function () {
+        getAttributesRules().criticals = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-default-diff', function () {
+        getAttributesRules().defaultDifficulty = String($(this).val());
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-context', function () {
+        const a = getAttributesRules();
+        const n = parseInt($(this).val(), 10);
+        a.contextMessages = Number.isFinite(n) ? Math.min(30, Math.max(1, n)) : 6;
+        $(this).val(a.contextMessages);
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '.rpg-attr-dc', function () {
+        const a = getAttributesRules();
+        const id = String($(this).data('diff') || '');
+        const def = DIFFICULTIES.find(d => d.id === id);
+        if (!def) return;
+        if (!a.difficulty || typeof a.difficulty !== 'object') a.difficulty = {};
+        const n = parseInt($(this).val(), 10);
+        a.difficulty[id] = Number.isFinite(n) ? Math.min(40, Math.max(1, n)) : def.dc;
+        // The default-difficulty options carry the DCs, so repaint.
+        _saveAttrs();
+    });
+    $(document).on('click', '#rpg-attr-add', function () {
+        const a = getAttributesRules();
+        if (!Array.isArray(a.list)) a.list = [];
+        if (a.list.length >= MAX_ATTRIBUTES) return;
+        const names = new Set(a.list.map(e => String(e?.name || '').toLowerCase()));
+        let name = 'New Attribute';
+        let n = 1;
+        while (names.has(name.toLowerCase())) { n++; name = `New Attribute ${n}`; }
+        const id = uniqueAttrId(a, attributeSlug(name));
+        a.list.push({ id, name, abbr: name.slice(0, 3).toUpperCase(), enabled: true });
+        _saveAttrs();
+        $(`#rpg-attr-list .rpg-attr-row[data-attr="${id}"] .rpg-attr-name`).trigger('focus').trigger('select');
+    });
+    $(document).on('click', '.rpg-attr-chip', function () {
+        const a = getAttributesRules();
+        if (!Array.isArray(a.list)) a.list = [];
+        const preset = ATTRIBUTE_PRESETS.find(p => p.id === String($(this).data('preset')));
+        if (!preset || findAttrEntry(a, preset.id) || a.list.length >= MAX_ATTRIBUTES) return;
+        a.list.push({ ...preset, enabled: true });
+        _saveAttrs();
+    });
+    $(document).on('click', '.rpg-attr-remove', function () {
+        const { a, entry } = _attrFromRow(this);
+        if (!entry) return;
+        a.list = a.list.filter(e => e !== entry);
+        // Its scores on every sheet would be orphans; drop them, and any
+        // sheet that is empty afterwards.
+        const store = extensionSettings.characterAttributes;
+        if (store && typeof store === 'object') {
+            for (const key of Object.keys(store)) {
+                const sheet = store[key];
+                if (!sheet || typeof sheet !== 'object') { delete store[key]; continue; }
+                delete sheet[entry.id];
+                if (!Object.keys(sheet).length) delete store[key];
+            }
+        }
+        _saveAttrs();
+    });
+    $(document).on('click', '.rpg-attr-move', function () {
+        const { a, entry } = _attrFromRow(this);
+        if (!entry) return;
+        const dir = parseInt($(this).data('dir'), 10) || 0;
+        const i = a.list.indexOf(entry);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= a.list.length) return;
+        a.list.splice(i, 1);
+        a.list.splice(j, 0, entry);
+        _saveAttrs();
+    });
+    $(document).on('change', '.rpg-attr-enabled', function () {
+        const { entry } = _attrFromRow(this);
+        if (!entry) return;
+        entry.enabled = $(this).prop('checked');
+        _saveAttrs();
+    });
+    // Renaming: the name is what the AI sees, so it stays unique
+    // (case-insensitively). The id, which the sheets are keyed by, never
+    // changes, so every character keeps their score.
+    $(document).on('blur', '.rpg-attr-name', function () {
+        const { a, entry } = _attrFromRow(this);
+        if (!entry) return;
+        const name = String($(this).val() || '').trim().slice(0, 32);
+        if (!name || name === entry.name) { renderAttributesSettings(); return; }
+        const clash = a.list.some(e => e !== entry && String(e?.name || '').toLowerCase() === name.toLowerCase());
+        if (clash) {
+            try { toastr.warning(`There is already an attribute called "${name}".`, 'Attributes'); } catch (e) { /* no toastr */ }
+            renderAttributesSettings();
+            return;
+        }
+        entry.name = name;
+        _saveAttrs();
+    });
+    $(document).on('blur', '.rpg-attr-abbr', function () {
+        const { entry } = _attrFromRow(this);
+        if (!entry) return;
+        const abbr = String($(this).val() || '').trim().toUpperCase().slice(0, 5)
+            || String(entry.name || '').slice(0, 3).toUpperCase();
+        if (abbr === entry.abbr) { $(this).val(abbr); return; }
+        entry.abbr = abbr;
+        _saveAttrs();
     });
 
     // Wording override. Empty string is meaningful (= use the bare option
@@ -2298,6 +2496,7 @@ function bindSettingsUI() {
     // ── Initialize UI state ──
     // Stats → Vitals (rows generated from the sheet)
     try { renderVitalsSettings(); } catch (e) { console.warn('[Dooms Tracker] Vitals settings failed to render', e); }
+    try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
