@@ -150,6 +150,36 @@ chat.push(user('I bluff.'));
 dice.onDiceMessageSent();
 check('...and that roll, not a new one, rides with the message sent', chat[3].extra.dooms_roll === waiting && dice.getPendingCheck() === null);
 
+// ── 5b. Roll now as one action from the popover ──
+chat.length = 0;
+chat.push(ai('The chasm yawns.'));
+chat.push(user('I leap.'));
+calls = 0;
+let oneStep = await dice.tagAndRollNow({ attributeId: 'dex', attempt: 'leap the chasm' });
+check('tagAndRollNow with nothing pending tags, asks the game master and rolls', oneStep && calls === 1 && oneStep.attributeId === 'dex' && oneStep.dc === 20 && oneStep.advantage === 'dis');
+check('...and attaches at once when the tail is the player\'s message', chat[1].extra.dooms_roll === oneStep && dice.getPendingCheck() === null);
+chat.push(ai('You land hard.'));
+pending = dice.tagCheck({ attributeId: 'str', attempt: 'hold on' });   // not awaited: the ruling is in flight
+const whileRating = await dice.tagAndRollNow({ attributeId: 'str', attempt: 'hold on' });
+check('tagAndRollNow on a check whose ruling is in flight waits for it, then rolls', whileRating && dice.getPendingCheck() && dice.getPendingCheck().roll === whileRating && whileRating.rulingSource === 'ai');
+check('...and a second Roll now keeps that roll rather than re-rolling', await dice.tagAndRollNow({ attributeId: 'str' }) === whileRating);
+dice.clearPendingCheck({ silent: true });
+pending = dice.tagCheck({ attributeId: 'str', attempt: 'push' });
+const switched = await dice.tagAndRollNow({ attributeId: 'cha', attempt: 'charm' });
+check('tagAndRollNow with a different attribute re-tags and rolls that one', switched && switched.attributeId === 'cha' && dice.getPendingCheck().roll === switched);
+dice.clearPendingCheck({ silent: true });
+check('a Roll now whose check is discarded mid-ruling rolls nothing', await (async () => {
+    dice.__setDiceTransport(async () => { await new Promise(r => setTimeout(r, 20)); return '{"difficulty":"easy"}'; });
+    const p = dice.tagAndRollNow({ attributeId: 'str', attempt: 'x' });
+    dice.clearPendingCheck({ silent: true });
+    const r = await p;
+    dice.__setDiceTransport(async (messages) => { calls++; lastMessages = messages; return '{"difficulty": "hard", "advantage": "disadvantage", "reason": "The wall is slick with rain."}'; });
+    return r === null && dice.getPendingCheck() === null;
+})());
+extensionSettings.attributes.enabled = false;
+check('tagAndRollNow with attributes off rolls nothing', await dice.tagAndRollNow({ attributeId: 'str' }) === null);
+extensionSettings.attributes.enabled = true;
+
 // ── 6. Fallbacks ──
 dice.__setDiceTransport(async () => { throw new Error('offline'); });
 pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
@@ -177,7 +207,11 @@ check('tagCheck with attributes off gives null', (extensionSettings.attributes.e
 extensionSettings.attributes.enabled = true;
 
 // ── 7. Removal and the chat switch ──
-check('removeRollFromMessage clears the roll', dice.removeRollFromMessage(3) === true && chat[3].extra.dooms_roll === undefined && dice.removeRollFromMessage(3) === false);
+chat.length = 0;
+chat.push(ai('Night falls.'));
+chat.push(user('I pick the lock.'));
+await dice.tagAndRollNow({ attributeId: 'dex', attempt: 'pick the lock' });
+check('removeRollFromMessage clears the roll', !!chat[1].extra.dooms_roll && dice.removeRollFromMessage(1) === true && chat[1].extra.dooms_roll === undefined && dice.removeRollFromMessage(1) === false);
 pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
 dice.onDiceChatChanged();
 check('a chat switch drops the pending check', dice.getPendingCheck() === null);

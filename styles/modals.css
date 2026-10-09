@@ -9587,6 +9587,9 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-dice-diff small { opacity: 0.7; }
 .rpg-dice-adv { font-size: 0.8em; }
 
+/* A button that waits (for the ruling, or for an attribute) looks like it. */
+.rpg-dice-actions .rpg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .rpg-dice-actions {
     display: flex;
     flex-wrap: wrap;

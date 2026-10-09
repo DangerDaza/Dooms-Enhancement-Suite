@@ -10,7 +10,8 @@
  * What the player decides here is the attribute. The difficulty and any
  * advantage are the game master's call (one small separate call made by
  * diceRolls.tagCheck); the override controls appear only with the setting
- * on. "Roll when I send" tags the message; "Roll now" shows the die first.
+ * on. "Roll when I send" tags the message; "Roll now" tags it too, waits
+ * for the ruling, rolls at once and shows the die.
  */
 import { extensionSettings } from '../../core/state.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
@@ -22,7 +23,7 @@ import {
     getPersonaSheet,
     tagCheck,
     reRateCheck,
-    rollNow,
+    tagAndRollNow,
     overrideRuling,
     clearPendingCheck,
 } from '../features/diceRolls.js';
@@ -33,6 +34,7 @@ const CHIP_ID = 'dooms-dice-chip';
 let bound = false;
 let lastAttributeId = null;     // the chip the player used last (session only)
 let justRolled = null;          // the roll shown with the die animation, until closed
+let rollingNow = false;         // a Roll now is waiting for the ruling
 
 // ─── Open / close ───────────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ export function openDicePanel() {
 
 function closeDicePanel() {
     justRolled = null;
+    rollingNow = false;
     $('#' + POPUP_ID).css('display', 'none');
 }
 
@@ -160,11 +163,14 @@ function render() {
             ${pending && pending.roll === rolled ? '<button type="button" class="rpg-btn rpg-dice-discard">Discard</button>' : ''}
         </div>`;
     } else {
-        const canRoll = pending && !pending.rating;
+        const rating = !!(pending && pending.rating);
+        const canRoll = !!selected && !rating && !rollingNow;
         const tagLabel = pending ? 'Re-tag with this attribute' : 'Roll when I send';
+        const rollLabel = rollingNow ? 'Asking the game master…' : 'Roll now';
+        const rollTitle = rating || rollingNow ? "Waiting for the game master's ruling" : 'Ask the game master, roll at once and see the die';
         actions = `<div class="rpg-dice-actions">
-            <button type="button" class="rpg-btn rpg-btn-primary rpg-dice-tag" title="Tag the message you are writing; the roll happens when you send it">${tagLabel}</button>
-            <button type="button" class="rpg-btn rpg-dice-roll-now"${canRoll ? '' : ' disabled'} title="See the die first">Roll now</button>
+            <button type="button" class="rpg-btn rpg-btn-primary rpg-dice-tag"${rollingNow ? ' disabled' : ''} title="Tag the message you are writing; the roll happens when you send it">${tagLabel}</button>
+            <button type="button" class="rpg-btn rpg-dice-roll-now"${canRoll ? '' : ' disabled'} title="${rollTitle}">${rollLabel}</button>
             ${pending ? '<button type="button" class="rpg-btn rpg-dice-discard">Discard</button>' : ''}
         </div>`;
     }
@@ -261,9 +267,24 @@ function bindOnce() {
         const pending = getPendingCheck();
         overrideRuling({ difficultyId: pending?.ruling?.difficultyId, advantage: String($(this).val()) });
     });
-    $(document).on('click', '#rpg-dice-body .rpg-dice-roll-now', function () {
-        const roll = rollNow();
-        if (roll) { justRolled = roll; render(); }
+    $(document).on('click', '#rpg-dice-body .rpg-dice-roll-now', async function () {
+        if (rollingNow) return;
+        const defs = attributeDefs(extensionSettings);
+        const id = selectedAttributeId(defs);
+        if (!id) return;
+        lastAttributeId = id;
+        justRolled = null;
+        rollingNow = true;
+        render();
+        let roll = null;
+        try {
+            roll = await tagAndRollNow({ attributeId: id, attempt: String($('#rpg-dice-attempt').val() || '') });
+        } catch (e) {
+            console.error('[Dooms Tracker] Dice: Roll now failed', e);
+        }
+        rollingNow = false;
+        if (roll) justRolled = roll;
+        if (isOpen()) render();
     });
     $(document).on('click', '#rpg-dice-body .rpg-dice-keep', closeDicePanel);
     $(document).on('click', '#rpg-dice-body .rpg-dice-discard', function () {

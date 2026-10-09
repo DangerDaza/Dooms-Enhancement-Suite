@@ -297,12 +297,15 @@ export async function tagCheck({ attributeId, attempt = '' } = {}) {
     };
     pending = check;
     notifyDiceChanged({ source: 'tag' });
-    const ruling = await rateAttempt({ attributeId: def.id, attempt: check.attempt });
-    if (pending !== check) return pending;   // discarded or re-tagged meanwhile
-    check.ruling = ruling;
-    check.rating = false;
-    notifyDiceChanged({ source: 'ruling' });
-    return check;
+    // The ruling's promise stays on the check so Roll now can wait for it.
+    check.settled = rateAttempt({ attributeId: def.id, attempt: check.attempt }).then(ruling => {
+        if (pending !== check) return pending;   // discarded or re-tagged meanwhile
+        check.ruling = ruling;
+        check.rating = false;
+        notifyDiceChanged({ source: 'ruling' });
+        return check;
+    });
+    return check.settled;
 }
 
 /** Asks the game master again, with whatever the message box holds now. */
@@ -312,12 +315,14 @@ export async function reRateCheck() {
     check.attempt = String(draftText()).trim().slice(0, 300) || check.attempt;
     check.rating = true;
     notifyDiceChanged({ source: 'tag' });
-    const ruling = await rateAttempt({ attributeId: check.attributeId, attempt: check.attempt });
-    if (pending !== check) return pending;
-    check.ruling = ruling;
-    check.rating = false;
-    notifyDiceChanged({ source: 'ruling' });
-    return check;
+    check.settled = rateAttempt({ attributeId: check.attributeId, attempt: check.attempt }).then(ruling => {
+        if (pending !== check) return pending;
+        check.ruling = ruling;
+        check.rating = false;
+        notifyDiceChanged({ source: 'ruling' });
+        return check;
+    });
+    return check.settled;
 }
 
 /**
@@ -393,6 +398,27 @@ export function rollNow() {
     }
     notifyDiceChanged({ source: 'rolled' });
     return pending.roll;
+}
+
+/**
+ * Roll now, as one action from the popover: tags the check when none is
+ * pending (or a different attribute was picked), waits for the game
+ * master's ruling, then rolls. A check that already carries a roll keeps
+ * it: an outcome is final. Resolves to the roll, or null when attributes
+ * are off or the check was discarded or re-tagged while the ruling was in
+ * flight.
+ */
+export async function tagAndRollNow({ attributeId, attempt = '' } = {}) {
+    if (!attributesOn(extensionSettings)) return null;
+    let check = pending;
+    if (check && check.roll) return check.roll;
+    if (!check || (attributeId && check.attributeId !== attributeId)) {
+        check = await tagCheck({ attributeId, attempt });
+    } else if (check.rating && check.settled) {
+        check = await check.settled;
+    }
+    if (!check || pending !== check || check.rating) return null;
+    return rollNow();
 }
 
 /**
