@@ -178,7 +178,7 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
 import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
-import { attributesOn, attributesConfig, migrateAttributesConfig, normalizeAttributeDef, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
+import { attributesOn, attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -347,6 +347,7 @@ function renderAttributesSettings() {
     $('#rpg-attr-context').val(cfg.contextMessages);
     $('#rpg-attr-override').prop('checked', cfg.allowOverride);
     $('#rpg-attr-criticals').prop('checked', cfg.criticals);
+    $('#rpg-attr-prof').val(cfg.proficiencyBonus);
     $('#rpg-attr-default-diff')
         .html(DIFFICULTIES.map(d => `<option value="${d.id}">${escapeHtml(d.label)} (DC ${cfg.difficulty[d.id]})</option>`).join(''))
         .val(cfg.defaultDifficulty);
@@ -363,6 +364,7 @@ function renderAttributesSettings() {
             </label>
             <input type="text" class="rpg-attr-name" value="${escapeHtml(d.name)}" maxlength="32" placeholder="Name" title="Name (what the AI sees)" />
             <input type="text" class="rpg-attr-abbr" value="${escapeHtml(d.abbr)}" maxlength="5" placeholder="ABBR" title="Short form (the popover and the roll line)" />
+            <input type="text" class="rpg-attr-skills" value="${escapeHtml((d.skills || []).join(', '))}" maxlength="400" placeholder="Skills, comma-separated" title="The skills offered under this attribute, comma-separated. Removing one drops its proficiencies." />
             <span class="rpg-vital-order">
                 <button type="button" class="rpg-attr-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
                 <button type="button" class="rpg-attr-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
@@ -1597,6 +1599,27 @@ function bindSettingsUI() {
         if (rerender) renderAttributesSettings();
         try { refreshDiceEntryPoints(); notifyDiceChanged({ reason: 'settings' }); } catch (e) { /* non-fatal */ }
     };
+    // Sheets keep nothing for an attribute or skill that is gone.
+    const _pruneSheets = () => {
+        const store = extensionSettings.characterAttributes;
+        if (!store || typeof store !== 'object') return;
+        const defs = attributeDefs(extensionSettings, { all: true });
+        const ids = new Set(defs.map(d => d.id));
+        for (const key of Object.keys(store)) {
+            const sheet = store[key];
+            if (!sheet || typeof sheet !== 'object') { delete store[key]; continue; }
+            for (const k of Object.keys(sheet)) {
+                if (k !== '_prof' && !ids.has(k)) delete sheet[k];
+            }
+            if (Array.isArray(sheet._prof)) {
+                const kept = pruneProficiencies(sheet._prof, defs);
+                if (kept.length) sheet._prof = kept; else delete sheet._prof;
+            } else if (sheet._prof !== undefined) {
+                delete sheet._prof;
+            }
+            if (!Object.keys(sheet).length) delete store[key];
+        }
+    };
     const _attrFromRow = (el) => {
         const a = getAttributesRules();
         const id = String($(el).closest('.rpg-attr-row').data('attr') || '');
@@ -1669,17 +1692,7 @@ function bindSettingsUI() {
         const { a, entry } = _attrFromRow(this);
         if (!entry) return;
         a.list = a.list.filter(e => e !== entry);
-        // Its scores on every sheet would be orphans; drop them, and any
-        // sheet that is empty afterwards.
-        const store = extensionSettings.characterAttributes;
-        if (store && typeof store === 'object') {
-            for (const key of Object.keys(store)) {
-                const sheet = store[key];
-                if (!sheet || typeof sheet !== 'object') { delete store[key]; continue; }
-                delete sheet[entry.id];
-                if (!Object.keys(sheet).length) delete store[key];
-            }
-        }
+        _pruneSheets();
         _saveAttrs();
     });
     $(document).on('click', '.rpg-attr-move', function () {
@@ -1714,6 +1727,21 @@ function bindSettingsUI() {
             return;
         }
         entry.name = name;
+        _saveAttrs();
+    });
+    $(document).on('change', '#rpg-attr-prof', function () {
+        const a = getAttributesRules();
+        a.proficiencyBonus = clampProficiency($(this).val());
+        $(this).val(a.proficiencyBonus);
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('blur', '.rpg-attr-skills', function () {
+        const { entry } = _attrFromRow(this);
+        if (!entry) return;
+        const skills = normalizeSkills(String($(this).val() || '').split(','));
+        if (skills.join('\u0000') === (entry.skills || []).join('\u0000')) { $(this).val(skills.join(', ')); return; }
+        entry.skills = skills;
+        _pruneSheets();
         _saveAttrs();
     });
     $(document).on('blur', '.rpg-attr-abbr', function () {

@@ -48,7 +48,7 @@ import { renderThoughts } from '../rendering/thoughts.js';
 import { generateKnifeSuggestions } from '../generation/doomCounter.js';
 // Attribute scores (Project Short Fuse, Phase 2): one sheet per name, not
 // per version, kept in extensionSettings.characterAttributes.
-import { attributeDefs, attributesOn, getSheet, setSheet, deleteSheet } from '../../utils/d20.js';
+import { attributeDefs, attributesOn, attributesConfig, getSheet, getProficiencies, setSheet, deleteSheet } from '../../utils/d20.js';
 import { i18n } from '../../core/i18n.js';
 import { getAllWorldNames, activateWorld, isWorldActive } from '../lorebook/lorebookAPI.js';
 // Campaign versions of a character (Base + one per campaign). The version
@@ -525,7 +525,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
             draft.dirty.bubbleFill = true;
         }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
-        if (carry.dirty?.attributes) { draft.attributes = { ...(carry.attributes || {}) }; draft.dirty.attributes = true; }
+        if (carry.dirty?.attributes) { draft.attributes = { ...(carry.attributes || {}) }; draft.proficiencies = [...(carry.proficiencies || [])]; draft.dirty.attributes = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
     // user-only sections without a JS class-toggle on every section.
@@ -617,7 +617,7 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, proficiencies: draft.proficiencies, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
     const name = draft.name;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
@@ -721,7 +721,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
+    const carry = { color: draft.color, aliases: draft.aliases, attributes: draft.attributes, proficiencies: draft.proficiencies, bubbleFill: draft.bubbleFill, bubbleFillColor: draft.bubbleFillColor, bubbleInkColor: draft.bubbleInkColor, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, attributes: draft.dirty.attributes, bubbleFill: draft.dirty.bubbleFill } };
     loadVersion(name, false, null, { carry });
 }
 
@@ -1288,6 +1288,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             },
             knives: Array.isArray(u.knives) ? u.knives.map(k => ({ ...k })) : [],
             attributes: getSheet(extensionSettings, name, true, attributeDefs(extensionSettings, { all: true })),
+            proficiencies: getProficiencies(extensionSettings, name, true),
             // Personas have no campaign versions, so their voice is stored
             // on the userCharacters entry itself.
             voice: cloneVoice(u.voice),
@@ -1324,6 +1325,7 @@ function buildDraft(name, isUser = false, versionId = null) {
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
         // Per name, like aliases: the same sheet whichever version is on the stage.
         attributes: getSheet(extensionSettings, name, false, attributeDefs(extensionSettings, { all: true })),
+        proficiencies: getProficiencies(extensionSettings, name, false),
         dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false, attributes: false },
     };
     if (live) {
@@ -1593,10 +1595,13 @@ function renderAttributes() {
         isUser: draft.isUser,
         defs: attributeDefs(extensionSettings, { all: true }),
         scores: draft.attributes || {},
+        proficiencies: draft.proficiencies || [],
+        profBonus: attributesConfig(extensionSettings).proficiencyBonus,
         attributesOn: attributesOn(extensionSettings),
-        onChange(scores) {
+        onChange(scores, proficiencies) {
             if (!draft) return;
             draft.attributes = { ...scores };
+            draft.proficiencies = Array.isArray(proficiencies) ? [...proficiencies] : [];
             draft.dirty.attributes = true;
         },
     });
@@ -2855,7 +2860,7 @@ function commitDraft() {
         if (draft.voice) next.voice = { ...draft.voice };
         else delete next.voice;
         extensionSettings.userCharacters[name] = next;
-        if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes);
+        if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes, null, draft.proficiencies || []);
         invalidateVoices();
         saveOrWarn(saveSettings, 'settings');
         try { updatePortraitBar(); } catch (e) {}
@@ -2976,7 +2981,7 @@ function commitDraft() {
     // Attribute scores are per name too: the sheet the dice use whichever
     // campaign is on the stage.
     if (draft.dirty.attributes) {
-        setSheet(extensionSettings, name, false, draft.attributes);
+        setSheet(extensionSettings, name, false, draft.attributes, null, draft.proficiencies || []);
         changed = true;
     }
 
@@ -3188,7 +3193,10 @@ function copyNpcToUserCharacter(name) {
     };
     const voiceToCopy = fromDraft ? fromDraft.voice : extensionSettings.characterVoices?.[trimmed];
     if (voiceToCopy && voiceToCopy.id) extensionSettings.userCharacters[trimmed].voice = { ...voiceToCopy };
-    setSheet(extensionSettings, trimmed, true, fromDraft ? fromDraft.attributes : getSheet(extensionSettings, trimmed, false, attributeDefs(extensionSettings, { all: true })));
+    setSheet(extensionSettings, trimmed, true,
+        fromDraft ? fromDraft.attributes : getSheet(extensionSettings, trimmed, false, attributeDefs(extensionSettings, { all: true })),
+        null,
+        fromDraft ? (fromDraft.proficiencies || []) : getProficiencies(extensionSettings, trimmed, false));
     saveOrWarn(saveSettings, 'settings');
     try {
         if (window.toastr) window.toastr.success(
@@ -3253,7 +3261,7 @@ function copyUserToNpcCharacter(name) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
         extensionSettings.characterVoices[trimmed] = { ...u.voice };
     }
-    setSheet(extensionSettings, trimmed, false, getSheet(extensionSettings, trimmed, true, attributeDefs(extensionSettings, { all: true })));
+    setSheet(extensionSettings, trimmed, false, getSheet(extensionSettings, trimmed, true, attributeDefs(extensionSettings, { all: true })), null, getProficiencies(extensionSettings, trimmed, true));
     saveOrWarn(saveSettings, 'settings');
     try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
     try {

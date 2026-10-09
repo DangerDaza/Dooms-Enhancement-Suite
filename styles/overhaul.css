@@ -2313,3 +2313,5 @@ body[data-dooms-ui] #character-workshop-popup .cw-attr-abbr { color: var(--ov-ac
 body[data-dooms-ui] #character-workshop-popup .cw-attr-mod { background: var(--ov-panel); color: var(--ov-text); }
 body[data-dooms-ui] #character-workshop-popup .cw-attr-notice { border-color: var(--ov-line); color: var(--ov-muted); }
 body[data-dooms-ui="lumen"] #character-workshop-popup .cw-attr-row { border-radius: 999px; padding-left: 12px; }
+body[data-dooms-ui] #character-workshop-popup .cw-attr-skill { border-color: var(--ov-line); }
+body[data-dooms-ui] #character-workshop-popup .cw-attr-skill.is-prof { border-color: var(--ov-accent); color: var(--ov-accent); }

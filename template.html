@@ -1525,8 +1525,9 @@
                         <div id="rpg-attr-chips" class="rpg-vitals-chips"></div>
                     </div>
                     <p class="rpg-note-text" style="margin-top:4px;">The name is what the AI sees; the short form is
-                        what the popover and the roll line show. Switching one off keeps every character's score
-                        for it; removing one drops those scores.</p>
+                        what the popover and the roll line show; the skills are the sub-checks offered under it.
+                        Switching an attribute off keeps every character's score for it; removing an attribute or a
+                        skill drops the scores or proficiencies that went with it.</p>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Send scores to the AI</span>
@@ -1589,6 +1590,15 @@
                             <input type="checkbox" id="rpg-attr-criticals" />
                             <span class="rpg-toggle-slider"></span>
                         </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Proficiency bonus</span>
+                            <span class="rpg-setting-hint">Added to a roll on a skill the character is proficient in.
+                                Proficiencies are ticked on the Workshop's Attributes tab.</span>
+                        </div>
+                        <input type="number" id="rpg-attr-prof" class="rpg-accordion-input" min="1" max="6"
+                            value="2" style="width: 64px;" />
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">

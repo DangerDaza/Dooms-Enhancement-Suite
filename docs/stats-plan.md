@@ -431,10 +431,10 @@ In the browser (parity checklist rows to add):
 
 ## 7. Phase 2 — Attributes and dice (player-triggered)
 
-Status: **built; commits 10–16 landed on `Project-Short-Fuse`; awaiting in-browser
+Status: **built, then reshaped on the owner's first try (D12); awaiting in-browser
 verification (the Attributes and dice rows in `docs/parity-checklist.md`).**
 
-Three things changed from the plan while building, recorded here:
+Four things changed from the plan while building, recorded here:
 
 - Sheets are per name, not per campaign version. §7.7 said "the way knives
   are", but a character's Strength is not something a campaign rewrites, and
@@ -447,10 +447,17 @@ Three things changed from the plan while building, recorded here:
   D11: the AI sets the difficulty (on), how many messages it reads (6), and
   Let me change the ruling (off). There are five difficulty classes, not
   four: Easy, Medium, Hard, Very hard, Nearly impossible.
-- `attributes.rollOnSend` is in the config and migrated but not on the
-  page: the popover always offers both Roll when I send and Roll now, so a
-  preference adds nothing yet. It stays for a later "always roll at once"
-  option.
+- D12, after the owner tried the first popover ("why are there two
+  options?"): the popover is for picking, not rolling. Pick the attribute, a
+  skill under it (5e's list, editable per attribute in Settings) or a plain
+  check, a line of context, OK. The ruling, the roll and the box all happen
+  when the message is sent: the game master reads the message itself (with a
+  timeout before the default stands), the die is rolled, and the box sits at
+  the top of the reply rather than under the player's message. Once rolled,
+  final: no Roll now, no Keep or Discard after a roll, no remove button;
+  Discard exists only before the roll. Skills carry proficiency: a tick per
+  skill on the Workshop sheet adds the proficiency bonus (2 by default,
+  Settings → Stats). `rollOnSend` left the config with this.
 
 One change from the first draft, on the owner's question "why is the player
 setting the difficulty?": they are not. The difficulty and any advantage are
@@ -611,14 +618,16 @@ modifier, the DC and the outcome; a default sheet emits nothing.
 - **The chip** above the message box while a tagged or rolled check waits
   for a message, with × to discard.
 - **Workshop → Attributes tab**, for NPCs and the persona: one number per
-  attribute with the modifier shown live, plus Standard array (15 14 13 12
-  10 8), Roll 4d6 drop lowest, and All 10. Saved with the Workshop's Save
-  into `characterAttributes`, the way knives are.
+  attribute with the modifier shown live, the skills under it with a
+  proficiency tick each, plus Standard array (15 14 13 12 10 8), Roll 4d6
+  drop lowest, and All 10. Saved with the Workshop's Save into
+  `characterAttributes`, per name like aliases.
 - **Settings → Stats → Attributes & checks**: master toggle; the attribute
   list (name, abbreviation, on/off, order, add, remove, presets as chips);
   Send scores to the AI (with a roll / always / never); the AI sets the
   difficulty and how many messages it reads; the default difficulty; Let me
-  change the ruling; criticals on/off; the five difficulty numbers.
+  change the ruling; criticals on/off; the proficiency bonus; the five
+  difficulty numbers. Each attribute row also carries its skills.
 
 ### 7.8 Files, tests, commits
 

@@ -9734,3 +9734,50 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 }
 
 body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-mod { animation: none; }
+
+/* ── Settings → Attributes: the skills field; Workshop → Attributes: skill ticks ── */
+.rpg-attr-row .rpg-attr-skills { flex: 1 1 100%; }
+
+#character-workshop-popup .cw-attr-row { flex-wrap: wrap; }
+
+#character-workshop-popup .cw-attr-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+#character-workshop-popup .cw-attr-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    flex: 1 1 100%;
+    padding-top: 2px;
+}
+
+#character-workshop-popup .cw-attr-skill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    color: inherit;
+    padding: 2px 8px;
+    font-size: 0.78em;
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+#character-workshop-popup .cw-attr-skill:hover { opacity: 1; border-color: var(--rpg-highlight, #e94560); }
+
+#character-workshop-popup .cw-attr-skill.is-prof {
+    opacity: 1;
+    border-color: var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+}
+
+#character-workshop-popup .cw-attr-skill i { font-size: 0.95em; }
+
+#character-workshop-popup .cw-attr-noskills { font-size: 0.75em; opacity: 0.5; }
