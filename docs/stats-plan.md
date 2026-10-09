@@ -428,22 +428,196 @@ In the browser (parity checklist rows to add):
 
 ---
 
-## 7. Later phases (sketch)
+## 7. Phase 2 — Attributes and dice (player-triggered)
 
-**Phase 2 — Attributes and dice (player-triggered).** Six attributes (or
-custom) per character on the same Stats page and a Workshop tab; D&D scale
-with modifier `floor((score − 10) / 2)`; a roller using
-`crypto.getRandomValues`; the player picks the attribute and a DC (or a
-difficulty word mapped to 10/15/20/25); DES resolves and injects a final
-verdict with the user's message; a roll card in chat; roll log per message in
-`message.extra`. Attributes go to the AI as one read-only line per character,
-never in the per-reply JSON.
+Status: **designed, awaiting the decisions in §7.9. No code yet.**
 
-**Phase 3 — AI-called checks.** A `check` request in the tracker JSON with a
-difficulty word, "end the reply at the attempt", DES rolls and auto-continues
-with the verdict. Behind a toggle; Phase 2 remains the fallback.
+What RPG Companion had here was a line of numbers the AI was told about and a
+roll it was asked to interpret ("rolled 14, decide whether they succeeded").
+Phase 2 does the arithmetic in code and hands the AI a verdict to narrate.
 
-**Phase 4 — if wanted.** Skills and proficiency, advantage, contested rolls,
+### 7.1 Goals
+
+1. Every character can carry attributes: the six D&D ones by default, the
+   list editable, D&D scale, modifier `floor((score − 10) / 2)`, 10 means +0.
+2. The player rolls a check from DES: pick an attribute, a difficulty, an
+   advantage state; DES rolls with real randomness, compares against the DC
+   in code, attaches the verdict to the message they send, and the AI narrates
+   an outcome that is already decided.
+3. Attributes reach the AI as one read-only line per character, never inside
+   the per-reply tracker JSON. The parser contract is untouched.
+4. Every roll leaves a visible record under the message it rode with.
+5. Off by default; a default install's prompt is byte-identical.
+
+### 7.2 Non-goals (later phases)
+
+AI-called checks (Phase 3). Skills, proficiency, contested rolls, levels,
+NPC sheets suggested by the AI (Phase 4). Per-chat attribute overrides.
+Campaign-versioned attributes (noted for the campaign store list; not now).
+
+### 7.3 Data model
+
+Attributes are identity, not tracker fields, so they live beside aliases and
+knives rather than in `trackerConfig`:
+
+```js
+extensionSettings.attributes = {               // the rules (Settings → Stats → Attributes & checks)
+  enabled: false,
+  list: [                                      // editable like the vitals sheet
+    { id: 'str', name: 'Strength',     abbr: 'STR', enabled: true },
+    { id: 'dex', name: 'Dexterity',    abbr: 'DEX', enabled: true },
+    { id: 'con', name: 'Constitution', abbr: 'CON', enabled: true },
+    { id: 'int', name: 'Intelligence', abbr: 'INT', enabled: true },
+    { id: 'wis', name: 'Wisdom',       abbr: 'WIS', enabled: true },
+    { id: 'cha', name: 'Charisma',     abbr: 'CHA', enabled: true },
+  ],
+  sendToAI: 'withRoll',                        // 'always' | 'withRoll' | 'never'
+  difficulty: { easy: 10, medium: 15, hard: 20, veryHard: 25 },
+  defaultDifficulty: 'medium',
+  criticals: true,                             // natural 20 / natural 1
+};
+extensionSettings.characterAttributes = {      // the values, global per character
+  'user:Jordan': { str: 15, dex: 12, con: 10, int: 8, wis: 11, cha: 14 },
+  'npc:Mara':    { str: 8, dex: 16 },          // missing → 10
+};
+```
+
+A sheet that is all 10s is "default" and is never sent. Scores are clamped
+1–30. Additive migration fills `attributes` and `characterAttributes` when
+missing; nothing existing is touched.
+
+### 7.4 The roll (pure, `src/utils/d20.js`)
+
+- `modifier(score)` → `floor((score − 10) / 2)`.
+- `rollDie(sides)` → `crypto.getRandomValues` with rejection sampling, so a
+  d20 is uniform. `Math.random` is not used.
+- `rollCheck({ attribute, score, dc, advantage, criticals })` → `{ die, kept,
+  dropped, mod, total, dc, success, margin, critical }`. Advantage rolls two
+  and keeps the higher, disadvantage the lower. With criticals on, a natural
+  20 succeeds and a natural 1 fails whatever the total.
+- `verdictText(roll, { userName, attempt })` builds the one block the AI sees:
+
+```
+[DICE: Jordan attempts "climb the wall". Strength check: d20 = 14, +2 (STR 15) = 16 vs DC 15 (Medium). SUCCESS, narrowly (by 1). This outcome is final: narrate the attempt succeeding with that margin in mind. Do not re-roll, reverse or soften it.]
+```
+
+Margin words: by 0–2 narrowly, 3–7 clearly, 8 or more decisively. Failure
+reads "FAILURE … narrate the attempt failing and its consequences." A natural
+20 reads "NATURAL 20, a critical success: better than hoped"; a natural 1
+"NATURAL 1, a critical failure: worse than a plain miss." Roughly 60 tokens,
+once.
+
+### 7.5 Lifecycle
+
+1. The player opens the roll popover (entry points in §7.7), picks an
+   attribute (the last one used is preselected), a difficulty word or a
+   number, optional "what are you attempting", advantage or disadvantage,
+   and presses Roll. DES rolls, animates a d20 for under a second, shows the
+   result.
+2. **Attach.** If the chat's last message is the player's own and no reply
+   follows it, the roll attaches to that message at once. Otherwise it is
+   **pending**: a chip above the message box reads "🎲 STR 16 vs 15 · success
+   · rides with your next message" with an × to discard, and on
+   `MESSAGE_SENT` it is written to the sent message as
+   `message.extra.dooms_roll = { attribute, score, mod, die, kept, dropped,
+   total, dc, difficulty, advantage, success, margin, critical, attempt, ts }`.
+3. **Inject.** On generation start the injector looks at the last user
+   message. If it carries a roll, the verdict goes into slot
+   `dooms-dice-verdict` at `IN_CHAT` depth 0, right after the player's words.
+   It is derived from chat state, not a one-shot flag, so a swipe or
+   regenerate of the reply gets the same verdict, and a reply to a message
+   without a roll gets the slot cleared. Like the Doom Counter twist it
+   bypasses tracker suppression, since it is the player's explicit action,
+   except for impersonation and quiet prompts.
+4. **Record.** A roll card renders under the user message, a sibling of the
+   message text like the Tracker Data dropdown: "🎲 Strength check · d20 14
+   + 2 = 16 vs DC 15 · Success". Rendered on `USER_MESSAGE_RENDERED`, swept
+   on `CHAT_CHANGED` and "show more messages", read from `extra.dooms_roll`.
+   Its × removes the roll from the message; the reply already written is
+   left alone.
+5. Nothing is stored anywhere but the message, so branching and copying a
+   chat take the rolls along and deleting the message deletes the roll.
+
+### 7.6 Prompt
+
+Two gated additions, both outside the tracker JSON:
+
+- **Attributes line.** `ATTRIBUTES (D&D scale, 10 is average, bonus =
+  (score − 10) / 2; read-only, never output them): Jordan: STR 15 (+2), DEX
+  12 (+1), INT 8 (−1), CHA 14 (+2). Mara: DEX 16 (+3).` Only characters with
+  a non-default sheet, only the attributes that differ from 10, about 15
+  tokens per character. Sent when `sendToAI` is `always`, or `withRoll` and a
+  verdict rides this generation; never otherwise.
+- **The verdict** from §7.4, once per generation that answers a rolled
+  message.
+
+Golden fixtures: default output unchanged; `always` adds the line; `withRoll`
+adds it only beside a verdict; the verdict names the attribute, the die, the
+modifier, the DC and the outcome; a default sheet emits nothing.
+
+### 7.7 UI
+
+- **Entry points.** The FAB fly-out gets "Roll a check" (hideable like the
+  other entries). Under the five setups the DES composer row gets a die
+  button beside the tray button. The persona card's context menu gets "Roll
+  a check". Under Classic the fly-out and the card menu are the ways in.
+- **The popover** (`src/systems/ui/dicePanel.js`, lazy like the other
+  modals; markup in `template.html`, CSS in `styles/modals.css` with setup
+  rules in `overhaul.css`): attribute chips with the player's modifier under
+  each, difficulty chips showing their DC and a number field, an
+  advantage/disadvantage toggle, an attempt text field, Roll, the animated
+  die (CSS, under a second, off under reduced motion and performance mode),
+  the result line, Attach or Discard.
+- **Pending chip** above the message box while a roll waits for a message.
+- **Workshop → Attributes tab**, for NPCs and the persona: one number per
+  attribute with the modifier shown live, plus Standard array (15 14 13 12
+  10 8), Roll 4d6 drop lowest, and All 10. Saved with the Workshop's Save
+  into `characterAttributes`, the way knives are.
+- **Settings → Stats → Attributes & checks**: master toggle; the attribute
+  list (name, abbreviation, on/off, order, add, remove); Send attributes to
+  the AI (always / with a roll / never); the four difficulty numbers; the
+  default difficulty; criticals on/off.
+
+### 7.8 Files, tests, commits
+
+New: `src/utils/d20.js` (pure), `src/systems/features/diceRolls.js`
+(pending roll, attach on send, verdict injection, roll-card sync; small and
+eager), `src/systems/ui/dicePanel.js` (lazy), `tools/d20-test.mjs`.
+Edits: `state.js`, `persistence.js` (migration), `injector.js` (the slot),
+`sillytavern.js` (attach on send), `index.js` (FAB entry, user-message
+decoration hook, settings handlers), `composer.js` (die button),
+`portraitBar.js` (menu entry), `characterWorkshop.js` and `template.html`
+(tab), `promptBuilder.js` (attributes line), the three stylesheets, docs.
+
+Tests: d20 uniformity over many rolls within tolerance, the modifier table,
+advantage and disadvantage, criticals, margin words, verdict text; sheet
+normalisation and the default-sheet rule; prompt gating; attach on send;
+the verdict present for a rolled last message, absent otherwise, kept
+across a swipe.
+
+Commits: 10 docs (this section); 11 model, settings, migration, tests;
+12 prompt line and golden fixtures; 13 roll lifecycle: pending, attach,
+inject, card; 14 popover, entry points, styling; 15 Workshop tab and the
+Settings group; 16 parity rows.
+
+### 7.9 Decisions needed
+
+| # | Question | Recommendation |
+|---|---|---|
+| D5 | The attribute list | The D&D six by default, editable like the vitals sheet |
+| D6 | When attributes go to the AI | With a roll only, by default; "always" available |
+| D7 | Natural 20 and 1 as criticals | On by default |
+| D8 | When a roll attaches | At once if your message is already the chat's tail, else with the next one you send |
+| D9 | NPC attributes in this phase | Yes: same tab, same store, sent only when not all 10s |
+| D10 | AI-suggested NPC sheets | Phase 4, not now |
+
+## 8. Phase 3 — AI-called checks (sketch)
+
+A `check` request in the tracker JSON with a difficulty word, "end the reply
+at the attempt", DES rolls and auto-continues with the verdict. Behind a
+toggle; Phase 2 remains the fallback.
+
+**Phase 4 — if wanted.** Skills and proficiency, contested rolls,
 levels. Borrow from PR #38 where it fits, with credit.
 
 ---
