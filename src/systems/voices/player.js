@@ -37,13 +37,6 @@ import { synthesizeLine } from './providers.js';
 import { getVoicesAudioElement } from './voiceBoot.js';
 
 const CACHE_MAX_ENTRIES = 150;
-/**
- * Spoken audio is uncompressed WAV (about 48 KB a second), so 150 lines can
- * run to hundreds of megabytes. The replay store also stops at this many
- * bytes, roughly 15 minutes of speech, dropping the least recently played.
- */
-const CACHE_MAX_BYTES = 48 * 1024 * 1024;
-let cacheBytes = 0;
 const RATE_BACKOFF_MS = [2000, 4000, 8000];
 /** One quick retry when the request never got an answer (a dropped connection). */
 const NETWORK_RETRY_MS = 1500;
@@ -147,25 +140,14 @@ function cacheGet(key) {
     return hit.url;
 }
 
-function cacheDrop(key, val) {
-    cache.delete(key);
-    cacheBytes -= val.bytes || 0;
-    // The element keeps a URL it is playing alive anyway; revoking it now
-    // would cut the sound off.
-    if (!(audioEl && audioEl.src === val.url)) URL.revokeObjectURL(val.url);
-}
-
 function cachePut(key, blob, audition) {
     const url = URL.createObjectURL(blob);
-    const bytes = blob?.size || 0;
-    cache.set(key, { url, audition: !!audition, bytes });
-    cacheBytes += bytes;
-    // Oldest first (a Map iterates in insertion order and cacheGet re-inserts
-    // on use), never the line just stored.
-    for (const [oldKey, oldVal] of cache) {
-        if (cache.size <= CACHE_MAX_ENTRIES && cacheBytes <= CACHE_MAX_BYTES) break;
-        if (oldKey === key) continue;
-        cacheDrop(oldKey, oldVal);
+    cache.set(key, { url, audition: !!audition });
+    while (cache.size > CACHE_MAX_ENTRIES) {
+        const [oldKey, oldVal] = cache.entries().next().value;
+        cache.delete(oldKey);
+        const inUse = audioEl && audioEl.src === oldVal.url;
+        if (!inUse) URL.revokeObjectURL(oldVal.url);
     }
     return url;
 }
@@ -174,13 +156,9 @@ function cachePut(key, blob, audition) {
 export function clearChatCache() {
     for (const [key, val] of [...cache.entries()]) {
         if (val.audition) continue;
-        cacheDrop(key, val);
+        cache.delete(key);
+        if (!(audioEl && audioEl.src === val.url)) URL.revokeObjectURL(val.url);
     }
-}
-
-/** For the settings status line: how much replay audio is held. */
-export function getCacheUsage() {
-    return { entries: cache.size, bytes: cacheBytes };
 }
 
 // ─── Fetching ───────────────────────────────────────────────────────────────
