@@ -37,7 +37,7 @@ import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
-import { vitalsOn, vitalDefs } from '../../utils/vitals.js';
+import { vitalsOn, vitalDefs, vitalsConfig, findVitalDef, clampVital, readVitals, toStatsArray, resolveVitals, vitalColor } from '../../utils/vitals.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -742,16 +742,18 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                             </div>
                     `;
                 }
-                // Stats with visual bars
+                // Stats with visual bars, in each vital's own colour
                 if (enabledCharStats.length > 0) {
+                    const lowAt = vitalsConfig(extensionSettings).lowAt;
                     html += `<div class="rpg-card-back-stats">`;
                     for (const stat of enabledCharStats) {
                         const sv = escapeHtml(char[stat.name] || 0);
+                        const fill = escapeHtml(vitalColor(stat, char[stat.name], lowAt));
                         html += `
                                 <div class="rpg-card-back-stat">
                                     <span class="rpg-card-back-stat-name">${escapeHtml(stat.name)}</span>
                                     <div class="rpg-card-back-stat-bar">
-                                        <div class="rpg-card-back-stat-fill" style="width: ${sv}%;"></div>
+                                        <div class="rpg-card-back-stat-fill" style="width: ${sv}%; background: ${fill};"></div>
                                     </div>
                                     <span class="rpg-card-back-stat-val">${sv}%</span>
                                 </div>
@@ -1065,6 +1067,48 @@ export function addNewCharacter() {
  * @param {string} field - Field to update (emoji, name, custom field name, Relationship, stat name)
  * @param {string} value - New value for the field
  */
+/**
+ * Vitals: sets one of the persona's values by hand. Writes the "player"
+ * block on display and committed data and into the last assistant message's
+ * swipe store, the way updateCharacterField does for an NPC, and saves the
+ * chat. Vitals with no value yet are filled from the sheet's start values.
+ * @param {string} vitalName - sheet name (case-insensitive) or id
+ * @param {number|string} value - 0–100; '80%' is fine
+ * @returns {number|null} the stored value, or null when nothing was written
+ */
+export function updatePlayerVital(vitalName, value) {
+    const defs = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
+    const def = findVitalDef(defs, vitalName);
+    const v = clampVital(value);
+    if (!def || v === null) return null;
+    let parsed = null;
+    try {
+        parsed = typeof lastGeneratedData.player === 'string' ? JSON.parse(lastGeneratedData.player) : lastGeneratedData.player;
+    } catch (e) {
+        parsed = null;
+    }
+    const base = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    const map = readVitals(base.stats, defs);
+    map[def.name] = v;
+    base.stats = toStatsArray(resolveVitals(map, map, defs), defs);
+    lastGeneratedData.player = JSON.stringify(base);
+    committedTrackerData.player = lastGeneratedData.player;
+    const chat = getContext().chat;
+    if (chat && chat.length > 0) {
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const message = chat[i];
+            if (!message.is_user) {
+                const swipeId = message.swipe_id || 0;
+                if (message.extra?.dooms_tracker_swipes?.[swipeId]) {
+                    message.extra.dooms_tracker_swipes[swipeId].player = lastGeneratedData.player;
+                }
+                break;
+            }
+        }
+    }
+    saveChatData();
+    return v;
+}
 export function updateCharacterField(characterName, field, value) {
     // Initialize if it doesn't exist
     if (!lastGeneratedData.characterThoughts) {
@@ -1208,6 +1252,11 @@ export function updateCharacterField(characterName, field, value) {
             }
         }
         saveChatData();
+        // The portrait shelf draws from the same data (vitals bars, back face);
+        // it listens for this rather than importing us, which would be a cycle.
+        try {
+            window.dispatchEvent(new CustomEvent('dooms:tracker-edited', { detail: { character: characterName, field } }));
+        } catch (e) { /* no window */ }
         // Re-render the thoughts panel to show updated value (preserve scroll position)
         renderThoughts({ preserveScroll: true });
         // Update chat thought overlays if editing thoughts

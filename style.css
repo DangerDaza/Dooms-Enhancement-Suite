@@ -9987,6 +9987,115 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
+/* ── Vitals (Project Short Fuse) ── */
+
+/* Front: thin stacked bars just above the name, inside the name strip. Each
+   bar's fill is a ::before sized by --v and coloured by --c; only width
+   transitions, nothing animates on its own. */
+.dooms-pb-vitals {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 2px 4px;
+}
+
+.dooms-pb-vital {
+    display: block;
+    position: relative;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+
+.dooms-pb-vital::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: var(--v, 0%);
+    background: var(--c, #888);
+    border-radius: inherit;
+    transition: width 0.4s ease;
+}
+
+/* Back: one row per vital — icon, name, track, editable value */
+.dooms-pb-back-vitals { gap: 3px; }
+
+.dooms-pb-vital-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 0.6em;
+    color: #ccc;
+}
+
+.dooms-pb-vital-icon {
+    flex: 0 0 auto;
+    line-height: 1;
+}
+
+.dooms-pb-vital-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 44%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dooms-pb-vital-track {
+    flex: 1 1 auto;
+    position: relative;
+    min-width: 14px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.dooms-pb-vital-track i {
+    position: absolute;
+    inset: 0;
+    width: var(--v, 0%);
+    background: var(--c, #888);
+    border-radius: inherit;
+    transition: width 0.4s ease;
+}
+
+.dooms-pb-vital-val,
+.dooms-pb-vital-input {
+    flex: 0 0 auto;
+    width: 3.4em;
+    padding: 0 2px;
+    font: inherit;
+    text-align: right;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.dooms-pb-vital-val:hover { border-color: rgba(255, 255, 255, 0.25); }
+
+.dooms-pb-vital-input {
+    cursor: text;
+    outline: none;
+    border-color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.6);
+    -moz-appearance: textfield;
+}
+
+.dooms-pb-vital-input::-webkit-outer-spin-button,
+.dooms-pb-vital-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.dooms-pb-vital-row.is-low .dooms-pb-vital-val { color: #ff8a8a; }
+
+
 .dooms-pb-back-label {
     font-size: 0.6em;
     font-weight: 700;

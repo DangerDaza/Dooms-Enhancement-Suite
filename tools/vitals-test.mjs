@@ -257,5 +257,26 @@ check('onMessageReceived: the swipe store holds the normalised data',
     chat[1].extra.dooms_tracker_swipes[0].player === state.lastGeneratedData.player
     && chat[1].extra.dooms_tracker_swipes[0].characterThoughts === state.lastGeneratedData.characterThoughts);
 
+// ── 7. Editing the persona's vitals by hand ──
+const th = await import(`${DES}/src/systems/rendering/thoughts.js`);
+chat.length = 0;
+chat.push({ is_user: false, mes: 'x', swipe_id: 0, swipes: ['x'], extra: { dooms_tracker_swipes: { 0: { player: null } } } });
+state.lastGeneratedData.player = '{"stats":[{"name":"Health","value":70},{"name":"Energy","value":44}]}';
+check('updatePlayerVital clamps and stores the value',
+    th.updatePlayerVital('health', '150%') === 100
+    && V.readVitals(JSON.parse(state.lastGeneratedData.player).stats, defs).Health === 100);
+check('updatePlayerVital keeps the other vitals',
+    V.readVitals(JSON.parse(state.lastGeneratedData.player).stats, defs).Energy === 44);
+check('updatePlayerVital reaches committed data and the swipe store',
+    state.committedTrackerData.player === state.lastGeneratedData.player
+    && chat[0].extra.dooms_tracker_swipes[0].player === state.lastGeneratedData.player);
+check('updatePlayerVital rejects an unknown vital', th.updatePlayerVital('Rage', 10) === null);
+state.lastGeneratedData.player = null;
+check('updatePlayerVital on an empty block seeds the rest from the sheet', (() => {
+    th.updatePlayerVital('Energy', 9);
+    const m = V.readVitals(JSON.parse(state.lastGeneratedData.player).stats, defs);
+    return m.Energy === 9 && m.Health === 100;
+})());
+
 console.log(failures === 0 ? '\nAll vitals checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

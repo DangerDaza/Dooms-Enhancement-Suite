@@ -45,6 +45,9 @@ import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { isOffScene } from '../../utils/offScene.js';
+// Vitals (Project Short Fuse): bars on the card front and rows on the back
+import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
+import { updateCharacterField, updatePlayerVital } from '../rendering/thoughts.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -352,6 +355,50 @@ export function initPortraitBar() {
         }, 200);
     });
 
+    // ── Vitals: click a value on the card back to edit it ──
+    // The card's flip handler ignores clicks on buttons and inputs, so the
+    // field opens in place. Enter or blur commits, Escape cancels.
+    $(document).on('click', '#dooms-portrait-bar .dooms-pb-vital-val', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const $btn = $(this);
+        if ($btn.siblings('input.dooms-pb-vital-input').length) return;
+        const current = clampVital($btn.text()) ?? 0;
+        const $input = $('<input type="number" class="dooms-pb-vital-input" min="0" max="100" step="1" inputmode="numeric" />').val(current);
+        $btn.hide().after($input);
+        $input.trigger('focus').trigger('select');
+        let done = false;
+        const finish = (commit) => {
+            if (done) return;
+            done = true;
+            const raw = $input.val();
+            $input.remove();
+            $btn.show();
+            if (!commit) return;
+            const value = clampVital(raw);
+            if (value === null) return;
+            const name = $btn.attr('data-char');
+            const vital = $btn.attr('data-vital');
+            const isUser = $btn.attr('data-user') === '1';
+            try {
+                if (isUser) updatePlayerVital(vital, value);
+                else updateCharacterField(name, vital, String(value));
+            } catch (err) {
+                console.error('[Dooms Portrait Bar] Vital edit failed:', err);
+            }
+            updatePortraitBar();
+        };
+        $input.on('keydown', function (ev) {
+            ev.stopPropagation();
+            if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+        });
+        $input.on('click', function (ev) { ev.stopPropagation(); });
+        $input.on('blur', function () { finish(true); });
+    });
+    // The legacy character panel edits the same data; repaint when it does.
+    window.addEventListener('dooms:tracker-edited', () => updatePortraitBar());
+
     // ── Right-click context menu on portrait cards (delegated) ──
     $(document).on('contextmenu', '.dooms-portrait-card', function (e) {
         e.preventDefault();
@@ -569,6 +616,11 @@ function renderPortraitBarNow() {
 
     // Build the steady-state HTML for each card (entrance markup is applied
     // separately in onEnter so it never pollutes the diff cache).
+    // Vitals: read the sheet once per render; each card reads its own values.
+    const vitalsCfg = vitalsConfig(extensionSettings);
+    const vitalsDefs = vitalsCfg.enabled ? vitalsCfg.customStats.filter(d => d.enabled) : [];
+    const playerVitalsMap = (vitalsDefs.length && vitalsCfg.player.enabled) ? readPlayerVitals(vitalsDefs) : null;
+
     const cardData = characters.map((char, idx) => {
         const portraitSrc = resolvePortrait(char.name);
         const speakingClass = (char.present && idx === 0) ? ' dooms-pb-speaking' : '';
@@ -589,9 +641,18 @@ function renderPortraitBarNow() {
             : '';
         const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
 
+        // Vitals for this card: the persona reads the player block, an NPC its own record.
+        let vitalsMap = null;
+        if (vitalsDefs.length) {
+            vitalsMap = char.isUser
+                ? playerVitalsMap
+                : readVitals((char.details || getCharacterDetails(char.name))?.stats, vitalsDefs);
+        }
+        const vitalsStrip = (vitalsMap && vitalsCfg.showOnCards) ? buildVitalsStrip(vitalsMap, vitalsDefs, vitalsCfg) : '';
+
         let backFace = '';
         try {
-            backFace = buildPortraitBackFace(char.name, emoji, char.details);
+            backFace = buildPortraitBackFace(char.name, emoji, char.details, { isUser: !!char.isUser, vitalsMap, vitalsDefs, vitalsCfg });
         } catch (e) {
             console.error(`[Dooms Portrait Bar] Error building back face for ${char.name}:`, e);
         }
@@ -620,7 +681,7 @@ function renderPortraitBarNow() {
                 ${absentOverlay}
                 ${youBadge}
                 ${injectingOverlay}
-                <div class="dooms-portrait-card-name">${colorDot}${nameEsc}</div>
+                <div class="dooms-portrait-card-name">${vitalsStrip}${colorDot}${nameEsc}</div>
                 ${backFace}
             </div>`;
         return { char, html };
@@ -1533,17 +1594,70 @@ function getCharacterDetails(charName) {
 }
 
 /**
+ * The persona's vitals, from the "player" block on display (committed as a
+ * fallback), keyed by sheet name.
+ */
+function readPlayerVitals(defs) {
+    const raw = lastGeneratedData.player || committedTrackerData.player;
+    if (!raw) return {};
+    const parsed = parseTrackerJson(raw);
+    return readVitals(parsed && typeof parsed === 'object' ? parsed.stats : null, defs);
+}
+
+/**
+ * The thin stacked bars on the card front: the first `maxBars` vitals with a
+ * value, each in its own colour (the warning colour at or below `lowAt`),
+ * every vital listed in the tooltip. Static markup, so the card's HTML
+ * cache and the reconciler treat it like the rest of the card.
+ */
+function buildVitalsStrip(map, defs, cfg) {
+    const withValue = defs.filter(d => typeof map[d.name] === 'number');
+    if (!withValue.length) return '';
+    const title = withValue.map(d => `${d.name} ${map[d.name]}%`).join(' · ');
+    const bars = withValue.slice(0, cfg.maxBars).map(d => {
+        const v = map[d.name];
+        const low = v <= cfg.lowAt ? ' is-low' : '';
+        return `<i class="dooms-pb-vital${low}" style="--v:${v}%;--c:${escapeHtml(vitalColor(d, v, cfg.lowAt))}"></i>`;
+    }).join('');
+    return `<div class="dooms-pb-vitals" title="${escapeHtml(title)}">${bars}</div>`;
+}
+
+/**
  * Builds the HTML for a portrait card back face detail sheet.
  * Shows relationship status, appearance, demeanor, and other key character info.
  * Thoughts are omitted here since they're shown in the sidebar Thoughts panel.
+ * `extras.vitalsMap` adds a Vitals section with a click-to-edit value per row.
  */
-function buildPortraitBackFace(charName, emoji, details = null) {
+function buildPortraitBackFace(charName, emoji, details = null, extras = {}) {
     // Absent-but-known characters carry no parsed record; fall back to the
     // (memoized) tracker-data lookup for them.
     details = details || getCharacterDetails(charName);
     const nameEsc = escapeHtml(charName);
 
     let sectionsHtml = '';
+
+    // Vitals first: the live numbers, editable
+    const { isUser = false, vitalsMap = null, vitalsDefs = [], vitalsCfg = null } = extras || {};
+    if (vitalsMap && vitalsDefs.length) {
+        const lowAt = vitalsCfg ? vitalsCfg.lowAt : 25;
+        const rows = vitalsDefs.filter(d => typeof vitalsMap[d.name] === 'number').map(d => {
+            const v = vitalsMap[d.name];
+            const color = escapeHtml(vitalColor(d, v, lowAt));
+            const nameAttr = escapeHtml(d.name);
+            return `<div class="dooms-pb-vital-row${v <= lowAt ? ' is-low' : ''}">
+                <span class="dooms-pb-vital-icon">${escapeHtml(d.icon || '')}</span>
+                <span class="dooms-pb-vital-name">${nameAttr}</span>
+                <span class="dooms-pb-vital-track"><i style="--v:${v}%;--c:${color}"></i></span>
+                <button type="button" class="dooms-pb-vital-val" data-char="${nameEsc}" data-user="${isUser ? '1' : '0'}" data-vital="${nameAttr}" title="Click to edit">${v}%</button>
+            </div>`;
+        }).join('');
+        if (rows) {
+            sectionsHtml += `<div class="dooms-pb-back-section dooms-pb-back-vitals">
+                <div class="dooms-pb-back-label">💓 Vitals</div>
+                ${rows}
+            </div>`;
+        }
+    }
 
     if (details) {
         // Relationship — may be { status: "Lover" } object or a flat string
