@@ -28,6 +28,8 @@ import {
     DEFAULT_CONTEXT_INSTRUCTIONS_PROMPT
 } from './promptBuilder.js';
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from './defaultPrompts.js';
+// Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
+import { buildDiceVerdictForGeneration, DICE_VERDICT_SLOT } from '../features/diceRolls.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
@@ -667,6 +669,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-dialogue-coloring', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
+        setExtensionPrompt(DICE_VERDICT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         // Also drop any historical-context payload queued from a prior
         // generation while the extension was enabled. Without this, the
         // persistent listeners (CHAT_COMPLETION_PROMPT_READY etc.) keep
@@ -737,6 +740,18 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt(DOOM_TWIST_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
     }
     // ──────────────────────────────────────────────────────────────────────────
+
+    // ─── Dice verdict (Phase 2) ────────────────────────────────────────────
+    // Derived from the chat, not a one-shot flag: the last user message's
+    // roll, so a swipe or regenerate narrates the same outcome. Bypasses
+    // tracker suppression like the twist (it is the player's own action),
+    // but never rides an impersonation or a quiet prompt.
+    try {
+        const verdict = (!isImpersonationGeneration && !hasQuietPrompt) ? buildDiceVerdictForGeneration() : '';
+        setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, 0, false);
+    } catch (e) {
+        console.warn('[Dooms Tracker] Dice: verdict injection failed', e);
+    }
 
     const currentChatLength = chat ? chat.length : 0;
     // For TOGETHER mode: Commit when user sends message (before first generation)

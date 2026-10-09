@@ -158,6 +158,8 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
+// Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
+import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, syncRollCardForMessage, updateRollCards } from './src/systems/features/diceRolls.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -373,6 +375,7 @@ async function addExtensionSettings() {
     // any other DES generation listener so per-gen records bracket every
     // slot write that follows.
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
+    try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
@@ -3771,25 +3774,25 @@ jQuery(async () => {
             // Single tracked registration point. Array order preserves the
             // original relative registration order within each event type.
             registerAllEvents({
-                [event_types.MESSAGE_SENT]: [onMessageSent, onMessageSentVoices],
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onMessageSent, onMessageSentVoices],
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices],
-                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
+                [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, syncRollCardForMessage, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onGlintMessageRendered],
-                [event_types.MESSAGE_UPDATED]: onMessageUpdatedDecorations,
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices],
+                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, syncRollCardForMessage],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
                 // Guarded: MORE_MESSAGES_LOADED doesn't exist on some older ST
                 // builds; a spread of {} registers nothing there.
                 ...(event_types.MORE_MESSAGES_LOADED
-                    ? { [event_types.MORE_MESSAGES_LOADED]: onMoreMessagesLoadedFullsheet }
+                    ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
                     : {}),
             });
         } catch (error) {

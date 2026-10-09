@@ -13323,3 +13323,56 @@ body[data-dooms-ui="inked"] .dooms-bubble[style*="--cb-fill"] .dooms-bubble-text
 body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
     --ov-bubble-paper: var(--cb-fill);
 }
+
+
+/* ── Dice: the roll card under a user message (Project Short Fuse, Phase 2) ──
+   A sibling of .mes_text inside .mes_block, like the Tracker Data dropdown,
+   so the decoration pipeline's rewrites of .mes_text leave it alone. */
+.dooms-roll-card {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.78em;
+    line-height: 1.4;
+    color: var(--rpg-text, #ddd);
+}
+
+.dooms-roll-card.is-success { border-color: rgba(47, 191, 113, 0.45); }
+.dooms-roll-card.is-failure { border-color: rgba(229, 72, 77, 0.45); }
+.dooms-roll-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+
+.dooms-roll-die { flex: 0 0 auto; }
+
+.dooms-roll-text { flex: 0 1 auto; font-weight: 600; }
+.dooms-roll-card.is-success .dooms-roll-text { color: #5fd38d; }
+.dooms-roll-card.is-failure .dooms-roll-text { color: #ff8a8a; }
+
+.dooms-roll-ruling {
+    flex: 1 1 auto;
+    min-width: 0;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dooms-roll-remove {
+    flex: 0 0 auto;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: inherit;
+    opacity: 0.45;
+    padding: 0 6px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.dooms-roll-remove:hover { opacity: 1; border-color: rgba(255, 255, 255, 0.25); }
