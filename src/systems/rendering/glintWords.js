@@ -562,6 +562,9 @@ function processMessage(mes) {
         if (isStreamingInto(mes)) return;
         wrapMessage(mesText, Infinity, id);
     }
+    // A rebuild that copied glints by HTML (bubbles keep inline thoughts
+    // that way) leaves spans the wrap never saw; watch them too.
+    for (const span of mesText.querySelectorAll('.dooms-glint')) if (!tracked.has(span)) trackLive(span);
     seen.set(id, mesText.querySelectorAll('.dooms-glint').length);
 }
 
