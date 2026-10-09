@@ -104,7 +104,10 @@ export function parseResponse(responseText) {
     const result = {
         quests: null,
         infoBox: null,
-        characterThoughts: null
+        characterThoughts: null,
+        // Vitals: the persona's "player" block ({ stats: [...] }) as a JSON
+        // string, or null. Rides in the unified object next to "characters".
+        player: null
     };
     // DEBUG: Log full response for troubleshooting
     debugLog('[RPG Parser] ==================== PARSING AI RESPONSE ====================');
@@ -166,7 +169,7 @@ export function parseResponse(responseText) {
         // First, try to parse as unified JSON structure (new v3.1 format)
         if (extractedObjects.length === 1) {
             const parsed = repairJSON(extractedObjects[0]);
-            if (parsed && (parsed.quests || parsed.infoBox || parsed.characters)) {
+            if (parsed && (parsed.quests || parsed.infoBox || parsed.characters || parsed.player)) {
                 if (parsed.quests) {
                     result.quests = JSON.stringify(parsed.quests);
                 }
@@ -176,7 +179,10 @@ export function parseResponse(responseText) {
                 if (parsed.characters) {
                     result.characterThoughts = JSON.stringify(parsed.characters);
                 }
-                if (result.quests || result.infoBox || result.characterThoughts) {
+                if (parsed.player && typeof parsed.player === 'object') {
+                    result.player = JSON.stringify(parsed.player);
+                }
+                if (result.quests || result.infoBox || result.characterThoughts || result.player) {
                     debugLog('[RPG Parser] Returning unified JSON parse results');
                     return result;
                 }
@@ -192,7 +198,7 @@ export function parseResponse(responseText) {
                 let unwrapped = parsed;
                 if (Object.keys(parsed).length === 1) {
                     const key = Object.keys(parsed)[0];
-                    if (key === 'quests' || key === 'infoBox' || key === 'characters') {
+                    if (key === 'quests' || key === 'infoBox' || key === 'characters' || key === 'player') {
                         unwrapped = parsed[key];
                     }
                 }
@@ -206,6 +212,10 @@ export function parseResponse(responseText) {
                 } else if (unwrapped.characters || Array.isArray(unwrapped)) {
                     result.characterThoughts = jsonContent;
                     debugLog('[RPG Parser] ✓ Extracted raw JSON Characters');
+                } else if (unwrapped.stats !== undefined && typeof unwrapped === 'object') {
+                    // The persona's vitals on their own (or wrapped as {"player": …}).
+                    result.player = JSON.stringify(unwrapped);
+                    debugLog('[RPG Parser] ✓ Extracted raw JSON Player');
                 } else {
                     console.warn('[RPG Parser] ⚠️ Could not categorize object with keys:', Object.keys(parsed));
                 }
@@ -213,7 +223,7 @@ export function parseResponse(responseText) {
                 console.error('[RPG Parser] ✗ Failed to parse raw JSON object', idx + 1);
             }
         }
-        if (result.quests || result.infoBox || result.characterThoughts) {
+        if (result.quests || result.infoBox || result.characterThoughts || result.player) {
             debugLog('[RPG Parser] Returning raw JSON parse results');
             return result;
         } else {
@@ -242,6 +252,12 @@ export function parseResponse(responseText) {
                 } else if (parsed.characters || Array.isArray(parsed)) {
                     result.characterThoughts = jsonContent;
                     debugLog('[RPG Parser] ✓ Extracted JSON Characters');
+                } else if (parsed.player && typeof parsed.player === 'object') {
+                    result.player = JSON.stringify(parsed.player);
+                    debugLog('[RPG Parser] ✓ Extracted JSON Player');
+                } else if (parsed.stats !== undefined) {
+                    result.player = jsonContent;
+                    debugLog('[RPG Parser] ✓ Extracted JSON Player (bare stats)');
                 } else {
                     console.warn('[RPG Parser] ⚠️ Could not categorize JSON block with keys:', Object.keys(parsed));
                 }
@@ -252,7 +268,7 @@ export function parseResponse(responseText) {
         }
         // If we found at least one valid JSON block, return the result
         // Mixed formats (some JSON, some text) will still work
-        if (result.quests || result.infoBox || result.characterThoughts) {
+        if (result.quests || result.infoBox || result.characterThoughts || result.player) {
             debugLog('[RPG Parser] Returning JSON parse results');
             return result;
         } else {
@@ -366,9 +382,10 @@ export function parseResponse(responseText) {
     debugLog('[RPG Parser] Found Quests:', !!result.quests);
     debugLog('[RPG Parser] Found Info Box:', !!result.infoBox);
     debugLog('[RPG Parser] Found Characters:', !!result.characterThoughts);
+    debugLog('[RPG Parser] Found Player:', !!result.player);
     debugLog('[RPG Parser] =======================================================');
     // Check if we found at least one section - if not, mark as parsing failure
-    if (!result.quests && !result.infoBox && !result.characterThoughts) {
+    if (!result.quests && !result.infoBox && !result.characterThoughts && !result.player) {
         result.parsingFailed = true;
         console.error('[RPG Parser] ❌ No tracker data found in response - parsing failed');
     }

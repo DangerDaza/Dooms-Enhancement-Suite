@@ -3,7 +3,7 @@
  * thoughts feature. When enabled (showTrackerJsonInChat, default off), every
  * AI message that carries per-swipe tracker data gets a small collapsible
  * "Tracker Data" dropdown showing that message's parsed tracker JSON
- * (characterThoughts / infoBox / quests), with an Edit mode that writes the
+ * (characterThoughts / infoBox / quests / player), with an Edit mode that writes the
  * corrected JSON back into the message's swipe store.
  *
  * Placement: the dropdown is appended to `.mes_block` AFTER `.mes_text`, not
@@ -42,7 +42,7 @@ function parseField(value) {
 /** Display object: parsed fields, omitting empty ones. */
 function buildDisplayObject(swipeData) {
     const out = {};
-    for (const key of ['characterThoughts', 'infoBox', 'quests']) {
+    for (const key of ['characterThoughts', 'infoBox', 'quests', 'player']) {
         const parsed = parseField(swipeData[key]);
         if (parsed !== null) out[key] = parsed;
     }
@@ -164,7 +164,7 @@ function saveEditor($dropdown) {
         return;
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        if (window.toastr) toastr.error('Tracker data must be a JSON object with characterThoughts / infoBox / quests keys.', 'Tracker Data', { timeOut: 5000 });
+        if (window.toastr) toastr.error('Tracker data must be a JSON object with characterThoughts / infoBox / quests / player keys.', 'Tracker Data', { timeOut: 5000 });
         return;
     }
 
@@ -175,7 +175,7 @@ function saveEditor($dropdown) {
     for (let i = chat.length - 1; i > mesId; i--) {
         if (chat[i] && !chat[i].is_user && !chat[i].is_system) { isLastAssistant = false; break; }
     }
-    for (const key of ['characterThoughts', 'infoBox', 'quests']) {
+    for (const key of ['characterThoughts', 'infoBox', 'quests', 'player']) {
         const edited = parsed[key];
         const wasString = typeof swipeData[key] === 'string' || swipeData[key] === undefined || swipeData[key] === null;
         if (edited === undefined) {

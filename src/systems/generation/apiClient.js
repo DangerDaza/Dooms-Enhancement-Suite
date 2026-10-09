@@ -369,6 +369,10 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
                 }
             }
+            // Vitals: the persona's own block.
+            if (parsedData.player) {
+                lastGeneratedData.player = parsedData.player;
+            }
             // Also store on assistant message if present (existing behavior).
             // Skip GuidedGenerations' synthetic tracker/note messages — they
             // look like assistant turns (is_user=false) but contain GG's
@@ -385,7 +389,8 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 lastMessage.extra.dooms_tracker_swipes[currentSwipeId] = {
                     quests: parsedData.quests,
                     infoBox: parsedData.infoBox,
-                    characterThoughts: parsedData.characterThoughts
+                    characterThoughts: parsedData.characterThoughts,
+                    player: parsedData.player
                 };
             }
             // Only commit on TRULY first generation (no committed data exists at all)
@@ -398,6 +403,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 committedTrackerData.quests = parsedData.quests;
                 committedTrackerData.infoBox = parsedData.infoBox;
                 committedTrackerData.characterThoughts = parsedData.characterThoughts;
+                committedTrackerData.player = parsedData.player;
             }
             // Render the updated data
             renderInfoBox();

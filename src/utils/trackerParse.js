@@ -1,5 +1,5 @@
 /**
- * Memoized parsing for tracker JSON blobs (characterThoughts / infoBox).
+ * Memoized parsing for tracker JSON blobs (characterThoughts / infoBox / player).
  *
  * The same JSON strings from lastGeneratedData/committedTrackerData are read
  * by several renderers back-to-back on every message (scene headers, portrait
@@ -9,7 +9,7 @@
 
 /** @type {Array<{ raw: string, result: object|Array|null }>} */
 const cache = [];
-const CACHE_SIZE = 4; // characterThoughts + infoBox for both last/committed sources
+const CACHE_SIZE = 6; // characterThoughts + infoBox + player for both last/committed sources
 
 /**
  * Parses a tracker JSON string with memoization.

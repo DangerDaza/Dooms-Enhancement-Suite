@@ -654,7 +654,8 @@ export function updateMessageSwipeData() {
             message.extra.dooms_tracker_swipes[swipeId] = {
                 quests: lastGeneratedData.quests,
                 infoBox: lastGeneratedData.infoBox,
-                characterThoughts: lastGeneratedData.characterThoughts
+                characterThoughts: lastGeneratedData.characterThoughts,
+                player: lastGeneratedData.player
             };
             break;
         }
@@ -708,12 +709,14 @@ export function loadChatData() {
             quests: null,
             infoBox: null,
             characterThoughts: null,
+            player: null,
             html: null
         });
         setCommittedTrackerData({
             quests: null,
             infoBox: null,
-            characterThoughts: null
+            characterThoughts: null,
+            player: null
         });
         // Scaffold per-chat character tracking for new chats so accessors
         // never fall through to global state when the toggle is on.
@@ -795,18 +798,21 @@ export function loadChatData() {
                         // Canonicalize alias names on restore — stored data may
                         // predate an alias (or the aliases feature itself).
                         if (swipeData.characterThoughts) latestData.characterThoughts = applyCharacterAliases(swipeData.characterThoughts);
-                        if (latestData.quests || latestData.infoBox || latestData.characterThoughts) {
+                        if (swipeData.player) latestData.player = swipeData.player;
+                        if (latestData.quests || latestData.infoBox || latestData.characterThoughts || latestData.player) {
                             setLastGeneratedData({
                                 quests: latestData.quests || lastGeneratedData.quests,
                                 infoBox: latestData.infoBox || lastGeneratedData.infoBox,
                                 characterThoughts: latestData.characterThoughts || lastGeneratedData.characterThoughts,
+                                player: latestData.player || lastGeneratedData.player || null,
                                 html: lastGeneratedData.html || null
                             });
                             // Also update committed data so next generation has the right context
                             setCommittedTrackerData({
                                 quests: latestData.quests || committedTrackerData.quests,
                                 infoBox: latestData.infoBox || committedTrackerData.infoBox,
-                                characterThoughts: latestData.characterThoughts || committedTrackerData.characterThoughts
+                                characterThoughts: latestData.characterThoughts || committedTrackerData.characterThoughts,
+                                player: latestData.player || committedTrackerData.player || null
                             });
                             // Parse quests from the latest data
                             if (latestData.quests) {

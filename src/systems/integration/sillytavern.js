@@ -107,6 +107,7 @@ export function commitTrackerData() {
                     committedTrackerData.quests = swipeData.quests || null;
                     committedTrackerData.infoBox = swipeData.infoBox || null;
                     committedTrackerData.characterThoughts = swipeData.characterThoughts || null;
+                    committedTrackerData.player = swipeData.player || null;
                 } else {
                 }
             } else {
@@ -140,10 +141,11 @@ export function onMessageSent() {
     // FAB spinning is handled by apiClient.js for separate/external modes when updateRPGData() is called
     // For separate/external mode with auto-update disabled, commit displayed tracker
     if ((extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') && !extensionSettings.autoUpdate) {
-        if (lastGeneratedData.quests || lastGeneratedData.infoBox || lastGeneratedData.characterThoughts) {
+        if (lastGeneratedData.quests || lastGeneratedData.infoBox || lastGeneratedData.characterThoughts || lastGeneratedData.player) {
             committedTrackerData.quests = lastGeneratedData.quests;
             committedTrackerData.infoBox = lastGeneratedData.infoBox;
             committedTrackerData.characterThoughts = lastGeneratedData.characterThoughts;
+            committedTrackerData.player = lastGeneratedData.player;
         }
     }
 }
@@ -207,6 +209,10 @@ export async function onMessageReceived(data) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
                 }
             }
+            // Vitals: the persona's own block.
+            if (parsedData.player) {
+                lastGeneratedData.player = parsedData.player;
+            }
             // Store RPG data for this specific swipe in the message's extra field
             if (!lastMessage.extra) {
                 lastMessage.extra = {};
@@ -218,7 +224,8 @@ export async function onMessageReceived(data) {
             lastMessage.extra.dooms_tracker_swipes[currentSwipeId] = {
                 quests: parsedData.quests,
                 infoBox: parsedData.infoBox,
-                characterThoughts: parsedData.characterThoughts
+                characterThoughts: parsedData.characterThoughts,
+                player: parsedData.player
             };
             // Note: JSON code blocks are hidden from the display by our registered regex script
             // (ensureJsonCleaningRegex). Legacy text format blocks (```Stats---```) are also
@@ -232,7 +239,7 @@ export async function onMessageReceived(data) {
             if (parsedData.characterThoughts) safeRender('renderThoughts', renderThoughts);
             if (parsedData.quests) safeRender('renderQuests', renderQuests);
             // Scene headers, portrait bar & weather depend on any of the above
-            const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
+            const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests || parsedData.player;
             if (hadAnyData) {
                 safeRender('updateChatSceneHeaders', updateChatSceneHeaders);
                 safeRender('updatePortraitBar', updatePortraitBar);
@@ -463,6 +470,7 @@ export function onMessageSwiped(messageIndex) {
         // Load swipe data into lastGeneratedData for display (both modes)
         lastGeneratedData.quests = swipeData.quests || null;
         lastGeneratedData.infoBox = swipeData.infoBox || null;
+        lastGeneratedData.player = swipeData.player || null;
         // Normalize characterThoughts to string format (for backward compatibility with old object format)
         if (swipeData.characterThoughts && typeof swipeData.characterThoughts === 'object') {
             lastGeneratedData.characterThoughts = JSON.stringify(swipeData.characterThoughts, null, 2);
@@ -532,18 +540,22 @@ export function onMessageDeleted() {
         lastGeneratedData.quests = payload.quests || null;
         lastGeneratedData.infoBox = payload.infoBox || null;
         lastGeneratedData.characterThoughts = normalizedThoughts;
+        lastGeneratedData.player = payload.player || null;
         committedTrackerData.quests = lastGeneratedData.quests;
         committedTrackerData.infoBox = lastGeneratedData.infoBox;
         committedTrackerData.characterThoughts = lastGeneratedData.characterThoughts;
+        committedTrackerData.player = lastGeneratedData.player;
     } else {
         // No tail or tail has no tracker data — clear panels rather than
         // leaving stale content from the deleted message on screen.
         lastGeneratedData.quests = null;
         lastGeneratedData.infoBox = null;
         lastGeneratedData.characterThoughts = null;
+        lastGeneratedData.player = null;
         committedTrackerData.quests = null;
         committedTrackerData.infoBox = null;
         committedTrackerData.characterThoughts = null;
+        committedTrackerData.player = null;
     }
     // Re-render every panel that reads from those two stores. Isolated for
     // the same reason as onMessageReceived: one throwing renderer must not

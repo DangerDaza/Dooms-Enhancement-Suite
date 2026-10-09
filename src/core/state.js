@@ -507,6 +507,9 @@ export let lastGeneratedData = {
     quests: null,
     infoBox: null,
     characterThoughts: null,
+    // Vitals: the persona's own "player" block ({ stats: [...] }), a JSON
+    // string like its siblings, or null.
+    player: null,
     html: null
 };
 /**
@@ -517,6 +520,7 @@ export let committedTrackerData = {
     quests: null,
     infoBox: null,
     characterThoughts: null,
+    player: null,
     html: null
 };
 /**
