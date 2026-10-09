@@ -4,6 +4,7 @@
  */
 import { defaultVoiceSettings } from '../systems/voices/voiceSettings.js';
 import { defaultVitalsConfig } from '../utils/vitals.js';
+import { defaultAttributesConfig } from '../utils/d20.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -71,6 +72,12 @@ export let extensionSettings = {
     // Character Aliases — alternative names that resolve to an existing
     // character card instead of creating a duplicate (Workshop → Identity)
     characterAliases: {},             // { [canonicalName]: string[] }
+    // Attributes and dice (Project Short Fuse, Phase 2; src/utils/d20.js).
+    // The rules, and the scores per character ("user:Name" / "npc:Name",
+    // only scores other than 10 stored). Off until Settings → Stats turns
+    // them on.
+    attributes: defaultAttributesConfig(),
+    characterAttributes: {},
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature

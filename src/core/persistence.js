@@ -26,6 +26,7 @@ import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { bankActiveCampaign, ensureCampaignSettings } from '../systems/lorebook/campaignProfiles.js';
 import { ensureVoiceSettings } from '../systems/voices/voiceSettings.js';
 import { defaultVitalsConfig, migrateVitalsConfig } from '../utils/vitals.js';
+import { migrateAttributesConfig } from '../utils/d20.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -542,6 +543,11 @@ export function loadSettings() {
             // place of the old two-entry default. Additive only; a list the
             // user ever edited is left as it is.
             if (migrateVitalsConfig(extensionSettings.trackerConfig)) {
+                settingsChanged = true;
+            }
+            // Attributes and dice (Phase 2): the rules block and the
+            // per-character score store, when missing. Additive only.
+            if (migrateAttributesConfig(extensionSettings)) {
                 settingsChanged = true;
             }
 

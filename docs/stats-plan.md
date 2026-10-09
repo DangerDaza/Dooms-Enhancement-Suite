@@ -430,7 +430,13 @@ In the browser (parity checklist rows to add):
 
 ## 7. Phase 2 — Attributes and dice (player-triggered)
 
-Status: **designed, awaiting the decisions in §7.9. No code yet.**
+Status: **decisions taken (§7.9), building on `Project-Short-Fuse` from commit 11.**
+
+One change from the first draft, on the owner's question "why is the player
+setting the difficulty?": they are not. The difficulty and any advantage are
+the game master's call, made by the AI in one small separate call when the
+message is tagged (§7.5). The player picks only the attribute, which is their
+declaration of approach. An override exists behind a setting, off by default.
 
 What RPG Companion had here was a line of numbers the AI was told about and a
 roll it was asked to interpret ("rolled 14, decide whether they succeeded").
@@ -472,9 +478,13 @@ extensionSettings.attributes = {               // the rules (Settings → Stats 
     { id: 'cha', name: 'Charisma',     abbr: 'CHA', enabled: true },
   ],
   sendToAI: 'withRoll',                        // 'always' | 'withRoll' | 'never'
-  difficulty: { easy: 10, medium: 15, hard: 20, veryHard: 25 },
-  defaultDifficulty: 'medium',
+  difficulty: { easy: 10, medium: 15, hard: 20, veryHard: 25, nearlyImpossible: 30 },
+  defaultDifficulty: 'medium',                 // when the AI is not asked, or cannot be read
   criticals: true,                             // natural 20 / natural 1
+  aiRatesDifficulty: true,                     // the game master call (§7.5)
+  allowOverride: false,                        // may the player change the ruling?
+  rollOnSend: true,                            // tag the message, roll when it is sent
+  contextMessages: 6,                          // what the rating call sees
 };
 extensionSettings.characterAttributes = {      // the values, global per character
   'user:Jordan': { str: 15, dex: 12, con: 10, int: 8, wis: 11, cha: 14 },
@@ -509,19 +519,28 @@ once.
 
 ### 7.5 Lifecycle
 
-1. The player opens the roll popover (entry points in §7.7), picks an
-   attribute (the last one used is preselected), a difficulty word or a
-   number, optional "what are you attempting", advantage or disadvantage,
-   and presses Roll. DES rolls, animates a d20 for under a second, shows the
-   result.
-2. **Attach.** If the chat's last message is the player's own and no reply
-   follows it, the roll attaches to that message at once. Otherwise it is
-   **pending**: a chip above the message box reads "🎲 STR 16 vs 15 · success
-   · rides with your next message" with an × to discard, and on
-   `MESSAGE_SENT` it is written to the sent message as
-   `message.extra.dooms_roll = { attribute, score, mod, die, kept, dropped,
-   total, dc, difficulty, advantage, success, margin, critical, attempt, ts }`.
-3. **Inject.** On generation start the injector looks at the last user
+1. **Tag.** The player opens the roll popover (entry points in §7.7) and
+   picks the attribute (the last one used is preselected). That is the only
+   thing they decide.
+2. **Rule.** DES makes one small separate call, on the same path as Separate
+   mode and Generate Knives: the last few messages, what is in the message
+   box so far, the attribute, and one question for the game master. The
+   answer is one JSON line: a difficulty word (easy, medium, hard, very
+   hard, nearly impossible), advantage, disadvantage or none, and a one-line
+   reason. The chip above the message box then reads "🎲 CHA check · the AI
+   calls it Hard (DC 20) · 'he already distrusts you' · rolls when you send".
+   If the call fails or nothing is connected, the configured default
+   difficulty is used and the chip says so. Keep typing and the chip offers
+   a re-ask. With `allowOverride` on, the chip's ruling can be changed.
+3. **Roll on send** (the default). On `MESSAGE_SENT` DES rolls, with
+   advantage or disadvantage as ruled, and writes the result to the sent
+   message as `message.extra.dooms_roll = { attribute, abbr, score, mod,
+   rolls, kept, dropped, total, dc, difficultyId, difficultyLabel, reason,
+   advantage, success, margin, critical, attempt, ts }`. **Roll now** rolls
+   in the popover instead, so the die is seen first and can be discarded;
+   the result then waits for the next message, or attaches at once when the
+   chat's last message is the player's own with no reply yet.
+4. **Inject.** On generation start the injector looks at the last user
    message. If it carries a roll, the verdict goes into slot
    `dooms-dice-verdict` at `IN_CHAT` depth 0, right after the player's words.
    It is derived from chat state, not a one-shot flag, so a swipe or
@@ -529,13 +548,13 @@ once.
    without a roll gets the slot cleared. Like the Doom Counter twist it
    bypasses tracker suppression, since it is the player's explicit action,
    except for impersonation and quiet prompts.
-4. **Record.** A roll card renders under the user message, a sibling of the
+5. **Record.** A roll card renders under the user message, a sibling of the
    message text like the Tracker Data dropdown: "🎲 Strength check · d20 14
-   + 2 = 16 vs DC 15 · Success". Rendered on `USER_MESSAGE_RENDERED`, swept
+   +2 = 16 vs DC 15 · Success". Rendered on `USER_MESSAGE_RENDERED`, swept
    on `CHAT_CHANGED` and "show more messages", read from `extra.dooms_roll`.
    Its × removes the roll from the message; the reply already written is
    left alone.
-5. Nothing is stored anywhere but the message, so branching and copying a
+6. Nothing is stored anywhere but the message, so branching and copying a
    chat take the rolls along and deleting the message deletes the roll.
 
 ### 7.6 Prompt
@@ -564,11 +583,13 @@ modifier, the DC and the outcome; a default sheet emits nothing.
 - **The popover** (`src/systems/ui/dicePanel.js`, lazy like the other
   modals; markup in `template.html`, CSS in `styles/modals.css` with setup
   rules in `overhaul.css`): attribute chips with the player's modifier under
-  each, difficulty chips showing their DC and a number field, an
-  advantage/disadvantage toggle, an attempt text field, Roll, the animated
-  die (CSS, under a second, off under reduced motion and performance mode),
-  the result line, Attach or Discard.
-- **Pending chip** above the message box while a roll waits for a message.
+  each; the game master's ruling once it arrives (difficulty, DC, advantage,
+  reason) with a re-ask; **Roll when I send** and **Roll now**; for Roll
+  now, the animated die (CSS, under a second, off under reduced motion and
+  performance mode), the result line, Keep or Discard. The difficulty and
+  advantage controls appear only with `allowOverride` on.
+- **The chip** above the message box while a tagged or rolled check waits
+  for a message, with × to discard.
 - **Workshop → Attributes tab**, for NPCs and the persona: one number per
   attribute with the modifier shown live, plus Standard array (15 14 13 12
   10 8), Roll 4d6 drop lowest, and All 10. Saved with the Workshop's Save
@@ -600,16 +621,17 @@ Commits: 10 docs (this section); 11 model, settings, migration, tests;
 inject, card; 14 popover, entry points, styling; 15 Workshop tab and the
 Settings group; 16 parity rows.
 
-### 7.9 Decisions needed
+### 7.9 Decisions, resolved 2026-10-09
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
 | D5 | The attribute list | The D&D six by default, editable like the vitals sheet |
 | D6 | When attributes go to the AI | With a roll only, by default; "always" available |
 | D7 | Natural 20 and 1 as criticals | On by default |
-| D8 | When a roll attaches | At once if your message is already the chat's tail, else with the next one you send |
+| D8 | When a roll happens | Tag the message, **roll when it is sent** (default); Roll now available |
 | D9 | NPC attributes in this phase | Yes: same tab, same store, sent only when not all 10s |
-| D10 | AI-suggested NPC sheets | Phase 4, not now |
+| D10 | AI-suggested NPC sheets | Later |
+| D11 | Who sets the difficulty | **The AI, as game master**, in one small call at tag time; player override behind a setting, off by default |
 
 ## 8. Phase 3 — AI-called checks (sketch)
 
