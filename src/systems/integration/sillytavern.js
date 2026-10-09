@@ -36,6 +36,8 @@ import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { applyCharacterAliases } from '../features/characterAliases.js';
+// Vitals (Project Short Fuse)
+import { vitalsOn, playerVitalsOn, vitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -186,6 +188,20 @@ export async function onMessageReceived(data) {
                 // the tracker data only — prose stays untouched — so no duplicate
                 // card is born and colors are harvested under the canonical name.
                 parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
+            }
+            // ── Vitals: normalise what came back against the values the AI was
+            // shown (committed data). Fixed vitals keep their previous value,
+            // vitals the AI left out are seeded, both shapes become the array
+            // shape, and the persona's block is built even when the AI dropped
+            // it — but only when the reply carried tracker data at all.
+            if (!parsedData.parsingFailed && vitalsOn(extensionSettings)) {
+                const defs = vitalDefs(extensionSettings);
+                if (parsedData.characterThoughts) {
+                    parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
+                }
+                if (playerVitalsOn(extensionSettings)) {
+                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                }
             }
             // Update display data with newly parsed response
             if (parsedData.quests) {

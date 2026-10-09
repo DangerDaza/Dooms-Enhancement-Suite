@@ -16,7 +16,7 @@ import {
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
-import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals } from '../../utils/vitals.js';
+import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
@@ -524,16 +524,22 @@ function formatTrackerDataForContext(jsonData, trackerType, userName) {
                         }
                         if (thoughtValue) formatted += `  Thoughts: ${thoughtValue}\n`;
                     }
-                    // Stats
-                    if (char.stats && typeof char.stats === 'object' && !Array.isArray(char.stats)) {
-                        const statsList = Object.entries(char.stats)
-                            .map(([name, val]) => {
-                                const statValue = getValue(val);
-                                return statValue ? `${name}: ${statValue}` : null;
-                            })
-                            .filter(s => s)
-                            .join(', ');
-                        if (statsList) formatted += `  Stats: ${statsList}\n`;
+                    // Vitals, in either shape; legacy object-shaped stats when vitals are off
+                    if (char.stats && typeof char.stats === 'object') {
+                        if (vitalsOn(extensionSettings)) {
+                            const defs = vitalDefs(extensionSettings);
+                            const line = formatVitalsLine(readVitals(char.stats, defs), defs);
+                            if (line) formatted += `  Vitals: ${line}\n`;
+                        } else if (!Array.isArray(char.stats)) {
+                            const statsList = Object.entries(char.stats)
+                                .map(([name, val]) => {
+                                    const statValue = getValue(val);
+                                    return statValue ? `${name}: ${statValue}` : null;
+                                })
+                                .filter(s => s)
+                                .join(', ');
+                            if (statsList) formatted += `  Stats: ${statsList}\n`;
+                        }
                     }
                 }
             }
@@ -731,10 +737,26 @@ export function formatHistoricalTrackerData(trackerData, trackerConfig, userName
                         : getValue(char.thoughts);
                     if (thoughts) charFormatted += `Thinking: ${thoughts}, `;
                 }
+                // Vitals (Settings → Stats → Include in history)
+                if (shouldInclude(charsConfig.characterStats) && char.stats && vitalsOn(extensionSettings)) {
+                    const defs = vitalDefs(extensionSettings);
+                    const line = formatVitalsLine(readVitals(char.stats, defs), defs);
+                    if (line) charFormatted += `Vitals: ${line}, `;
+                }
                 if (charFormatted) {
                     formatted += `${getValue(char.name)}: ${charFormatted.slice(0, -2)}\n`;
                 }
             }
+        }
+        // Vitals: the persona's own block, under the same toggle
+        if (trackerData.player && playerVitalsOn(extensionSettings)
+            && shouldInclude(trackerConfig.presentCharacters?.characterStats)) {
+            const playerData = typeof trackerData.player === 'string'
+                ? JSON.parse(trackerData.player)
+                : trackerData.player;
+            const defs = vitalDefs(extensionSettings);
+            const line = formatVitalsLine(readVitals(playerData?.stats, defs), defs);
+            if (line) formatted += `${userName}: Vitals: ${line}\n`;
         }
         return formatted.trim();
     } catch (e) {
@@ -786,6 +808,17 @@ export function generateContextualSummary() {
             console.warn('[Dooms Tracker] Failed to format characters for context:', e);
         }
     }
+    // Vitals: the persona's own line
+    if (playerVitalsOn(extensionSettings) && committedTrackerData.player) {
+        try {
+            const parsed = JSON.parse(committedTrackerData.player);
+            const defs = vitalDefs(extensionSettings);
+            const line = formatVitalsLine(readVitals(parsed?.stats, defs), defs);
+            if (line) summary += `${userName}'s vitals: ${line}\n`;
+        } catch (e) {
+            console.warn('[Dooms Tracker] Failed to format player vitals for context:', e);
+        }
+    }
     return summary.trim();
 }
 /**
@@ -801,7 +834,8 @@ export function generateRPGPromptText() {
     promptText += `Here are the previous trackers in the roleplay that you should consider when responding:\n`;
     promptText += `<previous>\n`;
     // Build unified JSON structure for previous trackers (v3.1 format)
-    const hasAnyPreviousData = committedTrackerData.quests || committedTrackerData.infoBox || committedTrackerData.characterThoughts;
+    const hasAnyPreviousData = committedTrackerData.quests || committedTrackerData.infoBox || committedTrackerData.characterThoughts
+        || (playerVitalsOn(extensionSettings) && committedTrackerData.player);
     if (hasAnyPreviousData) {
         const unifiedPrevious = {};
         if (extensionSettings.showQuests && committedTrackerData.quests) {
@@ -841,7 +875,9 @@ export function generateRPGPromptText() {
                 // Only include if there's actual character data (non-empty array or object with content)
                 if (parsed && ((Array.isArray(parsed) && parsed.length > 0) ||
                                (parsed.characters && Array.isArray(parsed.characters) && parsed.characters.length > 0))) {
-                    unifiedPrevious.characters = parsed;
+                    // Vitals: fixed ones are shown as locked
+                    const defs = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
+                    unifiedPrevious.characters = hasFixedVitals(defs) ? markFixedVitals(parsed, defs) : parsed;
                 }
             } catch (e) {
                 // Old text format - show it separately for backward compat
@@ -849,6 +885,16 @@ export function generateRPGPromptText() {
                     ? committedTrackerData.characterThoughts
                     : JSON.stringify(committedTrackerData.characterThoughts, null, 2);
                 promptText += `${charText}\n`;
+            }
+        }
+        // Vitals: the persona's block, with fixed vitals marked locked
+        if (playerVitalsOn(extensionSettings) && committedTrackerData.player) {
+            try {
+                const parsed = JSON.parse(committedTrackerData.player);
+                const defs = vitalDefs(extensionSettings);
+                unifiedPrevious.player = hasFixedVitals(defs) ? markFixedVitals(parsed, defs) : parsed;
+            } catch (e) {
+                // A malformed player blob is left out rather than breaking the JSON
             }
         }
         // If we successfully built a unified structure, display it

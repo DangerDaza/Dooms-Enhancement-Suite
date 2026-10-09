@@ -284,3 +284,139 @@ export function migrateVitalsConfig(trackerConfig) {
     }
     return changed;
 }
+
+// ─── Values ─────────────────────────────────────────────────────────────────
+//
+// A character's vitals live in the `stats` field of its tracker object. The
+// AI is asked for the array shape, [{ name, value }], and that is what DES
+// writes back; the object shape ({ Health: 80 } or { Health: { value: 80 } })
+// is read for old data and for models that drift.
+
+function unwrapValue(v) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'value' in v) return unwrapValue(v.value);
+    return v;
+}
+
+/**
+ * The vitals a stats field holds, keyed by sheet name: `{ Health: 72 }`.
+ * Only vitals on the sheet are read; anything else the AI wrote is dropped.
+ * @param {*} statsField - array or object shape, or nothing
+ * @param {Array<object>} defs - vitalDefs()
+ * @returns {Object.<string, number>}
+ */
+export function readVitals(statsField, defs) {
+    const out = {};
+    if (!statsField || typeof statsField !== 'object') return out;
+    const put = (name, raw) => {
+        const def = findVitalDef(defs, name);
+        if (!def) return;
+        const v = clampVital(unwrapValue(raw));
+        if (v !== null) out[def.name] = v;
+    };
+    if (Array.isArray(statsField)) {
+        for (const entry of statsField) {
+            if (entry && typeof entry === 'object') put(entry.name, entry.value);
+        }
+    } else {
+        for (const [name, raw] of Object.entries(statsField)) put(name, raw);
+    }
+    return out;
+}
+
+/** The array shape the AI uses, in sheet order, for the vitals present in `map`. */
+export function toStatsArray(map, defs) {
+    const out = [];
+    for (const def of defs) {
+        if (map && typeof map[def.name] === 'number') out.push({ name: def.name, value: map[def.name] });
+    }
+    return out;
+}
+
+/**
+ * What a character's vitals become after a reply: for every vital on the
+ * sheet, a fixed one (ai: false) keeps its previous value, a free one takes
+ * the AI's, and a vital with no value yet starts at the sheet's start value.
+ * @returns {Object.<string, number>} a value for every enabled vital
+ */
+export function resolveVitals(nextMap, prevMap, defs) {
+    const out = {};
+    for (const def of defs) {
+        const next = nextMap ? nextMap[def.name] : undefined;
+        const prev = prevMap ? prevMap[def.name] : undefined;
+        if (def.ai === false) {
+            out[def.name] = typeof prev === 'number' ? prev : (typeof next === 'number' ? next : def.start);
+        } else {
+            out[def.name] = typeof next === 'number' ? next : (typeof prev === 'number' ? prev : def.start);
+        }
+    }
+    return out;
+}
+
+function parseLoose(json) {
+    if (json === null || json === undefined || json === '') return null;
+    if (typeof json !== 'string') return json;
+    try { return JSON.parse(json); } catch (e) { return null; }
+}
+
+function characterList(parsed) {
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.characters)) return parsed.characters;
+    return null;
+}
+
+/**
+ * Normalises the vitals in a fresh characters tracker against the one the
+ * AI was shown (committed data): fixed vitals keep their value, missing ones
+ * are seeded, both shapes become the array shape, and only the sheet's
+ * vitals survive. Characters are matched by name, case-insensitively.
+ * Returns the new JSON string, or the input untouched when it is not JSON.
+ * @param {string|object} nextJson
+ * @param {string|object|null} prevJson
+ * @param {Array<object>} defs
+ */
+export function applyVitalsToCharacters(nextJson, prevJson, defs) {
+    const parsed = parseLoose(nextJson);
+    const chars = characterList(parsed);
+    if (!chars) return nextJson;
+    const prevByName = new Map();
+    for (const c of characterList(parseLoose(prevJson)) || []) {
+        if (c && typeof c.name === 'string') prevByName.set(c.name.trim().toLowerCase(), c);
+    }
+    for (const c of chars) {
+        if (!c || typeof c !== 'object') continue;
+        const prev = typeof c.name === 'string' ? prevByName.get(c.name.trim().toLowerCase()) : null;
+        c.stats = toStatsArray(resolveVitals(readVitals(c.stats, defs), readVitals(prev?.stats, defs), defs), defs);
+    }
+    return typeof nextJson === 'string' ? JSON.stringify(parsed) : parsed;
+}
+
+/**
+ * The persona's block after a reply, always as a JSON string `{ stats: [...] }`:
+ * the AI's values where it gave them, the previous values for fixed vitals,
+ * the start values for the rest. A missing or malformed block still yields
+ * a seeded one, so the persona's bars never sit empty.
+ */
+export function applyVitalsToPlayer(nextJson, prevJson, defs) {
+    const next = parseLoose(nextJson);
+    const prev = parseLoose(prevJson);
+    const nextStats = next && typeof next === 'object' ? next.stats : undefined;
+    const prevStats = prev && typeof prev === 'object' ? prev.stats : undefined;
+    const base = next && typeof next === 'object' && !Array.isArray(next) ? { ...next } : {};
+    base.stats = toStatsArray(resolveVitals(readVitals(nextStats, defs), readVitals(prevStats, defs), defs), defs);
+    return JSON.stringify(base);
+}
+
+/** The colour a bar shows: the vital's own, or the warning colour at or below `lowAt`. */
+export function vitalColor(def, value, lowAt) {
+    const v = clampVital(value);
+    if (v !== null && typeof lowAt === 'number' && v <= lowAt) return LOW_VITAL_COLOR;
+    return def?.color || EXTRA_VITAL_COLORS[0];
+}
+
+/** "Health 72%, Energy 50%" for the vitals in `map`, in sheet order. */
+export function formatVitalsLine(map, defs) {
+    return defs
+        .filter(d => map && typeof map[d.name] === 'number')
+        .map(d => `${d.name} ${map[d.name]}%`)
+        .join(', ');
+}

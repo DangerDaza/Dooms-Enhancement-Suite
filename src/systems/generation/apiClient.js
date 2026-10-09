@@ -28,6 +28,7 @@ import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { applyCharacterAliases } from '../features/characterAliases.js';
+import { vitalsOn, playerVitalsOn, vitalDefs, applyVitalsToCharacters, applyVitalsToPlayer } from '../../utils/vitals.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -345,6 +346,16 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                 // this covers both the auto-update and manual Refresh RPG Info
                 // paths in separate/external mode.
                 parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
+            }
+            // Vitals: same normalisation as together mode (see sillytavern.js).
+            if (!parsedData.parsingFailed && vitalsOn(extensionSettings)) {
+                const defs = vitalDefs(extensionSettings);
+                if (parsedData.characterThoughts) {
+                    parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
+                }
+                if (playerVitalsOn(extensionSettings)) {
+                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                }
             }
             // Store RPG data for the last assistant message (separate mode)
             const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;

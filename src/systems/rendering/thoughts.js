@@ -37,6 +37,7 @@ import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
+import { vitalsOn, vitalDefs } from '../../utils/vitals.js';
 
 /**
  * Per-card steady-state HTML cache (character name -> html) so the keyed
@@ -343,8 +344,8 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     // Get tracker configuration
     const config = extensionSettings.trackerConfig?.presentCharacters;
     const enabledFields = config?.customFields?.filter(f => f && f.enabled && f.name) || [];
-    const characterStatsConfig = config?.characterStats;
-    const enabledCharStats = characterStatsConfig?.enabled && characterStatsConfig?.customStats?.filter(s => s && s.enabled && s.name) || [];
+    // Vitals (src/utils/vitals.js): the sheet, normalised, or nothing when off.
+    const enabledCharStats = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
     const relationshipFields = config?.relationshipFields || [];
     // Honour Settings → Workshop → Track Relationships as well as the list
     // itself; the prompt stops asking when it's off, so the badge would
@@ -956,8 +957,7 @@ export function removeCharacter(characterName) {
 export function addNewCharacter() {
     const presentCharsConfig = extensionSettings.trackerConfig?.presentCharacters;
     const enabledFields = presentCharsConfig?.customFields?.filter(f => f && f.enabled && f.name) || [];
-    const characterStats = presentCharsConfig?.characterStats;
-    const enabledCharStats = characterStats?.enabled && characterStats?.customStats?.filter(s => s && s.enabled && s.name) || [];
+    const enabledCharStats = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
     const hasRelationship = presentCharsConfig?.relationships?.enabled !== false
         && presentCharsConfig?.relationshipFields?.length > 0;
     // Check if data is in JSON format
@@ -989,12 +989,9 @@ export function addNewCharacter() {
         if (hasRelationship) {
             newCharacter.relationship = 'Neutral';
         }
-        // Add stats if enabled
+        // Vitals start at the sheet's start values, in the array shape the AI uses
         if (enabledCharStats.length > 0) {
-            newCharacter.stats = {};
-            for (const stat of enabledCharStats) {
-                newCharacter.stats[stat.name] = 100;
-            }
+            newCharacter.stats = enabledCharStats.map(s => ({ name: s.name, value: s.start }));
         }
         charactersArray.push(newCharacter);
         // Save back as JSON string
@@ -1075,8 +1072,7 @@ export function updateCharacterField(characterName, field, value) {
     }
     const presentCharsConfig = extensionSettings.trackerConfig?.presentCharacters;
     const enabledFields = presentCharsConfig?.customFields?.filter(f => f && f.enabled && f.name) || [];
-    const characterStats = presentCharsConfig?.characterStats;
-    const enabledCharStats = characterStats?.enabled && characterStats?.customStats?.filter(s => s && s.enabled && s.name) || [];
+    const enabledCharStats = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
     // Get relationship emoji mappings from config
     const relationshipEmojis = presentCharsConfig?.relationshipEmojis || {
         'Enemy': '⚔️',
