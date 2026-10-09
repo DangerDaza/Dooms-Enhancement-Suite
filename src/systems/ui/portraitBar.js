@@ -45,9 +45,11 @@ import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { isOffScene } from '../../utils/offScene.js';
-// Vitals (Project Short Fuse): bars on the card front and rows on the back
+// Vitals (Project Short Fuse): bars on the card front and rows on the back.
+// The editors live in thoughts.js, which reaches this module through
+// characterAliases.js, so they are imported at click time rather than here
+// (a static edge would close a cycle).
 import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
-import { updateCharacterField, updatePlayerVital } from '../rendering/thoughts.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -380,13 +382,15 @@ export function initPortraitBar() {
             const name = $btn.attr('data-char');
             const vital = $btn.attr('data-vital');
             const isUser = $btn.attr('data-user') === '1';
-            try {
-                if (isUser) updatePlayerVital(vital, value);
-                else updateCharacterField(name, vital, String(value));
-            } catch (err) {
-                console.error('[Dooms Portrait Bar] Vital edit failed:', err);
-            }
-            updatePortraitBar();
+            // thoughts.js is already loaded (the generation path imports it),
+            // so this resolves at once; it just keeps the module graph acyclic.
+            import('../rendering/thoughts.js')
+                .then(({ updateCharacterField, updatePlayerVital }) => {
+                    if (isUser) updatePlayerVital(vital, value);
+                    else updateCharacterField(name, vital, String(value));
+                })
+                .catch(err => console.error('[Dooms Portrait Bar] Vital edit failed:', err))
+                .then(() => updatePortraitBar());
         };
         $input.on('keydown', function (ev) {
             ev.stopPropagation();

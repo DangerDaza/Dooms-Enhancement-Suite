@@ -616,6 +616,59 @@ body[data-dooms-ui] .dooms-pb-card-back {
 }
 body[data-dooms-ui] .dooms-pb-back-label { color: var(--ov-muted); font-family: var(--ov-display); }
 
+/* ── Vitals (Project Short Fuse) ──
+   The bars keep each vital's own colour under every look; the setups only
+   change the track behind them, the corners, and where the strip sits. */
+body[data-dooms-ui] .dooms-pb-vital,
+body[data-dooms-ui] .dooms-pb-vital-track {
+    background: color-mix(in srgb, var(--ov-text) 18%, transparent);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-ui] .dooms-pb-vitals { margin: 0 0 3px; }
+body[data-dooms-ui] .dooms-pb-vital-row { color: var(--ov-text); font-family: var(--ov-body); }
+body[data-dooms-ui] .dooms-pb-vital-val:hover { border-color: var(--ov-line); }
+body[data-dooms-ui] .dooms-pb-vital-input { border-color: var(--ov-accent); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-pb-vital-row.is-low .dooms-pb-vital-val { color: var(--ov-accent2); }
+
+/* Grimoire: hairlines in the ledger */
+body[data-dooms-ui="grimoire"] .dooms-pb-vital { height: 2px; }
+body[data-dooms-ui="grimoire"] .dooms-pb-vitals { gap: 3px; }
+body[data-dooms-ui="grimoire"] .dooms-pb-vital-track { height: 3px; }
+
+/* Ops Console: square readout bars, labels in the mono face */
+body[data-dooms-ui="console"] .dooms-pb-vitals { margin: 0 0 3px -2px; }
+body[data-dooms-ui="console"] .dooms-pb-vital-row { font-family: var(--ov-mono); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Lumen: pills, glass track */
+body[data-dooms-ui="lumen"] .dooms-pb-vital,
+body[data-dooms-ui="lumen"] .dooms-pb-vital-track,
+body[data-dooms-ui="lumen"] .dooms-pb-vital-input {
+    border-radius: 999px;
+}
+body[data-dooms-ui="lumen"] .dooms-pb-vital,
+body[data-dooms-ui="lumen"] .dooms-pb-vital-track {
+    background: color-mix(in srgb, var(--ov-text) 14%, transparent);
+}
+
+/* Arcade: the name is a skewed tag that hugs its text, so the strip leaves
+   it and sits in the band below, counter-skewed, as wide as the card. */
+body[data-dooms-ui="arcade"] .dooms-portrait-card-name .dooms-pb-vitals {
+    position: absolute;
+    top: 100%;
+    left: 8px;
+    width: calc(var(--dooms-pb-card-w, 110px) - 16px);
+    margin: 4px 0 0;
+    gap: 2px;
+    transform: skewX(8deg);
+}
+body[data-dooms-ui="arcade"] .dooms-pb-vital { height: 4px; background: color-mix(in srgb, var(--ov-text) 35%, transparent); }
+body[data-dooms-ui="arcade"] .dooms-pb-vital-track { height: 5px; }
+
+/* Inked: paper tracks on the ink band, hard corners */
+body[data-dooms-ui="inked"] .dooms-pb-vital { height: 4px; background: color-mix(in srgb, var(--ov-paper) 28%, transparent); }
+body[data-dooms-ui="inked"] .dooms-pb-vital-track { height: 5px; background: var(--ov-caption); box-shadow: inset 0 0 0 1px var(--ov-ink); }
+body[data-dooms-ui="inked"] .dooms-pb-vital-input { border-color: var(--ov-ink); }
+
 /* ── FAB ── */
 body[data-dooms-ui] .dooms-fab-btn {
     background: var(--ov-panel);
