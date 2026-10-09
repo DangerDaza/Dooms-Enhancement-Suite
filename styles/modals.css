@@ -1645,6 +1645,96 @@
     color: var(--rpg-highlight);
 }
 
+/* ── Settings → Stats → Vitals (Project Short Fuse) ──
+   One row per vital on the sheet: switch, icon, name, colour, start value,
+   AI flag, order, remove. Wraps on narrow screens; the name takes the slack. */
+.rpg-vitals-list { margin-top: 4px; }
+
+.rpg-vital-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    min-width: 0;
+}
+
+.rpg-vital-row.is-off > :not(.rpg-vital-switch):not(.rpg-vital-remove) { opacity: 0.45; }
+
+.rpg-vital-row input[type="text"],
+.rpg-vital-row input[type="number"] {
+    box-sizing: border-box;
+    background: var(--rpg-bg);
+    color: var(--rpg-text);
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    padding: 5px 7px;
+    font-size: 0.85em;
+    min-width: 0;
+}
+
+.rpg-vital-row input:focus {
+    outline: none;
+    border-color: var(--rpg-highlight);
+}
+
+.rpg-vital-switch { flex: 0 0 auto; }
+.rpg-vital-icon { flex: 0 0 48px; text-align: center; cursor: pointer; }
+.rpg-vital-name { flex: 1 1 110px; }
+.rpg-vital-color { flex: 0 0 auto; }
+
+.rpg-vital-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78em;
+    color: var(--rpg-text);
+    opacity: 0.85;
+    flex: 0 0 auto;
+}
+
+.rpg-vital-field input[type="number"] { width: 58px; }
+.rpg-vital-ai-field input { margin: 0; }
+
+.rpg-vital-order { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+
+.rpg-vital-move {
+    background: transparent;
+    border: 1px solid var(--rpg-border);
+    border-radius: 4px;
+    color: var(--rpg-text);
+    opacity: 0.6;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 0.75em;
+}
+
+.rpg-vital-move:hover:not(:disabled) { opacity: 1; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
+.rpg-vital-move:disabled { opacity: 0.2; cursor: default; }
+
+.rpg-vitals-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.rpg-vitals-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+.rpg-vital-chip {
+    background: var(--rpg-bg);
+    border: 1px dashed var(--rpg-border);
+    border-radius: 999px;
+    color: var(--rpg-text);
+    opacity: 0.8;
+    padding: 3px 9px;
+    font-size: 0.78em;
+    cursor: pointer;
+}
+
+.rpg-vital-chip:hover { opacity: 1; border-style: solid; border-color: var(--rpg-highlight); color: var(--rpg-highlight); }
+
 
 /* Accordion sections */
 .rpg-accordion-section {

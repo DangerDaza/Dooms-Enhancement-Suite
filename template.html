@@ -1412,6 +1412,97 @@
                 </div>
             </div>
 
+            <!-- ═══════ STATS (Project Short Fuse) ═══════
+                 Vitals: the 0–100 bars on the Present Characters shelf. The rows
+                 are generated from the sheet (trackerConfig.presentCharacters
+                 .characterStats) by renderVitalsSettings() in index.js, so this
+                 page and the prompt can never disagree. docs/stats-plan.md. -->
+            <div class="rpg-accordion-section" data-accordion="stats">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-heart-pulse rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Stats</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-subsection-label">Vitals</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Track vitals</span>
+                            <span class="rpg-setting-hint">Health, Energy and the rest as 0–100 bars on every
+                                portrait card, moved by the AI with each reply and editable on the card's back.
+                                Costs about a dozen tokens per vital per character per reply.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-vitals-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Your character too</span>
+                            <span class="rpg-setting-hint">Your persona gets the same vitals, on its own card and
+                                in a "player" block of the tracker.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-vitals-player" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- Rows generated from the sheet (renderVitalsSettings). -->
+                    <div id="rpg-vitals-list" class="rpg-vitals-list"></div>
+                    <div class="rpg-vitals-add-row">
+                        <button id="rpg-vitals-add" class="rpg-accordion-action-btn" type="button">
+                            <i class="fa-solid fa-plus"></i> Add vital
+                        </button>
+                        <div id="rpg-vitals-chips" class="rpg-vitals-chips"></div>
+                    </div>
+                    <p class="rpg-note-text" style="margin-top:4px;">Each vital has its own switch. <b>AI</b> lets
+                        the AI move it; off, the value only changes when you edit it on a card. <b>Start</b> is the
+                        value a character begins at. A vital's name is what the AI sees, so keep it plain;
+                        renaming one starts its values over.</p>
+
+                    <div class="rpg-subsection-label" style="margin-top:12px;">Cards and context</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Bars on the card front</span>
+                            <span class="rpg-setting-hint">Thin bars above the name. The card's back always lists
+                                every vital.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-vitals-show-cards" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Bars on the front</span>
+                            <span class="rpg-setting-hint">How many of the vitals, in sheet order, the front shows.</span>
+                        </div>
+                        <input type="number" id="rpg-vitals-max-bars" class="rpg-accordion-input" min="1" max="6"
+                            value="3" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Warn at or below</span>
+                            <span class="rpg-setting-hint">A bar at or under this percentage turns the warning colour.</span>
+                        </div>
+                        <input type="number" id="rpg-vitals-low-at" class="rpg-accordion-input" min="0" max="100"
+                            value="25" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Include in history context</span>
+                            <span class="rpg-setting-hint">Send each message's vitals with History Persistence, the
+                                way the fields ticked in Edit Trackers are.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-vitals-persist" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══════ VOICES ═══════ -->
             <!-- Per-character Gemini voices (docs/google-tts-voices-plan.md §6.2).
                  Bound by src/systems/ui/voicesSettingsUI.js. -->

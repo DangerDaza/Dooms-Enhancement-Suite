@@ -174,6 +174,8 @@ import {
 } from './src/systems/voices/voiceBoot.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
+// Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
+import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -242,6 +244,75 @@ function syncRelationshipConfig(pc) {
     const emojis = pc.relationships.relationshipEmojis;
     pc.relationshipEmojis = { ...emojis };
     pc.relationshipFields = Object.keys(emojis);
+}
+
+// ── Stats → Vitals (Project Short Fuse) ──
+// The sheet is trackerConfig.presentCharacters.characterStats and this page
+// is its only writer (the Tracker Editor tab that used to be is gone), so the
+// rows here and the prompt can never disagree. Rows are generated from the
+// sheet; every edit saves at once and repaints the shelf and the panel.
+function getVitalsSheet() {
+    const tc = extensionSettings.trackerConfig;
+    if (!tc || !tc.presentCharacters) return null;
+    if (!tc.presentCharacters.characterStats || typeof tc.presentCharacters.characterStats !== 'object') {
+        tc.presentCharacters.characterStats = defaultVitalsConfig();
+    } else {
+        migrateVitalsConfig(tc);
+    }
+    return tc.presentCharacters.characterStats;
+}
+function findVitalEntry(cs, id) {
+    return (cs.customStats || []).find(e => e && e.id === id) || null;
+}
+function uniqueVitalId(cs, base) {
+    const taken = new Set((cs.customStats || []).map(e => e && e.id));
+    let id = base || 'vital';
+    let n = 1;
+    while (taken.has(id)) { n++; id = `${base || 'vital'}_${n}`; }
+    return id;
+}
+function renderVitalsSettings() {
+    const $list = $('#rpg-vitals-list');
+    if (!$list.length) return;
+    const cs = getVitalsSheet();
+    if (!cs) {
+        $list.html('<p class="rpg-note-text">Tracker settings are still loading.</p>');
+        return;
+    }
+    const cfg = vitalsConfig(extensionSettings);
+    $('#rpg-vitals-enabled').prop('checked', cfg.enabled);
+    $('#rpg-vitals-player').prop('checked', cfg.player.enabled);
+    $('#rpg-vitals-show-cards').prop('checked', cfg.showOnCards);
+    $('#rpg-vitals-max-bars').val(cfg.maxBars);
+    $('#rpg-vitals-low-at').val(cfg.lowAt);
+    $('#rpg-vitals-persist').prop('checked', cfg.persistInHistory);
+    const list = Array.isArray(cs.customStats) ? cs.customStats : [];
+    const rows = list.map((raw, i) => {
+        const d = normalizeVitalDef(raw, i);
+        const id = escapeHtml(d.id);
+        return `<div class="rpg-vital-row${d.enabled ? '' : ' is-off'}" data-vital="${id}">
+            <label class="rpg-toggle-switch rpg-vital-switch" title="On or off">
+                <input type="checkbox" class="rpg-vital-enabled"${d.enabled ? ' checked' : ''} />
+                <span class="rpg-toggle-slider"></span>
+            </label>
+            <input type="text" class="rpg-vital-icon" value="${escapeHtml(d.icon)}" maxlength="4" placeholder="🙂" title="Icon (click to pick)" />
+            <input type="text" class="rpg-vital-name" value="${escapeHtml(d.name)}" maxlength="40" placeholder="Name" title="Name (what the AI sees)" />
+            <input type="color" class="rpg-vital-color rpg-color-swatch" value="${escapeHtml(d.color)}" title="Bar colour" />
+            <label class="rpg-vital-field" title="The value a character starts at"><span>Start</span><input type="number" class="rpg-vital-start" min="0" max="100" value="${d.start}" /></label>
+            <label class="rpg-vital-field rpg-vital-ai-field" title="Let the AI move this vital. Off, it only changes when you edit it on a card."><input type="checkbox" class="rpg-vital-ai"${d.ai ? ' checked' : ''} /><span>AI</span></label>
+            <span class="rpg-vital-order">
+                <button type="button" class="rpg-vital-move" data-dir="-1" title="Move up"${i === 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
+                <button type="button" class="rpg-vital-move" data-dir="1" title="Move down"${i === list.length - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
+            </span>
+            <button type="button" class="rpg-ws-rel-remove rpg-vital-remove" title="Remove this vital"><i class="fa-solid fa-trash"></i></button>
+        </div>`;
+    });
+    $list.html(rows.join('') || '<p class="rpg-note-text">No vitals yet. Add one, or pick a preset below.</p>');
+    const have = new Set(list.map(e => e && e.id));
+    const chips = VITAL_PRESETS.filter(p => !have.has(p.id)).map(p =>
+        `<button type="button" class="rpg-vital-chip" data-preset="${escapeHtml(p.id)}" title="Add ${escapeHtml(p.name)}">${escapeHtml(p.icon)} ${escapeHtml(p.name)}</button>`);
+    $('#rpg-vitals-chips').html(chips.join(''));
+    $('#rpg-vitals-add').prop('disabled', list.length >= MAX_VITALS);
 }
 
 function renderWorkshopRelationships() {
@@ -1219,6 +1290,7 @@ function bindSettingsUI() {
     window.addEventListener('dooms:tracker-config-saved', () => {
         try { renderSceneCustomFieldToggles(); } catch (e) { /* non-fatal */ }
         try { renderWorkshopRelationships(); } catch (e) { /* non-fatal */ }
+        try { renderVitalsSettings(); } catch (e) { /* non-fatal */ }
     });
 
     // ── Workshop → Relationships ──
@@ -1291,6 +1363,167 @@ function bindSettingsUI() {
             _saveRel(pc);
         });
     });
+    // ── Stats → Vitals ──
+    // Same shape as the relationships above: straight to extensionSettings,
+    // saved at once, the shelf and the panel repainted.
+    const _saveVitals = ({ rerender = true } = {}) => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] vitals save failed', e); }
+        if (rerender) renderVitalsSettings();
+        try { renderThoughts(); updatePortraitBar(); } catch (e) { /* non-fatal */ }
+    };
+    const _vitalFromRow = (el) => {
+        const cs = getVitalsSheet();
+        if (!cs) return { cs: null, entry: null };
+        const id = String($(el).closest('.rpg-vital-row').data('vital') || '');
+        return { cs, entry: findVitalEntry(cs, id) };
+    };
+    $(document).on('change', '#rpg-vitals-enabled', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        cs.enabled = $(this).prop('checked');
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '#rpg-vitals-player', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        if (!cs.player || typeof cs.player !== 'object') cs.player = {};
+        cs.player.enabled = $(this).prop('checked');
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '#rpg-vitals-show-cards', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        cs.showOnCards = $(this).prop('checked');
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '#rpg-vitals-persist', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        cs.persistInHistory = $(this).prop('checked');
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '#rpg-vitals-max-bars', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        const n = parseInt($(this).val(), 10);
+        cs.maxBars = Number.isFinite(n) ? Math.min(6, Math.max(1, n)) : 3;
+        $(this).val(cs.maxBars);
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '#rpg-vitals-low-at', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        cs.lowAt = clampVital($(this).val()) ?? 25;
+        $(this).val(cs.lowAt);
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('click', '#rpg-vitals-add', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        if (!Array.isArray(cs.customStats)) cs.customStats = [];
+        if (cs.customStats.length >= MAX_VITALS) return;
+        const names = new Set(cs.customStats.map(e => String(e?.name || '').toLowerCase()));
+        let name = 'New Vital';
+        let n = 1;
+        while (names.has(name.toLowerCase())) { n++; name = `New Vital ${n}`; }
+        const id = uniqueVitalId(cs, vitalSlug(name));
+        cs.customStats.push({
+            id, name, enabled: true,
+            color: EXTRA_VITAL_COLORS[cs.customStats.length % EXTRA_VITAL_COLORS.length],
+            icon: '', start: 100, ai: true,
+        });
+        _saveVitals();
+        $(`#rpg-vitals-list .rpg-vital-row[data-vital="${id}"] .rpg-vital-name`).trigger('focus').trigger('select');
+    });
+    $(document).on('click', '.rpg-vital-chip', function () {
+        const cs = getVitalsSheet();
+        if (!cs) return;
+        if (!Array.isArray(cs.customStats)) cs.customStats = [];
+        const preset = VITAL_PRESETS.find(p => p.id === String($(this).data('preset')));
+        if (!preset || findVitalEntry(cs, preset.id) || cs.customStats.length >= MAX_VITALS) return;
+        cs.customStats.push({ ...preset, enabled: true, ai: true });
+        _saveVitals();
+    });
+    $(document).on('click', '.rpg-vital-remove', function () {
+        const { cs, entry } = _vitalFromRow(this);
+        if (!entry) return;
+        cs.customStats = cs.customStats.filter(e => e !== entry);
+        _saveVitals();
+    });
+    $(document).on('click', '.rpg-vital-move', function () {
+        const { cs, entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const dir = parseInt($(this).data('dir'), 10) || 0;
+        const i = cs.customStats.indexOf(entry);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= cs.customStats.length) return;
+        cs.customStats.splice(i, 1);
+        cs.customStats.splice(j, 0, entry);
+        _saveVitals();
+    });
+    $(document).on('change', '.rpg-vital-enabled', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        entry.enabled = $(this).prop('checked');
+        _saveVitals();
+    });
+    $(document).on('change', '.rpg-vital-ai', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        entry.ai = $(this).prop('checked');
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('input', '.rpg-vital-color', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const v = String($(this).val() || '').toLowerCase();
+        if (!isHexColor(v)) return;
+        entry.color = v;
+        _saveVitals({ rerender: false });
+    });
+    $(document).on('change', '.rpg-vital-start', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const v = clampVital($(this).val());
+        if (v === null) { renderVitalsSettings(); return; }
+        entry.start = v;
+        $(this).val(v);
+        _saveVitals({ rerender: false });
+    });
+    // Renaming: the name is what the AI sees and what every card and swipe
+    // stores the value under, so it stays unique (case-insensitively).
+    $(document).on('blur', '.rpg-vital-name', function () {
+        const { cs, entry } = _vitalFromRow(this);
+        if (!entry) return;
+        const name = String($(this).val() || '').trim().slice(0, 40);
+        if (!name || name === entry.name) { renderVitalsSettings(); return; }
+        const clash = cs.customStats.some(e => e !== entry && String(e?.name || '').toLowerCase() === name.toLowerCase());
+        if (clash) {
+            try { toastr.warning(`There is already a vital called "${name}".`, 'Vitals'); } catch (e) { /* no toastr */ }
+            renderVitalsSettings();
+            return;
+        }
+        entry.name = name;
+        _saveVitals();
+    });
+    $(document).on('blur', '.rpg-vital-icon', function () {
+        const { entry } = _vitalFromRow(this);
+        if (!entry) return;
+        entry.icon = String($(this).val() || '').trim().slice(0, 4);
+        _saveVitals({ rerender: false });
+    });
+    // Clicking the icon field opens the picker; typing or pasting still works.
+    $(document).on('click', '.rpg-vital-icon', function () {
+        const input = this;
+        openEmojiPicker(input, (emoji) => {
+            const { entry } = _vitalFromRow(input);
+            if (!entry) return;
+            entry.icon = String(emoji || '').slice(0, 4);
+            $(input).val(entry.icon);
+            _saveVitals({ rerender: false });
+        });
+    });
+
     // Wording override. Empty string is meaningful (= use the bare option
     // list), so it's stored as '' rather than deleted. This one skips the
     // _saveRel repaint: the wording only ever reaches the prompt, so there's
@@ -2059,6 +2292,8 @@ function bindSettingsUI() {
         }
     });
     // ── Initialize UI state ──
+    // Stats → Vitals (rows generated from the sheet)
+    try { renderVitalsSettings(); } catch (e) { console.warn('[Dooms Tracker] Vitals settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
