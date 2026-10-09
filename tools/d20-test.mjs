@@ -131,6 +131,7 @@ D.setSheet(settings, 'Mara', false, { dex: 10 }, sdefs);
 check('an all-10 sheet with proficiencies keeps its entry', !!settings.characterAttributes['npc:Mara'] && settings.characterAttributes['npc:Mara'].dex === undefined && D.getProficiencies(settings, 'Mara', false).length === 1);
 D.setSheet(settings, 'Mara', false, { dex: 10 }, sdefs, []);
 check('...and clearing them removes it', settings.characterAttributes['npc:Mara'] === undefined);
+check('findSkill finds a skill under any attribute, any case, and names its home', (() => { const a = D.findSkill(sdefs, 'athletics'); const b = D.findSkill(sdefs, 'Sleight of Hand'); return a && a.attributeId === 'str' && a.name === 'Athletics' && b && b.attributeId === 'dex' && D.findSkill(sdefs, 'Flying') === null && D.findSkill(sdefs, '') === null; })());
 check('skillNameForKey and pruneProficiencies', D.skillNameForKey(sdefs, 'dex:stealth') === 'Stealth' && D.skillNameForKey(sdefs, 'dex:flying') === '' && D.pruneProficiencies(['dex:stealth', 'dex:flying', 'luck:x'], sdefs).join() === 'dex:stealth');
 check('clampProficiency', D.clampProficiency(3) === 3 && D.clampProficiency(0) === 1 && D.clampProficiency(9) === 6 && D.clampProficiency('x') === 2);
 let pr = D.rollCheck({ attribute: 'Strength', abbr: 'STR', skill: 'Athletics', score: 15, dc: 15, proficiency: 2, rng: faces(14) });

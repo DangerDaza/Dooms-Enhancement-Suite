@@ -89,7 +89,7 @@ function render() {
         </div>`;
     }).join('');
     const helper = ctx.isUser
-        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it. Tag a message with the d20 button and this is the sheet it rolls on.`
+        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, and the skills they are proficient in (+${bonus} each). NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
     host.innerHTML = `
         <h4>&#127922; Attributes</h4>

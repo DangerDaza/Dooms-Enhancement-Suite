@@ -16,7 +16,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { escapeHtml } from '../../utils/html.js';
-import { attributesConfig, attributeDefs, attributesOn, difficultyTable, formatModifier, modifier, isProficient } from '../../utils/d20.js';
+import { attributesConfig, attributeDefs, attributesOn, difficultyTable, formatModifier, modifier, isProficient, findSkill } from '../../utils/d20.js';
 import {
     DICE_CHANGED_EVENT,
     getPendingCheck,
@@ -31,7 +31,7 @@ const CHIP_ID = 'dooms-dice-chip';
 let bound = false;
 let lastAttributeId = null;     // the chip the player used last (session only)
 // What the player has picked since opening, seeded from the pending check.
-let draft = { attributeId: null, skill: '', difficultyId: '', advantage: 'none' };
+let draft = { attributeId: null, skill: '', otherSkills: false, difficultyId: '', advantage: 'none' };
 
 // ─── Open / close ───────────────────────────────────────────────────────────
 
@@ -67,9 +67,12 @@ function seedDraft() {
     if (pending && defs.some(d => d.id === pending.attributeId)) id = pending.attributeId;
     else if (lastAttributeId && defs.some(d => d.id === lastAttributeId)) id = lastAttributeId;
     else id = defs[0]?.id || null;
+    const skill = pending && pending.attributeId === id ? pending.skill : '';
     draft = {
         attributeId: id,
-        skill: pending && pending.attributeId === id ? pending.skill : '',
+        skill,
+        // A borrowed skill opens the "Other skills" row so it can be seen.
+        otherSkills: !!(pending && skill && pending.skillAttributeId && pending.skillAttributeId !== id),
         difficultyId: pending?.override?.difficultyId || '',
         advantage: pending?.override?.advantage || 'none',
     };
@@ -103,21 +106,32 @@ function render() {
         </button>`;
     }).join('');
 
-    // The skills under the chosen attribute: a plain check first, then each
-    // skill, the proficient ones marked with the bonus they add.
+    // The skills: a plain check first, then the chosen attribute's own
+    // skills, then (behind "Other skills") every other attribute's, each
+    // tagged with its home. Any skill may pair with any attribute; the
+    // proficiency follows the skill, so the tick is read from its home.
     let skills = '';
     if (def) {
-        const list = Array.isArray(def.skills) ? def.skills : [];
-        const wanted = String(draft.skill || '').toLowerCase();
-        if (wanted && !list.some(sk => sk.toLowerCase() === wanted)) draft.skill = '';
-        const plain = `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${!draft.skill ? ' is-selected' : ''}" data-skill="" title="The attribute alone">Plain ${escapeHtml(def.name)} check</button>`;
-        const items = list.map(sk => {
-            const prof = isProficient(profs, def.id, sk);
-            const sel = draft.skill.toLowerCase() === sk.toLowerCase();
+        const hit = findSkill(defs, draft.skill);
+        if (draft.skill && !hit) draft.skill = '';
+        const sel = (sk) => !!hit && hit.name.toLowerCase() === sk.toLowerCase();
+        const chip = (homeId, sk, tag) => {
+            const prof = isProficient(profs, homeId, sk);
             const title = prof ? `Proficient: +${cfg.proficiencyBonus} on this skill` : sk;
-            return `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${sel ? ' is-selected' : ''}${prof ? ' is-prof' : ''}" data-skill="${escapeHtml(sk)}" title="${escapeHtml(title)}">${escapeHtml(sk)}${prof ? `<span class="rpg-dice-skill-prof">+${cfg.proficiencyBonus}</span>` : ''}</button>`;
-        }).join('');
-        skills = `<div class="rpg-dice-skills">${plain}${items}</div>`;
+            return `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${sel(sk) ? ' is-selected' : ''}${prof ? ' is-prof' : ''}" data-skill="${escapeHtml(sk)}" title="${escapeHtml(title)}">${escapeHtml(sk)}${tag ? `<small class="rpg-dice-skill-home">${escapeHtml(tag)}</small>` : ''}${prof ? `<span class="rpg-dice-skill-prof">+${cfg.proficiencyBonus}</span>` : ''}</button>`;
+        };
+        const own = (Array.isArray(def.skills) ? def.skills : []).map(sk => chip(def.id, sk, '')).join('');
+        const plain = `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${!draft.skill ? ' is-selected' : ''}" data-skill="" title="The attribute alone">Plain ${escapeHtml(def.name)} check</button>`;
+        const others = defs.filter(d => d.id !== def.id && Array.isArray(d.skills) && d.skills.length);
+        const borrowed = !!hit && hit.attributeId !== def.id;
+        const open = draft.otherSkills || borrowed;
+        const toggle = others.length
+            ? `<button type="button" class="rpg-dice-chip-btn rpg-dice-others${open ? ' is-selected' : ''}" title="Pair this attribute with a skill from another one (the Skills with Different Abilities variant)">Other skills ${open ? '&#9662;' : '&#9656;'}</button>`
+            : '';
+        const otherRow = open && others.length
+            ? `<div class="rpg-dice-skills rpg-dice-skills-other">${others.map(d => d.skills.map(sk => chip(d.id, sk, d.abbr)).join('')).join('')}</div>`
+            : '';
+        skills = `<div class="rpg-dice-skills">${plain}${own}${toggle}</div>${otherRow}`;
     }
 
     const sheetNote = persona && persona.isDefault
@@ -228,11 +242,17 @@ function bindOnce() {
     $(document).on('click', '#rpg-dice-close, #rpg-dice-body .rpg-dice-cancel', closeDicePanel);
     $(document).on('click', '#rpg-dice-body .rpg-dice-attr', function () {
         const id = String($(this).data('id'));
-        if (id !== draft.attributeId) { draft.attributeId = id; draft.skill = ''; }
+        // A new attribute starts as a plain check: a pairing across attributes
+        // is picked on purpose from "Other skills", never left over.
+        if (id !== draft.attributeId) { draft.attributeId = id; draft.skill = ''; draft.otherSkills = false; }
         render();
     });
     $(document).on('click', '#rpg-dice-body .rpg-dice-skill', function () {
         draft.skill = String($(this).data('skill') || '');
+        render();
+    });
+    $(document).on('click', '#rpg-dice-body .rpg-dice-others', function () {
+        draft.otherSkills = !draft.otherSkills;
         render();
     });
     $(document).on('click', '#rpg-dice-body .rpg-dice-diff', function () {

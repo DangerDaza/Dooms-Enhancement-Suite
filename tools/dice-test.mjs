@@ -107,6 +107,7 @@ check('tagCheck records the attribute, the skill (any case), the score, the prof
 check('...synchronously, with nothing asked yet', calls === 0 && pending.rating === false && dice.getPendingCheck() === pending);
 check('an unknown skill is dropped', dice.tagCheck({ attributeId: 'str', skill: 'Flying' }).skill === '');
 check('a skill the character is not proficient in adds nothing', (() => { const p = dice.tagCheck({ attributeId: 'cha', skill: 'Persuasion' }); return p.skill === 'Persuasion' && p.proficient === false && p.prof === 0; })());
+check('a skill may pair with another attribute and keeps its proficiency (Constitution (Athletics))', (() => { const p = dice.tagCheck({ attributeId: 'con', skill: 'Athletics' }); return p.attribute === 'Constitution' && p.skill === 'Athletics' && p.skillAttributeId === 'str' && p.proficient === true && p.prof === 2 && p.score === 10; })());
 check('override is refused while the setting is off', dice.tagCheck({ attributeId: 'str', skill: 'Athletics', context: 'climb the wall', override: { difficultyId: 'easy' } }).override === null && dice.overrideRuling({ difficultyId: 'easy' }) === null);
 extensionSettings.attributes.allowOverride = true;
 check('override is kept once the setting is on', (() => { const p = dice.overrideRuling({ difficultyId: 'easy', advantage: 'adv' }); return p && p.override.dc === 10 && p.override.advantage === 'adv' && p.override.source === 'override'; })());
@@ -142,6 +143,18 @@ extensionSettings.attributes.enabled = false;
 chat.length = 3;
 check('attributes off: no verdict even with a roll on the message', dice.buildDiceVerdictForGeneration() === '');
 extensionSettings.attributes.enabled = true;
+
+// ── 4b. A borrowed skill at send: the label, the bonus and what the game master is told ──
+chat.length = 0;
+chat.push(ai('The strait is wide and cold.'));
+chat.push(user('I swim for the mainland.'));
+calls = 0;
+dice.tagCheck({ attributeId: 'con', skill: 'Athletics', context: 'swim to the mainland' });
+await dice.onDiceMessageSent();
+const swim = chat[1].extra.dooms_roll;
+check('the roll is a Constitution (Athletics) check with the Athletics proficiency', swim && swim.attribute === 'Constitution' && swim.skill === 'Athletics' && swim.skillAttributeId === 'str' && swim.prof === 2 && swim.score === 10 && swim.mod === 0 && swim.total === swim.kept + 2);
+check('the game master is told the skill is borrowed', calls === 1 && lastMessages[1].content.includes('using Constitution (Athletics, normally a Strength skill)'), lastMessages && lastMessages[1].content);
+check('the verdict and the short form read Constitution (Athletics)', dice.buildDiceVerdictForGeneration().includes('Constitution (Athletics) check: d20 = ') && D.formatRollShort(swim).startsWith('Constitution (Athletics) check · d20 '));
 
 // ── 5. A fixed ruling skips the game master; a discard mid-ruling rolls nothing ──
 chat.length = 0;

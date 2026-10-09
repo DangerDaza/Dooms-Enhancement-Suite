@@ -27,6 +27,7 @@ import {
     getSheet,
     getProficiencies,
     isProficient,
+    findSkill,
     isDefaultSheet,
     buildAttributesLine,
     difficultyById,
@@ -279,16 +280,19 @@ export function tagCheck({ attributeId, skill = '', context = '', override = nul
     const defs = attributeDefs(extensionSettings);
     const def = defs.find(d => d.id === attributeId) || defs[0];
     if (!def) return null;
-    const wanted = String(skill || '').trim().toLowerCase();
-    const skillName = wanted ? ((def.skills || []).find(sk => sk.toLowerCase() === wanted) || '') : '';
+    // Any skill on the list may pair with any attribute (the "Skills with
+    // Different Abilities" variant); the proficiency follows the skill.
+    const hit = findSkill(defs, skill);
+    const skillName = hit ? hit.name : '';
     const persona = getPersonaSheet();
     const cfg = attributesConfig(extensionSettings);
-    const proficient = !!skillName && !!persona && isProficient(persona.proficiencies, def.id, skillName);
+    const proficient = !!hit && !!persona && isProficient(persona.proficiencies, hit.attributeId, hit.name);
     pending = {
         attributeId: def.id,
         attribute: def.name,
         abbr: def.abbr,
         skill: skillName,
+        skillAttributeId: hit ? hit.attributeId : '',
         score: persona ? persona.sheet[def.id] : DEFAULT_SCORE,
         proficient,
         prof: proficient ? cfg.proficiencyBonus : 0,
@@ -324,11 +328,15 @@ export async function rateAttempt({ attributeId, skill = '', context = '', messa
     const cfg = attributesConfig(extensionSettings);
     const def = attributeDefs(extensionSettings).find(d => d.id === attributeId);
     if (!cfg.aiRatesDifficulty || !def) return defaultRuling();
+    // A borrowed skill is named with its home so the game master knows the
+    // pairing is the player's call under the variant rule.
+    const home = skill ? findSkill(attributeDefs(extensionSettings), skill) : null;
+    const homeDef = home && home.attributeId !== def.id ? attributeDefs(extensionSettings).find(d => d.id === home.attributeId) : null;
     const prompt = buildDifficultyRatingPrompt({
         userName: resolvePersonaName() || 'The player',
         attempt: context,
         attributeName: def.name,
-        skillName: skill,
+        skillName: homeDef ? `${skill}, normally a ${homeDef.name} skill` : skill,
         messageText,
         recentText: recentChatText(cfg.contextMessages, { before: beforeIndex }),
     });
@@ -361,6 +369,7 @@ function performRoll(check, ruling) {
     return {
         ...result,
         attributeId: check.attributeId,
+        skillAttributeId: check.skillAttributeId || '',
         difficultyId: ruling.difficultyId,
         difficultyLabel: ruling.label,
         reason: ruling.reason || '',

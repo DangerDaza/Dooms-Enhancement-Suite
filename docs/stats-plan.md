@@ -457,7 +457,12 @@ Four things changed from the plan while building, recorded here:
   final: no Roll now, no Keep or Discard after a roll, no remove button;
   Discard exists only before the roll. Skills carry proficiency: a tick per
   skill on the Workshop sheet adds the proficiency bonus (2 by default,
-  Settings → Stats). `rollOnSend` left the config with this.
+  Settings → Stats). `rollOnSend` left the config with this. The 5e variant
+  "Skills with Different Abilities" is in: any skill may pair with any
+  attribute (Constitution (Athletics), Strength (Intimidation)); the popover
+  lists the attribute's own skills first and the rest behind "Other
+  skills", each tagged with its home; the proficiency follows the skill, and
+  the game master is told when one is borrowed.
 
 One change from the first draft, on the owner's question "why is the player
 setting the difficulty?": they are not. The difficulty and any advantage are

@@ -366,6 +366,24 @@ export function skillNameForKey(defs, key) {
     return (def.skills || []).find(sk => attributeSlug(sk) === slug) || '';
 }
 
+/**
+ * A skill by name, wherever it sits on the list: { attributeId, name } with
+ * the attribute it belongs to (its "home"), or null. Case-insensitive. The
+ * variant rule "Skills with Different Abilities" pairs any skill with any
+ * attribute (Constitution (Athletics), Strength (Intimidation)); the
+ * proficiency stays keyed by the skill's home attribute, so a tick on
+ * Athletics applies whichever attribute the check uses.
+ */
+export function findSkill(defs, name) {
+    const wanted = String(name || '').trim().toLowerCase();
+    if (!wanted) return null;
+    for (const d of defs || []) {
+        const hit = (d.skills || []).find(sk => sk.toLowerCase() === wanted);
+        if (hit) return { attributeId: d.id, name: hit };
+    }
+    return null;
+}
+
 /** Keeps only the proficiencies whose attribute and skill still exist on the defs. */
 export function pruneProficiencies(proficiencies, defs) {
     return normalizeProfKeys((proficiencies || []).filter(k => skillNameForKey(defs, k)));
