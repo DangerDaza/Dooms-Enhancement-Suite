@@ -286,5 +286,89 @@ check('custom relationship names are offered to the model',
     jh.buildRelationshipSpec(relCfg) === '(choose one: Sworn Rival/Reluctant Ally/Blood Debt)');
 resetSettings();
 
+// ── 11. Vitals (Project Short Fuse) ──
+// Off by default, and off must mean INVISIBLE: with vitals off the block
+// carries no stats array, no player key and no guidance, and switching them
+// off again after use gives back the same bytes.
+resetSettings();
+const { committedTrackerData } = await import(`${DES}/src/core/state.js`);
+const vitalsCfg = () => extensionSettings.trackerConfig.presentCharacters.characterStats;
+const setVitals = (patch) => { extensionSettings.trackerConfig.presentCharacters.characterStats = { ...vitalsCfg(), ...patch }; };
+setVitals({ enabled: false });
+const baseline = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('vitals off: no stats array in the characters spec', !baseline.includes('"stats"'));
+check('vitals off: no player key, no guidance', !baseline.includes('"player"') && !baseline.includes('VITALS'));
+check('vitals off: the example is unchanged by the sheet', (() => {
+    committedTrackerData.characterThoughts = JSON.stringify({ characters: [{ name: 'Mara', stats: [{ name: 'Health', value: 72 }] }] });
+    const ex = pb.generateTrackerExample();
+    committedTrackerData.characterThoughts = null;
+    return ex.includes('"value": 72') && !ex.includes('"locked"');
+})());
+
+setVitals({ enabled: true, customStats: [
+    { id: 'health', name: 'Health', enabled: true, ai: true },
+    { id: 'energy', name: 'Energy', enabled: true, ai: false },
+    { id: 'mana', name: 'Mana', enabled: false, ai: true },
+], player: { enabled: true } });
+const withVitals = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('vitals on: the characters spec carries the stats array',
+    withVitals.includes('"stats": [') && withVitals.includes('{"name": "Health", "value": X}'));
+check('vitals on: a switched-off vital is not asked for', !withVitals.includes('"Mana"'));
+check('vitals on: the player key follows characters, with the same stats shape',
+    /"characters": \[[\s\S]*\n  \],\n  "player": \{\n    "stats": \[\n      \{"name": "Health", "value": X\},\n      \{"name": "Energy", "value": X\}\n    \]\n  \}\n\}\n```/.test(withVitals),
+    withVitals.slice(withVitals.indexOf('"player"') - 10, withVitals.indexOf('"player"') + 160));
+check('vitals on: guidance names the player',
+    withVitals.includes('VITALS:') && withVitals.includes(`"player" is ${CTX_NAME}'s`));
+check('vitals on: verbose differs but carries the same keys', (() => {
+    const v = pb.buildTrackerPromptBlock(CTX_NAME, false);
+    return v !== withVitals && v.includes('"player"') && v.includes('VITALS:');
+})());
+check('vitals on: assembly still embeds the block verbatim',
+    pb.generateTrackerInstructions(false, false).includes(withVitals));
+const warnedVitals = pb.getTrackerPromptKeyWarnings('"quests":"" "infoBox":"" "characters":"" "name":"" "location":"" "time":"" "date":""');
+check('vitals on: missing stats and player keys are warned about',
+    warnedVitals.some(w => w.key === 'stats') && warnedVitals.some(w => w.key === 'player'));
+check('vitals on: the generated prompt raises no warnings',
+    pb.getTrackerPromptKeyWarnings(pb.getAssembledTrackerPrompt()).length === 0,
+    pb.getTrackerPromptKeyWarnings(pb.getAssembledTrackerPrompt()).map(w => w.key).join(', '));
+
+setVitals({ player: { enabled: false } });
+const noPlayer = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('player off: stats stay, player key goes', noPlayer.includes('"stats": [') && !noPlayer.includes('"player"'));
+check('player off: characters is again the last section (no trailing comma)', /\]\n\}\n```/.test(noPlayer));
+check('player off: guidance drops the player sentence', !noPlayer.includes('own vitals'));
+
+setVitals({ player: { enabled: true } });
+extensionSettings.showCharacterThoughts = false;
+const onlyPlayer = pb.buildTrackerPromptBlock(CTX_NAME, true);
+check('characters tracker off: the player block is still asked for',
+    onlyPlayer.includes('"player": {') && !onlyPlayer.includes('"characters": '));
+extensionSettings.showQuests = false;
+extensionSettings.showInfoBox = false;
+check('only the player on: instructions are still emitted',
+    pb.generateTrackerInstructions(false, false).includes('"player"'));
+resetSettings();
+
+// Fixed vitals are shown as locked in the previous-tracker example, on
+// characters and on the player, and free ones are not.
+committedTrackerData.characterThoughts = JSON.stringify({ characters: [
+    { name: 'Mara', emoji: '🗡️', stats: [{ name: 'Health', value: 72 }, { name: 'Energy', value: 50 }] },
+] });
+committedTrackerData.player = JSON.stringify({ stats: [{ name: 'Health', value: 91 }, { name: 'Energy', value: 40 }] });
+const example = pb.generateTrackerExample();
+check('example: the fixed vital carries locked on the character',
+    /"name": "Energy",\s*"value": 50,\s*"locked": true/.test(example), example);
+check('example: the free vital does not', !/"name": "Health",\s*"value": 72,\s*"locked"/.test(example));
+check('example: the player block is echoed with its lock',
+    example.includes('"player"') && /"name": "Energy",\s*"value": 40,\s*"locked": true/.test(example));
+check('example: still one JSON object', (() => { try { JSON.parse(example); return true; } catch (e) { return false; } })(), example);
+committedTrackerData.characterThoughts = null;
+committedTrackerData.player = null;
+
+setVitals({ enabled: false });
+check('vitals off again: the block is back to the baseline byte for byte',
+    pb.buildTrackerPromptBlock(CTX_NAME, true) === baseline);
+resetSettings();
+
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

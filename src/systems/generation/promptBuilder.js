@@ -10,10 +10,13 @@ import {
     buildQuestsJSONInstruction,
     buildInfoBoxJSONInstruction,
     buildCharactersJSONInstruction,
+    buildPlayerJSONInstruction,
+    buildVitalsGuidance,
     addLockInstruction,
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
+import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals } from '../../utils/vitals.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
@@ -131,13 +134,32 @@ export function generateTrackerExample() {
             example += '```\n' + committedTrackerData.infoBox + '\n```\n';
         }
     }
+    // Vitals: a fixed vital (ai: false) is shown to the AI as locked, so the
+    // lock sentence already in the prompt covers it. DES enforces the value
+    // after parsing regardless (src/utils/vitals.js).
+    const vitalsActive = vitalsOn(extensionSettings);
+    const defs = vitalsActive ? vitalDefs(extensionSettings) : [];
+    const lockFixed = vitalsActive && hasFixedVitals(defs);
     if (extensionSettings.showCharacterThoughts && committedTrackerData.characterThoughts) {
         try {
             JSON.parse(committedTrackerData.characterThoughts);
-            const lockedData = applyLocks(committedTrackerData.characterThoughts, 'characters');
+            let lockedData = applyLocks(committedTrackerData.characterThoughts, 'characters');
+            if (lockFixed) {
+                lockedData = JSON.stringify(markFixedVitals(JSON.parse(lockedData), defs), null, 2);
+            }
             parts.push(`  "characters": ${lockedData}`);
         } catch {
             example += '```\n' + committedTrackerData.characterThoughts + '\n```';
+        }
+    }
+    if (vitalsActive && playerVitalsOn(extensionSettings) && committedTrackerData.player) {
+        try {
+            const parsed = JSON.parse(committedTrackerData.player);
+            const shown = lockFixed ? markFixedVitals(parsed, defs) : parsed;
+            parts.push(`  "player": ${JSON.stringify(shown, null, 2)}`);
+        } catch {
+            // A malformed player blob is left out of the example rather than
+            // breaking the JSON the AI is asked to copy.
         }
     }
     // If we have JSON parts, wrap them in unified structure
@@ -189,6 +211,9 @@ export function buildTrackerPromptBlock(userName, compact) {
     if (extensionSettings.showQuests) enabledTrackers.push('quests');
     if (extensionSettings.showInfoBox) enabledTrackers.push('infoBox');
     if (extensionSettings.showCharacterThoughts) enabledTrackers.push('characters');
+    // Vitals: the persona's own block rides after "characters".
+    const playerOn = playerVitalsOn(extensionSettings);
+    if (playerOn) enabledTrackers.push('player');
     if (enabledTrackers.length > 0) {
         out += '\n\nFORMAT:\n\nProvide EXACTLY ONE JSON code block with ALL tracker sections wrapped in a single object:\n\n```json\n{\n';
         if (extensionSettings.showQuests) {
@@ -207,10 +232,20 @@ export function buildTrackerPromptBlock(userName, compact) {
             out += '  "characters": ';
             const charactersJSON = buildCharactersJSONInstruction();
             out += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
+            out += enabledTrackers.indexOf('characters') < enabledTrackers.length - 1 ? ',\n' : '';
+        }
+        if (playerOn) {
+            out += '  "player": ';
+            const playerJSON = buildPlayerJSONInstruction();
+            out += playerJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
         }
         out += compact
             ? '\n}\n```\n\nONE unified JSON object only — never separate blocks.'
             : '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
+        // Vitals guidance: one paragraph, only when vitals are on.
+        if (vitalsOn(extensionSettings)) {
+            out += '\n\n' + buildVitalsGuidance(compact, userName);
+        }
     }
     return out;
 }
@@ -266,7 +301,9 @@ export function getTrackerPromptKeyWarnings(promptText) {
     if (extensionSettings.showCharacterThoughts) {
         need('characters', 'Present Characters');
         need('name', 'Present Characters — character names');
+        if (vitalsOn(extensionSettings)) need('stats', 'Vitals');
     }
+    if (playerVitalsOn(extensionSettings)) need('player', 'Vitals — your character');
     // doomTension rides inside the infoBox block, so it's only ever asked for
     // when the Scene Tracker is on. Warning on doomCounter alone flagged DES's
     // own untouched default prompt as broken for anyone running the Doom
@@ -280,8 +317,9 @@ export function getTrackerPromptKeyWarnings(promptText) {
 export function generateTrackerInstructions(includeHtmlPrompt = true, includeContinuation = true) {
     const userName = getContext().name1;
     let instructions = '';
-    // Check if any trackers are enabled
-    const hasAnyTrackers = extensionSettings.showQuests || extensionSettings.showInfoBox || extensionSettings.showCharacterThoughts;
+    // Check if any trackers are enabled (the persona's vitals count as one)
+    const hasAnyTrackers = extensionSettings.showQuests || extensionSettings.showInfoBox || extensionSettings.showCharacterThoughts
+        || playerVitalsOn(extensionSettings);
     // Only add tracker instructions if at least one tracker is enabled
     const compact = extensionSettings.compactPrompts !== false;
     if (hasAnyTrackers) {

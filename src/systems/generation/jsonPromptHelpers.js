@@ -6,6 +6,7 @@ import { extensionSettings, committedTrackerData } from '../../core/state.js';
 import { getContext } from '../../../../../../extensions.js';
 import { i18n } from '../../core/i18n.js';
 import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
+import { vitalDefs, vitalsOn, playerVitalsOn } from '../../utils/vitals.js';
 /**
  * Converts a field name to snake_case for use as JSON key
  * Example: "Test Tracker" -> "test_tracker"
@@ -260,8 +261,9 @@ export function buildCharactersJSONInstruction() {
     const enabledFields = presentCharsConfig?.customFields?.filter(f => f && f.enabled && f.name) || [];
     const relationshipsEnabled = presentCharsConfig?.relationships?.enabled !== false;
     const thoughtsConfig = presentCharsConfig?.thoughts;
-    const characterStats = presentCharsConfig?.characterStats;
-    const enabledCharStats = characterStats?.enabled && characterStats?.customStats?.filter(s => s && s.enabled && s.name) || [];
+    // Vitals (src/utils/vitals.js): the 0–100 bars on the shelf. Off means
+    // nothing is emitted, so a default install's spec is unchanged.
+    const enabledCharStats = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
     let instruction = '[\n';
     instruction += '  {\n';
     instruction += '    "name": "CharacterName",\n';
@@ -301,7 +303,7 @@ export function buildCharactersJSONInstruction() {
         for (let i = 0; i < enabledCharStats.length; i++) {
             const stat = enabledCharStats[i];
             const comma = i < enabledCharStats.length - 1 ? ',' : '';
-            instruction += `      {"name": "${stat.name}", "value": X}${comma}\n`;
+            instruction += `      {"name": "${escapeSpecString(stat.name)}", "value": X}${comma}\n`;
         }
         instruction += '    ]';
     }
@@ -313,6 +315,44 @@ export function buildCharactersJSONInstruction() {
     instruction += '\n  }\n';
     instruction += ']';
     return instruction;
+}
+/**
+ * Builds the "player" block of the spec: the persona's own vitals. The
+ * persona stays out of "characters" (that rule is load-bearing for chat
+ * bubbles, voices and duplicate detection), so it gets a sibling key with
+ * the same stats shape the characters use.
+ * @returns {string} JSON format instruction for the player block
+ */
+export function buildPlayerJSONInstruction() {
+    const defs = vitalDefs(extensionSettings);
+    let instruction = '{\n';
+    instruction += '  "stats": [\n';
+    for (let i = 0; i < defs.length; i++) {
+        const comma = i < defs.length - 1 ? ',' : '';
+        instruction += `    {"name": "${escapeSpecString(defs[i].name)}", "value": X}${comma}\n`;
+    }
+    instruction += '  ]\n';
+    instruction += '}';
+    return instruction;
+}
+/**
+ * The one guidance paragraph for vitals, appended after the FORMAT block.
+ * Only emitted when vitals are on, so it never touches a default prompt.
+ * @param {boolean} compact - honours the Compact Tracker Prompt setting
+ * @param {string} userName - the persona's name, for the player sentence
+ * @returns {string}
+ */
+export function buildVitalsGuidance(compact, userName) {
+    const playerOn = playerVitalsOn(extensionSettings);
+    let out;
+    if (compact) {
+        out = 'VITALS: every "stats" value is a percentage, 0-100. Move each one realistically with what happens and with time passing (rest, food, wounds, exertion, fear); keep it unchanged when nothing affects it. Return every vital listed; never invent others.';
+        if (playerOn) out += ` "player" is ${userName}'s own vitals, same rules.`;
+    } else {
+        out = 'VITALS: every value inside "stats" is a percentage from 0 to 100 showing how that character is doing right now. Raise, lower or keep each one realistically based on what happens in the scene and on the passage of time (rest and food restore; wounds, exertion and fear drain), and leave it unchanged when nothing affects it. Always return every vital listed, and never invent vitals that are not listed.';
+        if (playerOn) out += ` The "player" block holds ${userName}'s own vitals and follows the same rules.`;
+    }
+    return out;
 }
 /**
  * Adds lock information to instruction text

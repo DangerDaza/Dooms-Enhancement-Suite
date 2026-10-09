@@ -169,6 +169,57 @@ export function playerVitalsOn(settings) {
     return vitalsOn(settings) && vitalsConfig(settings).player.enabled;
 }
 
+/** Case-insensitive lookup of a sheet entry by the name the AI uses (or its id). */
+export function findVitalDef(defs, name) {
+    const n = String(name ?? '').trim().toLowerCase();
+    if (!n) return null;
+    return (defs || []).find(d => d.name.toLowerCase() === n || d.id === n) || null;
+}
+
+/** Whether any vital on the sheet is fixed (the AI may not change it). */
+export function hasFixedVitals(defs) {
+    return (defs || []).some(d => d.ai === false);
+}
+
+/**
+ * Marks fixed vitals as locked in a copy of tracker data, for the
+ * previous-tracker example the AI is shown. `data` is the parsed characters
+ * tracker (an array or `{ characters: [...] }`) or a parsed player block
+ * (`{ stats }`). Array-shaped stats gain `locked: true` on the entry; the
+ * object shape becomes `{ value, locked: true }`, the form the lock sentence
+ * in the prompt already describes. Returns `data` itself when nothing on the
+ * sheet is fixed.
+ */
+export function markFixedVitals(data, defs) {
+    const fixed = (defs || []).filter(d => d.ai === false);
+    if (!fixed.length || !data || typeof data !== 'object') return data;
+    const isFixed = (name) => !!findVitalDef(fixed, name);
+    const markStats = (stats) => {
+        if (Array.isArray(stats)) {
+            return stats.map(s => (s && typeof s === 'object' && isFixed(s.name)) ? { ...s, locked: true } : s);
+        }
+        if (stats && typeof stats === 'object') {
+            const out = {};
+            for (const [k, v] of Object.entries(stats)) {
+                if (!isFixed(k)) { out[k] = v; continue; }
+                out[k] = (v && typeof v === 'object') ? { ...v, locked: true } : { value: v, locked: true };
+            }
+            return out;
+        }
+        return stats;
+    };
+    if (Array.isArray(data)) {
+        return data.map(c => (c && typeof c === 'object' && c.stats !== undefined) ? { ...c, stats: markStats(c.stats) } : c);
+    }
+    if (Array.isArray(data.characters)) {
+        return { ...data, characters: markFixedVitals(data.characters, defs) };
+    }
+    if (data.stats !== undefined) {
+        return { ...data, stats: markStats(data.stats) };
+    }
+    return data;
+}
+
 /** True when the stored list is the untouched pre-Short-Fuse default (Health + Arousal, no extra fields). */
 function isLegacyDefaultList(list) {
     if (!Array.isArray(list)) return false;
