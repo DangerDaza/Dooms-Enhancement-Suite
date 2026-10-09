@@ -17,6 +17,8 @@ import {
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
 import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
+// Attributes (Phase 2): one read-only line, outside the tracker JSON.
+import { buildAttributesLineForPrompt } from '../features/diceRolls.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
@@ -334,6 +336,10 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
         instructions += '\n' + (override
             ? override.replace(/{userName}/g, userName)
             : buildTrackerPromptBlock(userName, compact));
+        // Attributes (Phase 2): read-only context, outside the editable block
+        // so it still arrives when the user has replaced the tracker prompt.
+        const attributesLine = buildAttributesLineForPrompt();
+        if (attributesLine) instructions += '\n\n' + attributesLine;
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
             const customPrompt = extensionSettings.customTrackerContinuationPrompt;
@@ -345,7 +351,11 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 instructions += `\n\nAfter updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
             }
         }
-        }
+    } else {
+        // No tracker on at all: the attributes line can still be worth sending.
+        const attributesLine = buildAttributesLineForPrompt();
+        if (attributesLine) instructions += '\n' + attributesLine;
+    }
     // Append HTML prompt if enabled AND includeHtmlPrompt is true
     if (extensionSettings.enableHtmlPrompt && includeHtmlPrompt) {
         // Add newlines only if we had tracker instructions
@@ -818,6 +828,13 @@ export function generateContextualSummary() {
         } catch (e) {
             console.warn('[Dooms Tracker] Failed to format player vitals for context:', e);
         }
+    }
+    // Attributes (Phase 2): the same read-only line the together-mode prompt gets
+    try {
+        const attributesLine = buildAttributesLineForPrompt();
+        if (attributesLine) summary += attributesLine + '\n';
+    } catch (e) {
+        console.warn('[Dooms Tracker] Failed to format attributes for context:', e);
     }
     return summary.trim();
 }

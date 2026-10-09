@@ -370,5 +370,39 @@ check('vitals off again: the block is back to the baseline byte for byte',
     pb.buildTrackerPromptBlock(CTX_NAME, true) === baseline);
 resetSettings();
 
+// ── 12. Attributes (Project Short Fuse, Phase 2) ──
+// One read-only line outside the tracker JSON, gated three ways: the master
+// switch, a sheet worth sending, and the "when" setting.
+resetSettings();
+extensionSettings.attributes = { ...extensionSettings.attributes, enabled: false };
+const attrBaseline = pb.generateTrackerInstructions(false, false);
+check('attributes off: no ATTRIBUTES line', !attrBaseline.includes('ATTRIBUTES'));
+extensionSettings.attributes = { ...extensionSettings.attributes, enabled: true, sendToAI: 'always' };
+extensionSettings.characterAttributes = {};
+check('attributes on, every sheet default: still no line', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
+extensionSettings.characterAttributes = { [`user:${CTX_NAME}`]: { str: 15 }, 'npc:Mara': { dex: 16 }, 'npc:Orin': {} };
+committedTrackerData.characterThoughts = JSON.stringify([{ name: 'Mara' }, { name: 'Orin' }]);
+const withAttrs = pb.generateTrackerInstructions(false, false);
+check('always: the line names the persona and the NPCs with non-default sheets',
+    withAttrs.includes('ATTRIBUTES (D&D scale') && withAttrs.includes(`${CTX_NAME} (player): STR 15 (+2)`) && withAttrs.includes('Mara: DEX 16 (+3)') && !withAttrs.includes('Orin'), withAttrs);
+check('always: the line sits after the tracker block and before the continuation', (() => {
+    const full = pb.generateTrackerInstructions(false, true);
+    return full.indexOf('ATTRIBUTES') > full.indexOf('ONE unified JSON object only') && full.indexOf('ATTRIBUTES') < full.indexOf('Then continue the story');
+})());
+check('always: the separate-mode context carries the same line', pb.generateContextualSummary().includes('Mara: DEX 16 (+3)'));
+extensionSettings.attributes = { ...extensionSettings.attributes, sendToAI: 'withRoll' };
+check('with a roll only: no roll in the chat, no line', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
+extensionSettings.attributes = { ...extensionSettings.attributes, sendToAI: 'never' };
+check('never: no line', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
+extensionSettings.attributes = { ...extensionSettings.attributes, sendToAI: 'always' };
+extensionSettings.showQuests = false; extensionSettings.showInfoBox = false; extensionSettings.showCharacterThoughts = false;
+check('no tracker on at all: the line is still sent', pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
+resetSettings();
+committedTrackerData.characterThoughts = null;
+extensionSettings.characterAttributes = {};
+extensionSettings.attributes = { ...extensionSettings.attributes, enabled: false, sendToAI: 'withRoll' };
+check('attributes off again: instructions back to the baseline byte for byte', pb.generateTrackerInstructions(false, false) === attrBaseline);
+resetSettings();
+
 console.log(failures === 0 ? '\nAll tracker-prompt fixtures pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
