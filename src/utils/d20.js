@@ -24,13 +24,23 @@
  * this; it is handed the verdict to narrate.
  */
 
+/** The 5e skills under each ability. Constitution has none; a plain check is always offered. */
+export const SKILL_PRESETS = Object.freeze({
+    str: Object.freeze(['Athletics']),
+    dex: Object.freeze(['Acrobatics', 'Sleight of Hand', 'Stealth']),
+    con: Object.freeze([]),
+    int: Object.freeze(['Arcana', 'History', 'Investigation', 'Nature', 'Religion']),
+    wis: Object.freeze(['Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival']),
+    cha: Object.freeze(['Deception', 'Intimidation', 'Performance', 'Persuasion']),
+});
+
 export const ATTRIBUTE_PRESETS = Object.freeze([
-    { id: 'str', name: 'Strength',     abbr: 'STR', enabled: true },
-    { id: 'dex', name: 'Dexterity',    abbr: 'DEX', enabled: true },
-    { id: 'con', name: 'Constitution', abbr: 'CON', enabled: true },
-    { id: 'int', name: 'Intelligence', abbr: 'INT', enabled: true },
-    { id: 'wis', name: 'Wisdom',       abbr: 'WIS', enabled: true },
-    { id: 'cha', name: 'Charisma',     abbr: 'CHA', enabled: true },
+    { id: 'str', name: 'Strength',     abbr: 'STR', enabled: true, skills: SKILL_PRESETS.str },
+    { id: 'dex', name: 'Dexterity',    abbr: 'DEX', enabled: true, skills: SKILL_PRESETS.dex },
+    { id: 'con', name: 'Constitution', abbr: 'CON', enabled: true, skills: SKILL_PRESETS.con },
+    { id: 'int', name: 'Intelligence', abbr: 'INT', enabled: true, skills: SKILL_PRESETS.int },
+    { id: 'wis', name: 'Wisdom',       abbr: 'WIS', enabled: true, skills: SKILL_PRESETS.wis },
+    { id: 'cha', name: 'Charisma',     abbr: 'CHA', enabled: true, skills: SKILL_PRESETS.cha },
 ]);
 
 /** The difficulty words the game master picks from, and their default DCs. */
@@ -46,6 +56,9 @@ export const MIN_SCORE = 1;
 export const MAX_SCORE = 30;
 export const DEFAULT_SCORE = 10;
 export const MAX_ATTRIBUTES = 12;
+export const MAX_SKILLS = 12;            // per attribute
+export const MIN_PROFICIENCY = 1;
+export const MAX_PROFICIENCY = 6;
 export const STANDARD_ARRAY = Object.freeze([15, 14, 13, 12, 10, 8]);
 
 const CONFIG_DEFAULTS = Object.freeze({
@@ -55,7 +68,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     criticals: true,               // natural 20 succeeds, natural 1 fails
     aiRatesDifficulty: true,       // one small separate call rates the attempt
     allowOverride: false,          // may the player change the AI's ruling?
-    rollOnSend: true,              // tag the message, roll when it is sent
+    proficiencyBonus: 2,           // added to a roll on a skill the character is proficient in
     contextMessages: 6,            // recent messages the rating call sees
 });
 
@@ -65,14 +78,14 @@ const SEND_MODES = ['always', 'withRoll', 'never'];
 export function defaultAttributesConfig() {
     return {
         enabled: CONFIG_DEFAULTS.enabled,
-        list: ATTRIBUTE_PRESETS.map(p => ({ ...p })),
+        list: ATTRIBUTE_PRESETS.map(p => ({ ...p, skills: [...p.skills] })),
         sendToAI: CONFIG_DEFAULTS.sendToAI,
         difficulty: Object.fromEntries(DIFFICULTIES.map(d => [d.id, d.dc])),
         defaultDifficulty: CONFIG_DEFAULTS.defaultDifficulty,
         criticals: CONFIG_DEFAULTS.criticals,
         aiRatesDifficulty: CONFIG_DEFAULTS.aiRatesDifficulty,
         allowOverride: CONFIG_DEFAULTS.allowOverride,
-        rollOnSend: CONFIG_DEFAULTS.rollOnSend,
+        proficiencyBonus: CONFIG_DEFAULTS.proficiencyBonus,
         contextMessages: CONFIG_DEFAULTS.contextMessages,
     };
 }
@@ -105,7 +118,31 @@ export function normalizeAttributeDef(entry) {
         name,
         abbr: abbrRaw.toUpperCase().slice(0, 5),
         enabled: e.enabled !== false,
+        skills: normalizeSkills(Array.isArray(e.skills) ? e.skills : (preset?.skills || [])),
     };
+}
+
+/** Skill names as stored on an attribute: trimmed, unique (case-insensitively), at most MAX_SKILLS. */
+export function normalizeSkills(list) {
+    const out = [];
+    const seen = new Set();
+    for (const raw of Array.isArray(list) ? list : []) {
+        const name = String(raw ?? '').trim().slice(0, 32);
+        if (!name) continue;
+        const lower = name.toLowerCase();
+        if (seen.has(lower)) continue;
+        seen.add(lower);
+        out.push(name);
+        if (out.length >= MAX_SKILLS) break;
+    }
+    return out;
+}
+
+/** The proficiency bonus as a whole number within range; the default when unreadable. */
+export function clampProficiency(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return CONFIG_DEFAULTS.proficiencyBonus;
+    return Math.min(MAX_PROFICIENCY, Math.max(MIN_PROFICIENCY, Math.round(n)));
 }
 
 /**
@@ -132,7 +169,7 @@ export function attributesConfig(settings) {
         criticals: a.criticals !== false,
         aiRatesDifficulty: a.aiRatesDifficulty !== false,
         allowOverride: a.allowOverride === true,
-        rollOnSend: a.rollOnSend !== false,
+        proficiencyBonus: clampProficiency(a.proficiencyBonus),
         contextMessages: Number.isFinite(ctx) ? Math.min(30, Math.max(1, Math.round(ctx))) : CONFIG_DEFAULTS.contextMessages,
     };
 }
@@ -167,7 +204,7 @@ export function migrateAttributesConfig(settings) {
         a.list = a.list.filter(e => e && typeof e === 'object');
         a.list.forEach(entry => {
             const full = normalizeAttributeDef(entry);
-            for (const key of ['id', 'name', 'abbr', 'enabled']) {
+            for (const key of ['id', 'name', 'abbr', 'enabled', 'skills']) {
                 if (entry[key] === undefined) { entry[key] = full[key]; changed = true; }
             }
         });
@@ -175,7 +212,7 @@ export function migrateAttributesConfig(settings) {
         for (const d of DIFFICULTIES) {
             if (a.difficulty[d.id] === undefined) { a.difficulty[d.id] = d.dc; changed = true; }
         }
-        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'rollOnSend', 'contextMessages']) {
+        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'contextMessages']) {
             if (a[key] === undefined) { a[key] = fresh[key]; changed = true; }
         }
     }
@@ -261,22 +298,77 @@ export function isDefaultSheet(sheet, defs) {
  * all-10 sheet removes the entry, so "default" stays trivially detectable.
  * Mutates settings.characterAttributes; returns the stored object or null.
  */
-export function setSheet(settings, name, isUser, scores, defs = null) {
+export function setSheet(settings, name, isUser, scores, defs = null, proficiencies = null) {
     if (!settings || typeof settings !== 'object' || !name) return null;
     if (!settings.characterAttributes || typeof settings.characterAttributes !== 'object') settings.characterAttributes = {};
     const list = defs || attributeDefs(settings, { all: true });
     const store = settings.characterAttributes;
     const key = characterKey(name, isUser);
     const existing = findStoreKey(store, key);
+    // Proficiencies not passed are kept as they were.
+    const prof = normalizeProfKeys(Array.isArray(proficiencies) ? proficiencies : (existing !== undefined ? store[existing]?.[PROF_KEY] : null));
     if (existing !== undefined && existing !== key) delete store[existing];
     const out = {};
     for (const d of list) {
         const v = clampScore(scores ? scores[d.id] : undefined);
         if (v !== null && v !== DEFAULT_SCORE) out[d.id] = v;
     }
+    if (prof.length) out[PROF_KEY] = prof;
     if (Object.keys(out).length) store[key] = out;
     else delete store[key];
     return store[key] || null;
+}
+
+// ─── Skills and proficiency ─────────────────────────────────────────────────
+//
+// A proficiency is "this character is good at this skill": the proficiency
+// bonus is added to a roll on it. Stored on the sheet under a reserved key
+// as "attributeId:skill-slug" strings, so an attribute or skill that goes
+// away takes its proficiencies with it (see index.js's settings handlers).
+
+const PROF_KEY = '_prof';
+
+/** The stored form of a proficiency: "dex:sleight_of_hand" (the attribute id, then the skill's slug). */
+export function skillKey(attributeId, skillName) {
+    return `${String(attributeId || '')}:${attributeSlug(skillName)}`;
+}
+
+function normalizeProfKeys(list) {
+    const out = [];
+    for (const raw of Array.isArray(list) ? list : []) {
+        const k = String(raw ?? '').trim();
+        if (k && k.includes(':') && !out.includes(k)) out.push(k);
+    }
+    return out.sort();
+}
+
+/** A character's proficiency keys, [] when none are stored. Name lookup is case-insensitive. */
+export function getProficiencies(settings, name, isUser) {
+    const store = settings?.characterAttributes;
+    const k = findStoreKey(store, characterKey(name, isUser));
+    if (k === undefined) return [];
+    return normalizeProfKeys(store[k]?.[PROF_KEY]);
+}
+
+/** True when the key for this attribute and skill is among the proficiencies. */
+export function isProficient(proficiencies, attributeId, skillName) {
+    return Array.isArray(proficiencies) && proficiencies.includes(skillKey(attributeId, skillName));
+}
+
+/** Resolves a proficiency key back to its skill's display name, or '' when no def carries it. */
+export function skillNameForKey(defs, key) {
+    const i = String(key || '').indexOf(':');
+    if (i < 0) return '';
+    const attributeId = key.slice(0, i);
+    const slug = key.slice(i + 1);
+    const def = (defs || []).find(d => d.id === attributeId);
+    if (!def) return '';
+    return (def.skills || []).find(sk => attributeSlug(sk) === slug) || '';
+}
+
+/** Keeps only the proficiencies whose attribute and skill still exist on the defs. */
+export function pruneProficiencies(proficiencies, defs) {
+    return normalizeProfKeys((proficiencies || []).filter(k => skillNameForKey(defs, k)));
 }
 
 /** Removes a character's sheet. */
@@ -326,9 +418,10 @@ export function roll4d6DropLowest(rng = cryptoRandomInt) {
  * @param {{ attribute: string, abbr?: string, score: number, dc: number,
  *           advantage?: 'none'|'adv'|'dis', criticals?: boolean, rng?: Function }} p
  */
-export function rollCheck({ attribute, abbr = '', score, dc, advantage = 'none', criticals = true, rng = cryptoRandomInt }) {
+export function rollCheck({ attribute, abbr = '', skill = '', score, dc, advantage = 'none', criticals = true, proficiency = 0, rng = cryptoRandomInt }) {
     const s = clampScore(score) ?? DEFAULT_SCORE;
     const mod = modifier(s);
+    const prof = Number.isFinite(Number(proficiency)) ? Math.max(0, Math.round(Number(proficiency))) : 0;
     const target = Number.isFinite(dc) ? Math.round(dc) : 15;
     const adv = advantage === 'adv' || advantage === 'dis' ? advantage : 'none';
     const first = rollDie(20, rng);
@@ -341,7 +434,7 @@ export function rollCheck({ attribute, abbr = '', score, dc, advantage = 'none',
         kept = adv === 'adv' ? Math.max(first, second) : Math.min(first, second);
         dropped = adv === 'adv' ? Math.min(first, second) : Math.max(first, second);
     }
-    const total = kept + mod;
+    const total = kept + mod + prof;
     let success = total >= target;
     let critical = null;
     if (criticals) {
@@ -351,8 +444,10 @@ export function rollCheck({ attribute, abbr = '', score, dc, advantage = 'none',
     return {
         attribute: String(attribute || ''),
         abbr: String(abbr || ''),
+        skill: String(skill || ''),
         score: s,
         mod,
+        prof,
         rolls,
         kept,
         dropped,
@@ -394,24 +489,33 @@ function narrateWords(roll) {
 export function verdictText(roll, { userName = 'The player', attempt = '', difficultyLabel = '', reason = '' } = {}) {
     const who = String(userName || 'The player');
     const what = attempt ? `"${String(attempt).trim()}"` : 'the action in their last message';
-    const label = roll.attribute || roll.abbr || 'Ability';
+    const label = checkLabel(roll);
     let dice = `d20 = ${roll.kept}`;
     if (roll.advantage !== 'none' && roll.rolls.length === 2) {
         dice += ` (rolled ${roll.rolls[0]} and ${roll.rolls[1]}; ${roll.advantage === 'adv' ? 'advantage keeps the higher' : 'disadvantage keeps the lower'})`;
     }
-    const modPart = `${formatModifier(roll.mod)}${roll.abbr ? ` (${roll.abbr} ${roll.score})` : ''}`;
+    const modPart = `${formatModifier(roll.mod)}${roll.abbr ? ` (${roll.abbr} ${roll.score})` : ''}${roll.prof ? `, +${roll.prof} (proficient in ${roll.skill || 'this'})` : ''}`;
     const dcPart = `DC ${roll.dc}${difficultyLabel ? ` (${difficultyLabel})` : ''}${reason ? `, because ${String(reason).trim().replace(/\.$/, '')}` : ''}`;
     return `[DICE: ${who} attempts ${what}. ${label} check: ${dice}, ${modPart} = ${roll.total} vs ${dcPart}. ${outcomeWords(roll)}. This outcome is final: ${narrateWords(roll)}. Do not re-roll, reverse or soften it.]`;
 }
 
-/** Short form for the chip and the roll card. */
-export function formatRollShort(roll) {
-    const label = roll.attribute || roll.abbr || 'Ability';
-    const dice = roll.advantage !== 'none' && roll.rolls.length === 2 ? `${roll.kept} (${roll.rolls[0]}/${roll.rolls[1]})` : `${roll.kept}`;
-    const outcome = roll.critical === 'success' ? 'Critical success'
+/** "Dexterity (Stealth)" or "Strength": the attribute with the skill when there is one. */
+export function checkLabel(roll) {
+    const base = roll?.attribute || roll?.abbr || 'Ability';
+    return roll?.skill ? `${base} (${roll.skill})` : base;
+}
+
+/** The outcome in two words for cards and chips. */
+export function outcomeLabel(roll) {
+    return roll.critical === 'success' ? 'Critical success'
         : roll.critical === 'failure' ? 'Critical failure'
             : roll.success ? 'Success' : 'Failure';
-    return `${label} check · d20 ${dice} ${formatModifier(roll.mod)} = ${roll.total} vs DC ${roll.dc} · ${outcome}`;
+}
+
+/** Short form for the chip and the roll card. */
+export function formatRollShort(roll) {
+    const dice = roll.advantage !== 'none' && roll.rolls.length === 2 ? `${roll.kept} (${roll.rolls[0]}/${roll.rolls[1]})` : `${roll.kept}`;
+    return `${checkLabel(roll)} check · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc} · ${outcomeLabel(roll)}`;
 }
 
 // ─── Prompt text ────────────────────────────────────────────────────────────
@@ -421,27 +525,38 @@ export function formatRollShort(roll) {
  * [{ name, isUser, sheet }]; a character whose sheet is all 10s is left
  * out, and only scores other than 10 are listed. '' when nothing to say.
  */
-export function buildAttributesLine(entries, defs) {
+export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus } = {}) {
     const parts = [];
+    let anyProf = false;
     for (const e of entries || []) {
-        if (!e || !e.name || !e.sheet || isDefaultSheet(e.sheet, defs)) continue;
+        if (!e || !e.name) continue;
+        const sheet = e.sheet || {};
         const scores = defs
-            .filter(d => e.sheet[d.id] !== undefined && e.sheet[d.id] !== DEFAULT_SCORE)
-            .map(d => `${d.abbr} ${e.sheet[d.id]} (${formatModifier(modifier(e.sheet[d.id]))})`);
-        if (scores.length) parts.push(`${e.name}${e.isUser ? ' (player)' : ''}: ${scores.join(', ')}`);
+            .filter(d => sheet[d.id] !== undefined && sheet[d.id] !== DEFAULT_SCORE)
+            .map(d => `${d.abbr} ${sheet[d.id]} (${formatModifier(modifier(sheet[d.id]))})`);
+        const prof = (e.proficiencies || []).map(k => skillNameForKey(defs, k)).filter(Boolean);
+        if (!scores.length && !prof.length) continue;
+        if (prof.length) anyProf = true;
+        const bits = [];
+        if (scores.length) bits.push(scores.join(', '));
+        if (prof.length) bits.push(`proficient in ${prof.join(', ')} (+${proficiencyBonus})`);
+        parts.push(`${e.name}${e.isUser ? ' (player)' : ''}: ${bits.join('; ')}`);
     }
     if (!parts.length) return '';
-    return 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; read-only, never output them): ' + parts.join('. ') + '.';
+    const head = 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2' + (anyProf ? `; a proficient skill adds +${proficiencyBonus}` : '') + '; read-only, never output them): ';
+    return head + parts.join('. ') + '.';
 }
 
 /**
  * The small separate call that rates an attempt: what the game master is
  * asked, and what it is shown.
  */
-export function buildDifficultyRatingPrompt({ userName = 'The player', attempt = '', attributeName = 'an ability', recentText = '' } = {}) {
+export function buildDifficultyRatingPrompt({ userName = 'The player', attempt = '', attributeName = 'an ability', skillName = '', messageText = '', recentText = '' } = {}) {
     const words = DIFFICULTIES.map(d => d.label.toLowerCase()).join('|');
     const system = `You are the game master of a roleplay. The player is about to attempt something and will roll a d20 against a difficulty you set. Judge how hard the attempt is for this character in this scene, as a fair but demanding game master would: an ordinary act is easy, a real test medium, something most people would fail hard, a feat very hard, a miracle nearly impossible. Give advantage only when circumstances clearly favour the attempt and disadvantage only when they clearly hinder it. Answer with ONE line of JSON and nothing else: {"difficulty": "<${words}>", "advantage": "<none|advantage|disadvantage>", "reason": "<one short sentence>"}`;
-    const user = `Recent scene:\n${recentText || '(no messages yet)'}\n\nThe player (${userName}) attempts: "${String(attempt || '').trim() || 'what their next message describes'}", using ${attributeName}.\nRate it.`;
+    const using = `${attributeName}${skillName ? ` (${skillName})` : ''}`;
+    const message = String(messageText || '').trim();
+    const user = `Recent scene:\n${recentText || '(no messages yet)'}\n\nThe player (${userName}) attempts: "${String(attempt || '').trim() || (message ? 'what their message describes' : 'what their next message describes')}", using ${using}.${message ? `\nTheir message: "${message.slice(0, 600)}"` : ''}\nRate it.`;
     return { system, user };
 }
 

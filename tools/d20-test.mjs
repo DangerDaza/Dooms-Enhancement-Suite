@@ -23,8 +23,8 @@ const faces = (...values) => { let i = 0; return (max) => (values[i++ % values.l
 // ── 1. Defaults and migration ──
 const fresh = D.defaultAttributesConfig();
 check('six attributes by default, all on', fresh.list.length === 6 && fresh.list.every(a => a.enabled));
-check('off by default; sent only with a roll; criticals on; roll on send; AI rates',
-    fresh.enabled === false && fresh.sendToAI === 'withRoll' && fresh.criticals === true && fresh.rollOnSend === true && fresh.aiRatesDifficulty === true && fresh.allowOverride === false);
+check('off by default; sent only with a roll; criticals on; AI rates; +2 proficiency',
+    fresh.enabled === false && fresh.sendToAI === 'withRoll' && fresh.criticals === true && fresh.aiRatesDifficulty === true && fresh.allowOverride === false && fresh.proficiencyBonus === 2 && fresh.rollOnSend === undefined);
 check('difficulty table has the five words', Object.keys(fresh.difficulty).length === 5 && fresh.difficulty.nearlyImpossible === 30);
 const settings = {};
 check('migration fills an empty settings object', D.migrateAttributesConfig(settings) === true && settings.attributes.list.length === 6 && typeof settings.characterAttributes === 'object');
@@ -113,6 +113,42 @@ check('rating: nothing readable gives null', D.parseDifficultyRating('Okay.', se
 settings.attributes.difficulty.hard = 18;
 check('rating uses the configured DC', D.parseDifficultyRating('hard', settings).dc === 18 && D.difficultyById(settings, 'hard').dc === 18);
 check('difficultyById falls back to the default difficulty', D.difficultyById(settings, 'bogus').id === 'medium');
+
+// ── 6. Skills and proficiency ──
+check('presets carry the 5e skills; Constitution has none', fresh.list.find(a => a.id === 'dex').skills.join() === 'Acrobatics,Sleight of Hand,Stealth' && fresh.list.find(a => a.id === 'con').skills.length === 0);
+check('the default list holds its own skill arrays, not the frozen presets', !Object.isFrozen(fresh.list[0].skills));
+check('migration adds skills to a preset entry and none to a custom one', edited.attributes.list[0].skills.join() === 'Athletics' && Array.isArray(edited.attributes.list[1].skills) && edited.attributes.list[1].skills.length === 0);
+check('normalizeAttributeDef cleans a skill list', D.normalizeAttributeDef({ id: 'str', skills: [' Athletics ', 'athletics', 'Climbing', '', 42] }).skills.join() === 'Athletics,Climbing,42');
+check('skillKey', D.skillKey('dex', 'Sleight of Hand') === 'dex:' + D.attributeSlug('Sleight of Hand') && D.skillKey('dex', 'Stealth') === 'dex:stealth');
+const sdefs = D.attributeDefs(settings, { all: true });
+D.setSheet(settings, 'Mara', false, { dex: 16 }, sdefs, [D.skillKey('dex', 'Stealth'), 'bogus', D.skillKey('dex', 'Stealth')]);
+check('setSheet stores proficiencies once, sorted, beside the scores', JSON.stringify(settings.characterAttributes['npc:Mara']) === JSON.stringify({ dex: 16, _prof: ['dex:stealth'] }), JSON.stringify(settings.characterAttributes['npc:Mara']));
+check('getProficiencies and isProficient', D.getProficiencies(settings, 'mara', false).join() === 'dex:stealth' && D.isProficient(D.getProficiencies(settings, 'Mara', false), 'dex', 'Stealth') && !D.isProficient(D.getProficiencies(settings, 'Mara', false), 'dex', 'Acrobatics'));
+D.setSheet(settings, 'Mara', false, { dex: 14 }, sdefs);
+check('setSheet without proficiencies keeps them', settings.characterAttributes['npc:Mara'].dex === 14 && settings.characterAttributes['npc:Mara']._prof.join() === 'dex:stealth');
+check('getSheet never leaks the proficiency key', D.getSheet(settings, 'Mara', false, sdefs)._prof === undefined);
+D.setSheet(settings, 'Mara', false, { dex: 10 }, sdefs);
+check('an all-10 sheet with proficiencies keeps its entry', !!settings.characterAttributes['npc:Mara'] && settings.characterAttributes['npc:Mara'].dex === undefined && D.getProficiencies(settings, 'Mara', false).length === 1);
+D.setSheet(settings, 'Mara', false, { dex: 10 }, sdefs, []);
+check('...and clearing them removes it', settings.characterAttributes['npc:Mara'] === undefined);
+check('skillNameForKey and pruneProficiencies', D.skillNameForKey(sdefs, 'dex:stealth') === 'Stealth' && D.skillNameForKey(sdefs, 'dex:flying') === '' && D.pruneProficiencies(['dex:stealth', 'dex:flying', 'luck:x'], sdefs).join() === 'dex:stealth');
+check('clampProficiency', D.clampProficiency(3) === 3 && D.clampProficiency(0) === 1 && D.clampProficiency(9) === 6 && D.clampProficiency('x') === 2);
+let pr = D.rollCheck({ attribute: 'Strength', abbr: 'STR', skill: 'Athletics', score: 15, dc: 15, proficiency: 2, rng: faces(14) });
+check('a proficient skill adds the bonus', pr.total === 18 && pr.prof === 2 && pr.skill === 'Athletics' && pr.success && pr.margin === 3);
+check('no proficiency means +0 and no skill', (() => { const q = D.rollCheck({ attribute: 'Wisdom', score: 10, dc: 10, rng: faces(10) }); return q.prof === 0 && q.skill === '' && q.total === 10; })());
+let pv = D.verdictText(pr, { userName: 'Jordan', attempt: 'climb', difficultyLabel: 'Medium' });
+check('verdict names the skill and the bonus', pv.includes('Strength (Athletics) check: d20 = 14, +2 (STR 15), +2 (proficient in Athletics) = 18 vs DC 15 (Medium)'), pv);
+check('short form with a skill and bonus', D.formatRollShort(pr) === 'Strength (Athletics) check · d20 14 +2 +2 = 18 vs DC 15 · Success', D.formatRollShort(pr));
+check('checkLabel without a skill is the attribute', D.checkLabel(D.rollCheck({ attribute: 'Wisdom', score: 10, dc: 10, rng: faces(10) })) === 'Wisdom');
+const pline = D.buildAttributesLine([
+    { name: 'Jordan', isUser: true, sheet: { str: 15 }, proficiencies: ['str:athletics', 'cha:persuasion'] },
+    { name: 'Orin', isUser: false, sheet: { str: 10 }, proficiencies: ['dex:stealth'] },
+    { name: 'Nobody', isUser: false, sheet: { str: 10 }, proficiencies: ['dex:flying'] },
+], sdefs, { proficiencyBonus: 3 });
+check('attributes line lists proficiencies, includes a proficiency-only character, skips an empty one',
+    pline === 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; a proficient skill adds +3; read-only, never output them): Jordan (player): STR 15 (+2); proficient in Athletics, Persuasion (+3). Orin: proficient in Stealth (+3).', pline);
+const sp = D.buildDifficultyRatingPrompt({ userName: 'Jordan', attempt: '', attributeName: 'Dexterity', skillName: 'Stealth', messageText: 'I slip past the guards.', recentText: 'x' });
+check('rating prompt names the skill and quotes the message', sp.user.includes('"what their message describes", using Dexterity (Stealth).') && sp.user.includes('Their message: "I slip past the guards."'), sp.user);
 
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
