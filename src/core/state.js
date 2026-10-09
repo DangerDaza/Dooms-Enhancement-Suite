@@ -3,6 +3,7 @@
  * Centralizes all extension state variables
  */
 import { defaultVoiceSettings } from '../systems/voices/voiceSettings.js';
+import { defaultVitalsConfig } from '../utils/vitals.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -226,14 +227,10 @@ export let extensionSettings = {
                 description: 'Internal Monologue (in first person from character\'s POV, up to three sentences long)',
                 persistInHistory: false
             },
-            // Character stats toggle (optional feature)
-            characterStats: {
-                enabled: false,
-                customStats: [
-                    { id: 'health', name: 'Health', enabled: true },
-                    { id: 'arousal', name: 'Arousal', enabled: true }
-                ]
-            }
+            // Vitals — the 0–100 bars on the Present Characters shelf (off
+            // until Settings → Stats switches them on). Shape and defaults
+            // live in src/utils/vitals.js.
+            characterStats: defaultVitalsConfig()
         }
     },
     quests: {

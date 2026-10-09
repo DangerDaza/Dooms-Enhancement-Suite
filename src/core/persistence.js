@@ -25,6 +25,7 @@ import { parseQuests } from '../systems/generation/parser.js';
 import { applyCharacterAliases } from '../systems/features/characterAliases.js';
 import { bankActiveCampaign, ensureCampaignSettings } from '../systems/lorebook/campaignProfiles.js';
 import { ensureVoiceSettings } from '../systems/voices/voiceSettings.js';
+import { defaultVitalsConfig, migrateVitalsConfig } from '../utils/vitals.js';
 import { extensionName } from './config.js';
 /**
  * Validates extension settings structure
@@ -531,6 +532,16 @@ export function loadSettings() {
             // match the desired existing-user state.)
             if (extensionSettings.whatsNewDisabled !== undefined) {
                 delete extensionSettings.whatsNewDisabled;
+                settingsChanged = true;
+            }
+
+            // Vitals (Project Short Fuse): the per-character stats block has
+            // shipped dormant since the fork. Fill in the new per-vital fields
+            // (colour, icon, start value, AI flag) and the new top-level ones;
+            // an install that never switched it on gets the preset sheet in
+            // place of the old two-entry default. Additive only; a list the
+            // user ever edited is left as it is.
+            if (migrateVitalsConfig(extensionSettings.trackerConfig)) {
                 settingsChanged = true;
             }
 
@@ -1086,10 +1097,10 @@ function migrateToTrackerConfig() {
                     { id: 'relationship', label: 'Relationship', enabled: true, type: 'relationship', placeholder: 'Enemy/Neutral/Friend/Lover' },
                     { id: 'internalMonologue', label: 'Internal Monologue', enabled: true, placeholder: 'Internal Monologue (in first person from character\'s POV, up to three sentences long)' }
                 ],
-                characterStats: {
-                    enabled: false,
-                    stats: []
-                }
+                // Vitals sheet (src/utils/vitals.js). This used to write a
+                // `stats: []` key that nothing reads; every reader wants
+                // `customStats`.
+                characterStats: defaultVitalsConfig()
             }
         };
     }

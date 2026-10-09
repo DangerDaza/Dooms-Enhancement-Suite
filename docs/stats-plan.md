@@ -12,16 +12,16 @@ storage, and the LLM is hardware.
 
 ## 0. Status and open decisions
 
-Status: **plan, awaiting review. No code yet.**
+Status: **Phase 1 in progress on branch `Project-Short-Fuse`.** Not released.
 
-Decisions needed before commit 2 (defaults) and commit 8 (settings labels):
+Decisions, resolved 2026-10-09:
 
-| # | Question | Proposed default |
+| # | Question | Decision |
 |---|---|---|
-| D1 | Default vital set when the feature is switched on | Health, Energy, Satiety on; Hygiene, Morale, Mana, Arousal, Stamina, Sanity as one-click chips |
-| D2 | Word for the bars in the UI | Settings page is **Stats**; the bars group inside it is **Vitals** (attributes join the same page in Phase 2) |
-| D3 | Player vitals in Phase 1 | **Yes.** It is the RPG Companion "User Stats" people remember, and it is the one piece that needs a new tracker key (§3.4) |
-| D4 | Release number and name | 3.1.0, name open |
+| D1 | Default vital set when the feature is switched on | Nine vitals in the sheet, each with its own on/off. Health, Energy, Satiety, Stamina, Morale, Sanity and Arousal **on**; Hygiene and Mana present but **off** |
+| D2 | Word for the bars in the UI | A **Stats** page of its own on the settings rail; the bars group inside it is **Vitals** (attributes join the same page in Phase 2) |
+| D3 | Player vitals in Phase 1 | **Yes.** The persona is included, on by default when vitals are on |
+| D4 | Release | **Not yet.** No version bump, changelog, What's New or README until told. Commit 9 waits |
 
 Everything else below is a routine call and is stated as such.
 
@@ -119,20 +119,28 @@ names do not change):
 trackerConfig.presentCharacters.characterStats = {
   enabled: false,                 // master switch (existing key)
   customStats: [                  // existing key, entries gain fields
-    { id: 'health', name: 'Health', enabled: true,
-      color: '#e5484d', icon: '❤️', start: 100, ai: true },
-    { id: 'energy', name: 'Energy', enabled: true,
-      color: '#f5b301', icon: '⚡', start: 100, ai: true },
-    { id: 'satiety', name: 'Satiety', enabled: true,
-      color: '#2fbf71', icon: '🍖', start: 80, ai: true },
+    { id: 'health',  name: 'Health',  enabled: true,  color: '#e5484d', icon: '❤️', start: 100, ai: true },
+    { id: 'energy',  name: 'Energy',  enabled: true,  color: '#f5b301', icon: '⚡', start: 100, ai: true },
+    { id: 'satiety', name: 'Satiety', enabled: true,  color: '#2fbf71', icon: '🍖', start: 80,  ai: true },
+    { id: 'stamina', name: 'Stamina', enabled: true,  color: '#ff7a45', icon: '🏃', start: 100, ai: true },
+    { id: 'morale',  name: 'Morale',  enabled: true,  color: '#4c8dff', icon: '🙂', start: 75,  ai: true },
+    { id: 'sanity',  name: 'Sanity',  enabled: true,  color: '#20c997', icon: '🧠', start: 100, ai: true },
+    { id: 'arousal', name: 'Arousal', enabled: true,  color: '#f06595', icon: '🔥', start: 0,   ai: true },
+    { id: 'hygiene', name: 'Hygiene', enabled: false, color: '#22b8cf', icon: '🧼', start: 100, ai: true },
+    { id: 'mana',    name: 'Mana',    enabled: false, color: '#a66bff', icon: '✨', start: 100, ai: true },
   ],
-  player: { enabled: false },     // new: the persona gets vitals too
+  player: { enabled: true },      // new: the persona gets vitals too
   showOnCards: true,              // new: bars on the card front
   maxBars: 3,                     // new: front shows the first N enabled
   lowAt: 25,                      // new: at or below → warning colour
   persistInHistory: false,        // new: include in History Persistence
 };
 ```
+
+The sheet and its defaults live in `src/utils/vitals.js` (pure, no SillyTavern
+imports). Every reader goes through `vitalsConfig()` / `vitalDefs()` there, which
+fill in missing fields on read, so presets saved before these fields existed
+still load.
 
 `ai: false` means "fixed": DES tells the AI the value is locked and, whatever
 the AI returns, writes the previous value back after parsing (§3.4). Deterministic;
@@ -326,9 +334,10 @@ fix so the roleplay call sees current vitals.
   when missing.
 - Add `player`, `showOnCards`, `maxBars`, `lowAt`, `persistInHistory` when
   missing.
-- If `enabled === false` **and** the list is exactly the old untouched default
-  (`health`, `arousal`), replace it with the D1 default. A list the user ever
-  edited is left alone.
+- If `enabled !== true` **and** the list is the old untouched default
+  (`health`, `arousal`, no extra fields) or the empty list the broken default
+  wrote, replace it with the preset sheet (D1). A list the user ever edited
+  is left alone.
 
 No stored key is renamed or removed. Presets export and import unchanged:
 missing fields default on read.
