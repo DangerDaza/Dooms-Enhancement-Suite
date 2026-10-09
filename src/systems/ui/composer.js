@@ -155,14 +155,34 @@ function updateCount() {
     if (n === 0) closeTray();
 }
 
+/**
+ * Puts the tray just above the button (below it when there is no room),
+ * inside the viewport. Placed by measurement: a transformed ancestor makes
+ * position: fixed measure from that ancestor's box instead of the viewport
+ * (SillyTavern's phone layout puts a transform on <html>, whose box is
+ * 0 px tall there, so a bottom-based position landed the tray above the
+ * screen). Setting top/left to 0 shows where the origin really is; the
+ * wanted viewport position is then an offset from that.
+ */
 function placeTray() {
     if (!tray || !trayBtn) return;
     const r = trayBtn.getBoundingClientRect();
-    tray.style.bottom = `${Math.max(EDGE, window.innerHeight - r.top + 6)}px`;
+    tray.style.bottom = 'auto';
+    tray.style.top = '0px';
+    tray.style.left = '0px';
+    const base = tray.getBoundingClientRect();
+    const w = tray.offsetWidth;
+    const h = tray.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let top = r.top - h - 6;
+    if (top < EDGE) top = Math.min(r.bottom + 6, vh - h - EDGE);
+    top = Math.max(EDGE, top);
     let left = r.left;
-    const width = tray.offsetWidth;
-    if (left + width > window.innerWidth - EDGE) left = window.innerWidth - EDGE - width;
-    tray.style.left = `${Math.max(EDGE, left)}px`;
+    if (left + w > vw - EDGE) left = vw - EDGE - w;
+    left = Math.max(EDGE, left);
+    tray.style.top = `${Math.round(top - base.top)}px`;
+    tray.style.left = `${Math.round(left - base.left)}px`;
 }
 
 function openTray() {
