@@ -12,9 +12,10 @@ storage, and the LLM is hardware.
 
 ## 0. Status and open decisions
 
-Status: **Phase 1 built on branch `Project-Short-Fuse`, commits 2–8 landed; awaiting
-in-browser verification (the Vitals rows in `docs/parity-checklist.md`).** Not
-released: commit 9 (version, changelog, What's New, README) waits for the word.
+Status: **Phase 1 (commits 2–8) and Phase 2 (commits 10–16) built on branch
+`Project-Short-Fuse`; awaiting in-browser verification (the Vitals rows and the
+Attributes and dice rows in `docs/parity-checklist.md`).** Not released: commit 9
+(version, changelog, What's New, README) waits for the word.
 
 Two things changed from the plan while building, both recorded below: the
 shelf reaches the editors in `thoughts.js` through a dynamic import rather
@@ -430,7 +431,26 @@ In the browser (parity checklist rows to add):
 
 ## 7. Phase 2 — Attributes and dice (player-triggered)
 
-Status: **decisions taken (§7.9), building on `Project-Short-Fuse` from commit 11.**
+Status: **built; commits 10–16 landed on `Project-Short-Fuse`; awaiting in-browser
+verification (the Attributes and dice rows in `docs/parity-checklist.md`).**
+
+Three things changed from the plan while building, recorded here:
+
+- Sheets are per name, not per campaign version. §7.7 said "the way knives
+  are", but a character's Strength is not something a campaign rewrites, and
+  the dice need one sheet to read whichever version is on the stage. So
+  `characterAttributes` is keyed `user:Name` / `npc:Name` like aliases are:
+  it carries across a version switch, goes with the character when deleted
+  from the Workshop or the Roster, and is copied when a persona becomes an
+  NPC or the other way round.
+- The Settings group has three more controls than §7.7 listed, all from
+  D11: the AI sets the difficulty (on), how many messages it reads (6), and
+  Let me change the ruling (off). There are five difficulty classes, not
+  four: Easy, Medium, Hard, Very hard, Nearly impossible.
+- `attributes.rollOnSend` is in the config and migrated but not on the
+  page: the popover always offers both Roll when I send and Roll now, so a
+  preference adds nothing yet. It stays for a later "always roll at once"
+  option.
 
 One change from the first draft, on the owner's question "why is the player
 setting the difficulty?": they are not. The difficulty and any advantage are
@@ -595,20 +615,24 @@ modifier, the DC and the outcome; a default sheet emits nothing.
   10 8), Roll 4d6 drop lowest, and All 10. Saved with the Workshop's Save
   into `characterAttributes`, the way knives are.
 - **Settings → Stats → Attributes & checks**: master toggle; the attribute
-  list (name, abbreviation, on/off, order, add, remove); Send attributes to
-  the AI (always / with a roll / never); the four difficulty numbers; the
-  default difficulty; criticals on/off.
+  list (name, abbreviation, on/off, order, add, remove, presets as chips);
+  Send scores to the AI (with a roll / always / never); the AI sets the
+  difficulty and how many messages it reads; the default difficulty; Let me
+  change the ruling; criticals on/off; the five difficulty numbers.
 
 ### 7.8 Files, tests, commits
 
 New: `src/utils/d20.js` (pure), `src/systems/features/diceRolls.js`
-(pending roll, attach on send, verdict injection, roll-card sync; small and
-eager), `src/systems/ui/dicePanel.js` (lazy), `tools/d20-test.mjs`.
+(pending roll, attach on send, verdict injection, roll-card sync, the d20
+button; small and eager), `src/systems/ui/dicePanel.js` (lazy),
+`src/systems/ui/attributesPane.js` (lazy, the Workshop tab), `tools/d20-test.mjs`
+(pure model), `tools/dice-test.mjs` (the lifecycle in the load-check sandbox).
 Edits: `state.js`, `persistence.js` (migration), `injector.js` (the slot),
 `sillytavern.js` (attach on send), `index.js` (FAB entry, user-message
 decoration hook, settings handlers), `composer.js` (die button),
 `portraitBar.js` (menu entry), `characterWorkshop.js` and `template.html`
-(tab), `promptBuilder.js` (attributes line), the three stylesheets, docs.
+(tab, settings group), `characterRoster.js` (sheet purge), `promptBuilder.js`
+(attributes line), the three stylesheets, docs.
 
 Tests: d20 uniformity over many rolls within tolerance, the modifier table,
 advantage and disadvantage, criticals, margin words, verdict text; sheet

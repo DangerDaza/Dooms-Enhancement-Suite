@@ -26,6 +26,21 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Rename a vital, remove one, reorder, add a preset chip, change a colour: the shelf repaints at once and a preset export/import round-trips the sheet
 - [ ] Switching the whole thing off again leaves old values in old chats alone and sends nothing about them
 
+## Attributes and dice (Project Short Fuse, `docs/stats-plan.md` §7)
+- [ ] Attributes off (the default): no d20 button by the wand, no "Roll a check" on the persona card's menu or in the FAB fly-out, the tracker prompt byte-identical to 3.0.1 (`node tools/tracker-prompt-test.mjs` pins it); Workshop → Attributes shows the "off in Settings" notice and still edits
+- [ ] Settings → Stats → Attributes & checks on: the d20 button, the menu item and the FAB item appear at once, no reload; off again, all three go; twice (double-binding)
+- [ ] Workshop → Attributes on the persona: type 15, the modifier reads +2 before leaving the box; Standard array, Roll 4d6 drop lowest (the modifiers pulse; not under reduced motion or performance mode) and All 10 fill the sheet; Save then reopen keeps it; Cancel drops it; a sheet that is all 10s leaves no `characterAttributes` entry
+- [ ] Same tab on an NPC: switch the campaign version with an unsaved sheet and it carries over; the sheet is sent with the player's only when it is not all 10s (Send scores = Always, read the prompt in the Context Inspector); copy persona → NPC and NPC → persona brings the sheet; delete from the Workshop and from the Roster removes it
+- [ ] Tag a check (button, menu item, FAB item all open the same popover): pick an attribute, type the attempt, the ruling arrives from a separate request with difficulty, DC, advantage and a reason; Ask again re-rules; the chip above the message box shows the pending check and its × discards it
+- [ ] Roll when I send: send the message; the roll card sits under it with the d20, the modifier, the DC and the verdict; the reply honours the verdict; swipe the reply and regenerate it: the same verdict goes, no second roll; the card survives reload and chat switch; its × removes the roll
+- [ ] Roll now: the die spins (not under reduced motion or performance mode), the result line reads correctly, Keep then send carries it, Discard clears it
+- [ ] Let me change the ruling off: no difficulty or advantage controls in the popover; on: the chips appear and a changed ruling is marked yours and used for the roll
+- [ ] The AI sets the difficulty off: no extra request, every check uses the default difficulty; the five difficulty classes edited in Settings show in the default-difficulty labels and in the next ruling's DC
+- [ ] Criticals on: a natural 20 or 1 reads as critical on the card and in the verdict when one lands; off: it is an ordinary total
+- [ ] Settings list: rename an attribute (every character keeps the score), switch one off (it leaves the popover, scores kept), remove one (its scores leave every sheet), reorder, add a preset chip, add a custom one with a short form of its own
+- [ ] Each of the six looks on desktop and a phone: the d20 button, the chip, the popover, the roll card and the Workshop pane are legible and nothing overflows; performance mode unchanged
+- [ ] Disable the extension mid-session: the verdict slot is cleared, the button and chip go, no console errors; re-enable: everything back without reload
+
 ## Generation & tracking
 - [ ] Tracker JSON injected on generation; fields parse into panels
 - [ ] Per-swipe data: swipe back/forth preserves independent tracker state
