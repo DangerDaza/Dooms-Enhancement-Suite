@@ -14,6 +14,18 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] i18n: switch en → ru → zh-tw → en; all visible labels update
 - [ ] System Log and Notification Log capture entries; Copy All works
 
+## Vitals (Project Short Fuse, `docs/stats-plan.md`)
+- [ ] Vitals off (the default): the tracker prompt is byte-identical to 3.0.1, no strip on any card, no Vitals section on any card back (`node tools/tracker-prompt-test.mjs` pins the prompt)
+- [ ] Settings → Stats: the page is on the rail; Track vitals on with the seven default vitals; a new NPC's card shows bars at the start values and the AI moves them on the next reply; bars, back-face rows and the Tracker Data dropdown agree
+- [ ] Your character too: the persona card shows the strip and the back-face rows; swipe back and forth and the persona's numbers follow the swipe; reload and they are still there
+- [ ] A vital with AI off keeps its value when the AI returns a different one; the previous-tracker example the AI sees shows it as locked
+- [ ] Click a value on a card back, type a number, Enter: the bar moves, the panel agrees, it survives a reload and a chat switch; Escape cancels; the card does not flip
+- [ ] Separate and External modes update vitals and seed the persona's block when the AI drops it
+- [ ] History Persistence includes vitals only with Settings → Stats → Include in history context on; Refresh RPG Info with "send all enabled" carries them regardless
+- [ ] Each of the six looks on desktop and a phone: strip legible above the name (Arcade: in the band under the tag), nothing overflows the card, performance mode unchanged
+- [ ] Rename a vital, remove one, reorder, add a preset chip, change a colour: the shelf repaints at once and a preset export/import round-trips the sheet
+- [ ] Switching the whole thing off again leaves old values in old chats alone and sends nothing about them
+
 ## Generation & tracking
 - [ ] Tracker JSON injected on generation; fields parse into panels
 - [ ] Per-swipe data: swipe back/forth preserves independent tracker state

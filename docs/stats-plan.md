@@ -12,7 +12,15 @@ storage, and the LLM is hardware.
 
 ## 0. Status and open decisions
 
-Status: **Phase 1 in progress on branch `Project-Short-Fuse`.** Not released.
+Status: **Phase 1 built on branch `Project-Short-Fuse`, commits 2–8 landed; awaiting
+in-browser verification (the Vitals rows in `docs/parity-checklist.md`).** Not
+released: commit 9 (version, changelog, What's New, README) waits for the word.
+
+Two things changed from the plan while building, both recorded below: the
+shelf reaches the editors in `thoughts.js` through a dynamic import rather
+than a static one (a static edge closed a cycle through
+`characterAliases.js`), and the legacy character panel's bars gained their
+missing fill colour while the renderer was open.
 
 Decisions, resolved 2026-10-09:
 
