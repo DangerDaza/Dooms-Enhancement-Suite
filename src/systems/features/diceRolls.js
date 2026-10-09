@@ -503,18 +503,65 @@ export function removeRollFromMessage(messageId) {
 /** CHAT_CHANGED: a pending check belongs to the chat it was tagged in. */
 export function onDiceChatChanged() {
     clearPendingCheck({ silent: true });
+    try { mountDiceButton(); } catch (e) { /* no DOM */ }
     try { updateRollCards(); } catch (e) { /* no DOM */ }
     notifyDiceChanged({ source: 'chat' });
 }
 
 /** Binds the card's remove button once. Safe without jQuery (tests). */
 export function initDiceRolls() {
+    try { mountDiceButton(); } catch (e) { /* no send form yet */ }
     if (listenersBound || typeof $ !== 'function') return;
     listenersBound = true;
+    window.addEventListener(DICE_CHANGED_EVENT, () => { try { refreshDiceEntryPoints(); } catch (e) { /* no DOM */ } });
     $(document).on('click', `.${CARD_CLASS} .dooms-roll-remove`, function (e) {
         e.preventDefault();
         e.stopPropagation();
         const mesId = $(this).closest(`.${CARD_CLASS}`).attr('data-mesid');
         removeRollFromMessage(mesId);
     });
+}
+
+// ─── Entry point in the message row ─────────────────────────────────────────
+//
+// A d20 button beside SillyTavern's own left-hand buttons, under every look
+// (the DES composer keeps DES's own buttons in the row). Shown only while
+// attributes are on. The popover loads on first click.
+
+const BUTTON_ID = 'dooms-dice-btn';
+
+function openPanelLazily() {
+    import('../ui/dicePanel.js')
+        .then(m => m.openDicePanel())
+        .catch(err => console.error('[Dooms Tracker] Dice panel failed to load:', err));
+}
+
+/** Adds the button once; safe to call again. */
+export function mountDiceButton() {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    if (document.getElementById(BUTTON_ID)) { refreshDiceEntryPoints(); return; }
+    const left = document.getElementById('leftSendForm');
+    if (!left || typeof left.appendChild !== 'function') return;
+    const btn = document.createElement('div');
+    btn.id = BUTTON_ID;
+    btn.className = 'dooms-dice-btn fa-solid fa-dice-d20 interactable';
+    btn.title = 'Roll a check';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('tabindex', '0');
+    btn.addEventListener('click', (e) => { e.preventDefault(); openPanelLazily(); });
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPanelLazily(); } });
+    const wand = document.getElementById('extensionsMenuButton');
+    if (wand && wand.parentElement === left) wand.after(btn);
+    else left.appendChild(btn);
+    refreshDiceEntryPoints();
+}
+
+/** Shows or hides the button with the attributes switch. */
+export function refreshDiceEntryPoints() {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    const btn = document.getElementById(BUTTON_ID);
+    if (!btn || !btn.style) return;
+    const on = !!extensionSettings.enabled && attributesOn(extensionSettings);
+    btn.style.display = on ? '' : 'none';
+    btn.classList.toggle('is-pending', on && !!pending);
 }

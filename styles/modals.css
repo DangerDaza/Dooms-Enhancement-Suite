@@ -9481,3 +9481,164 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-glint-add .rpg-accordion-select { flex: 1 1 200px; min-width: 0; }
 .rpg-glint-muted { opacity: 0.55; }
 .rpg-glint-empty { margin: 0; }
+
+/* ── Dice: the "Roll a check" popover (Project Short Fuse, Phase 2) ── */
+.rpg-dice-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px 14px;
+}
+
+.rpg-dice-who { font-size: 0.9em; opacity: 0.85; }
+
+.rpg-dice-hint {
+    margin: 0;
+    font-size: 0.85em;
+    opacity: 0.8;
+    line-height: 1.5;
+}
+
+.rpg-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--rpg-highlight);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+}
+
+.rpg-dice-attrs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.rpg-dice-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--rpg-bg);
+    border: 1px solid var(--rpg-border);
+    border-radius: 999px;
+    color: var(--rpg-text);
+    padding: 5px 11px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.rpg-dice-chip-btn:hover { border-color: var(--rpg-highlight); }
+
+.rpg-dice-chip-btn.is-selected {
+    border-color: var(--rpg-highlight);
+    background: color-mix(in srgb, var(--rpg-highlight) 18%, var(--rpg-bg));
+    color: var(--rpg-highlight);
+}
+
+.rpg-dice-attr-abbr { font-weight: 700; letter-spacing: 0.04em; }
+.rpg-dice-attr-mod { opacity: 0.8; font-variant-numeric: tabular-nums; }
+
+.rpg-dice-attempt-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+.rpg-dice-attempt-label input { width: 100%; box-sizing: border-box; }
+
+.rpg-dice-ruling {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--rpg-border);
+    background: var(--rpg-bg);
+    font-size: 0.88em;
+    line-height: 1.5;
+}
+
+.rpg-dice-ruling.is-waiting { opacity: 0.8; }
+.rpg-dice-ruling.is-ai { border-color: color-mix(in srgb, var(--rpg-highlight) 55%, var(--rpg-border)); }
+
+.rpg-dice-ruling-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rpg-dice-ruling-line .rpg-btn { margin-left: auto; padding: 2px 8px; font-size: 0.85em; }
+
+.rpg-dice-reason { font-style: italic; opacity: 0.8; }
+
+.rpg-dice-override {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--rpg-border);
+}
+
+.rpg-dice-override-label { font-size: 0.8em; opacity: 0.7; }
+.rpg-dice-diff { padding: 3px 9px; font-size: 0.8em; }
+.rpg-dice-diff small { opacity: 0.7; }
+.rpg-dice-adv { font-size: 0.8em; }
+
+.rpg-dice-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.rpg-dice-result {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--rpg-border);
+    background: var(--rpg-bg);
+}
+
+.rpg-dice-result.is-success { border-color: rgba(47, 191, 113, 0.6); }
+.rpg-dice-result.is-failure { border-color: rgba(229, 72, 77, 0.6); }
+
+/* The die: a clipped 20-gon-ish badge that spins in once. */
+.rpg-dice-die {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    background: color-mix(in srgb, var(--rpg-highlight) 70%, var(--rpg-bg));
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.4em;
+    animation: rpg-dice-spin 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 1;
+}
+
+.rpg-dice-result.is-failure .rpg-dice-die { background: color-mix(in srgb, #e5484d 70%, var(--rpg-bg)); }
+.rpg-dice-result.is-success .rpg-dice-die { background: color-mix(in srgb, #2fbf71 70%, var(--rpg-bg)); }
+.rpg-dice-result.is-crit .rpg-dice-die { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35); }
+
+@keyframes rpg-dice-spin {
+    0%   { transform: rotate(-540deg) scale(0.4); opacity: 0; }
+    70%  { transform: rotate(10deg) scale(1.1); opacity: 1; }
+    100% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rpg-dice-die { animation: none; }
+}
+
+body.dooms-perf-mode .rpg-dice-die { animation: none; }
+
+.rpg-dice-result-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rpg-dice-outcome { font-weight: 700; font-size: 1.05em; }
+.rpg-dice-result.is-success .rpg-dice-outcome { color: #5fd38d; }
+.rpg-dice-result.is-failure .rpg-dice-outcome { color: #ff8a8a; }
+.rpg-dice-math { font-size: 0.85em; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.rpg-dice-where { font-size: 0.8em; opacity: 0.65; }

@@ -178,6 +178,7 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
 import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
+import { attributesOn } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -2920,6 +2921,19 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
+            // Dice (Phase 2): only while attributes are on.
+            if (attributesOn(extensionSettings)) {
+                items.push({
+                    id: 'dice-check',
+                    label: 'Roll a check',
+                    iconClass: 'fa-solid fa-dice-d20',
+                    action: () => {
+                        import('./src/systems/ui/dicePanel.js')
+                            .then(m => m.openDicePanel())
+                            .catch(err => console.error('[Dooms Tracker] Dice panel failed to load:', err));
+                    },
+                });
+            }
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",

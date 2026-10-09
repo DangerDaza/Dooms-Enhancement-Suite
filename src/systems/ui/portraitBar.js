@@ -50,6 +50,7 @@ import { isOffScene } from '../../utils/offScene.js';
 // characterAliases.js, so they are imported at click time rather than here
 // (a static edge would close a cycle).
 import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
+import { attributesOn } from '../../utils/d20.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -233,6 +234,9 @@ export function initPortraitBar() {
         <div id="dooms-pb-context-menu" class="dooms-pb-context-menu" style="display:none;">
             <div class="dooms-pb-ctx-item" data-action="open-workshop">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Open in Workshop
+            </div>
+            <div class="dooms-pb-ctx-item" data-action="roll-check" style="display:none;" title="Tag your next message with an attribute check">
+                <i class="fa-solid fa-dice-d20"></i> Roll a check
             </div>
             <div class="dooms-pb-ctx-item dooms-pb-ctx-danger" data-action="cancel-inject" style="display:none;">
                 <i class="fa-solid fa-ban"></i> Cancel Injection
@@ -438,6 +442,8 @@ export function initPortraitBar() {
         // replaced portrait is actually banked for this character.
         $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
         $menu.find('[data-action="restore-portrait"]').toggle(!isUser && getPortraitHistoryCount(characterName) > 0);
+        // 'Roll a check' is the persona's: checks are the player's attempts.
+        $menu.find('[data-action="roll-check"]').toggle(isUser && attributesOn(extensionSettings));
 
         // Position near the cursor, clamped to viewport. Re-parent to
         // <body> first so the menu escapes any ancestor stacking context
@@ -489,6 +495,10 @@ export function initPortraitBar() {
             ensureSettingsUI().then(() => {
                 window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
             }).catch(() => {});
+        } else if (action === 'roll-check') {
+            import('./dicePanel.js')
+                .then(m => m.openDicePanel())
+                .catch(err => console.error('[Dooms Tracker] Dice panel failed to load:', err));
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         } else if (action === 'regenerate-portrait') {

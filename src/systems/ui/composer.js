@@ -88,6 +88,8 @@ function sweep(holder) {
     if (!tray) return;
     for (const el of Array.from(holder.children)) {
         if (!(el instanceof HTMLElement) || isCore(el)) continue;
+        // DES's own buttons (the dice button) belong in the row, not the tray.
+        if (Array.from(el.classList).some(c => c.startsWith('dooms-'))) continue;
         homes.set(el, { holder, next: el.nextElementSibling });
         tray.appendChild(el);
     }

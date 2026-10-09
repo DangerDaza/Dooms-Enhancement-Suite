@@ -13376,3 +13376,61 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 }
 
 .dooms-roll-remove:hover { opacity: 1; border-color: rgba(255, 255, 255, 0.25); }
+
+
+/* ── Dice: the d20 button in the message row and the chip above it ── */
+.dooms-dice-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.75;
+    padding: 0 6px;
+    font-size: 1.1em;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.dooms-dice-btn:hover { opacity: 1; }
+
+.dooms-dice-btn.is-pending {
+    opacity: 1;
+    color: rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96));
+}
+
+.dooms-dice-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.45);
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.1);
+    color: var(--rpg-text, #ddd);
+    font-size: 0.8em;
+    line-height: 1.4;
+    cursor: pointer;
+    max-width: 100%;
+}
+
+.dooms-dice-chip-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dooms-dice-chip-x {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.dooms-dice-chip-x:hover { opacity: 1; }

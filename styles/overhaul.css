@@ -2267,3 +2267,31 @@ body[data-dooms-ui="arcade"] .dooms-fab-btn {
         --ov-ground: color-mix(in srgb, var(--ui-bg) 85%, #000);
     }
 }
+
+/* ── Dice (Project Short Fuse, Phase 2): the chip, the row button, the popover chips ── */
+body[data-dooms-ui] .dooms-dice-chip {
+    border: var(--ov-border-w) solid var(--ov-line);
+    background: var(--ov-panel);
+    color: var(--ov-text);
+    border-radius: var(--ov-radius-sm);
+    font-family: var(--ov-body);
+}
+body[data-dooms-ui] .dooms-dice-btn.is-pending { color: var(--ov-accent2); }
+body[data-dooms-ui] .rpg-dice-chip-btn {
+    border-radius: var(--ov-radius-sm);
+    border: var(--ov-border-w) solid var(--ov-line);
+    background: var(--ov-panel);
+    color: var(--ov-text);
+}
+body[data-dooms-ui] .rpg-dice-chip-btn.is-selected { border-color: var(--ov-accent); color: var(--ov-accent); background: var(--ov-panel2); }
+body[data-dooms-ui] .rpg-dice-ruling,
+body[data-dooms-ui] .rpg-dice-result {
+    border: var(--ov-border-w) solid var(--ov-line);
+    background: var(--ov-panel);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-ui] .rpg-dice-ruling.is-ai { border-color: var(--ov-accent); }
+body[data-dooms-ui] .rpg-dice-die { background: var(--ov-accent); color: var(--ov-on-accent); }
+body[data-dooms-ui="lumen"] .dooms-dice-chip,
+body[data-dooms-ui="lumen"] .rpg-dice-chip-btn { border-radius: 999px; }
+body[data-dooms-ui="inked"] .dooms-dice-chip { border-color: var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); }
