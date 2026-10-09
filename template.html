@@ -1505,9 +1505,10 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Attributes and dice checks</span>
-                            <span class="rpg-setting-hint">D&amp;D-style scores for your character and the NPCs, and a
-                                d20 button by the message box. You pick the attribute, your AI rules how hard the
-                                attempt is, DES rolls, and the result goes to the AI as final. Scores are set on each
+                            <span class="rpg-setting-hint">D&amp;D-style scores and skills for your character and the
+                                NPCs, and a d20 button by the message box. You pick the attribute and skill; when you
+                                send, your AI rules how hard the attempt is, DES rolls, and the result shows at the top
+                                of the reply and goes to the AI as final. Scores and proficiencies are set on each
                                 character's Workshop tab.</span>
                         </div>
                         <label class="rpg-toggle-switch">
@@ -1542,9 +1543,9 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">The AI sets the difficulty</span>
-                            <span class="rpg-setting-hint">One small separate request before each roll: your AI, as
-                                game master, picks Easy to Nearly impossible and advantage or disadvantage, with a
-                                reason. Off, every check uses the default difficulty below.</span>
+                            <span class="rpg-setting-hint">One small separate request when you send a tagged message:
+                                your AI, as game master, reads it and picks Easy to Nearly impossible and advantage or
+                                disadvantage, with a reason. Off, every check uses the default difficulty below.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-attr-ai-rates" />
@@ -1570,8 +1571,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Let me change the ruling</span>
-                            <span class="rpg-setting-hint">Shows difficulty and advantage controls in the dice popover
-                                so you can overrule the game master.</span>
+                            <span class="rpg-setting-hint">Adds a difficulty row to the dice popover so you can fix
+                                the ruling yourself before OK instead of asking the game master.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-attr-override" />

@@ -94,125 +94,109 @@ globalThis.__DES_CTX__.user_avatar = '';
 extensionSettings.userCharacters = {};
 check('getPersonaSheet reads the stored scores', (() => { const p = dice.getPersonaSheet(); return p && p.name === 'Jordan' && p.sheet.str === 15 && p.sheet.cha === 8 && p.sheet.dex === 10 && !p.isDefault; })());
 
-// ── 2. Tag and rule ──
+// ── 2. Tag ──
 let calls = 0;
 let lastMessages = null;
-dice.__setDiceTransport(async (messages) => { calls++; lastMessages = messages; return '{"difficulty": "hard", "advantage": "disadvantage", "reason": "The wall is slick with rain."}'; });
+const gm = async (messages) => { calls++; lastMessages = messages; return '{"difficulty": "hard", "advantage": "disadvantage", "reason": "The wall is slick with rain."}'; };
+dice.__setDiceTransport(gm);
+D.setSheet(extensionSettings, 'Jordan', true, { str: 15, cha: 8 }, null, [D.skillKey('str', 'Athletics')]);
 chat.length = 0;
 chat.push(ai('The wall rises before you.'));
-let pending = await dice.tagCheck({ attributeId: 'str', attempt: 'climb the wall' });
-check('tagCheck records the player\'s attribute and score', pending && pending.attribute === 'Strength' && pending.abbr === 'STR' && pending.score === 15 && pending.attempt === 'climb the wall');
-check('...and the game master\'s ruling', pending.ruling && pending.ruling.difficultyId === 'hard' && pending.ruling.dc === 20 && pending.ruling.advantage === 'dis' && pending.ruling.source === 'ai' && pending.rating === false);
-check('the rating call saw the attempt, the attribute and the scene', calls === 1 && lastMessages[1].content.includes('"climb the wall", using Strength') && lastMessages[1].content.includes('AI: The wall rises'));
-check('getPendingCheck returns it', dice.getPendingCheck() === pending);
-check('override is refused while the setting is off', dice.overrideRuling({ difficultyId: 'easy' }) === null && pending.ruling.dc === 20);
+let pending = dice.tagCheck({ attributeId: 'str', skill: 'athletics', context: 'climb the wall' });
+check('tagCheck records the attribute, the skill (any case), the score, the proficiency and the context', pending && pending.attribute === 'Strength' && pending.abbr === 'STR' && pending.skill === 'Athletics' && pending.score === 15 && pending.proficient === true && pending.prof === 2 && pending.context === 'climb the wall');
+check('...synchronously, with nothing asked yet', calls === 0 && pending.rating === false && dice.getPendingCheck() === pending);
+check('an unknown skill is dropped', dice.tagCheck({ attributeId: 'str', skill: 'Flying' }).skill === '');
+check('a skill the character is not proficient in adds nothing', (() => { const p = dice.tagCheck({ attributeId: 'cha', skill: 'Persuasion' }); return p.skill === 'Persuasion' && p.proficient === false && p.prof === 0; })());
+check('override is refused while the setting is off', dice.tagCheck({ attributeId: 'str', skill: 'Athletics', context: 'climb the wall', override: { difficultyId: 'easy' } }).override === null && dice.overrideRuling({ difficultyId: 'easy' }) === null);
 extensionSettings.attributes.allowOverride = true;
-check('override is honoured once the setting is on', dice.overrideRuling({ difficultyId: 'easy', advantage: 'adv' }) === pending && pending.ruling.dc === 10 && pending.ruling.advantage === 'adv' && pending.ruling.source === 'override');
+check('override is kept once the setting is on', (() => { const p = dice.overrideRuling({ difficultyId: 'easy', advantage: 'adv' }); return p && p.override.dc === 10 && p.override.advantage === 'adv' && p.override.source === 'override'; })());
+check('...and cleared with nothing', dice.overrideRuling(null).override === null);
 extensionSettings.attributes.allowOverride = false;
 
-// ── 3. Roll on send ──
+// ── 3. Rule and roll on send ──
 chat.push(user('I climb the wall.'));
-dice.onDiceMessageSent();
+await dice.onDiceMessageSent();
 const roll = chat[1].extra.dooms_roll;
-check('the roll is written to the sent message', roll && roll.attribute === 'Strength' && roll.score === 15 && roll.mod === 2 && roll.kept >= 1 && roll.kept <= 20);
-check('...with the ruling it was rolled against', roll.dc === 10 && roll.difficultyId === 'easy' && roll.advantage === 'adv' && roll.rolls.length === 2 && roll.rulingSource === 'override');
-check('...and the arithmetic holds', roll.total === roll.kept + roll.mod && (roll.critical ? true : roll.success === (roll.total >= roll.dc)));
+check('the game master is asked once, at send, and sees the context, the skill, the message and the scene', calls === 1 && lastMessages[1].content.includes('"climb the wall", using Strength (Athletics)') && lastMessages[1].content.includes('Their message: "I climb the wall."') && lastMessages[1].content.includes('AI: The wall rises'), lastMessages && lastMessages[1].content);
+check('...and not the message being rated as part of the scene', !lastMessages[1].content.includes('Jordan: I climb the wall'));
+check('the roll is written to the sent message with the ruling', roll && roll.attribute === 'Strength' && roll.skill === 'Athletics' && roll.score === 15 && roll.mod === 2 && roll.prof === 2 && roll.dc === 20 && roll.difficultyId === 'hard' && roll.advantage === 'dis' && roll.rolls.length === 2 && roll.rulingSource === 'ai' && roll.reason === 'The wall is slick with rain.');
+check('...and the arithmetic holds', roll.total === roll.kept + roll.mod + roll.prof && (roll.critical ? true : roll.success === (roll.total >= roll.dc)));
 check('the pending check is consumed', dice.getPendingCheck() === null);
-check('onDiceMessageSent with nothing pending is a no-op', (dice.onDiceMessageSent(), chat[1].extra.dooms_roll === roll));
+check('onDiceMessageSent with nothing pending is a no-op', (await dice.onDiceMessageSent(), chat[1].extra.dooms_roll === roll));
 
-// ── 4. The verdict for the next generation ──
+// ── 4. The verdict for the next generation, and the box on the reply ──
 let verdict = dice.buildDiceVerdictForGeneration();
 check('a fresh reply to the rolled message gets the verdict',
-    verdict.startsWith('[DICE: Jordan attempts "climb the wall". Strength check: d20 = ') && verdict.includes('vs DC 10 (Easy), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
+    verdict.startsWith('[DICE: Jordan attempts "climb the wall". Strength (Athletics) check: d20 = ') && verdict.includes('+2 (proficient in Athletics)') && verdict.includes('vs DC 20 (Hard), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
 chat.push(ai('You scramble up.'));
 check('a swipe or regenerate of that reply gets the same verdict', dice.buildDiceVerdictForGeneration() === verdict);
-check('the attributes line rides with a roll (with-a-roll mode)', pb.generateTrackerInstructions(false, false).includes('Jordan (player): STR 15 (+2), CHA 8 (-1)'));
+check('the reply shows the roll of the message it answers', dice.rollForReply(2) === roll && dice.rollForReply(1) === null && dice.rollForReply(0) === null);
+chat.push(ai('(a second reply, as in a group)'));
+check('every reply before the next player message shows it', dice.rollForReply(3) === roll);
+check('the attributes line rides with a roll and lists the proficiency', pb.generateTrackerInstructions(false, false).includes('Jordan (player): STR 15 (+2), CHA 8 (-1); proficient in Athletics (+2)'), pb.generateTrackerInstructions(false, false));
 chat.push(user('I walk on.'));
-check('a later message without a roll gets no verdict', dice.buildDiceVerdictForGeneration() === '');
+chat.push(ai('The road is quiet.'));
+check('a later message without a roll gets no verdict and no box', dice.buildDiceVerdictForGeneration() === '' && dice.rollForReply(5) === null);
 check('...and no attributes line', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
 extensionSettings.attributes.enabled = false;
-chat.length = 2;
+chat.length = 3;
 check('attributes off: no verdict even with a roll on the message', dice.buildDiceVerdictForGeneration() === '');
 extensionSettings.attributes.enabled = true;
 
-// ── 5. Roll now ──
+// ── 5. A fixed ruling skips the game master; a discard mid-ruling rolls nothing ──
 chat.length = 0;
 chat.push(ai('A guard blocks the gate.'));
-chat.push(user('I try to talk my way past.'));
-pending = await dice.tagCheck({ attributeId: 'cha', attempt: 'talk past the guard' });
-const now = dice.rollNow();
-check('rollNow attaches at once when the tail is the player\'s own message', now && chat[1].extra.dooms_roll === now && dice.getPendingCheck() === null && now.dc === 20 && now.advantage === 'dis');
-chat.push(ai('The guard squints.'));
-pending = await dice.tagCheck({ attributeId: 'cha', attempt: 'bluff' });
-const waiting = dice.rollNow();
-check('rollNow waits for the next message when a reply is the tail', waiting && dice.getPendingCheck() && dice.getPendingCheck().roll === waiting && dice.getPendingCheck().mode === 'now');
-chat.push(user('I bluff.'));
-dice.onDiceMessageSent();
-check('...and that roll, not a new one, rides with the message sent', chat[3].extra.dooms_roll === waiting && dice.getPendingCheck() === null);
-
-// ── 5b. Roll now as one action from the popover ──
-chat.length = 0;
-chat.push(ai('The chasm yawns.'));
-chat.push(user('I leap.'));
+extensionSettings.attributes.allowOverride = true;
+dice.tagCheck({ attributeId: 'cha', skill: 'Persuasion', context: 'talk past the guard', override: { difficultyId: 'easy', advantage: 'adv' } });
+extensionSettings.attributes.allowOverride = false;
 calls = 0;
-let oneStep = await dice.tagAndRollNow({ attributeId: 'dex', attempt: 'leap the chasm' });
-check('tagAndRollNow with nothing pending tags, asks the game master and rolls', oneStep && calls === 1 && oneStep.attributeId === 'dex' && oneStep.dc === 20 && oneStep.advantage === 'dis');
-check('...and attaches at once when the tail is the player\'s message', chat[1].extra.dooms_roll === oneStep && dice.getPendingCheck() === null);
-chat.push(ai('You land hard.'));
-pending = dice.tagCheck({ attributeId: 'str', attempt: 'hold on' });   // not awaited: the ruling is in flight
-const whileRating = await dice.tagAndRollNow({ attributeId: 'str', attempt: 'hold on' });
-check('tagAndRollNow on a check whose ruling is in flight waits for it, then rolls', whileRating && dice.getPendingCheck() && dice.getPendingCheck().roll === whileRating && whileRating.rulingSource === 'ai');
-check('...and a second Roll now keeps that roll rather than re-rolling', await dice.tagAndRollNow({ attributeId: 'str' }) === whileRating);
-dice.clearPendingCheck({ silent: true });
-pending = dice.tagCheck({ attributeId: 'str', attempt: 'push' });
-const switched = await dice.tagAndRollNow({ attributeId: 'cha', attempt: 'charm' });
-check('tagAndRollNow with a different attribute re-tags and rolls that one', switched && switched.attributeId === 'cha' && dice.getPendingCheck().roll === switched);
-dice.clearPendingCheck({ silent: true });
-check('a Roll now whose check is discarded mid-ruling rolls nothing', await (async () => {
+chat.push(user('I try to talk my way past.'));
+await dice.onDiceMessageSent();
+check('with the ruling fixed by the player, nobody is asked and the roll uses it', calls === 0 && chat[1].extra.dooms_roll && chat[1].extra.dooms_roll.dc === 10 && chat[1].extra.dooms_roll.advantage === 'adv' && chat[1].extra.dooms_roll.rulingSource === 'override' && chat[1].extra.dooms_roll.skill === 'Persuasion');
+check('a check discarded while the game master thinks rolls nothing', await (async () => {
     dice.__setDiceTransport(async () => { await new Promise(r => setTimeout(r, 20)); return '{"difficulty":"easy"}'; });
-    const p = dice.tagAndRollNow({ attributeId: 'str', attempt: 'x' });
+    dice.tagCheck({ attributeId: 'str', context: 'x' });
+    chat.push(ai('The guard squints.'));
+    chat.push(user('I push past.'));
+    const p = dice.onDiceMessageSent();
+    const wasRating = !!dice.getPendingCheck() && dice.getPendingCheck().rating === true;
     dice.clearPendingCheck({ silent: true });
-    const r = await p;
-    dice.__setDiceTransport(async (messages) => { calls++; lastMessages = messages; return '{"difficulty": "hard", "advantage": "disadvantage", "reason": "The wall is slick with rain."}'; });
-    return r === null && dice.getPendingCheck() === null;
+    await p;
+    return wasRating && chat[3].extra.dooms_roll === undefined && dice.getPendingCheck() === null;
 })());
-extensionSettings.attributes.enabled = false;
-check('tagAndRollNow with attributes off rolls nothing', await dice.tagAndRollNow({ attributeId: 'str' }) === null);
-extensionSettings.attributes.enabled = true;
+dice.__setDiceTransport(gm);
 
 // ── 6. Fallbacks ──
-dice.__setDiceTransport(async () => { throw new Error('offline'); });
-pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
-check('a failed rating call falls back to the default difficulty and says so', pending.ruling.difficultyId === 'medium' && pending.ruling.dc === 15 && pending.ruling.source === 'default' && pending.ruling.error === 'offline');
-dice.__setDiceTransport(async () => 'Hmm, let me think about that.');
-pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
-check('an unreadable answer falls back too', pending.ruling.source === 'default' && pending.ruling.error === 'unreadable');
+const sendWith = async (transport) => {
+    dice.__setDiceTransport(transport);
+    dice.tagCheck({ attributeId: 'str', context: 'x' });
+    chat.push(ai('...'));
+    chat.push(user('I try.'));
+    await dice.onDiceMessageSent();
+    return chat[chat.length - 1].extra.dooms_roll;
+};
+let r = await sendWith(async () => { throw new Error('offline'); });
+check('a failed rating call falls back to the default difficulty and says so', r && r.difficultyId === 'medium' && r.dc === 15 && r.rulingSource === 'default' && r.rulingError === 'offline');
+r = await sendWith(async () => 'Hmm, let me think about that.');
+check('an unreadable answer falls back too', r.rulingSource === 'default' && r.rulingError === 'unreadable');
+dice.__setRulingTimeout(30);
+r = await sendWith(() => new Promise(res => setTimeout(() => res('{"difficulty":"easy"}'), 200)));
+check('a game master who takes too long is not waited for', r.rulingSource === 'default' && r.rulingError === 'timeout');
+dice.__setRulingTimeout(20000);
 calls = 0;
-dice.__setDiceTransport(async () => { calls++; return '{"difficulty":"hard"}'; });
 extensionSettings.attributes.aiRatesDifficulty = false;
-pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
-check('with the AI not asked, no call is made and the default stands', calls === 0 && pending.ruling.source === 'default');
+r = await sendWith(async () => { calls++; return '{"difficulty":"hard"}'; });
+check('with the AI not asked, no call is made and the default stands', calls === 0 && r.rulingSource === 'default' && !r.rulingError);
 extensionSettings.attributes.aiRatesDifficulty = true;
-check('a re-tag while a ruling is in flight wins', await (async () => {
-    dice.__setDiceTransport(async () => { await new Promise(r => setTimeout(r, 20)); return '{"difficulty":"easy"}'; });
-    const first = dice.tagCheck({ attributeId: 'str', attempt: 'first' });
-    const second = dice.tagCheck({ attributeId: 'dex', attempt: 'second' });
-    await Promise.all([first, second]);
-    const p = dice.getPendingCheck();
-    return p && p.attempt === 'second' && p.attribute === 'Dexterity' && p.ruling && p.ruling.difficultyId === 'easy';
-})());
+dice.__setDiceTransport(gm);
+check('a second tag replaces the first', (() => { dice.tagCheck({ attributeId: 'str', context: 'first' }); dice.tagCheck({ attributeId: 'dex', skill: 'Stealth', context: 'second' }); const p = dice.getPendingCheck(); return p && p.context === 'second' && p.attribute === 'Dexterity' && p.skill === 'Stealth'; })());
 dice.clearPendingCheck();
 check('clearPendingCheck', dice.getPendingCheck() === null);
-check('tagCheck with attributes off gives null', (extensionSettings.attributes.enabled = false, dice.tagCheck({ attributeId: 'str' }).then(v => v === null)));
+check('tagCheck with attributes off gives null', (extensionSettings.attributes.enabled = false, dice.tagCheck({ attributeId: 'str' }) === null));
 extensionSettings.attributes.enabled = true;
 
-// ── 7. Removal and the chat switch ──
-chat.length = 0;
-chat.push(ai('Night falls.'));
-chat.push(user('I pick the lock.'));
-await dice.tagAndRollNow({ attributeId: 'dex', attempt: 'pick the lock' });
-check('removeRollFromMessage clears the roll', !!chat[1].extra.dooms_roll && dice.removeRollFromMessage(1) === true && chat[1].extra.dooms_roll === undefined && dice.removeRollFromMessage(1) === false);
-pending = await dice.tagCheck({ attributeId: 'str', attempt: 'x' });
+// ── 7. The chat switch ──
+dice.tagCheck({ attributeId: 'str', context: 'x' });
 dice.onDiceChatChanged();
 check('a chat switch drops the pending check', dice.getPendingCheck() === null);
 

@@ -13325,57 +13325,45 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 }
 
 
-/* ── Dice: the roll card under a user message (Project Short Fuse, Phase 2) ──
-   A sibling of .mes_text inside .mes_block, like the Tracker Data dropdown,
-   so the decoration pipeline's rewrites of .mes_text leave it alone. */
+/* ── Dice: the roll box at the top of a reply (Project Short Fuse, Phase 2) ──
+   Inserted before .mes_text in the reply's .mes_block, so SillyTavern's own
+   re-renders of the text leave it alone. Nothing on it removes the roll. */
 .dooms-roll-card {
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 6px 0 0;
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-direction: column;
+    gap: 3px;
+    margin: 4px 0 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left-width: 3px;
     background: rgba(255, 255, 255, 0.04);
-    font-size: 0.78em;
-    line-height: 1.4;
+    font-size: 0.8em;
+    line-height: 1.45;
     color: var(--rpg-text, #ddd);
 }
 
-.dooms-roll-card.is-success { border-color: rgba(47, 191, 113, 0.45); }
-.dooms-roll-card.is-failure { border-color: rgba(229, 72, 77, 0.45); }
-.dooms-roll-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.dooms-roll-card.is-success { border-left-color: #2fbf71; }
+.dooms-roll-card.is-failure { border-left-color: #e5484d; }
+.dooms-roll-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+
+.dooms-roll-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+}
 
 .dooms-roll-die { flex: 0 0 auto; }
+.dooms-roll-label { font-weight: 700; }
+.dooms-roll-math { font-variant-numeric: tabular-nums; opacity: 0.9; }
+.dooms-roll-math small { opacity: 0.7; }
+.dooms-roll-outcome { font-weight: 700; margin-left: auto; }
+.dooms-roll-card.is-success .dooms-roll-outcome { color: #5fd38d; }
+.dooms-roll-card.is-failure .dooms-roll-outcome { color: #ff8a8a; }
 
-.dooms-roll-text { flex: 0 1 auto; font-weight: 600; }
-.dooms-roll-card.is-success .dooms-roll-text { color: #5fd38d; }
-.dooms-roll-card.is-failure .dooms-roll-text { color: #ff8a8a; }
-
-.dooms-roll-ruling {
-    flex: 1 1 auto;
-    min-width: 0;
-    opacity: 0.7;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.dooms-roll-remove {
-    flex: 0 0 auto;
-    margin-left: auto;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: inherit;
-    opacity: 0.45;
-    padding: 0 6px;
-    line-height: 1.4;
-    cursor: pointer;
-}
-
-.dooms-roll-remove:hover { opacity: 1; border-color: rgba(255, 255, 255, 0.25); }
+.dooms-roll-why { opacity: 0.75; font-style: italic; }
+.dooms-roll-attempt { font-style: normal; opacity: 0.95; }
 
 
 /* ── Dice: the d20 button in the message row and the chip above it ── */
