@@ -27,6 +27,8 @@ import {
     forgetBook,
     getActiveCampaignId as profilesActiveId,
 } from './campaignProfiles.js';
+import { notifyStatsChanged } from '../features/characterStats.js';
+import { notifyMemoriesChanged } from '../features/characterMemories.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -328,6 +330,9 @@ export async function repaintAfterCampaignSwitch() {
     // LLM-written portrait prompts were derived from the previous campaign's
     // descriptions; a regeneration must not reuse them for the new versions.
     try { clearSessionAvatarPrompts(); } catch (e) {}
+    // Portraits and descriptions may change with the campaign: stat views repaint.
+    try { notifyStatsChanged({ source: 'campaign' }); } catch (e) {}
+    try { notifyMemoriesChanged({ source: 'campaign' }); } catch (e) {}
     // The data switch always happens; the DOM work is pointless (and can
     // resurrect panels) while the extension is disabled.
     if (extensionSettings.enabled === false) return;

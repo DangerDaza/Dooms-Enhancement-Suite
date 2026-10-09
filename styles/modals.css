@@ -7893,3 +7893,476 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 @media (max-width: 720px) {
     .rpg-inspector-diff { grid-template-columns: 1fr; }
 }
+
+
+/* ============================================
+   CHARACTER WORKSHOP — STATS TAB
+   ============================================ */
+#character-workshop-popup .cw-stats-group {
+    margin-bottom: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+#character-workshop-popup .cw-stats-group-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: var(--modal-font-small, 0.8rem);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cw-accent, var(--rpg-highlight, #e94560));
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#character-workshop-popup .cw-stats-group-head .muted {
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: rgba(234, 234, 234, 0.5);
+}
+
+#character-workshop-popup .cw-stat-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto auto auto 28px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+#character-workshop-popup .cw-stat-row:first-of-type { border-top: none; }
+
+#character-workshop-popup .cw-stat-row.is-custom { background: rgba(255, 255, 255, 0.015); }
+
+#character-workshop-popup .cw-stat-abbr {
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 3px 0;
+    border-radius: 4px;
+    color: var(--rpg-text, #eaeaea);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+#character-workshop-popup .cw-stat-swatch {
+    position: relative;
+    justify-self: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+    transition: box-shadow 0.15s;
+}
+
+#character-workshop-popup .cw-stat-swatch:hover,
+#character-workshop-popup .cw-stat-swatch:focus-within { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35); }
+
+/* The native picker stays clickable but invisible over the swatch. */
+#character-workshop-popup .cw-stat-color {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+#character-workshop-popup .cw-stat-on { justify-self: center; }
+
+#character-workshop-popup .cw-stat-on-spacer { width: 40px; }
+
+#character-workshop-popup .cw-stat-row.is-off .cw-stat-name,
+#character-workshop-popup .cw-stat-row.is-off .cw-stat-base,
+#character-workshop-popup .cw-stat-row.is-off .cw-stat-ai-toggle,
+#character-workshop-popup .cw-stat-row.is-off .cw-stat-abbr,
+#character-workshop-popup .cw-stat-row.is-off .cw-stat-swatch { opacity: 0.4; }
+
+#character-workshop-popup .cw-stat-off-tag {
+    margin-left: 6px;
+    padding: 0 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+#character-workshop-popup .cw-stats-legend { margin-top: -0.4rem; }
+
+#character-workshop-popup .cw-stat-name {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#character-workshop-popup .cw-stat-label {
+    font-size: 0.88rem;
+    color: var(--rpg-text, #eaeaea);
+}
+
+#character-workshop-popup .cw-stat-desc {
+    font-size: 0.72rem;
+    color: rgba(234, 234, 234, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#character-workshop-popup .cw-stat-base {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+#character-workshop-popup .cw-stat-base-input {
+    width: 4.2em;
+    padding: 3px 6px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+#character-workshop-popup .cw-stat-unit {
+    display: inline-block;
+    width: 0.9em;
+    font-size: 0.75rem;
+    color: rgba(234, 234, 234, 0.55);
+}
+
+#character-workshop-popup .cw-stat-ai-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(234, 234, 234, 0.75);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+#character-workshop-popup .cw-stat-del-spacer { width: 28px; }
+
+#character-workshop-popup .cw-stats-add {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#character-workshop-popup .cw-stats-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+#character-workshop-popup .cw-stats-add-row #cw-stat-new-name { flex: 1 1 180px; min-width: 0; }
+
+#character-workshop-popup .cw-stats-add-row #cw-stat-new-kind { flex: 0 0 auto; width: auto; }
+
+#character-workshop-popup .cw-stats-add-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+#character-workshop-popup .cw-stats-add-error {
+    flex: 1;
+    font-size: 0.78rem;
+    color: #ff8a8a;
+}
+
+@media (max-width: 600px) {
+    #character-workshop-popup .cw-stat-row {
+        grid-template-columns: 26px minmax(0, 1fr) auto auto auto 24px;
+        gap: 6px;
+        padding: 6px 8px;
+    }
+    #character-workshop-popup .cw-stat-desc { display: none; }
+    #character-workshop-popup .cw-stat-base-input { width: 3.6em; }
+}
+
+#character-workshop-popup .cw-stats-gen {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.8rem;
+    padding: 8px 10px;
+    font-size: var(--modal-font-small, 0.8rem);
+    color: rgba(234, 234, 234, 0.75);
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+}
+
+#character-workshop-popup .cw-stats-gen span { flex: 1; line-height: 1.4; }
+
+#character-workshop-popup .cw-stats-gen .rpg-btn { flex: 0 0 auto; }
+
+#character-workshop-popup .cw-stats-gen.is-pending {
+    color: var(--rpg-text, #eaeaea);
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--cw-accent, #e94560) 55%, transparent);
+    background: color-mix(in srgb, var(--cw-accent, #e94560) 10%, transparent);
+}
+
+#character-workshop-popup .cw-stats-gen.is-pending i { color: var(--cw-accent, var(--rpg-highlight, #e94560)); }
+
+/* Settings → Stats switches */
+.rpg-stat-toggle-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 7px;
+    border-radius: 50%;
+    vertical-align: 0;
+}
+
+.rpg-stat-toggle-abbr {
+    display: inline-block;
+    min-width: 2.6em;
+    margin-right: 7px;
+    padding: 1px 4px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-align: center;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#character-workshop-popup .cw-stats-off { font-style: italic; }
+
+.rpg-stat-color-swatch {
+    position: relative;
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    border-radius: 50%;
+    vertical-align: -1px;
+    cursor: pointer;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+.rpg-stat-color-swatch:hover { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45); }
+
+.rpg-stat-color-swatch .rpg-stat-color {
+    position: absolute;
+    inset: -3px;
+    width: calc(100% + 6px);
+    height: calc(100% + 6px);
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.rpg-stat-color-reset {
+    margin-left: 6px;
+    padding: 0 4px;
+    font-size: 0.75em;
+    color: rgba(234, 234, 234, 0.55);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.rpg-stat-color-reset:hover { color: #fff; }
+
+.rpg-stat-setting-row.is-off .rpg-setting-label-group { opacity: 0.45; }
+
+.rpg-stat-kind {
+    margin-left: 4px;
+    padding: 0 5px;
+    font-size: 0.68em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(234, 234, 234, 0.6);
+}
+
+.rpg-stat-delete {
+    margin-left: 6px;
+    padding: 0 4px;
+    font-size: 0.75em;
+    color: rgba(234, 234, 234, 0.5);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.rpg-stat-delete:hover { color: #e94560; }
+
+
+/* ============================================
+   CHARACTER WORKSHOP — MEMORIES TAB
+   ============================================ */
+#character-workshop-popup .cw-mem-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: var(--modal-font-small, 0.8rem);
+    color: rgba(234, 234, 234, 0.6);
+}
+
+#character-workshop-popup .cw-mem-campaign {
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--cw-accent, #e94560) 50%, transparent);
+    color: var(--rpg-text, #eaeaea);
+}
+
+#character-workshop-popup .cw-mem-off { color: #f0c040; }
+
+#character-workshop-popup .cw-mem-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: var(--modal-font-small, 0.8rem);
+    color: rgba(234, 234, 234, 0.5);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+}
+
+#character-workshop-popup #cw-mem-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+#character-workshop-popup .cw-mem-row {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto 28px;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+#character-workshop-popup .cw-mem-row.is-important {
+    border-color: rgba(240, 192, 64, 0.35);
+    background: rgba(240, 192, 64, 0.06);
+}
+
+#character-workshop-popup .cw-mem-row.is-faded .cw-mem-text { opacity: 0.45; }
+
+#character-workshop-popup .cw-mem-star {
+    width: 26px;
+    height: 26px;
+    font-size: 1rem;
+    line-height: 1;
+    color: rgba(234, 234, 234, 0.4);
+    background: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#character-workshop-popup .cw-mem-star:hover { color: #f0c040; background: rgba(240, 192, 64, 0.1); }
+
+#character-workshop-popup .cw-mem-row.is-important .cw-mem-star { color: #f0c040; }
+
+#character-workshop-popup .cw-mem-text {
+    font-size: 0.86rem;
+    line-height: 1.35;
+    color: var(--rpg-text, #eaeaea);
+    word-break: break-word;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+#character-workshop-popup .cw-mem-text:hover,
+#character-workshop-popup .cw-mem-text:focus-visible { background: rgba(255, 255, 255, 0.05); outline: none; }
+
+#character-workshop-popup .cw-mem-edit { width: 100%; font-size: 0.86rem; }
+
+#character-workshop-popup .cw-mem-tags { display: inline-flex; gap: 4px; }
+
+#character-workshop-popup .cw-mem-tag {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0 5px;
+    border-radius: 4px;
+    color: rgba(234, 234, 234, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+#character-workshop-popup .cw-mem-tag.is-faded { border-style: dashed; }
+
+#character-workshop-popup .cw-mem-add {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+#character-workshop-popup .cw-mem-add-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#character-workshop-popup .cw-mem-important-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    color: #f0c040;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#character-workshop-popup .cw-mem-error { flex: 1; font-size: 0.78rem; color: #ff8a8a; }
+
+/* ── RPG & Stats settings: XP table ─────────────────────────────────────── */
+.rpg-setting-row.rpg-setting-row-wrap {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.rpg-xp-tiers,
+.rpg-xp-quest-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.rpg-setting-row .rpg-xp-tier,
+.rpg-setting-row .rpg-xp-quest-sizes label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: normal;
+    opacity: 0.85;
+}
+.rpg-setting-row .rpg-xp-tier input {
+    width: 4.5em;
+}
+.rpg-quest-actions .rpg-quest-drop {
+    opacity: 0.6;
+}

@@ -14,6 +14,14 @@ import {
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
+import { buildStatsPromptForGeneration, buildStatsContextSummary, getStatsExampleObject } from '../features/characterStats.js';
+import { buildMemoriesPromptForGeneration, buildMemoriesContextSummary, isMemoriesEnabled } from '../features/characterMemories.js';
+import { buildEquipmentPromptForGeneration, buildEquipmentContextSummary, isEquipmentEnabled } from '../features/characterEquipment.js';
+import { buildConditionsPromptForGeneration, buildConditionsContextSummary, isConditionsEnabled } from '../features/characterConditions.js';
+import { buildAbilitiesPromptForGeneration, buildAbilitiesContextSummary, isAbilitiesEnabled } from '../features/characterAbilities.js';
+import { buildProgressPromptForGeneration, buildProgressContextSummary } from '../features/characterProgress.js';
+// Registers the attribute-modifier provider the stats prompt uses.
+import '../features/characterModifiers.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
 /**
  * Default HTML prompt text
@@ -139,6 +147,20 @@ export function generateTrackerExample() {
         } catch {
             example += '```\n' + committedTrackerData.characterThoughts + '\n```';
         }
+    }
+    // Stats, equipment and memories are part of the same object. Showing
+    // them in the previous reply's JSON matters: small models copy that
+    // structure and leave out any key it doesn't contain. Equipment and
+    // memories are change-only, so they appear empty ("nothing changed").
+    if (parts.length > 0) {
+        try {
+            const stats = getStatsExampleObject();
+            if (stats) parts.push(`  "stats": ${JSON.stringify(stats)}`);
+            if (isEquipmentEnabled()) parts.push('  "equipment": {}');
+            if (isMemoriesEnabled()) parts.push('  "memories": {}');
+            if (isConditionsEnabled()) parts.push('  "conditions": {}');
+            if (isAbilitiesEnabled()) parts.push('  "abilities": {}');
+        } catch (e) { /* the example is best-effort */ }
     }
     // If we have JSON parts, wrap them in unified structure
     if (parts.length > 0) {
@@ -296,6 +318,27 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
         instructions += '\n' + (override
             ? override.replace(/{userName}/g, userName)
             : buildTrackerPromptBlock(userName, compact));
+        // Character Stats ride in the same JSON object. Appended after the
+        // block (not inside its FORMAT spec) so they still reach the AI when
+        // the user has replaced the tracker prompt with their own text.
+        const statsSection = buildStatsPromptForGeneration({ compact });
+        if (statsSection) instructions += '\n\n' + statsSection;
+        // Character Memories: what the NPCs in the scene remember, and how
+        // to add new ones (same JSON object).
+        const memoriesSection = buildMemoriesPromptForGeneration({ compact });
+        if (memoriesSection) instructions += '\n\n' + memoriesSection;
+        // Character Equipment: what everyone carries, and how to change it.
+        const equipmentSection = buildEquipmentPromptForGeneration({ compact });
+        if (equipmentSection) instructions += '\n\n' + equipmentSection;
+        // Character Conditions: temporary states, and how to change them.
+        const conditionsSection = buildConditionsPromptForGeneration({ compact });
+        if (conditionsSection) instructions += '\n\n' + conditionsSection;
+        // Spells & Abilities.
+        const abilitiesSection = buildAbilitiesPromptForGeneration({ compact });
+        if (abilitiesSection) instructions += '\n\n' + abilitiesSection;
+        // Experience and levels.
+        const progressSection = buildProgressPromptForGeneration({ compact });
+        if (progressSection) instructions += '\n\n' + progressSection;
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
             const customPrompt = extensionSettings.customTrackerContinuationPrompt;
@@ -307,7 +350,23 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 instructions += `\n\nAfter updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
             }
         }
+    } else {
+        // No tracker section is enabled, but Character Stats still need a
+        // JSON block of their own to come back through.
+        const statsSection = buildStatsPromptForGeneration({ compact, standalone: true });
+        // With stats asking for their own block, memories join it; alone they ask for one.
+        const memoriesSection = buildMemoriesPromptForGeneration({ compact, standalone: !statsSection });
+        const equipmentSection = buildEquipmentPromptForGeneration({ compact, standalone: !statsSection && !memoriesSection });
+        const conditionsSection = buildConditionsPromptForGeneration({ compact, standalone: !statsSection && !memoriesSection && !equipmentSection });
+        const abilitiesSection = buildAbilitiesPromptForGeneration({ compact, standalone: !statsSection && !memoriesSection && !equipmentSection && !conditionsSection });
+        const progressSection = buildProgressPromptForGeneration({ compact, standalone: !statsSection && !memoriesSection && !equipmentSection && !conditionsSection && !abilitiesSection });
+        if (statsSection || memoriesSection || equipmentSection || conditionsSection || abilitiesSection || progressSection) {
+            instructions += '\n' + [statsSection, memoriesSection, equipmentSection, conditionsSection, abilitiesSection, progressSection].filter(Boolean).join('\n\n');
+            if (includeContinuation) {
+                instructions += '\n\nThen continue the story directly from the last message, letting the stats shape what the characters can do and how they feel.\n\n';
+            }
         }
+    }
     // Append HTML prompt if enabled AND includeHtmlPrompt is true
     if (extensionSettings.enableHtmlPrompt && includeHtmlPrompt) {
         // Add newlines only if we had tracker instructions
@@ -747,6 +806,24 @@ export function generateContextualSummary() {
         } catch (e) {
             console.warn('[Dooms Tracker] Failed to format characters for context:', e);
         }
+    }
+    // Character Stats — so the roleplay reply can reflect hunger, fatigue,
+    // strength and so on (the separate tracker call keeps them updated).
+    try {
+        const stats = buildStatsContextSummary();
+        if (stats) summary += stats + '\n';
+        const memories = buildMemoriesContextSummary();
+        if (memories) summary += memories + '\n';
+        const equipment = buildEquipmentContextSummary();
+        if (equipment) summary += equipment + '\n';
+        const conditions = buildConditionsContextSummary();
+        if (conditions) summary += conditions + '\n';
+        const abilities = buildAbilitiesContextSummary();
+        if (abilities) summary += abilities + '\n';
+        const levels = buildProgressContextSummary();
+        if (levels) summary += levels + '\n';
+    } catch (e) {
+        console.warn('[Dooms Tracker] Failed to format character stats for context:', e);
     }
     return summary.trim();
 }

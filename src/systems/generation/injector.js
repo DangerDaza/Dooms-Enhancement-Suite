@@ -16,6 +16,12 @@ import {
 import { getActiveCharacterColors } from '../../core/persistence.js';
 import { evaluateSuppression } from './suppression.js';
 import { parseQuests } from './parser.js';
+import { revertAIStatsForReplacedMessage } from '../features/characterStats.js';
+import { revertAIMemoriesForReplacedMessage } from '../features/characterMemories.js';
+import { revertAIEquipmentForReplacedMessage } from '../features/characterEquipment.js';
+import { revertAIConditionsForReplacedMessage } from '../features/characterConditions.js';
+import { revertAIAbilitiesForReplacedMessage } from '../features/characterAbilities.js';
+import { revertAIProgressForReplacedMessage } from '../features/characterProgress.js';
 import { getPendingTwist, isPendingTwistAKnife, getPendingKnifeCharacter, clearPendingTwist, buildDoomTensionInstruction, DOOM_TWIST_SLOT, DOOM_TENSION_SLOT } from './doomCounter.js';
 import {
     generateTrackerExample,
@@ -658,6 +664,22 @@ export async function onGenerationStarted(type, data, dryRun) {
     // Skip tracker injection for image generation requests
     if (data?.quietImage || data?.quiet_image || data?.isImageGeneration) {
         return;
+    }
+    // Character Stats: a swipe or regenerate replaces the last reply, so roll
+    // back the stat changes it made before the prompt reads them. (A new
+    // swipe also does this in onMessageSwiped; the undo record is consumed
+    // once, so running both is harmless.)
+    if (type === 'swipe' || type === 'regenerate') {
+        try {
+            const ctxChat = getContext().chat;
+            const last = Array.isArray(ctxChat) ? ctxChat.length - 1 : undefined;
+            revertAIStatsForReplacedMessage(last);
+            revertAIMemoriesForReplacedMessage(last);
+            revertAIEquipmentForReplacedMessage(last);
+            revertAIConditionsForReplacedMessage(last);
+            revertAIAbilitiesForReplacedMessage(last);
+            revertAIProgressForReplacedMessage(last);
+        } catch (e) { /* best-effort */ }
     }
     if (!extensionSettings.enabled) {
         // Extension is disabled - clear any existing prompts to ensure nothing is injected

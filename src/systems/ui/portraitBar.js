@@ -44,6 +44,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { schedule } from '../../core/scheduler.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
+import { isProgressEnabled, hasLevel, getProgress } from '../features/characterProgress.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -182,6 +183,12 @@ export function initPortraitBar() {
     // Don't double-init
     if ($('#dooms-portrait-bar-wrapper').length) return;
 
+    // Level badges follow XP, level-ups and RPG mode.
+    window.addEventListener('dooms:stats-changed', (e) => {
+        const src = e.detail?.source;
+        if (['progress', 'quest', 'ai', 'undo', 'settings', 'rpg-mode'].includes(src)) updatePortraitBar();
+    });
+
     const wrapperHtml = `
         <div id="dooms-portrait-bar-wrapper">
             <div class="dooms-pb-toggle dooms-pb-open" id="dooms-pb-toggle">
@@ -217,6 +224,9 @@ export function initPortraitBar() {
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
                 <i class="fa-solid fa-scroll"></i> Character Sheet
+            </div>
+            <div class="dooms-pb-ctx-item" data-action="stats" title="Health, hunger, energy and the other stats of this character — can be popped out into its own window">
+                <i class="fa-solid fa-chart-simple"></i> Stats
             </div>
             <div class="dooms-pb-ctx-item" data-action="regenerate-portrait" title="Generate a fresh AI portrait for this character — the current one is kept and can be restored (needs the Image Generation extension)">
                 <i class="fa-solid fa-arrows-rotate"></i> Regenerate Portrait
@@ -403,6 +413,11 @@ export function initPortraitBar() {
             ensureSettingsUI().then(() => {
                 window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
             }).catch(() => {});
+        } else if (action === 'stats') {
+            // Lazy: the panel module (and its stylesheet) load on first use.
+            import('./statsPanel.js')
+                .then(({ openStatsPanel }) => openStatsPanel(characterName, isUser))
+                .catch(err => console.error('[Dooms Tracker] Stats panel failed to open:', err));
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         } else if (action === 'regenerate-portrait') {
@@ -553,6 +568,16 @@ function renderPortraitBarNow() {
             ? `<span class="dooms-portrait-card-color-dot" style="background:${escapeHtml(charColor)};"></span>`
             : '';
         const youBadge = char.isUser ? '<span class="dooms-pb-you-badge">YOU</span>' : '';
+        // Level (Better Stats), top-right; ⬆ when attribute points wait to be assigned.
+        let levelBadge = '';
+        try {
+            if (isProgressEnabled() && hasLevel(char.name, !!char.isUser)) {
+                const pr = getProgress(char.name, !!char.isUser);
+                const up = pr.points > 0 ? ' dooms-pb-level-up' : '';
+                const tip = `Level ${pr.level}${pr.party || char.isUser ? ' · party' : ''}${pr.points ? ` · ${pr.points} point${pr.points === 1 ? '' : 's'} to assign` : ''}`;
+                levelBadge = `<span class="dooms-pb-level-badge${up}" title="${escapeHtml(tip)}">Lv ${pr.level}${pr.points ? ' ⬆' : ''}</span>`;
+            }
+        } catch (e) { /* levels are optional */ }
 
         let backFace = '';
         try {
@@ -584,6 +609,7 @@ function renderPortraitBarNow() {
                 ${face}
                 ${absentOverlay}
                 ${youBadge}
+                ${levelBadge}
                 ${injectingOverlay}
                 <div class="dooms-portrait-card-name">${colorDot}${nameEsc}</div>
                 ${backFace}

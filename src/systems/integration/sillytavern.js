@@ -36,6 +36,12 @@ import { updatePortraitBar } from '../ui/portraitBar.js';
 import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Name Ban
 import { applyCharacterAliases } from '../features/characterAliases.js';
+import { applyAIStatUpdates, revertAIStatsForReplacedMessage } from '../features/characterStats.js';
+import { applyAIMemories, revertAIMemoriesForReplacedMessage } from '../features/characterMemories.js';
+import { applyAIEquipment, revertAIEquipmentForReplacedMessage, notifyBlockedRemovals } from '../features/characterEquipment.js';
+import { applyAIConditions, revertAIConditionsForReplacedMessage } from '../features/characterConditions.js';
+import { applyAIAbilities, revertAIAbilitiesForReplacedMessage } from '../features/characterAbilities.js';
+import { applyAIProgress, revertAIProgressForReplacedMessage } from '../features/characterProgress.js';
 // Expression classification
 import { classifyAllCharacterExpressions, classifyActiveUserExpression, isExpressionSpritesModeEnabled } from './expressionSync.js';
 import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
@@ -205,6 +211,63 @@ export async function onMessageReceived(data) {
                     harvestNewSpeakerColors(lastMessage.mes, parsedData.characterThoughts);
                 } catch (e) {
                     console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
+                }
+            }
+            // Character Stats: apply the AI's stat update for fresh replies only
+            // (this handler also runs when a chat is loaded — re-applying an old
+            // reply's values there would overwrite later manual edits).
+            // Experience and NPC levels — before stats, whose generation
+            // clears the "pending" flag the levels look at.
+            if ((parsedData.xp || parsedData.levels) && isAwaitingNewMessage) {
+                try {
+                    applyAIProgress(parsedData.xp, parsedData.levels, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] XP: applying AI update failed', e);
+                }
+            }
+            if (parsedData.stats && isAwaitingNewMessage) {
+                try {
+                    applyAIStatUpdates(parsedData.stats, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Stats: applying AI update failed', e);
+                }
+            }
+            // Character Memories: same rule — fresh replies only.
+            if (parsedData.memories && isAwaitingNewMessage) {
+                try {
+                    applyAIMemories(parsedData.memories, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Memories: applying AI update failed', e);
+                }
+            }
+            // What the reply carried for the new trackers — shown in the
+            // System Log so a missing update can be told apart from a
+            // reply that never contained one.
+            if (isAwaitingNewMessage) {
+                console.log(`[Dooms Tracker] Reply trackers — stats: ${parsedData.stats ? 'yes' : 'no'}, equipment: ${parsedData.equipment || 'no'}, conditions: ${parsedData.conditions || 'no'}, abilities: ${parsedData.abilities || 'no'}, memories: ${parsedData.memories || 'no'}, xp: ${parsedData.xp || 'no'}, levels: ${parsedData.levels || 'no'}`);
+            }
+            // Spells & Abilities: same rule.
+            if (parsedData.abilities && isAwaitingNewMessage) {
+                try {
+                    notifyBlockedRemovals(applyAIAbilities(parsedData.abilities, chat.length - 1));
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Abilities: applying AI update failed', e);
+                }
+            }
+            // Character Conditions: same rule.
+            if (parsedData.conditions && isAwaitingNewMessage) {
+                try {
+                    applyAIConditions(parsedData.conditions, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Conditions: applying AI update failed', e);
+                }
+            }
+            // Character Equipment: same rule.
+            if (parsedData.equipment && isAwaitingNewMessage) {
+                try {
+                    notifyBlockedRemovals(applyAIEquipment(parsedData.equipment, chat.length - 1));
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Equipment: applying AI update failed', e);
                 }
             }
             // Store RPG data for this specific swipe in the message's extra field
@@ -452,6 +515,14 @@ export function onMessageSwiped(messageIndex) {
         // This is a NEW swipe that will trigger generation
         setLastActionWasSwipe(true);
         setIsAwaitingNewMessage(true);
+        // The reply being replaced may have changed character stats: start
+        // the new swipe from the values that reply saw.
+        try { revertAIStatsForReplacedMessage(messageIndex); } catch (e) {}
+        try { revertAIMemoriesForReplacedMessage(messageIndex); } catch (e) {}
+        try { revertAIEquipmentForReplacedMessage(messageIndex); } catch (e) {}
+        try { revertAIConditionsForReplacedMessage(messageIndex); } catch (e) {}
+        try { revertAIAbilitiesForReplacedMessage(messageIndex); } catch (e) {}
+        try { revertAIProgressForReplacedMessage(messageIndex); } catch (e) {}
     } else {
         // This is navigating to an EXISTING swipe - don't change the flag
     }

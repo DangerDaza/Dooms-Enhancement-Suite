@@ -6,6 +6,7 @@ import { extensionSettings, $questsContainer, committedTrackerData, lastGenerate
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
 import { escapeHtml } from '../../utils/html.js';
+import { awardQuestXp, isXpEnabled } from '../features/characterProgress.js';
 /**
  * Syncs the current extensionSettings.quests to committedTrackerData.quests
  * This ensures quest changes made via UI are reflected in the data sent to AI
@@ -15,6 +16,25 @@ function syncQuestsToCommittedData() {
     const questsJSON = JSON.stringify(questsData, null, 2);
     committedTrackerData.quests = questsJSON;
     lastGeneratedData.quests = questsJSON;
+}
+/**
+ * The finish buttons of a quest. With experience on there are two: ✓ marks
+ * it completed and gives the party XP, ✕ just removes it. Without, one ✓
+ * that removes it (as before).
+ */
+function questButtons(field, index) {
+    const idx = index !== undefined ? ` data-index="${index}"` : '';
+    if (!isXpEnabled()) {
+        return `<button class="rpg-quest-remove" data-action="remove-quest" data-field="${field}"${idx} title="Complete/Remove quest">
+                    <i class="fa-solid fa-check"></i>
+                </button>`;
+    }
+    return `<button class="rpg-quest-remove rpg-quest-complete" data-action="complete-quest" data-field="${field}"${idx} title="Completed — the party gets XP">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <button class="rpg-quest-remove rpg-quest-drop" data-action="remove-quest" data-field="${field}"${idx} title="Remove (no XP)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>`;
 }
 /**
  * Renders the quests sub-tab navigation (Main, Optional)
@@ -68,9 +88,7 @@ export function renderMainQuestView(mainQuest) {
                             <button class="rpg-quest-edit" data-action="edit-quest" data-field="main" title="Edit quest">
                                 <i class="fa-solid fa-edit"></i>
                             </button>
-                            <button class="rpg-quest-remove" data-action="remove-quest" data-field="main" title="Complete/Remove quest">
-                                <i class="fa-solid fa-check"></i>
-                            </button>
+                            ${questButtons('main')}
                         </div>
                     </div>
                 ` : `
@@ -111,9 +129,7 @@ export function renderOptionalQuestsView(optionalQuests) {
             <div class="rpg-quest-item" data-field="optional" data-index="${index}">
                 <div class="rpg-quest-title rpg-editable" contenteditable="true" data-field="optional" data-index="${index}" title="Click to edit">${escapeHtml(quest)}</div>
                 <div class="rpg-quest-actions">
-                    <button class="rpg-quest-remove" data-action="remove-quest" data-field="optional" data-index="${index}" title="Complete/Remove quest">
-                        <i class="fa-solid fa-check"></i>
-                    </button>
+                    ${questButtons('optional', index)}
                 </div>
             </div>
         `}).join('');
@@ -186,6 +202,11 @@ export function renderQuests() {
  */
 export function initQuestEventDelegation() {
     if (!$questsContainer || !$questsContainer.length) return;
+    // Experience or RPG mode switched: the finish buttons change.
+    window.addEventListener('dooms:stats-changed', (e) => {
+        const src = e.detail?.source;
+        if (src === 'settings' || src === 'rpg-mode') renderQuests();
+    });
     // Sub-tab switching
     $questsContainer.on('click', '.rpg-quests-subtab', function() {
         const tab = $(this).data('tab');
@@ -258,10 +279,17 @@ export function initQuestEventDelegation() {
             renderQuests();
         }
     });
-    // Remove quest
-    $questsContainer.on('click', '[data-action="remove-quest"]', function() {
+    // Remove quest (✕), or complete it (✓ — XP for the party)
+    $questsContainer.on('click', '[data-action="remove-quest"], [data-action="complete-quest"]', function() {
         const field = $(this).data('field');
         const index = $(this).data('index');
+        if ($(this).data('action') === 'complete-quest') {
+            let title = field === 'main' ? extensionSettings.quests.main : extensionSettings.quests.optional?.[index];
+            while (title && typeof title === 'object' && title.value !== undefined) title = title.value;
+            try { awardQuestXp(typeof title === 'string' ? title : '', field === 'main' ? 'main' : 'optional'); } catch (e) {
+                console.warn('[Dooms Tracker] XP: quest award failed', e);
+            }
+        }
         if (field === 'main') {
             extensionSettings.quests.main = 'None';
         } else {

@@ -13137,3 +13137,34 @@ body > .dooms-mobile-quick-jump {
         display: none !important;
     }
 }
+
+/* Better Stats: level badge on portrait cards (top-right). */
+.dooms-pb-level-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 5;
+    font-size: 0.6em;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(20, 20, 28, 0.78);
+    border: 1px solid rgba(255, 215, 120, 0.7);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    pointer-events: auto;
+    white-space: nowrap;
+}
+.dooms-pb-level-badge.dooms-pb-level-up {
+    background: linear-gradient(135deg, #b8860b, #e0a82e);
+    border-color: #ffe08a;
+    animation: dooms-pb-level-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dooms-pb-level-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 120, 0.6); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 215, 120, 0); }
+}
+.dooms-pb-flipped .dooms-pb-level-badge {
+    display: none;
+}

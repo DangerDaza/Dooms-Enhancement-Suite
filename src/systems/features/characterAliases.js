@@ -19,6 +19,11 @@ import { chat_metadata, saveSettingsDebounced } from '../../../../../../../scrip
 import { namesAreSimilar, normalizeName } from '../../utils/nameSimilarity.js';
 import { escapeHtml } from '../../utils/html.js';
 import { mergeVariantIntoCanonicalProfiles } from '../lorebook/campaignProfiles.js';
+import { mergeMemories } from './characterMemories.js';
+import { mergeEquipment } from './characterEquipment.js';
+import { mergeConditions } from './characterConditions.js';
+import { mergeProgress } from './characterProgress.js';
+import { mergeAbilities } from './characterAbilities.js';
 
 /**
  * Builds a lowercase alias → canonical-name lookup from settings.
@@ -408,6 +413,12 @@ export async function adoptVariantAsAlias(canonical, variant) {
     } catch (e) {
         console.warn('[Dooms Tracker] Aliases: campaign profile merge failed', e);
     }
+    // The variant's memories become the canonical character's.
+    try { mergeMemories(canonical, variant); } catch (e) {}
+    try { mergeEquipment(canonical, variant); } catch (e) {}
+    try { mergeConditions(canonical, variant); } catch (e) {}
+    try { mergeProgress(canonical, variant); } catch (e) {}
+    try { mergeAbilities(canonical, variant); } catch (e) {}
     for (const store of ['characterColors', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
         'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
         'generatedPortraits']) {

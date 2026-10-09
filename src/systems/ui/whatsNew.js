@@ -78,7 +78,7 @@ export async function showWhatsNew() {
     overlay.id = ROOT_ID;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', "What's new in Doom's Enhancement Suite");
+    overlay.setAttribute('aria-label', "What's new in Better Stats");
 
     const panel = el('div', 'dooms-wn-panel');
 

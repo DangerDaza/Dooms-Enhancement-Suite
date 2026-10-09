@@ -147,11 +147,14 @@ import { initSystemLog, openSystemLog } from './src/systems/ui/systemLog.js';
 import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 // Character Sheet
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
+import { onChatChangedRpgMode } from './src/systems/features/rpgMode.js';
+import { migrateLegacyToChat } from './src/systems/features/chatScope.js';
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mobileQuickJump.js';
 import { escapeHtml } from './src/utils/html.js';
+import { initStatsSettings } from './src/systems/ui/statsSettings.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -332,9 +335,9 @@ async function addExtensionSettings() {
             .catch((e) => console.warn("[Dooms Tracker] What's New failed:", e));
     });
     $('#dooms-github-star-btn').on('click', function () {
-        window.open('https://github.com/DangerDaza/Dooms-Enhancement-Suite', '_blank', 'noopener,noreferrer');
+        window.open('https://github.com/Caged1994/Better-Stats', '_blank', 'noopener,noreferrer');
     });
-    fetch('https://api.github.com/repos/DangerDaza/Dooms-Enhancement-Suite', { headers: { 'Accept': 'application/vnd.github+json' } })
+    fetch('https://api.github.com/repos/Caged1994/Better-Stats', { headers: { 'Accept': 'application/vnd.github+json' } })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
             if (data && typeof data.stargazers_count === 'number') {
@@ -512,7 +515,7 @@ function populateUpdateBranchDropdownOnce() {
                     }
                 } catch (e) { /* keep fallback */ }
             }
-            if (!repoSlug) repoSlug = 'DangerDaza/Dooms-Enhancement-Suite';
+            if (!repoSlug) repoSlug = 'Caged1994/Better-Stats';
             try {
                 const ghResp = await fetch(`https://api.github.com/repos/${repoSlug}/branches?per_page=100`, {
                     headers: { 'Accept': 'application/vnd.github+json' },
@@ -804,7 +807,7 @@ function bindSettingsUI() {
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
         applyNewPlayerProfile();
         saveSettings();
-        toastr.success('Defaults restored — reloading...', "Doom's Enhancement Suite", { timeOut: 2500 });
+        toastr.success('Defaults restored — reloading...', "Better Stats", { timeOut: 2500 });
         // saveSettings() only schedules SillyTavern's ~1s debounced POST; a
         // reload before it flushes silently cancels the restore. 2.5s gives
         // the trailing debounce + request comfortable room.
@@ -1990,6 +1993,8 @@ function bindSettingsUI() {
         }
     });
     // ── Initialize UI state ──
+    // Character Stats: one switch per built-in stat
+    try { initStatsSettings(); } catch (e) { console.warn('[Dooms Tracker] Stats settings failed to initialise', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
@@ -2314,7 +2319,7 @@ function bindSettingsUI() {
             return;
         }
         const ok = window.confirm(
-            `Switch Doom's Enhancement Suite to the "${selectedBranch}" branch?\n\n` +
+            `Switch Better Stats to the "${selectedBranch}" branch?\n\n` +
             `SillyTavern will reload after switching. Your settings, characters, and chats won't be affected — only the extension's code is replaced.`
         );
         if (!ok) {
@@ -2454,7 +2459,7 @@ async function initUI() {
             // ANY World Info access. Surface the failure and re-trigger the
             // click with a one-shot bypass so ST's native drawer opens.
             console.error('[Dooms Tracker] Lore Library failed to load:', err);
-            try { toastr.error('Lore Library failed to load — opening native World Info.', "Doom's Enhancement Suite"); } catch (e) { }
+            try { toastr.error('Lore Library failed to load — opening native World Info.', "Better Stats"); } catch (e) { }
             _wiInterceptBypassOnce = true;
             $(this).trigger('click');
         });
@@ -3438,7 +3443,7 @@ jQuery(async () => {
                 [event_types.MESSAGE_RECEIVED]: onMessageReceived,
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet],
                 [event_types.GENERATION_ENDED]: onGenerationEnded,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, migrateLegacyToChat, onChatChangedRpgMode, onChatChangedTtsCleanup, onChatChangedDecorations, refreshMobileQuickJump],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,

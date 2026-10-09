@@ -28,6 +28,12 @@ import { recordSeparateTrackerPrompt } from './inspector.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { removeLocks } from './lockManager.js';
 import { applyCharacterAliases } from '../features/characterAliases.js';
+import { applyAIStatUpdates } from '../features/characterStats.js';
+import { applyAIMemories } from '../features/characterMemories.js';
+import { applyAIEquipment, notifyBlockedRemovals } from '../features/characterEquipment.js';
+import { applyAIConditions } from '../features/characterConditions.js';
+import { applyAIAbilities } from '../features/characterAbilities.js';
+import { applyAIProgress } from '../features/characterProgress.js';
 import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
@@ -348,6 +354,52 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
             }
             // Store RPG data for the last assistant message (separate mode)
             const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;
+            // Character Stats: the tracker call was given the current values,
+            // so its "stats" are the new ones for this reply.
+            // Experience and NPC levels (before stats: see sillytavern.js).
+            if (parsedData.xp || parsedData.levels) {
+                try {
+                    applyAIProgress(parsedData.xp, parsedData.levels, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] XP: applying AI update failed', e);
+                }
+            }
+            if (parsedData.stats) {
+                try {
+                    applyAIStatUpdates(parsedData.stats, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Stats: applying AI update failed', e);
+                }
+            }
+            if (parsedData.memories) {
+                try {
+                    applyAIMemories(parsedData.memories, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Memories: applying AI update failed', e);
+                }
+            }
+            console.log(`[Dooms Tracker] Tracker update — stats: ${parsedData.stats ? 'yes' : 'no'}, equipment: ${parsedData.equipment || 'no'}, conditions: ${parsedData.conditions || 'no'}, abilities: ${parsedData.abilities || 'no'}, memories: ${parsedData.memories || 'no'}, xp: ${parsedData.xp || 'no'}, levels: ${parsedData.levels || 'no'}`);
+            if (parsedData.abilities) {
+                try {
+                    notifyBlockedRemovals(applyAIAbilities(parsedData.abilities, chat.length - 1));
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Abilities: applying AI update failed', e);
+                }
+            }
+            if (parsedData.conditions) {
+                try {
+                    applyAIConditions(parsedData.conditions, chat.length - 1);
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Conditions: applying AI update failed', e);
+                }
+            }
+            if (parsedData.equipment) {
+                try {
+                    notifyBlockedRemovals(applyAIEquipment(parsedData.equipment, chat.length - 1));
+                } catch (e) {
+                    console.warn('[Dooms Tracker] Equipment: applying AI update failed', e);
+                }
+            }
             // Update lastGeneratedData for display (regardless of message type)
             if (parsedData.quests) {
                 lastGeneratedData.quests = parsedData.quests;
@@ -435,7 +487,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
     } catch (error) {
         console.error('[Dooms Tracker] Error updating RPG data:', error);
         if (isExternalMode) {
-            toastr.error(error.message, "Doom's Enhancement Suite External API Error");
+            toastr.error(error.message, "Better Stats External API Error");
         }
     } finally {
         // Restore connection profile AND preset if we switched.

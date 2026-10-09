@@ -1,5 +1,5 @@
 {
-    "display_name": "Doom's Enhancement Suite",
+    "display_name": "Better Stats",
     "loading_order": 100,
     "requires": [],
     "optional": [],
@@ -8,6 +8,6 @@
     "author": "Doom",
     "license": "AGPL-3.0-or-later",
     "version": "2.6.0",
-    "homePage": "https://github.com/DangerDaza/Dooms-Enhancement-Suite",
+    "homePage": "https://github.com/Caged1994/Better-Stats",
     "description": "An immersive RPG extension with character tracking, Lore Library, portrait bar, scene headers, chat bubbles, and multiple themes."
 }

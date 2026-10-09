@@ -580,6 +580,24 @@ export function saveChatData({ immediate = false } = {}) {
         // with immediate saves, wiped from disk on the next generation).
         knivesEnabled: chat_metadata.dooms_tracker?.knivesEnabled === true,
         characterSheets: chat_metadata.dooms_tracker?.characterSheets || {},
+        // Undo for the last AI stat update (characterStats.js) — consumed
+        // when that reply is swiped or regenerated.
+        statsUndo: chat_metadata.dooms_tracker?.statsUndo || null,
+        // Undo for the memories the last reply added (characterMemories.js).
+        memoriesUndo: chat_metadata.dooms_tracker?.memoriesUndo || null,
+        // Undo for the equipment changes of the last reply (characterEquipment.js).
+        equipmentUndo: chat_metadata.dooms_tracker?.equipmentUndo || null,
+        // Undo for the condition changes of the last reply (characterConditions.js).
+        conditionsUndo: chat_metadata.dooms_tracker?.conditionsUndo || null,
+        // Undo for the spell/ability changes of the last reply (characterAbilities.js).
+        abilitiesUndo: chat_metadata.dooms_tracker?.abilitiesUndo || null,
+        // Undo for the XP and NPC levels of the last reply (characterProgress.js).
+        xpUndo: chat_metadata.dooms_tracker?.xpUndo || null,
+        // Better Stats data that belongs to this chat — current stat values,
+        // memories, equipment, conditions, abilities, XP (chatScope.js).
+        betterStats: chat_metadata.dooms_tracker?.betterStats || {},
+        // RPG mode set for this chat (rpgMode.js): true / false, or absent to follow the card.
+        rpgMode: typeof chat_metadata.dooms_tracker?.rpgMode === 'boolean' ? chat_metadata.dooms_tracker.rpgMode : undefined,
         timestamp: Date.now()
     };
     // Persist per-chat character tracking data when enabled

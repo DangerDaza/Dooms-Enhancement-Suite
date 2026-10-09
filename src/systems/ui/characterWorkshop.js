@@ -73,6 +73,20 @@ import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 import { escapeHtml } from '../../utils/html.js';
 import { DIALOGUE_COLOR_LIST } from '../../utils/dialogueColors.js';
+// Character Stats: the sheet (definitions, base values, AI flags) is shared by
+// every campaign, so it travels across version switches like colour/aliases.
+import { getStatSheet, saveStatSheet, deleteStatSheet, isStatGenerationPending, setStatEnabled, setStatColor, getDisabledStatIds, getStatColors, STATS_CHANGED_EVENT, addCustomStat, deleteCustomStat, getCustomStatDefinitions } from '../features/characterStats.js';
+import { clampStatValue, HUMAN_AVERAGE, HUMAN_PEAK, BUILTIN_STATES, isHexColor } from '../../utils/statsModel.js';
+// Character Memories (NPCs only): per chat, edited live (no Save needed).
+import {
+    getMemories, addMemory, updateMemory, deleteMemory, deleteMemoriesEverywhere,
+    getRecentLimit, isMemoriesEnabled, MEMORIES_CHANGED_EVENT,
+} from '../features/characterMemories.js';
+import { fadedIds } from '../../utils/memoryModel.js';
+import { deleteEquipmentEverywhere } from '../features/characterEquipment.js';
+import { deleteConditionsEverywhere } from '../features/characterConditions.js';
+import { deleteProgressEverywhere, requestLevelGeneration } from '../features/characterProgress.js';
+import { deleteAbilitiesEverywhere } from '../features/characterAbilities.js';
 
 /**
  * Runs a save function, surfacing failures instead of silently discarding
@@ -500,6 +514,7 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     if (carry) {
         if (carry.dirty?.color) { draft.color = carry.color; draft.dirty.color = true; }
         if (carry.dirty?.aliases) { draft.aliases = [...(carry.aliases || [])]; draft.dirty.aliases = true; }
+        if (carry.dirty?.stats) { draft.stats = cloneStats(carry.stats); draft.statsPending = !!carry.statsPending; draft.dirty.stats = true; }
     }
     // Stamp the modal with a mode attribute so CSS can flip NPC-only vs
     // user-only sections without a JS class-toggle on every section.
@@ -514,14 +529,214 @@ function loadVersion(name, isUser, versionId, { fullReset = false, carry = null 
     renderInjection();
     renderKnives();
     renderAliases();
+    renderStats();
+    renderMemories();
     renderVersionStrip();
     if (fullReset) {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
+        resetStatAddForm();
+        $modal.find('#cw-mem-input').val('');
+        $modal.find('#cw-mem-error').text('');
         activatePane('identity');
     }
     // Suggestions generated for another version must not be kept for this one.
     clearKnifeSuggestions();
+}
+
+/**
+ * The edits that do not belong to a single version (colour, aliases, stats)
+ * and so travel with the user when another version is put on the stage.
+ */
+function versionIndependentCarry() {
+    return {
+        color: draft.color,
+        aliases: draft.aliases,
+        stats: draft.stats,
+        statsPending: draft.statsPending,
+        dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases, stats: draft.dirty.stats },
+    };
+}
+
+/** Deep-enough copy of a resolved stat list (entries are flat objects). */
+function cloneStats(stats) {
+    return Array.isArray(stats) ? stats.map(s => ({ ...s })) : [];
+}
+
+// ─── Stats tab ──────────────────────────────────────────────────────────────
+
+function statRowHtml(stat) {
+    const isState = stat.kind === 'state';
+    const off = stat.enabled === false;
+    const range = isState ? '0–100%' : '1–100';
+    // Stats (rings) get a colour picker: global for the built-ins, this
+    // character's own for custom stats. Attributes show their abbreviation.
+    const colorTip = `Colour of ${stat.name} for every character`;
+    const swatch = isState
+        ? `<label class="cw-stat-swatch" title="${escapeHtml(colorTip)}" style="background:${escapeHtml(stat.color || '#888888')}">
+                <input type="color" class="cw-stat-color" value="${escapeHtml(toSixDigitHex(stat.color))}" aria-label="${escapeHtml(colorTip)}">
+           </label>`
+        : `<span class="cw-stat-abbr">${escapeHtml(stat.abbr || stat.name.slice(0, 3).toUpperCase())}</span>`;
+    const tip = stat.description ? ` title="${escapeHtml(stat.description)}"` : '';
+    const disabledAttr = off ? ' disabled' : '';
+    const onSwitch = `<label class="rpg-toggle-switch cw-stat-on" title="${off ? 'Switched off' : 'Switched on'} for every character — click to change">
+                <input type="checkbox" class="cw-stat-on-input"${off ? '' : ' checked'} aria-label="Use ${escapeHtml(stat.name)}">
+                <span class="rpg-toggle-slider"></span>
+           </label>`;
+    return `
+        <div class="cw-stat-row${stat.builtin ? '' : ' is-custom'}${off ? ' is-off' : ''}" data-stat="${escapeHtml(stat.id)}">
+            ${swatch}
+            <div class="cw-stat-name"${tip}>
+                <span class="cw-stat-label">${escapeHtml(stat.name)}${off ? ' <span class="cw-stat-off-tag">off</span>' : ''}</span>
+                ${stat.builtin ? '' : `<span class="cw-stat-desc">${escapeHtml(stat.description || 'No description')}</span>`}
+            </div>
+            <label class="cw-stat-base" title="Starting value (${range})">
+                <input type="number" class="rpg-input cw-stat-base-input" min="${stat.min}" max="${stat.max}" step="1"
+                    value="${escapeHtml(String(stat.base))}" aria-label="${escapeHtml(stat.name)} starting value"${disabledAttr}><span class="cw-stat-unit">${isState ? '%' : ''}</span>
+            </label>
+            <label class="cw-stat-ai-toggle" title="Let the AI change ${escapeHtml(stat.name)}">
+                <input type="checkbox" class="cw-stat-ai-input"${stat.ai ? ' checked' : ''}${disabledAttr}> AI
+            </label>
+            ${onSwitch}
+            ${stat.builtin ? '<span class="cw-stat-del-spacer"></span>' : `<button type="button" class="rpg-dc-knife-btn cw-stat-delete" title="Delete ${escapeHtml(stat.name)} for every character"><i class="fa-solid fa-trash"></i></button>`}
+        </div>`;
+}
+
+// ─── Memories tab ───────────────────────────────────────────────────────────
+
+function renderMemories() {
+    const $list = $modal.find('#cw-mem-list');
+    if (!$list.length) return;
+    const $meta = $modal.find('#cw-mem-meta');
+    if (!draft || draft.isUser) { $list.empty(); $meta.empty(); return; }
+    const list = getMemories(draft.name);
+    const limit = getRecentLimit();
+    const faded = fadedIds(list, limit);
+    const campaignId = getActiveCampaignId();
+    const campaign = campaignId ? extensionSettings.lorebook?.campaigns?.[campaignId]?.name : '';
+    const important = list.filter(m => m.important).length;
+    $meta.html(`
+        <span>${list.length} ${list.length === 1 ? 'memory' : 'memories'} · ${important} ★ · ${list.length - faded.size} sent to the AI</span>
+        ${campaign ? `<span class="cw-mem-campaign">${escapeHtml(campaign)}</span>` : ''}
+        ${isMemoriesEnabled() ? '' : '<span class="cw-mem-off">Memories are switched off in Settings → Stats</span>'}`);
+    if (!list.length) {
+        $list.html(`<div class="cw-mem-empty">No memories yet. They appear here as the story goes — or add one below.</div>`);
+        return;
+    }
+    // Newest first: the most recent memories are the ones you check.
+    $list.html([...list].reverse().map(m => {
+        const isFaded = faded.has(m.id);
+        return `
+        <div class="cw-mem-row${m.important ? ' is-important' : ''}${isFaded ? ' is-faded' : ''}" data-id="${escapeHtml(m.id)}">
+            <button type="button" class="cw-mem-star" title="${m.important ? 'Important — always remembered. Click to make it a normal memory' : 'Make it important — never forgotten'}" aria-pressed="${m.important}">${m.important ? '★' : '☆'}</button>
+            <div class="cw-mem-text" tabindex="0" title="Click to edit">${escapeHtml(m.text)}</div>
+            <span class="cw-mem-tags">
+                ${m.source === 'ai' ? '<span class="cw-mem-tag" title="Added by the AI">AI</span>' : ''}
+                ${isFaded ? '<span class="cw-mem-tag is-faded" title="Older than the most recent memories: kept here, no longer sent to the AI">faded</span>' : ''}
+            </span>
+            <button type="button" class="rpg-dc-knife-btn cw-mem-delete" title="Delete memory"><i class="fa-solid fa-trash"></i></button>
+        </div>`;
+    }).join(''));
+}
+
+function memoryIdOf(el) {
+    return $(el).closest('.cw-mem-row').attr('data-id');
+}
+
+function onMemoriesChanged() {
+    if (!$modal || !$modal.hasClass('is-open') || !draft || draft.isUser) return;
+    if ($modal.find('.cw-mem-edit').length) return; // don't kill an edit in progress
+    renderMemories();
+}
+
+/** <input type=color> only takes #rrggbb. */
+function toSixDigitHex(color) {
+    const c = String(color || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(c)) return '#' + c.slice(1).split('').map(ch => ch + ch).join('').toLowerCase();
+    return '#888888';
+}
+
+function renderStats() {
+    const $host = $modal.find('#cw-stats-editor');
+    if (!$host.length) return;
+    // On/off and built-in colours are global settings that may have changed
+    // since the draft was built (Settings, another character): read them fresh.
+    syncGlobalStatSettings();
+    // Switched-off stats are listed greyed out so they can be switched back on.
+    const stats = draft?.stats || [];
+    const attrs = stats.filter(s => s.kind === 'attribute');
+    const states = stats.filter(s => s.kind === 'state');
+    // NPCs get their values from the AI the first time they are in a scene;
+    // the persona is always set by hand.
+    const genBox = draft?.isUser ? '' : (draft?.statsPending
+        ? `<div class="cw-stats-gen is-pending">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>The AI will generate ${escapeHtml(draft.name)}'s stats to fit who they are, the next time they are in a reply. Edit a starting value below to set them yourself instead.</span>
+            </div>`
+        : `<div class="cw-stats-gen">
+                <span>Want the AI to decide these values again from who ${escapeHtml(draft?.name || 'this character')} is?</span>
+                <button type="button" class="rpg-btn" id="cw-stats-regenerate"><i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate with AI</button>
+            </div>`);
+    $host.html(`
+        ${genBox}
+        ${attrs.length ? `<div class="cw-stats-group">
+            <div class="cw-stats-group-head"><span>Attributes</span><span class="muted">${HUMAN_AVERAGE} average · ${HUMAN_PEAK} human peak · up to 100</span></div>
+            ${attrs.map(statRowHtml).join('')}
+        </div>` : ''}
+        ${states.length ? `<div class="cw-stats-group">
+            <div class="cw-stats-group-head"><span>Stats</span><span class="muted">0–100% · rings in the Stats panel</span></div>
+            ${states.map(statRowHtml).join('')}
+        </div>` : ''}
+        <p class="helper cw-stats-legend"><strong>On</strong>, the colour and the custom stats themselves apply to every character; starting values and the AI tick are this character's.</p>`);
+}
+
+function onGlobalStatsChanged(e) {
+    if (e?.detail?.source !== 'settings') return;
+    if (!$modal || !$modal.hasClass('is-open') || !draft) return;
+    const active = document.activeElement;
+    if (active && $modal[0].contains(active) && active.matches('input[type=number], input[type=color]')) return;
+    renderStats();
+}
+
+/** Copies the global on/off state and built-in colours onto the draft. */
+function syncGlobalStatSettings() {
+    if (!draft || !Array.isArray(draft.stats)) return;
+    const off = new Set(getDisabledStatIds());
+    const colors = getStatColors();
+    const defaults = new Map(BUILTIN_STATES.map(d => [d.id, d.color]));
+    // Custom stats added or deleted elsewhere (Settings, another character).
+    const defs = getCustomStatDefinitions();
+    const defIds = new Set(defs.map(d => d.id));
+    draft.stats = draft.stats.filter(st => st.builtin || defIds.has(st.id));
+    const have = new Set(draft.stats.map(st => st.id));
+    if (defs.some(d => !have.has(d.id))) {
+        const fresh = getStatSheet(draft.name, draft.isUser);
+        for (const st of fresh) {
+            if (have.has(st.id)) continue;
+            const after = draft.stats.map(x => x.kind).lastIndexOf(st.kind);
+            draft.stats.splice(after + 1, 0, { ...st });
+        }
+    }
+    for (const st of draft.stats) {
+        st.enabled = !off.has(st.id);
+        if (st.builtin && st.kind === 'state') st.color = isHexColor(colors[st.id]) ? colors[st.id] : (defaults.get(st.id) || st.color);
+        else if (!st.builtin && isHexColor(colors[st.id])) st.color = colors[st.id];
+    }
+}
+
+/** Clears the "Add a stat" form; the AI box follows the kind's default. */
+function resetStatAddForm() {
+    $modal.find('#cw-stat-new-name').val('');
+    $modal.find('#cw-stat-new-desc').val('');
+    $modal.find('#cw-stat-new-kind').val('state');
+    $modal.find('#cw-stat-new-ai').prop('checked', true);
+    $modal.find('#cw-stat-new-error').text('');
+}
+
+function findDraftStat(el) {
+    const id = $(el).closest('.cw-stat-row').attr('data-stat');
+    return id && draft ? draft.stats.find(s => s.id === id) : null;
 }
 
 /** After a successful commit the draft matches the stores again. */
@@ -589,7 +804,7 @@ async function switchVersion(versionId) {
             $modal.find('#cw-alias-input').val('');
         }
     }
-    const carry = { color: draft.color, aliases: draft.aliases, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases } };
+    const carry = versionIndependentCarry();
     const name = draft.name;
     const $editor = $modal.find('.cw-editor');
     const animate = !motionDisabled();
@@ -682,7 +897,7 @@ export function refreshWorkshopIfOpen() {
         $modal.find('#cw-knife-input').val('');
         $modal.find('#cw-alias-input').val('');
     }
-    const carry = { color: draft.color, aliases: draft.aliases, dirty: { color: draft.dirty.color, aliases: draft.dirty.aliases } };
+    const carry = versionIndependentCarry();
     loadVersion(name, false, null, { carry });
 }
 
@@ -1177,7 +1392,9 @@ function buildDraft(name, isUser = false, versionId = null) {
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false },
+            stats: cloneStats(getStatSheet(name, true)),
+            statsPending: false,
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, stats: false },
         };
     }
     const version = versionId || defaultVersionFor(name);
@@ -1202,7 +1419,9 @@ function buildDraft(name, isUser = false, versionId = null) {
         isLive: live,
         color: activeColors[name] || '',
         aliases: Array.isArray(npcAliases) ? npcAliases.filter(a => typeof a === 'string') : [],
-        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false },
+        stats: cloneStats(getStatSheet(name, false)),
+        statsPending: isStatGenerationPending(name, false),
+        dirty: { color: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, stats: false },
     };
     if (live) {
         const inj = extensionSettings?.characterInjection?.[name] || {};
@@ -1805,6 +2024,153 @@ function bindStaticListeners() {
         draft.dirty.knives = true;
         renderKnives();
     });
+    // Stats — sheet edits live on the draft and persist on Save.
+    $modal.on('change.cw', '#cw-stats-editor .cw-stat-base-input', function () {
+        const stat = findDraftStat(this);
+        if (!stat) return;
+        const v = clampStatValue(stat, $(this).val());
+        if (v === null) { $(this).val(stat.base); return; }
+        $(this).val(v);
+        if (v === stat.base) return;
+        stat.base = v;
+        draft.dirty.stats = true;
+        // Choosing a value by hand means the user is setting the sheet.
+        if (draft.statsPending) { draft.statsPending = false; renderStats(); }
+    });
+    // On/off and built-in colours are global settings: applied at once,
+    // mirrored onto the draft so the tab repaints without losing edits.
+    $modal.on('change.cw', '#cw-stats-editor .cw-stat-on-input', function () {
+        const stat = findDraftStat(this);
+        if (!stat) return;
+        const on = $(this).is(':checked');
+        setStatEnabled(stat.id, on);
+        stat.enabled = on;
+        renderStats();
+    });
+    $modal.on('input.cw', '#cw-stats-editor .cw-stat-color', function () {
+        // Live preview on the swatch while the picker is open.
+        $(this).closest('.cw-stat-swatch').css('background', $(this).val());
+    });
+    $modal.on('change.cw', '#cw-stats-editor .cw-stat-color', function () {
+        const stat = findDraftStat(this);
+        if (!stat) return;
+        const color = String($(this).val() || '').toLowerCase();
+        stat.color = color;
+        setStatColor(stat.id, color);
+        renderStats();
+    });
+    // Memories — saved immediately (they live per campaign, not per version).
+    window.removeEventListener(MEMORIES_CHANGED_EVENT, onMemoriesChanged);
+    window.addEventListener(MEMORIES_CHANGED_EVENT, onMemoriesChanged);
+    const addMem = () => {
+        if (!draft || draft.isUser) return;
+        const $in = $modal.find('#cw-mem-input');
+        const res = addMemory(draft.name, $in.val(), { important: $modal.find('#cw-mem-important').is(':checked'), source: 'user' });
+        if (res.error) { $modal.find('#cw-mem-error').text(res.error); return; }
+        $in.val('');
+        $modal.find('#cw-mem-important').prop('checked', false);
+        $modal.find('#cw-mem-error').text('');
+        renderMemories();
+    };
+    $modal.on('click.cw', '#cw-mem-add', addMem);
+    $modal.on('keydown.cw', '#cw-mem-input', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addMem(); }
+    });
+    $modal.on('input.cw', '#cw-mem-input', () => $modal.find('#cw-mem-error').text(''));
+    $modal.on('click.cw', '#cw-mem-list .cw-mem-star', function () {
+        if (!draft) return;
+        const id = memoryIdOf(this);
+        const m = getMemories(draft.name).find(x => x.id === id);
+        if (m) updateMemory(draft.name, id, { important: !m.important });
+        renderMemories();
+    });
+    $modal.on('click.cw', '#cw-mem-list .cw-mem-delete', function () {
+        if (!draft) return;
+        deleteMemory(draft.name, memoryIdOf(this));
+        renderMemories();
+    });
+    const startMemEdit = (el) => {
+        if (!draft) return;
+        const id = memoryIdOf(el);
+        const m = getMemories(draft.name).find(x => x.id === id);
+        if (!m) return;
+        const $ta = $('<textarea class="rpg-textarea cw-mem-edit" rows="2" maxlength="200"></textarea>').val(m.text);
+        $(el).replaceWith($ta);
+        $ta.trigger('focus');
+        let done = false;
+        const finish = (save) => {
+            if (done) return;
+            done = true;
+            if (save && String($ta.val()).trim() && $ta.val() !== m.text) updateMemory(draft.name, id, { text: String($ta.val()) });
+            $ta.remove();
+            renderMemories();
+        };
+        $ta.on('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+        });
+        $ta.on('blur', () => finish(true));
+    };
+    $modal.on('click.cw', '#cw-mem-list .cw-mem-text', function () { startMemEdit(this); });
+    $modal.on('keydown.cw', '#cw-mem-list .cw-mem-text', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); startMemEdit(this); }
+    });
+
+    // Settings → Stats changed while the card is open: repaint the tab.
+    window.removeEventListener(STATS_CHANGED_EVENT, onGlobalStatsChanged);
+    window.addEventListener(STATS_CHANGED_EVENT, onGlobalStatsChanged);
+    $modal.on('click.cw', '#cw-stats-regenerate', function () {
+        if (!draft || draft.isUser) return;
+        draft.statsPending = true;
+        draft.dirty.stats = true;
+        renderStats();
+    });
+    $modal.on('change.cw', '#cw-stats-editor .cw-stat-ai-input', function () {
+        const stat = findDraftStat(this);
+        if (!stat) return;
+        stat.ai = $(this).is(':checked');
+        draft.dirty.stats = true;
+    });
+    $modal.on('click.cw', '#cw-stats-editor .cw-stat-delete', function () {
+        const stat = findDraftStat(this);
+        if (!stat || stat.builtin) return;
+        const ok = window.confirm(`Delete the stat "${stat.name}" for every character?\n\nTheir values for it are deleted too.`);
+        if (!ok) return;
+        deleteCustomStat(stat.id);
+        draft.stats = draft.stats.filter(s => s.id !== stat.id);
+        renderStats();
+    });
+    // The AI box follows the kind's default until the user touches it.
+    $modal.on('change.cw', '#cw-stat-new-kind', function () {
+        $modal.find('#cw-stat-new-ai').prop('checked', $(this).val() === 'state');
+    });
+    const addStat = () => {
+        if (!draft) return;
+        const $err = $modal.find('#cw-stat-new-error');
+        // Custom stats are global: added for every character at once.
+        const result = addCustomStat({
+            name: $modal.find('#cw-stat-new-name').val(),
+            description: $modal.find('#cw-stat-new-desc').val(),
+            kind: $modal.find('#cw-stat-new-kind').val(),
+            ai: $modal.find('#cw-stat-new-ai').is(':checked'),
+        });
+        if (result.error) {
+            $err.text(result.error);
+            return;
+        }
+        const stat = result.stat;
+        resetStatAddForm();
+        renderStats();
+        $modal.find(`#cw-stats-editor .cw-stat-row[data-stat="${stat.id}"]`)[0]?.scrollIntoView({ block: 'nearest' });
+    };
+    $modal.on('click.cw', '#cw-stat-add', addStat);
+    $modal.on('keydown.cw', '#cw-stat-new-name', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); addStat(); }
+    });
+    $modal.on('input.cw', '#cw-stat-new-name', function () {
+        $modal.find('#cw-stat-new-error').text('');
+    });
+
     // Aliases — other names that resolve to this card. Edits live on the
     // draft and persist on Save.
     const addAlias = () => {
@@ -2512,6 +2878,14 @@ function commitDraft() {
     const name = draft.name;
     let changed = false;
 
+    // Stats are shared by every version and campaign — saved the same way
+    // whatever version is on the stage, for NPCs and personas alike.
+    if (draft.dirty.stats) {
+        saveStatSheet(name, draft.isUser, draft.stats, { persist: false, pending: !!draft.statsPending });
+        if (draft.statsPending && !draft.isUser) requestLevelGeneration(name);
+        changed = true;
+    }
+
     // User-character mode: write the whole entry into a single namespace.
     if (draft.isUser) {
         if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
@@ -2909,6 +3283,11 @@ function deleteCharacter(name) {
         if (extensionSettings.activeUserCharacter === name) {
             extensionSettings.activeUserCharacter = null;
         }
+        deleteStatSheet(name, true);
+        deleteEquipmentEverywhere(name, true);
+        deleteConditionsEverywhere(name, true);
+        deleteProgressEverywhere(name, true);
+        deleteAbilitiesEverywhere(name, true);
         saveOrWarn(saveSettings, 'settings');
         // A persona copied from an NPC shares the NPC's portrait file —
         // only files nothing else references are deleted.
@@ -2935,6 +3314,13 @@ function deleteCharacter(name) {
     // Aliases too — an orphaned alias entry would keep silently renaming a
     // future, unrelated character to this deleted one.
     if (extensionSettings.characterAliases) delete extensionSettings.characterAliases[name];
+    // Stat sheet, and its values and memories in the open chat.
+    deleteStatSheet(name, false);
+    deleteMemoriesEverywhere(name);
+    deleteEquipmentEverywhere(name, false);
+    deleteConditionsEverywhere(name, false);
+    deleteProgressEverywhere(name, false);
+    deleteAbilitiesEverywhere(name, false);
     // When perChatCharacterTracking is on, knownCharacters/characterColors
     // live on chat_metadata. Without wiping those, the Roster grid (which
     // reads via the active getters) shows the character right back after
