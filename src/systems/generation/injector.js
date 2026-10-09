@@ -649,6 +649,24 @@ function onChatCompletionPromptReady(eventData) {
  * @param {Object} data - Event data
  * @param {boolean} dryRun - If true, this is a dry run (page reload, prompt preview, etc.) - skip all logic
  */
+/**
+ * Sets (or clears) the dice slot from the chat as it is now. Called when
+ * generation starts and again from MESSAGE_SENT, after the roll for the
+ * sent message is attached: SillyTavern's Generate() fires
+ * GENERATION_STARTED before sendMessageAsUser(), so only the second call can
+ * see that roll, and only the second call clears a previous message's
+ * verdict from a turn that rolled nothing. SillyTavern awaits MESSAGE_SENT
+ * listeners before it builds the prompt, so the slot set here is in it.
+ */
+export function refreshDiceInjection({ suppress = false } = {}) {
+    try {
+        const verdict = (!suppress && extensionSettings.enabled) ? buildDiceVerdictForGeneration() : '';
+        setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, 0, false);
+    } catch (e) {
+        console.warn('[Dooms Tracker] Dice: verdict injection failed', e);
+    }
+}
+
 export async function onGenerationStarted(type, data, dryRun) {
     // Skip dry runs (page reload, prompt manager preview, etc.)
     if (dryRun) {
@@ -745,13 +763,11 @@ export async function onGenerationStarted(type, data, dryRun) {
     // Derived from the chat, not a one-shot flag: the last user message's
     // roll, so a swipe or regenerate narrates the same outcome. Bypasses
     // tracker suppression like the twist (it is the player's own action),
-    // but never rides an impersonation or a quiet prompt.
-    try {
-        const verdict = (!isImpersonationGeneration && !hasQuietPrompt) ? buildDiceVerdictForGeneration() : '';
-        setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, 0, false);
-    } catch (e) {
-        console.warn('[Dooms Tracker] Dice: verdict injection failed', e);
-    }
+    // but never rides an impersonation or a quiet prompt. On a normal send
+    // this runs BEFORE SillyTavern adds the sent message, so it sees the
+    // previous one; refreshDiceInjection runs again from MESSAGE_SENT, once
+    // the roll is on the message and before the prompt is built.
+    refreshDiceInjection({ suppress: isImpersonationGeneration || hasQuietPrompt });
 
     const currentChatLength = chat ? chat.length : 0;
     // For TOGETHER mode: Commit when user sends message (before first generation)

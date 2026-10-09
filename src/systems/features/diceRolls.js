@@ -162,18 +162,23 @@ export function getRollForGeneration() {
 
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
+/** The read-only attributes line, or '' when nobody has a sheet worth sending. */
+function attributesLine() {
+    const cfg = attributesConfig(extensionSettings);
+    return buildAttributesLine(getAttributeEntries(), attributeDefs(extensionSettings), { proficiencyBonus: cfg.proficiencyBonus });
+}
+
 /**
- * The read-only attributes line for this generation, or '' when attributes
- * are off, nobody has a sheet worth sending, or the setting keeps them out:
- * 'always' sends them every turn, 'withRoll' only on a turn that answers a
- * rolled message, 'never' never.
+ * The attributes line for the tracker block, or ''. Only the 'always'
+ * setting puts it there: the block is built when generation starts, which
+ * SillyTavern fires before the sent message (and its roll) exists, so the
+ * 'withRoll' line rides in the dice slot with the verdict instead
+ * (buildDiceVerdictForGeneration). 'never' never.
  */
 export function buildAttributesLineForPrompt() {
     if (!attributesOn(extensionSettings)) return '';
-    const cfg = attributesConfig(extensionSettings);
-    if (cfg.sendToAI === 'never') return '';
-    if (cfg.sendToAI === 'withRoll' && !getRollForGeneration()) return '';
-    return buildAttributesLine(getAttributeEntries(), attributeDefs(extensionSettings), { proficiencyBonus: cfg.proficiencyBonus });
+    if (attributesConfig(extensionSettings).sendToAI !== 'always') return '';
+    return attributesLine();
 }
 
 /** Tells open dice views (the popover, the chip, the cards) to repaint. */
@@ -426,20 +431,31 @@ export async function onDiceMessageSent() {
 }
 
 /**
- * The verdict the next generation is handed, or '' when the last user
- * message carries no roll. Called by the injector on every generation, so
- * swipes and regenerates narrate the same outcome.
+ * What the dice slot holds for the next generation: the verdict for the
+ * last user message's roll (and, with "Send scores to the AI" = with a
+ * roll, the attributes line ahead of it), or '' when that message carries
+ * no roll. Derived from the chat, so swipes and regenerates narrate the
+ * same outcome. Set by the injector when generation starts and again right
+ * after a roll is attached on send: SillyTavern fires generation-started
+ * before the sent message exists, so the first pass sees the previous
+ * message and only the second can see the roll.
  */
 export function buildDiceVerdictForGeneration() {
     if (!attributesOn(extensionSettings)) return '';
     const roll = getRollForGeneration();
     if (!roll) return '';
-    return verdictText(roll, {
+    const parts = [];
+    if (attributesConfig(extensionSettings).sendToAI === 'withRoll') {
+        const line = attributesLine();
+        if (line) parts.push(line);
+    }
+    parts.push(verdictText(roll, {
         userName: resolvePersonaName() || 'The player',
         attempt: roll.attempt,
         difficultyLabel: roll.difficultyLabel,
         reason: roll.reason,
-    });
+    }));
+    return parts.join('\n');
 }
 
 // ─── The roll box at the top of the reply ───────────────────────────────────

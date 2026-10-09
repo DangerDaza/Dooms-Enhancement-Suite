@@ -48,7 +48,7 @@ import { parseResponse, parseQuests } from './src/systems/generation/parser.js';
 import { buildRelationshipSpec } from './src/systems/generation/jsonPromptHelpers.js';
 import { openEmojiPicker, closeEmojiPicker } from './src/systems/ui/emojiPicker.js';
 import { updateRPGData, testExternalAPIConnection, getAvailableConnectionProfiles } from './src/systems/generation/apiClient.js';
-import { onGenerationStarted } from './src/systems/generation/injector.js';
+import { onGenerationStarted, refreshDiceInjection } from './src/systems/generation/injector.js';
 // Rendering modules
 import { getSafeThumbnailUrl } from './src/utils/avatars.js';
 import { isSyntheticTrackerMessage } from './src/utils/messageGuards.js';
@@ -4015,7 +4015,11 @@ jQuery(async () => {
             // Single tracked registration point. Array order preserves the
             // original relative registration order within each event type.
             registerAllEvents({
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onMessageSent, onMessageSentVoices],
+                // onDiceMessageSent rolls and attaches; refreshDiceInjection then
+                // sets the verdict slot while SillyTavern is still awaiting this
+                // event, before it builds the prompt (GENERATION_STARTED already
+                // fired, before the sent message existed).
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],

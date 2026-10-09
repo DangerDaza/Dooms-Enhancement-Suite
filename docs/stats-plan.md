@@ -463,6 +463,17 @@ Four things changed from the plan while building, recorded here:
   lists the attribute's own skills first and the rest behind "Other
   skills", each tagged with its home; the proficiency follows the skill, and
   the game master is told when one is borrowed.
+- The verdict is set twice. SillyTavern's `Generate()` fires
+  GENERATION_STARTED before `sendMessageAsUser()` adds the sent message and
+  emits MESSAGE_SENT, so the injector's pass at generation start sees the
+  previous user message: no roll on the send that rolled, and a stale roll
+  on the next send that did not. `refreshDiceInjection` therefore runs
+  again from MESSAGE_SENT, right after `onDiceMessageSent` attaches the
+  roll; SillyTavern awaits MESSAGE_SENT listeners before it builds the
+  prompt, so that is the pass the reply is generated from. For the same
+  reason the "with a roll" attributes line rides in the dice slot with the
+  verdict rather than in the tracker block, which is built at generation
+  start; "always" keeps it in the block.
 
 One change from the first draft, on the owner's question "why is the player
 setting the difficulty?": they are not. The difficulty and any advantage are

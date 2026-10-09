@@ -128,13 +128,17 @@ check('onDiceMessageSent with nothing pending is a no-op', (await dice.onDiceMes
 // ── 4. The verdict for the next generation, and the box on the reply ──
 let verdict = dice.buildDiceVerdictForGeneration();
 check('a fresh reply to the rolled message gets the verdict',
-    verdict.startsWith('[DICE: Jordan attempts "climb the wall". Strength (Athletics) check: d20 = ') && verdict.includes('+2 (proficient in Athletics)') && verdict.includes('vs DC 20 (Hard), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
+    verdict.includes('\n[DICE: Jordan attempts "climb the wall". Strength (Athletics) check: d20 = ') && verdict.includes('+2 (proficient in Athletics)') && verdict.includes('vs DC 20 (Hard), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
 chat.push(ai('You scramble up.'));
 check('a swipe or regenerate of that reply gets the same verdict', dice.buildDiceVerdictForGeneration() === verdict);
 check('the reply shows the roll of the message it answers', dice.rollForReply(2) === roll && dice.rollForReply(1) === null && dice.rollForReply(0) === null);
 chat.push(ai('(a second reply, as in a group)'));
 check('every reply before the next player message shows it', dice.rollForReply(3) === roll);
-check('the attributes line rides with a roll and lists the proficiency', pb.generateTrackerInstructions(false, false).includes('Jordan (player): STR 15 (+2), CHA 8 (-1); proficient in Athletics (+2)'), pb.generateTrackerInstructions(false, false));
+check('with a roll, the attributes line rides in the dice slot ahead of the verdict and lists the proficiency', verdict.indexOf('ATTRIBUTES (D&D scale') === 0 && verdict.includes('Jordan (player): STR 15 (+2), CHA 8 (-1); proficient in Athletics (+2)') && verdict.indexOf('ATTRIBUTES') < verdict.indexOf('[DICE:'), verdict);
+check('...and not in the tracker block, which is built before the sent message exists', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
+extensionSettings.attributes.sendToAI = 'always';
+check('always: the tracker block carries the line and the dice slot only the verdict', pb.generateTrackerInstructions(false, false).includes('Jordan (player): STR 15 (+2)') && dice.buildDiceVerdictForGeneration().startsWith('[DICE:'));
+extensionSettings.attributes.sendToAI = 'withRoll';
 chat.push(user('I walk on.'));
 chat.push(ai('The road is quiet.'));
 check('a later message without a roll gets no verdict and no box', dice.buildDiceVerdictForGeneration() === '' && dice.rollForReply(5) === null);
