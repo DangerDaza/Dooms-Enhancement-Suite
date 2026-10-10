@@ -230,6 +230,13 @@ export function saveRollChange() {
 
 export const DICE_VERDICT_SLOT = 'dooms-dice-verdict';
 
+/**
+ * Said after every verdict the model is handed. A verdict is an imperative
+ * about narration, and a model that reads it last tends to answer with
+ * narration alone and drop the tracker block it was asked for.
+ */
+export const STILL_REQUIRED = 'This decides only how the attempt went. Everything else your instructions require, the tracker data block included, still comes exactly as usual.';
+
 let pending = null;
 let transport = null;          // test hook: (messages) => Promise<string>
 let rulingTimeoutMs = 20000;   // the game master gets this long before the default stands
@@ -498,6 +505,7 @@ export function buildDiceVerdictForGeneration() {
         if (line) parts.push(line);
     }
     for (const roll of rolls) parts.push(verdictFor(roll));
+    parts.push(`[${STILL_REQUIRED}]`);
     return parts.join('\n');
 }
 
@@ -924,7 +932,7 @@ export function diceToolAction(args) {
         diceNotice(`Dice tool asked again for the same check · kept ${rollLine(roll)}`);
     }
     notifyDiceChanged({ source: 'tool' });
-    return verdictFor(roll);
+    return `${verdictFor(roll)} ${STILL_REQUIRED}`;
 }
 
 /**

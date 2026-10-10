@@ -474,6 +474,19 @@ Four things changed from the plan while building, recorded here:
   reason the "with a roll" attributes line rides in the dice slot with the
   verdict rather than in the tracker block, which is built at generation
   start; "always" keeps it in the block.
+- Where the dice texts sit. SillyTavern joins every injection that shares a
+  depth and role into one message, in key order, and within a depth puts
+  the system-role message after the user-role one, closest to the reply.
+  The tracker instructions go in as a user-role message at depth 0 (Settings
+  → Prompt Injection); the verdict first went in as a system-role message
+  at depth 0 and so landed after them, and a model that read "narrate the
+  attempt failing" last answered with narration and no tracker block, which
+  the next replies then copied (The Long Calling, replies 36 and 55). The
+  verdict, the rules and a "your previous reply left out the block" reminder
+  now use the tracker instructions' own depth and role; their keys sort
+  before 'dooms-tracker-inject', so the instructions end the message. Every
+  verdict, and the tool's result, also says in words that the block is still
+  required.
 
 One change from the first draft, on the owner's question "why is the player
 setting the difficulty?": they are not. The difficulty and any advantage are

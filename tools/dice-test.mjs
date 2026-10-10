@@ -131,6 +131,7 @@ check('a fresh reply to the rolled message gets the verdict',
     verdict.includes('\n[DICE: Jordan attempts "climb the wall". Strength (Athletics) check: d20 = ') && verdict.includes('+2 (proficient in Athletics)') && verdict.includes('vs DC 20 (Hard), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
 chat.push(ai('You scramble up.'));
 check('a swipe or regenerate of that reply gets the same verdict', dice.buildDiceVerdictForGeneration() === verdict);
+check('the verdict ends by saying the tracker block is still required', verdict.trimEnd().endsWith(`[${dice.STILL_REQUIRED}]`) && verdict.indexOf('[DICE:') < verdict.indexOf('[This decides only'));
 check('the reply shows the roll of the message it answers', dice.rollsForReply(2).length === 1 && dice.rollsForReply(2)[0] === roll && dice.rollsForReply(1).length === 0 && dice.rollsForReply(0).length === 0);
 chat.push(ai('(a second reply, as in a group)'));
 check('every reply before the next player message shows it', dice.rollsForReply(3)[0] === roll);
@@ -281,7 +282,7 @@ chat.push(user('I cross.'));
 const toolText = dice.diceToolAction({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', advantage: 'none', reason: 'the planks are wet' });
 const memo = chat[1].extra.dooms_tool_rolls;
 const memoKeys = Object.keys(memo || {});
-check('the tool rolls on the player\'s sheet and answers with the verdict', toolText.startsWith('[DICE: Jordan attempts the action in their last message, on a check you called for. Dexterity (Acrobatics) check: d20 = ') && toolText.includes('vs DC 20 (Hard), because the planks are wet') && memoKeys.length === 1 && memo[memoKeys[0]].calledBy === 'tool', toolText);
+check('the tool rolls on the player\'s sheet and answers with the verdict, then says the block is still required', toolText.startsWith('[DICE: Jordan attempts the action in their last message, on a check you called for. Dexterity (Acrobatics) check: d20 = ') && toolText.includes('vs DC 20 (Hard), because the planks are wet') && toolText.endsWith(dice.STILL_REQUIRED) && memoKeys.length === 1 && memo[memoKeys[0]].calledBy === 'tool', toolText);
 check('the same call for the same message rolls once', dice.diceToolAction({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', reason: 'again' }) === toolText && Object.keys(chat[1].extra.dooms_tool_rolls).length === 1);
 const npcText = dice.diceToolAction({ who: 'Guard', attribute: 'Wisdom', skill: 'Perception', difficulty: 'Medium', reason: 'dark' });
 check('a named roller uses the NPC\'s sheet', npcText.startsWith('[DICE: Guard, on a check you called for. Wisdom (Perception) check:') && npcText.includes('(WIS 14), +2 (proficient in Perception)'), npcText);

@@ -30,6 +30,7 @@ import {
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from './defaultPrompts.js';
 // Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
 import { buildDiceVerdictForGeneration, buildDiceRulesForGeneration, DICE_VERDICT_SLOT, DICE_RULES_SLOT } from '../features/diceRolls.js';
+import { attributesOn } from '../../utils/d20.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
@@ -658,14 +659,60 @@ function onChatCompletionPromptReady(eventData) {
  * verdict from a turn that rolled nothing. SillyTavern awaits MESSAGE_SENT
  * listeners before it builds the prompt, so the slot set here is in it.
  */
+/**
+ * Where the tracker instructions go (Settings → Prompt Injection), so the
+ * dice texts can go with them. SillyTavern joins every injection that
+ * shares a depth and role into one message, in key order, and within a
+ * depth puts the system-role message after the user-role one. The dice
+ * keys sort before 'dooms-tracker-inject', so with the same depth and role
+ * the tracker instructions end the message and the model's last
+ * instruction stays "the data block, then the story". Injected as a
+ * system message at the same depth, the verdict landed after them and
+ * replies came back as narration alone (The Long Calling, replies 36 and
+ * 55).
+ */
+function trackerInjectionTarget() {
+    const ti = (extensionSettings.promptInjection || {}).trackerInstructions || {};
+    const depth = Number.isFinite(ti.depth) ? ti.depth : 0;
+    let role = extension_prompt_roles.USER;
+    if (ti.role === 'assistant') role = extension_prompt_roles.ASSISTANT;
+    else if (ti.role === 'system') role = extension_prompt_roles.SYSTEM;
+    return { depth, role };
+}
+
+const TRACKER_AGAIN_SLOT = 'dooms-tracker-again';
+const TRACKER_AGAIN_TEXT = '[Your previous reply left out the tracker data block. This reply must include it, exactly as the tracker instructions require.]';
+
+/** True when the chat's last reply carried no tracker data although this chat has had some. */
+function lastReplyLackedTracker() {
+    if (extensionSettings.generationMode !== 'together') return false;
+    if (!lastGeneratedData.characterThoughts && !lastGeneratedData.infoBox && !lastGeneratedData.quests) return false;
+    let list = [];
+    try { list = Array.isArray(getContext().chat) ? getContext().chat : []; } catch (e) { return false; }
+    for (let i = list.length - 1; i >= 0; i--) {
+        const m = list[i];
+        if (!m || m.is_system) continue;
+        if (m.is_user) continue;
+        if (Array.isArray(m.extra?.tool_invocations)) continue;
+        const swipes = m.extra?.dooms_tracker_swipes;
+        return !(swipes && typeof swipes === 'object' && swipes[m.swipe_id || 0]);
+    }
+    return false;
+}
+
 export function refreshDiceInjection({ suppress = false } = {}) {
     try {
-        const verdict = (!suppress && extensionSettings.enabled) ? buildDiceVerdictForGeneration() : '';
-        setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, 0, false);
-        // What the game master may do about checks of its own (Phase 3):
-        // one message up from the verdict, so the verdict stays last.
-        const rules = (!suppress && extensionSettings.enabled) ? buildDiceRulesForGeneration() : '';
-        setExtensionPrompt(DICE_RULES_SLOT, rules ? `\n${rules}\n` : '', extension_prompt_types.IN_CHAT, 1, false);
+        const { depth, role } = trackerInjectionTarget();
+        const on = !suppress && extensionSettings.enabled;
+        const verdict = on ? buildDiceVerdictForGeneration() : '';
+        setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
+        // What the game master may do about checks of its own (Phase 3).
+        const rules = on ? buildDiceRulesForGeneration() : '';
+        setExtensionPrompt(DICE_RULES_SLOT, rules ? `\n${rules}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
+        // A reply that dropped the block tends to be copied by the next one;
+        // say so once, in the same message, ahead of the instructions.
+        const again = on && attributesOn(extensionSettings) && lastReplyLackedTracker() ? TRACKER_AGAIN_TEXT : '';
+        setExtensionPrompt(TRACKER_AGAIN_SLOT, again ? `\n${again}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
     } catch (e) {
         console.warn('[Dooms Tracker] Dice: verdict injection failed', e);
     }
@@ -692,7 +739,8 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         setExtensionPrompt(DICE_VERDICT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
-        setExtensionPrompt(DICE_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 1, false);
+        setExtensionPrompt(DICE_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt(TRACKER_AGAIN_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         // Also drop any historical-context payload queued from a prior
         // generation while the extension was enabled. Without this, the
         // persistent listeners (CHAT_COMPLETION_PROMPT_READY etc.) keep
