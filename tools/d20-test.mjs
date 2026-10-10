@@ -6,11 +6,11 @@
  * Usage:  node tools/d20-test.mjs     (from the repo root)
  * Exit:   0 = pass, 1 = failure
  */
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const D = await import(join(here, '..', 'src', 'utils', 'd20.js'));
+const D = await import(pathToFileURL(join(here, '..', 'src', 'utils', 'd20.js')).href);
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
