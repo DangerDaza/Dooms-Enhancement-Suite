@@ -235,7 +235,7 @@ export const DICE_VERDICT_SLOT = 'dooms-dice-verdict';
  * about narration, and a model that reads it last tends to answer with
  * narration alone and drop the tracker block it was asked for.
  */
-export const STILL_REQUIRED = 'This decides only how the attempt went. Everything else your instructions require, the tracker data block included, still comes exactly as usual.';
+export const STILL_REQUIRED = 'This decides only how the attempt went. The shape of your reply does not change: the tracker data block still comes exactly where your instructions place it (before the story unless they say otherwise), and everything else they require still follows.';
 
 let pending = null;
 let transport = null;          // test hook: (messages) => Promise<string>
