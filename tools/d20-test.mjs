@@ -151,5 +151,51 @@ check('attributes line lists proficiencies, includes a proficiency-only characte
 const sp = D.buildDifficultyRatingPrompt({ userName: 'Jordan', attempt: '', attributeName: 'Dexterity', skillName: 'Stealth', messageText: 'I slip past the guards.', recentText: 'x' });
 check('rating prompt names the skill and quotes the message', sp.user.includes('"what their message describes", using Dexterity (Stealth).') && sp.user.includes('Their message: "I slip past the guards."'), sp.user);
 
+// ── 7. The game master's own calls ──
+check('aiCalls defaults: on, both ways, NPCs too, sparingly', (() => { const c = D.attributesConfig(settings).aiCalls; return c.enabled && c.endOfReply && c.tool && c.npcs && c.frequency === 'sparingly'; })());
+check('aiCalls migration fills a missing block and a missing key', (() => {
+    const s1 = { attributes: { enabled: true, list: [{ name: 'Strength' }] } };
+    D.migrateAttributesConfig(s1);
+    const s2 = { attributes: { enabled: true, list: [{ name: 'Strength' }], aiCalls: { enabled: false } } };
+    const changed = D.migrateAttributesConfig(s2);
+    return s1.attributes.aiCalls.enabled === true && changed && s2.attributes.aiCalls.enabled === false && s2.attributes.aiCalls.tool === true;
+})());
+check('normalizeAiCalls tolerates garbage', D.normalizeAiCalls({ frequency: 'always', npcs: 'no' }).frequency === 'sparingly' && D.normalizeAiCalls({ npcs: false }).npcs === false && D.normalizeAiCalls(null).enabled === true);
+settings.attributes.difficulty.hard = 20;
+let call = D.parseCheckCall('The guards turn the corner.\n\n[CHECK: Dexterity (Stealth) | Hard, disadvantage | because the lamps are lit]', settings);
+check('a call at the end of a reply: attribute, skill, difficulty, advantage, reason', call && call.who === '' && call.attributeId === 'dex' && call.skill === 'Stealth' && call.skillAttributeId === 'dex' && call.difficultyId === 'hard' && call.dc === 20 && call.advantage === 'dis' && call.reason === 'the lamps are lit' && call.difficultySource === 'ai' && call.raw.startsWith('[CHECK:'), JSON.stringify(call));
+call = D.parseCheckCall('[CHECK: Guard: Wisdom (Perception) | Medium | the corridor is dark]', settings);
+check('a named roller is an NPC check', call && call.who === 'Guard' && call.attributeId === 'wis' && call.skill === 'Perception' && call.difficultyId === 'medium');
+call = D.parseCheckCall('[CHECK: STR | very hard]', settings);
+check('short form, no skill, no reason, "very hard" not "hard"', call && call.attributeId === 'str' && call.skill === '' && call.difficultyId === 'veryHard' && call.reason === '');
+call = D.parseCheckCall('[CHECK: Constitution (Athletics) | Easy | a long swim]', settings);
+check('a borrowed skill keeps its home', call && call.attributeId === 'con' && call.skill === 'Athletics' && call.skillAttributeId === 'str');
+call = D.parseCheckCall('[CHECK: Stealth | Hard]', settings);
+check('a skill alone means its home attribute', call && call.attributeId === 'dex' && call.skill === 'Stealth');
+call = D.parseCheckCall('[CHECK: Dexterity: Stealth | Hard]', settings);
+check('"Attribute: Skill" is read as attribute and skill, not a roller', call && call.who === '' && call.attributeId === 'dex' && call.skill === 'Stealth');
+call = D.parseCheckCall('[CHECK: Charisma (Persuasion)]', settings);
+check('no difficulty falls back to the default and says so', call && call.difficultyId === 'medium' && call.difficultySource === 'default');
+check('an unknown attribute is no call; no tag is no call', D.parseCheckCall('[CHECK: Luck | Hard]', settings) === null && D.parseCheckCall('No tag here.', settings) === null);
+check('the last tag wins', D.parseCheckCall('[CHECK: STR | Easy] ... [CHECK: DEX | Hard]', settings).attributeId === 'dex');
+check('stripCheckCalls removes the tag and tidies the end', D.stripCheckCalls('She nods.\n\n[CHECK: Dexterity (Stealth) | Hard | x]\n') === 'She nods.' && D.stripCheckCalls('a\n\n\n\n[CHECK: STR | Easy]\n\nb') === 'a\n\nb');
+check('resolveCheckCall from tool arguments', (() => { const r = D.resolveCheckCall({ who: 'Mara', attribute: 'Wisdom', skill: 'insight', difficulty: 'Nearly impossible', advantage: 'advantage', reason: 'because she is lying well' }, settings); return r && r.who === 'Mara' && r.attributeId === 'wis' && r.skill === 'Insight' && r.difficultyId === 'nearlyImpossible' && r.advantage === 'adv' && r.reason === 'she is lying well'; })());
+const inst = D.buildCheckCallInstruction({ settings, userName: 'Jordan' });
+check('the end-of-reply instruction names the sheet, the form, the words, the NPC form and the restraint',
+    inst.startsWith('[CHECKS: The game rolls the dice; you never do. Jordan\'s attributes and skills: STR Strength (Athletics); DEX Dexterity (Acrobatics, Sleight of Hand, Stealth); CON Constitution;') && inst.includes('[CHECK: Dexterity (Stealth) | Hard | the guards are alert]') && inst.includes('Easy, Medium, Hard, Very hard, Nearly impossible') && inst.includes('[CHECK: Guard: Wisdom (Perception)') && inst.includes('most replies have none') && inst.includes('only when the stakes are real'), inst);
+settings.attributes.aiCalls.npcs = false;
+settings.attributes.aiCalls.frequency = 'whenUncertain';
+check('...without NPCs and with the looser frequency', !D.buildCheckCallInstruction({ settings }).includes('Guard:') && D.buildCheckCallInstruction({ settings }).includes('whenever an attempt could plausibly fail'));
+settings.attributes.aiCalls.npcs = true;
+settings.attributes.aiCalls.frequency = 'sparingly';
+const toolInst = D.buildToolCallInstruction({ settings, userName: 'Jordan' });
+check('the tool instruction names the tool and the restraint', toolInst.includes('call the dooms_roll_check tool') && toolInst.includes('who is rolling when it is not the player') && toolInst.includes('most replies have none'));
+const tool = D.buildDiceToolDefinition({ settings, userName: 'Jordan' });
+check('the tool definition: enums from the sheet, who only with NPCs on',
+    tool.name === 'dooms_roll_check' && tool.parameters.properties.attribute.enum.join() === 'Strength,Dexterity,Constitution,Intelligence,Wisdom,Charisma' && tool.parameters.properties.difficulty.enum.length === 5 && tool.parameters.required.join() === 'attribute,difficulty,reason' && !!tool.parameters.properties.who && tool.parameters.properties.skill.description.includes('Stealth (DEX)'));
+settings.attributes.aiCalls.npcs = false;
+check('...no who parameter without NPCs', D.buildDiceToolDefinition({ settings }).parameters.properties.who === undefined);
+settings.attributes.aiCalls.npcs = true;
+
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

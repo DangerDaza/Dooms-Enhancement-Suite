@@ -69,10 +69,32 @@ const CONFIG_DEFAULTS = Object.freeze({
     aiRatesDifficulty: true,       // one small separate call rates the attempt
     allowOverride: false,          // may the player change the AI's ruling?
     proficiencyBonus: 2,           // added to a roll on a skill the character is proficient in
+    // The game master's own calls for checks (Phase 3). On with attributes.
+    aiCalls: Object.freeze({
+        enabled: true,
+        endOfReply: true,          // "[CHECK: ...]" as the last line of a reply; any model
+        tool: true,                // the dooms_roll_check function tool, where the model supports tools
+        npcs: true,                // may call checks on NPCs' own actions, on their sheets
+        frequency: 'sparingly',    // 'sparingly' | 'whenUncertain'
+    }),
     contextMessages: 6,            // recent messages the rating call sees
 });
 
 const SEND_MODES = ['always', 'withRoll', 'never'];
+export const CALL_FREQUENCIES = Object.freeze(['sparingly', 'whenUncertain']);
+
+/** The aiCalls block with defaults filled in. Never mutates. */
+export function normalizeAiCalls(raw) {
+    const d = CONFIG_DEFAULTS.aiCalls;
+    const a = raw && typeof raw === 'object' ? raw : {};
+    return {
+        enabled: a.enabled !== false,
+        endOfReply: a.endOfReply !== false,
+        tool: a.tool !== false,
+        npcs: a.npcs !== false,
+        frequency: CALL_FREQUENCIES.includes(a.frequency) ? a.frequency : d.frequency,
+    };
+}
 
 /** A fresh, fully-populated rules block. */
 export function defaultAttributesConfig() {
@@ -87,6 +109,7 @@ export function defaultAttributesConfig() {
         allowOverride: CONFIG_DEFAULTS.allowOverride,
         proficiencyBonus: CONFIG_DEFAULTS.proficiencyBonus,
         contextMessages: CONFIG_DEFAULTS.contextMessages,
+        aiCalls: { ...CONFIG_DEFAULTS.aiCalls },
     };
 }
 
@@ -170,6 +193,7 @@ export function attributesConfig(settings) {
         aiRatesDifficulty: a.aiRatesDifficulty !== false,
         allowOverride: a.allowOverride === true,
         proficiencyBonus: clampProficiency(a.proficiencyBonus),
+        aiCalls: normalizeAiCalls(a.aiCalls),
         contextMessages: Number.isFinite(ctx) ? Math.min(30, Math.max(1, Math.round(ctx))) : CONFIG_DEFAULTS.contextMessages,
     };
 }
@@ -214,6 +238,14 @@ export function migrateAttributesConfig(settings) {
         }
         for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'contextMessages']) {
             if (a[key] === undefined) { a[key] = fresh[key]; changed = true; }
+        }
+        if (!a.aiCalls || typeof a.aiCalls !== 'object' || Array.isArray(a.aiCalls)) {
+            a.aiCalls = { ...fresh.aiCalls };
+            changed = true;
+        } else {
+            for (const key of Object.keys(fresh.aiCalls)) {
+                if (a.aiCalls[key] === undefined) { a.aiCalls[key] = fresh.aiCalls[key]; changed = true; }
+            }
         }
     }
     if (!settings.characterAttributes || typeof settings.characterAttributes !== 'object' || Array.isArray(settings.characterAttributes)) {
@@ -617,4 +649,167 @@ export function parseDifficultyRating(text, settings) {
     }
     const entry = table.find(d => d.id === difficultyId);
     return { difficultyId, dc: entry.dc, label: entry.label, advantage, reason };
+}
+
+// ─── The game master's own calls (Phase 3) ──────────────────────────────────
+//
+// Two ways for the AI to call for a check: a "[CHECK: ...]" line at the end
+// of a reply (any model), or the dooms_roll_check function tool (models with
+// tool calling). Either way the AI names the attribute, a skill, the
+// difficulty and a reason before any die exists; the game rolls.
+
+const CHECK_CALL_RE = /\[CHECK:\s*([^\]]*?)\s*\]/gi;
+
+function matchDifficultyWords(text, settings) {
+    const lower = String(text || '').toLowerCase();
+    let difficultyId = null;
+    for (const id of ['nearlyImpossible', 'veryHard', 'hard', 'medium', 'easy']) {
+        const label = DIFFICULTIES.find(d => d.id === id).label.toLowerCase();
+        if (lower.includes(label)) { difficultyId = id; break; }
+    }
+    let advantage = 'none';
+    if (lower.includes('disadvantage')) advantage = 'dis';
+    else if (lower.includes('advantage')) advantage = 'adv';
+    return { difficultyId, advantage };
+}
+
+/** An attribute def by name or short form, case-insensitive, or null. */
+export function findAttribute(defs, text) {
+    const t = String(text || '').trim().toLowerCase();
+    if (!t) return null;
+    return (defs || []).find(d => d.name.toLowerCase() === t || d.abbr.toLowerCase() === t) || null;
+}
+
+/**
+ * Turns the pieces of a call (from the tag or the tool) into one check
+ * description, or null when no attribute can be read. Missing difficulty
+ * falls back to the configured default, and says so in `difficultySource`.
+ */
+export function resolveCheckCall({ who = '', attribute = '', skill = '', difficulty = '', advantage = '', reason = '' } = {}, settings) {
+    const defs = attributeDefs(settings);
+    let def = findAttribute(defs, attribute);
+    let hit = findSkill(defs, skill);
+    // "[CHECK: Stealth | Hard]": a skill alone means its home attribute.
+    if (!def && !hit) hit = findSkill(defs, attribute);
+    if (!def && hit) def = defs.find(d => d.id === hit.attributeId) || null;
+    if (!def) return null;
+    const words = matchDifficultyWords(`${difficulty} ${advantage}`, settings);
+    const cfg = attributesConfig(settings);
+    const d = difficultyById(settings, words.difficultyId || cfg.defaultDifficulty);
+    return {
+        who: String(who || '').trim().slice(0, 60),
+        attributeId: def.id,
+        attribute: def.name,
+        abbr: def.abbr,
+        skill: hit ? hit.name : '',
+        skillAttributeId: hit ? hit.attributeId : '',
+        difficultyId: d.id,
+        dc: d.dc,
+        label: d.label,
+        difficultySource: words.difficultyId ? 'ai' : 'default',
+        advantage: words.advantage,
+        reason: String(reason || '').trim().replace(/^because\s+/i, '').slice(0, 200),
+    };
+}
+
+/**
+ * The last "[CHECK: ...]" tag in a reply, read into a check description, or
+ * null. The form the game master is asked for:
+ *   [CHECK: Dexterity (Stealth) | Hard, disadvantage | the guards are alert]
+ *   [CHECK: Guard: Wisdom (Perception) | Medium | the corridor is dark]
+ * A missing skill, difficulty or reason is tolerated; a missing or unknown
+ * attribute is not.
+ */
+export function parseCheckCall(text, settings) {
+    const matches = [...String(text || '').matchAll(CHECK_CALL_RE)];
+    if (!matches.length) return null;
+    const m = matches[matches.length - 1];
+    const parts = m[1].split('|').map(p => p.trim());
+    let head = parts[0] || '';
+    let who = '';
+    const defs = attributeDefs(settings);
+    const colon = head.indexOf(':');
+    if (colon > 0) {
+        const before = head.slice(0, colon).trim();
+        // "Guard: Wisdom (Perception)" names who rolls; "Dexterity: Stealth"
+        // is just a loose way of writing the attribute and skill.
+        if (findAttribute(defs, before)) {
+            head = `${before} (${head.slice(colon + 1).trim().replace(/^\(|\)$/g, '')})`;
+        } else {
+            who = before;
+            head = head.slice(colon + 1).trim();
+        }
+    }
+    const paren = head.match(/^([^()]*?)\s*\(([^)]*)\)\s*$/);
+    const attribute = paren ? paren[1].trim() : head.trim();
+    const skill = paren ? paren[2].trim() : '';
+    const call = resolveCheckCall({ who, attribute, skill, difficulty: parts[1] || '', reason: parts[2] || '' }, settings);
+    return call ? { ...call, raw: m[0] } : null;
+}
+
+/** The reply with every "[CHECK: ...]" tag removed, for display. */
+export function stripCheckCalls(text) {
+    return String(text || '').replace(CHECK_CALL_RE, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function attributeMenu(defs) {
+    return (defs || []).map(d => `${d.abbr} ${d.name}${d.skills && d.skills.length ? ` (${d.skills.join(', ')})` : ''}`).join('; ');
+}
+
+function frequencyClause(frequency) {
+    return frequency === 'whenUncertain'
+        ? 'whenever an attempt could plausibly fail'
+        : 'only when the stakes are real and the outcome could go either way';
+}
+
+/**
+ * What the game master is told when it may call for checks by ending a
+ * reply with a tag. Short, and firm that most replies have none.
+ */
+export function buildCheckCallInstruction({ settings, userName = 'the player' } = {}) {
+    const cfg = attributesConfig(settings);
+    const defs = attributeDefs(settings);
+    const words = DIFFICULTIES.map(d => d.label).join(', ');
+    const npc = cfg.aiCalls.npcs
+        ? ' For a character other than the player, start with their name: [CHECK: Guard: Wisdom (Perception) | Medium | the corridor is dark].'
+        : '';
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, you may call for ONE check by ending your reply with a line in exactly this form, then stopping: [CHECK: Dexterity (Stealth) | Hard | the guards are alert]. Difficulty is one of ${words}; you may add "advantage" or "disadvantage" after it.${npc} Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never roll, resolve or narrate the outcome yourself: the result arrives with the next message and you narrate it then.]`;
+}
+
+export const DICE_TOOL_NAME = 'dooms_roll_check';
+
+/** What the game master is told when the dice tool is available to it. */
+export function buildToolCallInstruction({ settings, userName = 'the player' } = {}) {
+    const cfg = attributesConfig(settings);
+    const defs = attributeDefs(settings);
+    const npc = cfg.aiCalls.npcs ? ', and who is rolling when it is not the player' : '';
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, call the ${DICE_TOOL_NAME} tool with the attribute, a skill if one applies, the difficulty and a short reason${npc}; the result comes back to you, is final, and you narrate it as it fell. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never invent a roll or an outcome without the tool.]`;
+}
+
+/**
+ * The dice tool as SillyTavern's ToolManager wants it, without the action
+ * (the feature module adds that). Attribute and difficulty are enums so a
+ * model cannot name what the sheet does not have.
+ */
+export function buildDiceToolDefinition({ settings, userName = 'the player' } = {}) {
+    const cfg = attributesConfig(settings);
+    const defs = attributeDefs(settings);
+    const skills = defs.flatMap(d => (d.skills || []).map(sk => `${sk} (${d.abbr})`));
+    const properties = {
+        attribute: { type: 'string', enum: defs.map(d => d.name), description: 'The attribute the check is made with.' },
+        skill: { type: 'string', description: `A skill that applies, or empty for a plain attribute check. Any skill may pair with any attribute. Known skills: ${skills.join(', ') || 'none'}.` },
+        difficulty: { type: 'string', enum: DIFFICULTIES.map(d => d.label), description: 'How hard the attempt is for this character in this scene, decided before the roll.' },
+        advantage: { type: 'string', enum: ['none', 'advantage', 'disadvantage'], description: 'Advantage only when circumstances clearly favour the attempt, disadvantage only when they clearly hinder it.' },
+        reason: { type: 'string', description: 'One short sentence: why this difficulty.' },
+    };
+    const required = ['attribute', 'difficulty', 'reason'];
+    if (cfg.aiCalls.npcs) {
+        properties.who = { type: 'string', description: `Who rolls: leave empty for ${userName}, or an NPC's name as it appears in the scene.` };
+    }
+    return {
+        name: DICE_TOOL_NAME,
+        displayName: 'Dice check',
+        description: `Rolls a d20 check for ${userName}${cfg.aiCalls.npcs ? ' or an NPC' : ''} against a difficulty you set, using their sheet (attribute modifier and proficiency). Call it only when an action's outcome is genuinely uncertain and matters; most replies need none. The result is final: narrate it as it fell.`,
+        parameters: { type: 'object', properties, required },
+    };
 }
