@@ -30,6 +30,62 @@ export const WHISPER_NOTE = 'hushed, quiet whisper';
 /** Rides with the note on every line when Settings → Voices → Never whisper is on; sent alone when the note is empty. */
 export const NEVER_WHISPER_NOTE = 'never whisper; a line the story marks as whispered is spoken quietly in tone but at full, clear volume';
 
+/** Longest anchor appended to a style note (the first clause or two of a design, not the whole thing). */
+export const ANCHOR_MAX_CHARS = 120;
+
+/**
+ * A short reminder of who is speaking, built from a designed voice's
+ * registry entry: gender, language and the opening clause or two of its
+ * design prompt, capped at ANCHOR_MAX_CHARS. Appended to every line's style
+ * note so each render starts from the same description, which steadies a
+ * voice Google would otherwise re-imagine per request. '' when the entry
+ * has no description to anchor to (a cloned voice, or a stock one).
+ * @param {{gender?: string, languageCode?: string, designPrompt?: string}|null|undefined} entry
+ */
+export function anchorForVoice(entry) {
+    if (!entry || typeof entry !== 'object') return '';
+    const prompt = String(entry.designPrompt || '').replace(/\s+/g, ' ').trim();
+    if (!prompt) return '';
+    const head = [];
+    if (entry.gender === 'female' || entry.gender === 'male') head.push(entry.gender);
+    if (typeof entry.languageCode === 'string' && /^[a-z]{2}-[A-Z]{2}$/.test(entry.languageCode)) head.push(entry.languageCode);
+    const prefix = head.length ? `${head.join(', ')} voice: ` : 'voice: ';
+    const room = ANCHOR_MAX_CHARS - prefix.length;
+    return prefix + firstClauses(prompt, room);
+}
+
+/**
+ * The opening of a description, cut at a clause boundary (sentence end,
+ * semicolon or comma) so it still reads as a phrase, then at a word, and
+ * never longer than `max`.
+ */
+function firstClauses(text, max) {
+    if (text.length <= max) return text.replace(/[.;,\s]+$/, '');
+    const window = text.slice(0, max + 1);
+    let cut = -1;
+    for (const re of [/[.!?;](?=\s)/g, /,(?=\s)/g]) {
+        for (const m of window.matchAll(re)) if (m.index > max / 3) cut = Math.max(cut, m.index);
+        if (cut > 0) break;
+    }
+    if (cut <= 0) {
+        const space = window.lastIndexOf(' ');
+        cut = space > max / 3 ? space : max;
+    }
+    return text.slice(0, cut).replace(/[.;,\s]+$/, '');
+}
+
+/**
+ * The style note with the anchor on the end: "note; anchor", the anchor
+ * alone when the note is empty, the note alone when there is no anchor.
+ */
+export function styleWithAnchor(style, anchor) {
+    const base = String(style || '').trim();
+    const tail = String(anchor || '').trim();
+    if (!tail) return base;
+    if (!base) return tail;
+    return `${base}; ${tail}`;
+}
+
 /** Narration or dialogue that says this line is meant to be quiet. */
 const WHISPER_CUE = /\b(?:whisper(?:s|ed|ing)?|murmur(?:s|ed|ing)?|hiss(?:es|ed)? softly|breath(?:es|ed)? (?:the words|out)|under (?:his|her|their|my|your|its) breath|sotto voce|barely audible|in a hushed (?:voice|tone)|hushed)\b/i;
 

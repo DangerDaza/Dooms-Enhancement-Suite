@@ -446,6 +446,49 @@ test('settings: a missing or broken delivery note is restored', () => {
     assert.equal(live2.voices.deliveryNote, '', 'an empty note (off) is kept');
 });
 
+test('delivery: anchorForVoice is gender, language and the opening clause of the design, capped', () => {
+    const entry = {
+        gender: 'female', languageCode: 'en-GB',
+        designPrompt: 'A posh English princess in her early twenties, bright and clear with a cut-glass accent. '
+            + 'She speaks quickly when excited and lets vowels stretch when she is bored, with a giggle at the end of teasing lines.',
+    };
+    const anchor = delivery.anchorForVoice(entry);
+    assert.equal(anchor, 'female, en-GB voice: A posh English princess in her early twenties, bright and clear with a cut-glass accent');
+    assert.ok(anchor.length <= delivery.ANCHOR_MAX_CHARS, `${anchor.length} chars`);
+    assert.equal(delivery.anchorForVoice({ gender: 'male', designPrompt: 'Deep and slow.' }), 'male voice: Deep and slow', 'short designs come whole, without the full stop');
+    assert.equal(delivery.anchorForVoice({ designPrompt: '  A   gravelly   drawl  ' }), 'voice: A gravelly drawl', 'no gender or language = just the voice');
+    assert.equal(delivery.anchorForVoice({ gender: 'other', languageCode: 'english', designPrompt: 'Warm.' }), 'voice: Warm', 'unknown gender and locale strings are left out');
+    assert.equal(delivery.anchorForVoice({ gender: 'female', languageCode: 'en-US', designPrompt: '' }), '', 'a cloned voice has no description to anchor to');
+    assert.equal(delivery.anchorForVoice(null), '');
+    assert.equal(delivery.anchorForVoice({ designPrompt: 7 }), 'voice: 7');
+    // One long clause with no punctuation is cut at a word, never mid-word.
+    const run = delivery.anchorForVoice({ designPrompt: 'a '.repeat(40) + 'supercalifragilistic voice that never pauses for breath at all in any way' });
+    assert.ok(run.length <= delivery.ANCHOR_MAX_CHARS, `${run.length} chars`);
+    assert.ok(run.endsWith('supercalifragilistic voice that'), run);
+    // A comma inside the window is used when no sentence ends there.
+    const comma = delivery.anchorForVoice({ gender: 'male', designPrompt: 'An old sea captain with a salt-roughened bass, slow and deliberate, who never raises his voice but is always heard' });
+    assert.equal(comma, 'male voice: An old sea captain with a salt-roughened bass, slow and deliberate');
+});
+
+test('delivery: styleWithAnchor joins note and anchor, and survives either being empty', () => {
+    assert.equal(delivery.styleWithAnchor('normal voice', 'female voice: posh'), 'normal voice; female voice: posh');
+    assert.equal(delivery.styleWithAnchor('', 'female voice: posh'), 'female voice: posh');
+    assert.equal(delivery.styleWithAnchor('normal voice', ''), 'normal voice');
+    assert.equal(delivery.styleWithAnchor('', ''), '');
+    assert.equal(delivery.styleWithAnchor(' x ', ' y '), 'x; y');
+    assert.equal(delivery.styleWithAnchor(delivery.WHISPER_NOTE, 'male voice: deep'), `${delivery.WHISPER_NOTE}; male voice: deep`, 'a whispered line keeps its anchor');
+});
+
+test('settings: the anchor switch is on by default and a broken value is repaired', () => {
+    assert.equal(settings.defaultVoiceSettings().anchorDesignedVoices, true);
+    const live = { voices: { anchorDesignedVoices: 'yes' } };
+    assert.equal(settings.ensureVoiceSettings({ voices: live.voices }, live), true);
+    assert.equal(live.voices.anchorDesignedVoices, true);
+    const off = { voices: { anchorDesignedVoices: false } };
+    settings.ensureVoiceSettings({ voices: off.voices }, off);
+    assert.equal(off.voices.anchorDesignedVoices, false, 'an honest false is kept');
+});
+
 test('settings: Steadiness is off by default; on, the slider maps into Google temperature', () => {
     const d = settings.defaultVoiceSettings();
     assert.equal(d.steadiness, false);

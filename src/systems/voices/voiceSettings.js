@@ -102,6 +102,10 @@ export function defaultVoiceSettings() {
         // line to line. Off = Google's own default.
         steadiness: false,
         steadinessTemperature: STEADINESS.default,
+        // Settings → Voices → Anchor designed voices to their description:
+        // a short reminder of the design (gender, language, opening clause)
+        // rides with the style note on every line of a designed voice.
+        anchorDesignedVoices: true,
         // The "Design a narrator voice" box, so edits survive a reload.
         narratorDesign: { ...DEFAULT_NARRATOR_DESIGN },
     };
@@ -217,6 +221,10 @@ export function ensureVoiceSettings(saved, live) {
         const steadyTemperature = clampSteadiness(live.voices.steadinessTemperature);
         if (steadyTemperature !== live.voices.steadinessTemperature) {
             live.voices.steadinessTemperature = steadyTemperature;
+            changed = true;
+        }
+        if (typeof live.voices.anchorDesignedVoices !== 'boolean') {
+            live.voices.anchorDesignedVoices = defaults.anchorDesignedVoices;
             changed = true;
         }
         const nd = live.voices.narratorDesign;

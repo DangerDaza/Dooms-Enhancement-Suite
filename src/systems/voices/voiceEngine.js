@@ -39,7 +39,7 @@ import { getRouteState, getDesKey } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
-import { styleForSegment, baseStyle } from './delivery.js';
+import { styleForSegment, baseStyle, anchorForVoice, styleWithAnchor } from './delivery.js';
 import { steadinessTemperature } from './voiceSettings.js';
 import { providerForRef, isProviderConnected, anyProviderConnected } from './providers.js';
 import { PROVIDER_LABELS } from './connections.js';
@@ -195,6 +195,18 @@ function temperatureFor(provider) {
     return provider === 'google' && getDesKey() ? steadinessTemperature(voices()) : null;
 }
 
+/**
+ * The anchor for a designed voice's line (Settings → Voices → Anchor
+ * designed voices to their description), or '' for stock and cloned
+ * voices, the switch off, or a route with no style field. Designed voices
+ * only play on Google's direct route, so the style always has somewhere to go.
+ */
+function anchorFor(ref, provider) {
+    if (!ref || (ref.source || 'stock') === 'stock' || voices().anchorDesignedVoices === false) return '';
+    if (!styleCapable(provider)) return '';
+    return anchorForVoice(voices().customVoices?.[ref.id]);
+}
+
 /** Designed voices already reported gone this session. */
 const goneToasts = new Set();
 
@@ -287,7 +299,10 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
         const provider = routeFor(ref);
         // Only some routes can carry a delivery note; elsewhere it would
         // only split requests for nothing.
-        const style = styleCapable(provider) ? styleForSegment(segments, i, note, { neverWhisper: !!voices().neverWhisper }) : '';
+        const anchor = anchorFor(ref, provider);
+        // The anchor lives inside the style, so the cache key and the merge
+        // below see it like any other style difference.
+        const style = styleWithAnchor(styleCapable(provider) ? styleForSegment(segments, i, note, { neverWhisper: !!voices().neverWhisper }) : '', anchor);
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
         // unvoiced character, then narration) are one Google request —
@@ -297,7 +312,7 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
             prev.idxs.push(...(seg.idxs || []));
             continue;
         }
-        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, temperature: temperatureFor(provider), reason, speaker, idxs: [...(seg.idxs || [])] });
+        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, anchored: !!anchor, temperature: temperatureFor(provider), reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
         console.debug('[DES Voices] job', source, messageId,
@@ -382,13 +397,14 @@ export function audition(ref, text, { provider: forced = null } = {}) {
     // here; otherwise the same stand-in chat would use.
     const { ref: playable } = resolveVoice({ seg: { kind: 'dialogue', speaker: 'x' }, present: true, ref, narrator: voices().narratorVoice, caps: caps() });
     const provider = forced || routeFor(playable);
-    const style = styleCapable(provider) ? baseStyle(voices().deliveryNote, { neverWhisper: !!voices().neverWhisper }) : '';
+    const anchor = anchorFor(playable, provider);
+    const style = styleWithAnchor(styleCapable(provider) ? baseStyle(voices().deliveryNote, { neverWhisper: !!voices().neverWhisper }) : '', anchor);
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text: text || `Hello, I'm ${ref.id}.` }]);
     const job = player.newJob({
         source: 'audition',
         key: ref.id,
         // Previews use the delivery note too, so they sound like chat will.
-        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, temperature: temperatureFor(provider), reason: 'audition', speaker: null, idxs: [] })),
+        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, anchored: !!anchor, temperature: temperatureFor(provider), reason: 'audition', speaker: null, idxs: [] })),
     });
     stopStPlayback();
     player.replaceWith(job);

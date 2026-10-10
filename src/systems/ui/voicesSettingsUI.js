@@ -523,6 +523,7 @@ function populate() {
     $('#rpg-voices-delivery').val(v().deliveryNote || '');
     $('#rpg-voices-never-whisper').prop('checked', !!v().neverWhisper);
     renderSteadiness();
+    $('#rpg-voices-anchor').prop('checked', v().anchorDesignedVoices !== false);
     $('#rpg-voices-guide').prop('open', v().guideOpen !== false);
     $('#rpg-voices-via').val(v().geminiVia === 'openrouter' ? 'openrouter' : 'google');
     $('#rpg-voices-or-key').val(v().openrouterKey || '').attr('type', 'password');
@@ -620,6 +621,11 @@ export function bindVoicesSettingsUI() {
         $('#rpg-voices-steady-value').text(t.toFixed(2));
         saveSettings();
         forgetTemperatureRejection();
+    });
+    // The anchor is part of the style, so it is part of the cache key too.
+    $('#rpg-voices-anchor').on('change', function () {
+        v().anchorDesignedVoices = $(this).prop('checked');
+        saveSettings();
     });
     // How DES voices work: remember open/closed.
     $('#rpg-voices-guide').on('toggle', function () {
