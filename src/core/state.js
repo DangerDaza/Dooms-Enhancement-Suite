@@ -12,6 +12,7 @@ export let extensionSettings = {
     settingsVersion: 15, // Version number for settings migrations (v14-v15 add Name Ban + expression classifier settings)
     enabled: true,
     autoUpdate: false,
+    recoverMissingTracker: true, // together mode: fetch the block separately when a reply skips it
     updateDepth: 4, // How many messages to include in the context
     generationMode: 'together', // 'together', 'separate', or 'external'
     // Per-prompt injection depth & role settings (configured in Customize Prompts editor)

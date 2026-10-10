@@ -549,16 +549,21 @@ function populateConnectionProfileDropdown() {
 function updateGenerationModeUI() {
     const mode = extensionSettings.generationMode || 'together';
     if (mode === 'together') {
-        $('#rpg-manual-update').hide();
+        // The block rides inside the reply; Refresh asks for it separately
+        // when a reply skipped it, and the switch does the same by itself.
+        $('#rpg-manual-update').show();
         $('#rpg-auto-update-container').hide();
+        $('#rpg-recover-tracker-container').show();
         $('#rpg-external-api-settings').slideUp(200);
     } else if (mode === 'separate') {
         $('#rpg-manual-update').show();
         $('#rpg-auto-update-container').show();
+        $('#rpg-recover-tracker-container').hide();
         $('#rpg-external-api-settings').slideUp(200);
     } else if (mode === 'external') {
         $('#rpg-manual-update').show();
         $('#rpg-auto-update-container').show();
+        $('#rpg-recover-tracker-container').hide();
         $('#rpg-external-api-settings').slideDown(200);
     }
 }
@@ -916,6 +921,10 @@ function bindSettingsUI() {
         extensionSettings.autoUpdate = $(this).prop('checked');
         saveSettings();
     });
+    $('#rpg-toggle-recover-tracker').on('change', function () {
+        extensionSettings.recoverMissingTracker = $(this).prop('checked');
+        saveSettings();
+    });
     $('#rpg-update-depth').on('change', function () {
         const value = $(this).val();
         extensionSettings.updateDepth = parseInt(String(value));
@@ -926,10 +935,11 @@ function bindSettingsUI() {
         const originalHtml = $btn.html();
         $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Generating...').prop('disabled', true);
         try {
-            await updateRPGData(renderInfoBox, renderThoughts);
+            await updateRPGData(renderInfoBox, renderThoughts, { force: true });
             updateChatSceneHeaders();
             updatePortraitBar();
             updateChatThoughts();
+            updateTrackerJsonDropdowns();
         } finally {
             $btn.html(originalHtml).prop('disabled', false);
         }
@@ -2566,6 +2576,7 @@ function bindSettingsUI() {
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
+    $('#rpg-toggle-recover-tracker').prop('checked', extensionSettings.recoverMissingTracker !== false);
     $('#rpg-update-depth').val(extensionSettings.updateDepth);
     $('#rpg-toggle-narrator').prop('checked', extensionSettings.narratorMode);
     $('#rpg-skip-guided-mode').val(extensionSettings.skipInjectionsForGuided);

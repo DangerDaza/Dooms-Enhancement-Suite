@@ -44,6 +44,8 @@ import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '.
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { adoptBlockFromTurn, shouldRecoverTracker } from '../generation/trackerRecovery.js';
+import { syncTrackerJsonForMessage } from '../rendering/trackerJsonInline.js';
 /**
  * Walks chat[] backwards to find the most recent real user message and
  * returns its text. Skips system entries and synthetic tracker messages
@@ -152,6 +154,37 @@ export function onMessageSent() {
     }
 }
 /**
+ * Fetch the tracker block a reply skipped (together mode). The same request
+ * separate mode makes after every reply, run once, for this reply only. The
+ * data lands on the reply's swipe as a parsed block would, marked as fetched
+ * separately so the next generation still carries the reminder.
+ * @param {number} index - the reply's index in chat
+ */
+export async function recoverTrackerForReply(index) {
+    const message = chat[index];
+    if (!message || message.is_user || message.is_system) return;
+    // Something else landed since (a quick send, a swipe): the next reply
+    // will carry its own block, and the request stores on the last message.
+    if (chat.length - 1 !== index) return;
+    console.log(`[Dooms Tracker] Reply #${index} came without a tracker block; fetching it separately`);
+    toastr.info('The reply came without its tracker data block. Asking for it separately…', "Doom's Enhancement Suite", { timeOut: 4000 });
+    await updateRPGData(renderInfoBox, renderThoughts, { force: true, recovery: true });
+    updateChatSceneHeaders();
+    updatePortraitBar();
+    updateWeatherEffect();
+    updateChatThoughts();
+    try {
+        syncTrackerJsonForMessage(index);
+    } catch (e) {
+        console.warn('[Dooms Tracker] Tracker Data dropdown refresh failed:', e);
+    }
+    if (isExpressionSpritesModeEnabled() && !isSyntheticTrackerMessage(message)) {
+        classifyAllCharacterExpressions(message.mes)
+            .then(() => updatePortraitBar())
+            .catch(err => console.error('[DES] Expression classification failed:', err));
+    }
+}
+/**
  * Event handler for when a message is generated.
  */
 export async function onMessageReceived(data) {
@@ -170,7 +203,16 @@ export async function onMessageReceived(data) {
         // the real lastGeneratedData state.
         if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
             const responseText = lastMessage.mes;
-            const parsedData = parseResponse(responseText);
+            let parsedData = parseResponse(responseText);
+            // A tool call splits a reply in two: whatever streamed before the
+            // call stays as its own message and never gets this event, so a
+            // block written there is read here, for the continuation.
+            if (parsedData.parsingFailed) {
+                const fromTurn = adoptBlockFromTurn(chat, chat.length - 1, parseResponse);
+                if (fromTurn) {
+                    parsedData = fromTurn;
+                }
+            }
             // Note: Don't show parsing error here - this event fires when loading chat history too
             // Error notification is handled in apiClient.js for fresh generations only
             // Remove locks from parsed data (JSON format only, text format is unaffected)
@@ -316,6 +358,14 @@ export async function onMessageReceived(data) {
                         { timeOut: 3000 }
                     );
                 }
+            }
+            // The reply came without its block, and no earlier part of the
+            // turn had one: fetch it separately, so nothing freezes.
+            if (shouldRecoverTracker(extensionSettings, { fresh: isAwaitingNewMessage, parsingFailed: parsedData.parsingFailed, message: lastMessage })) {
+                const replyIndex = chat.length - 1;
+                setTimeout(() => {
+                    recoverTrackerForReply(replyIndex).catch(err => console.error('[Dooms Tracker] Tracker recovery failed:', err));
+                }, 500);
             }
         }
     } else if (extensionSettings.generationMode === 'separate' || extensionSettings.generationMode === 'external') {

@@ -30,7 +30,7 @@ import {
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from './defaultPrompts.js';
 // Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
 import { buildDiceVerdictForGeneration, buildDiceRulesForGeneration, DICE_VERDICT_SLOT, DICE_RULES_SLOT } from '../features/diceRolls.js';
-import { attributesOn } from '../../utils/d20.js';
+import { lastReply, replyLacksTracker } from './trackerRecovery.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
@@ -689,15 +689,11 @@ function lastReplyLackedTracker() {
     if (!lastGeneratedData.characterThoughts && !lastGeneratedData.infoBox && !lastGeneratedData.quests) return false;
     let list = [];
     try { list = Array.isArray(getContext().chat) ? getContext().chat : []; } catch (e) { return false; }
-    for (let i = list.length - 1; i >= 0; i--) {
-        const m = list[i];
-        if (!m || m.is_system) continue;
-        if (m.is_user) continue;
-        if (Array.isArray(m.extra?.tool_invocations)) continue;
-        const swipes = m.extra?.dooms_tracker_swipes;
-        return !(swipes && typeof swipes === 'object' && swipes[m.swipe_id || 0]);
-    }
-    return false;
+    // Together mode stores an entry for every reply, parsed or not, so an
+    // entry's presence says nothing: look at what it holds, and at whether a
+    // recovery request filled it in after the fact.
+    const reply = lastReply(list);
+    return reply ? replyLacksTracker(reply) : false;
 }
 
 export function refreshDiceInjection({ suppress = false } = {}) {
@@ -711,7 +707,7 @@ export function refreshDiceInjection({ suppress = false } = {}) {
         setExtensionPrompt(DICE_RULES_SLOT, rules ? `\n${rules}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
         // A reply that dropped the block tends to be copied by the next one;
         // say so once, in the same message, ahead of the instructions.
-        const again = on && attributesOn(extensionSettings) && lastReplyLackedTracker() ? TRACKER_AGAIN_TEXT : '';
+        const again = on && lastReplyLackedTracker() ? TRACKER_AGAIN_TEXT : '';
         setExtensionPrompt(TRACKER_AGAIN_SLOT, again ? `\n${again}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
     } catch (e) {
         console.warn('[Dooms Tracker] Dice: verdict injection failed', e);

@@ -48,6 +48,7 @@ export function getExtensionVersion() {
 export const defaultSettings = {
     enabled: true,
     autoUpdate: true,
+    recoverMissingTracker: true, // together mode: fetch the block separately when a reply skips it
     updateDepth: 4,
     generationMode: 'together',
     showInfoBox: true,

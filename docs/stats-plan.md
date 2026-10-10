@@ -766,6 +766,35 @@ rollsForReply), `src/systems/generation/injector.js` (the rules slot),
 the popover and the chip), `template.html`, the stylesheets, docs.
 `tools/d20-test.mjs` §7 and `tools/dice-test.mjs` §8–9.
 
+### 8.5 When the block goes missing (resolved 2026-10-10)
+
+A reply that has just been handed a verdict, or that resumes after a tool
+call, sometimes writes the story and skips the tracker block. In together
+mode nothing then updates, and the next reply copies the last one. Three
+layers, in `src/systems/generation/trackerRecovery.js` (pure, tested by
+`tools/tracker-recovery-test.mjs`), `sillytavern.onMessageReceived`,
+`apiClient.updateRPGData` and the injector:
+
+1. **Wording and order.** The verdict and the rules ride at the tracker
+   instructions' own depth and role, so the instructions come last; the
+   verdict and the tool instruction say where the block goes ("before the
+   story, exactly where your instructions place it").
+2. **The reminder.** When the last reply's own text lacked the block, the
+   next generation carries "[Your previous reply left out the tracker data
+   block...]" in the same slot. Together mode stores a swipe entry for every
+   reply, parsed or not, so the check reads the entry's content, and the
+   mark a recovery leaves (`extra.dooms_tracker_recovered[swipe]`), never
+   the entry's presence.
+3. **The recovery.** A fresh reply that fails to parse (not a history load,
+   not a tool record, at least one section on) gets one separate tracker
+   request: `updateRPGData` forced through its mode guard, storing on the
+   reply's swipe like a parsed block and marking it recovered. Behind
+   "Fetch the tracker when a reply skips it" (Generation settings, together
+   mode only, on by default). "Refresh Tracker Data" shows in together mode
+   too. A tool call splits a reply in two and only the continuation gets
+   MESSAGE_RECEIVED, so a block written in the first half is adopted for the
+   continuation before any request is made.
+
 **Phase 4 — if wanted.** Contested rolls (Stealth against Perception as one
 opposed roll), levels and a growing proficiency bonus, saving throws.
 

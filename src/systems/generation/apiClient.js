@@ -33,6 +33,7 @@ import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+import { markRecovered } from './trackerRecovery.js';
 import { generateAvatarsForCharacters, generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
 // Store the original preset name to restore after tracker generation
 let originalPresetName = null;
@@ -242,21 +243,27 @@ export function getAvailableConnectionProfiles() {
     }
 }
 /**
- * Updates RPG tracker data using separate API call (separate mode only).
- * Makes a dedicated API call to generate tracker data, then stores it
- * in the last assistant message's swipe data.
+ * Updates RPG tracker data using a separate API call. The standing request
+ * of separate and external mode; in together mode it runs only when forced
+ * (the Refresh button, and the recovery after a reply that skipped the
+ * block). Makes a dedicated API call to generate tracker data, then stores
+ * it in the last assistant message's swipe data.
  *
  * @param {Function} renderInfoBox - UI function to render info box
  * @param {Function} renderThoughts - UI function to render character thoughts
+ * @param {object} [options]
+ * @param {boolean} [options.force] - run in together mode too
+ * @param {boolean} [options.recovery] - mark the stored swipe as fetched
+ *   separately, so the next generation still reminds the model
  */
-export async function updateRPGData(renderInfoBox, renderThoughts) {
+export async function updateRPGData(renderInfoBox, renderThoughts, { force = false, recovery = false } = {}) {
     if (isGenerating) {
         return;
     }
     if (!extensionSettings.enabled) {
         return;
     }
-    if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
+    if (!force && extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') {
         return;
     }
     // Nothing to update when every tracker section is hidden — the separate
@@ -403,6 +410,11 @@ export async function updateRPGData(renderInfoBox, renderThoughts) {
                     characterThoughts: parsedData.characterThoughts,
                     player: parsedData.player
                 };
+                // The reply's own text still lacks the block; the next
+                // generation's reminder reads this mark.
+                if (recovery && !parsedData.parsingFailed) {
+                    markRecovered(lastMessage);
+                }
             }
             // Only commit on TRULY first generation (no committed data exists at all)
             const hasAnyCommittedContent = (
