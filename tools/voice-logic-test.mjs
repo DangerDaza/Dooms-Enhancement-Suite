@@ -446,6 +446,39 @@ test('settings: a missing or broken delivery note is restored', () => {
     assert.equal(live2.voices.deliveryNote, '', 'an empty note (off) is kept');
 });
 
+test('settings: Steadiness is off by default; on, the slider maps into Google temperature', () => {
+    const d = settings.defaultVoiceSettings();
+    assert.equal(d.steadiness, false);
+    assert.equal(d.steadinessTemperature, settings.STEADINESS.default);
+    assert.equal(settings.steadinessTemperature(d), null, 'off sends nothing');
+    assert.equal(settings.steadinessTemperature({ steadiness: true, steadinessTemperature: 0.7 }), 0.7);
+    assert.equal(settings.steadinessTemperature({ steadiness: true, steadinessTemperature: 0.2 }), settings.STEADINESS.min, 'held to the floor');
+    assert.equal(settings.steadinessTemperature({ steadiness: true, steadinessTemperature: 7 }), settings.STEADINESS.max, 'held to the ceiling');
+    assert.equal(settings.steadinessTemperature({ steadiness: true, steadinessTemperature: 'hot' }), settings.STEADINESS.default, 'nonsense = the default');
+    assert.equal(settings.steadinessTemperature({ steadiness: true, steadinessTemperature: '0.85' }), 0.85, 'a slider string is a number');
+    assert.equal(settings.steadinessTemperature({ steadiness: 'yes', steadinessTemperature: 0.6 }), null, 'only an honest true turns it on');
+    assert.equal(settings.steadinessTemperature(null), null);
+    assert.equal(settings.clampSteadiness(0.666), 0.67, 'two decimals');
+});
+
+test('settings: broken Steadiness values are repaired, honest ones kept', () => {
+    const live = { voices: { steadiness: 'on', steadinessTemperature: null } };
+    assert.equal(settings.ensureVoiceSettings({ voices: live.voices }, live), true);
+    assert.equal(live.voices.steadiness, false);
+    assert.equal(live.voices.steadinessTemperature, settings.STEADINESS.default);
+    const kept = { voices: { steadiness: true, steadinessTemperature: 0.55 } };
+    settings.ensureVoiceSettings({ voices: kept.voices }, kept);
+    assert.equal(kept.voices.steadiness, true);
+    assert.equal(kept.voices.steadinessTemperature, 0.55);
+    const high = { voices: { steadiness: true, steadinessTemperature: 3 } };
+    assert.equal(settings.ensureVoiceSettings({ voices: high.voices }, high), true);
+    assert.equal(high.voices.steadinessTemperature, settings.STEADINESS.max, 'out of range is held to the range');
+    const missing = { voices: { deliveryNote: 'x' } };
+    settings.ensureVoiceSettings({ voices: missing.voices }, missing);
+    assert.equal(missing.voices.steadiness, false, 'an old blob gets the switch, off');
+    assert.equal(missing.voices.steadinessTemperature, settings.STEADINESS.default);
+});
+
 // ─── connections.js ─────────────────────────────────────────────────────────
 
 test('connections: what counts as connected', () => {

@@ -8529,7 +8529,8 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     gap: 6px;
 }
 #rpg-voices-remove-unused[hidden],
-#rpg-voices-count-slots[hidden] {
+#rpg-voices-count-slots[hidden],
+#rpg-voices-steady-row[hidden] {
     display: none;
 }
 .rpg-voices-badge,

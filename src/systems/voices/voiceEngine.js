@@ -40,6 +40,7 @@ import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
 import { styleForSegment, baseStyle } from './delivery.js';
+import { steadinessTemperature } from './voiceSettings.js';
 import { providerForRef, isProviderConnected, anyProviderConnected } from './providers.js';
 import { PROVIDER_LABELS } from './connections.js';
 import { getOpenRouterState } from './openrouter.js';
@@ -186,6 +187,14 @@ function styleCapable(provider) {
     return provider === 'openrouter' ? true : !!getDesKey();
 }
 
+/**
+ * The Steadiness temperature for a line on this service, or null: only
+ * Google's direct route (the key in DES) has a field for it.
+ */
+function temperatureFor(provider) {
+    return provider === 'google' && getDesKey() ? steadinessTemperature(voices()) : null;
+}
+
 /** Designed voices already reported gone this session. */
 const goneToasts = new Set();
 
@@ -288,7 +297,7 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
             prev.idxs.push(...(seg.idxs || []));
             continue;
         }
-        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, reason, speaker, idxs: [...(seg.idxs || [])] });
+        jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, temperature: temperatureFor(provider), reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
         console.debug('[DES Voices] job', source, messageId,
@@ -379,7 +388,7 @@ export function audition(ref, text, { provider: forced = null } = {}) {
         source: 'audition',
         key: ref.id,
         // Previews use the delivery note too, so they sound like chat will.
-        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, reason: 'audition', speaker: null, idxs: [] })),
+        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, temperature: temperatureFor(provider), reason: 'audition', speaker: null, idxs: [] })),
     });
     stopStPlayback();
     player.replaceWith(job);

@@ -34,6 +34,13 @@ export const ST_FALLBACK_MODEL = 'gemini-3.1-flash-tts-preview';
 export const NARRATOR_FALLBACK_VOICE = 'Charon';
 
 /**
+ * Settings → Voices → Steadiness: the range of generationConfig.temperature
+ * a line may carry on the direct route (lower = less variation between
+ * renders), and where the slider starts when the switch goes on.
+ */
+export const STEADINESS = Object.freeze({ min: 0.5, max: 1, step: 0.05, default: 0.7 });
+
+/**
  * What the "Design a narrator voice" box (Settings → Voices) starts with:
  * an old wizard telling the tale by the fire. Written for Google's voice
  * designer: who is speaking, the sound of the voice, then how they pace and
@@ -89,9 +96,31 @@ export function defaultVoiceSettings() {
         // Settings → Voices → Never whisper: the ban rides with the note on
         // every line and the story's whisper cues are ignored.
         neverWhisper: false,
+        // Settings → Voices → Steadiness: when on, every line on the direct
+        // route carries generationConfig.temperature (STEADINESS.min–max,
+        // lower = steadier) so a designed voice renders more alike from
+        // line to line. Off = Google's own default.
+        steadiness: false,
+        steadinessTemperature: STEADINESS.default,
         // The "Design a narrator voice" box, so edits survive a reload.
         narratorDesign: { ...DEFAULT_NARRATOR_DESIGN },
     };
+}
+
+/** A temperature inside the Steadiness range (two decimals); the default when it isn't a number. */
+export function clampSteadiness(value) {
+    const t = typeof value === 'number' ? value : (typeof value === 'string' && value.trim() ? Number(value) : NaN);
+    if (!Number.isFinite(t)) return STEADINESS.default;
+    return Math.min(STEADINESS.max, Math.max(STEADINESS.min, Math.round(t * 100) / 100));
+}
+
+/**
+ * The temperature a line should carry, or null when Steadiness is off.
+ * @param {{steadiness?: boolean, steadinessTemperature?: number}|null|undefined} voices - extensionSettings.voices
+ */
+export function steadinessTemperature(voices) {
+    if (!voices || voices.steadiness !== true) return null;
+    return clampSteadiness(voices.steadinessTemperature);
 }
 
 /** A registry entry is usable when it is an object with a Google voice id. */
@@ -179,6 +208,15 @@ export function ensureVoiceSettings(saved, live) {
         }
         if (typeof live.voices.neverWhisper !== 'boolean') {
             live.voices.neverWhisper = defaults.neverWhisper;
+            changed = true;
+        }
+        if (typeof live.voices.steadiness !== 'boolean') {
+            live.voices.steadiness = defaults.steadiness;
+            changed = true;
+        }
+        const steadyTemperature = clampSteadiness(live.voices.steadinessTemperature);
+        if (steadyTemperature !== live.voices.steadinessTemperature) {
+            live.voices.steadinessTemperature = steadyTemperature;
             changed = true;
         }
         const nd = live.voices.narratorDesign;

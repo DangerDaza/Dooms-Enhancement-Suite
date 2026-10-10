@@ -26,7 +26,8 @@
  * - Audio is cached in memory, so re-reading a line costs nothing.
  *
  * @typedef {{text: string, voiceId: string, voiceSource?: string, reason: string, speaker: string|null, idxs: number[],
- *            url?: string}} JobSegment
+ *            style?: string, temperature?: number|null, url?: string}} JobSegment
+ *   style: the delivery note; temperature: Settings → Voices → Steadiness (direct route; null = not sent);
  *   url: audio already in hand (a designed voice's sample) — played without a request.
  * @typedef {{id: number, messageId: number|null, source: string, auto: boolean, segments: JobSegment[],
  *            highlightMessage?: boolean, controller?: AbortController}} Job
@@ -180,7 +181,10 @@ export function urlForBlob(blob, key) {
 async function fetchSegment(job, seg, signal) {
     if (seg.url) return seg.url;
     const model = voices().model;
-    const key = cacheKey(`${seg.provider || ''}\u0002${model}`, seg.voiceId, seg.text, seg.style || '');
+    const temperature = Number.isFinite(seg.temperature) ? seg.temperature : null;
+    // Route, model and temperature are part of the key: a flipped Steadiness
+    // switch re-makes a line rather than replaying the old render.
+    const key = cacheKey(`${seg.provider || ''}\u0002${model}\u0002${temperature === null ? '' : temperature}`, seg.voiceId, seg.text, seg.style || '');
     const hit = cacheGet(key);
     if (hit) return hit;
     if (job.auto) {
@@ -196,7 +200,7 @@ async function fetchSegment(job, seg, signal) {
         hooks.onStateChange?.();
         const usedVoiceId = seg.voiceId;
         try {
-            const { blob } = await synthesizeLine({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', provider: seg.provider, model, signal, style: seg.style || '' });
+            const { blob } = await synthesizeLine({ text: seg.text, voiceId: usedVoiceId, voiceSource: seg.voiceSource || 'stock', provider: seg.provider, model, signal, style: seg.style || '', temperature });
             consecutiveRateGiveUps = 0;
             return cachePut(key, blob, job.source === 'audition');
         } catch (e) {

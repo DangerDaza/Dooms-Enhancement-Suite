@@ -44,7 +44,7 @@ export function anyProviderConnected() {
 }
 
 /**
- * @param {{text: string, voiceId: string, voiceSource?: string, provider?: string, model: string, style?: string, signal?: AbortSignal}} req
+ * @param {{text: string, voiceId: string, voiceSource?: string, provider?: string, model: string, style?: string, temperature?: number|null, signal?: AbortSignal}} req
  * @returns {Promise<{blob: Blob, model: string}>}
  */
 export async function synthesizeLine(req) {

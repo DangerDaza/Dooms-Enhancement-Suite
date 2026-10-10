@@ -67,7 +67,7 @@ const routeState = {
 };
 
 export function getRouteState() {
-    return { ...routeState };
+    return { ...routeState, styleRejected, temperatureRejected };
 }
 
 /** The key pasted into Settings → Voices, or '' to use SillyTavern's. */
@@ -103,6 +103,7 @@ function writeProbe(route, requested, model, shape) {
 
 export function clearRouteProbe() {
     try { sessionStorage.removeItem(PROBE_KEY); } catch (e) {}
+    temperatureRejected = false;
     routeState.route = null;
     routeState.status = 'unknown';
     routeState.effectiveModel = null;
@@ -193,17 +194,47 @@ function shapesFor(model) {
  */
 let styleRejected = false;
 
-function directBody(text, voiceId, shape, style) {
+/**
+ * Set when Google refuses generationConfig.temperature (Settings → Voices →
+ * Steadiness) or answers it with no audio: lines go without it for the rest
+ * of the session. forgetTemperatureRejection() clears it.
+ */
+let temperatureRejected = false;
+
+/** Lets the user try Steadiness again after a rejection (the switch or slider changed). */
+export function forgetTemperatureRejection() {
+    temperatureRejected = false;
+}
+
+/**
+ * The generateContent body for one line. `temperature` (a number from the
+ * Steadiness slider, or null) lands in generationConfig unless Google has
+ * refused it this session.
+ */
+function directBody(text, voiceId, shape, style, temperature = null) {
     const voiceConfig = shape === 'voice' ? { voice: voiceId } : { prebuiltVoiceConfig: { voiceName: voiceId } };
     const part = { text };
     if (style && !styleRejected) part.speech_metadata = { style };
+    const generationConfig = {
+        responseModalities: ['AUDIO'],
+        speechConfig: { voiceConfig },
+    };
+    if (Number.isFinite(temperature) && !temperatureRejected) generationConfig.temperature = temperature;
     return {
         contents: [{ role: 'user', parts: [part] }],
-        generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: { voiceConfig },
-        },
+        generationConfig,
     };
+}
+
+/**
+ * True when a line sent with a temperature came back refused because of it
+ * (an argument error naming temperature) or with no audio at all (the
+ * reported symptom of a temperature Google's TTS models won't render at).
+ */
+function isTemperatureError(e, temperature) {
+    if (!Number.isFinite(temperature) || temperatureRejected || !(e instanceof TtsError)) return false;
+    if (e.kind === 'argument') return /temperature/i.test(e.message);
+    return e.kind === 'content';
 }
 
 /** True when Google's complaint is about the style note, not the voice or model. */
@@ -211,24 +242,43 @@ function isStyleError(e, style) {
     return !!style && !styleRejected && e instanceof TtsError && e.kind === 'argument' && /speech_metadata|style/i.test(e.message);
 }
 
-async function postDirect({ text, voiceId, model, shape, key, signal, style }) {
+/**
+ * One line, with one retry each for the two optional fields: a refused
+ * delivery note goes again without the note, a refused temperature goes
+ * again without the temperature, and both are remembered for the session.
+ */
+async function postDirect(req) {
     try {
-        return await postDirectOnce({ text, voiceId, model, shape, key, signal, style });
+        return await postDirectOnce(req);
     } catch (e) {
-        if (!isStyleError(e, style)) throw e;
-        styleRejected = true;
-        console.warn(`[DES Voices] Google rejected the delivery note (${e.message}); sending lines without it this session.`);
-        return postDirectOnce({ text, voiceId, model, shape, key, signal, style: '' });
+        if (isStyleError(e, req.style)) {
+            styleRejected = true;
+            console.warn(`[DES Voices] Google rejected the delivery note (${e.message}); sending lines without it this session.`);
+            return postDirect({ ...req, style: '' });
+        }
+        if (isTemperatureError(e, req.temperature)) {
+            temperatureRejected = true;
+            try {
+                const result = await postDirect({ ...req, temperature: null });
+                console.warn(`[DES Voices] Google rejected the Steadiness temperature ${req.temperature} (${e.message}); sending lines without it this session.`);
+                return result;
+            } catch (again) {
+                // No audio with or without it: the temperature was not the cause.
+                if (e.kind === 'content' && again instanceof TtsError && again.kind === 'content') temperatureRejected = false;
+                throw again;
+            }
+        }
+        throw e;
     }
 }
 
-async function postDirectOnce({ text, voiceId, model, shape, key, signal, style }) {
+async function postDirectOnce({ text, voiceId, model, shape, key, signal, style, temperature = null }) {
     const response = await fetchWithTimeout(
         `${GOOGLE_API}/models/${encodeURIComponent(model)}:generateContent`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-            body: JSON.stringify(directBody(text, voiceId, shape, style)),
+            body: JSON.stringify(directBody(text, voiceId, shape, style, temperature)),
         },
         signal,
         'Couldn’t reach Google (check your connection, or whether something is blocking requests to googleapis.com)',
@@ -249,7 +299,7 @@ async function postDirectOnce({ text, voiceId, model, shape, key, signal, style 
     return new Blob([bytes], { type: audio.mimeType });
 }
 
-async function synthesizeDirect({ text, voiceId, model, signal, key, style }) {
+async function synthesizeDirect({ text, voiceId, model, signal, key, style, temperature = null }) {
     const remembered = readProbe('direct', model);
     const attempts = [];
     if (remembered) {
@@ -261,7 +311,7 @@ async function synthesizeDirect({ text, voiceId, model, signal, key, style }) {
     let lastError = null;
     for (const attempt of attempts) {
         try {
-            const blob = await postDirect({ text, voiceId, model: attempt.model, shape: attempt.shape, key, signal, style });
+            const blob = await postDirect({ text, voiceId, model: attempt.model, shape: attempt.shape, key, signal, style, temperature });
             if (!remembered) writeProbe('direct', model, attempt.model, attempt.shape);
             if (attempt.model !== model) {
                 console.warn(`[DES Voices] Google rejected ${model} (${lastError?.message}); using ${attempt.model} this session.`);
@@ -287,7 +337,7 @@ const CUSTOM_FALLBACK_MODEL = 'gemini-3.8-flash-tts';
  * speechConfig.voiceConfig.voice (voice-design docs). Never downgraded to
  * 3.1 — designed voices are a 3.8 feature.
  */
-async function synthesizeCustom({ text, voiceId, model, signal, key, style }) {
+async function synthesizeCustom({ text, voiceId, model, signal, key, style, temperature = null }) {
     if (!key) {
         throw new TtsError('needs-key', 'Designed voices need your Google AI Studio key in Settings \u2192 Voices.');
     }
@@ -296,7 +346,7 @@ async function synthesizeCustom({ text, voiceId, model, signal, key, style }) {
     let lastError = null;
     for (const m of models) {
         try {
-            const blob = await postDirect({ text, voiceId, model: m, shape: 'voice', key, signal, style });
+            const blob = await postDirect({ text, voiceId, model: m, shape: 'voice', key, signal, style, temperature });
             return { blob, model: m };
         } catch (e) {
             if (!(e instanceof TtsError)) throw e;
@@ -365,16 +415,16 @@ async function synthesizeSt({ text, voiceId, model, signal }) {
 /**
  * Synthesises one line. Stock voices use either route; designed voices
  * (voiceSource other than 'stock') need the DES key. `style` (the delivery
- * note) is sent on the direct route only — SillyTavern's route has no field
- * for it.
- * @param {{text: string, voiceId: string, voiceSource?: string, model: string, signal?: AbortSignal, style?: string}} req
+ * note) and `temperature` (Settings → Voices → Steadiness) are sent on the
+ * direct route only — SillyTavern's route has no field for them.
+ * @param {{text: string, voiceId: string, voiceSource?: string, model: string, signal?: AbortSignal, style?: string, temperature?: number|null}} req
  * @returns {Promise<{blob: Blob, model: string}>}
  */
-export async function synthesize({ text, voiceId, voiceSource = 'stock', model, signal, style = '' }) {
+export async function synthesize({ text, voiceId, voiceSource = 'stock', model, signal, style = '', temperature = null }) {
     const key = getDesKey();
     if (voiceSource && voiceSource !== 'stock') {
         // Kept out of routeState: a custom voice failing says nothing about the route.
-        return synthesizeCustom({ text, voiceId, model, signal, key, style });
+        return synthesizeCustom({ text, voiceId, model, signal, key, style, temperature });
     }
     const route = key ? 'direct' : 'st';
     if (routeState.route !== route) {
@@ -385,7 +435,7 @@ export async function synthesize({ text, voiceId, voiceSource = 'stock', model, 
     }
     try {
         const result = key
-            ? await synthesizeDirect({ text, voiceId, model, signal, key, style })
+            ? await synthesizeDirect({ text, voiceId, model, signal, key, style, temperature })
             : await synthesizeSt({ text, voiceId, model, signal });
         routeState.status = 'ok';
         routeState.effectiveModel = result.model;

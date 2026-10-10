@@ -1792,6 +1792,31 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Steadiness</span>
+                            <span class="rpg-setting-hint">Asks Google to render every line with less variation
+                                (a lower temperature), so a designed voice sounds more alike from one line to the
+                                next. Off: Google's own setting. Works with the Google AI Studio key below; if Google
+                                refuses it, lines go without it for the rest of the session.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-voices-steady" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row" id="rpg-voices-steady-row" hidden>
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Temperature</span>
+                            <span class="rpg-setting-hint">0.5 is the steadiest; 1.0 is about Google's usual
+                                variety.</span>
+                        </div>
+                        <div class="rpg-slider-group">
+                            <input type="range" id="rpg-voices-steady-temp" class="rpg-range-slider" min="0.5" max="1"
+                                step="0.05" value="0.7" />
+                            <span id="rpg-voices-steady-value" class="rpg-slider-value">0.70</span>
+                        </div>
+                    </div>
                     <!-- Design a narrator voice: a designed voice made here becomes the
                          Narrator. Filled by voicesSettingsUI.js; the text is saved in
                          voices.narratorDesign so edits survive a reload. -->

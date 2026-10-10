@@ -20,7 +20,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { STOCK_VOICES, stockLabel, stockRef, canonicalStockId, DESIGN_LANGUAGES } from '../voices/voiceCatalog.js';
-import { VOICE_MODELS, NARRATOR_FALLBACK_VOICE, DEFAULT_NARRATOR_DESIGN, isValidVoiceRef } from '../voices/voiceSettings.js';
+import { VOICE_MODELS, NARRATOR_FALLBACK_VOICE, DEFAULT_NARRATOR_DESIGN, isValidVoiceRef, clampSteadiness } from '../voices/voiceSettings.js';
 import { syncVoicesState, getEngine, getEngineIfLoaded, unlockVoicesAudio } from '../voices/voiceBoot.js';
 import {
     listRegistered,
@@ -249,6 +249,7 @@ function renderStatus() {
             } else {
                 parts.push('Ready.');
             }
+            if (route.temperatureRejected) parts.push('Google refused the Steadiness temperature this session, so lines go without it.');
         } else if (st.connected?.google) {
             parts.push('Designed and cloned voices: Google.');
         }
@@ -491,6 +492,24 @@ function bindNarratorDesign() {
     });
 }
 
+/** The Steadiness switch and its slider (the slider shows only while the switch is on). */
+function renderSteadiness() {
+    const on = v().steadiness === true;
+    const t = clampSteadiness(v().steadinessTemperature);
+    $('#rpg-voices-steady').prop('checked', on);
+    $('#rpg-voices-steady-row').prop('hidden', !on);
+    $('#rpg-voices-steady-temp').val(t);
+    $('#rpg-voices-steady-value').text(t.toFixed(2));
+}
+
+/** A changed Steadiness setting gets another go, even if Google refused the last value this session. */
+async function forgetTemperatureRejection() {
+    try {
+        const { forgetTemperatureRejection: forget } = await import('../voices/transport.js');
+        forget();
+    } catch (e) { /* engine not loaded yet */ }
+}
+
 function populate() {
     fillNarratorOptions();
     $('#rpg-voices-model').html(VOICE_MODELS.map(m =>
@@ -503,6 +522,7 @@ function populate() {
     $('#rpg-voices-model').val(v().model);
     $('#rpg-voices-delivery').val(v().deliveryNote || '');
     $('#rpg-voices-never-whisper').prop('checked', !!v().neverWhisper);
+    renderSteadiness();
     $('#rpg-voices-guide').prop('open', v().guideOpen !== false);
     $('#rpg-voices-via').val(v().geminiVia === 'openrouter' ? 'openrouter' : 'google');
     $('#rpg-voices-or-key').val(v().openrouterKey || '').attr('type', 'password');
@@ -583,6 +603,23 @@ export function bindVoicesSettingsUI() {
     $('#rpg-voices-never-whisper').on('change', function () {
         v().neverWhisper = $(this).prop('checked');
         saveSettings();
+    });
+    // Steadiness: the temperature is part of the audio cache key too, so a
+    // change re-makes lines on their next play instead of replaying old renders.
+    $('#rpg-voices-steady').on('change', function () {
+        v().steadiness = $(this).prop('checked');
+        v().steadinessTemperature = clampSteadiness(v().steadinessTemperature);
+        saveSettings();
+        forgetTemperatureRejection();
+        renderSteadiness();
+        renderStatus();
+    });
+    $('#rpg-voices-steady-temp').on('input change', function () {
+        const t = clampSteadiness($(this).val());
+        v().steadinessTemperature = t;
+        $('#rpg-voices-steady-value').text(t.toFixed(2));
+        saveSettings();
+        forgetTemperatureRejection();
     });
     // How DES voices work: remember open/closed.
     $('#rpg-voices-guide').on('toggle', function () {
