@@ -44,6 +44,11 @@ import { escapeHtml } from '../../utils/html.js';
 
 let bound = false;
 
+/** What the Narrator's ▶ and Audition ×3 say. */
+const NARRATOR_PREVIEW_LINE = 'The rain had not stopped for three days, and the city was starting to forget what the sun looked like.';
+/** What a custom voice's ▶ and Audition ×3 say under My custom voices. */
+const CUSTOM_PREVIEW_LINE = 'This is how I sound when I read your story.';
+
 function v() {
     return extensionSettings.voices;
 }
@@ -109,6 +114,9 @@ function renderDesigned() {
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-play" title="Preview" ${h === 'gone' ? 'disabled' : ''}>
                         <i class="fa-solid ${playing ? 'fa-stop' : 'fa-play'}"></i>
                     </button>
+                    <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-x3" title="Audition ×3: the same line three times in a row, each a fresh render, to hear how steady this voice is (three Google requests)" ${h === 'gone' ? 'disabled' : ''}>
+                        <i class="fa-solid fa-repeat"></i> &times;3
+                    </button>
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-rename" title="Rename"><i class="fa-solid fa-pen"></i></button>
                     ${h !== 'ok' && e.source !== 'cloned' ? '<button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-recreate" title="Design a fresh copy from its description">Recreate</button>' : ''}
                     <button type="button" class="rpg-accordion-mini-btn rpg-voices-designed-delete" title="Delete from Google"><i class="fa-solid fa-trash"></i></button>
@@ -142,7 +150,14 @@ function bindDesigned() {
         const id = $(this).closest('.rpg-voices-designed-row').attr('data-voice');
         const entry = getRegistered(id);
         if (!entry) return;
-        (await getEngine()).audition(refFor(entry), 'This is how I sound when I read your story.');
+        (await getEngine()).audition(refFor(entry), CUSTOM_PREVIEW_LINE);
+    });
+    $(document).on('click', '#rpg-voices-designed .rpg-voices-designed-x3', async function () {
+        unlockVoicesAudio();
+        const id = $(this).closest('.rpg-voices-designed-row').attr('data-voice');
+        const entry = getRegistered(id);
+        if (!entry) return;
+        (await getEngine()).auditionRepeat(refFor(entry), CUSTOM_PREVIEW_LINE, 3);
     });
     $(document).on('click', '#rpg-voices-designed .rpg-voices-designed-rename', function () {
         const id = $(this).closest('.rpg-voices-designed-row').attr('data-voice');
@@ -570,7 +585,13 @@ export function bindVoicesSettingsUI() {
     $('#rpg-voices-narrator-preview').on('click', async function () {
         unlockVoicesAudio();
         const engine = await getEngine();
-        engine.audition(narratorRef(), 'The rain had not stopped for three days, and the city was starting to forget what the sun looked like.');
+        engine.audition(narratorRef(), NARRATOR_PREVIEW_LINE);
+    });
+    // Audition ×3: the same line three times, each a fresh render.
+    $('#rpg-voices-narrator-x3').on('click', async function () {
+        unlockVoicesAudio();
+        const engine = await getEngine();
+        engine.auditionRepeat(narratorRef(), NARRATOR_PREVIEW_LINE, 3);
     });
     $('#rpg-voices-key').on('change', function () { saveKey($(this).val()); });
     $('#rpg-voices-key-toggle').on('click', function () {

@@ -315,10 +315,20 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
         jobSegments.push({ text: seg.text, voiceId: ref.id, voiceSource: ref.source || 'stock', provider, style, anchored: !!anchor, temperature: temperatureFor(provider), reason, speaker, idxs: [...(seg.idxs || [])] });
     }
     if (jobSegments.length) {
-        console.debug('[DES Voices] job', source, messageId,
-            jobSegments.map(s => `${PROVIDER_LABELS[s.provider] || s.provider}/${s.voiceId} — ${describeReason(s.reason, s.speaker)}: ${s.text.slice(0, 40)}`));
+        console.debug('[DES Voices] job', source, messageId, jobSegments.map(s => describeSegment(s)));
     }
     return player.newJob({ messageId, source, auto, highlightMessage, segments: jobSegments });
+}
+
+/**
+ * One segment for the `[DES Voices] job` debug line: service/voice, the
+ * model asked for, the Steadiness temperature (or "t=off") and whether an
+ * anchor rode along, then why this voice and the start of the text.
+ */
+function describeSegment(s) {
+    const t = Number.isFinite(s.temperature) ? `t=${s.temperature}` : 't=off';
+    const anchor = s.anchored ? 'anchor=yes' : 'anchor=no';
+    return `${PROVIDER_LABELS[s.provider] || s.provider}/${s.voiceId} [${voices().model} ${t} ${anchor}] — ${describeReason(s.reason, s.speaker)}: ${s.text.slice(0, 40)}`;
 }
 
 function play(job) {
@@ -389,6 +399,22 @@ export function speakReasoning(messageId, text) {
  * @param {string} text
  */
 export function audition(ref, text, { provider: forced = null } = {}) {
+    startAudition(ref, text, { forced, takes: 1 });
+}
+
+/**
+ * "Audition ×3": the same line rendered `takes` times in a row, each a
+ * fresh request (never the cache), so the ear can judge how steady a voice
+ * is from one render to the next. Toggles off like audition().
+ * @param {{id: string, source?: string}} ref
+ * @param {string} text
+ * @param {number} [takes]
+ */
+export function auditionRepeat(ref, text, takes = 3) {
+    startAudition(ref, text, { forced: null, takes: Math.max(1, Math.min(5, Math.round(Number(takes) || 1))) });
+}
+
+function startAudition(ref, text, { forced = null, takes = 1 }) {
     if (!ref || !ref.id) return;
     const cur = player.getCurrentJob();
     if (cur && cur.source === 'audition' && cur.key === ref.id) { player.stop(); return; }
@@ -398,14 +424,22 @@ export function audition(ref, text, { provider: forced = null } = {}) {
     const { ref: playable } = resolveVoice({ seg: { kind: 'dialogue', speaker: 'x' }, present: true, ref, narrator: voices().narratorVoice, caps: caps() });
     const provider = forced || routeFor(playable);
     const anchor = anchorFor(playable, provider);
+    // Previews use the delivery note (and the anchor) too, so they sound like chat will.
     const style = styleWithAnchor(styleCapable(provider) ? baseStyle(voices().deliveryNote, { neverWhisper: !!voices().neverWhisper }) : '', anchor);
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text: text || `Hello, I'm ${ref.id}.` }]);
-    const job = player.newJob({
-        source: 'audition',
-        key: ref.id,
-        // Previews use the delivery note too, so they sound like chat will.
-        segments: segments.map(s => ({ text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style, anchored: !!anchor, temperature: temperatureFor(provider), reason: 'audition', speaker: null, idxs: [] })),
-    });
+    const jobSegments = [];
+    for (let take = 1; take <= takes; take++) {
+        for (const s of segments) {
+            jobSegments.push({
+                text: s.text, voiceId: playable.id, voiceSource: playable.source || 'stock', provider, style,
+                anchored: !!anchor, temperature: temperatureFor(provider), reason: 'audition', speaker: null, idxs: [],
+                // A numbered take is always a new request; a single preview replays from the cache.
+                ...(takes > 1 ? { take } : {}),
+            });
+        }
+    }
+    const job = player.newJob({ source: 'audition', key: ref.id, segments: jobSegments });
+    if (takes > 1) console.debug(`[DES Voices] audition ×${takes}`, jobSegments.map(s => describeSegment(s)));
     stopStPlayback();
     player.replaceWith(job);
 }

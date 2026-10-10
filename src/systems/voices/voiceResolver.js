@@ -90,6 +90,7 @@ export function describeReason(reason, speaker) {
         case 'needs-key': return `${who}’s designed voice needs the Google key in Settings → Voices`;
         case 'voice-gone': return `${who}’s designed voice no longer exists on Google`;
         case 'character': return `${who}’s voice`;
+        case 'audition': return 'Audition';
         default: return '';
     }
 }

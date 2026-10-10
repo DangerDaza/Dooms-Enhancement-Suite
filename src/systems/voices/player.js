@@ -26,8 +26,9 @@
  * - Audio is cached in memory, so re-reading a line costs nothing.
  *
  * @typedef {{text: string, voiceId: string, voiceSource?: string, reason: string, speaker: string|null, idxs: number[],
- *            style?: string, temperature?: number|null, url?: string}} JobSegment
+ *            style?: string, temperature?: number|null, take?: number, url?: string}} JobSegment
  *   style: the delivery note; temperature: Settings → Voices → Steadiness (direct route; null = not sent);
+ *   take: a numbered repeat (Audition ×3) — always a fresh request, never a cache hit;
  *   url: audio already in hand (a designed voice's sample) — played without a request.
  * @typedef {{id: number, messageId: number|null, source: string, auto: boolean, segments: JobSegment[],
  *            highlightMessage?: boolean, controller?: AbortController}} Job
@@ -184,7 +185,10 @@ async function fetchSegment(job, seg, signal) {
     const temperature = Number.isFinite(seg.temperature) ? seg.temperature : null;
     // Route, model and temperature are part of the key: a flipped Steadiness
     // switch re-makes a line rather than replaying the old render.
-    const key = cacheKey(`${seg.provider || ''}\u0002${model}\u0002${temperature === null ? '' : temperature}`, seg.voiceId, seg.text, seg.style || '');
+    // A numbered take (Audition ×3) is keyed to its job, so every take is a
+    // fresh request and the next press renders anew.
+    const take = Number.isInteger(seg.take) && seg.take > 0 ? `\u0002take:${job.id}:${seg.take}` : '';
+    const key = cacheKey(`${seg.provider || ''}\u0002${model}\u0002${temperature === null ? '' : temperature}${take}`, seg.voiceId, seg.text, seg.style || '');
     const hit = cacheGet(key);
     if (hit) return hit;
     if (job.auto) {

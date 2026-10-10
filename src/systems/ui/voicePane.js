@@ -248,6 +248,7 @@ function render(host, ctx) {
             </div>
             <div class="cw-voice-current-actions">
                 ${canPreview ? `<button type="button" class="rpg-btn cw-voice-play-current" title="Say the test line in this voice"><i class="fa-solid ${isPlaying(current.id) ? 'fa-stop' : 'fa-play'}"></i> Play</button>` : ''}
+                ${canPreview ? `<button type="button" class="rpg-btn cw-voice-play-current-x3" title="Say the test line three times in a row, each a fresh render, to hear how steady this voice is from line to line (three Google requests)"><i class="fa-solid fa-repeat"></i> Audition &times;3</button>` : ''}
                 ${current ? `<button type="button" class="rpg-btn cw-voice-clear" title="Take this voice off ${escapeAttr(ctx.name)}; the Narrator reads their lines"><i class="fa-solid fa-xmark"></i> Remove</button>` : ''}
             </div>
         </div>
@@ -293,6 +294,14 @@ async function audition(ref, name) {
     unlockVoicesAudio();
     const engine = await getEngine();
     engine.audition(ref, testLineFor(name));
+    refreshPlayButtons();
+}
+
+/** Audition ×3: the test line three times, each a fresh render. */
+async function auditionRepeat(ref, name) {
+    unlockVoicesAudio();
+    const engine = await getEngine();
+    engine.auditionRepeat(ref, testLineFor(name), 3);
     refreshPlayButtons();
 }
 
@@ -364,6 +373,11 @@ function bindOnce(host) {
             const id = pick.getAttribute('data-voice');
             ctx.onChange(stockRef(id));
             audition(stockRef(id), ctx.name);
+            return;
+        }
+        if (target.closest('.cw-voice-play-current-x3')) {
+            e.preventDefault();
+            if (ctx.voice?.id) auditionRepeat(ctx.voice, ctx.name);
             return;
         }
         if (target.closest('.cw-voice-play-current')) {
