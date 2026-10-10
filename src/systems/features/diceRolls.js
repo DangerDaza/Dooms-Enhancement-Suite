@@ -40,6 +40,12 @@ import {
     outcomeLabel,
     marginWord,
     DEFAULT_SCORE,
+    parseCheckCall,
+    resolveCheckCall,
+    buildCheckCallInstruction,
+    buildToolCallInstruction,
+    buildDiceToolDefinition,
+    DICE_TOOL_NAME,
 } from '../../utils/d20.js';
 
 export const DICE_CHANGED_EVENT = 'dooms:dice-changed';
@@ -280,7 +286,7 @@ function normalizeOverride(o) {
  * is asked and nothing is rolled until the message is sent.
  * Returns the pending check, or null when attributes are off.
  */
-export function tagCheck({ attributeId, skill = '', context = '', override = null } = {}) {
+export function tagCheck({ attributeId, skill = '', context = '', override = null, gmRuling = null, fromIndex = -1 } = {}) {
     if (!attributesOn(extensionSettings)) return null;
     const defs = attributeDefs(extensionSettings);
     const def = defs.find(d => d.id === attributeId) || defs[0];
@@ -302,7 +308,13 @@ export function tagCheck({ attributeId, skill = '', context = '', override = nul
         proficient,
         prof: proficient ? cfg.proficiencyBonus : 0,
         context: String(context || '').trim().slice(0, 300),
+        who: persona ? persona.name : (resolvePersonaName() || 'The player'),
+        isUser: true,
         override: cfg.allowOverride ? normalizeOverride(override) : null,
+        // A ruling the game master made when it called for this check.
+        gmRuling: gmRuling && typeof gmRuling === 'object' ? { ...gmRuling } : null,
+        calledBy: gmRuling ? 'gm' : 'player',
+        fromIndex: Number.isFinite(fromIndex) ? fromIndex : -1,
         rating: false,
         ts: Date.now() + Math.random(),
     };
@@ -381,6 +393,9 @@ function performRoll(check, ruling) {
         rulingSource: ruling.source || 'default',
         rulingError: ruling.error || '',
         attempt: check.context || '',
+        who: check.who || resolvePersonaName() || 'The player',
+        isUser: check.isUser !== false,
+        calledBy: check.calledBy || 'player',
         ts: Date.now(),
     };
 }
@@ -413,7 +428,7 @@ export async function onDiceMessageSent() {
     const found = findLastUserMessage();
     if (!found) return;
     const check = pending;
-    let ruling = check.override;
+    let ruling = check.override || check.gmRuling;
     if (!ruling) {
         check.rating = true;
         notifyDiceChanged({ source: 'rating' });
@@ -442,20 +457,39 @@ export async function onDiceMessageSent() {
  */
 export function buildDiceVerdictForGeneration() {
     if (!attributesOn(extensionSettings)) return '';
-    const roll = getRollForGeneration();
-    if (!roll) return '';
+    const found = findLastUserMessage();
+    if (!found) return '';
+    // The game master's NPC checks from the end of the previous reply, then
+    // the player's own roll on their message.
+    const rolls = [...npcRollsBefore(found.index)];
+    const own = found.message.extra?.dooms_roll;
+    if (own && typeof own === 'object') rolls.push(own);
+    if (!rolls.length) return '';
     const parts = [];
     if (attributesConfig(extensionSettings).sendToAI === 'withRoll') {
         const line = attributesLine();
         if (line) parts.push(line);
     }
-    parts.push(verdictText(roll, {
-        userName: resolvePersonaName() || 'The player',
+    for (const roll of rolls) parts.push(verdictFor(roll));
+    return parts.join('\n');
+}
+
+/** One roll's verdict, framed for who rolled and who asked. */
+function verdictFor(roll) {
+    const who = roll.who || resolvePersonaName() || 'The player';
+    let framing = '';
+    if (roll.isUser === false) {
+        framing = `${who}, on a check you called for`;
+    } else if (roll.calledBy === 'gm' || roll.calledBy === 'tool') {
+        framing = `${who} attempts ${roll.attempt ? `"${String(roll.attempt).trim()}"` : 'the action in their last message'}, on a check you called for`;
+    }
+    return verdictText(roll, {
+        userName: who,
         attempt: roll.attempt,
         difficultyLabel: roll.difficultyLabel,
         reason: roll.reason,
-    }));
-    return parts.join('\n');
+        framing,
+    });
 }
 
 // ─── The roll box at the top of the reply ───────────────────────────────────
@@ -468,23 +502,42 @@ export function buildDiceVerdictForGeneration() {
 
 const CARD_CLASS = 'dooms-roll-card';
 
-/** The roll a reply at `index` answers: the one on the nearest player message above it, or null. */
-export function rollForReply(index) {
+/**
+ * The rolls a reply at `index` answers: the one on the nearest player
+ * message above it, then any the dice tool made on the way to this reply
+ * (kept on SillyTavern's tool-call messages in between). [] when none.
+ */
+export function rollsForReply(index) {
     const list = chatArray();
-    if (!list || !Number.isFinite(index) || index < 0 || index >= list.length) return null;
+    if (!list || !Number.isFinite(index) || index < 0 || index >= list.length) return [];
     const m = list[index];
-    if (!m || m.is_user || m.is_system) return null;
-    for (let i = index - 1; i >= 0; i--) {
+    if (!m || m.is_user || m.is_system) return [];
+    const tool = [];
+    let i = index - 1;
+    for (; i >= 0; i--) {
         const p = list[i];
-        if (!p || p.is_system || !p.is_user) continue;
-        const r = p.extra?.dooms_roll;
-        return r && typeof r === 'object' ? r : null;
+        if (!p) continue;
+        if (p.is_user) break;
+        if (p.is_system && Array.isArray(p.extra?.tool_invocations)) {
+            // Walking back message by message; within a message, in the order the model called.
+            const here = p.extra.tool_invocations
+                .filter(inv => inv && inv.name === DICE_TOOL_NAME && inv.dooms_roll && typeof inv.dooms_roll === 'object')
+                .map(inv => inv.dooms_roll);
+            tool.unshift(...here);
+        }
     }
-    return null;
+    const out = [];
+    if (i >= 0) {
+        const r = list[i].extra?.dooms_roll;
+        if (r && typeof r === 'object') out.push(r);
+    }
+    return out.concat(tool);
 }
 
 function cardHtml(roll) {
     const cls = [CARD_CLASS, roll.success ? 'is-success' : 'is-failure', roll.critical ? 'is-crit' : ''].filter(Boolean).join(' ');
+    const whoLabel = roll.isUser === false ? `${escapeHtml(roll.who || 'NPC')}: ` : '';
+    const asked = roll.calledBy === 'gm' || roll.calledBy === 'tool' ? ' <small>(the game master called for it)</small>' : '';
     const twoDice = roll.advantage !== 'none' && Array.isArray(roll.rolls) && roll.rolls.length === 2;
     const dice = twoDice
         ? `${roll.kept} <small>(${roll.rolls[0]}/${roll.rolls[1]}, ${roll.advantage === 'adv' ? 'advantage' : 'disadvantage'})</small>`
@@ -500,7 +553,7 @@ function cardHtml(roll) {
     return `<div class="${cls}" role="note">
         <div class="dooms-roll-line">
             <span class="dooms-roll-die" aria-hidden="true">🎲</span>
-            <span class="dooms-roll-label">${escapeHtml(checkLabel(roll))} check</span>
+            <span class="dooms-roll-label">${whoLabel}${escapeHtml(checkLabel(roll))} check${asked}</span>
             <span class="dooms-roll-math">${math}</span>
             <span class="dooms-roll-outcome">${escapeHtml(outcome)}</span>
         </div>
@@ -512,16 +565,10 @@ function syncCardOnReply(messageElement, index) {
     const $block = $(messageElement).find('.mes_block').first();
     if (!$block.length) return;
     const $existing = $block.children(`.${CARD_CLASS}`);
-    const roll = extensionSettings.enabled && attributesOn(extensionSettings) ? rollForReply(index) : null;
-    if (!roll) {
-        $existing.remove();
-        return;
-    }
-    const html = cardHtml(roll);
-    if ($existing.length) {
-        $existing.first().replaceWith(html);
-        return;
-    }
+    const rolls = extensionSettings.enabled && attributesOn(extensionSettings) ? rollsForReply(index) : [];
+    $existing.remove();
+    if (!rolls.length) return;
+    const html = rolls.map(cardHtml).join('');
     const $text = $block.children('.mes_text').first();
     if ($text.length) $text.before(html);
     else $block.prepend(html);
@@ -556,7 +603,8 @@ export function syncRollCardForMessage(messageId) {
 export function updateRollCards() {
     const list = chatArray();
     if (!list || typeof $ !== 'function') return;
-    const any = extensionSettings.enabled && attributesOn(extensionSettings) && list.some(m => m && m.extra && m.extra.dooms_roll);
+    const any = extensionSettings.enabled && attributesOn(extensionSettings)
+        && list.some(m => m && m.extra && (m.extra.dooms_roll || m.extra.dooms_gm_calls || (Array.isArray(m.extra.tool_invocations) && m.extra.tool_invocations.some(inv => inv && inv.dooms_roll))));
     if (!any) {
         $(`#chat .${CARD_CLASS}`).remove();
         return;
@@ -573,15 +621,314 @@ export function onDiceChatChanged() {
     clearPendingCheck({ silent: true });
     try { mountDiceButton(); } catch (e) { /* no DOM */ }
     try { updateRollCards(); } catch (e) { /* no DOM */ }
+    // A call the game master made at the end of the chat's last reply is
+    // still waiting for the player's next message.
+    try {
+        const list = chatArray();
+        if (list && list.length && !list[list.length - 1].is_user) onDiceReplyRendered(list.length - 1);
+    } catch (e) { /* no chat */ }
     notifyDiceChanged({ source: 'chat' });
 }
 
 /** Mounts the button and listens once. Safe without jQuery (tests). */
 export function initDiceRolls() {
     try { mountDiceButton(); } catch (e) { /* no send form yet */ }
+    try { registerDiceTool(); } catch (e) { /* no ToolManager */ }
     if (listenersBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     listenersBound = true;
     window.addEventListener(DICE_CHANGED_EVENT, () => { try { refreshDiceEntryPoints(); } catch (e) { /* no DOM */ } });
+}
+
+// ─── The game master's own calls (Phase 3) ──────────────────────────────────
+//
+// The AI may call for a check two ways. At the end of a reply, a
+// "[CHECK: ...]" line: for the player it becomes a pending check that rolls
+// when they send (they can decline it on the chip); for an NPC it is rolled
+// at once, kept with that reply (per swipe), and handed to the next
+// generation as a verdict. With tool calling, the dooms_roll_check tool:
+// the game rolls on the sheet and the result goes straight back into the
+// model's context, final. The same call for the same player message rolls
+// once, so a swipe never re-rolls.
+
+export const DICE_RULES_SLOT = 'dooms-dice-rules';
+
+/** Who a call is about: the player when `who` is empty or names them, else an NPC by name. */
+function resolveRoller(who) {
+    const persona = resolvePersonaName();
+    const w = String(who || '').trim();
+    const isPlayer = !w
+        || (persona && w.toLowerCase() === persona.toLowerCase())
+        || /^(?:the )?(?:player|user|you)$/i.test(w);
+    if (isPlayer) return { name: persona || 'The player', isUser: true };
+    return { name: w, isUser: false };
+}
+
+/** A call plus the roller's sheet, in the shape onDiceMessageSent and performRoll expect. */
+function checkFromCall(call, roller) {
+    const defs = attributeDefs(extensionSettings);
+    const cfg = attributesConfig(extensionSettings);
+    const sheet = getSheet(extensionSettings, roller.name, roller.isUser, defs);
+    const profs = getProficiencies(extensionSettings, roller.name, roller.isUser);
+    const proficient = !!call.skill && isProficient(profs, call.skillAttributeId || call.attributeId, call.skill);
+    return {
+        attributeId: call.attributeId,
+        attribute: call.attribute,
+        abbr: call.abbr,
+        skill: call.skill,
+        skillAttributeId: call.skillAttributeId || '',
+        score: sheet[call.attributeId] ?? DEFAULT_SCORE,
+        proficient,
+        prof: proficient ? cfg.proficiencyBonus : 0,
+        context: '',
+        who: roller.name,
+        isUser: roller.isUser,
+        calledBy: 'gm',
+        gmRuling: {
+            difficultyId: call.difficultyId,
+            dc: call.dc,
+            label: call.label,
+            advantage: call.advantage,
+            reason: call.reason,
+            source: call.difficultySource === 'ai' ? 'gm' : 'default',
+        },
+        override: null,
+        rating: false,
+        ts: Date.now() + Math.random(),
+    };
+}
+
+function sameCall(a, b) {
+    return !!a && !!b && a.attributeId === b.attributeId && a.skill === b.skill && a.difficultyId === b.difficultyId
+        && a.advantage === b.advantage && String(a.who || '').toLowerCase() === String(b.who || '').toLowerCase();
+}
+
+function gmCallStore(message) {
+    const s = message?.extra?.dooms_gm_calls;
+    return s && typeof s === 'object' ? s : {};
+}
+
+/**
+ * CHARACTER_MESSAGE_RENDERED, MESSAGE_SWIPED, MESSAGE_UPDATED: reads the
+ * reply for a "[CHECK: ...]" call. A player's check becomes the pending
+ * check (when the reply is the chat's tail); an NPC's is rolled now and
+ * kept on the reply for its swipe. A reply without a call withdraws what it
+ * had. The tag in the shown text becomes a line saying what was called.
+ */
+export function onDiceReplyRendered(messageId) {
+    const list = chatArray();
+    const i = parseInt(messageId, 10);
+    const m = list && Number.isFinite(i) ? list[i] : null;
+    if (!m || m.is_user || m.is_system) return;
+    const cfg = attributesConfig(extensionSettings);
+    const on = !!extensionSettings.enabled && attributesOn(extensionSettings) && cfg.aiCalls.enabled && cfg.aiCalls.endOfReply;
+    const swipeId = m.swipe_id || 0;
+    const call = on ? parseCheckCall(typeof m.mes === 'string' ? m.mes : '', extensionSettings) : null;
+    const store = gmCallStore(m);
+    const prev = store[swipeId] || null;
+    const isLast = i === list.length - 1;
+    let changed = false;
+    if (!call) {
+        if (prev) { delete store[swipeId]; changed = true; }
+        if (pending && pending.calledBy === 'gm' && pending.fromIndex === i) clearPendingCheck();
+    } else {
+        const roller = resolveRoller(cfg.aiCalls.npcs ? call.who : '');
+        if (roller.isUser) {
+            if (!prev || prev.kind !== 'player' || !sameCall(prev.call, call)) { store[swipeId] = { kind: 'player', call }; changed = true; }
+            // A check the player tagged themselves is theirs; otherwise the
+            // game master's call waits on the chip for their next message.
+            if (isLast && (!pending || pending.calledBy === 'gm')) {
+                pending = { ...checkFromCall(call, roller), fromIndex: i };
+                notifyDiceChanged({ source: 'gm-call' });
+            }
+        } else {
+            if (!prev || prev.kind !== 'npc' || !prev.roll || !sameCall(prev.call, call)) {
+                const check = checkFromCall(call, roller);
+                store[swipeId] = { kind: 'npc', call, roll: performRoll(check, check.gmRuling) };
+                changed = true;
+            }
+            if (pending && pending.calledBy === 'gm' && pending.fromIndex === i) clearPendingCheck();
+        }
+    }
+    if (!m.extra || typeof m.extra !== 'object') m.extra = {};
+    if (Object.keys(store).length) m.extra.dooms_gm_calls = store;
+    else delete m.extra.dooms_gm_calls;
+    if (changed) saveRollChange();
+    decorateCallTag(i, store[swipeId] || null);
+}
+
+/** The NPC rolls the game master made at the end of the reply just before the player's message at `userIndex`. */
+function npcRollsBefore(userIndex) {
+    const list = chatArray();
+    if (!list) return [];
+    for (let i = userIndex - 1; i >= 0; i--) {
+        const m = list[i];
+        if (!m || m.is_system) continue;
+        if (m.is_user) return [];
+        const entry = gmCallStore(m)[m.swipe_id || 0];
+        return entry && entry.kind === 'npc' && entry.roll ? [entry.roll] : [];
+    }
+    return [];
+}
+
+function playerCallHtml(call) {
+    const label = call.skill ? `${call.attribute} (${call.skill})` : call.attribute;
+    const adv = call.advantage === 'adv' ? ', with advantage' : call.advantage === 'dis' ? ', with disadvantage' : '';
+    const why = call.reason ? ` ${escapeHtml(call.reason.replace(/\.$/, ''))}.` : '';
+    return `<span class="dooms-gm-call"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> The game master calls for a <b>${escapeHtml(label)}</b> check, <b>${escapeHtml(call.label)}</b> (DC ${call.dc})${adv}.${why} It rolls when you send your next message.</span>`;
+}
+
+function npcCallHtml(entry) {
+    const roll = entry.roll;
+    const outcome = outcomeLabel(roll) + (roll.critical ? '' : `, ${marginWord(roll.margin)}`);
+    const cls = roll.success ? 'is-success' : 'is-failure';
+    return `<span class="dooms-gm-call is-npc ${cls}"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> <b>${escapeHtml(roll.who || 'NPC')}</b>: ${escapeHtml(checkLabel(roll))} check · d20 ${roll.kept} ${escapeHtml(formatModifier(roll.mod))}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs DC ${roll.dc} (${escapeHtml(roll.difficultyLabel || '')}) · <b>${escapeHtml(outcome)}</b>${roll.reason ? ` <i>${escapeHtml(roll.reason)}</i>` : ''}</span>`;
+}
+
+/** Replaces the "[CHECK: ...]" text in the shown reply with a line that says what was called (and, for an NPC, how it fell). */
+function decorateCallTag(index, entry) {
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+    const el = document.querySelector(`#chat .mes[mesid="${index}"] .mes_text`);
+    if (!el || typeof el.innerHTML !== 'string') return;
+    const re = /\[CHECK:[^\]]*\]/g;
+    const matches = el.innerHTML.match(re);
+    if (!matches) return;
+    let replacement = '';
+    if (entry && entry.kind === 'npc' && entry.roll) replacement = npcCallHtml(entry);
+    else if (entry && entry.kind === 'player') replacement = playerCallHtml(entry.call);
+    let seen = 0;
+    el.innerHTML = el.innerHTML.replace(re, () => (++seen === matches.length ? replacement : ''));
+}
+
+// ─── The dice tool ──────────────────────────────────────────────────────────
+
+/** The key a tool roll is kept under on the player's message: who, what, against what. */
+function toolMemoKey(call, roller) {
+    return JSON.stringify([roller.name.toLowerCase(), call.attributeId, call.skill.toLowerCase(), call.difficultyId, call.advantage]);
+}
+
+/** The tool's arguments as a check description and its roller, or null. */
+function callFromToolArgs(args) {
+    const cfg = attributesConfig(extensionSettings);
+    const a = args && typeof args === 'object' ? args : {};
+    const call = resolveCheckCall({
+        who: cfg.aiCalls.npcs ? a.who : '',
+        attribute: a.attribute,
+        skill: a.skill,
+        difficulty: a.difficulty,
+        advantage: a.advantage,
+        reason: a.reason,
+    }, extensionSettings);
+    return call ? { call, roller: resolveRoller(call.who) } : null;
+}
+
+function toolMemo(create = false) {
+    const found = findLastUserMessage();
+    if (!found) return null;
+    const extra = found.message.extra && typeof found.message.extra === 'object' ? found.message.extra : (create ? (found.message.extra = {}) : null);
+    if (!extra) return null;
+    if (extra.dooms_tool_rolls && typeof extra.dooms_tool_rolls === 'object') return extra.dooms_tool_rolls;
+    return create ? (extra.dooms_tool_rolls = {}) : null;
+}
+
+function toolCallingLive() {
+    try {
+        const ctx = getContext();
+        return typeof ctx.isToolCallingSupported === 'function' && ctx.isToolCallingSupported() === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * The dooms_roll_check tool's action: rolls on the roller's sheet against
+ * the difficulty the game master set and answers with the verdict. The same
+ * call for the same player message rolls once (the roll is kept on that
+ * message), so a swipe or a repeated call never re-rolls.
+ */
+export function diceToolAction(args) {
+    const hit = callFromToolArgs(args);
+    if (!hit) {
+        const a = args && typeof args === 'object' ? args : {};
+        return `No check was rolled: "${String(a.attribute || '')}" is not an attribute on the sheet. Use one of: ${attributeDefs(extensionSettings).map(d => d.name).join(', ')}.`;
+    }
+    const { call, roller } = hit;
+    const check = { ...checkFromCall(call, roller), calledBy: 'tool' };
+    const memo = toolMemo(true);
+    const key = toolMemoKey(call, roller);
+    let roll = memo ? memo[key] : null;
+    if (!roll || typeof roll !== 'object') {
+        roll = performRoll(check, check.gmRuling);
+        if (memo) { memo[key] = roll; saveRollChange(); }
+    }
+    notifyDiceChanged({ source: 'tool' });
+    return verdictFor(roll);
+}
+
+/**
+ * TOOL_CALLS_PERFORMED: keeps each roll on its invocation, which SillyTavern
+ * saves with the chat and the reply's box reads. Matched by the arguments
+ * the model passed, through the same key the roll was kept under, so the
+ * order and count of invocations do not matter.
+ */
+export function onDiceToolCallsPerformed(invocations) {
+    if (!Array.isArray(invocations)) return;
+    const memo = toolMemo(false);
+    if (!memo) return;
+    for (const inv of invocations) {
+        if (!inv || inv.name !== DICE_TOOL_NAME) continue;
+        let args = inv.parameters;
+        if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch (e) { continue; }
+        }
+        const hit = callFromToolArgs(args);
+        if (!hit) continue;
+        const roll = memo[toolMemoKey(hit.call, hit.roller)];
+        if (roll && typeof roll === 'object') inv.dooms_roll = roll;
+    }
+}
+
+/**
+ * Registers (or re-registers, after the sheet changes) the dice tool with
+ * SillyTavern. shouldRegister keeps it out of prompts while attributes or
+ * the tool switch are off; SillyTavern itself leaves it out on APIs that
+ * cannot call tools.
+ */
+export function registerDiceTool() {
+    let ctx;
+    try { ctx = getContext(); } catch (e) { return false; }
+    if (!ctx || typeof ctx.registerFunctionTool !== 'function') return false;
+    const def = buildDiceToolDefinition({ settings: extensionSettings, userName: resolvePersonaName() || 'the player' });
+    try {
+        ctx.registerFunctionTool({
+            ...def,
+            action: (args) => diceToolAction(args),
+            formatMessage: () => '',
+            shouldRegister: () => {
+                const cfg = attributesConfig(extensionSettings);
+                return !!extensionSettings.enabled && attributesOn(extensionSettings) && cfg.aiCalls.enabled && cfg.aiCalls.tool;
+            },
+            stealth: false,
+        });
+        return true;
+    } catch (e) {
+        console.warn('[Dooms Tracker] Dice: the tool could not be registered', e);
+        return false;
+    }
+}
+
+/**
+ * What the game master is told this generation about calling for checks:
+ * the tool instruction when the tool is on and the API can call tools,
+ * else the end-of-reply form, else nothing. '' when calls are off.
+ */
+export function buildDiceRulesForGeneration() {
+    if (!extensionSettings.enabled || !attributesOn(extensionSettings)) return '';
+    const cfg = attributesConfig(extensionSettings);
+    if (!cfg.aiCalls.enabled) return '';
+    const userName = resolvePersonaName() || 'the player';
+    if (cfg.aiCalls.tool && toolCallingLive()) return buildToolCallInstruction({ settings: extensionSettings, userName });
+    if (cfg.aiCalls.endOfReply) return buildCheckCallInstruction({ settings: extensionSettings, userName });
+    return '';
 }
 
 // ─── Entry point in the message row ─────────────────────────────────────────

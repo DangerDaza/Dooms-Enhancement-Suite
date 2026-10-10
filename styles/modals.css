@@ -9606,6 +9606,10 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-attr-row .rpg-attr-abbr { flex: 0 0 64px; text-transform: uppercase; text-align: center; }
 .rpg-vital-row.is-off > .rpg-attr-remove { opacity: 1; }
 
+/* The game master's call rows follow their master switch. */
+.rpg-attr-calls-sub { padding-left: 14px; }
+.rpg-attr-calls-sub.is-off { opacity: 0.45; }
+
 .rpg-attr-dcs {
     display: flex;
     flex-wrap: wrap;

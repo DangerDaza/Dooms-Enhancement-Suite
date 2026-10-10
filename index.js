@@ -159,7 +159,7 @@ import { initNotificationLog } from './src/systems/ui/notificationLog.js';
 import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMessage, clearStatsCache } from './src/systems/ui/fullsheetButtons.js';
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
-import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
+import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendered, onDiceToolCallsPerformed, registerDiceTool, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -348,6 +348,12 @@ function renderAttributesSettings() {
     $('#rpg-attr-override').prop('checked', cfg.allowOverride);
     $('#rpg-attr-criticals').prop('checked', cfg.criticals);
     $('#rpg-attr-prof').val(cfg.proficiencyBonus);
+    $('#rpg-attr-calls').prop('checked', cfg.aiCalls.enabled);
+    $('#rpg-attr-calls-tag').prop('checked', cfg.aiCalls.endOfReply);
+    $('#rpg-attr-calls-tool').prop('checked', cfg.aiCalls.tool);
+    $('#rpg-attr-calls-npcs').prop('checked', cfg.aiCalls.npcs);
+    $('#rpg-attr-calls-freq').val(cfg.aiCalls.frequency);
+    $('.rpg-attr-calls-sub').toggleClass('is-off', !cfg.aiCalls.enabled);
     $('#rpg-attr-default-diff')
         .html(DIFFICULTIES.map(d => `<option value="${d.id}">${escapeHtml(d.label)} (DC ${cfg.difficulty[d.id]})</option>`).join(''))
         .val(cfg.defaultDifficulty);
@@ -1597,7 +1603,7 @@ function bindSettingsUI() {
     const _saveAttrs = ({ rerender = true } = {}) => {
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] attributes save failed', e); }
         if (rerender) renderAttributesSettings();
-        try { refreshDiceEntryPoints(); notifyDiceChanged({ reason: 'settings' }); } catch (e) { /* non-fatal */ }
+        try { refreshDiceEntryPoints(); notifyDiceChanged({ reason: 'settings' }); registerDiceTool(); } catch (e) { /* non-fatal */ }
     };
     // Sheets keep nothing for an attribute or skill that is gone.
     const _pruneSheets = () => {
@@ -1728,6 +1734,33 @@ function bindSettingsUI() {
         }
         entry.name = name;
         _saveAttrs();
+    });
+    // The game master's own calls (Phase 3).
+    const _aiCalls = () => {
+        const a = getAttributesRules();
+        if (!a.aiCalls || typeof a.aiCalls !== 'object') a.aiCalls = {};
+        return a.aiCalls;
+    };
+    $(document).on('change', '#rpg-attr-calls', function () {
+        _aiCalls().enabled = $(this).prop('checked');
+        $('.rpg-attr-calls-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-calls-tag', function () {
+        _aiCalls().endOfReply = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-calls-tool', function () {
+        _aiCalls().tool = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-calls-npcs', function () {
+        _aiCalls().npcs = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-calls-freq', function () {
+        _aiCalls().frequency = String($(this).val());
+        _saveAttrs({ rerender: false });
     });
     $(document).on('change', '#rpg-attr-prof', function () {
         const a = getAttributesRules();
@@ -4025,11 +4058,14 @@ jQuery(async () => {
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, syncRollCardForMessage],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
-                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, syncRollCardForMessage, onGlintMessageRendered],
-                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, syncRollCardForMessage],
+                // onDiceReplyRendered reads a game-master call from the reply and
+                // decorates its tag; it runs after the bubble decorations so it
+                // sees the final markup, and before the roll box sync.
+                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
+                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, syncRollCardForMessage],
                 [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
@@ -4038,6 +4074,10 @@ jQuery(async () => {
                 // builds; a spread of {} registers nothing there.
                 ...(event_types.MORE_MESSAGES_LOADED
                     ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
+                    : {}),
+                // The dice tool's rolls ride on SillyTavern's tool-call messages.
+                ...(event_types.TOOL_CALLS_PERFORMED
+                    ? { [event_types.TOOL_CALLS_PERFORMED]: onDiceToolCallsPerformed }
                     : {}),
             });
         } catch (error) {

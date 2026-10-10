@@ -536,9 +536,10 @@ function narrateWords(roll) {
  * The one block the AI sees for a roll: the arithmetic, the outcome, and
  * the instruction that it is final.
  */
-export function verdictText(roll, { userName = 'The player', attempt = '', difficultyLabel = '', reason = '' } = {}) {
+export function verdictText(roll, { userName = 'The player', attempt = '', difficultyLabel = '', reason = '', framing = '' } = {}) {
     const who = String(userName || 'The player');
     const what = attempt ? `"${String(attempt).trim()}"` : 'the action in their last message';
+    const opening = framing ? String(framing).trim().replace(/\.$/, '') : `${who} attempts ${what}`;
     const label = checkLabel(roll);
     let dice = `d20 = ${roll.kept}`;
     if (roll.advantage !== 'none' && roll.rolls.length === 2) {
@@ -546,7 +547,7 @@ export function verdictText(roll, { userName = 'The player', attempt = '', diffi
     }
     const modPart = `${formatModifier(roll.mod)}${roll.abbr ? ` (${roll.abbr} ${roll.score})` : ''}${roll.prof ? `, +${roll.prof} (proficient in ${roll.skill || 'this'})` : ''}`;
     const dcPart = `DC ${roll.dc}${difficultyLabel ? ` (${difficultyLabel})` : ''}${reason ? `, because ${String(reason).trim().replace(/\.$/, '')}` : ''}`;
-    return `[DICE: ${who} attempts ${what}. ${label} check: ${dice}, ${modPart} = ${roll.total} vs ${dcPart}. ${outcomeWords(roll)}. This outcome is final: ${narrateWords(roll)}. Do not re-roll, reverse or soften it.]`;
+    return `[DICE: ${opening}. ${label} check: ${dice}, ${modPart} = ${roll.total} vs ${dcPart}. ${outcomeWords(roll)}. This outcome is final: ${narrateWords(roll)}. Do not re-roll, reverse or soften it.]`;
 }
 
 /** "Dexterity (Stealth)" or "Strength": the attribute with the skill when there is one. */

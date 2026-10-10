@@ -1593,6 +1593,63 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">The AI may call for checks</span>
+                            <span class="rpg-setting-hint">As game master, your AI can ask for a roll when the story
+                                calls for one: a line at the end of its reply that rolls when you next send, or the
+                                dice tool where your model can call tools. It is told to do so only when an outcome
+                                is genuinely in doubt and that most replies have none.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-calls" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;as a line at the end of its reply</span>
+                            <span class="rpg-setting-hint">Works with any model. The call waits on the chip above the
+                                message box; × declines it.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-calls-tag" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;as a dice tool</span>
+                            <span class="rpg-setting-hint">Needs a chat-completion model with function calling on in
+                                its preset. The AI rolls mid-reply and narrates the result at once; where tools are
+                                not available the line above is used instead.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-calls-tool" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;on NPCs too</span>
+                            <span class="rpg-setting-hint">The guard's Perception against your Stealth, rolled on the
+                                guard's Workshop sheet. Off, the AI calls checks on you only.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-calls-npcs" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">How often</span>
+                            <span class="rpg-setting-hint">What the game master is told about when to ask.</span>
+                        </div>
+                        <select id="rpg-attr-calls-freq" class="rpg-accordion-select">
+                            <option value="sparingly">Sparingly: only when the stakes are real</option>
+                            <option value="whenUncertain">Whenever an attempt could plausibly fail</option>
+                        </select>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Proficiency bonus</span>
                             <span class="rpg-setting-hint">Added to a roll on a skill the character is proficient in.
                                 Proficiencies are ticked on the Workshop's Attributes tab.</span>

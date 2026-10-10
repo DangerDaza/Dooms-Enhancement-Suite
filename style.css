@@ -13365,6 +13365,26 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 .dooms-roll-why { opacity: 0.75; font-style: italic; }
 .dooms-roll-attempt { font-style: normal; opacity: 0.95; }
 
+/* ── Dice: the game master's call, in place of its "[CHECK: ...]" line ──
+   For the player: what was called and that it rolls on the next send. For an
+   NPC: the roll already made. */
+.dooms-gm-call {
+    display: inline-block;
+    margin: 4px 0 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.85em;
+    line-height: 1.45;
+    opacity: 0.95;
+}
+
+.dooms-gm-call.is-npc { border-style: solid; border-left-width: 3px; }
+.dooms-gm-call.is-npc.is-success { border-left-color: #2fbf71; }
+.dooms-gm-call.is-npc.is-failure { border-left-color: #e5484d; }
+.dooms-gm-call-die { margin-right: 2px; }
+
 
 /* ── Dice: the d20 button in the message row and the chip above it ── */
 .dooms-dice-btn {

@@ -131,9 +131,9 @@ check('a fresh reply to the rolled message gets the verdict',
     verdict.includes('\n[DICE: Jordan attempts "climb the wall". Strength (Athletics) check: d20 = ') && verdict.includes('+2 (proficient in Athletics)') && verdict.includes('vs DC 20 (Hard), because The wall is slick with rain') && verdict.includes('This outcome is final'), verdict);
 chat.push(ai('You scramble up.'));
 check('a swipe or regenerate of that reply gets the same verdict', dice.buildDiceVerdictForGeneration() === verdict);
-check('the reply shows the roll of the message it answers', dice.rollForReply(2) === roll && dice.rollForReply(1) === null && dice.rollForReply(0) === null);
+check('the reply shows the roll of the message it answers', dice.rollsForReply(2).length === 1 && dice.rollsForReply(2)[0] === roll && dice.rollsForReply(1).length === 0 && dice.rollsForReply(0).length === 0);
 chat.push(ai('(a second reply, as in a group)'));
-check('every reply before the next player message shows it', dice.rollForReply(3) === roll);
+check('every reply before the next player message shows it', dice.rollsForReply(3)[0] === roll);
 check('with a roll, the attributes line rides in the dice slot ahead of the verdict and lists the proficiency', verdict.indexOf('ATTRIBUTES (D&D scale') === 0 && verdict.includes('Jordan (player): STR 15 (+2), CHA 8 (-1); proficient in Athletics (+2)') && verdict.indexOf('ATTRIBUTES') < verdict.indexOf('[DICE:'), verdict);
 check('...and not in the tracker block, which is built before the sent message exists', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
 extensionSettings.attributes.sendToAI = 'always';
@@ -141,7 +141,7 @@ check('always: the tracker block carries the line and the dice slot only the ver
 extensionSettings.attributes.sendToAI = 'withRoll';
 chat.push(user('I walk on.'));
 chat.push(ai('The road is quiet.'));
-check('a later message without a roll gets no verdict and no box', dice.buildDiceVerdictForGeneration() === '' && dice.rollForReply(5) === null);
+check('a later message without a roll gets no verdict and no box', dice.buildDiceVerdictForGeneration() === '' && dice.rollsForReply(5).length === 0);
 check('...and no attributes line', !pb.generateTrackerInstructions(false, false).includes('ATTRIBUTES'));
 extensionSettings.attributes.enabled = false;
 chat.length = 3;
@@ -216,6 +216,101 @@ extensionSettings.attributes.enabled = true;
 dice.tagCheck({ attributeId: 'str', context: 'x' });
 dice.onDiceChatChanged();
 check('a chat switch drops the pending check', dice.getPendingCheck() === null);
+
+// ── 8. The game master's calls at the end of a reply ──
+chat.length = 0;
+chat.push(ai('The door is locked.'));
+chat.push(user('I look for another way in.'));
+chat.push(ai('A window above, shutters rotten.\n\n[CHECK: Dexterity (Acrobatics) | Hard | the ledge is narrow]'));
+dice.onDiceReplyRendered(2);
+pending = dice.getPendingCheck();
+check('a player call on the chat\'s last reply becomes the pending check with the game master\'s ruling', pending && pending.calledBy === 'gm' && pending.fromIndex === 2 && pending.attribute === 'Dexterity' && pending.skill === 'Acrobatics' && pending.gmRuling && pending.gmRuling.dc === 20 && pending.gmRuling.source === 'gm' && pending.gmRuling.reason === 'the ledge is narrow', JSON.stringify(pending));
+check('...and is kept on the reply for its swipe', !!chat[2].extra.dooms_gm_calls && chat[2].extra.dooms_gm_calls[0].kind === 'player');
+calls = 0;
+chat.push(user('I climb to the window.'));
+await dice.onDiceMessageSent();
+const gmRoll = chat[3].extra.dooms_roll;
+check('sending rolls it against the game master\'s DC without asking again', calls === 0 && gmRoll && gmRoll.dc === 20 && gmRoll.rulingSource === 'gm' && gmRoll.calledBy === 'gm' && gmRoll.skill === 'Acrobatics');
+check('the verdict says the game master called for it', dice.buildDiceVerdictForGeneration().includes('[DICE: Jordan attempts the action in their last message, on a check you called for. Dexterity (Acrobatics) check:'), dice.buildDiceVerdictForGeneration());
+chat.length = 3;
+chat[2].mes = 'A window above, shutters rotten.';
+dice.onDiceReplyRendered(2);
+check('a swipe without the call withdraws it', dice.getPendingCheck() === null && chat[2].extra.dooms_gm_calls === undefined);
+dice.tagCheck({ attributeId: 'str', context: 'force the door' });
+chat[2].mes = 'x\n[CHECK: Dexterity (Acrobatics) | Hard | y]';
+dice.onDiceReplyRendered(2);
+check('a check the player tagged themselves is not trampled by a call', dice.getPendingCheck().calledBy === 'player' && dice.getPendingCheck().attribute === 'Strength');
+dice.clearPendingCheck({ silent: true });
+D.setSheet(extensionSettings, 'Guard', false, { wis: 14 }, null, [D.skillKey('wis', 'Perception')]);
+chat.length = 0;
+chat.push(user('I slip past the guard.'));
+chat.push(ai('The guard yawns.\n\n[CHECK: Guard: Wisdom (Perception) | Medium | the corridor is dark]'));
+dice.onDiceReplyRendered(1);
+const npcEntry = chat[1].extra.dooms_gm_calls && chat[1].extra.dooms_gm_calls[0];
+check('an NPC call is rolled at once on the NPC\'s sheet and kept on the reply', !!npcEntry && npcEntry.kind === 'npc' && !!npcEntry.roll && npcEntry.roll.who === 'Guard' && npcEntry.roll.isUser === false && npcEntry.roll.score === 14 && npcEntry.roll.mod === 2 && npcEntry.roll.prof === 2 && npcEntry.roll.dc === 15 && dice.getPendingCheck() === null, JSON.stringify(npcEntry));
+const npcRoll = npcEntry.roll;
+dice.onDiceReplyRendered(1);
+check('rendering the same reply again keeps the roll', chat[1].extra.dooms_gm_calls[0].roll === npcRoll);
+chat.push(user('I hold my breath.'));
+verdict = dice.buildDiceVerdictForGeneration();
+check('the next generation gets the NPC\'s verdict, framed as the game master\'s call', verdict.includes('[DICE: Guard, on a check you called for. Wisdom (Perception) check: d20 = ') && verdict.includes('+2 (WIS 14), +2 (proficient in Perception)'), verdict);
+dice.tagCheck({ attributeId: 'dex', skill: 'Stealth', context: 'sneak' });
+await dice.onDiceMessageSent();
+verdict = dice.buildDiceVerdictForGeneration();
+check('...and both verdicts when the player rolled too, the NPC\'s first', verdict.indexOf('[DICE: Guard') < verdict.indexOf('[DICE: Jordan attempts "sneak"') && verdict.indexOf('[DICE: Guard') >= 0);
+extensionSettings.attributes.aiCalls.npcs = false;
+chat.push(ai('x [CHECK: Guard: Wisdom (Perception) | Medium | y]'));
+dice.onDiceReplyRendered(3);
+check('with NPC calls off, a named call is read as the player\'s', !!dice.getPendingCheck() && dice.getPendingCheck().isUser === true && dice.getPendingCheck().calledBy === 'gm');
+extensionSettings.attributes.aiCalls.npcs = true;
+dice.clearPendingCheck({ silent: true });
+extensionSettings.attributes.aiCalls.endOfReply = false;
+chat.push(ai('x [CHECK: STR | Easy]'));
+dice.onDiceReplyRendered(4);
+check('with the end-of-reply way off, a tag is ignored', dice.getPendingCheck() === null && chat[4].extra.dooms_gm_calls === undefined);
+extensionSettings.attributes.aiCalls.endOfReply = true;
+chat.push(ai('Last word.\n[CHECK: Charisma (Persuasion) | Easy | he likes you]'));
+dice.onDiceChatChanged();
+check('a chat switch restores the call waiting on the chat\'s last reply', !!dice.getPendingCheck() && dice.getPendingCheck().calledBy === 'gm' && dice.getPendingCheck().attribute === 'Charisma');
+dice.clearPendingCheck({ silent: true });
+
+// ── 9. The dice tool ──
+chat.length = 0;
+chat.push(ai('The bridge sways.'));
+chat.push(user('I cross.'));
+const toolText = dice.diceToolAction({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', advantage: 'none', reason: 'the planks are wet' });
+const memo = chat[1].extra.dooms_tool_rolls;
+const memoKeys = Object.keys(memo || {});
+check('the tool rolls on the player\'s sheet and answers with the verdict', toolText.startsWith('[DICE: Jordan attempts the action in their last message, on a check you called for. Dexterity (Acrobatics) check: d20 = ') && toolText.includes('vs DC 20 (Hard), because the planks are wet') && memoKeys.length === 1 && memo[memoKeys[0]].calledBy === 'tool', toolText);
+check('the same call for the same message rolls once', dice.diceToolAction({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', reason: 'again' }) === toolText && Object.keys(chat[1].extra.dooms_tool_rolls).length === 1);
+const npcText = dice.diceToolAction({ who: 'Guard', attribute: 'Wisdom', skill: 'Perception', difficulty: 'Medium', reason: 'dark' });
+check('a named roller uses the NPC\'s sheet', npcText.startsWith('[DICE: Guard, on a check you called for. Wisdom (Perception) check:') && npcText.includes('(WIS 14), +2 (proficient in Perception)'), npcText);
+check('an unknown attribute rolls nothing and says which exist', dice.diceToolAction({ attribute: 'Luck', difficulty: 'Hard', reason: 'x' }).startsWith('No check was rolled') && Object.keys(chat[1].extra.dooms_tool_rolls).length === 2);
+const invocations = [
+    { name: 'dooms_roll_check', parameters: JSON.stringify({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', reason: 'the planks are wet' }), result: toolText },
+    { name: 'other_tool', parameters: '{}', result: 'x' },
+    { name: 'dooms_roll_check', parameters: { who: 'Guard', attribute: 'Wisdom', skill: 'Perception', difficulty: 'Medium', reason: 'dark' }, result: npcText },
+    { name: 'dooms_roll_check', parameters: 'not json', result: 'x' },
+];
+dice.onDiceToolCallsPerformed(invocations);
+check('each invocation gets its roll, matched by its arguments', !!invocations[0].dooms_roll && invocations[0].dooms_roll.attribute === 'Dexterity' && invocations[1].dooms_roll === undefined && !!invocations[2].dooms_roll && invocations[2].dooms_roll.who === 'Guard' && invocations[3].dooms_roll === undefined);
+chat.push({ is_user: false, is_system: true, mes: 'tool', extra: { tool_invocations: invocations } });
+chat.push(ai('You make it across.'));
+const shown = dice.rollsForReply(3);
+check('the reply after the tool message shows the tool rolls', shown.length === 2 && shown[0].attribute === 'Dexterity' && shown[1].who === 'Guard');
+let rules = dice.buildDiceRulesForGeneration();
+check('without tool calling, the rules are the end-of-reply form', rules.startsWith('[CHECKS:') && rules.includes('[CHECK: Dexterity (Stealth) | Hard | the guards are alert]'), rules);
+globalThis.__DES_CTX__.isToolCallingSupported = () => true;
+rules = dice.buildDiceRulesForGeneration();
+check('with tool calling, the rules name the tool', rules.includes('call the dooms_roll_check tool'));
+extensionSettings.attributes.aiCalls.tool = false;
+check('...unless the tool way is off', dice.buildDiceRulesForGeneration().includes('[CHECK: Dexterity (Stealth)'));
+extensionSettings.attributes.aiCalls.tool = true;
+extensionSettings.attributes.aiCalls.enabled = false;
+check('with calls off, no rules', dice.buildDiceRulesForGeneration() === '');
+extensionSettings.attributes.aiCalls.enabled = true;
+delete globalThis.__DES_CTX__.isToolCallingSupported;
+check('registerDiceTool hands SillyTavern the tool', dice.registerDiceTool() === true);
 
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);

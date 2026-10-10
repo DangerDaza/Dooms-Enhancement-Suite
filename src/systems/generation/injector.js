@@ -29,7 +29,7 @@ import {
 } from './promptBuilder.js';
 import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFAULT_NEW_FIELDS_BOOST_PROMPT } from './defaultPrompts.js';
 // Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
-import { buildDiceVerdictForGeneration, DICE_VERDICT_SLOT } from '../features/diceRolls.js';
+import { buildDiceVerdictForGeneration, buildDiceRulesForGeneration, DICE_VERDICT_SLOT, DICE_RULES_SLOT } from '../features/diceRolls.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
 // Cache of the last GENERATION_STARTED args (type/data/dryRun) so the
@@ -662,6 +662,10 @@ export function refreshDiceInjection({ suppress = false } = {}) {
     try {
         const verdict = (!suppress && extensionSettings.enabled) ? buildDiceVerdictForGeneration() : '';
         setExtensionPrompt(DICE_VERDICT_SLOT, verdict ? `\n${verdict}\n` : '', extension_prompt_types.IN_CHAT, 0, false);
+        // What the game master may do about checks of its own (Phase 3):
+        // one message up from the verdict, so the verdict stays last.
+        const rules = (!suppress && extensionSettings.enabled) ? buildDiceRulesForGeneration() : '';
+        setExtensionPrompt(DICE_RULES_SLOT, rules ? `\n${rules}\n` : '', extension_prompt_types.IN_CHAT, 1, false);
     } catch (e) {
         console.warn('[Dooms Tracker] Dice: verdict injection failed', e);
     }
@@ -688,6 +692,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt('dooms-tracker-context', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('dooms-tracker-new-fields', '', extension_prompt_types.IN_PROMPT, 0, false);
         setExtensionPrompt(DICE_VERDICT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt(DICE_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 1, false);
         // Also drop any historical-context payload queued from a prior
         // generation while the extension was enabled. Without this, the
         // persistent listeners (CHAT_COMPLETION_PROMPT_READY etc.) keep

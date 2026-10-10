@@ -12,9 +12,9 @@ storage, and the LLM is hardware.
 
 ## 0. Status and open decisions
 
-Status: **Phase 1 (commits 2–8) and Phase 2 (commits 10–16) built on branch
-`Project-Short-Fuse`; awaiting in-browser verification (the Vitals rows and the
-Attributes and dice rows in `docs/parity-checklist.md`).** Not released: commit 9
+Status: **Phases 1, 2 and 3 built on branch `Project-Short-Fuse`; awaiting
+in-browser verification (the Vitals rows and the Attributes and dice rows in
+`docs/parity-checklist.md`).** Not released: commit 9
 (version, changelog, What's New, README) waits for the word.
 
 Two things changed from the plan while building, both recorded below: the
@@ -682,14 +682,79 @@ Settings group; 16 parity rows.
 | D10 | AI-suggested NPC sheets | Later |
 | D11 | Who sets the difficulty | **The AI, as game master**, in one small call at tag time; player override behind a setting, off by default |
 
-## 8. Phase 3 — AI-called checks (sketch)
+## 8. Phase 3 — The game master's own calls
 
-A `check` request in the tracker JSON with a difficulty word, "end the reply
-at the attempt", DES rolls and auto-continues with the verdict. Behind a
-toggle; Phase 2 remains the fallback.
+Status: **built on `Project-Short-Fuse`; awaiting in-browser verification (the
+"game master" rows under Attributes and dice in `docs/parity-checklist.md`).**
 
-**Phase 4 — if wanted.** Skills and proficiency, contested rolls,
-levels. Borrow from PR #38 where it fits, with credit.
+The owner's ask, after reading how Multihog's D&D framework does it: "I have
+always wanted that, and it would be both, but I don't want it to force a
+dice roll into every scene, only if it's called for in the story." Two
+decisions: D13, NPC checks too, on their Workshop sheets; D14, on by default
+with attributes, each piece with its own switch.
+
+### 8.1 Two ways in
+
+- **A line at the end of the reply, any model.** The game master is told it
+  may end a reply with `[CHECK: Dexterity (Stealth) | Hard, disadvantage |
+  the lamps are lit]` and stop. For the player, that becomes the pending
+  check: the chip above the message box says the game master called for it,
+  × declines it, and the next send rolls it against the ruling the game
+  master already gave, no second call. The popover shows the call; OK keeps
+  the ruling under the player's own attribute and skill (the variant rule
+  again). For an NPC (`[CHECK: Guard: Wisdom (Perception) | Medium | ...]`)
+  the die is rolled the moment the reply renders, on the guard's sheet, kept
+  on that reply per swipe, shown in place of the tag, and handed to the next
+  generation as a verdict beside the player's. A swipe without the call
+  withdraws it; a swipe with the same call keeps its roll. A reload restores
+  a call waiting on the chat's last reply.
+- **The `dooms_roll_check` tool, models with tool calling.** Registered with
+  SillyTavern's ToolManager with the attribute and difficulty as enums from
+  the sheet, `who` only with NPC checks on, and `shouldRegister` tied to the
+  switches. The action rolls in code on the roller's sheet (modifier and
+  proficiency included, unlike Multihog, where the model passes the
+  formula) and answers with the same verdict text the slot would carry.
+  SillyTavern then generates again with the result in context. The same
+  arguments for the same player message roll once (the roll is kept on that
+  message), so a repeated call or a swipe never re-rolls. Each roll is also
+  attached to SillyTavern's tool-call message (matched by the arguments the
+  model passed), and the reply that follows shows it in its box.
+
+Which the game master is told about is decided per generation: the tool
+when the tool switch is on and `isToolCallingSupported()` says the current
+API can call tools, else the end-of-reply line, else nothing. The text goes
+in its own slot one message above the verdict and says, in both forms, that
+most replies have none.
+
+### 8.2 Settings → Stats → Attributes & checks
+
+The AI may call for checks (on); as a line at the end of its reply (on); as
+a dice tool (on); on NPCs too (on); How often: Sparingly (only when the
+stakes are real) or Whenever an attempt could plausibly fail. Editing the
+attribute list re-registers the tool so its enums follow the sheet.
+
+### 8.3 What stays the player's
+
+Nothing the game master calls can be rolled twice, softened, or re-asked.
+The player can decline a called check (×) or re-tag it under another
+attribute and skill; the difficulty stands. Combat, initiative, HP and
+damage dice are not in scope; the verdict text and the box are the whole
+mechanical surface.
+
+### 8.4 Files and tests
+
+`src/utils/d20.js` (parseCheckCall, stripCheckCalls, resolveCheckCall,
+findAttribute, the two instructions, buildDiceToolDefinition, the aiCalls
+config and its migration), `src/systems/features/diceRolls.js`
+(onDiceReplyRendered, the NPC roll store, diceToolAction,
+onDiceToolCallsPerformed, registerDiceTool, buildDiceRulesForGeneration,
+rollsForReply), `src/systems/generation/injector.js` (the rules slot),
+`index.js` (events, settings), `src/systems/ui/dicePanel.js` (the call in
+the popover and the chip), `template.html`, the stylesheets, docs.
+`tools/d20-test.mjs` §7 and `tools/dice-test.mjs` §8–9.
+
+**Phase 4 — if wanted.** Contested rolls (Stealth against Perception as one
+opposed roll), levels and a growing proficiency bonus, saving throws.
 
 ---
 
