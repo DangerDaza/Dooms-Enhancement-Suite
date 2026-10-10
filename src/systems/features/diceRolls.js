@@ -815,19 +815,48 @@ function npcCallHtml(entry) {
     return `<span class="dooms-gm-call is-npc ${cls}"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> <b>${escapeHtml(roll.who || 'NPC')}</b>: ${escapeHtml(checkLabel(roll))} check · d20 ${roll.kept} ${escapeHtml(formatModifier(roll.mod))}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs DC ${roll.dc} (${escapeHtml(roll.difficultyLabel || '')}) · <b>${escapeHtml(outcome)}</b>${roll.reason ? ` <i>${escapeHtml(roll.reason)}</i>` : ''}</span>`;
 }
 
-/** Replaces the "[CHECK: ...]" text in the shown reply with a line that says what was called (and, for an NPC, how it fell). */
+/**
+ * Replaces the "[CHECK: ...]" text in the shown reply with a line that says
+ * what was called (and, for an NPC, how it fell). Works on the text nodes
+ * that hold the tag, never by re-serialising the message, so nothing else
+ * DES or SillyTavern bound inside the reply is disturbed. A tag split
+ * across markup is left as it is.
+ */
 function decorateCallTag(index, entry) {
-    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function' || typeof document.createTreeWalker !== 'function') return;
     const el = document.querySelector(`#chat .mes[mesid="${index}"] .mes_text`);
-    if (!el || typeof el.innerHTML !== 'string') return;
+    // A real element has string text; the test sandbox's stand-ins do not.
+    if (!el || typeof el.textContent !== 'string' || !el.textContent.includes('[CHECK:')) return;
     const re = /\[CHECK:[^\]]*\]/g;
-    const matches = el.innerHTML.match(re);
-    if (!matches) return;
+    const walker = document.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
+    const hits = [];
+    for (let node = walker.nextNode(), guard = 0; node && guard < 5000; node = walker.nextNode(), guard++) {
+        if (node.nodeType === 3 && typeof node.nodeValue === 'string' && node.nodeValue.includes('[CHECK:') && re.test(node.nodeValue)) hits.push(node);
+        re.lastIndex = 0;
+    }
+    if (!hits.length) return;
     let replacement = '';
     if (entry && entry.kind === 'npc' && entry.roll) replacement = npcCallHtml(entry);
     else if (entry && entry.kind === 'player') replacement = playerCallHtml(entry.call);
-    let seen = 0;
-    el.innerHTML = el.innerHTML.replace(re, () => (++seen === matches.length ? replacement : ''));
+    hits.forEach((node, n) => {
+        const last = n === hits.length - 1;
+        const frag = document.createDocumentFragment();
+        let cursor = 0;
+        const text = node.nodeValue;
+        const all = [...text.matchAll(re)];
+        all.forEach((m, k) => {
+            if (m.index > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, m.index)));
+            // Only the last tag of the last node becomes the line; earlier ones vanish.
+            if (last && k === all.length - 1 && replacement) {
+                const span = document.createElement('span');
+                span.innerHTML = replacement;
+                frag.appendChild(span.firstElementChild || span);
+            }
+            cursor = m.index + m[0].length;
+        });
+        if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+        node.parentNode?.replaceChild(frag, node);
+    });
 }
 
 // ─── The dice tool ──────────────────────────────────────────────────────────
