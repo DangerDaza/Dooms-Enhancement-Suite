@@ -40,6 +40,10 @@ The request is `POST /v1beta/voices {store:true, voice:{model, type:'replicated'
 replicated:{source_audio, consent_audio}}}` per the voice-replication docs (fetched 2026-09-26). The
 wizard lives in `src/systems/ui/voiceCloner.js` rather than inside `voiceStudio.js`.
 
+Consistency controls for designed voices (Steadiness, the description anchor, Audition ×3) were
+added on `Project-Short-Fuse` on 2026-10-10; §11.1 has what they do, §11.2 and §11.3 what was
+scoped and set aside.
+
 M4 follows §8.3–8.7 with these differences: `model` is sent inside `voice` when creating (Google's
 voice-design docs, fetched 2026-09-26, say it's required — §8.3 said to omit it); the chosen model is
 tried first and `gemini-3.8-flash-tts` on a model/argument error. A voice is registered as soon as
@@ -929,6 +933,77 @@ are exactly two present stock-voiced speakers with no narration between.
 - Never sent on the ST route; never prepended to text (D18). Style is part of the cache key, so it
   reduces cache hits — the helper says so.
 
+### 11.1 Consistency controls (built 2026-10-10, branch `Project-Short-Fuse`)
+
+A designed voice drifts between the lines of one message although every line goes out with the
+same voice id, model and style note: Google renders each request afresh and documents no
+consistency parameter. Three controls, all on the direct route:
+
+- **Steadiness** (Settings → Voices, off by default): `voices.steadiness` and
+  `voices.steadinessTemperature` (0.5–1.0, 0.7 to start). The engine stamps the temperature on
+  every Google direct-route segment, `transport.directBody` writes `generationConfig.temperature`,
+  and the player keys the audio cache on it. A reply that refuses the field (an argument error
+  naming temperature) or comes back with no audio (a forum report: 0.1 returned nothing) is sent
+  once more without it; the rejection is remembered for the session, shown in the status line,
+  and forgotten when the switch or slider changes. **[U]** whether 0.5 is audibly steadier than
+  Google's default on the 3.8 TTS models — listen with Audition ×3, on and off.
+- **Anchor designed voices to their description** (on by default): `delivery.anchorForVoice(entry)`
+  turns a registry entry into "female, en-GB voice: A posh English princess…" (gender, language,
+  the opening clause or two of the design prompt, ≤120 characters) and `styleWithAnchor` puts it
+  after the delivery note on every line of that voice, so each render starts from the same picture
+  of the speaker. Designed voices only (a cloned voice has no description). The anchor lives inside
+  the style, so the cache key and the neighbour merge treat it like any other style difference.
+- **Audition ×3** (Workshop → Voice → current voice; Settings → Voices → Narrator and My custom
+  voices): the test line three times back to back, each take numbered and keyed to its job in the
+  cache so all three are fresh requests. The `[DES Voices] job` and `audition ×3` debug lines show,
+  per segment, the model asked for, `t=0.6` or `t=off`, and `anchor=yes|no`.
+
+### 11.2 Pin a designed voice by cloning it (scope only, not built)
+
+The idea: a designed voice is a description Google re-imagines per request; a cloned voice renders
+from a fixed sample. So render one good passage with the designed voice and clone from it, and
+the character keeps the take Jordan liked.
+
+- **Render the sample.** One request for a neutral passage of ~70–80 words (the cloner takes
+  10–30 s of speech; the render must stay under 30 s), with Steadiness and the anchor on. The
+  direct route already returns 24 kHz PCM which `wav.js` wraps, the same shape `audioPrep.js`
+  produces for recordings, so it can go straight to `cloneVoice({label, gender, locale,
+  sourceBase64, consentBase64})` (`voiceRegistry.js`).
+- **The consent clip is the open question.** Google requires the consent statement for the
+  voice's locale (`consentPhraseFor(locale).text`) spoken by the voice's owner, and checks that it
+  matches the sample's speaker. For a designed voice the only way to get it is to synthesise the
+  statement in that same designed voice. **[U]** whether Google's check accepts a consent clip its
+  own TTS produced (it may detect synthetic speech, or only compare speakers); one probe answers
+  it: two `generateContent` calls and one `POST /v1beta/voices`, then delete. **[U]** whether that
+  is within Google's terms: the consent flow protects real people, a designed voice has no owner
+  but the project, and the voice-replication terms and the Prohibited Use Policy (§15 #14) must be
+  read before any of this is built. If the terms require a human speaker's consent, this is out.
+- **If it goes ahead.** `pinDesignedVoice(id)` in `voiceRegistry.js`: render, clone, keep the old
+  entry's `designPrompt` on the new one as `pinnedFrom` so Recreate (§8.5) and the anchor still
+  work, point every reference at the clone (`rewriteVoiceRefs`), keep the designed voice until the
+  user deletes it. A "Pin this voice" button under Workshop → Voice → My voices, behind a
+  confirmation that names the slot cost (one of 200) and the one-year expiry. Size ~150 lines plus
+  a passage-selection test.
+
+### 11.3 Why multi-speaker single-request rendering is not the plan
+
+Google's multi-speaker mode (`multiSpeakerVoiceConfig` with `speakerVoiceConfigs`) renders a whole
+scripted exchange in one request, which sounds like a consistency fix: one render, one timbre per
+speaker. It is not the plan because:
+
+1. **Exactly two speakers per request [V docs].** A DES scene is the Narrator plus one or more
+   characters, so every message would be split back into speaker pairs, which is the per-line
+   model again with worse joins and a second attribution problem (which two?).
+2. **Only prebuilt voices in the examples.** Whether a `voice_…` designed id works in a speaker
+   slot is **[U]**, and designed voices are the ones that drift; stock voices do not need it.
+3. **Timbre blur.** Users report speakers bleeding into each other within one multi-speaker
+   request, the opposite of what consistency work needs.
+4. **One clip per message.** A single failure drops the whole message, the cache key becomes the
+   whole message so any edit re-renders everything, and per-line highlighting (§9.4) needs
+   per-line audio boundaries that one clip does not give.
+
+If it is ever revisited: stock-voice pairs only, as the M6 extra in §16, behind its own switch.
+
 ---
 
 ## 12. Errors and degraded modes
@@ -1081,7 +1156,7 @@ Each milestone ships behind the master toggle (off by default), with a plain-lan
 | **M3** | **Optional key + Extended Voice Library** | Paste a key; browse and preview the library; set fallback voices for devices without the key; library voice as Narrator. | `transport.js` (Direct), `capabilityProbe.js` (custom-id bonus), `voicePane.js`, `voiceSettings.js`, `template.html`, `index.js` | `voice-resolve` additions; manual 13 | ~500 |
 | **M4** | **Voice Design + custom voice manager** | Describe a voice (or draft from the card), hear it, keep or discard; expiry warnings, Recreate, "Used by", slot counter, delete. | new `ui/voiceStudio.js`; `voiceRegistry.js`, `campaignProfiles.js` (`rewriteVoiceRefs`), `defaultPrompts.js`, `characterWorkshop.js` (export), `characterRoster.js` (import) | `campaign-profiles` rewrite cases; manual 14, 16, 17 | ~900 |
 | **M5** | **Voice Cloning** | Record or upload a sample and a consent recording; create a cloned voice. | `ui/voiceStudio.js`, `utils/wav.js`, `voices/consentPhrases.js` | `wav-test`; manual 15 | ~700 |
-| **M6** | **Extras** (each behind its own setting) | Style from tracker mood; streaming on the direct route; two-speaker batching for stock pairs; persona colour attribution; persistent audio cache. | `player.js`, `transport.js`, `segmenter.js` | per feature | ~200-500 each |
+| **M6** | **Extras** (each behind its own setting) | Style from tracker mood; streaming on the direct route; two-speaker batching for stock pairs (never for designed voices, §11.3); persona colour attribution; persistent audio cache. | `player.js`, `transport.js`, `segmenter.js` | per feature | ~200-500 each |
 | **M7** | **Upstream ST PR + `UpstreamTransport`** | Library/design/clone with no DES key at all. | ST `src/endpoints/google.js`, `public/scripts/extensions/tts/google-native.js`; DES `transport.js` | probe detects route | ST ~200 / DES ~150 |
 
 The ST PR can be opened any time after M0; DES never waits on it.
