@@ -348,6 +348,7 @@ function renderAttributesSettings() {
     $('#rpg-attr-override').prop('checked', cfg.allowOverride);
     $('#rpg-attr-criticals').prop('checked', cfg.criticals);
     $('#rpg-attr-prof').val(cfg.proficiencyBonus);
+    $('#rpg-attr-notify').prop('checked', cfg.notify);
     $('#rpg-attr-calls').prop('checked', cfg.aiCalls.enabled);
     $('#rpg-attr-calls-tag').prop('checked', cfg.aiCalls.endOfReply);
     $('#rpg-attr-calls-tool').prop('checked', cfg.aiCalls.tool);
@@ -1760,6 +1761,10 @@ function bindSettingsUI() {
     });
     $(document).on('change', '#rpg-attr-calls-freq', function () {
         _aiCalls().frequency = String($(this).val());
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-notify', function () {
+        getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
     });
     $(document).on('change', '#rpg-attr-prof', function () {

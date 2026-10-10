@@ -194,6 +194,27 @@ export function notifyDiceChanged(detail = {}) {
     } catch (e) { /* no window (tests) */ }
 }
 
+/**
+ * A dice event the player can see while trying the system: always a
+ * console line, and a toast while Settings → Stats → Notify on dice events
+ * is on (toasts also land in DES's Notification Log).
+ */
+export function diceNotice(text, { kind = 'info', title = 'Dice' } = {}) {
+    try { console.debug(`[Dooms Tracker] Dice: ${text}`); } catch (e) { /* no console */ }
+    if (!attributesConfig(extensionSettings).notify) return;
+    try {
+        const t = typeof window !== 'undefined' ? window.toastr : null;
+        if (t && typeof t[kind] === 'function') t[kind](text, title, { timeOut: 6000, escapeHtml: true });
+    } catch (e) { /* no toastr */ }
+}
+
+/** A roll in one line for notices. */
+function rollLine(roll) {
+    const who = roll.isUser === false ? `${roll.who}: ` : '';
+    const dice = roll.advantage !== 'none' && Array.isArray(roll.rolls) && roll.rolls.length === 2 ? `${roll.kept} (${roll.rolls.join('/')})` : String(roll.kept);
+    return `${who}${checkLabel(roll)} · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc}${roll.difficultyLabel ? ` (${roll.difficultyLabel})` : ''} · ${outcomeLabel(roll)}`;
+}
+
 /** Saves the chat after a roll is written to or removed from a message. */
 export function saveRollChange() {
     try { saveChatDebounced(); } catch (e) { /* no chat open */ }
@@ -440,9 +461,15 @@ export async function onDiceMessageSent() {
             beforeIndex: found.index,
         });
         if (pending !== check) return;
+        const adv = ruling.advantage === 'adv' ? ', advantage' : ruling.advantage === 'dis' ? ', disadvantage' : '';
+        diceNotice(ruling.source === 'ai'
+            ? `Game master rules ${ruling.label} (DC ${ruling.dc})${adv}${ruling.reason ? `: ${ruling.reason}` : ''}`
+            : `Default difficulty ${ruling.label} (DC ${ruling.dc})${ruling.error ? ` (the game master could not be asked: ${ruling.error})` : ''}`);
     }
     pending = null;
-    attachRollToMessage(found.message, performRoll(check, ruling), found.index);
+    const roll = performRoll(check, ruling);
+    attachRollToMessage(found.message, roll, found.index);
+    diceNotice(`Rolled on send · ${rollLine(roll)}`, { kind: roll.success ? 'success' : 'warning' });
 }
 
 /**
@@ -737,14 +764,18 @@ export function onDiceReplyRendered(messageId) {
             // A check the player tagged themselves is theirs; otherwise the
             // game master's call waits on the chip for their next message.
             if (isLast && (!pending || pending.calledBy === 'gm')) {
+                const fresh = !pending || pending.fromIndex !== i || !sameCall({ ...pending, who: '' }, { ...call, who: '' });
                 pending = { ...checkFromCall(call, roller), fromIndex: i };
                 notifyDiceChanged({ source: 'gm-call' });
+                if (fresh) diceNotice(`Game master calls for a ${call.skill ? `${call.attribute} (${call.skill})` : call.attribute} check, ${call.label} (DC ${call.dc})${call.reason ? `: ${call.reason}` : ''} · rolls when you send`);
             }
         } else {
             if (!prev || prev.kind !== 'npc' || !prev.roll || !sameCall(prev.call, call)) {
                 const check = checkFromCall(call, roller);
-                store[swipeId] = { kind: 'npc', call, roll: performRoll(check, check.gmRuling) };
+                const roll = performRoll(check, check.gmRuling);
+                store[swipeId] = { kind: 'npc', call, roll };
                 changed = true;
+                diceNotice(`Game master called an NPC check · ${rollLine(roll)}`, { kind: roll.success ? 'success' : 'warning' });
             }
             if (pending && pending.calledBy === 'gm' && pending.fromIndex === i) clearPendingCheck();
         }
@@ -859,6 +890,9 @@ export function diceToolAction(args) {
     if (!roll || typeof roll !== 'object') {
         roll = performRoll(check, check.gmRuling);
         if (memo) { memo[key] = roll; saveRollChange(); }
+        diceNotice(`Dice tool · ${rollLine(roll)}${call.reason ? ` · ${call.reason}` : ''}`, { kind: roll.success ? 'success' : 'warning' });
+    } else {
+        diceNotice(`Dice tool asked again for the same check · kept ${rollLine(roll)}`);
     }
     notifyDiceChanged({ source: 'tool' });
     return verdictFor(roll);
@@ -973,4 +1007,5 @@ export function refreshDiceEntryPoints() {
     const on = !!extensionSettings.enabled && attributesOn(extensionSettings);
     btn.style.display = on ? '' : 'none';
     btn.classList.toggle('is-pending', on && !!pending);
+    btn.classList.toggle('is-called', on && !!pending && pending.calledBy === 'gm');
 }

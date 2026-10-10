@@ -152,6 +152,7 @@ const sp = D.buildDifficultyRatingPrompt({ userName: 'Jordan', attempt: '', attr
 check('rating prompt names the skill and quotes the message', sp.user.includes('"what their message describes", using Dexterity (Stealth).') && sp.user.includes('Their message: "I slip past the guards."'), sp.user);
 
 // ── 7. The game master's own calls ──
+check('notify defaults on and a false survives', D.attributesConfig(settings).notify === true && D.attributesConfig({ attributes: { notify: false } }).notify === false);
 check('aiCalls defaults: on, both ways, NPCs too, sparingly', (() => { const c = D.attributesConfig(settings).aiCalls; return c.enabled && c.endOfReply && c.tool && c.npcs && c.frequency === 'sparingly'; })());
 check('aiCalls migration fills a missing block and a missing key', (() => {
     const s1 = { attributes: { enabled: true, list: [{ name: 'Strength' }] } };

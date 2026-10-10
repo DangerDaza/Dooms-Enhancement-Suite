@@ -69,6 +69,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     aiRatesDifficulty: true,       // one small separate call rates the attempt
     allowOverride: false,          // may the player change the AI's ruling?
     proficiencyBonus: 2,           // added to a roll on a skill the character is proficient in
+    notify: true,                  // toasts when a check is called, ruled or rolled (debugging aid)
     // The game master's own calls for checks (Phase 3). On with attributes.
     aiCalls: Object.freeze({
         enabled: true,
@@ -108,6 +109,7 @@ export function defaultAttributesConfig() {
         aiRatesDifficulty: CONFIG_DEFAULTS.aiRatesDifficulty,
         allowOverride: CONFIG_DEFAULTS.allowOverride,
         proficiencyBonus: CONFIG_DEFAULTS.proficiencyBonus,
+        notify: CONFIG_DEFAULTS.notify,
         contextMessages: CONFIG_DEFAULTS.contextMessages,
         aiCalls: { ...CONFIG_DEFAULTS.aiCalls },
     };
@@ -193,6 +195,7 @@ export function attributesConfig(settings) {
         aiRatesDifficulty: a.aiRatesDifficulty !== false,
         allowOverride: a.allowOverride === true,
         proficiencyBonus: clampProficiency(a.proficiencyBonus),
+        notify: a.notify !== false,
         aiCalls: normalizeAiCalls(a.aiCalls),
         contextMessages: Number.isFinite(ctx) ? Math.min(30, Math.max(1, Math.round(ctx))) : CONFIG_DEFAULTS.contextMessages,
     };
@@ -236,7 +239,7 @@ export function migrateAttributesConfig(settings) {
         for (const d of DIFFICULTIES) {
             if (a.difficulty[d.id] === undefined) { a.difficulty[d.id] = d.dc; changed = true; }
         }
-        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'contextMessages']) {
+        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'notify', 'contextMessages']) {
             if (a[key] === undefined) { a[key] = fresh[key]; changed = true; }
         }
         if (!a.aiCalls || typeof a.aiCalls !== 'object' || Array.isArray(a.aiCalls)) {

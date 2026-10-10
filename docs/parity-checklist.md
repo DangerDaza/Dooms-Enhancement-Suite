@@ -43,6 +43,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Game master's calls, NPC: "[CHECK: Guard: Wisdom (Perception) | Medium | ...]" is rolled the moment the reply renders, on the guard's Workshop sheet, shown in place of the tag with the result; swipe that reply: a swipe without the call drops it, a swipe with it keeps the same number; the next reply narrates it (Context Inspector shows "[DICE: Guard, on a check you called for")
 - [ ] Game master's calls, the tool: with a chat-completion model and function calling on, the dice tool appears in the tool list; a tense moment makes the AI call it mid-reply, SillyTavern shows the tool call, the reply narrates the result and its box shows the roll; swipe the reply: same roll; "...as a dice tool" off: the AI falls back to the end-of-reply line
 - [ ] "The AI may call for checks" off: no [CHECKS:] text in the prompt (Context Inspector), no tool registered, tags in old replies still display as calls but nothing new is tagged
+- [ ] Notify on dice events (on by default): a toast when the game master calls for a check (and the d20 button pulses until you send or decline), when it rules at send, when the die lands, when an NPC check is rolled and when the dice tool rolls, each with the numbers; the same lines in the browser console and the Notification Log; off: no toasts, console and log still written
 
 ## Generation & tracking
 - [ ] Tracker JSON injected on generation; fields parse into panels

@@ -13405,6 +13405,20 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
     color: rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96));
 }
 
+/* A check the game master called for is waiting on the player: the die pulses. */
+@keyframes dooms-dice-called {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.18); filter: brightness(1.5); }
+}
+
+.dooms-dice-btn.is-called { animation: dooms-dice-called 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dooms-dice-btn.is-called { animation: none; text-shadow: 0 0 6px currentColor; }
+}
+
+body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0 0 6px currentColor; }
+
 .dooms-dice-chip {
     display: flex;
     align-items: center;
