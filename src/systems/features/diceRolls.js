@@ -28,6 +28,8 @@ import {
     getProficiencies,
     isProficient,
     isSaveProficient,
+    getCastingAbility,
+    dcAbilityId,
     findSkill,
     findAttribute,
     isDefaultSheet,
@@ -442,13 +444,15 @@ function saveCheckFromRuling(ruling, playerCheck) {
     const defs = attributeDefs(extensionSettings);
     const cfg = attributesConfig(extensionSettings);
     const saveDef = defs.find(d => d.id === ruling.attributeId) || defs[0];
-    const againstDef = defs.find(d => d.id === ruling.againstAttributeId) || saveDef;
     const target = { name: ruling.who, isUser: false };
     const sheet = getSheet(extensionSettings, target.name, false, defs);
     const profs = getProficiencies(extensionSettings, target.name, false);
     const proficient = isSaveProficient(profs, saveDef.id);
     const persona = playerCheck.who || resolvePersonaName() || 'The player';
     const actorSheet = getSheet(extensionSettings, persona, true, defs);
+    // The actor's casting ability sets the DC for anything their power does (§10.1).
+    const dcId = dcAbilityId({ namedId: ruling.againstAttributeId, castingId: getCastingAbility(getProficiencies(extensionSettings, persona, true)) });
+    const againstDef = defs.find(d => d.id === dcId) || defs.find(d => d.id === ruling.againstAttributeId) || saveDef;
     const actorScore = actorSheet[againstDef.id] ?? DEFAULT_SCORE;
     const filled = applySaveDC(
         { kind: 'save', against: { who: persona, attributeId: againstDef.id, attribute: againstDef.name, abbr: againstDef.abbr } },
@@ -825,10 +829,16 @@ function checkFromCall(call, roller) {
     if (save && call.against && typeof call.against === 'object') {
         const actor = resolveRoller(call.against.who);
         const actorSheet = getSheet(extensionSettings, actor.name, actor.isUser, defs);
-        resolved = applySaveDC(call, {
+        // The actor's casting ability sets the DC for anything their power does (§10.1).
+        const dcId = dcAbilityId({ namedId: call.against.attributeId, castingId: getCastingAbility(getProficiencies(extensionSettings, actor.name, actor.isUser)) });
+        const dcDef = defs.find(d => d.id === dcId);
+        const withAbility = dcDef && dcDef.id !== call.against.attributeId
+            ? { ...call, against: { ...call.against, attributeId: dcDef.id, attribute: dcDef.name, abbr: dcDef.abbr } }
+            : call;
+        resolved = applySaveDC(withAbility, {
             who: actor.name,
             isUser: actor.isUser,
-            score: actorSheet[call.against.attributeId] ?? DEFAULT_SCORE,
+            score: actorSheet[withAbility.against.attributeId] ?? DEFAULT_SCORE,
             proficiencyBonus: cfg.proficiencyBonus,
         });
     }

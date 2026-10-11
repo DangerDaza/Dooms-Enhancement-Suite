@@ -356,6 +356,20 @@ chat.push({ is_user: false, is_system: true, mes: 'tool', extra: { tool_invocati
 dice.onDiceToolCallsPerformed(chat[6].extra.tool_invocations);
 chat.push(ai('He staggers.'));
 check('the reply after a tool save shows it in its box', (() => { const r = dice.rollsForReply(7); return r.length === 2 && r[0].kind === 'save' && r[0].who === 'Jordan' && r[1].kind === 'save' && r[1].who === 'Guard'; })());
+// The casting ability: Jordan's powers run on Charisma 8 (-1); a save the game master names as Wisdom still uses Charisma.
+D.setSheet(extensionSettings, 'Jordan', true, { str: 15, cha: 8, wis: 18 }, null, [D.skillKey('str', 'Athletics'), D.castingKey('cha')]);
+chat.push(user('I push into his mind.'));
+const castingSave = dice.diceToolAction({ kind: 'save', who: 'Guard', attribute: 'Wisdom', against: 'Jordan', againstAttribute: 'Wisdom', reason: 'the push' });
+check('a save named against the caster\'s Wisdom is set by their casting ability instead', castingSave.includes('against Jordan\'s Charisma') && castingSave.includes('vs DC 9 (Jordan\'s Charisma: 8 + 2 proficiency -1)'), castingSave);
+const shove = dice.diceToolAction({ kind: 'save', who: 'Guard', attribute: 'Dexterity', against: 'Jordan', againstAttribute: 'Strength', reason: 'the shove' });
+check('...but a physical ability the game master names stands', shove.includes('against Jordan\'s Strength') && shove.includes('vs DC 12 (Jordan\'s Strength: 8 + 2 proficiency +2)'), shove);
+dice.__setDiceTransport(async () => '{"save": {"who": "Guard", "attribute": "Wisdom", "against": "Wisdom"}, "advantage": "none", "reason": "x"}');
+dice.tagCheck({ attributeId: 'wis', context: 'read his mind' });
+chat.push(user('I read his mind.'));
+await dice.onDiceMessageSent();
+const rulingCasting = chat[chat.length - 1].extra.dooms_roll;
+check('the ruling path uses the casting ability too', !!rulingCasting && rulingCasting.kind === 'save' && rulingCasting.against.attribute === 'Charisma' && rulingCasting.dc === 9, JSON.stringify(rulingCasting));
+dice.__setDiceTransport(gm);
 
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);

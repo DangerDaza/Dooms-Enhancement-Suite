@@ -160,8 +160,8 @@ export function normalizeSkills(list) {
     for (const raw of Array.isArray(list) ? list : []) {
         const name = String(raw ?? '').trim().slice(0, 32);
         if (!name) continue;
-        // "save" is the saving-throw proficiency's slot on the sheet.
-        if (attributeSlug(name) === SAVE_SLUG) continue;
+        // "save" and "casting" are the saving-throw and casting-ability slots on the sheet.
+        if (attributeSlug(name) === SAVE_SLUG || attributeSlug(name) === CASTING_SLUG) continue;
         const lower = name.toLowerCase();
         if (seen.has(lower)) continue;
         seen.add(lower);
@@ -314,7 +314,7 @@ export function difficultyGuide(settings, { brief = false } = {}) {
     const scale = difficultyTable(settings)
         .map(d => `${d.label} (DC ${d.dc}; a +0 roll makes it ${oddsText(d.dc, 0)} of the time, a +5 roll ${oddsText(d.dc, 5)}): ${meaning[d.id]}`)
         .join('. ');
-    const who = `Who rolls: the one whose own action is uncertain makes an ability check against a difficulty. When the action is done to someone who can resist it, that someone makes a saving throw and the actor's ability sets the DC (${SAVE_DC_BASE} + the actor's proficiency bonus of ${cfg.proficiencyBonus} + the actor's modifier); the actor does not roll.`;
+    const who = `Who rolls: the one whose own action is uncertain makes an ability check against a difficulty. When the action is done to someone who can resist it, that someone makes a saving throw and the actor's ability sets the DC (${SAVE_DC_BASE} + the actor's proficiency bonus of ${cfg.proficiencyBonus} + the actor's modifier); the actor does not roll. A character with a casting ability on their sheet imposes everything their magic or powers do through it, whatever other ability might seem to fit; name a different ability only for a physical act, such as Strength for a shove.`;
     if (brief) {
         return `Set the difficulty by the task and the circumstances, never by who attempts it (their bonus is added afterwards); Medium is the usual call, Hard when most people would fail. ${who}`;
     }
@@ -463,6 +463,63 @@ export function saveProficiencyDefs(defs, proficiencies) {
     return (defs || []).filter(d => isSaveProficient(proficiencies, d.id));
 }
 
+/**
+ * The casting ability (§10.1): the one attribute a character's magic or
+ * powers run on. Stored beside the proficiencies as "cha:casting", so it
+ * follows the sheet wherever proficiencies do (copies, versions, pruning).
+ * It sets the DC for anything that character's power does to someone.
+ */
+export const CASTING_SLUG = 'casting';
+
+/** The stored form of the casting ability: "cha:casting". */
+export function castingKey(attributeId) {
+    return `${String(attributeId || '')}:${CASTING_SLUG}`;
+}
+
+/** True for an "attr:casting" key. */
+export function isCastingKey(key) {
+    const k = String(key || '');
+    const i = k.indexOf(':');
+    return i > 0 && k.slice(i + 1) === CASTING_SLUG;
+}
+
+/** The casting attribute id among the proficiencies, or '' when none is set. */
+export function getCastingAbility(proficiencies) {
+    const k = (Array.isArray(proficiencies) ? proficiencies : []).find(isCastingKey);
+    return k ? String(k).slice(0, String(k).indexOf(':')) : '';
+}
+
+/** The proficiencies with the casting ability set to `attributeId` ('' clears it). One at most. */
+export function withCastingAbility(proficiencies, attributeId) {
+    const rest = (Array.isArray(proficiencies) ? proficiencies : []).filter(k => !isCastingKey(k));
+    return normalizeProfKeys(attributeId ? [...rest, castingKey(attributeId)] : rest);
+}
+
+/** The attributes that may be a casting ability: the mental three when present, else every attribute. */
+export function castingCandidateIds(defs) {
+    const ids = (defs || []).map(d => d.id);
+    const mental = ids.filter(id => ['int', 'wis', 'cha'].includes(id));
+    return mental.length ? mental : ids;
+}
+
+/** Physical abilities: a DC named with one of these stands even when the actor has a casting ability. */
+const PHYSICAL_IDS = Object.freeze(['str', 'dex', 'con']);
+
+/**
+ * Which ability sets a save's DC (§10.1): the actor's casting ability for
+ * anything their power does, unless the game master named a physical one
+ * (a shove is Strength); the named ability when the actor has no casting
+ * ability; '' when neither is known.
+ * @param {{ namedId?: string, castingId?: string }} p
+ */
+export function dcAbilityId({ namedId = '', castingId = '' } = {}) {
+    const named = String(namedId || '');
+    const casting = String(castingId || '');
+    if (!casting) return named;
+    if (named && PHYSICAL_IDS.includes(named)) return named;
+    return casting;
+}
+
 /** Resolves a proficiency key back to its skill's display name, or '' when no def carries it. */
 export function skillNameForKey(defs, key) {
     const i = String(key || '').indexOf(':');
@@ -492,10 +549,10 @@ export function findSkill(defs, name) {
     return null;
 }
 
-/** Keeps only the proficiencies whose attribute and skill (or save) still exist on the defs. */
+/** Keeps only the proficiencies whose attribute and skill (or save, or casting slot) still exist on the defs. */
 export function pruneProficiencies(proficiencies, defs) {
     return normalizeProfKeys((proficiencies || []).filter(k => {
-        if (isSaveKey(k)) return (defs || []).some(d => d.id === String(k).slice(0, String(k).indexOf(':')));
+        if (isSaveKey(k) || isCastingKey(k)) return (defs || []).some(d => d.id === String(k).slice(0, String(k).indexOf(':')));
         return !!skillNameForKey(defs, k);
     }));
 }
@@ -706,12 +763,14 @@ export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_D
             .map(d => `${d.abbr} ${sheet[d.id]} (${formatModifier(modifier(sheet[d.id]))})`);
         const prof = (e.proficiencies || []).map(k => skillNameForKey(defs, k)).filter(Boolean);
         const saves = saveProficiencyDefs(defs, e.proficiencies).map(d => d.name);
-        if (!scores.length && !prof.length && !saves.length) continue;
+        const castingDef = defs.find(d => d.id === getCastingAbility(e.proficiencies)) || null;
+        if (!scores.length && !prof.length && !saves.length && !castingDef) continue;
         if (prof.length || saves.length) anyProf = true;
         const bits = [];
         if (scores.length) bits.push(scores.join(', '));
         if (prof.length) bits.push(`proficient in ${prof.join(', ')} (+${proficiencyBonus})`);
         if (saves.length) bits.push(`proficient in ${saves.join(', ')} saves (+${proficiencyBonus})`);
+        if (castingDef) bits.push(`casting ability ${castingDef.name} (anything their power does to someone is resisted against it)`);
         parts.push(`${e.name}${e.isUser ? ' (player)' : ''}: ${bits.join('; ')}`);
     }
     if (!parts.length) return '';
@@ -1016,7 +1075,7 @@ export function buildDiceToolDefinition({ settings, userName = 'the player' } = 
         advantage: { type: 'string', enum: ['none', 'advantage', 'disadvantage'], description: 'Advantage only when circumstances clearly favour the roller, disadvantage only when they clearly hinder them.' },
         reason: { type: 'string', description: 'One short sentence: the one thing that could go wrong, and why this difficulty.' },
         against: { type: 'string', description: `For a save a character imposes: that character's name as it appears in the scene, or empty for ${userName}.` },
-        againstAttribute: { type: 'string', enum: names, description: 'For a save a character imposes: the ability of theirs that sets the DC (8 + their proficiency bonus + their modifier).' },
+        againstAttribute: { type: 'string', enum: names, description: 'For a save a character imposes: the ability of theirs that sets the DC (8 + their proficiency bonus + their modifier). Leave it empty when they have a casting ability on their sheet: anything their power does is resisted against that, and only a physical act (a shove, a grapple) is named otherwise.' },
     };
     const required = ['attribute', 'reason'];
     if (cfg.aiCalls.npcs) {

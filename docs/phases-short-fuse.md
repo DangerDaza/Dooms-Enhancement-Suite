@@ -263,8 +263,15 @@ with whose roll it is and what success means.
 `tools/dice-test.mjs` §10 pass; then parity rows "Saving throws" (the
 ruling, the tags, the tool, the Save tick) and the NPC-verdict row.
 
+**Found in play (first sitting).** The game master named Muzen's Wisdom
+for a telepathic push and the DC came out of Wisdom 11. Fixed by the
+casting ability: the Casting chip on INT, WIS and CHA in the Workshop
+(one per sheet, stored as `cha:casting`); the DC for anything that
+character's power does comes from it, whatever ability the game master
+names, unless the named one is physical. Tick it on Muzen's Charisma.
+
 **Open.** Whether Claude reaches for the save form unprompted; the brief
-guide's cost per turn (about 90 words); Hard at DC 28 in Jordan's own
+guide's cost per turn (about 100 words); Hard at DC 28 in Jordan's own
 settings prints as a 0% roll in the guide, which is the point.
 
 ## Phase 4 — if wanted (not started, not designed)

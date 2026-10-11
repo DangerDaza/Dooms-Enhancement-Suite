@@ -21,6 +21,9 @@ import {
     isProficient,
     saveKey,
     isSaveProficient,
+    getCastingAbility,
+    withCastingAbility,
+    castingCandidateIds,
     STANDARD_ARRAY,
     DEFAULT_SCORE,
     MIN_SCORE,
@@ -68,9 +71,19 @@ function saveChipHtml(d, ctx) {
         </button>`;
 }
 
+/** The Casting chip on the mental attributes: one per sheet, the ability the character's powers run on. */
+function castingChipHtml(d, ctx) {
+    const defs = Array.isArray(ctx.defs) ? ctx.defs : [];
+    if (!castingCandidateIds(defs).includes(d.id)) return '';
+    const on = getCastingAbility(ctx.proficiencies) === d.id;
+    return `<button type="button" class="cw-attr-skill cw-attr-casting${on ? ' is-prof' : ''}" data-casting="1" role="radio" aria-checked="${on ? 'true' : 'false'}" title="${on ? `Casting ability: anything ${escapeHtml(ctx.name || 'this character')}'s powers do to someone is resisted against ${escapeHtml(d.name)} (DC 8 + ${ctx.profBonus} + the modifier)` : `Make ${escapeHtml(d.name)} the casting ability`}">
+            <i class="${on ? 'fa-solid fa-wand-sparkles' : 'fa-regular fa-circle'}" aria-hidden="true"></i>Casting
+        </button>`;
+}
+
 function skillsHtml(d, ctx) {
     const list = Array.isArray(d.skills) ? d.skills : [];
-    const save = saveChipHtml(d, ctx);
+    const save = saveChipHtml(d, ctx) + castingChipHtml(d, ctx);
     if (!list.length) return save + '<span class="cw-attr-noskills">No skills under this attribute.</span>';
     return save + list.map(sk => {
         const on = isProficient(ctx.proficiencies, d.id, sk);
@@ -99,7 +112,7 @@ function render() {
         </div>`;
     }).join('');
     const helper = ctx.isUser
-        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Tag a message with the d20 button and this is the sheet it rolls on.`
+        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
     host.innerHTML = `
         <h4>&#127922; Attributes</h4>
@@ -174,6 +187,14 @@ function bindOnce(host) {
         const defs = Array.isArray(last.ctx.defs) ? last.ctx.defs : [];
 
         // A skill chip: toggle the proficiency and repaint that chip alone.
+        // The Casting chip: one ability per sheet, so the row repaints as a whole.
+        if (btn.classList.contains('cw-attr-casting')) {
+            const id = btn.closest('.cw-attr-row')?.dataset.attr;
+            if (!id) return;
+            const current = getCastingAbility(last.ctx.proficiencies);
+            commit({ proficiencies: withCastingAbility(last.ctx.proficiencies, current === id ? '' : id) }, { repaint: true });
+            return;
+        }
         if (btn.classList.contains('cw-attr-skill')) {
             const id = btn.closest('.cw-attr-row')?.dataset.attr;
             const isSave = btn.dataset.save === '1';

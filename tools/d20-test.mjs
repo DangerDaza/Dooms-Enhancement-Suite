@@ -254,6 +254,17 @@ check('a CHECK tag after a SAVE tag still wins', D.parseCheckCall('[SAVE: Wisdom
 check('stripCheckCalls removes SAVE tags too', D.stripCheckCalls('Text.\n[SAVE: Wisdom | Hard | x]\n[CHECK: Stealth | Hard | y]') === 'Text.');
 check('the end-of-reply instruction shows the SAVE form and the brief guide', inst.includes('[SAVE: Guard: Wisdom | vs Jordan\'s Charisma |') && inst.includes('Set the difficulty by the task and the circumstances') && inst.includes('Who rolls:'));
 check('the tool instruction and definition carry saves', toolInst.includes('kind "save"') && tool.parameters.properties.kind.enum.join() === 'check,save' && tool.parameters.properties.againstAttribute.enum.length === 6 && tool.parameters.properties.difficulty.description.includes('DIFFICULTY: judge the task') && tool.description.includes('the actor never rolls'));
+check('casting ability: stored as "cha:casting", one per sheet, cleared with empty, and a skill cannot be called Casting',
+    D.castingKey('cha') === 'cha:casting' && D.isCastingKey('cha:casting') && !D.isCastingKey('cha:save')
+    && D.getCastingAbility(['wis:save', 'cha:casting']) === 'cha' && D.getCastingAbility(['wis:save']) === ''
+    && D.withCastingAbility(['wis:save', 'int:casting'], 'cha').join() === 'cha:casting,wis:save' && D.withCastingAbility(['cha:casting', 'wis:save'], '').join() === 'wis:save'
+    && D.normalizeSkills(['Casting', 'Stealth']).join() === 'Stealth');
+check('pruneProficiencies keeps a casting slot whose attribute exists', D.pruneProficiencies(['cha:casting', 'luck:casting', 'wis:save'], defs).join() === 'cha:casting,wis:save');
+check('castingCandidateIds: the mental three, else every attribute', D.castingCandidateIds(defs).join() === 'int,wis,cha' && D.castingCandidateIds([{ id: 'luck' }, { id: 'grit' }]).join() === 'luck,grit');
+check('dcAbilityId: casting wins over a named mental ability, a physical one stands, no casting means the named one',
+    D.dcAbilityId({ namedId: 'wis', castingId: 'cha' }) === 'cha' && D.dcAbilityId({ namedId: '', castingId: 'cha' }) === 'cha' && D.dcAbilityId({ namedId: 'str', castingId: 'cha' }) === 'str' && D.dcAbilityId({ namedId: 'wis', castingId: '' }) === 'wis' && D.dcAbilityId({}) === '');
+check('the attributes line names the casting ability', D.buildAttributesLine([{ name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['cha:casting'] }], defs, { proficiencyBonus: 2 }).endsWith('Muzen (player): CHA 30 (+10); casting ability Charisma (anything their power does to someone is resisted against it).'));
+check('the guide says a casting ability imposes everything a power does', guide.includes('A character with a casting ability on their sheet imposes everything their magic or powers do through it'));
 
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

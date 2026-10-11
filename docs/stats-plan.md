@@ -849,6 +849,13 @@ means.
   resist, that someone makes a saving throw and the actor's ability sets
   the DC; the actor does not roll. Perception against Stealth stays a check
   against a difficulty word for now (passive scores are a non-goal).
+- The casting ability (added after the first play, when the game master
+  named Muzen's Wisdom for a telepathic push): one attribute per sheet,
+  marked with the Casting chip on the mental stats in the Workshop, stored
+  as `cha:casting` beside the proficiencies. Anything that character's
+  magic or powers do to someone is resisted against it, whatever the game
+  master names; a named physical ability (a shove's Strength) stands. The
+  attributes line tells the AI "casting ability Charisma".
 
 ### 10.2 Data model
 
