@@ -130,6 +130,12 @@ SillyTavern yet; the cloud session cannot run it. That is step 3 above.
 - Group chats: each block-less reply triggers its own recovery.
 - Race: a send within the recovery's flight stores nothing on the user's
   message but does update `lastGeneratedData` (separate mode has the same).
+- Phase 4a, saving throws (2026-10-11, `3c7969c` … `ee08db6`,
+  `docs/stats-plan.md` §10): the target saves against DC 8 + the actor's
+  proficiency bonus + modifier; a Save tick per attribute in the Workshop;
+  the difficulty guide in every instruction; verdicts end with whose roll
+  it is. Unverified in play: see the phases doc and parity rows "Saving
+  throws". Jordan's Hard is DC 28, above Very hard; the guide will say so.
 
 ## 4. What is built (all on the branch, base `origin/main` at `c97bac0`)
 

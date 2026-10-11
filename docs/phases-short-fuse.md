@@ -17,7 +17,7 @@ says where things stand.
 | 3 | The game master's own calls: end-of-reply line and the dice tool, NPCs too | Yes (`807ce54` … `19d0d57`) | `d20-test` §7, `dice-test` §8–9 | Not yet: the export showed tool calls happening (`toolu_` ids, a Constitution check on Silvy) but the tracker froze after them | Parity rows "Game master's calls" and "Notify"; then the verdict on frequency |
 | 3.5 | Keeping the tracker alive after dice (reminder, recovery, tool split) | Yes (`f35507d`, `3c18e89`) | `tracker-recovery-test` | Not yet | Handover §2 step 3 |
 | Side | Voices: Never whisper | Yes (`789e136`, `4df16d3`) | `voice-logic-test` | Not yet | Parity row 158 |
-| 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | In progress (`docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 when they land | Not yet | The four commits in §10.8, then parity rows "Saving throws" |
+| 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | Yes (`3c7969c` … `ee08db6`; `docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 | Not yet | Parity rows "Saving throws" and the NPC-verdict row |
 | 4 | Levels, AI-suggested NPC sheets | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
 
@@ -237,6 +237,35 @@ delivery.js`, `voiceSettings.js`, `voiceEngine.js`,
 `tools/voice-logic-test.mjs`. Parity row 158. Voices work has gone on
 locally since (Steadiness, anchoring, Audition ×3; `3ee652f` … `18caf70`,
 `docs/google-tts-voices-plan.md`); it is not part of Stats.
+
+## Phase 4a — Saving throws and opposed actions (2024 rules)
+
+**Is it ready?** Built, tested, pushed (`3c7969c` design, `31a4a84`
+model, `ee08db6` lifecycle). Not yet watched in play. Born of Jordan's
+scene: Muzen (Charisma 30) reads Ines Arden's mind, the game master rolled
+*her* Wisdom check at Medium, and the verdict's "narrate the attempt
+succeeding" read as *his* success.
+
+**What exists.** The one acted upon makes a saving throw: d20 + modifier,
++ the proficiency bonus when the Save tick is set for that attribute on
+the Workshop sheet. The DC is the actor's: 8 + proficiency bonus + their
+modifier in the ability the game master names (Muzen's Charisma 30 sets
+DC 20), or a difficulty word when the world is the source. Three ways in:
+the ruling call on a tagged check may answer with the target's save; a
+`[SAVE: Ines Arden: Charisma | vs Muzen's Charisma | reason]` line; the
+tool with kind "save", against and againstAttribute. A shared difficulty
+guide (the task not the character, the five DCs with the odds for +0 and
++5, one step for circumstances, who rolls) rides in the ruling call and
+the tool, briefly in the per-turn instructions. Every verdict now ends
+with whose roll it is and what success means.
+
+**Prove it.** `timeout 90 node tools/d20-test.mjs` §8 and
+`tools/dice-test.mjs` §10 pass; then parity rows "Saving throws" (the
+ruling, the tags, the tool, the Save tick) and the NPC-verdict row.
+
+**Open.** Whether Claude reaches for the save form unprompted; the brief
+guide's cost per turn (about 90 words); Hard at DC 28 in Jordan's own
+settings prints as a 0% roll in the guide, which is the point.
 
 ## Phase 4 — if wanted (not started, not designed)
 

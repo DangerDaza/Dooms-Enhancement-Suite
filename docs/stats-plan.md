@@ -811,7 +811,9 @@ AI-suggested NPC sheets. Saving throws and opposed actions are §10.
 
 ## 10. Phase 4a — Saving throws and opposed actions (2024 rules)
 
-Status: **in progress on `Project-Short-Fuse`, 2026-10-11.**
+Status: **built on `Project-Short-Fuse` (`3c7969c` design, `31a4a84`
+model, `ee08db6` lifecycle, 2026-10-11); awaiting in-browser
+verification (parity rows "Saving throws").**
 
 The owner's scene: Muzen (Charisma 30, his casting score, a master
 telepath) reads the mind of Ines Arden, an untrained girl, while talking to
