@@ -29,6 +29,9 @@ import {
     isProficient,
     isSaveProficient,
     getCastingAbility,
+    castingAbilityFor,
+    isCastingSkill,
+    CASTING_CHECK_NAME,
     dcAbilityId,
     findSkill,
     findAttribute,
@@ -334,10 +337,12 @@ export function tagCheck({ attributeId, skill = '', context = '', override = nul
     const def = defs.find(d => d.id === attributeId) || defs[0];
     if (!def) return null;
     // Any skill on the list may pair with any attribute (the "Skills with
-    // Different Abilities" variant); the proficiency follows the skill.
-    const hit = findSkill(defs, skill);
-    const skillName = hit ? hit.name : '';
+    // Different Abilities" variant); the proficiency follows the skill. The
+    // Casting skill (§12) sits on the chosen attribute itself: proficient
+    // exactly when that attribute is the persona's casting ability.
     const persona = getPersonaSheet();
+    const hit = isCastingSkill(skill) ? { attributeId: def.id, name: CASTING_CHECK_NAME } : findSkill(defs, skill);
+    const skillName = hit ? hit.name : '';
     const cfg = attributesConfig(extensionSettings);
     const proficient = !!hit && !!persona && isProficient(persona.proficiencies, hit.attributeId, hit.name);
     pending = {
@@ -812,6 +817,19 @@ function resolveRoller(who) {
 }
 
 /**
+ * A bare Casting call (§12) with the roller's ability filled in: their
+ * casting ability, or Charisma when none is set (D27), the Casting skill
+ * riding on it. Done once, up front, so the stored call, the pending check
+ * and the shown line all agree. Any other call comes back as it was.
+ */
+function fillCastingCall(call, roller) {
+    if (!call || !call.castingCheck || call.attributeId) return call;
+    const defs = attributeDefs(extensionSettings);
+    const d = defs.find(x => x.id === castingAbilityFor(getProficiencies(extensionSettings, roller.name, roller.isUser), defs)) || defs[0];
+    return d ? { ...call, attributeId: d.id, attribute: d.name, abbr: d.abbr, skillAttributeId: d.id } : call;
+}
+
+/**
  * A call plus the roller's sheet, in the shape onDiceMessageSent and
  * performRoll expect. A save whose DC another character sets reads that
  * character's sheet here (§10.1): 8 + proficiency bonus + their modifier.
@@ -822,6 +840,7 @@ function checkFromCall(call, roller) {
     const save = call.kind === 'save';
     const sheet = getSheet(extensionSettings, roller.name, roller.isUser, defs);
     const profs = getProficiencies(extensionSettings, roller.name, roller.isUser);
+    call = fillCastingCall(call, roller);
     const proficient = save
         ? isSaveProficient(profs, call.attributeId)
         : (!!call.skill && isProficient(profs, call.skillAttributeId || call.attributeId, call.skill));
@@ -899,7 +918,7 @@ export function onDiceReplyRendered(messageId) {
     const cfg = attributesConfig(extensionSettings);
     const on = !!extensionSettings.enabled && attributesOn(extensionSettings) && cfg.aiCalls.enabled && cfg.aiCalls.endOfReply;
     const swipeId = m.swipe_id || 0;
-    const call = on ? parseCheckCall(typeof m.mes === 'string' ? m.mes : '', extensionSettings) : null;
+    let call = on ? parseCheckCall(typeof m.mes === 'string' ? m.mes : '', extensionSettings) : null;
     const store = gmCallStore(m);
     const prev = store[swipeId] || null;
     const isLast = i === list.length - 1;
@@ -909,6 +928,7 @@ export function onDiceReplyRendered(messageId) {
         if (pending && pending.calledBy === 'gm' && pending.fromIndex === i) clearPendingCheck();
     } else {
         const roller = resolveRoller(cfg.aiCalls.npcs ? call.who : '');
+        call = fillCastingCall(call, roller);
         if (roller.isUser) {
             const check = checkFromCall(call, roller);
             if (!prev || prev.kind !== 'player' || !sameCall(prev.call, call)) { store[swipeId] = { kind: 'player', call, ruling: check.gmRuling }; changed = true; }
@@ -1065,7 +1085,7 @@ export function diceToolAction(args) {
     const hit = callFromToolArgs(args);
     if (!hit) {
         const a = args && typeof args === 'object' ? args : {};
-        return `Nothing was rolled: "${String(a.attribute || '')}" is not an attribute on the sheet. Use one of: ${attributeDefs(extensionSettings).map(d => d.name).join(', ')}.`;
+        return `Nothing was rolled: "${String(a.attribute || '')}" is not an attribute on the sheet. Use one of: ${attributeDefs(extensionSettings).map(d => d.name).join(', ')}, or ${CASTING_CHECK_NAME} for a casting check.`;
     }
     const { call, roller } = hit;
     const check = { ...checkFromCall(call, roller), calledBy: 'tool' };

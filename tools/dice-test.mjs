@@ -371,6 +371,32 @@ const rulingCasting = chat[chat.length - 1].extra.dooms_roll;
 check('the ruling path uses the casting ability too', !!rulingCasting && rulingCasting.kind === 'save' && rulingCasting.against.attribute === 'Charisma' && rulingCasting.dc === 9, JSON.stringify(rulingCasting));
 dice.__setDiceTransport(gm);
 
+// ── 11. Casting checks and talents (Phase 4c, §12) ──
+D.setSheet(extensionSettings, 'Jordan', true, { str: 15, cha: 8, wis: 18 }, null, [D.skillKey('str', 'Athletics'), D.castingKey('cha'), D.talentKey('Telepathy', 'master'), D.talentKey('Mist-walking')]);
+chat.length = 0;
+chat.push(ai('The ward hums.'));
+let castingPending = dice.tagCheck({ attributeId: 'cha', skill: 'Casting', context: 'unpick the ward' });
+check('tagCheck takes the Casting skill on the casting ability, proficient by definition', !!castingPending && castingPending.skill === 'Casting' && castingPending.skillAttributeId === 'cha' && castingPending.proficient === true && castingPending.prof === 2 && castingPending.score === 8, JSON.stringify(castingPending));
+check('...and unpractised on any other attribute', (() => { const p = dice.tagCheck({ attributeId: 'wis', skill: 'casting' }); return p.skill === 'Casting' && p.skillAttributeId === 'wis' && p.proficient === false && p.prof === 0; })());
+dice.tagCheck({ attributeId: 'cha', skill: 'Casting', context: 'unpick the ward' });
+chat.push(user('I work at the ward.'));
+await dice.onDiceMessageSent();
+const castingRoll = chat[1].extra.dooms_roll;
+check('the ruling call sees Charisma (Casting); the roll adds the modifier and proficiency', lastMessages[1].content.includes('using Charisma (Casting)') && !!castingRoll && castingRoll.skill === 'Casting' && castingRoll.mod === -1 && castingRoll.prof === 2 && castingRoll.dc === 20, JSON.stringify(castingRoll));
+verdict = dice.buildDiceVerdictForGeneration();
+check('the verdict reads Charisma (Casting) and the attributes line carries the numbers and the talents',
+    verdict.includes('Charisma (Casting) check: d20 = ') && verdict.includes('+2 (proficient in Casting)') && verdict.includes('casting ability Charisma (save DC 9, casting check +1); talents: Telepathy (Master), Mist-walking'), verdict);
+chat.push(ai('The ward resists.\n[CHECK: Casting | Hard | the ward is old]'));
+dice.onDiceReplyRendered(2);
+const castingCall = dice.getPendingCheck();
+check('a bare [CHECK: Casting] for the player fills Charisma from the sheet, proficient', !!castingCall && castingCall.calledBy === 'gm' && castingCall.attributeId === 'cha' && castingCall.attribute === 'Charisma' && castingCall.abbr === 'CHA' && castingCall.skill === 'Casting' && castingCall.skillAttributeId === 'cha' && castingCall.proficient === true && castingCall.gmRuling.dc === 20, JSON.stringify(castingCall));
+dice.clearPendingCheck();
+chat.push(user('I push harder.'));
+const npcCasting = dice.diceToolAction({ who: 'Guard', attribute: 'Casting', difficulty: 'Medium', reason: 'a warding word' });
+check('the tool: an NPC with no casting ability casts with Charisma, unpractised (D27)', npcCasting.includes('[DICE: Guard, on a check you called for. Charisma (Casting) check: d20 = ') && !npcCasting.includes('proficient in Casting') && npcCasting.includes('vs DC 15 (Medium), because a warding word'), npcCasting);
+const noAttr = dice.diceToolAction({ attribute: 'Luck', difficulty: 'Medium', reason: 'x' });
+check('...and the refusal names Casting', noAttr.startsWith('Nothing was rolled') && noAttr.includes(', or Casting for a casting check.'), noAttr);
+
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

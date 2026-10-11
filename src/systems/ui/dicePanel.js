@@ -16,7 +16,7 @@
 import { extensionSettings } from '../../core/state.js';
 import { ensureSettingsUI } from '../../core/lazyUI.js';
 import { escapeHtml } from '../../utils/html.js';
-import { attributesConfig, attributeDefs, attributesOn, difficultyTable, formatModifier, modifier, isProficient, findSkill } from '../../utils/d20.js';
+import { attributesConfig, attributeDefs, attributesOn, difficultyTable, formatModifier, modifier, isProficient, findSkill, getCastingAbility, isCastingSkill, CASTING_CHECK_NAME } from '../../utils/d20.js';
 import {
     DICE_CHANGED_EVENT,
     getPendingCheck,
@@ -112,8 +112,11 @@ function render() {
     // proficiency follows the skill, so the tick is read from its home.
     let skills = '';
     if (def) {
-        const hit = findSkill(defs, draft.skill);
-        if (draft.skill && !hit) draft.skill = '';
+        // The casting check (§12) is offered on the casting ability only, and is proficient there by definition.
+        const castingHere = !!profs.length && getCastingAbility(profs) === def.id;
+        const castingPick = castingHere && isCastingSkill(draft.skill);
+        const hit = castingPick ? null : findSkill(defs, draft.skill);
+        if (draft.skill && !hit && !castingPick) draft.skill = '';
         const sel = (sk) => !!hit && hit.name.toLowerCase() === sk.toLowerCase();
         const chip = (homeId, sk, tag) => {
             const prof = isProficient(profs, homeId, sk);
@@ -121,6 +124,9 @@ function render() {
             return `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${sel(sk) ? ' is-selected' : ''}${prof ? ' is-prof' : ''}" data-skill="${escapeHtml(sk)}" title="${escapeHtml(title)}">${escapeHtml(sk)}${tag ? `<small class="rpg-dice-skill-home">${escapeHtml(tag)}</small>` : ''}${prof ? `<span class="rpg-dice-skill-prof">+${cfg.proficiencyBonus}</span>` : ''}</button>`;
         };
         const own = (Array.isArray(def.skills) ? def.skills : []).map(sk => chip(def.id, sk, '')).join('');
+        const casting = castingHere
+            ? `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill rpg-dice-casting is-prof${castingPick ? ' is-selected' : ''}" data-skill="${CASTING_CHECK_NAME}" title="Casting check: ${escapeHtml(def.name)} with proficiency (+${cfg.proficiencyBonus}), for magic that contends with the world rather than with someone"><i class="fa-solid fa-wand-sparkles" aria-hidden="true"></i> ${CASTING_CHECK_NAME}<span class="rpg-dice-skill-prof">+${cfg.proficiencyBonus}</span></button>`
+            : '';
         const plain = `<button type="button" class="rpg-dice-chip-btn rpg-dice-skill${!draft.skill ? ' is-selected' : ''}" data-skill="" title="The attribute alone">Plain ${escapeHtml(def.name)} check</button>`;
         const others = defs.filter(d => d.id !== def.id && Array.isArray(d.skills) && d.skills.length);
         const borrowed = !!hit && hit.attributeId !== def.id;
@@ -131,7 +137,7 @@ function render() {
         const otherRow = open && others.length
             ? `<div class="rpg-dice-skills rpg-dice-skills-other">${others.map(d => d.skills.map(sk => chip(d.id, sk, d.abbr)).join('')).join('')}</div>`
             : '';
-        skills = `<div class="rpg-dice-skills">${plain}${own}${toggle}</div>${otherRow}`;
+        skills = `<div class="rpg-dice-skills">${plain}${casting}${own}${toggle}</div>${otherRow}`;
     }
 
     const sheetNote = persona && persona.isDefault

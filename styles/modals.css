@@ -9810,6 +9810,58 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 }
 
 #character-workshop-popup .cw-attr-noskills { font-size: 0.75em; opacity: 0.5; }
+/* Casting readout (§12) beside the lit Casting chip, and the Talents row under the grid. */
+#character-workshop-popup .cw-attr-casting-nums {
+    align-self: center;
+    padding: 0 4px;
+    font-size: 0.78em;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+#character-workshop-popup .cw-attr-talents {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 0;
+}
+#character-workshop-popup .cw-attr-talent-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+#character-workshop-popup .cw-attr-talent {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    font-size: 0.85em;
+}
+#character-workshop-popup .cw-attr-talent.is-master { border-color: var(--rpg-highlight, #e94560); }
+#character-workshop-popup .cw-attr-talent.is-master .cw-attr-talent-level { color: var(--rpg-highlight, #e94560); opacity: 1; }
+#character-workshop-popup .cw-attr-talent-name small { opacity: 0.7; }
+#character-workshop-popup .cw-attr-talent-level,
+#character-workshop-popup .cw-attr-talent-remove {
+    background: transparent;
+    border: 0;
+    padding: 0 4px;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.7;
+}
+#character-workshop-popup .cw-attr-talent-level:hover,
+#character-workshop-popup .cw-attr-talent-remove:hover { opacity: 1; }
+#character-workshop-popup .cw-attr-talent-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+#character-workshop-popup .cw-attr-talent-input { width: 12em; }
 
 /* Dice popover: a borrowed skill shows its home attribute; the row of other skills sits under the toggle. */
 .rpg-dice-skill-home { opacity: 0.6; font-size: 0.85em; letter-spacing: 0.04em; }

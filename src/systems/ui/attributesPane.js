@@ -24,6 +24,12 @@ import {
     getCastingAbility,
     withCastingAbility,
     castingCandidateIds,
+    saveDC,
+    castingCheckBonus,
+    getTalents,
+    withTalent,
+    withoutTalent,
+    normalizeTalentName,
     TIERS,
     tierById,
     getTier,
@@ -84,9 +90,47 @@ function castingChipHtml(d, ctx) {
     const defs = Array.isArray(ctx.defs) ? ctx.defs : [];
     if (!castingCandidateIds(defs).includes(d.id)) return '';
     const on = getCastingAbility(ctx.proficiencies) === d.id;
-    return `<button type="button" class="cw-attr-skill cw-attr-casting${on ? ' is-prof' : ''}" data-casting="1" role="radio" aria-checked="${on ? 'true' : 'false'}" title="${on ? `Casting ability: anything ${escapeHtml(ctx.name || 'this character')}'s powers do to someone is resisted against ${escapeHtml(d.name)} (DC 8 + ${ctx.profBonus} + the modifier)` : `Make ${escapeHtml(d.name)} the casting ability`}">
+    return `<button type="button" class="cw-attr-skill cw-attr-casting${on ? ' is-prof' : ''}" data-casting="1" role="radio" aria-checked="${on ? 'true' : 'false'}" title="${on ? `Casting ability: anything ${escapeHtml(ctx.name || 'this character')}'s powers do to someone is resisted against ${escapeHtml(d.name)} (DC 8 + ${ctx.profBonus} + the modifier), and a casting check is ${escapeHtml(d.name)} with proficiency` : `Make ${escapeHtml(d.name)} the casting ability`}">
             <i class="${on ? 'fa-solid fa-wand-sparkles' : 'fa-regular fa-circle'}" aria-hidden="true"></i>Casting
-        </button>`;
+        </button>${on ? `<span class="cw-attr-casting-nums" title="The spell save DC (8 + ${ctx.profBonus} + the modifier) and what a casting check adds (the modifier + ${ctx.profBonus})">${castingNumsText(scoreOf(ctx.scores, d.id), ctx.profBonus)}</span>` : ''}`;
+}
+
+/** "DC 20 · check +12" (§12): the save DC the power sets and what a casting check adds. */
+function castingNumsText(score, profBonus) {
+    const bonus = Number.isFinite(profBonus) ? profBonus : 2;
+    return `DC ${saveDC(score, bonus)} · check ${formatModifier(castingCheckBonus(score, bonus))}`;
+}
+
+/** The Talents row (§12): what the character's magic is known for, Practised or Master, a name box to add one. */
+function talentsHtml(ctx) {
+    const talents = getTalents(ctx.proficiencies);
+    const chips = talents.map(t => {
+        const master = t.level === 'master';
+        return `<span class="cw-attr-talent${master ? ' is-master' : ''}" data-talent="${escapeHtml(t.name)}">
+                <button type="button" class="cw-attr-talent-level" aria-pressed="${master ? 'true' : 'false'}" title="${master ? 'Master: a casting check inside it rolls with advantage. Click for Practised' : 'Practised: a casting check inside it is proficient. Click for Master'}"><i class="${master ? 'fa-solid' : 'fa-regular'} fa-star" aria-hidden="true"></i></button>
+                <span class="cw-attr-talent-name">${escapeHtml(t.name)}${master ? ' <small>(Master)</small>' : ''}</span>
+                <button type="button" class="cw-attr-talent-remove" title="Remove ${escapeHtml(t.name)}" aria-label="Remove ${escapeHtml(t.name)}">&times;</button>
+            </span>`;
+    }).join('');
+    return `<div class="cw-attr-talents">
+            <span class="cw-attr-tier-label">Talents</span>
+            <div class="cw-attr-talent-list">${chips || '<span class="cw-attr-noskills">None listed: the game master judges from the card.</span>'}</div>
+            <span class="cw-attr-talent-add">
+                <input type="text" class="rpg-input cw-attr-talent-input" maxlength="32" placeholder="Telepathy, Mist-walking…" aria-label="New talent" />
+                <button type="button" class="rpg-btn cw-attr-talent-submit" title="Add it at Practised; the star makes it Master"><i class="fa-solid fa-plus"></i> Add</button>
+            </span>
+            <span class="cw-attr-tier-means">What their magic or powers are known for. It describes, never limits: a casting check inside a listed talent is proficient, inside a starred Master one it rolls with advantage, and anything else is simply unpractised.</span>
+        </div>`;
+}
+
+/** Adds the typed talent at Practised and clears the box; nothing for an empty name. */
+function addTalentFromInput(host) {
+    const input = host.querySelector('.cw-attr-talent-input');
+    if (!input || !last) return;
+    const name = normalizeTalentName(input.value);
+    if (!name) { input.value = ''; return; }
+    commit({ proficiencies: withTalent(last.ctx.proficiencies, name, 'practised') }, { repaint: true });
+    host.querySelector('.cw-attr-talent-input')?.focus();
 }
 
 function skillsHtml(d, ctx) {
@@ -134,7 +178,7 @@ function render() {
             <span class="cw-attr-tier-means">${tier ? `${escapeHtml(tier.means)}; scores outside ${tier.min}–${tier.max} are marked` : 'where this character stands, from ordinary people to legends'}</span>
         </div>`;
     const helper = ctx.isUser
-        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier. Tag a message with the d20 button and this is the sheet it rolls on.`
+        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier, and a casting check (magic against the world) is that ability with proficiency. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
     host.innerHTML = `
         <h4>&#127922; Attributes</h4>
@@ -142,7 +186,7 @@ function render() {
         ${ctx.attributesOn ? '' : '<div class="cw-attr-notice"><i class="fa-solid fa-circle-info"></i><span>Attributes are off in <strong>Settings &rarr; Stats &rarr; Attributes &amp; checks</strong>. The sheet is kept; nothing is sent or rolled until they are on.</span></div>'}
         ${defs.length ? tierRow : ''}
         ${defs.length
-            ? `<div class="cw-attr-grid">${rows}</div>`
+            ? `<div class="cw-attr-grid">${rows}</div>${talentsHtml(ctx)}`
             : '<div class="rpg-dc-knives-empty">No attributes on the list. Add some in Settings &rarr; Stats &rarr; Attributes &amp; checks.</div>'}
         <div class="cw-attr-actions"${defs.length ? '' : ' hidden'}>
             <button type="button" class="rpg-btn cw-attr-standard" title="15, 14, 13, 12, 10, 8 down the list; edit after"><i class="fa-solid fa-list-ol"></i> Standard array</button>
@@ -188,6 +232,9 @@ function paintModifier(row, score) {
         if (off && t) input.title = `Outside the ${t.label} range (${t.min}–${t.max}); allowed, just unusual`;
         else input.removeAttribute('title');
     }
+    // The casting readout follows too, when this row is the casting ability.
+    const nums = row.querySelector('.cw-attr-casting-nums');
+    if (nums && last) nums.textContent = castingNumsText(score, last.ctx.profBonus);
 }
 
 function bindOnce(host) {
@@ -205,6 +252,13 @@ function bindOnce(host) {
         if (v === null) return;
         paintModifier(row, v);
         commit({ scores: { ...last.ctx.scores, [id]: v } });
+    });
+
+    // Enter in the talent box adds it (no form: the Workshop popup is not one).
+    host.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !e.target?.closest?.('.cw-attr-talent-input')) return;
+        e.preventDefault();
+        addTalentFromInput(host);
     });
 
     // Leaving the box: clamp into range, or fall back to the last good score.
@@ -270,6 +324,22 @@ function bindOnce(host) {
             if (!id) return;
             const current = getCastingAbility(last.ctx.proficiencies);
             commit({ proficiencies: withCastingAbility(last.ctx.proficiencies, current === id ? '' : id) }, { repaint: true });
+            return;
+        }
+        // Talents (§12): add from the box, star for Master, cross to remove.
+        if (btn.classList.contains('cw-attr-talent-submit')) {
+            addTalentFromInput(host);
+            return;
+        }
+        if (btn.classList.contains('cw-attr-talent-level') || btn.classList.contains('cw-attr-talent-remove')) {
+            const name = btn.closest('.cw-attr-talent')?.dataset.talent || '';
+            if (!name) return;
+            if (btn.classList.contains('cw-attr-talent-remove')) {
+                commit({ proficiencies: withoutTalent(last.ctx.proficiencies, name) }, { repaint: true });
+            } else {
+                const t = getTalents(last.ctx.proficiencies).find(x => x.name === name);
+                commit({ proficiencies: withTalent(last.ctx.proficiencies, name, t && t.level === 'master' ? 'practised' : 'master') }, { repaint: true });
+            }
             return;
         }
         if (btn.classList.contains('cw-attr-skill')) {
