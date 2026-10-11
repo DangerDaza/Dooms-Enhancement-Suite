@@ -18,7 +18,7 @@ says where things stand.
 | 3.5 | Keeping the tracker alive after dice (reminder, recovery, tool split) | Yes (`f35507d`, `3c18e89`) | `tracker-recovery-test` | Not yet | Handover §2 step 3 |
 | Side | Voices: Never whisper | Yes (`789e136`, `4df16d3`) | `voice-logic-test` | Not yet | Parity row 158 |
 | 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | Yes (`3c7969c` … `ee08db6`; `docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 | Not yet | Parity rows "Saving throws" and the NPC-verdict row |
-| 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | In progress (`docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` when they land | Not yet | The four commits in §11.8, then parity rows "Tiers" |
+| 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
 
@@ -274,6 +274,31 @@ names, unless the named one is physical. Tick it on Muzen's Charisma.
 **Open.** Whether Claude reaches for the save form unprompted; the brief
 guide's cost per turn (about 100 words); Hard at DC 28 in Jordan's own
 settings prints as a 0% roll in the guide, which is the point.
+
+## Phase 4b — Tiers and NPC sheets
+
+**Is it ready?** Built, tested, pushed (`bc48864` design, `e079ccf`
+model, `734b0c2` lifecycle). Not yet watched in play. Jordan's
+ask: NPC stats away from all 10s, on a scale where Legends sit far above
+ordinary people.
+
+**What exists.** Five tiers, Ordinary (8–12) to Legend (18–30), each with
+a standard array; the tier is one word on the sheet and never caps a
+score. Three ways to fill a sheet: Fill by tier in the Workshop (the
+array over the current ranking), Suggest from the story (one small call,
+nothing kept until Save), and automatic suggestion for a new face on the
+shelf behind a switch that is off by default (stored with an
+"AI-suggested" badge until the owner touches the sheet). The attributes
+line carries the tier word, behind "Send the tier to the AI".
+
+**Prove it.** `timeout 90 node tools/d20-test.mjs` §9 and
+`node tools/sheet-suggest-test.mjs` pass; then parity rows "Tiers" (the
+Workshop, Suggest from the story, automatic, the AI).
+
+**Open.** Whether the AI's suggestions land in sensible tiers for this
+story's cast (Masters as Exceptional, Servants as Legend); the cost of the
+automatic switch in a crowded scene (one call per new face, sequential);
+no bulk "suggest for everyone" yet.
 
 ## Phase 4 — if wanted (not started, not designed)
 

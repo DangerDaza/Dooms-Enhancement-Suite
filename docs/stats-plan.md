@@ -954,7 +954,9 @@ card and notices), `tools/dice-test.mjs` §10; `src/systems/ui/attributesPane.js
 
 ## 11. Phase 4b — Tiers and NPC sheets
 
-Status: **in progress on `Project-Short-Fuse`, 2026-10-11.**
+Status: **built on `Project-Short-Fuse` (`bc48864` design, `e079ccf`
+model, `734b0c2` lifecycle, 2026-10-11); awaiting in-browser
+verification (parity rows "Tiers").**
 
 The owner's ask: "we need a way to set NPC's stats away from all 10s. But
 there needs to be a scale to it: Legends should have really good stats,

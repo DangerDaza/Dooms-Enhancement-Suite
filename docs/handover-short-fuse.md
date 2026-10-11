@@ -47,6 +47,7 @@ state and the next moves.
    timeout 90 node tools/vitals-test.mjs
    node tools/tracker-recovery-test.mjs
    node tools/voice-logic-test.mjs
+   timeout 90 node tools/sheet-suggest-test.mjs
    ```
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
    current RP, with Settings → Generation → "Fetch the tracker when a reply
@@ -136,6 +137,12 @@ SillyTavern yet; the cloud session cannot run it. That is step 3 above.
   the difficulty guide in every instruction; verdicts end with whose roll
   it is. Unverified in play: see the phases doc and parity rows "Saving
   throws". Jordan's Hard is DC 28, above Very hard; the guide will say so.
+- Phase 4b, tiers and NPC sheets (2026-10-11, `bc48864` onward,
+  `docs/stats-plan.md` §11): the five-tier scale on the sheet, Fill by
+  tier and Suggest from the story in the Workshop, automatic suggestions
+  behind a switch that is off by default, the tier word in the attributes
+  line. Unverified in play: parity rows "Tiers". `tools/sheet-suggest-test.mjs`
+  joins the gate.
 
 ## 4. What is built (all on the branch, base `origin/main` at `c97bac0`)
 
