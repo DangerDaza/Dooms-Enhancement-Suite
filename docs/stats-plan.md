@@ -949,3 +949,106 @@ card and notices), `tools/dice-test.mjs` §10; `src/systems/ui/attributesPane.js
 2. The model and its tests.
 3. The lifecycle, the tool, the Workshop tick, the card; tests.
 4. Parity rows, the phases doc, the handover.
+
+---
+
+## 11. Phase 4b — Tiers and NPC sheets
+
+Status: **in progress on `Project-Short-Fuse`, 2026-10-11.**
+
+The owner's ask: "we need a way to set NPC's stats away from all 10s. But
+there needs to be a scale to it: Legends should have really good stats,
+like Muzen's 30 Charisma, but people like Ines should have normal human
+stats." Decisions: **D18** the five-tier scale below; **D19** three ways
+to fill a sheet, all three built: by tier in the Workshop, by one small
+AI call from the Workshop, and automatically for new characters behind a
+switch that is off by default; **D20** the tier word goes to the AI in
+the attributes line; **D21** the ranges guide and warn, they never cap.
+
+### 11.1 The scale
+
+| Tier | Range | Standard array | Means |
+| --- | --- | --- | --- |
+| Ordinary | 8–12 | 12, 11, 10, 10, 9, 8 | most people; Ines |
+| Trained | 10–14 | 14, 13, 12, 11, 10, 10 | good at their trade |
+| Exceptional | 12–17 | 17, 15, 14, 13, 12, 12 | the best in a city; a field Master |
+| Heroic | 15–20 | 20, 18, 17, 16, 15, 15 | the best alive |
+| Legend | 18–30 | 30, 26, 24, 22, 20, 18 | beyond human; a Servant, Muzen |
+
+A tier is one word on the sheet. Any score may still be typed; the
+Workshop marks a score outside the tier's range and says which range, and
+that is all a range does. The difficulty guide is unchanged: a DC is about
+the task, never the tier.
+
+### 11.2 Data model
+
+- The tier rides in the sheet's proficiency list as the flag `tier:<id>`,
+  the same way the casting ability does (`cha:casting`), so it follows the
+  sheet through copies, campaign versions and pruning with no new plumbing.
+  One per sheet; `withTier` replaces it.
+- A sheet the AI filled without the owner looking carries `mark:suggested`
+  until the owner changes anything on it in the Workshop; the tab shows a
+  badge while it is there. "tier" and "mark" are reserved: an attribute
+  that would take either id is given `attr_` in front.
+- Settings → Stats → Attributes & checks: "Send the tier to the AI" (on) and
+  "Suggest stats for new characters automatically" (off).
+
+### 11.3 Three ways to fill a sheet
+
+1. **Fill by tier.** The tier's standard array laid over the attributes
+   in the order of the current scores (ties by list order), so a sheet
+   that already favours Charisma keeps favouring it; an all-10 sheet gets
+   the array in list order. No request.
+2. **Suggest from the story.** One small call, the ruling call's size: the
+   character's card text (the Workshop description and appearance), the
+   recent scene, the attribute list and the scale. The AI answers with a
+   tier, six scores and a few words each. The pane fills, the changed
+   boxes are marked, nothing is kept until Save.
+3. **Automatically for new characters.** When a fresh reply's tracker
+   block names a character who has no sheet and no tier, DES asks once
+   (per session, per name), stores the answer with `mark:suggested`, and
+   says so in a notice. The persona is never touched; a failed call is not
+   retried that session. Off by default.
+
+### 11.4 Prompt
+
+- `buildAttributesLine` gains the tier: "Ines Arden, Ordinary: …" and a
+  character with a tier but default scores is still listed ("Ines Arden,
+  Ordinary."), so the game master knows the shape of the cast without the
+  numbers.
+- `buildSheetSuggestionPrompt`: who the character is, the scale with its
+  ranges and meanings, the attributes; answer with ONE JSON line
+  `{"tier": "<word>", "scores": {"Strength": 11, …}, "reasons": {"Strength":
+  "…"}}`. `parseSheetSuggestion` reads the tier word (label or id), clamps
+  scores to 1–30, ignores unknown attributes, tolerates missing reasons.
+
+### 11.5 UI
+
+Workshop → Attributes: a Tier row above the grid (select, Fill by tier,
+Suggest from the story, the suggested badge); a score box outside the
+tier's range gets an amber border and a title with the range. Settings
+gains the two switches. Notices: "Suggested stats for Ines Arden:
+Ordinary" on an automatic fill.
+
+### 11.6 Non-goals
+
+Levels, hit points, monster stat blocks, per-chat sheets, bulk suggestion
+for everyone on the roster (one button per character is enough for now).
+
+### 11.7 Files and tests
+
+`src/utils/d20.js` (TIERS, tier and mark flags, fillByTier, the
+suggestion prompt and parser, the attributes line, config), `tools/d20-test.mjs`
+§9; `src/systems/features/sheetSuggest.js` (the call, the apply, the
+automatic trigger), `tools/sheet-suggest-test.mjs`; `src/systems/features/diceRolls.js`
+(recentChatText exported); `src/systems/integration/sillytavern.js` (the
+trigger after a fresh reply parses); `src/systems/ui/attributesPane.js`,
+`src/systems/ui/characterWorkshop.js` (card text to the pane);
+`template.html`, `index.js`, the stylesheet; docs and parity rows "Tiers".
+
+### 11.8 Commits
+
+1. This section; the phases table row.
+2. The model and its tests.
+3. The suggestion module, the trigger, the Workshop, the switches; tests.
+4. Parity rows, the phases doc, the handover.
