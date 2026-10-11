@@ -1059,7 +1059,7 @@ trigger after a fresh reply parses); `src/systems/ui/attributesPane.js`,
 
 ## 12. Phase 4c — Casting checks and talents (freeform magic)
 
-Status: **designed 2026-10-11; building on `Project-Short-Fuse`.**
+Status: **built on `Project-Short-Fuse` (`7ce9335` design, `4f1e2cd` model, `9dddb03` lifecycle, 2026-10-11); awaiting in-browser verification (parity rows "Casting checks" and "Talents").**
 
 The owner's ask: "how should we handle spell casting? This is roleplay, so
 I don't want to lock the player into the D&D spell casting system, but I

@@ -19,7 +19,7 @@ says where things stand.
 | Side | Voices: Never whisper | Yes (`789e136`, `4df16d3`) | `voice-logic-test` | Not yet | Parity row 158 |
 | 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | Yes (`3c7969c` … `ee08db6`; `docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 | Not yet | Parity rows "Saving throws" and the NPC-verdict row |
 | 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
-| 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Designed (`docs/stats-plan.md` §12, D22–D27); building | `d20-test` §10, `dice-test` §11 | Not yet | The build, then parity rows "Casting checks" and "Talents" |
+| 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Yes (`7ce9335` … `9dddb03`; `docs/stats-plan.md` §12, D22–D27) | `d20-test` §10, `dice-test` §11 | Not yet | Parity rows "Casting checks" and "Talents" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
 
@@ -300,6 +300,43 @@ Workshop, Suggest from the story, automatic, the AI).
 story's cast (Masters as Exceptional, Servants as Legend); the cost of the
 automatic switch in a crowded scene (one call per new face, sequential);
 no bulk "suggest for everyone" yet.
+
+## Phase 4c — Casting checks and talents (freeform magic)
+
+**Is it ready?** Built, tested, pushed (`7ce9335` design, `4f1e2cd`
+model, `9dddb03` lifecycle). Not yet watched in play. Jordan's ask:
+spell casting for roleplay that keeps the casting modifier and spell
+saves without locking the player into D&D's spell system.
+
+**What exists.** No spell list, slots or levels. Three resolutions: magic
+done to someone who can resist is their save against the caster's DC
+(Phase 4a); magic against the world is a casting check, "Charisma
+(Casting)", the casting ability with proficiency; nothing resisting, no
+roll. The game master calls it as `[CHECK: Casting | Hard | …]` or the
+tool's attribute Casting; the player picks the Casting chip in the
+popover. Talents on the sheet (Practised or Master) say what the magic is
+known for and ride to the AI with the numbers: "casting ability Charisma
+(save DC 20, casting check +12); talents: Telepathy (Master)". A Master
+talent is advantage on the casting check; unlisted magic is unpractised,
+never refused. The Workshop shows the DC and the check bonus beside the
+Casting chip and has a Talents row under the grid.
+
+**Prove it.** `timeout 90 node tools/d20-test.mjs` §10 and
+`timeout 90 node tools/dice-test.mjs` §11 pass; then parity rows "Casting
+checks" and "Talents".
+
+**Cost.** Measured 2026-10-11 with Jordan's settings (`docs/stats-plan.md`
+§12.9): about 1,900 tokens a turn for everything the stats features add
+with tools live, of which the tool schema is 1,100; the tracker block is
+about 520 and the chat about 120,000. The one lever is the full guide
+duplicated inside the tool schema (about 400).
+
+**Open.** Whether the game master reaches for Casting on its own for
+wards and workings rather than a plain Charisma check; whether Master
+talents show up as advantage in its calls; the Charisma fallback for an
+NPC with no casting ability (D27) may surprise in a story where the
+caster is an Intelligence wizard, and the fix is the Casting chip on
+their sheet.
 
 ## Phase 4 — if wanted (not started, not designed)
 

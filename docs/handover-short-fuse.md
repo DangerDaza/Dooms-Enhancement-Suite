@@ -143,6 +143,15 @@ SillyTavern yet; the cloud session cannot run it. That is step 3 above.
   behind a switch that is off by default, the tier word in the attributes
   line. Unverified in play: parity rows "Tiers". `tools/sheet-suggest-test.mjs`
   joins the gate.
+- Phase 4c, casting checks and talents (2026-10-11, `7ce9335` onward,
+  `docs/stats-plan.md` §12): freeform magic with no spell list; a target
+  saves, or the caster makes a casting check ("Charisma (Casting)", the
+  casting ability with proficiency, called as `[CHECK: Casting | …]` or
+  the tool's attribute Casting), or nothing rolls; talents on the sheet
+  (`talent:<level>:<name>`, Practised or Master) go to the AI with the
+  save DC and the check bonus. Unverified in play: parity rows "Casting
+  checks" and "Talents". §12.9 has the measured per-turn cost of the stats
+  features (about 1,900 tokens with tools live).
 
 ## 4. What is built (all on the branch, base `origin/main` at `c97bac0`)
 
