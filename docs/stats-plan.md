@@ -1054,3 +1054,137 @@ trigger after a fresh reply parses); `src/systems/ui/attributesPane.js`,
 2. The model and its tests.
 3. The suggestion module, the trigger, the Workshop, the switches; tests.
 4. Parity rows, the phases doc, the handover.
+
+---
+
+## 12. Phase 4c — Casting checks and talents (freeform magic)
+
+Status: **designed 2026-10-11; building on `Project-Short-Fuse`.**
+
+The owner's ask: "how should we handle spell casting? This is roleplay, so
+I don't want to lock the player into the D&D spell casting system, but I
+do want to keep the spell casting modifier and spell saves. How do we set
+the player up with spell functions without feeling restrictive?"
+
+Decisions: **D22** no spell list, no slots, no levels: the player writes
+what their character does and the game master picks one of three
+resolutions (§12.1). **D23** a casting check is the casting ability with
+proficiency, D&D's spell attack bonus turned into a check against a
+difficulty, because prose fights have no armour class to attack. **D24**
+talents are an optional free-text list on the sheet with two levels,
+Practised and Master; a Master talent gives advantage on casting checks
+and never moves the save DC, so a Legend's Charisma does the work it does
+today. **D25** magic outside the listed talents is allowed at no
+proficiency, never refused by the rules; an empty list means the game
+master judges from the card, which is what happens now. **D26** no
+resource track: the narration carries the price of magic; a Strain vital
+is the lever later if fights ever feel free. **D27** a character with no
+casting ability who is called for a casting check casts with Charisma
+(the first casting candidate when the list has no Charisma), unpractised.
+
+### 12.1 The three resolutions
+
+| The act | Who rolls | Against |
+| --- | --- | --- |
+| Done to someone who can resist (reading a mind, a compulsion, a curse) | The target saves (§10) | The caster's spell save DC: 8 + proficiency + casting modifier |
+| Contending with the world (a ward, a storm, a working held while hurt, a reach across a city) | The caster makes a casting check: d20 + casting modifier + proficiency | A DC from the difficulty table |
+| Nothing pushes back | Nobody | It just happens |
+
+Holding a working through harm is a Constitution save, as the 2024 rules
+make it; the guide names it, nothing tracks it.
+
+### 12.2 Data model
+
+- A casting check is the skill "Casting" on the casting ability. The
+  proficiency is the existing key `cha:casting`: `isProficient(prof, 'cha',
+  'Casting')` is true exactly when Charisma is the casting ability, so no
+  new key and no new switch. It is called as `[CHECK: Casting | Hard | the
+  ward is old]`, `[CHECK: Muzen: Casting | …]`, `Charisma (Casting)`, or the
+  tool with attribute `Casting`. `resolveCheckCall` marks a bare Casting
+  with `castingCheck: true` and no attribute; the lifecycle fills the
+  attribute from the roller's sheet (D27) before anything rolls.
+- Talents ride in `_prof` as `talent:<level>:<name>` (`talent:master:Telepathy`,
+  `talent:practised:Blood-binding`): the name as typed, up to 32
+  characters, one entry per name; "talent" joins the reserved prefixes.
+  `pruneProficiencies` keeps a well-formed talent. They follow the sheet
+  through copies, campaign versions and the suggested mark like the tier.
+- Settings: none new.
+
+### 12.3 Prompt
+
+- `buildAttributesLine`: "casting ability Charisma (save DC 20, casting
+  check +12)" instead of the hint, so the game master no longer does the
+  arithmetic; then "talents: Telepathy (Master), Blood-binding" when any.
+- `difficultyGuide`, both forms, after the who-rolls rule: "Magic and
+  powers: done to someone who can resist, that someone saves against the
+  caster's DC as above; contending with the world (a ward, a storm, a
+  working held while hurt, a reach across a city), the caster makes a
+  casting check, written Casting (their casting ability plus proficiency;
+  advantage inside a Master talent on their sheet; outside their listed
+  talents no proficiency, but never refused); nothing resisting, no roll.
+  Holding a working through harm is a Constitution save."
+- The tag instruction gains the Casting example; the tool's `attribute`
+  enum gains `Casting`, and its description says what it is.
+- The ruling call is unchanged beyond the guide: a tagged Casting check is
+  rated like any check, or turned into the target's save when the attempt
+  works on someone.
+
+### 12.4 Flow
+
+- Player: the popover shows a Casting chip under the casting ability, with
+  the proficiency badge; tag, send, ruled and rolled like any check.
+  `tagCheck` accepts the Casting skill when the attribute is the persona's
+  casting ability.
+- Game master: the tag or the tool; `checkFromCall` fills the ability for a
+  bare Casting and reads the proficiency from the casting key.
+- Verdicts and cards read "Charisma (Casting) check"; nothing else new.
+
+### 12.5 UI
+
+Workshop → Attributes: the lit Casting chip gains a readout, "DC 20 ·
+check +12", that follows the score as it is typed; a Talents row under
+the grid (a name box and Add, chips with a star to make a talent Master
+and a cross to remove it). The popover gains the Casting chip.
+
+### 12.6 Non-goals
+
+Spell lists, slots, levels, components, concentration tracking, a strain
+vital, per-talent DCs or bonuses, talents for anything but magic.
+
+### 12.7 Files and tests
+
+`src/utils/d20.js` (the Casting skill, talents, the attributes line, the
+guide, `resolveCheckCall`, the instructions and the tool definition),
+`tools/d20-test.mjs` §10; `src/systems/features/diceRolls.js` (`tagCheck`,
+`checkFromCall`), `tools/dice-test.mjs` §11; `src/systems/ui/dicePanel.js`
+(the chip), `src/systems/ui/attributesPane.js` (the readout, the Talents
+row), the stylesheet; docs and `docs/parity-checklist.md` rows "Casting
+checks" and "Talents".
+
+### 12.8 Commits
+
+1. This section; the phases table row.
+2. The model and its tests.
+3. The lifecycle, the popover chip, the Workshop readout and Talents row;
+   tests.
+4. Parity rows, the phases doc, the handover.
+
+### 12.9 What the stats features cost per turn (measured 2026-10-11)
+
+With Jordan's settings (six sheets, tiers on, scores always sent, tool
+calling live on the Claude source), estimated at four characters a token:
+
+| Piece | Tokens | When |
+| --- | --- | --- |
+| Attributes line | ~290 | every turn |
+| CHECKS instruction, tool form | ~490 | every turn |
+| Tool schema (`dooms_roll_check`), of which the full guide ~415 | ~1,100 | every turn, tools live |
+| Verdict and the shape reminder | ~140 | a turn with a roll |
+| Ruling call | ~1,700 | a tagged check, with "AI rates difficulty" on (off in Jordan's) |
+| Sheet suggestion | ~1,700 | once per new character, automatic switch on |
+
+About 1,900 tokens a turn against a tracker block of about 520 and a chat
+of about 120,000, so under two per cent of the prompt. A turn where the
+tool fires costs a second request's input, less with caching. The one
+duplicate is the full guide inside the tool schema while the instruction
+carries the brief one; dropping it would save about 400 a turn.

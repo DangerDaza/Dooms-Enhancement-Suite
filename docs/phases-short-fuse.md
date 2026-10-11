@@ -19,6 +19,7 @@ says where things stand.
 | Side | Voices: Never whisper | Yes (`789e136`, `4df16d3`) | `voice-logic-test` | Not yet | Parity row 158 |
 | 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | Yes (`3c7969c` … `ee08db6`; `docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 | Not yet | Parity rows "Saving throws" and the NPC-verdict row |
 | 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
+| 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Designed (`docs/stats-plan.md` §12, D22–D27); building | `d20-test` §10, `dice-test` §11 | Not yet | The build, then parity rows "Casting checks" and "Talents" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
 
