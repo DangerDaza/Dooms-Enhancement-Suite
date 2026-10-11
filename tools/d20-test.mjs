@@ -193,10 +193,67 @@ const toolInst = D.buildToolCallInstruction({ settings, userName: 'Jordan' });
 check('the tool instruction names the tool and the restraint', toolInst.includes('call the dooms_roll_check tool') && toolInst.includes('who is rolling when it is not the player') && toolInst.includes('most replies have none'));
 const tool = D.buildDiceToolDefinition({ settings, userName: 'Jordan' });
 check('the tool definition: enums from the sheet, who only with NPCs on',
-    tool.name === 'dooms_roll_check' && tool.parameters.properties.attribute.enum.join() === 'Strength,Dexterity,Constitution,Intelligence,Wisdom,Charisma' && tool.parameters.properties.difficulty.enum.length === 5 && tool.parameters.required.join() === 'attribute,difficulty,reason' && !!tool.parameters.properties.who && tool.parameters.properties.skill.description.includes('Stealth (DEX)'));
+    tool.name === 'dooms_roll_check' && tool.parameters.properties.attribute.enum.join() === 'Strength,Dexterity,Constitution,Intelligence,Wisdom,Charisma' && tool.parameters.properties.difficulty.enum.length === 5 && tool.parameters.required.join() === 'attribute,reason' && !!tool.parameters.properties.who && tool.parameters.properties.skill.description.includes('Stealth (DEX)'));
 settings.attributes.aiCalls.npcs = false;
 check('...no who parameter without NPCs', D.buildDiceToolDefinition({ settings }).parameters.properties.who === undefined);
 settings.attributes.aiCalls.npcs = true;
+
+// ── 8. Saving throws and opposed actions (Phase 4a, §10, 2024 rules) ──
+check('save keys: "wis:save", recognised, and a skill cannot be called Save',
+    D.saveKey('wis') === 'wis:save' && D.isSaveKey('wis:save') && !D.isSaveKey('wis:perception') && !D.isSaveKey('save')
+    && D.isSaveProficient(['wis:save', 'dex:stealth'], 'wis') && !D.isSaveProficient(['dex:stealth'], 'wis')
+    && D.normalizeSkills(['Save', 'Stealth', ' save ']).join() === 'Stealth');
+check('pruneProficiencies keeps a save whose attribute exists and drops one whose attribute is gone',
+    D.pruneProficiencies(['wis:save', 'luck:save', 'dex:stealth', 'dex:gone'], defs).join() === 'dex:stealth,wis:save');
+check('saveProficiencyDefs lists the attributes in list order', D.saveProficiencyDefs(defs, ['cha:save', 'str:save']).map(d => d.id).join() === 'str,cha');
+check('saveDC: 8 + proficiency + modifier (Charisma 30, +2 → 20; a 10 → 10; a +3 bonus → 11)',
+    D.saveDC(30, 2) === 20 && D.saveDC(10, 2) === 10 && D.saveDC(10, 3) === 11 && D.SAVE_DC_BASE === 8);
+const guide = D.difficultyGuide(settings);
+check('the guide carries the configured DCs with the odds for +0 and +5, the one-step rule and who rolls',
+    guide.startsWith('DIFFICULTY: judge the task and the circumstances, never the character')
+    && guide.includes('Easy (DC 10; a +0 roll makes it 55% of the time, a +5 roll 80%)')
+    && guide.includes('Medium (DC 15; a +0 roll makes it 30% of the time, a +5 roll 55%)')
+    && guide.includes('Hard (DC 20; a +0 roll makes it 5% of the time, a +5 roll 30%)')
+    && guide.includes('Very hard (DC 25; a +0 roll makes it 0% of the time, a +5 roll 5%)')
+    && guide.includes('When unsure, Medium.') && guide.includes('never both') && guide.includes('starts at Hard')
+    && guide.includes('Who rolls:') && guide.includes('8 + the actor\'s proficiency bonus of 2 + the actor\'s modifier'), guide);
+check('...the brief form is shorter and still says who rolls', (() => { const b = D.difficultyGuide(settings, { brief: true }); return b.length < guide.length / 2 && b.includes('Who rolls:') && b.includes('Medium is the usual call'); })());
+check('...and follows an edited table', D.difficultyGuide({ attributes: { difficulty: { hard: 28 } } }).includes('Hard (DC 28; a +0 roll makes it 0% of the time, a +5 roll 0%)'));
+const saveRoll = D.rollCheck({ attribute: 'Charisma', abbr: 'CHA', score: 10, dc: 20, proficiency: 0, kind: 'save', rng: faces(18) });
+check('rollCheck carries the kind; an old record is a check', saveRoll.kind === 'save' && D.isSaveRoll(saveRoll) && D.rollCheck({ attribute: 'Strength', score: 10, dc: 10, rng: faces(5) }).kind === 'check' && !D.isSaveRoll({ attribute: 'Strength' }));
+const saveRecord = { ...saveRoll, who: 'Ines Arden', isUser: false, against: { who: 'Muzen', isUser: true, attributeId: 'cha', attribute: 'Charisma', abbr: 'CHA', score: 30, mod: 10, prof: 2 } };
+const saveVerdict = D.verdictText(saveRecord, { framing: 'Ines Arden makes a Charisma saving throw against Muzen\'s Charisma', reason: 'the push goes deep', ownership: D.ownershipSentence(saveRecord) });
+check('a save verdict: the throw, the DC formula, the failure, and whose roll it is',
+    saveVerdict.includes('Charisma saving throw: d20 = 18, +0 (CHA 10) = 18 vs DC 20 (Muzen\'s Charisma: 8 + 2 proficiency +10), because the push goes deep. FAILURE, narrowly (by 2). This roll is Ines Arden\'s: Ines Arden does not resist, and Muzen\'s effect on them takes hold. This outcome is final: narrate the effect taking hold and its consequences.'), saveVerdict);
+const saved = { ...saveRecord, ...D.rollCheck({ attribute: 'Charisma', abbr: 'CHA', score: 10, dc: 20, kind: 'save', rng: faces(20) }), who: 'Ines Arden', isUser: false };
+check('...a success resists; a natural 20 shrugs it off', D.ownershipSentence(saved) === 'This roll is Ines Arden\'s: Ines Arden resists, and Muzen\'s effect on them fails.' && D.verdictText(saved, { ownership: '' }).includes('NATURAL 20, a critical success. This outcome is final: narrate the effect shrugged off entirely.'));
+check('an NPC\'s check says whose roll it is and whose attempt it is not; the player\'s own check says nothing extra',
+    D.ownershipSentence({ kind: 'check', who: 'Ines Arden', isUser: false, success: true }, { actorName: 'Muzen' }) === 'This roll is Ines Arden\'s: it decides whether Ines Arden succeeds at what the reason describes, nothing about Muzen\'s own attempt.'
+    && D.ownershipSentence({ kind: 'check', who: 'Muzen', isUser: true, success: true }) === '');
+check('describeDC falls back to the word for checks', D.describeDC({ kind: 'check', dc: 15 }, 'Medium') === 'DC 15 (Medium)' && D.formatRollShort(saveRecord).startsWith('Charisma save · d20 18'));
+check('the attributes line names save proficiencies',
+    D.buildAttributesLine([{ name: 'Jordan', isUser: true, sheet: { str: 15 }, proficiencies: ['wis:save', 'cha:save', 'str:athletics'] }], defs, { proficiencyBonus: 2 })
+    === 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; a proficient skill adds +2; read-only, never output them): Jordan (player): STR 15 (+2); proficient in Athletics (+2); proficient in Wisdom, Charisma saves (+2).');
+const rp = D.buildDifficultyRatingPrompt({ userName: 'Muzen', attempt: 'read her mind', attributeName: 'Charisma', settings, targets: ['Ines Arden', 'Silvy'] });
+check('the ruling prompt carries the full guide, both answer forms and the names who could resist',
+    rp.system.includes('DIFFICULTY: judge the task') && rp.system.includes('"save": {"who": "<their name>"') && rp.system.includes('"difficulty": "<easy|medium|hard|very hard|nearly impossible>"')
+    && rp.user.includes('Characters in the scene who could resist: Ines Arden, Silvy.'), rp.user);
+const savedAnswer = D.parseDifficultyRating('{"save": {"who": "Ines Arden", "attribute": "Charisma", "against": "Charisma"}, "advantage": "disadvantage", "reason": "She is distracted."}', settings);
+check('a save answer is read as one', savedAnswer && savedAnswer.kind === 'save' && savedAnswer.who === 'Ines Arden' && savedAnswer.attribute === 'Charisma' && savedAnswer.against === 'Charisma' && savedAnswer.advantage === 'dis' && savedAnswer.reason === 'She is distracted.');
+check('a check answer still reads as a check', D.parseDifficultyRating('{"difficulty": "hard", "advantage": "none", "reason": "x"}', settings).kind === 'check');
+check('parseAgainst', JSON.stringify(D.parseAgainst('vs Muzen\'s Charisma')) === '{"who":"Muzen","attribute":"Charisma"}' && JSON.stringify(D.parseAgainst('against the player’s Wisdom')) === '{"who":"the player","attribute":"Wisdom"}' && JSON.stringify(D.parseAgainst('vs Charisma')) === '{"who":"","attribute":"Charisma"}' && D.parseAgainst('Hard') === null);
+const sc = D.resolveCheckCall({ kind: 'save', who: 'Ines Arden', attribute: 'Charisma', difficulty: 'vs Muzen\'s Charisma', reason: 'the push goes deep' }, settings);
+check('a save against a character resolves with the DC pending', sc && sc.kind === 'save' && sc.who === 'Ines Arden' && sc.attributeId === 'cha' && sc.skill === '' && sc.dc === null && sc.difficultySource === 'character' && sc.against.who === 'Muzen' && sc.against.attributeId === 'cha', JSON.stringify(sc));
+const sc2 = D.applySaveDC(sc, { who: 'Muzen', isUser: true, score: 30, proficiencyBonus: 2 });
+check('applySaveDC fills 8 + 2 + 10 and the label', sc2.dc === 20 && sc2.label === 'vs Muzen\'s Charisma' && sc2.against.mod === 10 && sc2.against.prof === 2 && sc2.against.score === 30 && sc.dc === null);
+check('a save against the world takes the word', (() => { const w = D.resolveCheckCall({ kind: 'save', attribute: 'Wisdom', difficulty: 'Hard, disadvantage', reason: 'the vision presses in' }, settings); return w && w.kind === 'save' && w.dc === 20 && w.label === 'Hard' && w.advantage === 'dis' && w.against === null && w.difficultySource === 'ai'; })());
+check('the tool\'s against fields resolve the same way', (() => { const t = D.resolveCheckCall({ kind: 'save', who: 'Ines Arden', attribute: 'Charisma', against: '', againstAttribute: 'Charisma', reason: 'x' }, settings); return t && t.against && t.against.who === '' && t.against.attributeId === 'cha' && t.dc === null; })());
+const tagged = D.parseCheckCall('She frowns.\n[CHECK: Wisdom (Insight) | Medium | something is off]\nThen it hits her.\n[SAVE: Ines Arden: Charisma | vs Muzen\'s Charisma | the push goes deep]', settings);
+check('the last tag wins, and a SAVE tag reads as a save', tagged && tagged.kind === 'save' && tagged.who === 'Ines Arden' && tagged.attributeId === 'cha' && tagged.against.who === 'Muzen' && tagged.raw.startsWith('[SAVE:'), JSON.stringify(tagged));
+check('a CHECK tag after a SAVE tag still wins', D.parseCheckCall('[SAVE: Wisdom | Hard | x]\n[CHECK: Stealth | Hard | y]', settings).kind === 'check');
+check('stripCheckCalls removes SAVE tags too', D.stripCheckCalls('Text.\n[SAVE: Wisdom | Hard | x]\n[CHECK: Stealth | Hard | y]') === 'Text.');
+check('the end-of-reply instruction shows the SAVE form and the brief guide', inst.includes('[SAVE: Guard: Wisdom | vs Jordan\'s Charisma |') && inst.includes('Set the difficulty by the task and the circumstances') && inst.includes('Who rolls:'));
+check('the tool instruction and definition carry saves', toolInst.includes('kind "save"') && tool.parameters.properties.kind.enum.join() === 'check,save' && tool.parameters.properties.againstAttribute.enum.length === 6 && tool.parameters.properties.difficulty.description.includes('DIFFICULTY: judge the task') && tool.description.includes('the actor never rolls'));
 
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

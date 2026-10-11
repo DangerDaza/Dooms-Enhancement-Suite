@@ -22,6 +22,12 @@
  * higher, disadvantage the lower. With criticals on, a natural 20 succeeds
  * and a natural 1 fails whatever the total. The AI never decides any of
  * this; it is handed the verdict to narrate.
+ *
+ * Saving throws (Phase 4a, docs/stats-plan.md §10, 2024 rules): the one
+ * acted upon rolls d20 + modifier (+ the proficiency bonus when proficient
+ * in that save) against a DC the actor's ability sets, 8 + proficiency
+ * bonus + modifier, or against a difficulty word when the world is the
+ * source. A roll carries `kind: 'check' | 'save'`.
  */
 
 /** The 5e skills under each ability. Constitution has none; a plain check is always offered. */
@@ -154,6 +160,8 @@ export function normalizeSkills(list) {
     for (const raw of Array.isArray(list) ? list : []) {
         const name = String(raw ?? '').trim().slice(0, 32);
         if (!name) continue;
+        // "save" is the saving-throw proficiency's slot on the sheet.
+        if (attributeSlug(name) === SAVE_SLUG) continue;
         const lower = name.toLowerCase();
         if (seen.has(lower)) continue;
         seen.add(lower);
@@ -273,6 +281,46 @@ export function difficultyById(settings, id) {
     return table.find(d => d.id === id) || table.find(d => d.id === cfg.defaultDifficulty) || table[1];
 }
 
+/** 2024 rules: a DC a character sets with an ability is 8 + proficiency bonus + modifier (the spell save DC). */
+export const SAVE_DC_BASE = 8;
+
+/** The DC a character's ability sets for a saving throw against them. */
+export function saveDC(score, proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus) {
+    return SAVE_DC_BASE + clampProficiency(proficiencyBonus) + modifier(score);
+}
+
+/** The chance, as "55%", that d20 + bonus reaches dc. */
+function oddsText(dc, bonus) {
+    const p = Math.max(0, Math.min(1, (21 - (dc - bonus)) / 20));
+    return `${Math.round(p * 100)}%`;
+}
+
+/**
+ * What the game master is told about choosing a difficulty, and who rolls
+ * (§10, D17): the task not the character, the five words with the
+ * configured DCs and the odds for a +0 and a +5 roll, the one-step rule,
+ * and the save rule. The brief form rides in the per-turn instruction; the
+ * full form in the ruling call and the tool.
+ */
+export function difficultyGuide(settings, { brief = false } = {}) {
+    const cfg = attributesConfig(settings);
+    const meaning = {
+        easy: 'a capable person nearly always manages this; call it only because failing would still matter',
+        medium: 'a real test with a real chance of failing; the usual call',
+        hard: 'most people fail and a skilled one often does',
+        veryHard: 'a feat, for the skilled with luck',
+        nearlyImpossible: 'a legend’s miracle, once a campaign',
+    };
+    const scale = difficultyTable(settings)
+        .map(d => `${d.label} (DC ${d.dc}; a +0 roll makes it ${oddsText(d.dc, 0)} of the time, a +5 roll ${oddsText(d.dc, 5)}): ${meaning[d.id]}`)
+        .join('. ');
+    const who = `Who rolls: the one whose own action is uncertain makes an ability check against a difficulty. When the action is done to someone who can resist it, that someone makes a saving throw and the actor's ability sets the DC (${SAVE_DC_BASE} + the actor's proficiency bonus of ${cfg.proficiencyBonus} + the actor's modifier); the actor does not roll.`;
+    if (brief) {
+        return `Set the difficulty by the task and the circumstances, never by who attempts it (their bonus is added afterwards); Medium is the usual call, Hard when most people would fail. ${who}`;
+    }
+    return `DIFFICULTY: judge the task and the circumstances, never the character: the roller's modifier and proficiency are added afterwards, so a master and a novice face the same DC and differ in their bonus. ${scale}. When unsure, Medium. Circumstances move the call one step (dark, hurried, wounded, a hostile listener) or give advantage or disadvantage, never both. A social check on someone who does not want to be moved starts at Hard; on someone already inclined, Easy. The reason names the one thing that could go wrong. ${who}`;
+}
+
 // ─── Scores and sheets ──────────────────────────────────────────────────────
 
 /** Rounds and clamps into 1–30; garbage gives null. */
@@ -390,6 +438,31 @@ export function isProficient(proficiencies, attributeId, skillName) {
     return Array.isArray(proficiencies) && proficiencies.includes(skillKey(attributeId, skillName));
 }
 
+/** The reserved slug of a saving-throw proficiency: "wis:save". A skill cannot take this name. */
+export const SAVE_SLUG = 'save';
+
+/** The stored form of a saving-throw proficiency: "wis:save". */
+export function saveKey(attributeId) {
+    return `${String(attributeId || '')}:${SAVE_SLUG}`;
+}
+
+/** True for an "attr:save" key. */
+export function isSaveKey(key) {
+    const k = String(key || '');
+    const i = k.indexOf(':');
+    return i > 0 && k.slice(i + 1) === SAVE_SLUG;
+}
+
+/** True when the character is proficient in saving throws with this attribute. */
+export function isSaveProficient(proficiencies, attributeId) {
+    return Array.isArray(proficiencies) && proficiencies.includes(saveKey(attributeId));
+}
+
+/** The attributes (by def) a character has save proficiency in, in list order. */
+export function saveProficiencyDefs(defs, proficiencies) {
+    return (defs || []).filter(d => isSaveProficient(proficiencies, d.id));
+}
+
 /** Resolves a proficiency key back to its skill's display name, or '' when no def carries it. */
 export function skillNameForKey(defs, key) {
     const i = String(key || '').indexOf(':');
@@ -419,9 +492,12 @@ export function findSkill(defs, name) {
     return null;
 }
 
-/** Keeps only the proficiencies whose attribute and skill still exist on the defs. */
+/** Keeps only the proficiencies whose attribute and skill (or save) still exist on the defs. */
 export function pruneProficiencies(proficiencies, defs) {
-    return normalizeProfKeys((proficiencies || []).filter(k => skillNameForKey(defs, k)));
+    return normalizeProfKeys((proficiencies || []).filter(k => {
+        if (isSaveKey(k)) return (defs || []).some(d => d.id === String(k).slice(0, String(k).indexOf(':')));
+        return !!skillNameForKey(defs, k);
+    }));
 }
 
 /** Removes a character's sheet. */
@@ -471,7 +547,7 @@ export function roll4d6DropLowest(rng = cryptoRandomInt) {
  * @param {{ attribute: string, abbr?: string, score: number, dc: number,
  *           advantage?: 'none'|'adv'|'dis', criticals?: boolean, rng?: Function }} p
  */
-export function rollCheck({ attribute, abbr = '', skill = '', score, dc, advantage = 'none', criticals = true, proficiency = 0, rng = cryptoRandomInt }) {
+export function rollCheck({ attribute, abbr = '', skill = '', score, dc, advantage = 'none', criticals = true, proficiency = 0, kind = 'check', rng = cryptoRandomInt }) {
     const s = clampScore(score) ?? DEFAULT_SCORE;
     const mod = modifier(s);
     const prof = Number.isFinite(Number(proficiency)) ? Math.max(0, Math.round(Number(proficiency))) : 0;
@@ -495,6 +571,7 @@ export function rollCheck({ attribute, abbr = '', skill = '', score, dc, advanta
         else if (kept === 1) { success = false; critical = 'failure'; }
     }
     return {
+        kind: kind === 'save' ? 'save' : 'check',
         attribute: String(attribute || ''),
         abbr: String(abbr || ''),
         skill: String(skill || ''),
@@ -513,6 +590,11 @@ export function rollCheck({ attribute, abbr = '', skill = '', score, dc, advanta
     };
 }
 
+/** True for a saving throw; an old record without a kind is a check. */
+export function isSaveRoll(roll) {
+    return !!roll && roll.kind === 'save';
+}
+
 /** How wide a margin reads: narrowly, clearly, decisively. */
 export function marginWord(margin) {
     const m = Math.abs(Number(margin) || 0);
@@ -529,28 +611,62 @@ function outcomeWords(roll) {
 }
 
 function narrateWords(roll) {
-    if (roll.critical === 'success') return 'narrate it going better than hoped';
-    if (roll.critical === 'failure') return 'narrate it going worse than a plain miss';
-    if (roll.success) return 'narrate the attempt succeeding, with that margin in mind';
-    return 'narrate the attempt failing and its consequences';
+    const save = isSaveRoll(roll);
+    if (roll.critical === 'success') return save ? 'narrate the effect shrugged off entirely' : 'narrate it going better than hoped';
+    if (roll.critical === 'failure') return save ? 'narrate the effect taking hold worse than a plain failure' : 'narrate it going worse than a plain miss';
+    if (roll.success) return save ? 'narrate the effect being resisted, with that margin in mind' : 'narrate the attempt succeeding, with that margin in mind';
+    return save ? 'narrate the effect taking hold and its consequences' : 'narrate the attempt failing and its consequences';
 }
 
 /**
- * The one block the AI sees for a roll: the arithmetic, the outcome, and
- * the instruction that it is final.
+ * Whose roll this is and what its outcome decides, so a verdict about one
+ * character's roll is never read as the other's result (§10, D17). '' for
+ * the player's own check, whose opening already says who attempts what.
+ * @param {object} roll
+ * @param {{ actorName?: string }} [opts] - who imposed a save, or whose attempt an NPC's check is not about
  */
-export function verdictText(roll, { userName = 'The player', attempt = '', difficultyLabel = '', reason = '', framing = '' } = {}) {
+export function ownershipSentence(roll, { actorName = '' } = {}) {
+    const who = String(roll?.who || '').trim();
+    if (!who) return '';
+    const actor = String(actorName || roll?.against?.who || '').trim();
+    if (isSaveRoll(roll)) {
+        const effect = actor ? `${actor}'s effect on them` : 'what the reason describes';
+        return `This roll is ${who}'s: ${who} ${roll.success ? `resists, and ${effect} fails` : `does not resist, and ${effect} takes hold`}.`;
+    }
+    if (roll.isUser === false) {
+        return `This roll is ${who}'s: it decides whether ${who} succeeds at what the reason describes${actor ? `, nothing about ${actor}'s own attempt` : ''}.`;
+    }
+    return '';
+}
+
+/** "DC 20 (Muzen's Charisma: 8 + 2 proficiency +10)" for a save a character set; "DC 15 (Medium)" otherwise. */
+export function describeDC(roll, difficultyLabel = '') {
+    const a = roll?.against;
+    if (isSaveRoll(roll) && a && typeof a === 'object' && a.who) {
+        return `DC ${roll.dc} (${a.who}'s ${a.attribute || a.abbr || 'ability'}: ${SAVE_DC_BASE} + ${a.prof} proficiency ${formatModifier(a.mod)})`;
+    }
+    return `DC ${roll.dc}${difficultyLabel ? ` (${difficultyLabel})` : ''}`;
+}
+
+/**
+ * The one block the AI sees for a roll: the arithmetic, the outcome, whose
+ * roll it is, and the instruction that it is final.
+ */
+export function verdictText(roll, { userName = 'The player', attempt = '', difficultyLabel = '', reason = '', framing = '', ownership = '' } = {}) {
     const who = String(userName || 'The player');
     const what = attempt ? `"${String(attempt).trim()}"` : 'the action in their last message';
     const opening = framing ? String(framing).trim().replace(/\.$/, '') : `${who} attempts ${what}`;
-    const label = checkLabel(roll);
+    const save = isSaveRoll(roll);
+    const label = `${checkLabel(roll)} ${save ? 'saving throw' : 'check'}`;
     let dice = `d20 = ${roll.kept}`;
     if (roll.advantage !== 'none' && roll.rolls.length === 2) {
         dice += ` (rolled ${roll.rolls[0]} and ${roll.rolls[1]}; ${roll.advantage === 'adv' ? 'advantage keeps the higher' : 'disadvantage keeps the lower'})`;
     }
-    const modPart = `${formatModifier(roll.mod)}${roll.abbr ? ` (${roll.abbr} ${roll.score})` : ''}${roll.prof ? `, +${roll.prof} (proficient in ${roll.skill || 'this'})` : ''}`;
-    const dcPart = `DC ${roll.dc}${difficultyLabel ? ` (${difficultyLabel})` : ''}${reason ? `, because ${String(reason).trim().replace(/\.$/, '')}` : ''}`;
-    return `[DICE: ${opening}. ${label} check: ${dice}, ${modPart} = ${roll.total} vs ${dcPart}. ${outcomeWords(roll)}. This outcome is final: ${narrateWords(roll)}. Do not re-roll, reverse or soften it.]`;
+    const profIn = save ? `${roll.attribute || roll.abbr || 'these'} saves` : (roll.skill || 'this');
+    const modPart = `${formatModifier(roll.mod)}${roll.abbr ? ` (${roll.abbr} ${roll.score})` : ''}${roll.prof ? `, +${roll.prof} (proficient in ${profIn})` : ''}`;
+    const dcPart = `${describeDC(roll, difficultyLabel)}${reason ? `, because ${String(reason).trim().replace(/\.$/, '')}` : ''}`;
+    const own = ownership ? ` ${String(ownership).trim()}` : '';
+    return `[DICE: ${opening}. ${label}: ${dice}, ${modPart} = ${roll.total} vs ${dcPart}. ${outcomeWords(roll)}.${own} This outcome is final: ${narrateWords(roll)}. Do not re-roll, reverse or soften it.]`;
 }
 
 /** "Dexterity (Stealth)" or "Strength": the attribute with the skill when there is one. */
@@ -569,7 +685,7 @@ export function outcomeLabel(roll) {
 /** Short form for the chip and the roll card. */
 export function formatRollShort(roll) {
     const dice = roll.advantage !== 'none' && roll.rolls.length === 2 ? `${roll.kept} (${roll.rolls[0]}/${roll.rolls[1]})` : `${roll.kept}`;
-    return `${checkLabel(roll)} check · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc} · ${outcomeLabel(roll)}`;
+    return `${checkLabel(roll)} ${isSaveRoll(roll) ? 'save' : 'check'} · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc} · ${outcomeLabel(roll)}`;
 }
 
 // ─── Prompt text ────────────────────────────────────────────────────────────
@@ -589,11 +705,13 @@ export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_D
             .filter(d => sheet[d.id] !== undefined && sheet[d.id] !== DEFAULT_SCORE)
             .map(d => `${d.abbr} ${sheet[d.id]} (${formatModifier(modifier(sheet[d.id]))})`);
         const prof = (e.proficiencies || []).map(k => skillNameForKey(defs, k)).filter(Boolean);
-        if (!scores.length && !prof.length) continue;
-        if (prof.length) anyProf = true;
+        const saves = saveProficiencyDefs(defs, e.proficiencies).map(d => d.name);
+        if (!scores.length && !prof.length && !saves.length) continue;
+        if (prof.length || saves.length) anyProf = true;
         const bits = [];
         if (scores.length) bits.push(scores.join(', '));
         if (prof.length) bits.push(`proficient in ${prof.join(', ')} (+${proficiencyBonus})`);
+        if (saves.length) bits.push(`proficient in ${saves.join(', ')} saves (+${proficiencyBonus})`);
         parts.push(`${e.name}${e.isUser ? ' (player)' : ''}: ${bits.join('; ')}`);
     }
     if (!parts.length) return '';
@@ -605,19 +723,24 @@ export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_D
  * The small separate call that rates an attempt: what the game master is
  * asked, and what it is shown.
  */
-export function buildDifficultyRatingPrompt({ userName = 'The player', attempt = '', attributeName = 'an ability', skillName = '', messageText = '', recentText = '' } = {}) {
+export function buildDifficultyRatingPrompt({ userName = 'The player', attempt = '', attributeName = 'an ability', skillName = '', messageText = '', recentText = '', settings = null, targets = [] } = {}) {
     const words = DIFFICULTIES.map(d => d.label.toLowerCase()).join('|');
-    const system = `You are the game master of a roleplay. The player is about to attempt something and will roll a d20 against a difficulty you set. Judge how hard the attempt is for this character in this scene, as a fair but demanding game master would: an ordinary act is easy, a real test medium, something most people would fail hard, a feat very hard, a miracle nearly impossible. Give advantage only when circumstances clearly favour the attempt and disadvantage only when they clearly hinder it. Answer with ONE line of JSON and nothing else: {"difficulty": "<${words}>", "advantage": "<none|advantage|disadvantage>", "reason": "<one short sentence>"}`;
+    const system = `You are the game master of a roleplay. The player is about to attempt something; the game rolls the d20 for it, never you. ${difficultyGuide(settings)} Give advantage only when circumstances clearly favour the attempt and disadvantage only when they clearly hinder it. Answer with ONE line of JSON and nothing else. For the player's own check: {"difficulty": "<${words}>", "advantage": "<none|advantage|disadvantage>", "reason": "<one short sentence>"}. When the attempt works on another character who can resist it, answer instead with that character's saving throw: {"save": {"who": "<their name>", "attribute": "<the ability they resist with>", "against": "<the player's ability that sets the DC>"}, "advantage": "<none|advantage|disadvantage>", "reason": "<one short sentence>"}; the player's ability is the one named in the attempt unless another clearly fits better.`;
     const using = `${attributeName}${skillName ? ` (${skillName})` : ''}`;
     const message = String(messageText || '').trim();
-    const user = `Recent scene:\n${recentText || '(no messages yet)'}\n\nThe player (${userName}) attempts: "${String(attempt || '').trim() || (message ? 'what their message describes' : 'what their next message describes')}", using ${using}.${message ? `\nTheir message: "${message.slice(0, 600)}"` : ''}\nRate it.`;
+    const names = (Array.isArray(targets) ? targets : []).map(t => String(t || '').trim()).filter(Boolean);
+    const user = `Recent scene:\n${recentText || '(no messages yet)'}\n\nThe player (${userName}) attempts: "${String(attempt || '').trim() || (message ? 'what their message describes' : 'what their next message describes')}", using ${using}.${message ? `\nTheir message: "${message.slice(0, 600)}"` : ''}${names.length ? `\nCharacters in the scene who could resist: ${names.join(', ')}.` : ''}\nRate it.`;
     return { system, user };
 }
 
 /**
  * Reads the game master's answer. A JSON line is preferred; prose with the
- * difficulty words in it is accepted. Null when nothing can be read.
- * @returns {{ difficultyId: string, dc: number, label: string, advantage: 'none'|'adv'|'dis', reason: string }|null}
+ * difficulty words in it is accepted. Null when nothing can be read. A
+ * save answer comes back as { kind: 'save', who, attribute, against,
+ * advantage, reason } with the names as written; the caller resolves them
+ * against the sheet.
+ * @returns {{ kind: 'check', difficultyId: string, dc: number, label: string, advantage: 'none'|'adv'|'dis', reason: string }
+ *   | { kind: 'save', who: string, attribute: string, against: string, advantage: 'none'|'adv'|'dis', reason: string } | null}
  */
 export function parseDifficultyRating(text, settings) {
     const s = String(text || '');
@@ -626,17 +749,28 @@ export function parseDifficultyRating(text, settings) {
     let difficultyId = null;
     let advantage = 'none';
     let reason = '';
-    const m = s.match(/\{[\s\S]*?\}/);
+    // The whole answer when it is JSON (a save answer nests an object), else the first object in it.
+    const m = s.match(/\{[\s\S]*\}/);
     if (m) {
         try {
             const j = JSON.parse(m[0]);
-            const word = String(j.difficulty || '').toLowerCase();
-            const hit = DIFFICULTIES.find(d => d.label.toLowerCase() === word || d.id.toLowerCase() === word.replace(/\s+/g, ''));
-            if (hit) difficultyId = hit.id;
             const advWord = String(j.advantage || '').toLowerCase();
             if (advWord.startsWith('dis')) advantage = 'dis';
             else if (advWord.startsWith('adv')) advantage = 'adv';
             if (typeof j.reason === 'string') reason = j.reason.trim().slice(0, 200);
+            if (j.save && typeof j.save === 'object' && String(j.save.who || '').trim()) {
+                return {
+                    kind: 'save',
+                    who: String(j.save.who).trim().slice(0, 60),
+                    attribute: String(j.save.attribute || '').trim().slice(0, 32),
+                    against: String(j.save.against || '').trim().slice(0, 32),
+                    advantage,
+                    reason,
+                };
+            }
+            const word = String(j.difficulty || '').toLowerCase();
+            const hit = DIFFICULTIES.find(d => d.label.toLowerCase() === word || d.id.toLowerCase() === word.replace(/\s+/g, ''));
+            if (hit) difficultyId = hit.id;
         } catch (e) { /* fall through to the prose scan */ }
     }
     if (!difficultyId) {
@@ -652,7 +786,7 @@ export function parseDifficultyRating(text, settings) {
         else if (lower.includes('advantage')) advantage = 'adv';
     }
     const entry = table.find(d => d.id === difficultyId);
-    return { difficultyId, dc: entry.dc, label: entry.label, advantage, reason };
+    return { kind: 'check', difficultyId, dc: entry.dc, label: entry.label, advantage, reason };
 }
 
 // ─── The game master's own calls (Phase 3) ──────────────────────────────────
@@ -663,6 +797,22 @@ export function parseDifficultyRating(text, settings) {
 // difficulty and a reason before any die exists; the game rolls.
 
 const CHECK_CALL_RE = /\[CHECK:\s*([^\]]*?)\s*\]/gi;
+const SAVE_CALL_RE = /\[SAVE:\s*([^\]]*?)\s*\]/gi;
+
+/**
+ * "vs Muzen's Charisma", "against the player's Wisdom", "vs Charisma": who
+ * sets the DC (empty for the player) and with which ability. Null when the
+ * text is not of that form.
+ */
+export function parseAgainst(text) {
+    const t = String(text || '').trim();
+    const m = t.match(/^(?:vs\.?|versus|against)\s+(.+?)\s*$/i);
+    if (!m) return null;
+    const rest = m[1].trim();
+    const owned = rest.match(/^(.+?)(?:'s|’s)\s+(.+)$/);
+    if (owned) return { who: owned[1].trim(), attribute: owned[2].trim() };
+    return { who: '', attribute: rest };
+}
 
 function matchDifficultyWords(text, settings) {
     const lower = String(text || '').toLowerCase();
@@ -685,34 +835,86 @@ export function findAttribute(defs, text) {
 }
 
 /**
- * Turns the pieces of a call (from the tag or the tool) into one check
- * description, or null when no attribute can be read. Missing difficulty
- * falls back to the configured default, and says so in `difficultySource`.
+ * Turns the pieces of a call (from the tag or the tool) into one check or
+ * save description, or null when no attribute can be read. A check with no
+ * difficulty falls back to the configured default, and says so in
+ * `difficultySource`. A save whose DC another character sets carries
+ * `against: { who, attribute, attributeId, abbr }` with `dc` null until
+ * the lifecycle reads that character's sheet (`applySaveDC`); `who` empty
+ * in `against` means the player. A save with a difficulty word instead is
+ * against the world and has its DC at once.
  */
-export function resolveCheckCall({ who = '', attribute = '', skill = '', difficulty = '', advantage = '', reason = '' } = {}, settings) {
+export function resolveCheckCall({ kind = 'check', who = '', attribute = '', skill = '', difficulty = '', advantage = '', reason = '', against = '', againstAttribute = '' } = {}, settings) {
     const defs = attributeDefs(settings);
+    const save = kind === 'save';
     let def = findAttribute(defs, attribute);
-    let hit = findSkill(defs, skill);
+    let hit = save ? null : findSkill(defs, skill);
     // "[CHECK: Stealth | Hard]": a skill alone means its home attribute.
-    if (!def && !hit) hit = findSkill(defs, attribute);
+    if (!def && !hit && !save) hit = findSkill(defs, attribute);
     if (!def && hit) def = defs.find(d => d.id === hit.attributeId) || null;
     if (!def) return null;
-    const words = matchDifficultyWords(`${difficulty} ${advantage}`, settings);
     const cfg = attributesConfig(settings);
-    const d = difficultyById(settings, words.difficultyId || cfg.defaultDifficulty);
-    return {
+    const words = matchDifficultyWords(`${difficulty} ${advantage}`, settings);
+    const base = {
+        kind: save ? 'save' : 'check',
         who: String(who || '').trim().slice(0, 60),
         attributeId: def.id,
         attribute: def.name,
         abbr: def.abbr,
         skill: hit ? hit.name : '',
         skillAttributeId: hit ? hit.attributeId : '',
+        advantage: words.advantage,
+        reason: String(reason || '').trim().replace(/^because\s+/i, '').slice(0, 200),
+    };
+    if (save) {
+        // "vs Muzen's Charisma" in the difficulty slot, or the tool's against fields.
+        const parsed = parseAgainst(difficulty);
+        const whoSets = parsed ? parsed.who : String(against || '').trim();
+        const abilityText = parsed ? parsed.attribute : String(againstAttribute || '').trim();
+        const againstDef = abilityText ? findAttribute(defs, abilityText) : null;
+        if (againstDef || (!words.difficultyId && (abilityText || whoSets || against))) {
+            // The DC comes from a character: the actor's ability. When no ability was named, the save's own ability.
+            const a = againstDef || def;
+            return {
+                ...base,
+                against: { who: String(whoSets || '').trim().slice(0, 60), attributeId: a.id, attribute: a.name, abbr: a.abbr },
+                difficultyId: '',
+                dc: null,
+                label: '',
+                difficultySource: 'character',
+            };
+        }
+    }
+    const d = difficultyById(settings, words.difficultyId || cfg.defaultDifficulty);
+    return {
+        ...base,
+        against: null,
         difficultyId: d.id,
         dc: d.dc,
         label: d.label,
         difficultySource: words.difficultyId ? 'ai' : 'default',
-        advantage: words.advantage,
-        reason: String(reason || '').trim().replace(/^because\s+/i, '').slice(0, 200),
+    };
+}
+
+/**
+ * Fills a save's DC from the sheet of the character who sets it (§10.1):
+ * 8 + proficiency bonus + their modifier. Returns a new call with `dc`, a
+ * label like "vs Muzen's Charisma", and the formula's parts on `against`.
+ * @param {object} call - from resolveCheckCall, difficultySource 'character'
+ * @param {{ who: string, isUser?: boolean, score: number, proficiencyBonus?: number }} actor
+ */
+export function applySaveDC(call, { who, isUser = false, score, proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus } = {}) {
+    if (!call || !call.against) return call;
+    const s = clampScore(score) ?? DEFAULT_SCORE;
+    const prof = clampProficiency(proficiencyBonus);
+    const mod = modifier(s);
+    const name = String(who || call.against.who || 'the player').trim();
+    return {
+        ...call,
+        against: { ...call.against, who: name, isUser: !!isUser, score: s, mod, prof },
+        dc: SAVE_DC_BASE + prof + mod,
+        label: `vs ${name}'s ${call.against.attribute}`,
+        difficultySource: 'character',
     };
 }
 
@@ -725,9 +927,12 @@ export function resolveCheckCall({ who = '', attribute = '', skill = '', difficu
  * attribute is not.
  */
 export function parseCheckCall(text, settings) {
-    const matches = [...String(text || '').matchAll(CHECK_CALL_RE)];
-    if (!matches.length) return null;
-    const m = matches[matches.length - 1];
+    const s = String(text || '');
+    const checks = [...s.matchAll(CHECK_CALL_RE)].map(m => ({ m, kind: 'check' }));
+    const saves = [...s.matchAll(SAVE_CALL_RE)].map(m => ({ m, kind: 'save' }));
+    const all = checks.concat(saves).sort((a, b) => a.m.index - b.m.index);
+    if (!all.length) return null;
+    const { m, kind } = all[all.length - 1];
     const parts = m[1].split('|').map(p => p.trim());
     let head = parts[0] || '';
     let who = '';
@@ -747,13 +952,13 @@ export function parseCheckCall(text, settings) {
     const paren = head.match(/^([^()]*?)\s*\(([^)]*)\)\s*$/);
     const attribute = paren ? paren[1].trim() : head.trim();
     const skill = paren ? paren[2].trim() : '';
-    const call = resolveCheckCall({ who, attribute, skill, difficulty: parts[1] || '', reason: parts[2] || '' }, settings);
+    const call = resolveCheckCall({ kind, who, attribute, skill, difficulty: parts[1] || '', reason: parts[2] || '' }, settings);
     return call ? { ...call, raw: m[0] } : null;
 }
 
-/** The reply with every "[CHECK: ...]" tag removed, for display. */
+/** The reply with every "[CHECK: ...]" and "[SAVE: ...]" tag removed, for display. */
 export function stripCheckCalls(text) {
-    return String(text || '').replace(CHECK_CALL_RE, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+    return String(text || '').replace(CHECK_CALL_RE, '').replace(SAVE_CALL_RE, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function attributeMenu(defs) {
@@ -777,7 +982,10 @@ export function buildCheckCallInstruction({ settings, userName = 'the player' } 
     const npc = cfg.aiCalls.npcs
         ? ' For a character other than the player, start with their name: [CHECK: Guard: Wisdom (Perception) | Medium | the corridor is dark].'
         : '';
-    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, you may call for ONE check by putting a line in exactly this form at the end of your narration: [CHECK: Dexterity (Stealth) | Hard | the guards are alert]. Difficulty is one of ${words}; you may add "advantage" or "disadvantage" after it.${npc} The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never roll, resolve or narrate the outcome yourself: the result arrives with the next message and you narrate it then.]`;
+    const saveExample = cfg.aiCalls.npcs
+        ? `[SAVE: Guard: Wisdom | vs ${userName}'s Charisma | the suggestion presses on his mind]`
+        : `[SAVE: Wisdom | Hard | the vision presses in]`;
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, you may call for ONE check by putting a line in exactly this form at the end of your narration: [CHECK: Dexterity (Stealth) | Hard | the guards are alert]. Difficulty is one of ${words}; you may add "advantage" or "disadvantage" after it.${npc} ${difficultyGuide(settings, { brief: true })} For a saving throw write ${saveExample}: the one who saves, the ability they resist with, then either "vs <name>'s <ability>" for the character whose ability sets the DC (a bare "vs <ability>" means ${userName}'s) or a difficulty word when the world is the source. The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never roll, resolve or narrate the outcome yourself: the result arrives with the next message and you narrate it then.]`;
 }
 
 export const DICE_TOOL_NAME = 'dooms_roll_check';
@@ -787,7 +995,7 @@ export function buildToolCallInstruction({ settings, userName = 'the player' } =
     const cfg = attributesConfig(settings);
     const defs = attributeDefs(settings);
     const npc = cfg.aiCalls.npcs ? ', and who is rolling when it is not the player' : '';
-    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, call the ${DICE_TOOL_NAME} tool with the attribute, a skill if one applies, the difficulty and a short reason${npc}; the result comes back to you, is final, and you narrate it as it fell. A tool call does not change the shape of your reply: after the result, produce the tracker data block exactly where your instructions place it, then the story. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never invent a roll or an outcome without the tool.]`;
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, call the ${DICE_TOOL_NAME} tool with the attribute, a skill if one applies, the difficulty and a short reason${npc}; the result comes back to you, is final, and you narrate it as it fell. ${difficultyGuide(settings, { brief: true })} For a saving throw call the tool with kind "save": who saves and the ability they resist with, and either the character whose ability sets the DC (against and againstAttribute) or a difficulty word when the world is the source. A tool call does not change the shape of your reply: after the result, produce the tracker data block exactly where your instructions place it, then the story. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never invent a roll or an outcome without the tool.]`;
 }
 
 /**
@@ -799,21 +1007,25 @@ export function buildDiceToolDefinition({ settings, userName = 'the player' } = 
     const cfg = attributesConfig(settings);
     const defs = attributeDefs(settings);
     const skills = defs.flatMap(d => (d.skills || []).map(sk => `${sk} (${d.abbr})`));
+    const names = defs.map(d => d.name);
     const properties = {
-        attribute: { type: 'string', enum: defs.map(d => d.name), description: 'The attribute the check is made with.' },
-        skill: { type: 'string', description: `A skill that applies, or empty for a plain attribute check. Any skill may pair with any attribute. Known skills: ${skills.join(', ') || 'none'}.` },
-        difficulty: { type: 'string', enum: DIFFICULTIES.map(d => d.label), description: 'How hard the attempt is for this character in this scene, decided before the roll.' },
-        advantage: { type: 'string', enum: ['none', 'advantage', 'disadvantage'], description: 'Advantage only when circumstances clearly favour the attempt, disadvantage only when they clearly hinder it.' },
-        reason: { type: 'string', description: 'One short sentence: why this difficulty.' },
+        kind: { type: 'string', enum: ['check', 'save'], description: 'check: the roller’s own uncertain action against a difficulty (the default). save: the roller resists something done to them; the DC comes from the character doing it (against, againstAttribute) or from a difficulty word when the world is the source.' },
+        attribute: { type: 'string', enum: names, description: 'The attribute the check is made with, or the ability a save is made with.' },
+        skill: { type: 'string', description: `A skill that applies to a check, or empty for a plain attribute check (never for a save). Any skill may pair with any attribute. Known skills: ${skills.join(', ') || 'none'}.` },
+        difficulty: { type: 'string', enum: DIFFICULTIES.map(d => d.label), description: `Required for a check, and for a save the world imposes. ${difficultyGuide(settings)}` },
+        advantage: { type: 'string', enum: ['none', 'advantage', 'disadvantage'], description: 'Advantage only when circumstances clearly favour the roller, disadvantage only when they clearly hinder them.' },
+        reason: { type: 'string', description: 'One short sentence: the one thing that could go wrong, and why this difficulty.' },
+        against: { type: 'string', description: `For a save a character imposes: that character's name as it appears in the scene, or empty for ${userName}.` },
+        againstAttribute: { type: 'string', enum: names, description: 'For a save a character imposes: the ability of theirs that sets the DC (8 + their proficiency bonus + their modifier).' },
     };
-    const required = ['attribute', 'difficulty', 'reason'];
+    const required = ['attribute', 'reason'];
     if (cfg.aiCalls.npcs) {
-        properties.who = { type: 'string', description: `Who rolls: leave empty for ${userName}, or an NPC's name as it appears in the scene.` };
+        properties.who = { type: 'string', description: `Who rolls: leave empty for ${userName}, or an NPC's name as it appears in the scene. For a save, the one resisting.` };
     }
     return {
         name: DICE_TOOL_NAME,
         displayName: 'Dice check',
-        description: `Rolls a d20 check for ${userName}${cfg.aiCalls.npcs ? ' or an NPC' : ''} against a difficulty you set, using their sheet (attribute modifier and proficiency). Call it only when an action's outcome is genuinely uncertain and matters; most replies need none. The result is final: narrate it as it fell.`,
+        description: `Rolls a d20 check or saving throw for ${userName}${cfg.aiCalls.npcs ? ' or an NPC' : ''}, using their sheet (modifier and proficiency), against a difficulty you set or the DC another character's ability sets. The one acting rolls a check; the one acted upon rolls a save, and the actor never rolls. Call it only when an action's outcome is genuinely uncertain and matters; most replies need none. The result is final: narrate it as it fell.`,
         parameters: { type: 'object', properties, required },
     };
 }
