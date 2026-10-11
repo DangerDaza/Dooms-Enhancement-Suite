@@ -202,6 +202,16 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 
 ## 6. Facts that cost time to learn
 
+- **Jordan's tracker instructions are a custom override.** Settings →
+  Prompts → Tracker Instructions holds his own text (the verbose default
+  plus a "TRACKER DISCIPLINE (2026-08-08)" block), stored as
+  `customTrackerInstructionsPrompt`. `buildTrackerPromptBlock` sends it
+  verbatim, so a change to DES's generated wording (compact or verbose)
+  never reaches his prompt until he pastes the new sentence into that box
+  or restores the default. The 2026-10-11 "list every NPC in the scene"
+  sentence is one such change: the AI had been leaving a speaking NPC
+  (Oskar Fenwright) out of "characters" because the lorebook's "ONE
+  principal NPC per reply" read as a cap on the list.
 - **SillyTavern event order:** `Generate()` emits GENERATION_STARTED before
   `sendMessageAsUser()` adds the user message and emits MESSAGE_SENT
   (awaited, listeners sequential). Anything that needs the user message

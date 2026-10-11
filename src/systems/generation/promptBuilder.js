@@ -202,9 +202,9 @@ export function buildTrackerPromptBlock(userName, compact) {
     if (customPrompt) {
         out += customPrompt.replace(/{userName}/g, userName);
     } else if (compact) {
-        out += `Replace every placeholder with concrete in-world details ${userName} perceives (e.g. "Location" -> "Forest Clearing"); numbers replace X. Exclude ${userName} from "characters" — NPCs only. Carry the previous trackers forward, changing values realistically per the user's actions, time passing, and consequences.`;
+        out += `Replace every placeholder with concrete in-world details ${userName} perceives (e.g. "Location" -> "Forest Clearing"); numbers replace X. Exclude ${userName} from "characters" — NPCs only. List every NPC in the scene, one entry each, including anyone who arrives or speaks in this reply, and drop one only when they leave; a rule about how many characters the story features per reply does not cap this list. Carry the previous trackers forward, changing values realistically per the user's actions, time passing, and consequences.`;
     } else {
-        out += `Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that ${userName} perceives about the current scene and the present characters. For example: "Location" becomes "Forest Clearing", "Mood Emoji" becomes "😊". DO NOT include ${userName} in the characters section, only NPCs. `;
+        out += `Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that ${userName} perceives about the current scene and the present characters. For example: "Location" becomes "Forest Clearing", "Mood Emoji" becomes "😊". DO NOT include ${userName} in the characters section, only NPCs. Include every NPC present in the scene, one entry each, including anyone who arrives or speaks in this reply, and drop a character only when they have left; any rule about how many characters the story features per reply does not limit this list. `;
         out += `Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user's actions, the passage of time, and logical consequences.`;
     }
     out += addLockInstruction('');
