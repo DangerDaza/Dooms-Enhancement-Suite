@@ -127,6 +127,9 @@ SillyTavern yet; the cloud session cannot run it. That is step 3 above.
 
 ## 4. What is built (all on the branch, base `origin/main` at `c97bac0`)
 
+The per-phase write-up (goal, what exists, how to prove it, what is left,
+Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
+
 - **Phase 1, vitals:** config shape, parser `player` key, enforcement of
   fixed vitals, bars on portrait cards, the Stats page on the settings
   rail. `tools/vitals-test.mjs`.
