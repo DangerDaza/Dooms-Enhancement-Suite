@@ -45,6 +45,7 @@ import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '.
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { adoptBlockFromTurn, shouldRecoverTracker } from '../generation/trackerRecovery.js';
+import { maybeAutoSuggestSheets } from '../features/sheetSuggest.js';
 import { syncTrackerJsonForMessage } from '../rendering/trackerJsonInline.js';
 /**
  * Walks chat[] backwards to find the most recent real user message and
@@ -358,6 +359,13 @@ export async function onMessageReceived(data) {
                         { timeOut: 3000 }
                     );
                 }
+            }
+            // Stats (§11.3): a fresh reply may bring a face with no sheet;
+            // behind its switch, one small call fills it in the background.
+            if (isAwaitingNewMessage && parsedData.characterThoughts) {
+                setTimeout(() => {
+                    maybeAutoSuggestSheets().catch(err => console.warn('[Dooms Tracker] Stats: automatic suggestion failed', err));
+                }, 800);
             }
             // The reply came without its block, and no earlier part of the
             // turn had one: fetch it separately, so nothing freezes.

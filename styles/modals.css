@@ -9777,6 +9777,37 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 }
 
 #character-workshop-popup .cw-attr-skill i { font-size: 0.95em; }
+/* Tier row (§11): the select, Fill by tier, Suggest from the story, the suggested badge. */
+#character-workshop-popup .cw-attr-tier-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+#character-workshop-popup .cw-attr-tier-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+#character-workshop-popup .cw-attr-tier { min-width: 150px; }
+#character-workshop-popup .cw-attr-tier-means {
+    flex-basis: 100%;
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+#character-workshop-popup .cw-attr-badge {
+    font-size: 0.78em;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--rpg-highlight, #e94560);
+    color: var(--rpg-highlight, #e94560);
+}
+#character-workshop-popup .cw-attr-score.is-off-tier {
+    border-color: #e9a045;
+    box-shadow: inset 0 0 0 1px #e9a045;
+}
 
 #character-workshop-popup .cw-attr-noskills { font-size: 0.75em; opacity: 0.5; }
 

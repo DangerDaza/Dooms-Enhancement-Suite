@@ -1673,6 +1673,33 @@
                     </div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Send the tier to the AI</span>
+                            <span class="rpg-setting-hint">The attributes line names each character's tier (Ordinary to
+                                Legend, set on the Workshop's Attributes tab), so the game master knows the shape of
+                                the cast even for a character with no numbers. One word per character. A DC is still
+                                about the task, never the tier.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-send-tier" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Suggest stats for new characters automatically</span>
+                            <span class="rpg-setting-hint">When a reply brings a character who has no sheet and no tier,
+                                one small call rates them (a tier and six scores) and the sheet is stored marked
+                                "AI-suggested" until you look at it in the Workshop. One request per new character
+                                per session; the persona is never touched. Off: fill sheets yourself from the
+                                Workshop, by tier or with "Suggest from the story".</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-suggest-new" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Proficiency bonus</span>
                             <span class="rpg-setting-hint">Added to a roll on a skill the character is proficient in.
                                 Proficiencies are ticked on the Workshop's Attributes tab.</span>

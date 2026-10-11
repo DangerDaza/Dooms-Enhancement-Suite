@@ -1598,6 +1598,9 @@ function renderAttributes() {
         proficiencies: draft.proficiencies || [],
         profBonus: attributesConfig(extensionSettings).proficiencyBonus,
         attributesOn: attributesOn(extensionSettings),
+        // What "Suggest from the story" shows the game master (§11.3).
+        description: draft.injection?.description || '',
+        appearance: draft.appearance || '',
         onChange(scores, proficiencies) {
             if (!draft) return;
             draft.attributes = { ...scores };

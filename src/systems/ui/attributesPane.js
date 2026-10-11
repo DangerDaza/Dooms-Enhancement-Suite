@@ -24,6 +24,14 @@ import {
     getCastingAbility,
     withCastingAbility,
     castingCandidateIds,
+    TIERS,
+    tierById,
+    getTier,
+    withTier,
+    tierFit,
+    fillByTier,
+    isSuggested,
+    withSuggestedMark,
     STANDARD_ARRAY,
     DEFAULT_SCORE,
     MIN_SCORE,
@@ -98,6 +106,7 @@ function render() {
     const { host, ctx } = last;
     const defs = Array.isArray(ctx.defs) ? ctx.defs : [];
     const bonus = Number.isFinite(ctx.profBonus) ? ctx.profBonus : 2;
+    const tierId = getTier(ctx.proficiencies);
     const rows = defs.map(d => {
         const score = scoreOf(ctx.scores, d.id);
         const m = modifier(score);
@@ -105,12 +114,25 @@ function render() {
             <div class="cw-attr-main">
                 <span class="cw-attr-abbr">${escapeHtml(d.abbr)}</span>
                 <span class="cw-attr-name" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}${d.enabled ? '' : ' <small>(off)</small>'}</span>
-                <input type="number" class="rpg-input cw-attr-score" min="${MIN_SCORE}" max="${MAX_SCORE}" step="1" value="${score}" aria-label="${escapeHtml(d.name)} score" />
+                <input type="number" class="rpg-input cw-attr-score${tierFit(score, tierId) === 'in' ? '' : ' is-off-tier'}" min="${MIN_SCORE}" max="${MAX_SCORE}" step="1" value="${score}" aria-label="${escapeHtml(d.name)} score"${offTierTitle(score, tierId)} />
                 <span class="cw-attr-mod${modClass(m)}" title="What a roll adds">${escapeHtml(formatModifier(m))}</span>
             </div>
             <div class="cw-attr-skills">${skillsHtml(d, ctx)}</div>
         </div>`;
     }).join('');
+    const tier = tierById(tierId);
+    const tierRow = `<div class="cw-attr-tier-row">
+            <label class="cw-attr-tier-label">Tier
+                <select class="rpg-select cw-attr-tier" aria-label="Tier">
+                    <option value=""${tierId ? '' : ' selected'}>None</option>
+                    ${TIERS.map(t => `<option value="${t.id}"${t.id === tierId ? ' selected' : ''}>${escapeHtml(t.label)} (${t.min}–${t.max})</option>`).join('')}
+                </select>
+            </label>
+            <button type="button" class="rpg-btn cw-attr-fill" title="${tier ? `The ${escapeHtml(tier.label)} array (${tier.array.join(', ')}) laid over the current ranking` : 'Pick a tier first'}"${tier ? '' : ' disabled'}><i class="fa-solid fa-layer-group"></i> Fill by tier</button>
+            <button type="button" class="rpg-btn cw-attr-suggest" title="One small call: the game master reads the card and the recent scene and proposes a tier and six scores. Nothing is kept until Save."><i class="fa-solid fa-wand-magic-sparkles"></i> Suggest from the story</button>
+            ${isSuggested(ctx.proficiencies) ? '<span class="cw-attr-badge" title="The game master filled this sheet on its own; it stays marked until you change something here">AI-suggested</span>' : ''}
+            <span class="cw-attr-tier-means">${tier ? `${escapeHtml(tier.means)}; scores outside ${tier.min}–${tier.max} are marked` : 'where this character stands, from ordinary people to legends'}</span>
+        </div>`;
     const helper = ctx.isUser
         ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
@@ -118,6 +140,7 @@ function render() {
         <h4>&#127922; Attributes</h4>
         <p class="helper">${helper}</p>
         ${ctx.attributesOn ? '' : '<div class="cw-attr-notice"><i class="fa-solid fa-circle-info"></i><span>Attributes are off in <strong>Settings &rarr; Stats &rarr; Attributes &amp; checks</strong>. The sheet is kept; nothing is sent or rolled until they are on.</span></div>'}
+        ${defs.length ? tierRow : ''}
         ${defs.length
             ? `<div class="cw-attr-grid">${rows}</div>`
             : '<div class="rpg-dc-knives-empty">No attributes on the list. Add some in Settings &rarr; Stats &rarr; Attributes &amp; checks.</div>'}
@@ -129,11 +152,18 @@ function render() {
         <p class="helper cw-attr-foot">Saved with <strong>Save</strong>. A sheet that is all 10s with no proficiencies is the default and is never sent.</p>`;
 }
 
-/** Updates the draft through ctx.onChange; repaints when a whole-sheet action asks for it. */
+/** The title on a score box outside its tier's range, or ''. */
+function offTierTitle(score, tierId) {
+    const t = tierById(tierId);
+    if (!t || tierFit(score, tierId) === 'in') return '';
+    return ` title="Outside the ${escapeHtml(t.label)} range (${t.min}–${t.max}); allowed, just unusual"`;
+}
+
+/** Updates the draft through ctx.onChange; repaints when a whole-sheet action asks for it. Any change clears the suggested mark: the owner has looked. */
 function commit({ scores, proficiencies }, { repaint = false } = {}) {
     if (!last) return;
     if (scores) last.ctx.scores = scores;
-    if (proficiencies) last.ctx.proficiencies = proficiencies;
+    last.ctx.proficiencies = withSuggestedMark(proficiencies || last.ctx.proficiencies, false);
     try {
         last.ctx.onChange?.({ ...last.ctx.scores }, [...last.ctx.proficiencies]);
     } catch (e) {
@@ -148,6 +178,16 @@ function paintModifier(row, score) {
     const m = modifier(score);
     mod.textContent = formatModifier(m);
     mod.className = `cw-attr-mod${modClass(m)}`;
+    // The range mark follows the score as it is typed.
+    const input = row.querySelector('.cw-attr-score');
+    if (input && last) {
+        const tierId = getTier(last.ctx.proficiencies);
+        const off = tierFit(score, tierId) !== 'in';
+        input.classList.toggle('is-off-tier', off);
+        const t = tierById(tierId);
+        if (off && t) input.title = `Outside the ${t.label} range (${t.min}–${t.max}); allowed, just unusual`;
+        else input.removeAttribute('title');
+    }
 }
 
 function bindOnce(host) {
@@ -169,6 +209,12 @@ function bindOnce(host) {
 
     // Leaving the box: clamp into range, or fall back to the last good score.
     host.addEventListener('change', (e) => {
+        // The Tier select: one word on the sheet; the whole pane repaints so the range marks follow.
+        const tierSel = e.target?.closest?.('.cw-attr-tier');
+        if (tierSel && last) {
+            commit({ proficiencies: withTier(last.ctx.proficiencies, tierSel.value) }, { repaint: true });
+            return;
+        }
         const input = e.target?.closest?.('.cw-attr-score');
         if (!input || !last) return;
         const row = input.closest('.cw-attr-row');
@@ -187,6 +233,37 @@ function bindOnce(host) {
         const defs = Array.isArray(last.ctx.defs) ? last.ctx.defs : [];
 
         // A skill chip: toggle the proficiency and repaint that chip alone.
+        // Fill by tier: the tier's array over the current ranking (§11.3).
+        if (btn.classList.contains('cw-attr-fill')) {
+            const tierId = getTier(last.ctx.proficiencies);
+            const next = fillByTier(last.ctx.scores, defs, tierId);
+            if (Object.keys(next).length) commit({ scores: { ...last.ctx.scores, ...next } }, { repaint: true });
+            return;
+        }
+        // Suggest from the story: one small call; the answer lands on the draft, Save keeps it.
+        if (btn.classList.contains('cw-attr-suggest')) {
+            if (btn.disabled) return;
+            btn.disabled = true;
+            const label = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Asking the game master…';
+            import('../features/sheetSuggest.js')
+                .then(m => m.suggestSheet({ name: last.ctx.name, isUser: !!last.ctx.isUser, description: last.ctx.description || '', appearance: last.ctx.appearance || '' }))
+                .then(s => {
+                    if (!last) return;
+                    const scores = { ...last.ctx.scores, ...s.scores };
+                    const profs = s.tierId ? withTier(last.ctx.proficiencies, s.tierId) : last.ctx.proficiencies;
+                    commit({ scores, proficiencies: profs }, { repaint: true });
+                    const t = tierById(s.tierId);
+                    const why = Object.entries(s.reasons || {}).map(([id, r]) => `${(defs.find(d => d.id === id) || {}).name || id}: ${r}`).join(' · ');
+                    try { window.toastr?.info?.(`${t ? `${t.label}. ` : ''}${why || 'Scores proposed.'} Save to keep them.`, 'Suggested stats', { timeOut: 9000, escapeHtml: true }); } catch (e) { /* no toastr */ }
+                })
+                .catch(err => {
+                    console.warn('[DES Workshop] suggestion failed', err);
+                    try { window.toastr?.warning?.(`The game master could not rate this character: ${err?.message || err}`, 'Suggested stats', { timeOut: 6000, escapeHtml: true }); } catch (e) { /* no toastr */ }
+                    if (btn.isConnected) { btn.disabled = false; btn.innerHTML = label; }
+                });
+            return;
+        }
         // The Casting chip: one ability per sheet, so the row repaints as a whole.
         if (btn.classList.contains('cw-attr-casting')) {
             const id = btn.closest('.cw-attr-row')?.dataset.attr;

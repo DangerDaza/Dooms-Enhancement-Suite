@@ -349,6 +349,8 @@ function renderAttributesSettings() {
     $('#rpg-attr-criticals').prop('checked', cfg.criticals);
     $('#rpg-attr-prof').val(cfg.proficiencyBonus);
     $('#rpg-attr-notify').prop('checked', cfg.notify);
+    $('#rpg-attr-send-tier').prop('checked', cfg.sendTier);
+    $('#rpg-attr-suggest-new').prop('checked', cfg.suggestNewSheets);
     $('#rpg-attr-calls').prop('checked', cfg.aiCalls.enabled);
     $('#rpg-attr-calls-tag').prop('checked', cfg.aiCalls.endOfReply);
     $('#rpg-attr-calls-tool').prop('checked', cfg.aiCalls.tool);
@@ -1775,6 +1777,14 @@ function bindSettingsUI() {
     });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-send-tier', function () {
+        getAttributesRules().sendTier = $(this).prop('checked');
+        _saveAttrs({ rerender: false });
+    });
+    $(document).on('change', '#rpg-attr-suggest-new', function () {
+        getAttributesRules().suggestNewSheets = $(this).prop('checked');
         _saveAttrs({ rerender: false });
     });
     $(document).on('change', '#rpg-attr-prof', function () {
