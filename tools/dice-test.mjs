@@ -286,7 +286,7 @@ check('the tool rolls on the player\'s sheet and answers with the verdict, then 
 check('the same call for the same message rolls once', dice.diceToolAction({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', reason: 'again' }) === toolText && Object.keys(chat[1].extra.dooms_tool_rolls).length === 1);
 const npcText = dice.diceToolAction({ who: 'Guard', attribute: 'Wisdom', skill: 'Perception', difficulty: 'Medium', reason: 'dark' });
 check('a named roller uses the NPC\'s sheet', npcText.startsWith('[DICE: Guard, on a check you called for. Wisdom (Perception) check:') && npcText.includes('(WIS 14), +2 (proficient in Perception)'), npcText);
-check('an unknown attribute rolls nothing and says which exist', dice.diceToolAction({ attribute: 'Luck', difficulty: 'Hard', reason: 'x' }).startsWith('No check was rolled') && Object.keys(chat[1].extra.dooms_tool_rolls).length === 2);
+check('an unknown attribute rolls nothing and says which exist', dice.diceToolAction({ attribute: 'Luck', difficulty: 'Hard', reason: 'x' }).startsWith('Nothing was rolled') && Object.keys(chat[1].extra.dooms_tool_rolls).length === 2);
 const invocations = [
     { name: 'dooms_roll_check', parameters: JSON.stringify({ attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', reason: 'the planks are wet' }), result: toolText },
     { name: 'other_tool', parameters: '{}', result: 'x' },
@@ -312,6 +312,50 @@ check('with calls off, no rules', dice.buildDiceRulesForGeneration() === '');
 extensionSettings.attributes.aiCalls.enabled = true;
 delete globalThis.__DES_CTX__.isToolCallingSupported;
 check('registerDiceTool hands SillyTavern the tool', dice.registerDiceTool() === true);
+
+// ── 10. Saving throws and opposed actions (Phase 4a, §10) ──
+D.setSheet(extensionSettings, 'Jordan', true, { str: 15, cha: 8 }, null, [D.skillKey('str', 'Athletics')]);
+D.setSheet(extensionSettings, 'Guard', false, { wis: 14 }, null, [D.skillKey('wis', 'Perception'), D.saveKey('wis')]);
+dice.__setDiceTransport(async () => '{"save": {"who": "Guard", "attribute": "Wisdom", "against": "Charisma"}, "advantage": "none", "reason": "He feels the push."}');
+chat.length = 0;
+chat.push(ai('The guard eyes you.'));
+dice.tagCheck({ attributeId: 'cha', context: 'read his mind' });
+chat.push(user('I reach into his thoughts.'));
+await dice.onDiceMessageSent();
+const saveRoll = chat[1].extra.dooms_roll;
+check('a ruling that names a save rolls the target\'s save against the player\'s ability: DC 8 + 2 - 1 on Jordan\'s Charisma 8, the Guard proficient in Wisdom saves',
+    !!saveRoll && saveRoll.kind === 'save' && saveRoll.who === 'Guard' && saveRoll.isUser === false && saveRoll.attribute === 'Wisdom' && saveRoll.score === 14 && saveRoll.prof === 2 && saveRoll.dc === 9
+    && saveRoll.against && saveRoll.against.who === 'Jordan' && saveRoll.against.attribute === 'Charisma' && saveRoll.against.mod === -1 && saveRoll.against.prof === 2 && saveRoll.attempt === 'read his mind' && dice.getPendingCheck() === null, JSON.stringify(saveRoll));
+verdict = dice.buildDiceVerdictForGeneration();
+check('...and the verdict names the throw, the formula and whose roll it is',
+    verdict.includes('[DICE: Guard makes a Wisdom saving throw against Jordan\'s Charisma. Wisdom saving throw: d20 = ') && verdict.includes('+2 (WIS 14), +2 (proficient in Wisdom saves) = ') && verdict.includes('vs DC 9 (Jordan\'s Charisma: 8 + 2 proficiency -1), because He feels the push.')
+    && verdict.includes(saveRoll.success ? 'This roll is Guard\'s: Guard resists, and Jordan\'s effect on them fails.' : 'This roll is Guard\'s: Guard does not resist, and Jordan\'s effect on them takes hold.'), verdict);
+dice.__setDiceTransport(gm);
+chat.push(ai('He blinks.\n[SAVE: Guard: Wisdom | vs Jordan\'s Charisma | the push goes deeper]'));
+dice.onDiceReplyRendered(2);
+const npcSave = chat[2].extra.dooms_gm_calls && chat[2].extra.dooms_gm_calls[0];
+check('an NPC SAVE tag is rolled on render against the player\'s DC', !!npcSave && npcSave.kind === 'npc' && npcSave.roll.kind === 'save' && npcSave.roll.dc === 9 && npcSave.roll.who === 'Guard' && npcSave.roll.against.who === 'Jordan' && dice.getPendingCheck() === null, JSON.stringify(npcSave));
+chat.push(user('I press on.'));
+verdict = dice.buildDiceVerdictForGeneration();
+check('...and rides to the next generation as a save', verdict.includes('[DICE: Guard makes a Wisdom saving throw against Jordan\'s Charisma, on a throw you called for. Wisdom saving throw:'), verdict);
+chat.push(ai('The vision presses in.\n[SAVE: Wisdom | Hard | the vision presses in]'));
+dice.onDiceReplyRendered(4);
+const pendingSave = dice.getPendingCheck();
+check('a player SAVE tag against the world waits on the chip as a save', !!pendingSave && pendingSave.kind === 'save' && pendingSave.isUser === true && pendingSave.calledBy === 'gm' && pendingSave.gmRuling.dc === 20 && pendingSave.gmRuling.label === 'Hard' && pendingSave.attribute === 'Wisdom', JSON.stringify(pendingSave));
+chat.push(user('I hold on.'));
+await dice.onDiceMessageSent();
+const playerSave = chat[5].extra.dooms_roll;
+check('...and rolls on send as Jordan\'s Wisdom save at DC 20', !!playerSave && playerSave.kind === 'save' && playerSave.who === 'Jordan' && playerSave.isUser === true && playerSave.dc === 20 && playerSave.against === null, JSON.stringify(playerSave));
+verdict = dice.buildDiceVerdictForGeneration();
+check('...with a verdict that says it is Jordan\'s roll', verdict.includes('[DICE: Jordan makes a Wisdom saving throw, on a throw you called for. Wisdom saving throw: d20 = ') && verdict.includes('vs DC 20 (Hard), because the vision presses in') && verdict.includes('This roll is Jordan\'s: Jordan '), verdict);
+const toolSave = dice.diceToolAction({ kind: 'save', who: 'Guard', attribute: 'Wisdom', against: '', againstAttribute: 'Charisma', reason: 'the push goes deeper' });
+check('the tool rolls a save against the player\'s DC and keeps it apart from a check', toolSave.includes('[DICE: Guard makes a Wisdom saving throw against Jordan\'s Charisma, on a throw you called for. Wisdom saving throw:') && toolSave.includes('vs DC 9 (Jordan\'s Charisma: 8 + 2 proficiency -1)') && toolSave.includes('This roll is Guard\'s:') && toolSave.endsWith(dice.STILL_REQUIRED)
+    && Object.keys(chat[5].extra.dooms_tool_rolls).length === 1 && dice.diceToolAction({ who: 'Guard', attribute: 'Wisdom', difficulty: 'Medium', reason: 'x' }) !== toolSave && Object.keys(chat[5].extra.dooms_tool_rolls).length === 2, toolSave);
+check('the same save asked again is kept', dice.diceToolAction({ kind: 'save', who: 'Guard', attribute: 'Wisdom', against: '', againstAttribute: 'Charisma', reason: 'again' }) === toolSave);
+chat.push({ is_user: false, is_system: true, mes: 'tool', extra: { tool_invocations: [{ name: 'dooms_roll_check', parameters: { kind: 'save', who: 'Guard', attribute: 'Wisdom', against: '', againstAttribute: 'Charisma', reason: 'the push goes deeper' } }] } });
+dice.onDiceToolCallsPerformed(chat[6].extra.tool_invocations);
+chat.push(ai('He staggers.'));
+check('the reply after a tool save shows it in its box', (() => { const r = dice.rollsForReply(7); return r.length === 2 && r[0].kind === 'save' && r[0].who === 'Jordan' && r[1].kind === 'save' && r[1].who === 'Guard'; })());
 
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);

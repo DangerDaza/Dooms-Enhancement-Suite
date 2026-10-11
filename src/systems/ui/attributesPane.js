@@ -19,6 +19,8 @@ import {
     roll4d6DropLowest,
     skillKey,
     isProficient,
+    saveKey,
+    isSaveProficient,
     STANDARD_ARRAY,
     DEFAULT_SCORE,
     MIN_SCORE,
@@ -59,10 +61,18 @@ function modClass(m) {
     return m > 0 ? ' is-pos' : m < 0 ? ' is-neg' : '';
 }
 
+function saveChipHtml(d, ctx) {
+    const on = isSaveProficient(ctx.proficiencies, d.id);
+    return `<button type="button" class="cw-attr-skill cw-attr-save${on ? ' is-prof' : ''}" data-save="1" role="checkbox" aria-checked="${on ? 'true' : 'false'}" title="${on ? `Proficient in ${escapeHtml(d.name)} saving throws: +${ctx.profBonus} to resist` : `Not proficient in ${escapeHtml(d.name)} saving throws`}">
+            <i class="${on ? 'fa-solid fa-shield-halved' : 'fa-regular fa-square'}" aria-hidden="true"></i>Save
+        </button>`;
+}
+
 function skillsHtml(d, ctx) {
     const list = Array.isArray(d.skills) ? d.skills : [];
-    if (!list.length) return '<span class="cw-attr-noskills">No skills under this attribute.</span>';
-    return list.map(sk => {
+    const save = saveChipHtml(d, ctx);
+    if (!list.length) return save + '<span class="cw-attr-noskills">No skills under this attribute.</span>';
+    return save + list.map(sk => {
         const on = isProficient(ctx.proficiencies, d.id, sk);
         return `<button type="button" class="cw-attr-skill${on ? ' is-prof' : ''}" data-skill="${escapeHtml(sk)}" role="checkbox" aria-checked="${on ? 'true' : 'false'}" title="${on ? `Proficient: +${ctx.profBonus} on ${escapeHtml(sk)}` : `Not proficient in ${escapeHtml(sk)}`}">
             <i class="${on ? 'fa-solid fa-square-check' : 'fa-regular fa-square'}" aria-hidden="true"></i>${escapeHtml(sk)}
@@ -89,8 +99,8 @@ function render() {
         </div>`;
     }).join('');
     const helper = ctx.isUser
-        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Tag a message with the d20 button and this is the sheet it rolls on.`
-        : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, and the skills they are proficient in (+${bonus} each). NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
+        ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Tag a message with the d20 button and this is the sheet it rolls on.`
+        : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
     host.innerHTML = `
         <h4>&#127922; Attributes</h4>
         <p class="helper">${helper}</p>
@@ -166,17 +176,21 @@ function bindOnce(host) {
         // A skill chip: toggle the proficiency and repaint that chip alone.
         if (btn.classList.contains('cw-attr-skill')) {
             const id = btn.closest('.cw-attr-row')?.dataset.attr;
+            const isSave = btn.dataset.save === '1';
             const sk = btn.dataset.skill || '';
-            if (!id || !sk) return;
-            const key = skillKey(id, sk);
+            if (!id || (!sk && !isSave)) return;
+            const key = isSave ? saveKey(id) : skillKey(id, sk);
             const has = last.ctx.proficiencies.includes(key);
             const next = has ? last.ctx.proficiencies.filter(k => k !== key) : [...last.ctx.proficiencies, key].sort();
             const on = !has;
             btn.classList.toggle('is-prof', on);
             btn.setAttribute('aria-checked', on ? 'true' : 'false');
-            btn.title = on ? `Proficient: +${last.ctx.profBonus} on ${sk}` : `Not proficient in ${sk}`;
+            const name = defs.find(d => d.id === id)?.name || id;
+            btn.title = isSave
+                ? (on ? `Proficient in ${name} saving throws: +${last.ctx.profBonus} to resist` : `Not proficient in ${name} saving throws`)
+                : (on ? `Proficient: +${last.ctx.profBonus} on ${sk}` : `Not proficient in ${sk}`);
             const icon = btn.querySelector('i');
-            if (icon) icon.className = on ? 'fa-solid fa-square-check' : 'fa-regular fa-square';
+            if (icon) icon.className = on ? (isSave ? 'fa-solid fa-shield-halved' : 'fa-solid fa-square-check') : 'fa-regular fa-square';
             commit({ proficiencies: next });
             return;
         }

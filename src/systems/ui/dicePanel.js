@@ -164,9 +164,9 @@ function render() {
     if (pending && pending.calledBy === 'gm' && pending.gmRuling) {
         const r = pending.gmRuling;
         const adv = r.advantage === 'adv' ? ', with advantage' : r.advantage === 'dis' ? ', with disadvantage' : '';
-        status = `<p class="rpg-dice-hint rpg-dice-pending">🎲 The game master calls for a <b>${escapeHtml(pending.abbr)}${pending.skill ? ` (${escapeHtml(pending.skill)})` : ''}</b> check, <b>${escapeHtml(r.label)}</b> (DC ${r.dc})${adv}${r.reason ? `: ${escapeHtml(r.reason)}` : ''}. It rolls when you send. OK keeps that ruling with your pick above; Discard declines it.</p>`;
+        status = `<p class="rpg-dice-hint rpg-dice-pending">🎲 The game master calls for a <b>${escapeHtml(pending.abbr)}${pending.skill ? ` (${escapeHtml(pending.skill)})` : ''}</b> ${pending.kind === 'save' ? 'saving throw' : 'check'}, <b>${escapeHtml(r.label)}</b> (DC ${r.dc})${adv}${r.reason ? `: ${escapeHtml(r.reason)}` : ''}. It rolls when you send. OK keeps that ruling with your pick above; Discard declines it.</p>`;
     } else if (pending) {
-        status = `<p class="rpg-dice-hint rpg-dice-pending">🎲 A <b>${escapeHtml(pending.abbr)}${pending.skill ? ` (${escapeHtml(pending.skill)})` : ''}</b> check is tagged and rolls when you send. OK replaces it.</p>`;
+        status = `<p class="rpg-dice-hint rpg-dice-pending">🎲 A <b>${escapeHtml(pending.abbr)}${pending.skill ? ` (${escapeHtml(pending.skill)})` : ''}</b> ${pending.kind === 'save' ? 'saving throw' : 'check'} is tagged and rolls when you send. OK replaces it.</p>`;
     }
 
     $body.html(`
@@ -211,7 +211,7 @@ function updateChip() {
         $chip.hide();
         return;
     }
-    const what = `${pending.abbr}${pending.skill ? ` (${pending.skill})` : ''} check`;
+    const what = `${pending.abbr}${pending.skill ? ` (${pending.skill})` : ''} ${pending.kind === 'save' ? 'saving throw' : 'check'}`;
     let text;
     if (pending.rating) {
         text = `🎲 ${what} · asking the game master…`;

@@ -27,14 +27,21 @@ import {
     getSheet,
     getProficiencies,
     isProficient,
+    isSaveProficient,
     findSkill,
+    findAttribute,
     isDefaultSheet,
     buildAttributesLine,
     difficultyById,
     buildDifficultyRatingPrompt,
     parseDifficultyRating,
     rollCheck,
+    isSaveRoll,
+    saveDC,
+    applySaveDC,
     verdictText,
+    ownershipSentence,
+    describeDC,
     formatModifier,
     checkLabel,
     outcomeLabel,
@@ -212,7 +219,12 @@ export function diceNotice(text, { kind = 'info', title = 'Dice' } = {}) {
 function rollLine(roll) {
     const who = roll.isUser === false ? `${roll.who}: ` : '';
     const dice = roll.advantage !== 'none' && Array.isArray(roll.rolls) && roll.rolls.length === 2 ? `${roll.kept} (${roll.rolls.join('/')})` : String(roll.kept);
-    return `${who}${checkLabel(roll)} · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc}${roll.difficultyLabel ? ` (${roll.difficultyLabel})` : ''} · ${outcomeLabel(roll)}`;
+    return `${who}${checkLabel(roll)}${isSaveRoll(roll) ? ' save' : ''} · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs ${describeDC(roll, roll.difficultyLabel)} · ${outcomeLabel(roll)}`;
+}
+
+/** "Charisma saving throw" or "Wisdom (Insight) check", for notices and the box. */
+function kindLabel(rollOrCall) {
+    return `${checkLabel(rollOrCall)} ${rollOrCall && rollOrCall.kind === 'save' ? 'saving throw' : 'check'}`;
 }
 
 /** Saves the chat after a roll is written to or removed from a message. */
@@ -364,26 +376,31 @@ export function overrideRuling(override) {
 
 /**
  * The game master's ruling for an attempt: one small separate call that
- * answers with a difficulty word, advantage or disadvantage, and a reason.
- * Falls back to the configured default difficulty when the AI is not asked,
- * cannot be reached, takes too long, or cannot be read; `source` and
- * `error` say which happened.
+ * answers with a difficulty word, advantage or disadvantage, and a reason,
+ * or (§10) with another character's saving throw against the player's
+ * ability. Falls back to the configured default difficulty when the AI is
+ * not asked, cannot be reached, takes too long, or cannot be read; `source`
+ * and `error` say which happened.
  */
 export async function rateAttempt({ attributeId, skill = '', context = '', messageText = '', beforeIndex = -1 } = {}) {
     const cfg = attributesConfig(extensionSettings);
-    const def = attributeDefs(extensionSettings).find(d => d.id === attributeId);
+    const defs = attributeDefs(extensionSettings);
+    const def = defs.find(d => d.id === attributeId);
     if (!cfg.aiRatesDifficulty || !def) return defaultRuling();
     // A borrowed skill is named with its home so the game master knows the
     // pairing is the player's call under the variant rule.
-    const home = skill ? findSkill(attributeDefs(extensionSettings), skill) : null;
-    const homeDef = home && home.attributeId !== def.id ? attributeDefs(extensionSettings).find(d => d.id === home.attributeId) : null;
+    const home = skill ? findSkill(defs, skill) : null;
+    const homeDef = home && home.attributeId !== def.id ? defs.find(d => d.id === home.attributeId) : null;
+    const persona = resolvePersonaName() || 'The player';
     const prompt = buildDifficultyRatingPrompt({
-        userName: resolvePersonaName() || 'The player',
+        userName: persona,
         attempt: context,
         attributeName: def.name,
         skillName: homeDef ? `${skill}, normally a ${homeDef.name} skill` : skill,
         messageText,
         recentText: recentChatText(cfg.contextMessages, { before: beforeIndex }),
+        settings: extensionSettings,
+        targets: committedCharacterNames().filter(n => n.toLowerCase() !== persona.toLowerCase()),
     });
     try {
         const text = await withTimeout((transport || defaultTransport)([
@@ -391,6 +408,22 @@ export async function rateAttempt({ attributeId, skill = '', context = '', messa
             { role: 'user', content: prompt.user },
         ]), rulingTimeoutMs);
         const parsed = parseDifficultyRating(text, extensionSettings);
+        if (parsed && parsed.kind === 'save') {
+            const target = resolveRoller(parsed.who);
+            // The player is the actor here; a save of their own makes no sense for their own attempt.
+            if (target.isUser) return { ...defaultRuling(), error: 'the game master named the player as the one saving' };
+            const saveDef = findAttribute(defs, parsed.attribute) || def;
+            const againstDef = findAttribute(defs, parsed.against) || def;
+            return {
+                kind: 'save',
+                who: target.name,
+                attributeId: saveDef.id,
+                againstAttributeId: againstDef.id,
+                advantage: parsed.advantage,
+                reason: parsed.reason,
+                source: 'ai',
+            };
+        }
         if (parsed) return { ...parsed, source: 'ai' };
         return { ...defaultRuling(), error: 'unreadable' };
     } catch (e) {
@@ -399,8 +432,60 @@ export async function rateAttempt({ attributeId, skill = '', context = '', messa
     }
 }
 
+/**
+ * The ruling said another character saves against the player's ability:
+ * that character's sheet for the throw, the player's for the DC (§10.1).
+ * Returns the check (the target's) and its ruling, in the shapes
+ * performRoll expects.
+ */
+function saveCheckFromRuling(ruling, playerCheck) {
+    const defs = attributeDefs(extensionSettings);
+    const cfg = attributesConfig(extensionSettings);
+    const saveDef = defs.find(d => d.id === ruling.attributeId) || defs[0];
+    const againstDef = defs.find(d => d.id === ruling.againstAttributeId) || saveDef;
+    const target = { name: ruling.who, isUser: false };
+    const sheet = getSheet(extensionSettings, target.name, false, defs);
+    const profs = getProficiencies(extensionSettings, target.name, false);
+    const proficient = isSaveProficient(profs, saveDef.id);
+    const persona = playerCheck.who || resolvePersonaName() || 'The player';
+    const actorSheet = getSheet(extensionSettings, persona, true, defs);
+    const actorScore = actorSheet[againstDef.id] ?? DEFAULT_SCORE;
+    const filled = applySaveDC(
+        { kind: 'save', against: { who: persona, attributeId: againstDef.id, attribute: againstDef.name, abbr: againstDef.abbr } },
+        { who: persona, isUser: true, score: actorScore, proficiencyBonus: cfg.proficiencyBonus },
+    );
+    const check = {
+        kind: 'save',
+        attributeId: saveDef.id,
+        attribute: saveDef.name,
+        abbr: saveDef.abbr,
+        skill: '',
+        skillAttributeId: '',
+        score: sheet[saveDef.id] ?? DEFAULT_SCORE,
+        proficient,
+        prof: proficient ? cfg.proficiencyBonus : 0,
+        context: playerCheck.context || '',
+        who: target.name,
+        isUser: false,
+        against: filled.against,
+        calledBy: playerCheck.calledBy || 'player',
+        fromIndex: playerCheck.fromIndex,
+    };
+    const rulingOut = {
+        kind: 'save',
+        difficultyId: '',
+        dc: filled.dc,
+        label: filled.label,
+        advantage: ruling.advantage || 'none',
+        reason: ruling.reason || '',
+        source: ruling.source || 'ai',
+    };
+    return { check, ruling: rulingOut };
+}
+
 function performRoll(check, ruling) {
     const cfg = attributesConfig(extensionSettings);
+    const kind = check.kind === 'save' ? 'save' : 'check';
     const result = rollCheck({
         attribute: check.attribute,
         abbr: check.abbr,
@@ -410,13 +495,15 @@ function performRoll(check, ruling) {
         advantage: ruling.advantage,
         criticals: cfg.criticals,
         proficiency: check.prof,
+        kind,
     });
     return {
         ...result,
         attributeId: check.attributeId,
         skillAttributeId: check.skillAttributeId || '',
-        difficultyId: ruling.difficultyId,
-        difficultyLabel: ruling.label,
+        against: kind === 'save' && check.against && typeof check.against === 'object' ? { ...check.against } : null,
+        difficultyId: ruling.difficultyId || '',
+        difficultyLabel: ruling.label || '',
         reason: ruling.reason || '',
         rulingSource: ruling.source || 'default',
         rulingError: ruling.error || '',
@@ -469,6 +556,15 @@ export async function onDiceMessageSent() {
         });
         if (pending !== check) return;
         const adv = ruling.advantage === 'adv' ? ', advantage' : ruling.advantage === 'dis' ? ', disadvantage' : '';
+        if (ruling.kind === 'save') {
+            const made = saveCheckFromRuling(ruling, check);
+            diceNotice(`Game master rules a saving throw: ${made.check.who}'s ${made.check.attribute} save ${made.ruling.label} (DC ${made.ruling.dc})${adv}${ruling.reason ? `: ${ruling.reason}` : ''}`);
+            pending = null;
+            const saved = performRoll(made.check, made.ruling);
+            attachRollToMessage(found.message, saved, found.index);
+            diceNotice(`Rolled on send · ${rollLine(saved)}`, { kind: saved.success ? 'warning' : 'success' });
+            return;
+        }
         diceNotice(ruling.source === 'ai'
             ? `Game master rules ${ruling.label} (DC ${ruling.dc})${adv}${ruling.reason ? `: ${ruling.reason}` : ''}`
             : `Default difficulty ${ruling.label} (DC ${ruling.dc})${ruling.error ? ` (the game master could not be asked: ${ruling.error})` : ''}`);
@@ -509,12 +605,24 @@ export function buildDiceVerdictForGeneration() {
     return parts.join('\n');
 }
 
-/** One roll's verdict, framed for who rolled and who asked. */
+/** One roll's verdict, framed for who rolled, who asked, and whose roll it is (§10, D17). */
 function verdictFor(roll) {
-    const who = roll.who || resolvePersonaName() || 'The player';
+    const persona = resolvePersonaName() || 'The player';
+    const who = roll.who || persona;
+    const called = roll.calledBy === 'gm' || roll.calledBy === 'tool' ? ', on a throw you called for' : '';
     let framing = '';
-    if (roll.isUser === false) {
+    let actorName = '';
+    if (isSaveRoll(roll)) {
+        const a = roll.against;
+        if (a && a.who) {
+            framing = `${who} makes a ${roll.attribute} saving throw against ${a.who}'s ${a.attribute}${called}`;
+            actorName = a.who;
+        } else {
+            framing = `${who} makes a ${roll.attribute} saving throw${called}`;
+        }
+    } else if (roll.isUser === false) {
         framing = `${who}, on a check you called for`;
+        actorName = persona;
     } else if (roll.calledBy === 'gm' || roll.calledBy === 'tool') {
         framing = `${who} attempts ${roll.attempt ? `"${String(roll.attempt).trim()}"` : 'the action in their last message'}, on a check you called for`;
     }
@@ -524,6 +632,7 @@ function verdictFor(roll) {
         difficultyLabel: roll.difficultyLabel,
         reason: roll.reason,
         framing,
+        ownership: ownershipSentence(roll, { actorName }),
     });
 }
 
@@ -577,7 +686,7 @@ function cardHtml(roll) {
     const dice = twoDice
         ? `${roll.kept} <small>(${roll.rolls[0]}/${roll.rolls[1]}, ${roll.advantage === 'adv' ? 'advantage' : 'disadvantage'})</small>`
         : `${roll.kept}`;
-    const math = `d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs DC ${roll.dc}${roll.difficultyLabel ? ` (${escapeHtml(roll.difficultyLabel)})` : ''}`;
+    const math = `d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs ${escapeHtml(describeDC(roll, roll.difficultyLabel))}`;
     const outcome = outcomeLabel(roll) + (roll.critical ? '' : `, ${marginWord(roll.margin)}`);
     let why = '';
     if (roll.rulingSource === 'ai' && roll.reason) why = `“${escapeHtml(roll.reason)}” — the game master`;
@@ -588,7 +697,7 @@ function cardHtml(roll) {
     return `<div class="${cls}" role="note">
         <div class="dooms-roll-line">
             <span class="dooms-roll-die" aria-hidden="true">🎲</span>
-            <span class="dooms-roll-label">${whoLabel}${escapeHtml(checkLabel(roll))} check${asked}</span>
+            <span class="dooms-roll-label">${whoLabel}${escapeHtml(kindLabel(roll))}${asked}</span>
             <span class="dooms-roll-math">${math}</span>
             <span class="dooms-roll-outcome">${escapeHtml(outcome)}</span>
         </div>
@@ -698,33 +807,54 @@ function resolveRoller(who) {
     return { name: w, isUser: false };
 }
 
-/** A call plus the roller's sheet, in the shape onDiceMessageSent and performRoll expect. */
+/**
+ * A call plus the roller's sheet, in the shape onDiceMessageSent and
+ * performRoll expect. A save whose DC another character sets reads that
+ * character's sheet here (§10.1): 8 + proficiency bonus + their modifier.
+ */
 function checkFromCall(call, roller) {
     const defs = attributeDefs(extensionSettings);
     const cfg = attributesConfig(extensionSettings);
+    const save = call.kind === 'save';
     const sheet = getSheet(extensionSettings, roller.name, roller.isUser, defs);
     const profs = getProficiencies(extensionSettings, roller.name, roller.isUser);
-    const proficient = !!call.skill && isProficient(profs, call.skillAttributeId || call.attributeId, call.skill);
+    const proficient = save
+        ? isSaveProficient(profs, call.attributeId)
+        : (!!call.skill && isProficient(profs, call.skillAttributeId || call.attributeId, call.skill));
+    let resolved = call;
+    if (save && call.against && typeof call.against === 'object') {
+        const actor = resolveRoller(call.against.who);
+        const actorSheet = getSheet(extensionSettings, actor.name, actor.isUser, defs);
+        resolved = applySaveDC(call, {
+            who: actor.name,
+            isUser: actor.isUser,
+            score: actorSheet[call.against.attributeId] ?? DEFAULT_SCORE,
+            proficiencyBonus: cfg.proficiencyBonus,
+        });
+    }
     return {
+        kind: save ? 'save' : 'check',
         attributeId: call.attributeId,
         attribute: call.attribute,
         abbr: call.abbr,
-        skill: call.skill,
-        skillAttributeId: call.skillAttributeId || '',
+        skill: save ? '' : call.skill,
+        skillAttributeId: save ? '' : (call.skillAttributeId || ''),
         score: sheet[call.attributeId] ?? DEFAULT_SCORE,
         proficient,
         prof: proficient ? cfg.proficiencyBonus : 0,
         context: '',
         who: roller.name,
         isUser: roller.isUser,
+        against: save && resolved.against ? { ...resolved.against } : null,
         calledBy: 'gm',
         gmRuling: {
-            difficultyId: call.difficultyId,
-            dc: call.dc,
-            label: call.label,
+            kind: save ? 'save' : 'check',
+            difficultyId: resolved.difficultyId || '',
+            dc: resolved.dc,
+            label: resolved.label,
             advantage: call.advantage,
             reason: call.reason,
-            source: call.difficultySource === 'ai' ? 'gm' : 'default',
+            source: call.difficultySource === 'ai' || call.difficultySource === 'character' ? 'gm' : 'default',
         },
         override: null,
         rating: false,
@@ -733,7 +863,9 @@ function checkFromCall(call, roller) {
 }
 
 function sameCall(a, b) {
-    return !!a && !!b && a.attributeId === b.attributeId && a.skill === b.skill && a.difficultyId === b.difficultyId
+    const againstOf = (c) => c && c.against && typeof c.against === 'object' ? `${String(c.against.who || '').toLowerCase()}:${c.against.attributeId || ''}` : '';
+    return !!a && !!b && (a.kind || 'check') === (b.kind || 'check') && a.attributeId === b.attributeId && a.skill === b.skill && a.difficultyId === b.difficultyId
+        && againstOf(a) === againstOf(b)
         && a.advantage === b.advantage && String(a.who || '').toLowerCase() === String(b.who || '').toLowerCase();
 }
 
@@ -768,14 +900,15 @@ export function onDiceReplyRendered(messageId) {
     } else {
         const roller = resolveRoller(cfg.aiCalls.npcs ? call.who : '');
         if (roller.isUser) {
-            if (!prev || prev.kind !== 'player' || !sameCall(prev.call, call)) { store[swipeId] = { kind: 'player', call }; changed = true; }
+            const check = checkFromCall(call, roller);
+            if (!prev || prev.kind !== 'player' || !sameCall(prev.call, call)) { store[swipeId] = { kind: 'player', call, ruling: check.gmRuling }; changed = true; }
             // A check the player tagged themselves is theirs; otherwise the
             // game master's call waits on the chip for their next message.
             if (isLast && (!pending || pending.calledBy === 'gm')) {
                 const fresh = !pending || pending.fromIndex !== i || !sameCall({ ...pending, who: '' }, { ...call, who: '' });
-                pending = { ...checkFromCall(call, roller), fromIndex: i };
+                pending = { ...check, fromIndex: i };
                 notifyDiceChanged({ source: 'gm-call' });
-                if (fresh) diceNotice(`Game master calls for a ${call.skill ? `${call.attribute} (${call.skill})` : call.attribute} check, ${call.label} (DC ${call.dc})${call.reason ? `: ${call.reason}` : ''} · rolls when you send`);
+                if (fresh) diceNotice(`Game master calls for a ${kindLabel(call)}, ${check.gmRuling.label} (DC ${check.gmRuling.dc})${call.reason ? `: ${call.reason}` : ''} · rolls when you send`);
             }
         } else {
             if (!prev || prev.kind !== 'npc' || !prev.roll || !sameCall(prev.call, call)) {
@@ -783,7 +916,7 @@ export function onDiceReplyRendered(messageId) {
                 const roll = performRoll(check, check.gmRuling);
                 store[swipeId] = { kind: 'npc', call, roll };
                 changed = true;
-                diceNotice(`Game master called an NPC check · ${rollLine(roll)}`, { kind: roll.success ? 'success' : 'warning' });
+                diceNotice(`Game master called an NPC ${call.kind === 'save' ? 'saving throw' : 'check'} · ${rollLine(roll)}`, { kind: roll.success ? 'success' : 'warning' });
             }
             if (pending && pending.calledBy === 'gm' && pending.fromIndex === i) clearPendingCheck();
         }
@@ -809,18 +942,19 @@ function npcRollsBefore(userIndex) {
     return [];
 }
 
-function playerCallHtml(call) {
-    const label = call.skill ? `${call.attribute} (${call.skill})` : call.attribute;
+function playerCallHtml(entry) {
+    const call = entry.call;
+    const ruling = entry.ruling || call;
     const adv = call.advantage === 'adv' ? ', with advantage' : call.advantage === 'dis' ? ', with disadvantage' : '';
     const why = call.reason ? ` ${escapeHtml(call.reason.replace(/\.$/, ''))}.` : '';
-    return `<span class="dooms-gm-call"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> The game master calls for a <b>${escapeHtml(label)}</b> check, <b>${escapeHtml(call.label)}</b> (DC ${call.dc})${adv}.${why} It rolls when you send your next message.</span>`;
+    return `<span class="dooms-gm-call"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> The game master calls for a <b>${escapeHtml(kindLabel(call))}</b>, <b>${escapeHtml(ruling.label || '')}</b> (DC ${ruling.dc})${adv}.${why} It rolls when you send your next message.</span>`;
 }
 
 function npcCallHtml(entry) {
     const roll = entry.roll;
     const outcome = outcomeLabel(roll) + (roll.critical ? '' : `, ${marginWord(roll.margin)}`);
     const cls = roll.success ? 'is-success' : 'is-failure';
-    return `<span class="dooms-gm-call is-npc ${cls}"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> <b>${escapeHtml(roll.who || 'NPC')}</b>: ${escapeHtml(checkLabel(roll))} check · d20 ${roll.kept} ${escapeHtml(formatModifier(roll.mod))}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs DC ${roll.dc} (${escapeHtml(roll.difficultyLabel || '')}) · <b>${escapeHtml(outcome)}</b>${roll.reason ? ` <i>${escapeHtml(roll.reason)}</i>` : ''}</span>`;
+    return `<span class="dooms-gm-call is-npc ${cls}"><span class="dooms-gm-call-die" aria-hidden="true">🎲</span> <b>${escapeHtml(roll.who || 'NPC')}</b>: ${escapeHtml(kindLabel(roll))} · d20 ${roll.kept} ${escapeHtml(formatModifier(roll.mod))}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs ${escapeHtml(describeDC(roll, roll.difficultyLabel))} · <b>${escapeHtml(outcome)}</b>${roll.reason ? ` <i>${escapeHtml(roll.reason)}</i>` : ''}</span>`;
 }
 
 /**
@@ -834,18 +968,18 @@ function decorateCallTag(index, entry) {
     if (typeof document === 'undefined' || typeof document.querySelector !== 'function' || typeof document.createTreeWalker !== 'function') return;
     const el = document.querySelector(`#chat .mes[mesid="${index}"] .mes_text`);
     // A real element has string text; the test sandbox's stand-ins do not.
-    if (!el || typeof el.textContent !== 'string' || !el.textContent.includes('[CHECK:')) return;
-    const re = /\[CHECK:[^\]]*\]/g;
+    if (!el || typeof el.textContent !== 'string' || !(el.textContent.includes('[CHECK:') || el.textContent.includes('[SAVE:'))) return;
+    const re = /\[(?:CHECK|SAVE):[^\]]*\]/g;
     const walker = document.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
     const hits = [];
     for (let node = walker.nextNode(), guard = 0; node && guard < 5000; node = walker.nextNode(), guard++) {
-        if (node.nodeType === 3 && typeof node.nodeValue === 'string' && node.nodeValue.includes('[CHECK:') && re.test(node.nodeValue)) hits.push(node);
+        if (node.nodeType === 3 && typeof node.nodeValue === 'string' && (node.nodeValue.includes('[CHECK:') || node.nodeValue.includes('[SAVE:')) && re.test(node.nodeValue)) hits.push(node);
         re.lastIndex = 0;
     }
     if (!hits.length) return;
     let replacement = '';
     if (entry && entry.kind === 'npc' && entry.roll) replacement = npcCallHtml(entry);
-    else if (entry && entry.kind === 'player') replacement = playerCallHtml(entry.call);
+    else if (entry && entry.kind === 'player') replacement = playerCallHtml(entry);
     hits.forEach((node, n) => {
         const last = n === hits.length - 1;
         const frag = document.createDocumentFragment();
@@ -869,22 +1003,26 @@ function decorateCallTag(index, entry) {
 
 // ─── The dice tool ──────────────────────────────────────────────────────────
 
-/** The key a tool roll is kept under on the player's message: who, what, against what. */
+/** The key a tool roll is kept under on the player's message: who, what kind, what, against what. */
 function toolMemoKey(call, roller) {
-    return JSON.stringify([roller.name.toLowerCase(), call.attributeId, call.skill.toLowerCase(), call.difficultyId, call.advantage]);
+    const against = call.against && typeof call.against === 'object' ? `vs:${String(call.against.who || '').toLowerCase()}:${call.against.attributeId || ''}` : (call.difficultyId || '');
+    return JSON.stringify([roller.name.toLowerCase(), call.kind || 'check', call.attributeId, String(call.skill || '').toLowerCase(), against, call.advantage]);
 }
 
-/** The tool's arguments as a check description and its roller, or null. */
+/** The tool's arguments as a check or save description and its roller, or null. */
 function callFromToolArgs(args) {
     const cfg = attributesConfig(extensionSettings);
     const a = args && typeof args === 'object' ? args : {};
     const call = resolveCheckCall({
+        kind: String(a.kind || '').toLowerCase() === 'save' ? 'save' : 'check',
         who: cfg.aiCalls.npcs ? a.who : '',
         attribute: a.attribute,
         skill: a.skill,
         difficulty: a.difficulty,
         advantage: a.advantage,
         reason: a.reason,
+        against: a.against,
+        againstAttribute: a.againstAttribute,
     }, extensionSettings);
     return call ? { call, roller: resolveRoller(call.who) } : null;
 }
@@ -917,7 +1055,7 @@ export function diceToolAction(args) {
     const hit = callFromToolArgs(args);
     if (!hit) {
         const a = args && typeof args === 'object' ? args : {};
-        return `No check was rolled: "${String(a.attribute || '')}" is not an attribute on the sheet. Use one of: ${attributeDefs(extensionSettings).map(d => d.name).join(', ')}.`;
+        return `Nothing was rolled: "${String(a.attribute || '')}" is not an attribute on the sheet. Use one of: ${attributeDefs(extensionSettings).map(d => d.name).join(', ')}.`;
     }
     const { call, roller } = hit;
     const check = { ...checkFromCall(call, roller), calledBy: 'tool' };
@@ -929,7 +1067,7 @@ export function diceToolAction(args) {
         if (memo) { memo[key] = roll; saveRollChange(); }
         diceNotice(`Dice tool · ${rollLine(roll)}${call.reason ? ` · ${call.reason}` : ''}`, { kind: roll.success ? 'success' : 'warning' });
     } else {
-        diceNotice(`Dice tool asked again for the same check · kept ${rollLine(roll)}`);
+        diceNotice(`Dice tool asked again for the same ${call.kind === 'save' ? 'saving throw' : 'check'} · kept ${rollLine(roll)}`);
     }
     notifyDiceChanged({ source: 'tool' });
     return `${verdictFor(roll)} ${STILL_REQUIRED}`;
