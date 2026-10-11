@@ -17,7 +17,8 @@ says where things stand.
 | 3 | The game master's own calls: end-of-reply line and the dice tool, NPCs too | Yes (`807ce54` … `19d0d57`) | `d20-test` §7, `dice-test` §8–9 | Not yet: the export showed tool calls happening (`toolu_` ids, a Constitution check on Silvy) but the tracker froze after them | Parity rows "Game master's calls" and "Notify"; then the verdict on frequency |
 | 3.5 | Keeping the tracker alive after dice (reminder, recovery, tool split) | Yes (`f35507d`, `3c18e89`) | `tracker-recovery-test` | Not yet | Handover §2 step 3 |
 | Side | Voices: Never whisper | Yes (`789e136`, `4df16d3`) | `voice-logic-test` | Not yet | Parity row 158 |
-| 4 | Contested rolls, levels, saving throws, AI-suggested NPC sheets | No. Not designed. | — | — | Jordan's decisions first |
+| 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | In progress (`docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 when they land | Not yet | The four commits in §10.8, then parity rows "Saving throws" |
+| 4 | Levels, AI-suggested NPC sheets | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
 
 "Not yet" means the cloud session could not run SillyTavern; every row

@@ -795,8 +795,8 @@ layers, in `src/systems/generation/trackerRecovery.js` (pure, tested by
    MESSAGE_RECEIVED, so a block written in the first half is adopted for the
    continuation before any request is made.
 
-**Phase 4 — if wanted.** Contested rolls (Stealth against Perception as one
-opposed roll), levels and a growing proficiency bonus, saving throws.
+**Phase 4 — if wanted.** Levels and a growing proficiency bonus,
+AI-suggested NPC sheets. Saving throws and opposed actions are §10.
 
 ---
 
@@ -806,3 +806,137 @@ opposed roll), levels and a growing proficiency bonus, saving throws.
 - Should fixed vitals also be lockable per character from the card back (a
   padlock like the legacy panel has)? Cheap to add in commit 6; default no
   until asked.
+
+---
+
+## 10. Phase 4a — Saving throws and opposed actions (2024 rules)
+
+Status: **in progress on `Project-Short-Fuse`, 2026-10-11.**
+
+The owner's scene: Muzen (Charisma 30, his casting score, a master
+telepath) reads the mind of Ines Arden, an untrained girl, while talking to
+her. The game master called a Wisdom (Insight) check for Ines at Medium,
+she rolled an 18, and the verdict said "narrate the attempt succeeding".
+The model took that as Muzen's success. Two faults: the dice had no way to
+say "a master against an untrained mind" (one roller, one flat difficulty
+word, Muzen's +10 never in the maths), and the verdict never said whose
+roll it was or what success meant.
+
+Decisions: **D15** (Jordan): add saving throws from D&D and use the 2024
+rules, so Ines makes a Charisma save against Muzen's Charisma. **D16**: the
+character acting never rolls against a character resisting; the resisting
+one saves, and the actor's ability sets the DC. **D17**: one shared
+difficulty guide, with the calibration odds, in every instruction the game
+master gets, and every verdict says whose roll it is and what success
+means.
+
+### 10.1 Rules used (2024 PHB, "d20 Tests")
+
+- A saving throw is d20 + the ability modifier + the proficiency bonus when
+  the character is proficient in that save. Advantage and disadvantage as
+  for checks. With criticals on (the existing switch), a natural 20
+  succeeds and a natural 1 fails, as the 2024 rules say for every d20 Test.
+- A DC set by a character is **8 + their proficiency bonus + their modifier
+  in the ability the effect uses**: the spell save DC formula, which the
+  2024 rules also use for grapples, shoves and the like in place of
+  contests. Muzen's Charisma 30 with a +2 bonus sets DC 20.
+- A DC set by the world (poison, a collapsing floor, a fright) is a
+  difficulty word from the same table as checks.
+- Who rolls: the one whose own action is uncertain makes an ability check
+  against a difficulty. When the action is done *to* someone who can
+  resist, that someone makes a saving throw and the actor's ability sets
+  the DC; the actor does not roll. Perception against Stealth stays a check
+  against a difficulty word for now (passive scores are a non-goal).
+
+### 10.2 Data model
+
+- Save proficiency per attribute, on the sheet beside the skill
+  proficiencies: the `_prof` key `attrId:save`. "save" is a reserved slug;
+  `normalizeSkills` refuses a skill named Save. `pruneProficiencies` keeps
+  a save key whose attribute still exists.
+- A roll record gains `kind: 'check' | 'save'` (missing means check) and,
+  for a save against a character, `against: { who, isUser, attributeId,
+  attribute, abbr, score, mod, prof }`, so the box and the verdict can show
+  the formula. `dcSource: 'word' | 'character'`.
+- The pending check, the game master's call store, the tool memo and the
+  tool-call record carry `kind` and `against` the same way. Old records
+  without `kind` read as checks; nothing migrates.
+- Settings: none new. The AI-call switches cover saves too; a separate
+  switch for saves is a non-goal.
+
+### 10.3 Prompt
+
+- `difficultyGuide(settings)`: judge the task and the circumstances, never
+  the character (the roller's bonus is added afterwards); the five words
+  with their configured DCs and the odds for a +0 and a +5 roll; Medium
+  when unsure; circumstances move the call one step or give advantage or
+  disadvantage, never both; a social check on someone who does not want to
+  be moved starts at Hard; the reason names the one thing that could go
+  wrong; the who-rolls rule and the save DC formula. A brief form for the
+  per-turn instruction; the full form in the ruling call and the tool.
+- The ruling call (a check the player tagged) may now answer with a save
+  instead of a difficulty:
+  `{"save": {"who": "Ines Arden", "attribute": "Charisma", "against":
+  "Charisma"}, "advantage": "none", "reason": "…"}`; `against` is the
+  player's ability that sets the DC. The call lists the NPCs on the shelf
+  so the game master can name a target.
+- End-of-reply forms: `[CHECK: …]` as before, and
+  `[SAVE: Ines Arden: Charisma | vs Muzen's Charisma | reason]`,
+  `[SAVE: Wisdom | Hard | the vision presses in]` (the player saves against
+  the world), `[SAVE: Ines Arden: Dexterity | Medium | the floor gives way]`.
+- The tool `dooms_roll_check` gains `kind` (check, the default, or save),
+  `against` (the name of the character whose ability sets the DC; empty is
+  the player) and `againstAttribute`; `difficulty` is then optional. One
+  tool, not two: fewer tools in the prompt and one enum for the sheet.
+- Verdicts. A save: "[DICE: Ines Arden makes a Charisma saving throw
+  against Muzen's Charisma: DC 20 (8 + 2 proficiency + 10 Charisma). d20 =
+  18, +0 (CHA 10) = 18 vs DC 20. FAILURE, narrowly (by 2). This roll is Ines
+  Arden's: she does not resist, and Muzen's effect on her takes hold. This
+  outcome is final: …]"; on a success, "she resists; Muzen's effect on her
+  fails." An NPC's check now adds "This roll is Ines Arden's: it decides
+  whether she succeeds at what the reason describes, nothing about Muzen's
+  own attempt." The player's own checks keep their text.
+
+### 10.4 Flow
+
+- Player tags a check (popover) and sends. The ruling may come back as a
+  save: DES looks up the target's sheet, sets the DC from the player's
+  sheet, rolls the target's save, and writes the roll to the player's
+  message (`kind: 'save'`, `who` the target, `isUser: false`, `against`
+  the player). The box on the reply reads "Ines Arden: Charisma save vs
+  Muzen's Charisma (DC 20)"; the verdict rides as before.
+- A `[SAVE: …]` at the end of a reply: for an NPC, rolled on render like an
+  NPC check, the DC from the player's sheet or the word; for the player, a
+  pending save that rolls on send with no second ruling.
+- The tool: resolved and rolled in code; the memo key includes the kind
+  and the DC source, so the same call rolls once.
+
+### 10.5 UI
+
+Workshop → Attributes: a "Save" tick at the head of each attribute's skill
+row ("Saving throw: proficient, +2"). The box, the notices and the chip say
+"saving throw" and show the DC formula. Settings → Stats is unchanged.
+
+### 10.6 Non-goals
+
+Passive checks, contests of two rolls, death saves, concentration,
+conditions, levels (the proficiency bonus stays one global number), a
+separate switch for saves, per-chat sheets.
+
+### 10.7 Files and tests
+
+`src/utils/d20.js` (save keys and proficiency, `saveDC`, `kind` on rolls,
+`difficultyGuide`, the rating prompt and its parser, the SAVE tag parser,
+`resolveCheckCall` with `against`, the tool definition, the verdict text),
+`tools/d20-test.mjs` §8; `src/systems/features/diceRolls.js` (the ruling
+flow, `checkFromCall`, the NPC roll store, the tool action and memo, the
+card and notices), `tools/dice-test.mjs` §10; `src/systems/ui/attributesPane.js`
+(the Save tick), `src/systems/ui/dicePanel.js` (chip wording); docs and
+`docs/parity-checklist.md` rows "Saving throws".
+
+### 10.8 Commits
+
+1. This section; the phases table row.
+2. The model and its tests.
+3. The lifecycle, the tool, the Workshop tick, the card; tests.
+4. Parity rows, the phases doc, the handover.
