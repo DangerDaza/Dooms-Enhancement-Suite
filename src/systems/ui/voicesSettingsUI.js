@@ -134,7 +134,7 @@ async function withBusy($btn, fn) {
         await fn();
     } catch (e) {
         const msg = e?.kind === 'no-key' ? e.message
-            : e?.kind === 'bad-key' ? 'Google rejected the key above.'
+            : e?.kind === 'bad-key' ? 'Google rejected the key under Connections.'
             : `Google said: ${e?.message || e}`;
         try { window.toastr?.warning(msg, 'DES Voices', { timeOut: 7000 }); } catch (err) {}
     } finally {
@@ -218,6 +218,9 @@ function bindDesigned() {
     });
 }
 
+/** The Connections card is unfolded once per session while no service is connected, so setup is in view. */
+let connectionsNudged = false;
+
 function renderStatus() {
     const $status = $('#rpg-voices-status');
     if (!$status.length) return;
@@ -227,6 +230,10 @@ function renderStatus() {
     const parts = [];
     if (!anyConnected(v(), secret_state)) {
         parts.push('No voice service connected yet. Add an OpenRouter or Google key under Connections.');
+        if (!connectionsNudged) {
+            connectionsNudged = true;
+            $('#rpg-voices-connections').prop('open', true);
+        }
     }
     if (!voicesOn) {
         parts.push('DES voices are off. The bullhorn buttons use SillyTavern’s own TTS.');
@@ -245,7 +252,7 @@ function renderStatus() {
         }
         if (st.geminiVia === 'google') {
             parts.push(route.route === 'direct' || (!route.route && v().googleApiKey)
-                ? 'Using the key above, directly with Google.'
+                ? 'Using the key under Connections, directly with Google.'
                 : 'Using the Google key saved in SillyTavern.');
             if (route.status === 'ok') {
                 const chosen = v().model;
@@ -253,12 +260,12 @@ function renderStatus() {
                 parts.push(used && used !== chosen
                     ? (route.route === 'direct'
                         ? `Google didn’t accept ${chosen} with this key, so voices use ${used}.`
-                        : `Your SillyTavern can’t send ${chosen} yet, so voices use ${used}. Paste a key above to call Google directly.`)
+                        : `Your SillyTavern can’t send ${chosen} yet, so voices use ${used}. Paste a key under Connections to call Google directly.`)
                     : `${used || chosen}: working.`);
             } else if (route.status === 'no-key') {
-                parts.push('No Google key found. Paste one above, or add one in SillyTavern under API Connections → Google AI Studio.');
+                parts.push('No Google key found. Paste one under Connections, or add one in SillyTavern under API Connections → Google AI Studio.');
             } else if (route.status === 'bad-key') {
-                parts.push(route.route === 'direct' ? 'Google rejected the key above.' : 'Google rejected the key saved in SillyTavern.');
+                parts.push(route.route === 'direct' ? 'Google rejected the key under Connections.' : 'Google rejected the key saved in SillyTavern.');
             } else if (route.status === 'error') {
                 parts.push(`Last request failed: ${route.lastError}`);
             } else {
@@ -363,7 +370,7 @@ function readNarratorDesign() {
 function describeDesignError(e) {
     if (!e) return 'Something went wrong.';
     if (e.kind === 'no-key') return e.message;
-    if (e.kind === 'bad-key') return 'Google rejected the key below.';
+    if (e.kind === 'bad-key') return 'Google rejected the key under Connections.';
     if (e.kind === 'quota') return 'Your Google project is out of quota, or already has 200 custom voices. Delete some under My custom voices.';
     if (e.kind === 'rate') return 'Google is rate-limiting requests. Wait a moment and try again.';
     return `Google said: ${e.message || e}`;

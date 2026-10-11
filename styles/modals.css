@@ -8299,13 +8299,6 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-voices-guide p { margin: 0.45rem 0 0.25rem; }
 .rpg-voices-guide ul { margin: 0.2rem 0 0.3rem; padding-left: 1.2rem; }
 .rpg-voices-guide li { margin: 0.15rem 0; }
-.rpg-voices-subhead {
-    margin: 0.9rem 0 0.3rem;
-    font-size: 0.8em;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    opacity: 0.7;
-}
 .rpg-voices-or-route {
     display: flex;
     flex-wrap: wrap;
