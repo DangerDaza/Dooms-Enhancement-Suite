@@ -2,7 +2,11 @@
 
 For a local Claude Code session picking this up in a clone of
 `DangerDaza/Dooms-Enhancement-Suite`, and for Jordan. Everything below is
-what the cloud session knew when it stopped. `docs/stats-plan.md` is the
+what the cloud session knew when it stopped. The local session is already
+live: it pushed five commits on 2026-10-11 (Voices: Steadiness, anchoring,
+Audition ×3, docs; and the d20 test importing by file URL for Windows).
+None of them touch Stats; this file and the phases write-up were rebased
+on top of them. `docs/stats-plan.md` is the
 design; `docs/parity-checklist.md` has the in-play checks; this file is the
 state and the next moves.
 
@@ -21,8 +25,10 @@ state and the next moves.
 - **Working style:** ask clarifying questions; say the plan before acting;
   one tested commit per step, pushed as you go; when you talk about removing
   something, Jordan likes "𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊" in that font.
-- **Tests run with a timeout** (`timeout 90 node tools/...`). The sandbox
-  stubs are proxies; a DOM walk on a proxy once looped forever.
+- **Tests run with a timeout** (`timeout 90 node tools/...`) on Linux and
+  macOS. On Windows `timeout` is a different command: run the plain
+  `node tools/...` lines, and kill the run if one hangs. The sandbox stubs
+  are proxies; a DOM walk on a proxy once looped forever (guarded since).
 
 ## 2. Immediate actions
 

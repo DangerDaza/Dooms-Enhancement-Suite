@@ -233,7 +233,9 @@ whispered delivery: the base style strips whisper directions, cached lines
 are told what changes, auditions carry the ban. `src/systems/voices/
 delivery.js`, `voiceSettings.js`, `voiceEngine.js`,
 `src/systems/ui/voicesSettingsUI.js`, `template.html`;
-`tools/voice-logic-test.mjs` (57 checks). Parity row 158.
+`tools/voice-logic-test.mjs`. Parity row 158. Voices work has gone on
+locally since (Steadiness, anchoring, Audition ×3; `3ee652f` … `18caf70`,
+`docs/google-tts-voices-plan.md`); it is not part of Stats.
 
 ## Phase 4 — if wanted (not started, not designed)
 
