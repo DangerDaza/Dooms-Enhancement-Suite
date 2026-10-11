@@ -323,10 +323,14 @@ export function difficultyGuide(settings, { brief = false } = {}) {
         .map(d => `${d.label} (DC ${d.dc}; a +0 roll makes it ${oddsText(d.dc, 0)} of the time, a +5 roll ${oddsText(d.dc, 5)}): ${meaning[d.id]}`)
         .join('. ');
     const who = `Who rolls: the one whose own action is uncertain makes an ability check against a difficulty. When the action is done to someone who can resist it, that someone makes a saving throw and the actor's ability sets the DC (${SAVE_DC_BASE} + the actor's proficiency bonus of ${cfg.proficiencyBonus} + the actor's modifier); the actor does not roll. A character with a casting ability on their sheet imposes everything their magic or powers do through it, whatever other ability might seem to fit; name a different ability only for a physical act, such as Strength for a shove.`;
+    // The three resolutions for magic (§12.1) and the talent rule (D24, D25); the brief form keeps the per-turn cost down.
+    const magic = brief
+        ? 'Magic: done to someone who can resist, they save against the caster\'s DC; against the world, the caster makes a casting check (Casting: their casting ability plus proficiency, advantage inside a Master talent, no proficiency outside their listed talents but never refused); nothing resisting, no roll.'
+        : 'Magic and powers: done to someone who can resist, that someone saves against the caster\'s DC as above; contending with the world (a ward, a storm, a working held while hurt, a reach across a city), the caster makes a casting check, written Casting (their casting ability plus proficiency; advantage inside a Master talent on their sheet; outside their listed talents no proficiency, but never refused); nothing resisting, no roll. Holding a working through harm is a Constitution save.';
     if (brief) {
-        return `Set the difficulty by the task and the circumstances, never by who attempts it (their bonus is added afterwards); Medium is the usual call, Hard when most people would fail. ${who}`;
+        return `Set the difficulty by the task and the circumstances, never by who attempts it (their bonus is added afterwards); Medium is the usual call, Hard when most people would fail. ${who} ${magic}`;
     }
-    return `DIFFICULTY: judge the task and the circumstances, never the character: the roller's modifier and proficiency are added afterwards, so a master and a novice face the same DC and differ in their bonus. ${scale}. When unsure, Medium. Circumstances move the call one step (dark, hurried, wounded, a hostile listener) or give advantage or disadvantage, never both. A social check on someone who does not want to be moved starts at Hard; on someone already inclined, Easy. The reason names the one thing that could go wrong. ${who}`;
+    return `DIFFICULTY: judge the task and the circumstances, never the character: the roller's modifier and proficiency are added afterwards, so a master and a novice face the same DC and differ in their bonus. ${scale}. When unsure, Medium. Circumstances move the call one step (dark, hurried, wounded, a hostile listener) or give advantage or disadvantage, never both. A social check on someone who does not want to be moved starts at Hard; on someone already inclined, Easy. The reason names the one thing that could go wrong. ${who} ${magic}`;
 }
 
 // ─── Scores and sheets ──────────────────────────────────────────────────────
@@ -510,6 +514,36 @@ export function castingCandidateIds(defs) {
     return mental.length ? mental : ids;
 }
 
+/**
+ * The casting check (§12, D23): "Charisma (Casting)", D&D's spell attack
+ * bonus turned into a check against a difficulty, for magic that contends
+ * with the world rather than with someone. Its slug is the casting slot's,
+ * so the proficiency is the casting key itself: a character is proficient
+ * in Casting exactly on the ability their powers run on.
+ */
+export const CASTING_CHECK_NAME = 'Casting';
+
+/** True when a skill or attribute name means the casting check. */
+export function isCastingSkill(name) {
+    return attributeSlug(name) === CASTING_SLUG;
+}
+
+/** What a casting check adds: the casting modifier plus the proficiency bonus. */
+export function castingCheckBonus(score, proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus) {
+    return modifier(score) + clampProficiency(proficiencyBonus);
+}
+
+/** The ability a character with no casting ability casts with (D27): Charisma when the list has it, else the first candidate. */
+export function defaultCastingId(defs) {
+    const ids = castingCandidateIds(defs);
+    return ids.includes('cha') ? 'cha' : (ids[0] || '');
+}
+
+/** The ability a casting check rolls on: the sheet's casting ability, else the default (and then unpractised). */
+export function castingAbilityFor(proficiencies, defs) {
+    return getCastingAbility(proficiencies) || defaultCastingId(defs);
+}
+
 /** Physical abilities: a DC named with one of these stands even when the actor has a casting ability. */
 const PHYSICAL_IDS = Object.freeze(['str', 'dex', 'con']);
 
@@ -562,6 +596,7 @@ export function pruneProficiencies(proficiencies, defs) {
     return normalizeProfKeys((proficiencies || []).filter(k => {
         if (isTierKey(k)) return !!tierById(getTierId(k));
         if (isMarkKey(k)) return true;
+        if (isTalentKey(k)) return !!parseTalentKey(k);
         if (isSaveKey(k) || isCastingKey(k)) return (defs || []).some(d => d.id === String(k).slice(0, String(k).indexOf(':')));
         return !!skillNameForKey(defs, k);
     }));
@@ -574,7 +609,7 @@ export function pruneProficiencies(proficiencies, defs) {
 // "tier:<id>" so it follows the sheet everywhere proficiencies do. Its
 // range guides the Workshop and the AI's suggestions; it never caps a score.
 
-export const RESERVED_FLAG_PREFIXES = Object.freeze(['tier', 'mark']);
+export const RESERVED_FLAG_PREFIXES = Object.freeze(['tier', 'mark', 'talent']);
 
 export const TIERS = Object.freeze([
     { id: 'ordinary',    label: 'Ordinary',    min: 8,  max: 12, array: Object.freeze([12, 11, 10, 10, 9, 8]),   means: 'most people' },
@@ -633,6 +668,80 @@ export function isSuggested(proficiencies) {
 export function withSuggestedMark(proficiencies, on) {
     const rest = (Array.isArray(proficiencies) ? proficiencies : []).filter(k => k !== SUGGESTED_MARK);
     return normalizeProfKeys(on ? [...rest, SUGGESTED_MARK] : rest);
+}
+
+// ─── Talents (Phase 4c, §12) ────────────────────────────────────────────────
+//
+// What a character's magic or powers are known for: a short free-text list
+// on the sheet, each entry Practised or Master. It describes, it never
+// limits (D25): the game master reads it and gives advantage on a casting
+// check inside a Master talent; nothing here changes a number on its own.
+// Stored as "talent:<level>:<name>" beside the proficiencies, like the tier.
+
+export const TALENT_LEVELS = Object.freeze([
+    { id: 'practised', label: 'Practised' },
+    { id: 'master', label: 'Master' },
+]);
+const TALENT_NAME_MAX = 32;
+
+function talentLevelById(id) {
+    const t = String(id || '').trim().toLowerCase();
+    return TALENT_LEVELS.find(l => l.id === t || l.label.toLowerCase() === t) || null;
+}
+
+/** A talent's name as stored: single-spaced, trimmed, up to 32 characters; '' when empty. */
+export function normalizeTalentName(name) {
+    return String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, TALENT_NAME_MAX);
+}
+
+/** The stored form of a talent: "talent:master:Telepathy". An unknown level is Practised. */
+export function talentKey(name, level = 'practised') {
+    const l = talentLevelById(level) || TALENT_LEVELS[0];
+    return `talent:${l.id}:${normalizeTalentName(name)}`;
+}
+
+/** True for a "talent:..." key. */
+export function isTalentKey(key) {
+    return String(key || '').startsWith('talent:');
+}
+
+/** { name, level } from a talent key, or null when it is malformed. */
+export function parseTalentKey(key) {
+    const k = String(key || '');
+    if (!isTalentKey(k)) return null;
+    const rest = k.slice('talent:'.length);
+    const i = rest.indexOf(':');
+    if (i < 0) return null;
+    const level = talentLevelById(rest.slice(0, i));
+    const name = normalizeTalentName(rest.slice(i + 1));
+    return level && name ? { name, level: level.id } : null;
+}
+
+/** The talents on a sheet: Masters first, then by name. */
+export function getTalents(proficiencies) {
+    const out = (Array.isArray(proficiencies) ? proficiencies : []).map(parseTalentKey).filter(Boolean);
+    return out.sort((a, b) => (a.level === b.level ? a.name.localeCompare(b.name) : (a.level === 'master' ? -1 : 1)));
+}
+
+/** The proficiencies without the named talent (case-insensitive). */
+export function withoutTalent(proficiencies, name) {
+    const n = normalizeTalentName(name).toLowerCase();
+    return normalizeProfKeys((Array.isArray(proficiencies) ? proficiencies : []).filter(k => {
+        const t = parseTalentKey(k);
+        return !t || t.name.toLowerCase() !== n;
+    }));
+}
+
+/** The proficiencies with this talent at this level, one entry per name; an empty name changes nothing. */
+export function withTalent(proficiencies, name, level = 'practised') {
+    const n = normalizeTalentName(name);
+    if (!n) return normalizeProfKeys(proficiencies);
+    return normalizeProfKeys([...withoutTalent(proficiencies, n), talentKey(n, level)]);
+}
+
+/** "Telepathy (Master), Blood-binding" for the prompt and the pane; '' when none. */
+export function talentsText(proficiencies) {
+    return getTalents(proficiencies).map(t => (t.level === 'master' ? `${t.name} (Master)` : t.name)).join(', ');
 }
 
 /** 'below', 'in' or 'above' the tier's range; 'in' when there is no tier. */
@@ -876,14 +985,20 @@ export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_D
         const saves = saveProficiencyDefs(defs, e.proficiencies).map(d => d.name);
         const castingDef = defs.find(d => d.id === getCastingAbility(e.proficiencies)) || null;
         const tier = sendTier ? tierById(getTier(e.proficiencies)) : null;
-        if (!scores.length && !prof.length && !saves.length && !castingDef && !tier) continue;
+        const talents = talentsText(e.proficiencies);
+        if (!scores.length && !prof.length && !saves.length && !castingDef && !tier && !talents) continue;
         if (prof.length || saves.length) anyProf = true;
         if (tier) anyTier = true;
         const bits = [];
         if (scores.length) bits.push(scores.join(', '));
         if (prof.length) bits.push(`proficient in ${prof.join(', ')} (+${proficiencyBonus})`);
         if (saves.length) bits.push(`proficient in ${saves.join(', ')} saves (+${proficiencyBonus})`);
-        if (castingDef) bits.push(`casting ability ${castingDef.name} (anything their power does to someone is resisted against it)`);
+        // The numbers, not the hint (§12.3): the save DC their power sets and what a casting check adds.
+        if (castingDef) {
+            const score = sheet[castingDef.id] ?? DEFAULT_SCORE;
+            bits.push(`casting ability ${castingDef.name} (save DC ${saveDC(score, proficiencyBonus)}, casting check ${formatModifier(castingCheckBonus(score, proficiencyBonus))})`);
+        }
+        if (talents) bits.push(`talents: ${talents}`);
         const who = `${e.name}${e.isUser ? ' (player)' : ''}${tier ? `, ${tier.label}` : ''}`;
         parts.push(bits.length ? `${who}: ${bits.join('; ')}` : who);
     }
@@ -1075,19 +1190,26 @@ export function resolveCheckCall({ kind = 'check', who = '', attribute = '', ski
     // "[CHECK: Stealth | Hard]": a skill alone means its home attribute.
     if (!def && !hit && !save) hit = findSkill(defs, attribute);
     if (!def && hit) def = defs.find(d => d.id === hit.attributeId) || null;
-    if (!def) return null;
+    // A casting check (§12): "Casting" alone, "Muzen: Casting", "Charisma
+    // (Casting)" or the tool's attribute Casting. The skill is Casting; a
+    // bare Casting leaves the attribute for the lifecycle to read off the
+    // roller's sheet (castingCheck: true), since the sheet is not known here.
+    const casting = !save && (isCastingSkill(attribute) || isCastingSkill(skill));
+    if (casting) hit = { attributeId: def ? def.id : '', name: CASTING_CHECK_NAME };
+    if (!def && !casting) return null;
     const cfg = attributesConfig(settings);
     const words = matchDifficultyWords(`${difficulty} ${advantage}`, settings);
     const base = {
         kind: save ? 'save' : 'check',
         who: String(who || '').trim().slice(0, 60),
-        attributeId: def.id,
-        attribute: def.name,
-        abbr: def.abbr,
+        attributeId: def ? def.id : '',
+        attribute: def ? def.name : CASTING_CHECK_NAME,
+        abbr: def ? def.abbr : 'CAST',
         skill: hit ? hit.name : '',
         skillAttributeId: hit ? hit.attributeId : '',
         advantage: words.advantage,
         reason: String(reason || '').trim().replace(/^because\s+/i, '').slice(0, 200),
+        ...(casting ? { castingCheck: true } : {}),
     };
     if (save) {
         // "vs Muzen's Charisma" in the difficulty slot, or the tool's against fields.
@@ -1208,7 +1330,7 @@ export function buildCheckCallInstruction({ settings, userName = 'the player' } 
     const saveExample = cfg.aiCalls.npcs
         ? `[SAVE: Guard: Wisdom | vs ${userName}'s Charisma | the suggestion presses on his mind]`
         : `[SAVE: Wisdom | Hard | the vision presses in]`;
-    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, you may call for ONE check by putting a line in exactly this form at the end of your narration: [CHECK: Dexterity (Stealth) | Hard | the guards are alert]. Difficulty is one of ${words}; you may add "advantage" or "disadvantage" after it.${npc} ${difficultyGuide(settings, { brief: true })} For a saving throw write ${saveExample}: the one who saves, the ability they resist with, then either "vs <name>'s <ability>" for the character whose ability sets the DC (a bare "vs <ability>" means ${userName}'s) or a difficulty word when the world is the source. The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never roll, resolve or narrate the outcome yourself: the result arrives with the next message and you narrate it then.]`;
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, you may call for ONE check by putting a line in exactly this form at the end of your narration: [CHECK: Dexterity (Stealth) | Hard | the guards are alert], or [CHECK: Casting | Hard | the ward is old] for a casting check. Difficulty is one of ${words}; you may add "advantage" or "disadvantage" after it.${npc} ${difficultyGuide(settings, { brief: true })} For a saving throw write ${saveExample}: the one who saves, the ability they resist with, then either "vs <name>'s <ability>" for the character whose ability sets the DC (a bare "vs <ability>" means ${userName}'s) or a difficulty word when the world is the source. The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never roll, resolve or narrate the outcome yourself: the result arrives with the next message and you narrate it then.]`;
 }
 
 export const DICE_TOOL_NAME = 'dooms_roll_check';
@@ -1218,7 +1340,7 @@ export function buildToolCallInstruction({ settings, userName = 'the player' } =
     const cfg = attributesConfig(settings);
     const defs = attributeDefs(settings);
     const npc = cfg.aiCalls.npcs ? ', and who is rolling when it is not the player' : '';
-    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, call the ${DICE_TOOL_NAME} tool with the attribute, a skill if one applies, the difficulty and a short reason${npc}; the result comes back to you, is final, and you narrate it as it fell. ${difficultyGuide(settings, { brief: true })} For a saving throw call the tool with kind "save": who saves and the ability they resist with, and either the character whose ability sets the DC (against and againstAttribute) or a difficulty word when the world is the source. A tool call does not change the shape of your reply: after the result, produce the tracker data block exactly where your instructions place it, then the story. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never invent a roll or an outcome without the tool.]`;
+    return `[CHECKS: The game rolls the dice; you never do. ${userName}'s attributes and skills: ${attributeMenu(defs)}. When an action's outcome is genuinely uncertain and matters, call the ${DICE_TOOL_NAME} tool with the attribute (or Casting for a casting check), a skill if one applies, the difficulty and a short reason${npc}; the result comes back to you, is final, and you narrate it as it fell. ${difficultyGuide(settings, { brief: true })} For a saving throw call the tool with kind "save": who saves and the ability they resist with, and either the character whose ability sets the DC (against and againstAttribute) or a difficulty word when the world is the source. A tool call does not change the shape of your reply: after the result, produce the tracker data block exactly where your instructions place it, then the story. Call for a check ${frequencyClause(cfg.aiCalls.frequency)}; never for routine actions, conversation or scene-setting, and most replies have none. Never invent a roll or an outcome without the tool.]`;
 }
 
 /**
@@ -1233,8 +1355,8 @@ export function buildDiceToolDefinition({ settings, userName = 'the player' } = 
     const names = defs.map(d => d.name);
     const properties = {
         kind: { type: 'string', enum: ['check', 'save'], description: 'check: the roller’s own uncertain action against a difficulty (the default). save: the roller resists something done to them; the DC comes from the character doing it (against, againstAttribute) or from a difficulty word when the world is the source.' },
-        attribute: { type: 'string', enum: names, description: 'The attribute the check is made with, or the ability a save is made with.' },
-        skill: { type: 'string', description: `A skill that applies to a check, or empty for a plain attribute check (never for a save). Any skill may pair with any attribute. Known skills: ${skills.join(', ') || 'none'}.` },
+        attribute: { type: 'string', enum: [...names, CASTING_CHECK_NAME], description: 'The attribute the check is made with, or the ability a save is made with. Casting is a casting check: the roller\'s casting ability with proficiency, for magic that contends with the world rather than with someone (who saves instead).' },
+        skill: { type: 'string', description: `A skill that applies to a check, or empty for a plain attribute check (never for a save). Any skill may pair with any attribute. Known skills: ${skills.join(', ') || 'none'}; Casting with the casting ability is the casting check.` },
         difficulty: { type: 'string', enum: DIFFICULTIES.map(d => d.label), description: `Required for a check, and for a save the world imposes. ${difficultyGuide(settings)}` },
         advantage: { type: 'string', enum: ['none', 'advantage', 'disadvantage'], description: 'Advantage only when circumstances clearly favour the roller, disadvantage only when they clearly hinder them.' },
         reason: { type: 'string', description: 'One short sentence: the one thing that could go wrong, and why this difficulty.' },

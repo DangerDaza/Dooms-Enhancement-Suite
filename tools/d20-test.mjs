@@ -193,7 +193,7 @@ const toolInst = D.buildToolCallInstruction({ settings, userName: 'Jordan' });
 check('the tool instruction names the tool and the restraint', toolInst.includes('call the dooms_roll_check tool') && toolInst.includes('who is rolling when it is not the player') && toolInst.includes('most replies have none'));
 const tool = D.buildDiceToolDefinition({ settings, userName: 'Jordan' });
 check('the tool definition: enums from the sheet, who only with NPCs on',
-    tool.name === 'dooms_roll_check' && tool.parameters.properties.attribute.enum.join() === 'Strength,Dexterity,Constitution,Intelligence,Wisdom,Charisma' && tool.parameters.properties.difficulty.enum.length === 5 && tool.parameters.required.join() === 'attribute,reason' && !!tool.parameters.properties.who && tool.parameters.properties.skill.description.includes('Stealth (DEX)'));
+    tool.name === 'dooms_roll_check' && tool.parameters.properties.attribute.enum.join() === 'Strength,Dexterity,Constitution,Intelligence,Wisdom,Charisma,Casting' && tool.parameters.properties.difficulty.enum.length === 5 && tool.parameters.required.join() === 'attribute,reason' && !!tool.parameters.properties.who && tool.parameters.properties.skill.description.includes('Stealth (DEX)'));
 settings.attributes.aiCalls.npcs = false;
 check('...no who parameter without NPCs', D.buildDiceToolDefinition({ settings }).parameters.properties.who === undefined);
 settings.attributes.aiCalls.npcs = true;
@@ -263,7 +263,7 @@ check('pruneProficiencies keeps a casting slot whose attribute exists', D.pruneP
 check('castingCandidateIds: the mental three, else every attribute', D.castingCandidateIds(defs).join() === 'int,wis,cha' && D.castingCandidateIds([{ id: 'luck' }, { id: 'grit' }]).join() === 'luck,grit');
 check('dcAbilityId: casting wins over a named mental ability, a physical one stands, no casting means the named one',
     D.dcAbilityId({ namedId: 'wis', castingId: 'cha' }) === 'cha' && D.dcAbilityId({ namedId: '', castingId: 'cha' }) === 'cha' && D.dcAbilityId({ namedId: 'str', castingId: 'cha' }) === 'str' && D.dcAbilityId({ namedId: 'wis', castingId: '' }) === 'wis' && D.dcAbilityId({}) === '');
-check('the attributes line names the casting ability', D.buildAttributesLine([{ name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['cha:casting'] }], defs, { proficiencyBonus: 2 }).endsWith('Muzen (player): CHA 30 (+10); casting ability Charisma (anything their power does to someone is resisted against it).'));
+check('the attributes line names the casting ability with its numbers', D.buildAttributesLine([{ name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['cha:casting'] }], defs, { proficiencyBonus: 2 }).endsWith('Muzen (player): CHA 30 (+10); casting ability Charisma (save DC 20, casting check +12).'));
 check('the guide says a casting ability imposes everything a power does', guide.includes('A character with a casting ability on their sheet imposes everything their magic or powers do through it'));
 
 // ── 9. Tiers and NPC sheets (Phase 4b, §11) ──
@@ -285,7 +285,7 @@ check('fillByTier lays the array over the current ranking, ties by list order',
     && JSON.stringify(D.fillByTier({}, defs, 'nope')) === '{}');
 check('the attributes line carries the tier, and a tier alone is enough to be listed',
     D.buildAttributesLine([{ name: 'Ines Arden', isUser: false, sheet: {}, proficiencies: ['tier:ordinary'] }, { name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['tier:legend', 'cha:casting'] }], defs, { proficiencyBonus: 2 })
-    === 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; a tier word says where they stand, Ordinary (8–12): most people; Trained (10–14): good at their trade; Exceptional (12–17): the best in a city; Heroic (15–20): the best alive; Legend (18–30): beyond human; read-only, never output them): Ines Arden, Ordinary. Muzen (player), Legend: CHA 30 (+10); casting ability Charisma (anything their power does to someone is resisted against it).');
+    === 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; a tier word says where they stand, Ordinary (8–12): most people; Trained (10–14): good at their trade; Exceptional (12–17): the best in a city; Heroic (15–20): the best alive; Legend (18–30): beyond human; read-only, never output them): Ines Arden, Ordinary. Muzen (player), Legend: CHA 30 (+10); casting ability Charisma (save DC 20, casting check +12).');
 check('...and leaves it out with sendTier off', D.buildAttributesLine([{ name: 'Ines Arden', isUser: false, sheet: {}, proficiencies: ['tier:ordinary'] }], defs, { sendTier: false }) === '');
 check('config: sendTier on and suggestNewSheets off by default, migration fills them', (() => { const c = D.attributesConfig({}); const s = { attributes: { enabled: true } }; D.migrateAttributesConfig(s); return c.sendTier === true && c.suggestNewSheets === false && s.attributes.sendTier === true && s.attributes.suggestNewSheets === false && D.attributesConfig({ attributes: { suggestNewSheets: true, sendTier: false } }).suggestNewSheets === true; })());
 const sp2 = D.buildSheetSuggestionPrompt({ name: 'Ines Arden', description: 'A clerk at the Office, twenty, nervous.', appearance: 'Small, dark coat.', recentText: 'Ines: Hello.', settings });
@@ -293,6 +293,48 @@ check('the suggestion prompt carries the scale, the attributes and the character
 const parsedSheet = D.parseSheetSuggestion('Here: {"tier": "ordinary", "scores": {"Strength": 9, "Charisma": 12, "Luck": 20, "Wisdom": 99}, "reasons": {"Charisma": "quick to smile", "Luck": "x"}}', settings);
 check('parseSheetSuggestion reads the tier, clamps, drops unknown attributes and keeps known reasons', parsedSheet && parsedSheet.tierId === 'ordinary' && JSON.stringify(parsedSheet.scores) === '{"str":9,"cha":12,"wis":30}' && JSON.stringify(parsedSheet.reasons) === '{"cha":"quick to smile"}', JSON.stringify(parsedSheet));
 check('...a label works, a bare tier works, garbage is null', D.parseSheetSuggestion('{"tier": "Legend", "scores": {}}', settings).tierId === 'legend' && D.parseSheetSuggestion('nothing here', settings) === null && D.parseSheetSuggestion('{"scores": {"Nope": 1}}', settings) === null);
+
+// ── 10. Casting checks and talents (Phase 4c, §12) ──
+check('the Casting skill: its slug is the casting slot, so the proficiency is the casting key',
+    D.CASTING_CHECK_NAME === 'Casting' && D.isCastingSkill('casting') && D.isCastingSkill(' CASTING ') && !D.isCastingSkill('Stealth')
+    && D.isProficient(['cha:casting'], 'cha', 'Casting') && !D.isProficient(['cha:casting'], 'wis', 'Casting') && !D.isProficient(['wis:save'], 'cha', 'Casting'));
+check('castingCheckBonus is the modifier plus proficiency; castingAbilityFor falls back to Charisma, then the first candidate (D27)',
+    D.castingCheckBonus(30, 2) === 12 && D.castingCheckBonus(8, 3) === 2 && D.castingAbilityFor(['int:casting'], defs) === 'int' && D.castingAbilityFor([], defs) === 'cha'
+    && D.defaultCastingId([{ id: 'luck' }, { id: 'grit' }]) === 'luck' && D.defaultCastingId([{ id: 'int' }, { id: 'wis' }]) === 'int');
+call = D.parseCheckCall('The ward hums.\n[CHECK: Casting | Hard | the ward is old]', settings);
+check('[CHECK: Casting | Hard] is a casting check with the attribute left for the sheet', call && call.castingCheck === true && call.attributeId === '' && call.attribute === 'Casting' && call.abbr === 'CAST' && call.skill === 'Casting' && call.skillAttributeId === '' && call.difficultyId === 'hard' && call.dc === 20 && call.reason === 'the ward is old', JSON.stringify(call));
+call = D.parseCheckCall('[CHECK: Muzen: Casting | Medium | the reach is long]', settings);
+check('...with a named roller', call && call.who === 'Muzen' && call.castingCheck === true && call.difficultyId === 'medium');
+call = D.parseCheckCall('[CHECK: Charisma (Casting) | Very hard | x]', settings);
+check('"Charisma (Casting)" names the attribute and keeps the Casting skill on it', call && call.castingCheck === true && call.attributeId === 'cha' && call.skill === 'Casting' && call.skillAttributeId === 'cha' && call.difficultyId === 'veryHard', JSON.stringify(call));
+check('the tool arguments: attribute Casting; and a save never becomes a casting check',
+    (() => { const r = D.resolveCheckCall({ attribute: 'Casting', difficulty: 'Hard', reason: 'x' }, settings); return r && r.castingCheck === true && r.attributeId === '' && r.skill === 'Casting'; })()
+    && (() => { const r = D.resolveCheckCall({ kind: 'save', attribute: 'Casting', difficulty: 'Hard', reason: 'x' }, settings); return r === null; })()
+    && (() => { const r = D.resolveCheckCall({ attribute: 'Wisdom', skill: 'casting', difficulty: 'Easy', reason: 'x' }, settings); return r && r.castingCheck === true && r.attributeId === 'wis' && r.skill === 'Casting'; })());
+check('an ordinary check carries no castingCheck flag', D.resolveCheckCall({ attribute: 'Wisdom', skill: 'Insight', difficulty: 'Easy', reason: 'x' }, settings).castingCheck === undefined);
+check('talent keys: "talent:master:Telepathy", parsed back, malformed ones null',
+    D.talentKey('Telepathy', 'master') === 'talent:master:Telepathy' && D.talentKey('  Blood   binding ', 'Nope') === 'talent:practised:Blood binding' && D.talentKey('Mist-walking', 'Master') === 'talent:master:Mist-walking'
+    && JSON.stringify(D.parseTalentKey('talent:master:Telepathy')) === '{"name":"Telepathy","level":"master"}' && D.parseTalentKey('talent:demigod:Telepathy') === null && D.parseTalentKey('talent:master:') === null && D.parseTalentKey('talent:Telepathy') === null && D.parseTalentKey('cha:casting') === null
+    && D.isTalentKey('talent:master:x') && !D.isTalentKey('tier:legend'));
+check('withTalent: one entry per name (any case), level replaced, empty name ignored; withoutTalent removes it',
+    D.withTalent(['cha:casting'], 'Telepathy', 'master').join() === 'cha:casting,talent:master:Telepathy'
+    && D.withTalent(['talent:master:Telepathy', 'cha:casting'], 'telepathy', 'practised').join() === 'cha:casting,talent:practised:telepathy'
+    && D.withTalent(['cha:casting'], '   ').join() === 'cha:casting'
+    && D.withoutTalent(['talent:master:Telepathy', 'talent:practised:Blood-binding', 'cha:casting'], 'TELEPATHY').join() === 'cha:casting,talent:practised:Blood-binding');
+check('getTalents: Masters first, then by name; talentsText writes them',
+    JSON.stringify(D.getTalents(['talent:practised:Mist-walking', 'talent:master:Telepathy', 'talent:practised:Blood-binding', 'cha:casting'])) === '[{"name":"Telepathy","level":"master"},{"name":"Blood-binding","level":"practised"},{"name":"Mist-walking","level":"practised"}]'
+    && D.talentsText(['talent:practised:Mist-walking', 'talent:master:Telepathy']) === 'Telepathy (Master), Mist-walking' && D.talentsText(['cha:casting']) === '');
+check('pruneProficiencies keeps a well-formed talent and drops a malformed one; an attribute cannot take the id "talent"',
+    D.pruneProficiencies(['talent:master:Telepathy', 'talent:demigod:X', 'talent:master:', 'str:athletics'], defs).join() === 'str:athletics,talent:master:Telepathy' && D.normalizeAttributeDef({ name: 'Talent' }).id === 'attr_talent');
+check('the attributes line lists the talents, and talents alone are enough to be listed',
+    D.buildAttributesLine([{ name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['cha:casting', 'talent:master:Telepathy', 'talent:practised:Blood-binding'] }], defs, { proficiencyBonus: 2 }).endsWith('Muzen (player): CHA 30 (+10); casting ability Charisma (save DC 20, casting check +12); talents: Telepathy (Master), Blood-binding.')
+    && D.buildAttributesLine([{ name: 'Silvy', isUser: false, sheet: {}, proficiencies: ['talent:practised:Lockpicking'] }], defs, { proficiencyBonus: 2 }).endsWith('Silvy: talents: Lockpicking.'));
+check('the guide carries the three resolutions and the talent rule, in both forms',
+    D.difficultyGuide(settings).includes('Magic and powers: done to someone who can resist, that someone saves against the caster\'s DC as above; contending with the world') && D.difficultyGuide(settings).includes('written Casting (their casting ability plus proficiency; advantage inside a Master talent on their sheet; outside their listed talents no proficiency, but never refused); nothing resisting, no roll. Holding a working through harm is a Constitution save.')
+    && D.difficultyGuide(settings, { brief: true }).includes('nothing resisting, no roll'));
+check('the instructions and the tool know Casting',
+    D.buildCheckCallInstruction({ settings, userName: 'Jordan' }).includes('[CHECK: Casting | Hard | the ward is old] for a casting check') && D.buildToolCallInstruction({ settings, userName: 'Jordan' }).includes('(or Casting for a casting check)')
+    && D.buildDiceToolDefinition({ settings }).parameters.properties.attribute.description.includes('Casting is a casting check') && D.buildDiceToolDefinition({ settings }).parameters.properties.skill.description.includes('Casting with the casting ability is the casting check'));
 
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
