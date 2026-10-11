@@ -294,7 +294,7 @@ function withTimeout(promise, ms) {
 }
 
 /** The last `count` messages before `before` (the whole chat when -1), one line each. */
-function recentChatText(count, { before = -1, truncation = 600 } = {}) {
+export function recentChatText(count, { before = -1, truncation = 600 } = {}) {
     const list = chatArray();
     if (!list) return '';
     const persona = resolvePersonaName() || 'Player';

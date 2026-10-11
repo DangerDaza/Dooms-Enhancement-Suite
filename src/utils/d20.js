@@ -85,6 +85,8 @@ const CONFIG_DEFAULTS = Object.freeze({
         frequency: 'sparingly',    // 'sparingly' | 'whenUncertain'
     }),
     contextMessages: 6,            // recent messages the rating call sees
+    sendTier: true,                // the tier word rides in the attributes line (§11, D20)
+    suggestNewSheets: false,       // one small call fills a new character's sheet (§11.3)
 });
 
 const SEND_MODES = ['always', 'withRoll', 'never'];
@@ -117,6 +119,8 @@ export function defaultAttributesConfig() {
         proficiencyBonus: CONFIG_DEFAULTS.proficiencyBonus,
         notify: CONFIG_DEFAULTS.notify,
         contextMessages: CONFIG_DEFAULTS.contextMessages,
+        sendTier: CONFIG_DEFAULTS.sendTier,
+        suggestNewSheets: CONFIG_DEFAULTS.suggestNewSheets,
         aiCalls: { ...CONFIG_DEFAULTS.aiCalls },
     };
 }
@@ -142,7 +146,9 @@ export function normalizeAttributeDef(entry) {
     const e = entry && typeof entry === 'object' ? entry : {};
     const preset = presetFor(e);
     const name = typeof e.name === 'string' && e.name.trim() ? e.name.trim().slice(0, 32) : (preset?.name || '');
-    const id = typeof e.id === 'string' && e.id ? e.id : (preset?.id || attributeSlug(name));
+    const rawId = typeof e.id === 'string' && e.id ? e.id : (preset?.id || attributeSlug(name));
+    // "tier" and "mark" are the sheet's own flag prefixes (§11.2).
+    const id = RESERVED_FLAG_PREFIXES.includes(rawId) ? `attr_${rawId}` : rawId;
     const abbrRaw = typeof e.abbr === 'string' && e.abbr.trim() ? e.abbr.trim() : (preset?.abbr || name.slice(0, 3));
     return {
         id,
@@ -206,6 +212,8 @@ export function attributesConfig(settings) {
         notify: a.notify !== false,
         aiCalls: normalizeAiCalls(a.aiCalls),
         contextMessages: Number.isFinite(ctx) ? Math.min(30, Math.max(1, Math.round(ctx))) : CONFIG_DEFAULTS.contextMessages,
+        sendTier: a.sendTier !== false,
+        suggestNewSheets: a.suggestNewSheets === true,
     };
 }
 
@@ -247,7 +255,7 @@ export function migrateAttributesConfig(settings) {
         for (const d of DIFFICULTIES) {
             if (a.difficulty[d.id] === undefined) { a.difficulty[d.id] = d.dc; changed = true; }
         }
-        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'notify', 'contextMessages']) {
+        for (const key of ['enabled', 'sendToAI', 'defaultDifficulty', 'criticals', 'aiRatesDifficulty', 'allowOverride', 'proficiencyBonus', 'notify', 'contextMessages', 'sendTier', 'suggestNewSheets']) {
             if (a[key] === undefined) { a[key] = fresh[key]; changed = true; }
         }
         if (!a.aiCalls || typeof a.aiCalls !== 'object' || Array.isArray(a.aiCalls)) {
@@ -549,12 +557,114 @@ export function findSkill(defs, name) {
     return null;
 }
 
-/** Keeps only the proficiencies whose attribute and skill (or save, or casting slot) still exist on the defs. */
+/** Keeps only the proficiencies whose attribute and skill (or save, or casting slot) still exist on the defs; the sheet's own flags stay. */
 export function pruneProficiencies(proficiencies, defs) {
     return normalizeProfKeys((proficiencies || []).filter(k => {
+        if (isTierKey(k)) return !!tierById(getTierId(k));
+        if (isMarkKey(k)) return true;
         if (isSaveKey(k) || isCastingKey(k)) return (defs || []).some(d => d.id === String(k).slice(0, String(k).indexOf(':')));
         return !!skillNameForKey(defs, k);
     }));
+}
+
+// ─── Tiers (Phase 4b, §11) ──────────────────────────────────────────────────
+//
+// A tier is one word on the sheet: where the character stands on the scale
+// from ordinary people to legends. It rides in the proficiency list as
+// "tier:<id>" so it follows the sheet everywhere proficiencies do. Its
+// range guides the Workshop and the AI's suggestions; it never caps a score.
+
+export const RESERVED_FLAG_PREFIXES = Object.freeze(['tier', 'mark']);
+
+export const TIERS = Object.freeze([
+    { id: 'ordinary',    label: 'Ordinary',    min: 8,  max: 12, array: Object.freeze([12, 11, 10, 10, 9, 8]),   means: 'most people' },
+    { id: 'trained',     label: 'Trained',     min: 10, max: 14, array: Object.freeze([14, 13, 12, 11, 10, 10]), means: 'good at their trade' },
+    { id: 'exceptional', label: 'Exceptional', min: 12, max: 17, array: Object.freeze([17, 15, 14, 13, 12, 12]), means: 'the best in a city' },
+    { id: 'heroic',      label: 'Heroic',      min: 15, max: 20, array: Object.freeze([20, 18, 17, 16, 15, 15]), means: 'the best alive' },
+    { id: 'legend',      label: 'Legend',      min: 18, max: 30, array: Object.freeze([30, 26, 24, 22, 20, 18]), means: 'beyond human' },
+]);
+
+/** A tier by id or label (case-insensitive), or null. */
+export function tierById(idOrLabel) {
+    const t = String(idOrLabel || '').trim().toLowerCase();
+    if (!t) return null;
+    return TIERS.find(x => x.id === t || x.label.toLowerCase() === t) || null;
+}
+
+/** The stored form of a tier: "tier:legend". */
+export function tierKey(tierId) {
+    return `tier:${String(tierId || '')}`;
+}
+
+/** True for a "tier:<id>" key. */
+export function isTierKey(key) {
+    return String(key || '').startsWith('tier:');
+}
+
+function getTierId(key) {
+    return String(key || '').slice('tier:'.length);
+}
+
+/** The tier id among the proficiencies, or '' when none is set. */
+export function getTier(proficiencies) {
+    const k = (Array.isArray(proficiencies) ? proficiencies : []).find(isTierKey);
+    const t = k ? tierById(getTierId(k)) : null;
+    return t ? t.id : '';
+}
+
+/** The proficiencies with the tier set to `tierId` ('' clears it). One at most. */
+export function withTier(proficiencies, tierId) {
+    const rest = (Array.isArray(proficiencies) ? proficiencies : []).filter(k => !isTierKey(k));
+    const t = tierById(tierId);
+    return normalizeProfKeys(t ? [...rest, tierKey(t.id)] : rest);
+}
+
+/** The "suggested" mark: the AI filled this sheet and nobody has looked at it yet. */
+export const SUGGESTED_MARK = 'mark:suggested';
+
+export function isMarkKey(key) {
+    return String(key || '').startsWith('mark:');
+}
+
+export function isSuggested(proficiencies) {
+    return Array.isArray(proficiencies) && proficiencies.includes(SUGGESTED_MARK);
+}
+
+export function withSuggestedMark(proficiencies, on) {
+    const rest = (Array.isArray(proficiencies) ? proficiencies : []).filter(k => k !== SUGGESTED_MARK);
+    return normalizeProfKeys(on ? [...rest, SUGGESTED_MARK] : rest);
+}
+
+/** 'below', 'in' or 'above' the tier's range; 'in' when there is no tier. */
+export function tierFit(score, tierId) {
+    const t = tierById(tierId);
+    const s = clampScore(score) ?? DEFAULT_SCORE;
+    if (!t) return 'in';
+    return s < t.min ? 'below' : s > t.max ? 'above' : 'in';
+}
+
+/**
+ * The tier's standard array laid over the attributes in the order of the
+ * current scores (highest first, ties by list order), so a sheet that
+ * already favours Charisma keeps favouring it. More attributes than the
+ * array has get the tier's floor; fewer leave the array's tail unused.
+ * @returns {Record<string, number>} the new scores, or {} without a tier
+ */
+export function fillByTier(scores, defs, tierId) {
+    const t = tierById(tierId);
+    const list = defs || [];
+    if (!t || !list.length) return {};
+    const ranked = list
+        .map((d, i) => ({ id: d.id, score: clampScore(scores?.[d.id]) ?? DEFAULT_SCORE, i }))
+        .sort((a, b) => b.score - a.score || a.i - b.i);
+    const out = {};
+    ranked.forEach((r, n) => { out[r.id] = n < t.array.length ? t.array[n] : t.min; });
+    return out;
+}
+
+/** The scale as a sentence for prompts. */
+export function tierScaleText() {
+    return TIERS.map(t => `${t.label} (${t.min}–${t.max}): ${t.means}`).join('; ');
 }
 
 /** Removes a character's sheet. */
@@ -752,9 +862,10 @@ export function formatRollShort(roll) {
  * [{ name, isUser, sheet }]; a character whose sheet is all 10s is left
  * out, and only scores other than 10 are listed. '' when nothing to say.
  */
-export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus } = {}) {
+export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_DEFAULTS.proficiencyBonus, sendTier = true } = {}) {
     const parts = [];
     let anyProf = false;
+    let anyTier = false;
     for (const e of entries || []) {
         if (!e || !e.name) continue;
         const sheet = e.sheet || {};
@@ -764,18 +875,71 @@ export function buildAttributesLine(entries, defs, { proficiencyBonus = CONFIG_D
         const prof = (e.proficiencies || []).map(k => skillNameForKey(defs, k)).filter(Boolean);
         const saves = saveProficiencyDefs(defs, e.proficiencies).map(d => d.name);
         const castingDef = defs.find(d => d.id === getCastingAbility(e.proficiencies)) || null;
-        if (!scores.length && !prof.length && !saves.length && !castingDef) continue;
+        const tier = sendTier ? tierById(getTier(e.proficiencies)) : null;
+        if (!scores.length && !prof.length && !saves.length && !castingDef && !tier) continue;
         if (prof.length || saves.length) anyProf = true;
+        if (tier) anyTier = true;
         const bits = [];
         if (scores.length) bits.push(scores.join(', '));
         if (prof.length) bits.push(`proficient in ${prof.join(', ')} (+${proficiencyBonus})`);
         if (saves.length) bits.push(`proficient in ${saves.join(', ')} saves (+${proficiencyBonus})`);
         if (castingDef) bits.push(`casting ability ${castingDef.name} (anything their power does to someone is resisted against it)`);
-        parts.push(`${e.name}${e.isUser ? ' (player)' : ''}: ${bits.join('; ')}`);
+        const who = `${e.name}${e.isUser ? ' (player)' : ''}${tier ? `, ${tier.label}` : ''}`;
+        parts.push(bits.length ? `${who}: ${bits.join('; ')}` : who);
     }
     if (!parts.length) return '';
-    const head = 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2' + (anyProf ? `; a proficient skill adds +${proficiencyBonus}` : '') + '; read-only, never output them): ';
+    const head = 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2'
+        + (anyProf ? `; a proficient skill adds +${proficiencyBonus}` : '')
+        + (anyTier ? `; a tier word says where they stand, ${tierScaleText()}` : '')
+        + '; read-only, never output them): ';
     return head + parts.join('. ') + '.';
+}
+
+/**
+ * The small separate call that fills a character's sheet (§11.3): who they
+ * are, the scale, the attributes; one JSON line back.
+ */
+export function buildSheetSuggestionPrompt({ name = 'This character', isUser = false, description = '', appearance = '', recentText = '', settings = null } = {}) {
+    const defs = attributeDefs(settings);
+    const names = defs.map(d => d.name).join(', ');
+    const system = `You rate characters for a roleplay's d20 sheet. The scale: ${tierScaleText()}. Scores run 1 to 30 and 10 is an average person; stay inside the tier's range unless the character's own description puts one score outside it. Judge from what the character is in the story, not from how the writing flatters them: most people are Ordinary, a professional is Trained, the best in a city Exceptional, the best alive Heroic, and Legend is for the plainly superhuman. Answer with ONE line of JSON and nothing else: {"tier": "<${TIERS.map(t => t.label).join('|')}>", "scores": {${defs.map(d => `"${d.name}": <1-30>`).join(', ')}}, "reasons": {<attribute>: "<a few words>"}}.`;
+    const bits = [];
+    if (description && String(description).trim()) bits.push(`Who they are: ${String(description).trim().slice(0, 1600)}`);
+    if (appearance && String(appearance).trim()) bits.push(`How they look: ${String(appearance).trim().slice(0, 600)}`);
+    bits.push(`Recent scene:\n${recentText || '(no messages yet)'}`);
+    const user = `Character: ${name}${isUser ? ' (the player)' : ''}. Attributes to score: ${names}.\n${bits.join('\n')}\nRate them.`;
+    return { system, user };
+}
+
+/**
+ * Reads a suggestion. Null when no tier and no score can be read. Scores
+ * for unknown attributes are dropped; known ones are clamped to 1–30.
+ * @returns {{ tierId: string, scores: Record<string, number>, reasons: Record<string, string> }|null}
+ */
+export function parseSheetSuggestion(text, settings) {
+    const s = String(text || '');
+    const m = s.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    let j;
+    try { j = JSON.parse(m[0]); } catch (e) { return null; }
+    if (!j || typeof j !== 'object') return null;
+    const defs = attributeDefs(settings);
+    const tier = tierById(j.tier);
+    const scores = {};
+    const reasons = {};
+    const rawScores = j.scores && typeof j.scores === 'object' ? j.scores : {};
+    for (const [key, value] of Object.entries(rawScores)) {
+        const def = findAttribute(defs, key);
+        const v = clampScore(value);
+        if (def && v !== null) scores[def.id] = v;
+    }
+    const rawReasons = j.reasons && typeof j.reasons === 'object' ? j.reasons : {};
+    for (const [key, value] of Object.entries(rawReasons)) {
+        const def = findAttribute(defs, key);
+        if (def && typeof value === 'string' && value.trim()) reasons[def.id] = value.trim().slice(0, 120);
+    }
+    if (!tier && !Object.keys(scores).length) return null;
+    return { tierId: tier ? tier.id : '', scores, reasons };
 }
 
 /**

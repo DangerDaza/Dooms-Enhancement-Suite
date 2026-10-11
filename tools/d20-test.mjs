@@ -266,5 +266,33 @@ check('dcAbilityId: casting wins over a named mental ability, a physical one sta
 check('the attributes line names the casting ability', D.buildAttributesLine([{ name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['cha:casting'] }], defs, { proficiencyBonus: 2 }).endsWith('Muzen (player): CHA 30 (+10); casting ability Charisma (anything their power does to someone is resisted against it).'));
 check('the guide says a casting ability imposes everything a power does', guide.includes('A character with a casting ability on their sheet imposes everything their magic or powers do through it'));
 
+// ── 9. Tiers and NPC sheets (Phase 4b, §11) ──
+check('five tiers, ascending, each with a six-score array inside its range',
+    D.TIERS.length === 5 && D.TIERS.map(t => t.id).join() === 'ordinary,trained,exceptional,heroic,legend'
+    && D.TIERS.every(t => t.array.length === 6 && t.array.every(v => v >= t.min && v <= t.max)) && D.TIERS[4].max === 30 && D.TIERS[0].min === 8);
+check('tierById takes an id or a label, any case', D.tierById('Legend').id === 'legend' && D.tierById('ORDINARY').id === 'ordinary' && D.tierById('demigod') === null && D.tierById('') === null);
+check('the tier rides in the proficiency list, one at most, and clears with empty',
+    D.withTier(['str:athletics'], 'legend').join() === 'str:athletics,tier:legend' && D.getTier(['tier:legend', 'str:athletics']) === 'legend'
+    && D.withTier(['tier:legend', 'str:athletics'], 'Ordinary').join() === 'str:athletics,tier:ordinary' && D.withTier(['tier:legend'], '').join() === '' && D.getTier(['tier:demigod']) === '');
+check('the suggested mark', D.withSuggestedMark(['tier:ordinary'], true).join() === 'mark:suggested,tier:ordinary' && D.isSuggested(['mark:suggested']) && D.withSuggestedMark(['mark:suggested', 'tier:ordinary'], false).join() === 'tier:ordinary');
+check('pruneProficiencies keeps a known tier and any mark and drops an unknown tier', D.pruneProficiencies(['tier:legend', 'tier:demigod', 'mark:suggested', 'str:athletics'], defs).join() === 'mark:suggested,str:athletics,tier:legend');
+check('an attribute cannot take the id "tier" or "mark"', D.normalizeAttributeDef({ name: 'Tier' }).id === 'attr_tier' && D.normalizeAttributeDef({ name: 'Mark' }).id === 'attr_mark');
+check('tierFit', D.tierFit(30, 'legend') === 'in' && D.tierFit(17, 'legend') === 'below' && D.tierFit(13, 'ordinary') === 'above' && D.tierFit(10, '') === 'in');
+check('fillByTier lays the array over the current ranking, ties by list order',
+    JSON.stringify(D.fillByTier({ cha: 14, wis: 12 }, defs, 'legend')) === '{"cha":30,"wis":26,"str":24,"dex":22,"con":20,"int":18}'
+    && JSON.stringify(D.fillByTier({}, defs, 'ordinary')) === '{"str":12,"dex":11,"con":10,"int":10,"wis":9,"cha":8}'
+    && JSON.stringify(D.fillByTier({}, [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }, { id: 'f' }, { id: 'g' }], 'trained')) === '{"a":14,"b":13,"c":12,"d":11,"e":10,"f":10,"g":10}'
+    && JSON.stringify(D.fillByTier({}, defs, 'nope')) === '{}');
+check('the attributes line carries the tier, and a tier alone is enough to be listed',
+    D.buildAttributesLine([{ name: 'Ines Arden', isUser: false, sheet: {}, proficiencies: ['tier:ordinary'] }, { name: 'Muzen', isUser: true, sheet: { cha: 30 }, proficiencies: ['tier:legend', 'cha:casting'] }], defs, { proficiencyBonus: 2 })
+    === 'ATTRIBUTES (D&D scale, 10 is average, bonus = (score - 10) / 2; a tier word says where they stand, Ordinary (8–12): most people; Trained (10–14): good at their trade; Exceptional (12–17): the best in a city; Heroic (15–20): the best alive; Legend (18–30): beyond human; read-only, never output them): Ines Arden, Ordinary. Muzen (player), Legend: CHA 30 (+10); casting ability Charisma (anything their power does to someone is resisted against it).');
+check('...and leaves it out with sendTier off', D.buildAttributesLine([{ name: 'Ines Arden', isUser: false, sheet: {}, proficiencies: ['tier:ordinary'] }], defs, { sendTier: false }) === '');
+check('config: sendTier on and suggestNewSheets off by default, migration fills them', (() => { const c = D.attributesConfig({}); const s = { attributes: { enabled: true } }; D.migrateAttributesConfig(s); return c.sendTier === true && c.suggestNewSheets === false && s.attributes.sendTier === true && s.attributes.suggestNewSheets === false && D.attributesConfig({ attributes: { suggestNewSheets: true, sendTier: false } }).suggestNewSheets === true; })());
+const sp2 = D.buildSheetSuggestionPrompt({ name: 'Ines Arden', description: 'A clerk at the Office, twenty, nervous.', appearance: 'Small, dark coat.', recentText: 'Ines: Hello.', settings });
+check('the suggestion prompt carries the scale, the attributes and the character', sp2.system.includes('Ordinary (8–12): most people') && sp2.system.includes('"Strength": <1-30>') && sp2.user.startsWith('Character: Ines Arden. Attributes to score: Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma.') && sp2.user.includes('Who they are: A clerk at the Office') && sp2.user.includes('How they look: Small, dark coat.'), sp2.user);
+const parsedSheet = D.parseSheetSuggestion('Here: {"tier": "ordinary", "scores": {"Strength": 9, "Charisma": 12, "Luck": 20, "Wisdom": 99}, "reasons": {"Charisma": "quick to smile", "Luck": "x"}}', settings);
+check('parseSheetSuggestion reads the tier, clamps, drops unknown attributes and keeps known reasons', parsedSheet && parsedSheet.tierId === 'ordinary' && JSON.stringify(parsedSheet.scores) === '{"str":9,"cha":12,"wis":30}' && JSON.stringify(parsedSheet.reasons) === '{"cha":"quick to smile"}', JSON.stringify(parsedSheet));
+check('...a label works, a bare tier works, garbage is null', D.parseSheetSuggestion('{"tier": "Legend", "scores": {}}', settings).tierId === 'legend' && D.parseSheetSuggestion('nothing here', settings) === null && D.parseSheetSuggestion('{"scores": {"Nope": 1}}', settings) === null);
+
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
