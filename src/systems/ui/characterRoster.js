@@ -1098,9 +1098,11 @@ function importCharacterPayload(payload) {
     // create anything on Google by themselves.
     const pv = payload.voice && typeof payload.voice === 'object' ? payload.voice : null;
     const voiceId = pv && (pv.source || 'stock') === 'stock' ? canonicalStockId(pv.id) : null;
+    // The character's own delivery note comes back with either kind.
+    const voiceNote = pv && typeof pv.note === 'string' && pv.note.trim() ? { note: pv.note.trim().slice(0, 300) } : {};
     if (voiceId) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
-        extensionSettings.characterVoices[targetName] = { source: 'stock', id: voiceId };
+        extensionSettings.characterVoices[targetName] = { source: 'stock', id: voiceId, ...voiceNote };
     } else if (pv && pv.source === 'designed' && typeof pv.designPrompt === 'string' && pv.designPrompt.trim()) {
         if (!extensionSettings.characterVoices) extensionSettings.characterVoices = {};
         const fallback = canonicalStockId(pv.fallbackStock) || (pv.gender === 'female' ? 'Kore' : 'Charon');
@@ -1110,6 +1112,7 @@ function importCharacterPayload(payload) {
             label: String(pv.label || '').slice(0, 60),
             pendingDesign: pv.designPrompt.trim().slice(0, 600),
             fallbackStock: fallback,
+            ...voiceNote,
         };
     }
 

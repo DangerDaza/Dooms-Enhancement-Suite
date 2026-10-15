@@ -39,7 +39,7 @@ import { getRouteState, getDesKey } from './transport.js';
 import { stopStPlayback } from './stAutoReadGuard.js';
 import { saveSettings } from '../../core/persistence.js';
 import { base64ToBytes } from './wav.js';
-import { styleForSegment, baseStyle, anchorForVoice, styleWithAnchor } from './delivery.js';
+import { styleForSegment, baseStyle, anchorForVoice, styleWithAnchor, noteFor } from './delivery.js';
 import { steadinessTemperature } from './voiceSettings.js';
 import { providerForRef, isProviderConnected, anyProviderConnected } from './providers.js';
 import { PROVIDER_LABELS } from './connections.js';
@@ -295,14 +295,16 @@ function buildJob(segments, { messageId = null, source, auto = false, highlightM
         const seg = segments[i];
         const speaker = seg.speaker ? canonicalName(seg.speaker) : null;
         const present = speaker ? isPresentOnPanel(speaker, presence) : false;
-        const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: voiceFor(speaker), narrator, caps: deviceCaps });
+        const own = voiceFor(speaker);
+        const { ref, reason } = resolveVoice({ seg: { ...seg, speaker }, present, ref: own, narrator, caps: deviceCaps });
         const provider = routeFor(ref);
         // Only some routes can carry a delivery note; elsewhere it would
         // only split requests for nothing.
         const anchor = anchorFor(ref, provider);
         // The anchor lives inside the style, so the cache key and the merge
-        // below see it like any other style difference.
-        const style = styleWithAnchor(styleCapable(provider) ? styleForSegment(segments, i, note, { neverWhisper: !!voices().neverWhisper }) : '', anchor);
+        // below see it like any other style difference. A character's own
+        // note (Workshop → Voice) replaces the global one on their lines.
+        const style = styleWithAnchor(styleCapable(provider) ? styleForSegment(segments, i, noteFor(own, reason, note), { neverWhisper: !!voices().neverWhisper }) : '', anchor);
         const prev = jobSegments[jobSegments.length - 1];
         // Neighbouring lines that land on the same voice (narration, then an
         // unvoiced character, then narration) are one Google request —
@@ -424,8 +426,9 @@ function startAudition(ref, text, { forced = null, takes = 1 }) {
     const { ref: playable } = resolveVoice({ seg: { kind: 'dialogue', speaker: 'x' }, present: true, ref, narrator: voices().narratorVoice, caps: caps() });
     const provider = forced || routeFor(playable);
     const anchor = anchorFor(playable, provider);
-    // Previews use the delivery note (and the anchor) too, so they sound like chat will.
-    const style = styleWithAnchor(styleCapable(provider) ? baseStyle(voices().deliveryNote, { neverWhisper: !!voices().neverWhisper }) : '', anchor);
+    // Previews use the delivery note (and the anchor) too, so they sound like
+    // chat will: the ref's own note when the Workshop passes one, else the global.
+    const style = styleWithAnchor(styleCapable(provider) ? baseStyle(noteFor(ref, 'audition', voices().deliveryNote), { neverWhisper: !!voices().neverWhisper }) : '', anchor);
     const segments = normalizeSegments([{ speaker: null, kind: 'narration', text: text || `Hello, I'm ${ref.id}.` }]);
     const jobSegments = [];
     for (let take = 1; take <= takes; take++) {

@@ -107,6 +107,24 @@ export function baseStyle(note, { neverWhisper = false } = {}) {
 }
 
 /**
+ * The delivery note for one line when characters can carry their own (the
+ * Workshop → Voice note, stored on the VoiceRef as `note`): the speaker's
+ * note when the line is theirs and the note says something; the global
+ * note otherwise. "Theirs" is resolveVoice's 'character', and the two
+ * stand-in cases ('needs-key', 'voice-gone') where their fallback voice
+ * reads for them; a line the Narrator reads because they are off the panel
+ * or have no voice is read the Narrator's way.
+ * @param {{note?: string}|null|undefined} ownRef - the speaker's stored voice
+ * @param {string} reason - from resolveVoice
+ * @param {string} globalNote - voices.deliveryNote
+ */
+export function noteFor(ownRef, reason, globalNote) {
+    const own = ownRef && typeof ownRef.note === 'string' ? ownRef.note.trim() : '';
+    if (own && (reason === 'character' || reason === 'needs-key' || reason === 'voice-gone' || reason === 'audition')) return own;
+    return String(globalNote || '');
+}
+
+/**
  * The style note for segment i: the whisper note for a spoken line when the
  * narration right next to it says it's whispered, otherwise the delivery note.
  * With neverWhisper on, every line gets the note plus the ban and no line is

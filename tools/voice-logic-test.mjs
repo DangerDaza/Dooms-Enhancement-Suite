@@ -405,6 +405,20 @@ test('delivery: a spoken line next to "whispered" narration is whispered; the na
     assert.equal(delivery.styleForSegment([{ kind: 'dialogue', text: 'Hi.' }, { kind: 'narration', text: 'she said.' }], 0, note), note);
 });
 
+test('delivery: noteFor reads a character\'s own note on their lines and the global one elsewhere', () => {
+    assert.equal(delivery.noteFor({ id: 'Kore', note: ' slow and gravelly ' }, 'character', 'normal'), 'slow and gravelly');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'needs-key', 'normal'), 'slow', 'their stand-in voice still reads their way');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'voice-gone', 'normal'), 'slow');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'audition', 'normal'), 'slow', 'Workshop previews use it');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'not-in-scene', 'normal'), 'normal', 'the Narrator reads an absent character the Narrator\'s way');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'narration', 'normal'), 'normal');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: '   ' }, 'character', 'normal'), 'normal', 'an empty note falls back to the global one');
+    assert.equal(delivery.noteFor({ id: 'Kore' }, 'character', 'normal'), 'normal');
+    assert.equal(delivery.noteFor(null, 'character', 'normal'), 'normal');
+    assert.equal(delivery.noteFor({ id: 'Kore', note: 'slow' }, 'character', ''), 'slow');
+    assert.equal(delivery.noteFor(null, 'character', undefined), '');
+});
+
 test('delivery: whisper cues are words, not fragments', () => {
     assert.ok(delivery.hasWhisperCue('she whispered'));
     assert.ok(delivery.hasWhisperCue('under his breath'));

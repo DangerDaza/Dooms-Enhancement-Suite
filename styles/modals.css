@@ -8189,6 +8189,12 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
     font-size: 0.9em;
     opacity: 0.75;
 }
+/* The character's own delivery note (replaces Settings → Voices → Delivery on their lines). */
+#character-workshop-popup .cw-voice-note-input {
+    min-height: 2.6em;
+    resize: vertical;
+    font: inherit;
+}
 #character-workshop-popup .cw-voice-test {
     display: flex;
     flex-direction: column;

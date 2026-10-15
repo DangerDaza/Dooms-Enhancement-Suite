@@ -63,11 +63,12 @@ function writeFilter(f) {
  * @property {boolean} isLive
  * @property {string} versionLabel
  * @property {boolean} isBase
- * @property {{source?: string, id: string|null, label?: string, pendingDesign?: string}|null} voice
+ * @property {{source?: string, id: string|null, label?: string, pendingDesign?: string, note?: string}|null} voice
  * @property {boolean} isCardCharacter
  * @property {string[]} sharesColorWith
  * @property {{appearance?: string, description?: string}} [card]
  * @property {(ref: object|null) => void} onChange
+ * @property {(note: string) => void} [onNoteChange] - the character's own delivery note, typed; no re-render
  */
 
 /** @type {{host: HTMLElement, ctx: VoicePaneContext}|null} */
@@ -253,6 +254,10 @@ function render(host, ctx) {
             </div>
         </div>
         ${note ? `<p class="helper cw-voice-note">${escapeHtml(note)}</p>` : ''}
+        ${canPreview ? `<label class="cw-voice-test cw-voice-note-field">
+            <span>Delivery note for ${escapeHtml(ctx.name)} <span class="cw-voice-test-hint">— how their lines are spoken, in place of the note under Settings → Voices → Delivery. Empty uses that one. Previews here use it; it goes with the voice, so Remove clears it.</span></span>
+            <textarea class="rpg-input cw-voice-note-input" rows="2" maxlength="300" placeholder="${escapeAttr(String(extensionSettings.voices?.deliveryNote || '').trim() || 'e.g. slow and gravelly, a faint northern accent')}">${escapeHtml(current.note || '')}</textarea>
+        </label>` : ''}
         <label class="cw-voice-test">
             <span>Test line <span class="cw-voice-test-hint">— what previews say. Each new line is one short Google request; replays are free.</span></span>
             <input type="text" class="rpg-input cw-voice-test-input" value="${escapeAttr(testLine)}" maxlength="300" />
@@ -407,6 +412,14 @@ function bindOnce(host) {
         if (!last) return;
         if (input.classList?.contains('cw-voice-test-input')) {
             testLines.set(last.ctx.name, /** @type {HTMLInputElement} */ (input).value);
+            return;
+        }
+        // The character's own delivery note: kept on the draft's voice without
+        // a re-render (the box keeps focus); Play reads it from ctx.voice.
+        if (input.classList?.contains('cw-voice-note-input')) {
+            const text = /** @type {HTMLTextAreaElement} */ (input).value;
+            if (last.ctx.voice) last.ctx.voice = { ...last.ctx.voice, note: text };
+            last.ctx.onNoteChange?.(text);
             return;
         }
         if (studio && toolFor(last.ctx) === 'studio') studio.handleStudioInput(input, last.ctx);

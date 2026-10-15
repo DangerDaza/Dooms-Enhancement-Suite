@@ -1562,9 +1562,19 @@ function renderVoice() {
         },
         onChange(ref) {
             if (!draft) return;
-            draft.voice = ref ? { ...ref } : null;
+            // A new voice keeps the character's delivery note: it describes
+            // them, not the voice. Remove (null) takes the note with it.
+            const keep = draft.voice && typeof draft.voice.note === 'string' && draft.voice.note.trim() ? { note: draft.voice.note } : {};
+            draft.voice = ref ? { ...keep, ...ref } : null;
             draft.dirty.voice = true;
             renderVoice();
+        },
+        onNoteChange(note) {
+            if (!draft || !draft.voice) return;
+            const text = String(note || '').slice(0, 300);
+            const { note: _old, ...rest } = draft.voice;
+            draft.voice = text.trim() ? { ...rest, note: text } : rest;
+            draft.dirty.voice = true;
         },
     });
 }
@@ -3781,8 +3791,10 @@ function exportDraft() {
     };
     // Standard voices travel as-is. A designed voice belongs to one Google
     // project, so it travels as its description and is re-created on import.
+    // The character's own delivery note travels with either kind.
+    const voiceNote = draft.voice && typeof draft.voice.note === 'string' && draft.voice.note.trim() ? { note: draft.voice.note } : {};
     if (draft.voice && (draft.voice.source || 'stock') === 'stock') {
-        payload.voice = { source: 'stock', id: draft.voice.id };
+        payload.voice = { source: 'stock', id: draft.voice.id, ...voiceNote };
     } else if (draft.voice && draft.voice.source === 'designed') {
         const entry = draft.voice.id ? extensionSettings.voices?.customVoices?.[draft.voice.id] : null;
         const designPrompt = entry?.designPrompt || draft.voice.pendingDesign || '';
@@ -3793,6 +3805,7 @@ function exportDraft() {
                 designPrompt,
                 gender: entry?.gender || '',
                 fallbackStock: draft.voice.fallbackStock || '',
+                ...voiceNote,
             };
         }
     }

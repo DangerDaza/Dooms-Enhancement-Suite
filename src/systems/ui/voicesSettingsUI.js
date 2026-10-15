@@ -218,6 +218,13 @@ function bindDesigned() {
     });
 }
 
+/** Connections shows the key row for the service picked under "Gemini voices via"; the other key stays saved, just folded away. */
+function renderConnectionRows() {
+    const openrouter = v().geminiVia === 'openrouter';
+    $('#rpg-voices-or-row').toggle(openrouter);
+    $('#rpg-voices-google-row').toggle(!openrouter);
+}
+
 /** The Connections card is unfolded once per session while no service is connected, so setup is in view. */
 let connectionsNudged = false;
 
@@ -548,6 +555,7 @@ function populate() {
     $('#rpg-voices-anchor').prop('checked', v().anchorDesignedVoices !== false);
     $('#rpg-voices-guide').prop('open', v().guideOpen !== false);
     $('#rpg-voices-via').val(v().geminiVia === 'openrouter' ? 'openrouter' : 'google');
+    renderConnectionRows();
     $('#rpg-voices-or-key').val(v().openrouterKey || '').attr('type', 'password');
     $('#rpg-voices-or-route').val(v().openrouterRoute || 'auto');
     renderOpenRouterNote();
@@ -664,6 +672,7 @@ export function bindVoicesSettingsUI() {
         v().geminiVia = $(this).val() === 'openrouter' ? 'openrouter' : 'google';
         saveSettings();
         getEngineIfLoaded()?.invalidate();
+        renderConnectionRows();
         renderStatus();
     });
     $('#rpg-voices-or-key').on('change', function () { saveOpenRouterKey($(this).val()); });

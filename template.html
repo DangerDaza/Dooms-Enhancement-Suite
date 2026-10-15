@@ -1884,7 +1884,8 @@
                                     <span class="rpg-setting-hint">Sent with every line so voices speak at a normal volume
                                         instead of drifting into a whisper. Lines the story says are whispered ("&hellip;," she
                                         whispered) are still whispered unless Never whisper is on. Leave empty to let Gemini
-                                        decide. Works with the Google AI Studio key under Connections.</span>
+                                        decide. A character's own note (Workshop &rarr; Voice) replaces this on their
+                                        lines. Works with the Google AI Studio key under Connections.</span>
                                 </div>
                                 <div class="rpg-voices-delivery">
                                     <textarea id="rpg-voices-delivery" class="rpg-accordion-input" rows="3" maxlength="160"
@@ -1965,15 +1966,16 @@
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">Gemini voices via</span>
                                     <span class="rpg-setting-hint">Which service plays the 30 standard Gemini voices. If that
-                                        one isn't set up, DES uses the other. Designed and cloned voices always need the
-                                        Google key.</span>
+                                        one isn't set up, DES uses the other. Only the chosen service's key is shown below;
+                                        the other stays saved. Designed and cloned voices always need the Google key, so
+                                        pick Google to enter or change it.</span>
                                 </div>
                                 <select id="rpg-voices-via" class="rpg-accordion-select">
                                     <option value="openrouter">OpenRouter</option>
                                     <option value="google">Google</option>
                                 </select>
                             </div>
-                            <div class="rpg-setting-row rpg-voices-stack">
+                            <div class="rpg-setting-row rpg-voices-stack" id="rpg-voices-or-row">
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">OpenRouter key</span>
                                     <span class="rpg-setting-hint">Get one at
@@ -2008,7 +2010,7 @@
                                     browser can't reach OpenRouter, through SillyTavern's server instead. For that, press <strong>Save key to
                                     SillyTavern</strong> once. The delivery note only works from the browser.</span>
                             </div>
-                            <div class="rpg-setting-row rpg-voices-stack">
+                            <div class="rpg-setting-row rpg-voices-stack" id="rpg-voices-google-row">
                                 <div class="rpg-setting-label-group">
                                     <span class="rpg-setting-label">Google AI Studio key</span>
                                     <span class="rpg-setting-hint">Optional. Paste a key from

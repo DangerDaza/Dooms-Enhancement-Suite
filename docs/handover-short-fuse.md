@@ -152,6 +152,14 @@ SillyTavern yet; the cloud session cannot run it. That is step 3 above.
   save DC and the check bonus. Unverified in play: parity rows "Casting
   checks" and "Talents". §12.9 has the measured per-turn cost of the stats
   features (about 1,900 tokens with tools live).
+- Voices, per-character delivery notes and one key row (2026-10-15):
+  the note rides on the character's VoiceRef as `note` (so it follows
+  campaign versions, personas, copies and the exported JSON) and replaces
+  `voices.deliveryNote` on lines their own voice (or its stand-in) reads
+  (`delivery.noteFor`); Workshop → Voice has the box under Current voice;
+  Connections shows only the key row for the service picked under "Gemini
+  voices via". Unverified in play: the two "Voices →" parity rows above
+  "Never whisper".
 
 ## 4. What is built (all on the branch, base `origin/main` at `c97bac0`)
 
