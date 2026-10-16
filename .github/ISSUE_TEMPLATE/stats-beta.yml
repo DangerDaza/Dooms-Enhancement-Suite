@@ -1,0 +1,36 @@
+name: "Stats beta: something broke"
+description: "Vitals, attributes, dice checks, the game master's calls, saves, tiers, casting, or the tracker after a roll."
+title: "[Stats beta] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing the Stats beta. **Settings → Stats → Report a problem** fills in the Environment and Logs boxes below. When you pressed it, the full Notification and System logs were copied to your clipboard: if the Logs box shows only the last lines, click into it, select all and paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what DES did. A screenshot of the box, the chip or the panel helps.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Filled in by the Report a problem button. Leave it as it is.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The Notification Log and the System Log. The button puts the last lines here and copies the full logs to your clipboard; paste over this box so the whole thing comes along.
+      render: text
+  - type: textarea
+    id: export
+    attributes:
+      label: Chat export
+      description: "In SillyTavern: the chat's menu (the three lines above the message box) → Manage chat files → Export (JSONL). Zip the file and drag it into this box. It shows exactly what the AI was sent and what came back, which is how the last two bugs were found."

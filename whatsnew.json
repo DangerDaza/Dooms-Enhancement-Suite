@@ -1,38 +1,34 @@
 {
-    "version": "3.0.1",
-    "title": "New Looks",
+    "version": "3.1.0-beta.1",
+    "title": "Stats (beta)",
     "items": [
         {
-            "title": "🎨 Five new looks, any colour theme",
-            "body": "Settings → Theme → UI Setup picks the shapes and type while your colour theme keeps picking the colours. Grimoire is a tabletop ledger, Ops Console a monospace readout, Lumen frosted glass, Arcade a visual-novel HUD, Inked graphic-novel panels. Each restyles everything DES draws at once: the scene tracker, chat bubbles, the Present Characters shelf, the Doom Counter, every window and the message box, with its own D glyph. Classic is the look DES always had, and it is still what you have until you pick another."
+            "title": "🧪 A beta: nothing changes until you switch something on",
+            "body": "Everything on the new Settings → Stats page is off until you turn it on, so this update changes nothing on screen, and nothing in your prompt beyond the one sentence noted under the tracker below. The Stats features are built and covered by tests, but nobody except their author has played them through yet: that is what the Beta badges mean. When something breaks, Settings → Stats → Report a problem opens a GitHub issue with your DES version, your Stats switches and the last lines of the Notification and System logs already filled in, and copies the full logs to your clipboard for the Logs box. A chat export (the chat menu → Manage chat files → Export) is the single most useful thing to attach."
         },
         {
-            "title": "🖼️ A background painted for each look",
-            "body": "With Setup background on (it is, by default), each setup paints a SillyTavern background in your theme's colours, saves it to your Backgrounds panel and selects it. Change the theme and it repaints. Pick your own background and DES leaves it alone. Go back to Classic and the background you had before comes back."
+            "title": "❤️ Vitals",
+            "body": "Settings → Stats → Track vitals. Health, Energy, Satiety, Stamina, Morale, Sanity and Arousal (Hygiene and Mana are ready but off) as 0–100 bars on every portrait card and on the card's back, moved by the AI with each reply and editable with a click on the back. Your persona gets them too. Each vital has a name, colour, icon, starting value and an AI-updated switch; one with AI off keeps its value whatever the AI returns. About a dozen tokens per vital per character per reply. Separate and External modes, per-swipe data, History Persistence and the Tracker Data dropdown all carry them."
         },
         {
-            "title": "💬 A calmer message box",
-            "body": "Under every setup but Classic, SillyTavern's message box becomes one quiet row: Options and the wand, the message, Continue and Send. Buttons and whole toolbars that other extensions add wait behind a single ⋯ button, so the row never clutters however many extensions you run. Nothing is replaced, only rearranged, so everything keeps working. Settings → Theme → Enhanced composer turns it off."
+            "title": "🎲 Attributes and dice checks",
+            "body": "Settings → Stats → Attributes and dice checks. Every character gets the six D&D attributes (the list is yours to edit) with 5e's skills under each and proficiency ticks, on a Workshop → Attributes tab with Standard array and Roll 4d6 drop lowest to fill a sheet. To make a check, press the d20 by the wand (or Roll a check on your persona's card or in the floating menu), pick an attribute, a skill under it or any skill with any attribute, add a line of context, and OK. When you send, the game master rules the difficulty from your message in one small call, DES rolls the die with real randomness, decides success in code and hands the AI a verdict to narrate. The result sits in a box at the top of the reply, swipes keep it, and once rolled it is final. Scores reach the AI only when a roll rides along, unless you choose Always."
         },
         {
-            "title": "🧭 A Settings window with a rail",
-            "body": "Sections sit as icons down the left and you see one page at a time; long pages split into sub-menus under their heading instead of one long scroll. Advanced and History Persistence now live at the bottom of Generation, Inline Banners and Chat Bubbles under Theme, Bunny Mo under Lore Library. If you are updating, your Settings window keeps the stacked list it had; Settings → Theme → Settings window switches to the rail."
+            "title": "🧙 The game master calls for checks",
+            "body": "With attributes on, the game master may call for a check when the story has stakes: as a line at the end of its reply with any model, or through a dice tool where your API supports function calling. A call on you becomes the pending check above the message box (× declines it) and rolls when you send against the difficulty already given; a call on an NPC rolls on that NPC's own sheet the moment the reply renders and is handed to the next reply as a verdict. How often is yours to set (Sparingly, or Whenever an attempt could plausibly fail), each way has its own switch, and Notify on dice events shows a toast at every step so you can see what it is doing."
         },
         {
-            "title": "🫧 Bubble Fill, per character",
-            "body": "Workshop → Appearance → Dialogue color → Bubble Fill paints that character's speech bubbles. On Auto the fill is their dialogue colour and the words its opposite (blue gives yellow); or pick any fill and text colour you like. Handy when two characters share a colour. Off for everyone until you turn it on."
+            "title": "🛡️ Saving throws, tiers and freeform magic",
+            "body": "Saving throws: when one character acts on another, the one acted upon rolls to resist, against a DC built from the actor's own bonus, with a Save tick per attribute in the Workshop; every verdict now says whose roll it is and what success means. Tiers: five tiers from Ordinary to Legend fill an NPC's sheet in one press (Fill by tier), Suggest from the story asks the AI for a sheet from what the chat says about them, and a switch that starts off does that by itself for every new face on the shelf. Casting: magic with no spell list. A Casting chip on INT, WIS or CHA in the Workshop names the ability a character's power runs on, so the game master can ask for a casting check or a target's save, and talents on the sheet (Practised or Master) go to the AI with their bonuses."
         },
         {
-            "title": "✨ Glint Words",
-            "body": "List words that matter in your story and they light up in chat. When a new message arrives, each one flares with a flash of light, a sparkle burst, a shockwave ring or a pop as it scrolls into view, then keeps its look for good: gold, silver, crimson, arcane, frost, prism and more, or your own colour. Afterwards it can shine, pulse, twinkle, throw sparks, flicker, beat like a heart, cycle colours, float or glitch. Start from a preset group like Treasure or Magic in Settings → Theme → Glint Words."
+            "title": "🗂️ The tracker, in a crowd and after a roll",
+            "body": "The default tracker instructions now ask for every NPC in the scene, including anyone who arrives or speaks in that reply, so a story rule about how many characters feature no longer shrinks the list. If your Tracker Instructions are a custom text, paste that sentence in from the Prompts editor's default. In together mode, a reply that comes without its tracker block now gets one separate request for it, so thoughts and the scene never freeze; a toast says when that happens, Settings → Generation has the switch, Refresh Tracker Data shows in together mode too, and the next generation is reminded to include the block."
         },
         {
-            "title": "🔊 Every character can have a voice",
-            "body": "A Voice tab in the Character Workshop gives each character one of Google's Gemini voices (through your Google key or an OpenRouter key), or a voice you design from a description, or one you clone from a recording of yourself. Settings → Voices turns DES voices on, can read new messages automatically, and lets you design a narrator voice. A bullhorn on every message reads it aloud in the right voices. Designed and cloned voices can be renamed from Settings → Voices → My custom voices."
-        },
-        {
-            "title": "🔧 Fixes and small additions",
-            "body": "Workshop → Appearance has a Recrop portrait button that reframes the portrait you already have. The Doom Counter badge is readable under every look (under Inked it is a paper sticker now). This screen now appears with Performance Mode on instead of leaving a dark backdrop. Bubble Fill saves on its own and survives per-chat saves. The Lore Library's campaign icon picker is no longer cut off. Settings rows no longer crush their labels on phones. Dialogue with | or {{ no longer breaks the bullhorn buttons. The strip-colour-tags setup no longer overwrites your own SillyTavern TTS regex."
+            "title": "🔊 Voices",
+            "body": "Steadiness (Settings → Voices → Delivery, off by default) sends a temperature with every line so a designed voice drifts less from line to line, and each line of a designed voice now carries a short anchor drawn from its description. Audition ×3 renders a test line three times back to back so you can hear whether a voice holds. Workshop → Voice has a delivery note for that character, used in place of the global one. Never whisper stops whispered delivery for good. The Voices page is grouped into General, Delivery, Connections and My custom voices, and Connections shows only the key for the service you picked."
         }
     ],
     "contact": {

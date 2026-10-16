@@ -17,8 +17,10 @@ state and the next moves.
 - **Commit as Jordan:** `git -c user.name="DangerDaza" -c user.email="jordan@howewire.com" commit ...`,
   ending the message with the attribution lines your harness supplies.
   No model identifiers anywhere in repo artifacts (commits, comments, docs).
-- **No release work until told:** no version bump (manifest is 3.0.1), no
-  CHANGELOG, no What's New, no README. When the word comes, the README
+- **The beta release is prepared on the branch (2026-10-16), not pushed to
+  main.** Manifest 3.1.0-beta.1, CHANGELOG and What's New written, badges
+  and Report a problem in place. Pushing main waits for Jordan's word (§8).
+  README is untouched. When the word comes, the README
   credits also get a courtesy line for Multihog's D&D framework (GPL-3.0;
   its design was read and compared, DES's dice were written from scratch,
   nothing copied, nothing owed; the credit was agreed for the release).
@@ -286,7 +288,36 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 - Tracker recovery: on by default, together mode only, toast always (see
   §3 for what to confirm before release).
 
-## 8. When Jordan says "release"
+## 8. The beta (prepared 2026-10-16)
+
+Jordan's call: ship the branch to main as `3.1.0-beta.1` with a visible
+BETA tag, so his users become the play-testers. Decided: recovery, the
+block reminder and the "list every NPC" sentence ship to everyone as they
+are; the wrapper is badges plus Report a problem; the writing is a What's
+New entry and a CHANGELOG entry; README waits.
+
+What is on the branch: `.rpg-beta-badge` (styles/modals.css) on the Stats
+page title, Vitals, Attributes & checks, Workshop → Attributes and the
+dice popover; the report row at the top of the Stats page with
+`#rpg-stats-report` (index.js) → `src/systems/features/betaReport.js`
+(lazy) → `src/utils/betaReport.js` (pure, `tools/beta-report-test.mjs`),
+which reads `getNotificationLogText()` and `getSystemLogText()`, copies
+the full report to the clipboard (or downloads it), and opens
+`.github/ISSUE_TEMPLATE/stats-beta.yml` prefilled through URL fields
+`title`, `environment`, `logs`, the logs tail cut to a 7,000-character URL.
+
+**When Jordan says push:** main is linear and the branch grew from its
+head, so it is a fast-forward:
+```
+git fetch origin main Project-Short-Fuse
+git merge-base --is-ancestor origin/main origin/Project-Short-Fuse && echo fast-forward-ok
+git push origin Project-Short-Fuse:main
+```
+If `main` has moved, merge it into the branch first and run the gate.
+After the push, GitHub shows the issue form under New issue; test Report
+a problem once from a live install before telling anyone.
+
+## 9. When Jordan says "release" (the full 3.1.0, after the beta)
 
 Version bump in `manifest.json` (and wherever else the repo keeps it),
 CHANGELOG, What's New, README (Stats section; the Multihog credit line in

@@ -1644,6 +1644,22 @@ function bindSettingsUI() {
         const id = String($(el).closest('.rpg-attr-row').data('attr') || '');
         return { a, entry: findAttrEntry(a, id) };
     };
+    // Stats beta: Report a problem builds the report from the settings and
+    // both logs, copies it, and opens a prefilled GitHub issue. The module
+    // loads on the first press.
+    $(document).on('click', '#rpg-stats-report', async function () {
+        const $btn = $(this);
+        $btn.prop('disabled', true);
+        try {
+            const mod = await import('./src/systems/features/betaReport.js');
+            await mod.openBetaReport();
+        } catch (e) {
+            console.error('[Dooms Tracker] Beta report failed', e);
+            toastr.error('Could not build the report. The System Log (Settings → Tools) has the error.', "Doom's Enhancement Suite");
+        } finally {
+            $btn.prop('disabled', false);
+        }
+    });
     $(document).on('change', '#rpg-attr-enabled', function () {
         getAttributesRules().enabled = $(this).prop('checked');
         _saveAttrs({ rerender: false });

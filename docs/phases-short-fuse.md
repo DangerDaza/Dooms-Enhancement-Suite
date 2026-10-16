@@ -21,7 +21,7 @@ says where things stand.
 | 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
 | 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Yes (`7ce9335` … `9dddb03`; `docs/stats-plan.md` §12, D22–D27) | `d20-test` §10, `dice-test` §11 | Not yet | Parity rows "Casting checks" and "Talents" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
-| Release | 3.1.0: version, CHANGELOG, What's New, README | No, on hold by Jordan's word | — | — | Only when told |
+| Release | 3.1.0-beta.1 prepared on the branch 2026-10-16: version, CHANGELOG, What's New, Beta badges, Report a problem with both logs (`tools/beta-report-test.mjs`) | Yes, on the branch | `beta-report-test` | Not yet | Jordan's word, then a fast-forward push of main (handover §9); README and the full 3.1.0 after the beta |
 
 "Not yet" means the cloud session could not run SillyTavern; every row
 below is an in-browser check for the local session or Jordan.

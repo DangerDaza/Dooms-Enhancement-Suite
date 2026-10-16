@@ -145,6 +145,19 @@ function closeNotificationLog() {
 }
 
 /**
+ * The Notification Log as text: what Copy All copies. Used by the Stats
+ * beta's Report a problem.
+ * @returns {string}
+ */
+export function getNotificationLogText() {
+    if (notifBuffer.length === 0) return '(no notifications captured)';
+    return notifBuffer.map(e => {
+        const label = `[${e.timestamp}] [${e.level.toUpperCase()}]`;
+        return e.title ? `${label} ${e.title} — ${e.message}` : `${label} ${e.message}`;
+    }).join('\n');
+}
+
+/**
  * Copies all notification entries to clipboard as formatted text.
  */
 function copyNotificationLog() {

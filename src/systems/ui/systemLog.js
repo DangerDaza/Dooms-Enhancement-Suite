@@ -245,6 +245,17 @@ function closeSystemLog() {
 }
 
 /**
+ * The System Log as text, with the diagnostic header: what Copy All copies.
+ * Used by the Stats beta's Report a problem.
+ * @returns {string}
+ */
+export function getSystemLogText() {
+    const header = buildDiagnosticHeader();
+    if (logBuffer.length === 0) return `${header}(no log entries captured)`;
+    return header + logBuffer.map(e => `[${e.timestamp}] [${e.level.toUpperCase()}] ${e.message}`).join('\n');
+}
+
+/**
  * Copies all log entries to clipboard with a diagnostic header so a
  * single paste gives the maintainer DES version + settings + chat
  * context + the captured log lines. Triggers a one-shot version fetch

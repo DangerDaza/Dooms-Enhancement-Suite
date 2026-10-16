@@ -1788,6 +1788,23 @@
     color: var(--rpg-highlight, #e94560);
 }
 
+/* The Stats beta: the same badge set as a label, on the Stats page and its
+   groups, the Workshop's Attributes heading and the dice popover. The rail
+   strips .rpg-accordion-badge from tab labels, so the word never leaks into
+   a tab or a rail button. */
+.rpg-beta-badge {
+    margin-left: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    vertical-align: middle;
+}
+/* The group labels are already small caps; the badge keeps their size. */
+.rpg-subsection-label .rpg-beta-badge {
+    font-size: 0.95em;
+    letter-spacing: 0.1em;
+}
+
 
 .rpg-accordion-chevron {
     color: #555;

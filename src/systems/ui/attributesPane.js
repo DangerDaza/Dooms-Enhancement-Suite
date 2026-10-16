@@ -181,7 +181,7 @@ function render() {
         ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier, and a casting check (magic against the world) is that ability with proficiency. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
     host.innerHTML = `
-        <h4>&#127922; Attributes</h4>
+        <h4>&#127922; Attributes <span class="rpg-accordion-badge rpg-beta-badge">Beta</span></h4>
         <p class="helper">${helper}</p>
         ${ctx.attributesOn ? '' : '<div class="cw-attr-notice"><i class="fa-solid fa-circle-info"></i><span>Attributes are off in <strong>Settings &rarr; Stats &rarr; Attributes &amp; checks</strong>. The sheet is kept; nothing is sent or rolled until they are on.</span></div>'}
         ${defs.length ? tierRow : ''}

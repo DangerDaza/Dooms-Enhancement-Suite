@@ -1431,10 +1431,26 @@
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-heart-pulse rpg-accordion-icon"></i>
                     <span class="rpg-accordion-title">Stats</span>
+                    <span class="rpg-accordion-badge rpg-beta-badge" title="Stats is in beta: everything on this page is off until you switch it on. Report a problem is at the top of the page.">Beta</span>
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
-                    <div class="rpg-subsection-label">Vitals</div>
+                    <!-- Stats beta: the notice and the one-press report. Rows before
+                         the first group heading form the page's General tab. -->
+                    <div class="rpg-setting-row rpg-beta-report-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Stats is in beta</span>
+                            <span class="rpg-setting-hint">Everything on this page is off until you switch it on. If something
+                                breaks, Report a problem opens a GitHub issue with your DES version, your Stats switches and the
+                                last lines of the Notification and System logs filled in, and copies the full logs to your
+                                clipboard for the Logs box. A chat export is the most useful thing to attach.</span>
+                        </div>
+                        <button id="rpg-stats-report" class="rpg-accordion-action-btn" type="button"
+                            title="Open a GitHub issue with your version, switches and logs filled in">
+                            <i class="fa-solid fa-bug"></i> Report a problem
+                        </button>
+                    </div>
+                    <div class="rpg-subsection-label">Vitals <span class="rpg-accordion-badge rpg-beta-badge">Beta</span></div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Track vitals</span>
@@ -1511,7 +1527,7 @@
                         </label>
                     </div>
 
-                    <div class="rpg-subsection-label" style="margin-top:12px;">Attributes &amp; checks</div>
+                    <div class="rpg-subsection-label" style="margin-top:12px;">Attributes &amp; checks <span class="rpg-accordion-badge rpg-beta-badge">Beta</span></div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Attributes and dice checks</span>
@@ -2513,6 +2529,7 @@
             <h3 id="rpg-dice-title">
                 <i class="fa-solid fa-dice-d20" aria-hidden="true"></i>
                 <span>Roll a check</span>
+                <span class="rpg-accordion-badge rpg-beta-badge">Beta</span>
             </h3>
             <button id="rpg-dice-close" class="rpg-popup-close" type="button" title="Close">&times;</button>
         </header>
@@ -3529,7 +3546,7 @@
                 <!-- ATTRIBUTES (rendered by src/systems/ui/attributesPane.js on first open) -->
                 <section class="rpg-editor-pane" data-pane="attributes">
                     <div class="rpg-editor-section" id="cw-attributes-pane">
-                        <h4>&#127922; Attributes</h4>
+                        <h4>&#127922; Attributes <span class="rpg-accordion-badge rpg-beta-badge">Beta</span></h4>
                     </div>
                 </section>
 
