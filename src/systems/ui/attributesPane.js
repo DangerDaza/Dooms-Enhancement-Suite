@@ -173,10 +173,13 @@ function render() {
                 </select>
             </label>
             <button type="button" class="rpg-btn cw-attr-fill" title="${tier ? `The ${escapeHtml(tier.label)} array (${tier.array.join(', ')}) laid over the current ranking` : 'Pick a tier first'}"${tier ? '' : ' disabled'}><i class="fa-solid fa-layer-group"></i> Fill by tier</button>
+            <button type="button" class="rpg-btn cw-attr-standard" title="15, 14, 13, 12, 10, 8 down the list; edit after"><i class="fa-solid fa-list-ol"></i> Standard array</button>
+            <button type="button" class="rpg-btn cw-attr-4d6" title="Four six-sided dice, drop the lowest, once per attribute"><i class="fa-solid fa-dice"></i> Roll 4d6 drop lowest</button>
+            <button type="button" class="rpg-btn cw-attr-reset" title="Every score back to 10; proficiencies stay"><i class="fa-solid fa-rotate-left"></i> All 10</button>
             <button type="button" class="rpg-btn cw-attr-suggest" title="One small call: the game master reads the card and the recent scene and proposes a tier and six scores. Nothing is kept until Save."><i class="fa-solid fa-wand-magic-sparkles"></i> Suggest from the story</button>
             ${isSuggested(ctx.proficiencies) ? '<span class="cw-attr-badge" title="The game master filled this sheet on its own; it stays marked until you change something here">AI-suggested</span>' : ''}
-            <span class="cw-attr-tier-means">${tier ? `${escapeHtml(tier.means)}; scores outside ${tier.min}–${tier.max} are marked` : 'where this character stands, from ordinary people to legends'}</span>
-        </div>`;
+        </div>
+        <p class="helper cw-attr-tier-means">${tier ? `${escapeHtml(tier.means)}; scores outside ${tier.min}–${tier.max} are marked` : 'where this character stands, from ordinary people to legends'}</p>`;
     const helper = ctx.isUser
         ? `Your scores, 1 to 30. The modifier beside each is what a roll adds: 10 and 11 give +0, and every two points above or below move it by one. Tick the skills you are proficient in; each adds +${bonus} to a roll on it, whichever attribute the check pairs it with. Save marks a saving throw you are proficient in (+${bonus} to resist what is done to you). Casting marks the one ability your magic or powers run on: anything they do to someone is resisted against it, DC 8 + ${bonus} + its modifier, and a casting check (magic against the world) is that ability with proficiency. Tag a message with the d20 button and this is the sheet it rolls on.`
         : `${escapeHtml(ctx.name || 'This character')}'s scores, 1 to 30, the skills they are proficient in (+${bonus} each) and the saving throws (Save) they are proficient in. NPCs never roll (the dice are yours), but a sheet that is not all 10s, or has proficiencies, goes to the AI with yours so it can play them to their strengths.`;
@@ -188,11 +191,6 @@ function render() {
         ${defs.length
             ? `<div class="cw-attr-grid">${rows}</div>${talentsHtml(ctx)}`
             : '<div class="rpg-dc-knives-empty">No attributes on the list. Add some in Settings &rarr; Stats &rarr; Attributes &amp; checks.</div>'}
-        <div class="cw-attr-actions"${defs.length ? '' : ' hidden'}>
-            <button type="button" class="rpg-btn cw-attr-standard" title="15, 14, 13, 12, 10, 8 down the list; edit after"><i class="fa-solid fa-list-ol"></i> Standard array</button>
-            <button type="button" class="rpg-btn cw-attr-4d6" title="Four six-sided dice, drop the lowest, once per attribute"><i class="fa-solid fa-dice"></i> Roll 4d6 drop lowest</button>
-            <button type="button" class="rpg-btn cw-attr-reset" title="Every score back to 10; proficiencies stay"><i class="fa-solid fa-rotate-left"></i> All 10</button>
-        </div>
         <p class="helper cw-attr-foot">Saved with <strong>Save</strong>. A sheet that is all 10s with no proficiencies is the default and is never sent.</p>`;
 }
 

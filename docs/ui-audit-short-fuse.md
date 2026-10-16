@@ -7,7 +7,13 @@ branch adds or reshapes: Settings → Stats, Settings → Generation (the
 together-mode rows), Settings → Voices, Workshop → Attributes, Workshop →
 Voice, the dice popover and chip, and the three ways into "Roll a check".
 Verdicts: **keep**, **move**, **fold**, **rename**, **dim** (grey out
-when its master is off), or 𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊. Nothing here is applied yet.
+when its master is off), or 𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊.
+
+**Applied 2026-10-16**, on Jordan's word, all of it: findings 1–6, the
+three wording fixes, the "About this beta" heading, dimming (not hiding)
+under a switched-off master, plain dividers (not tabs) on the attributes
+page. The sections below describe the page as it was; section 10 is the
+page as it is now.
 
 ## The short version
 
@@ -215,7 +221,38 @@ three open the same popover. Keep all three.
 - Settings → Stats → the beta row's group: a heading "About this beta",
   so the rail's first tab is not "General".
 
-## 9. Decisions for Jordan
+## 10. As applied
+
+- Settings → Stats, rail tabs: **About this beta**, **Vitals**,
+  **Attributes & checks**. Vitals: master, Your character too, the
+  sheet, then a divider "On the cards and in context" with the four card
+  and history rows. Attributes & checks: master, then dividers **Sheet**
+  (the list, Add, presets, Proficiency bonus), **Rolls** (Difficulty
+  classes, Default difficulty, Criticals), **The game master** (The AI
+  sets the difficulty, Messages the game master reads, Let me change the
+  ruling, The AI may call for checks and its four sub-rows), **What the
+  AI is told** (Send scores, Send the tier), **NPC sheets** (Suggest
+  stats for new characters automatically, its hint naming the Workshop
+  buttons), **Debugging** (Notify on dice events). Dividers are
+  `.rpg-setting-divider`, which the rail ignores.
+- Every row under Track vitals carries `rpg-vitals-sub`, every row under
+  Attributes and dice checks carries `rpg-attr-sub`; both grey out
+  (`is-off`, opacity 0.45) when the master is off, set on render and on
+  the master's change.
+- Workshop → Attributes: one toolbar above the grid (Tier, Fill by tier,
+  Standard array, Roll 4d6 drop lowest, All 10, Suggest from the story,
+  the suggested badge), the tier's meaning on the line under it, then
+  the grid, Talents, the foot note. The bottom actions block is gone.
+- Dice popover: the game master's call, when one waits, is the first
+  line.
+- Settings → Generation: a hint under Refresh Tracker Data that changes
+  with the mode; Connection Profile moved to sit under it, its hint and
+  Chat History Depth's naming both the separate request and the
+  together-mode fetch.
+- Settings → Voices → Delivery note: the hint says a character with a
+  note of their own in Workshop → Voice uses that instead.
+
+## 9. Decisions for Jordan (taken)
 
 1. Apply findings 1–6 as listed? All are reorders; none changes a
    setting's key or default.

@@ -4660,6 +4660,19 @@ body:has(.rpg-panel) #sheld {
 }
 
 
+/* A divider inside a group (the Stats page's Sheet, Rolls, The game master…):
+   smaller than a group label and not one, so the rail layout never turns it
+   into a tab (settingsRail.js reads .rpg-subsection-label only). */
+.rpg-setting-divider {
+    font-size: 0.66em;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    color: #666;
+    margin: 12px 0 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
 .rpg-subsection-label:first-child {
     margin-top: 0;
     border-top: none;

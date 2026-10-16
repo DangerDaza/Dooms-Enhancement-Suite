@@ -9626,6 +9626,10 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 /* The game master's call rows follow their master switch. */
 .rpg-attr-calls-sub { padding-left: 14px; }
 .rpg-attr-calls-sub.is-off { opacity: 0.45; }
+/* Audit finding 3: every row under a switched-off master greys out, the
+   way the calls sub-rows do; the page keeps its shape. */
+.rpg-vitals-sub.is-off,
+.rpg-attr-sub.is-off { opacity: 0.45; }
 
 .rpg-attr-dcs {
     display: flex;
@@ -9716,15 +9720,6 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 #character-workshop-popup .cw-attr-mod.is-pos { color: #7bd88f; }
 #character-workshop-popup .cw-attr-mod.is-neg { color: #ff7b7b; }
 
-#character-workshop-popup .cw-attr-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 10px;
-}
-
-#character-workshop-popup .cw-attr-actions[hidden] { display: none; }
-
 #character-workshop-popup .cw-attr-notice {
     display: flex;
     gap: 8px;
@@ -9800,13 +9795,15 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 }
 
 #character-workshop-popup .cw-attr-skill i { font-size: 0.95em; }
-/* Tier row (§11): the select, Fill by tier, Suggest from the story, the suggested badge. */
+/* The sheet toolbar (§11, audit finding 4): the tier select, Fill by tier,
+   Standard array, Roll 4d6, All 10 and Suggest from the story in one row
+   above the grid, the suggested badge beside them. */
 #character-workshop-popup .cw-attr-tier-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin: 0 0 10px;
+    gap: 6px 8px;
+    margin: 0 0 4px;
 }
 #character-workshop-popup .cw-attr-tier-label {
     display: inline-flex;
@@ -9815,7 +9812,13 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
     font-weight: 600;
 }
 #character-workshop-popup .cw-attr-tier { min-width: 150px; }
-#character-workshop-popup .cw-attr-tier-means {
+#character-workshop-popup p.cw-attr-tier-means {
+    margin: 0 0 10px;
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+/* The talents row's own meaning line, still a span inside its flex row. */
+#character-workshop-popup span.cw-attr-tier-means {
     flex-basis: 100%;
     font-size: 0.85em;
     opacity: 0.75;

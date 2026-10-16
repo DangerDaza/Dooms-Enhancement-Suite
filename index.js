@@ -284,6 +284,7 @@ function renderVitalsSettings() {
     }
     const cfg = vitalsConfig(extensionSettings);
     $('#rpg-vitals-enabled').prop('checked', cfg.enabled);
+    $('.rpg-vitals-sub').toggleClass('is-off', !cfg.enabled);
     $('#rpg-vitals-player').prop('checked', cfg.player.enabled);
     $('#rpg-vitals-show-cards').prop('checked', cfg.showOnCards);
     $('#rpg-vitals-max-bars').val(cfg.maxBars);
@@ -342,6 +343,7 @@ function renderAttributesSettings() {
     const a = getAttributesRules();
     const cfg = attributesConfig(extensionSettings);
     $('#rpg-attr-enabled').prop('checked', cfg.enabled);
+    $('.rpg-attr-sub').toggleClass('is-off', !cfg.enabled);
     $('#rpg-attr-send').val(cfg.sendToAI);
     $('#rpg-attr-ai-rates').prop('checked', cfg.aiRatesDifficulty);
     $('#rpg-attr-context').val(cfg.contextMessages);
@@ -550,6 +552,10 @@ function populateConnectionProfileDropdown() {
  */
 function updateGenerationModeUI() {
     const mode = extensionSettings.generationMode || 'together';
+    const hint = mode === 'together'
+        ? 'Asks for the last reply\'s tracker data again, the way a skipped block is fetched.'
+        : 'Runs the tracker request now.';
+    $('#rpg-manual-update-hint').text(hint).show();
     if (mode === 'together') {
         // The block rides inside the reply; Refresh asks for it separately
         // when a reply skipped it, and the switch does the same by itself.
@@ -1467,6 +1473,7 @@ function bindSettingsUI() {
         const cs = getVitalsSheet();
         if (!cs) return;
         cs.enabled = $(this).prop('checked');
+        $('.rpg-vitals-sub').toggleClass('is-off', !cs.enabled);
         _saveVitals({ rerender: false });
     });
     $(document).on('change', '#rpg-vitals-player', function () {
@@ -1662,6 +1669,7 @@ function bindSettingsUI() {
     });
     $(document).on('change', '#rpg-attr-enabled', function () {
         getAttributesRules().enabled = $(this).prop('checked');
+        $('.rpg-attr-sub').toggleClass('is-off', !$(this).prop('checked'));
         _saveAttrs({ rerender: false });
     });
     $(document).on('change', '#rpg-attr-send', function () {

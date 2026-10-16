@@ -176,6 +176,7 @@ function render() {
     }
 
     $body.html(`
+        ${status}
         <div class="rpg-dice-who">Checking as <b>${escapeHtml(name)}</b></div>
         <div class="rpg-dice-attrs">${chips}</div>
         ${skills}
@@ -186,7 +187,6 @@ function render() {
         </label>
         ${override}
         <p class="rpg-dice-hint">${howRuled}</p>
-        ${status}
         <div class="rpg-dice-actions">
             <button type="button" class="rpg-btn rpg-btn-primary rpg-dice-ok"${def ? '' : ' disabled'}>OK</button>
             ${pending

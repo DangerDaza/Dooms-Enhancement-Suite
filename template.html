@@ -54,10 +54,22 @@
                         style="display:none; margin-bottom:8px;">
                         <i class="fa-solid fa-arrows-rotate"></i> Refresh Tracker Data
                     </button>
+                    <p class="rpg-note-text" id="rpg-manual-update-hint" style="display:none; margin:-4px 0 10px;"></p>
+                    <!-- Connection Profile (uses SillyTavern Connection Manager) -->
+                    <div class="rpg-setting-row" id="rpg-connection-profile-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Connection Profile</span>
+                            <span class="rpg-setting-hint">The profile the tracker request switches to: the Separate and External request, and the together-mode fetch when a reply skips the block</span>
+                        </div>
+                        <select id="rpg-connection-profile" class="rpg-accordion-select">
+                            <option value="">Use Current</option>
+                        </select>
+                    </div>
+
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Chat History Depth</span>
-                            <span class="rpg-setting-hint">Messages included in context</span>
+                            <span class="rpg-setting-hint">Messages the tracker request reads (Separate and External mode, and the fetch when a reply skips the block)</span>
                         </div>
                         <select id="rpg-update-depth" class="rpg-accordion-select">
                             <option value="2">2</option>
@@ -89,17 +101,6 @@
                             <option value="none">None</option>
                             <option value="impersonation">Impersonation</option>
                             <option value="guided">All Guided</option>
-                        </select>
-                    </div>
-
-                    <!-- Connection Profile (uses SillyTavern Connection Manager) -->
-                    <div class="rpg-setting-row" id="rpg-connection-profile-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Connection Profile</span>
-                            <span class="rpg-setting-hint">API profile for tracker generation</span>
-                        </div>
-                        <select id="rpg-connection-profile" class="rpg-accordion-select">
-                            <option value="">Use Current</option>
                         </select>
                     </div>
 
@@ -1437,6 +1438,7 @@
                 <div class="rpg-accordion-body">
                     <!-- Stats beta: the notice and the one-press report. Rows before
                          the first group heading form the page's General tab. -->
+                    <div class="rpg-subsection-label">About this beta</div>
                     <div class="rpg-setting-row rpg-beta-report-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Stats is in beta</span>
@@ -1463,7 +1465,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Your character too</span>
                             <span class="rpg-setting-hint">Your persona gets the same vitals, on its own card and
@@ -1475,20 +1477,20 @@
                         </label>
                     </div>
                     <!-- Rows generated from the sheet (renderVitalsSettings). -->
-                    <div id="rpg-vitals-list" class="rpg-vitals-list"></div>
-                    <div class="rpg-vitals-add-row">
+                    <div id="rpg-vitals-list" class="rpg-vitals-list rpg-vitals-sub"></div>
+                    <div class="rpg-vitals-add-row rpg-vitals-sub">
                         <button id="rpg-vitals-add" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-plus"></i> Add vital
                         </button>
                         <div id="rpg-vitals-chips" class="rpg-vitals-chips"></div>
                     </div>
-                    <p class="rpg-note-text" style="margin-top:4px;">Each vital has its own switch. <b>AI</b> lets
+                    <p class="rpg-note-text rpg-vitals-sub" style="margin-top:4px;">Each vital has its own switch. <b>AI</b> lets
                         the AI move it; off, the value only changes when you edit it on a card. <b>Start</b> is the
                         value a character begins at. A vital's name is what the AI sees, so keep it plain;
                         renaming one starts its values over.</p>
 
-                    <div class="rpg-subsection-label" style="margin-top:12px;">Cards and context</div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-divider rpg-vitals-sub">On the cards and in context</div>
+                    <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the card front</span>
                             <span class="rpg-setting-hint">Thin bars above the name. The card's back always lists
@@ -1499,7 +1501,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Bars on the front</span>
                             <span class="rpg-setting-hint">How many of the vitals, in sheet order, the front shows.</span>
@@ -1507,7 +1509,7 @@
                         <input type="number" id="rpg-vitals-max-bars" class="rpg-accordion-input" min="1" max="6"
                             value="3" style="width: 64px;" />
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Warn at or below</span>
                             <span class="rpg-setting-hint">A bar at or under this percentage turns the warning colour.</span>
@@ -1515,7 +1517,7 @@
                         <input type="number" id="rpg-vitals-low-at" class="rpg-accordion-input" min="0" max="100"
                             value="25" style="width: 64px;" />
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-vitals-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Include in history context</span>
                             <span class="rpg-setting-hint">Send each message's vitals with History Persistence, the
@@ -1542,32 +1544,59 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="rpg-setting-divider rpg-attr-sub">Sheet</div>
                     <!-- Rows generated from the list (renderAttributesSettings). -->
-                    <div id="rpg-attr-list" class="rpg-vitals-list rpg-attr-list"></div>
-                    <div class="rpg-vitals-add-row">
+                    <div id="rpg-attr-list" class="rpg-vitals-list rpg-attr-list rpg-attr-sub"></div>
+                    <div class="rpg-vitals-add-row rpg-attr-sub">
                         <button id="rpg-attr-add" class="rpg-accordion-action-btn" type="button">
                             <i class="fa-solid fa-plus"></i> Add attribute
                         </button>
                         <div id="rpg-attr-chips" class="rpg-vitals-chips"></div>
                     </div>
-                    <p class="rpg-note-text" style="margin-top:4px;">The name is what the AI sees; the short form is
+                    <p class="rpg-note-text rpg-attr-sub" style="margin-top:4px;">The name is what the AI sees; the short form is
                         what the popover and the roll line show; the skills are the sub-checks offered under it.
                         Switching an attribute off keeps every character's score for it; removing an attribute or a
                         skill drops the scores or proficiencies that went with it.</p>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Send scores to the AI</span>
-                            <span class="rpg-setting-hint"><b>With a roll</b> adds the sheets only to a reply that
-                                answers a check. <b>Always</b> adds them to every reply, about a line per character
-                                whose scores are not all 10.</span>
+                            <span class="rpg-setting-label">Proficiency bonus</span>
+                            <span class="rpg-setting-hint">Added to a roll on a skill the character is proficient in.
+                                Proficiencies are ticked on the Workshop's Attributes tab.</span>
                         </div>
-                        <select id="rpg-attr-send" class="rpg-accordion-select">
-                            <option value="withRoll">With a roll</option>
-                            <option value="always">Always</option>
-                            <option value="never">Never</option>
-                        </select>
+                        <input type="number" id="rpg-attr-prof" class="rpg-accordion-input" min="1" max="6"
+                            value="2" style="width: 64px;" />
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-divider rpg-attr-sub">Rolls</div>
+                    <div class="rpg-setting-row rpg-attr-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Difficulty classes</span>
+                            <span class="rpg-setting-hint">What a d20 plus the modifier has to reach for each word the
+                                game master can pick.</span>
+                        </div>
+                    </div>
+                    <!-- Five labelled numbers, one per difficulty (renderAttributesSettings). -->
+                    <div id="rpg-attr-dcs" class="rpg-attr-dcs rpg-attr-sub"></div>
+                    <div class="rpg-setting-row rpg-attr-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Default difficulty</span>
+                            <span class="rpg-setting-hint">Used when the AI is not asked, or its answer cannot be
+                                read.</span>
+                        </div>
+                        <select id="rpg-attr-default-diff" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row rpg-attr-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Criticals</span>
+                            <span class="rpg-setting-hint">A natural 20 always succeeds and a natural 1 always fails,
+                                whatever the difficulty.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-criticals" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-divider rpg-attr-sub">The game master</div>
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">The AI sets the difficulty</span>
                             <span class="rpg-setting-hint">One small separate request when you send a tagged message:
@@ -1579,7 +1608,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Messages the game master reads</span>
                             <span class="rpg-setting-hint">How many recent messages go with that request.</span>
@@ -1587,15 +1616,7 @@
                         <input type="number" id="rpg-attr-context" class="rpg-accordion-input" min="1" max="30"
                             value="6" style="width: 64px;" />
                     </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Default difficulty</span>
-                            <span class="rpg-setting-hint">Used when the AI is not asked, or its answer cannot be
-                                read.</span>
-                        </div>
-                        <select id="rpg-attr-default-diff" class="rpg-accordion-select"></select>
-                    </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Let me change the ruling</span>
                             <span class="rpg-setting-hint">Adds a difficulty row to the dice popover so you can fix
@@ -1606,18 +1627,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Criticals</span>
-                            <span class="rpg-setting-hint">A natural 20 always succeeds and a natural 1 always fails,
-                                whatever the difficulty.</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-attr-criticals" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">The AI may call for checks</span>
                             <span class="rpg-setting-hint">As game master, your AI can ask for a roll when the story
@@ -1630,7 +1640,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                    <div class="rpg-setting-row rpg-attr-calls-sub rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">&hellip;as a line at the end of its reply</span>
                             <span class="rpg-setting-hint">Works with any model. The call waits on the chip above the
@@ -1641,7 +1651,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                    <div class="rpg-setting-row rpg-attr-calls-sub rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">&hellip;as a dice tool</span>
                             <span class="rpg-setting-hint">Needs a chat-completion model with function calling on in
@@ -1653,7 +1663,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                    <div class="rpg-setting-row rpg-attr-calls-sub rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">&hellip;on NPCs too</span>
                             <span class="rpg-setting-hint">The guard's Perception against your Stealth, rolled on the
@@ -1664,7 +1674,7 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row rpg-attr-calls-sub">
+                    <div class="rpg-setting-row rpg-attr-calls-sub rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">How often</span>
                             <span class="rpg-setting-hint">What the game master is told about when to ask.</span>
@@ -1674,20 +1684,21 @@
                             <option value="whenUncertain">Whenever an attempt could plausibly fail</option>
                         </select>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-divider rpg-attr-sub">What the AI is told</div>
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Notify on dice events</span>
-                            <span class="rpg-setting-hint">A small toast when the game master calls for a check, when
-                                it rules, and when a die is rolled, with the numbers. Handy while trying the system;
-                                switch off when you trust it. Every event is also written to the browser console
-                                and the Notification Log.</span>
+                            <span class="rpg-setting-label">Send scores to the AI</span>
+                            <span class="rpg-setting-hint"><b>With a roll</b> adds the sheets only to a reply that
+                                answers a check. <b>Always</b> adds them to every reply, about a line per character
+                                whose scores are not all 10.</span>
                         </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-attr-notify" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
+                        <select id="rpg-attr-send" class="rpg-accordion-select">
+                            <option value="withRoll">With a roll</option>
+                            <option value="always">Always</option>
+                            <option value="never">Never</option>
+                        </select>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Send the tier to the AI</span>
                             <span class="rpg-setting-hint">The attributes line names each character's tier (Ordinary to
@@ -1700,38 +1711,35 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-divider rpg-attr-sub">NPC sheets</div>
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Suggest stats for new characters automatically</span>
                             <span class="rpg-setting-hint">When a reply brings a character who has no sheet and no tier,
                                 one small call rates them (a tier and six scores) and the sheet is stored marked
                                 "AI-suggested" until you look at it in the Workshop. One request per new character
                                 per session; the persona is never touched. Off: fill sheets yourself from the
-                                Workshop, by tier or with "Suggest from the story".</span>
+                                Workshop, by tier or with "Suggest from the story". Fill by tier and Suggest from the story in Workshop → Attributes do the same by hand.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-attr-suggest-new" />
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
-                    <div class="rpg-setting-row">
+                    <div class="rpg-setting-divider rpg-attr-sub">Debugging</div>
+                    <div class="rpg-setting-row rpg-attr-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Proficiency bonus</span>
-                            <span class="rpg-setting-hint">Added to a roll on a skill the character is proficient in.
-                                Proficiencies are ticked on the Workshop's Attributes tab.</span>
+                            <span class="rpg-setting-label">Notify on dice events</span>
+                            <span class="rpg-setting-hint">A small toast when the game master calls for a check, when
+                                it rules, and when a die is rolled, with the numbers. Handy while trying the system;
+                                switch off when you trust it. Every event is also written to the browser console
+                                and the Notification Log.</span>
                         </div>
-                        <input type="number" id="rpg-attr-prof" class="rpg-accordion-input" min="1" max="6"
-                            value="2" style="width: 64px;" />
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-attr-notify" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
                     </div>
-                    <div class="rpg-setting-row">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Difficulty classes</span>
-                            <span class="rpg-setting-hint">What a d20 plus the modifier has to reach for each word the
-                                game master can pick.</span>
-                        </div>
-                    </div>
-                    <!-- Five labelled numbers, one per difficulty (renderAttributesSettings). -->
-                    <div id="rpg-attr-dcs" class="rpg-attr-dcs"></div>
                 </div>
             </div>
 
@@ -1901,7 +1909,7 @@
                                         instead of drifting into a whisper. Lines the story says are whispered ("&hellip;," she
                                         whispered) are still whispered unless Never whisper is on. Leave empty to let Gemini
                                         decide. A character's own note (Workshop &rarr; Voice) replaces this on their
-                                        lines. Works with the Google AI Studio key under Connections.</span>
+                                        lines. Works with the Google AI Studio key under Connections. A character with a note of their own in Workshop → Voice uses that instead.</span>
                                 </div>
                                 <div class="rpg-voices-delivery">
                                     <textarea id="rpg-voices-delivery" class="rpg-accordion-input" rows="3" maxlength="160"
