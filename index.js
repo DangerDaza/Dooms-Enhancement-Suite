@@ -1657,20 +1657,13 @@ function bindSettingsUI() {
     $(document).on('click', '#rpg-stats-report', async function () {
         const $btn = $(this);
         $btn.prop('disabled', true);
-        // Open the tab inside the click, so pop-up blockers allow it; the
-        // report lands in it once the logs are gathered.
-        let win = null;
-        try {
-            win = window.open('about:blank', '_blank');
-            if (win) win.opener = null;
-        } catch (e) {
-            win = null;
-        }
+        // The module saves the file and copies the report while this tab
+        // still has focus (a clipboard write needs it), then opens the issue
+        // inside the click's activation window.
         try {
             const mod = await import('./src/systems/features/betaReport.js');
-            await mod.openBetaReport({ win });
+            await mod.openBetaReport();
         } catch (e) {
-            try { if (win && !win.closed) win.close(); } catch (e2) { /* nothing to close */ }
             console.error('[Dooms Tracker] Beta report failed', e);
             toastr.error('Could not build the report. The System Log (Settings → Tools) has the error.', "Doom's Enhancement Suite");
         } finally {

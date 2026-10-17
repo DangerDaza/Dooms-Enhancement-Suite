@@ -318,8 +318,11 @@ beta is on main the button finds no form: it asks the GitHub API once
 per session whether `.github/ISSUE_TEMPLATE/stats-beta.yml` is on the
 default branch and, when it is not, puts the same report into the issue
 body as Markdown sections (`buildIssueBody`). After the merge the form
-is used. The tab is opened inside the click (index.js) and filled once
-the logs are gathered, so pop-up blockers stay quiet.
+is used. Order matters: the file is saved and the clipboard written while
+the SillyTavern tab still has focus (a clipboard write is refused once
+another tab takes it), and the issue opens last, inside the click's
+activation window; the form check runs alongside the gathering with a
+2.5 s timeout.
 
 **When Jordan says push:** main is linear and the branch grew from its
 head, so it is a fast-forward:

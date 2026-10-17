@@ -26,7 +26,7 @@ async function issueFormExists() {
     if (formOnDefaultBranch !== null) return formOnDefaultBranch;
     try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const timer = setTimeout(() => ctrl.abort(), 2500);
         const resp = await fetch(ISSUE_FORM_CHECK_URL, { headers: { 'Accept': 'application/vnd.github+json' }, signal: ctrl.signal });
         clearTimeout(timer);
         formOnDefaultBranch = !!resp.ok;
@@ -78,12 +78,14 @@ function downloadText(text, filename) {
 }
 
 /**
- * Gather, save, copy, open.
- * @param {{ win?: Window|null }} [options] - a tab opened inside the click
- *   (so pop-up blockers allow it) for the report to land in; otherwise one
- *   is opened here.
+ * Gather, save, copy, open: in that order. The file and the clipboard need
+ * this tab focused, and opening the issue takes the focus away, so the
+ * issue opens last; the form check runs alongside the gathering so the
+ * whole thing stays inside the click's activation window (about five
+ * seconds in Chrome and Firefox).
  */
-export async function openBetaReport({ win = null } = {}) {
+export async function openBetaReport() {
+    const formCheck = issueFormExists();
     let version = '';
     try { version = (await getExtensionVersion()) || ''; } catch (e) { /* unknown */ }
     let api = '';
@@ -106,22 +108,10 @@ export async function openBetaReport({ win = null } = {}) {
     const fileName = saved ? wanted : '';
     const copied = await copyText(full);
 
-    const mode = (await issueFormExists()) ? 'form' : 'body';
+    const mode = (await formCheck) ? 'form' : 'body';
     const { url } = buildIssueUrl({ title: ISSUE_TITLE, environment, logs: logsForUrl(notifications, system), mode, fileName });
 
-    let opened = false;
-    if (win && !win.closed) {
-        try {
-            win.location.href = url;
-            opened = true;
-        } catch (e) {
-            opened = false;
-        }
-    }
-    if (!opened) {
-        const fresh = window.open(url, '_blank', 'noopener,noreferrer');
-        opened = !!fresh;
-    }
+    const opened = !!window.open(url, '_blank', 'noopener,noreferrer');
     if (!opened) {
         toastr.warning(`The browser blocked the new window. Allow pop-ups for SillyTavern and press Report a problem again.${saved ? ` The full report is in your Downloads as ${wanted}.` : ''}`, TITLE, { timeOut: 10000 });
         return;

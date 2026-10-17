@@ -203,7 +203,7 @@ export function buildIssueBody({ environment = '', logs = '', fileName = '' } = 
     return [
         '### What happened',
         '',
-        '_What you did, what DES did. A screenshot of the box, the chip or the panel helps._',
+        'What you did, what DES did. A screenshot of the box, the chip or the panel helps.',
         '',
         '### What you expected',
         '',
@@ -216,7 +216,7 @@ export function buildIssueBody({ environment = '', logs = '', fileName = '' } = 
         '',
         '### Logs',
         '',
-        `_The last lines of the System Log (and the Notification Log when it has any). ${whereTheRestIs(fileName)}_`,
+        `The last lines of the System Log (and the Notification Log when it has any). ${whereTheRestIs(fileName)}`,
         '',
         '```text',
         logs,
@@ -224,7 +224,7 @@ export function buildIssueBody({ environment = '', logs = '', fileName = '' } = 
         '',
         '### Chat export',
         '',
-        '_In SillyTavern: the chat menu (the three lines above the message box) → Manage chat files → Export (JSONL). Zip the file and drag it here._',
+        'In SillyTavern: the chat menu (the three lines above the message box) → Manage chat files → Export (JSONL). Zip the file and drag it here.',
         '',
     ].join('\n');
 }
