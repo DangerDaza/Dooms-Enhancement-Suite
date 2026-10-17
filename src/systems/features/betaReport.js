@@ -10,9 +10,27 @@ import { getExtensionVersion } from '../../core/config.js';
 import { getContext } from '../../../../../../extensions.js';
 import { getSystemLogText } from '../ui/systemLog.js';
 import { getNotificationLogText } from '../ui/notificationLog.js';
-import { environmentLines, logsForUrl, buildReportText, buildIssueUrl, ISSUE_TITLE } from '../../utils/betaReport.js';
+import { environmentLines, logsForUrl, buildReportText, buildIssueUrl, ISSUE_TITLE, ISSUE_FORM_CHECK_URL } from '../../utils/betaReport.js';
 
 const TITLE = "Doom's Enhancement Suite";
+
+/** Whether the issue form is on the default branch; asked once per session. */
+let formOnDefaultBranch = null;
+
+async function issueFormExists() {
+    if (formOnDefaultBranch !== null) return formOnDefaultBranch;
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const resp = await fetch(ISSUE_FORM_CHECK_URL, { headers: { 'Accept': 'application/vnd.github+json' }, signal: ctrl.signal });
+        clearTimeout(timer);
+        formOnDefaultBranch = !!resp.ok;
+    } catch (e) {
+        // Offline, blocked or slow: the body works on any repository.
+        formOnDefaultBranch = false;
+    }
+    return formOnDefaultBranch;
+}
 
 async function copyText(text) {
     try {
@@ -56,8 +74,11 @@ function downloadText(text, filename) {
 
 /**
  * Gather, copy, open.
+ * @param {{ win?: Window|null }} [options] - a tab opened inside the click
+ *   (so pop-up blockers allow it) for the report to land in; otherwise one
+ *   is opened here.
  */
-export async function openBetaReport() {
+export async function openBetaReport({ win = null } = {}) {
     let version = '';
     try { version = (await getExtensionVersion()) || ''; } catch (e) { /* unknown */ }
     let api = '';
@@ -72,7 +93,8 @@ export async function openBetaReport() {
     const notifications = getNotificationLogText();
     const system = getSystemLogText();
     const full = buildReportText({ environment, notifications, system });
-    const { url, truncated } = buildIssueUrl({ title: ISSUE_TITLE, environment, logs: logsForUrl(notifications, system) });
+    const mode = (await issueFormExists()) ? 'form' : 'body';
+    const { url, truncated } = buildIssueUrl({ title: ISSUE_TITLE, environment, logs: logsForUrl(notifications, system), mode });
 
     const copied = await copyText(full);
     let saved = false;
@@ -81,14 +103,27 @@ export async function openBetaReport() {
         saved = downloadText(full, `des-beta-report-${stamp}.txt`);
     }
 
-    const win = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!win) {
+    let opened = false;
+    if (win && !win.closed) {
+        try {
+            win.location.href = url;
+            opened = true;
+        } catch (e) {
+            opened = false;
+        }
+    }
+    if (!opened) {
+        const fresh = window.open(url, '_blank', 'noopener,noreferrer');
+        opened = !!fresh;
+    }
+    if (!opened) {
         toastr.warning('The browser blocked the new window. Allow pop-ups for SillyTavern and press Report a problem again.', TITLE, { timeOut: 8000 });
         return;
     }
+    const where = mode === 'body' ? 'the Logs block of the issue body' : 'the Logs box';
     if (copied) {
         toastr.info(truncated
-            ? 'The issue has your version, switches and the last log lines. The full logs are on your clipboard: paste them into the Logs box.'
+            ? `The issue has your version, switches and the last log lines. The full logs are on your clipboard: paste them over ${where}.`
             : 'The issue has your version, switches and both logs. The full report is on your clipboard too.', TITLE, { timeOut: 8000 });
     } else if (saved) {
         toastr.info('The issue has your version and switches. The clipboard was not available, so the full logs were saved as a text file: drag it into the issue.', TITLE, { timeOut: 10000 });

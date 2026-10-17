@@ -6,7 +6,7 @@
  * Usage:  node tools/beta-report-test.mjs     (from the repo root)
  * Exit:   0 = pass, 1 = failure
  */
-import { environmentLines, tailOf, logsForUrl, buildReportText, buildIssueUrl, URL_BUDGET, REPO_URL } from '../src/utils/betaReport.js';
+import { environmentLines, tailOf, logsForUrl, buildReportText, buildIssueUrl, buildIssueBody, URL_BUDGET, REPO_URL } from '../src/utils/betaReport.js';
 
 let failures = 0;
 function check(name, ok, detail = '') {
@@ -52,6 +52,15 @@ console.log('\n§3 logsForUrl / buildReportText');
 {
     const section = logsForUrl('n1\nn2', 's1\ns2', 100);
     check('both logs, headed', section.includes('== Notification Log ==\nn1\nn2') && section.includes('== System Log ==\ns1\ns2'));
+    const longN = Array.from({ length: 200 }, (_, i) => `notice ${i}`).join('\n');
+    const longS = Array.from({ length: 200 }, (_, i) => `system ${i}`).join('\n');
+    const shared = logsForUrl(longN, longS, 1200);
+    const nPart = shared.slice(0, shared.indexOf('== System Log =='));
+    const sPart = shared.slice(shared.indexOf('== System Log =='));
+    check('the System Log gets the larger share', sPart.length > nPart.length * 1.5, `${nPart.length} vs ${sPart.length}`);
+    const body = buildIssueBody({ environment: 'ENV', logs: 'LOGS' });
+    check('the body has the form\'s sections in order', body.indexOf('### What happened') < body.indexOf('### Environment') && body.indexOf('### Environment') < body.indexOf('### Logs') && body.indexOf('### Logs') < body.indexOf('### Chat export'));
+    check('the body carries the environment and the logs in code blocks', body.includes('```text\nENV\n```') && body.includes('```text\nLOGS\n```'));
     const full = buildReportText({ environment: 'E', notifications: 'N', system: 'S' });
     check('the full report has every section in order', full.indexOf('== Environment ==\nE') < full.indexOf('== Notification Log ==\nN') && full.indexOf('== Notification Log ==\nN') < full.indexOf('== System Log ==\nS'));
     check('empty logs are marked', buildReportText({ environment: '', notifications: '', system: '' }).includes('(empty)'));
@@ -71,6 +80,16 @@ console.log('\n§4 buildIssueUrl');
     const tiny = buildIssueUrl({ environment: 'DES x', logs: big }, { budget: 300 });
     check('a budget too small for any log still yields a URL', tiny.url.length <= 300 || tiny.logs === '', `url ${tiny.url.length}`);
     check('the environment is never cut', tiny.url.includes('&environment=DES%20x'));
+    // body mode: no form on the default branch
+    const b = buildIssueUrl({ environment: 'DES x', logs: 'a few lines', mode: 'body' });
+    check('body mode points at a plain new issue', b.url.startsWith(`${REPO_URL}/issues/new?title=`) && !b.url.includes('template='));
+    const decoded = decodeURIComponent(b.url.slice(b.url.indexOf('&body=') + 6));
+    check('body mode carries the sections, the environment and the logs', decoded.includes('### Environment') && decoded.includes('DES x') && decoded.includes('a few lines'));
+    check('body mode reports its mode', b.mode === 'body' && !b.truncated);
+    const bb = buildIssueUrl({ environment: 'DES x', logs: big, mode: 'body' });
+    check('body mode fits the budget with a huge log', bb.url.length <= URL_BUDGET, `url ${bb.url.length}`);
+    check('...and keeps the log\'s end', bb.logs.endsWith('line 2000 with some words in it') && bb.truncated);
+    check('...and the environment', decodeURIComponent(bb.url).includes('DES x'));
 }
 
 console.log('');

@@ -16,6 +16,11 @@ import { vitalsConfig, vitalsOn, playerVitalsOn } from './vitals.js';
 export const REPO_URL = 'https://github.com/DangerDaza/Dooms-Enhancement-Suite';
 export const ISSUE_TEMPLATE = 'stats-beta.yml';
 export const ISSUE_TITLE = '[Stats beta] ';
+/**
+ * GitHub reads issue forms from the default branch only. Until the beta is
+ * on main, this path answers 404 and the report goes into the issue body.
+ */
+export const ISSUE_FORM_CHECK_URL = `https://api.github.com/repos/DangerDaza/Dooms-Enhancement-Suite/contents/.github/ISSUE_TEMPLATE/${ISSUE_TEMPLATE}`;
 /** Browsers and GitHub both stop reading a URL somewhere past 8,000 characters. */
 export const URL_BUDGET = 7000;
 
@@ -84,8 +89,46 @@ export function tailOf(text, maxChars) {
  * @returns {string}
  */
 export function logsForUrl(notifications, system, maxChars = 2400) {
-    const half = Math.floor(maxChars / 2);
-    return `== Notification Log ==\n${tailOf(notifications, half)}\n\n== System Log ==\n${tailOf(system, half)}`;
+    // The System Log is what a report is usually about: two thirds to it.
+    const sysShare = Math.floor((maxChars * 2) / 3);
+    const notifShare = Math.max(0, maxChars - sysShare);
+    return `== Notification Log ==\n${tailOf(notifications, notifShare)}\n\n== System Log ==\n${tailOf(system, sysShare)}`;
+}
+
+/**
+ * The issue body for a repository without the form (the default branch
+ * before the beta is merged): the form's sections as Markdown headings.
+ * @param {{ environment?: string, logs?: string }} parts
+ * @returns {string}
+ */
+export function buildIssueBody({ environment = '', logs = '' } = {}) {
+    return [
+        '### What happened',
+        '',
+        '_What you did, what DES did. A screenshot of the box, the chip or the panel helps._',
+        '',
+        '### What you expected',
+        '',
+        '',
+        '### Environment',
+        '',
+        '```text',
+        environment,
+        '```',
+        '',
+        '### Logs',
+        '',
+        '_The last lines of the Notification and System logs. The full logs are on your clipboard: paste them over this block if it was cut short._',
+        '',
+        '```text',
+        logs,
+        '```',
+        '',
+        '### Chat export',
+        '',
+        '_In SillyTavern: the chat menu (the three lines above the message box) → Manage chat files → Export (JSONL). Zip the file and drag it here._',
+        '',
+    ].join('\n');
 }
 
 /**
@@ -110,23 +153,26 @@ export function buildReportText({ environment, notifications, system }) {
 }
 
 /**
- * The prefilled issue URL. The logs field shrinks until the URL fits the
- * budget; the title and environment are never cut.
- * @param {{ title?: string, environment?: string, logs?: string }} fields
+ * The prefilled issue URL. In 'form' mode the fields of the issue form are
+ * filled by id; in 'body' mode (no form on the default branch) the report
+ * goes into the issue body as Markdown. Either way the logs shrink until
+ * the URL fits the budget; the title and environment are never cut.
+ * @param {{ title?: string, environment?: string, logs?: string, mode?: 'form'|'body' }} fields
  * @param {{ budget?: number }} [options]
- * @returns {{ url: string, logs: string, truncated: boolean }}
+ * @returns {{ url: string, logs: string, truncated: boolean, mode: string }}
  */
-export function buildIssueUrl({ title = ISSUE_TITLE, environment = '', logs = '' } = {}, { budget = URL_BUDGET } = {}) {
+export function buildIssueUrl({ title = ISSUE_TITLE, environment = '', logs = '', mode = 'form' } = {}, { budget = URL_BUDGET } = {}) {
     const enc = encodeURIComponent;
-    const fixed = `${REPO_URL}/issues/new?template=${ISSUE_TEMPLATE}&title=${enc(title)}&environment=${enc(environment)}`;
     const all = typeof logs === 'string' ? logs : '';
-    const make = (text) => `${fixed}&logs=${enc(text)}`;
+    const make = mode === 'body'
+        ? (text) => `${REPO_URL}/issues/new?title=${enc(title)}&body=${enc(buildIssueBody({ environment, logs: text }))}`
+        : (text) => `${REPO_URL}/issues/new?template=${ISSUE_TEMPLATE}&title=${enc(title)}&environment=${enc(environment)}&logs=${enc(text)}`;
     let kept = all;
     let url = make(kept);
     // Encoded length runs about three times the raw length for log text:
     // aim under the room left, then shrink until it fits. Each try tails
     // the original, so the "left out" line never stacks.
-    const room = Math.max(0, budget - fixed.length - '&logs='.length);
+    const room = Math.max(0, budget - make('').length);
     let target = Math.min(all.length - 1, Math.floor(room / 3.2));
     let guard = 0;
     while (url.length > budget && target > 0 && guard++ < 60) {
@@ -138,5 +184,5 @@ export function buildIssueUrl({ title = ISSUE_TITLE, environment = '', logs = ''
         kept = '';
         url = make('');
     }
-    return { url, logs: kept, truncated: kept.length < (logs || '').length };
+    return { url, logs: kept, truncated: kept.length < (logs || '').length, mode };
 }
