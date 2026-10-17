@@ -1836,6 +1836,145 @@
                 </div>
             </div>
 
+            <!-- ═══════ LIVE WORLD ═══════ -->
+            <!-- docs/live-world-spec.md. Background plot clocks and last-seen
+                 places per chat, from a world pack; the advancer runs between
+                 scenes. Bound in index.js (#rpg-world-*), the state in
+                 src/systems/features/liveWorld.js. -->
+            <div class="rpg-accordion-section" data-accordion="liveworld">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-globe rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Live World</span>
+                    <span class="rpg-accordion-badge rpg-beta-badge" title="Live World is in beta: off until you switch it on.">Beta</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Live World</span>
+                            <span class="rpg-setting-hint">A world that moves between scenes. A world pack gives it places,
+                                plot clocks and a cast; each chat keeps its own copy. Every few replies a quiet background
+                                request reads the recent scenes and moves the clocks and the last-seen places, and one short
+                                line tells the narrator where things stand. Nothing is ever written into the chat.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-world-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p class="rpg-note-text rpg-world-sub" id="rpg-world-status" style="margin-top:4px;"></p>
+                    <div class="rpg-setting-divider rpg-world-sub">The world</div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">World pack for new chats</span>
+                            <span class="rpg-setting-hint">A chat keeps the pack it started with; this one seeds the next
+                                new chat. Skyreach is a draft until its campaign notes fill it in; Example is a port town to
+                                copy.</span>
+                        </div>
+                        <select id="rpg-world-pack" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Paste a pack</span>
+                            <span class="rpg-setting-hint">A pack's JSON (copy worldpacks/example.json from the extension
+                                folder and change everything). Add stores it under its id; Remove drops the pasted pack
+                                chosen above.</span>
+                            <textarea id="rpg-world-paste" class="rpg-accordion-input" rows="4" placeholder='{ "id": "my-world", "name": "…", "places": [ … ], "clocks": [ … ], "cast": [ … ] }' style="width:100%; margin-top:6px; font-family: ui-monospace, monospace; font-size: 0.8em;"></textarea>
+                            <div style="display:flex; gap:6px; margin-top:6px;">
+                                <button id="rpg-world-add-pack" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plus"></i> Add pack</button>
+                                <button id="rpg-world-remove-pack" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-trash"></i> Remove pasted pack</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">This chat</span>
+                            <span class="rpg-setting-hint">Advance now runs the plot advancer at once (the same as /advance).
+                                Re-seed throws this chat's world away and starts it again from the pack above.</span>
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+                            <button id="rpg-world-advance" class="rpg-accordion-action-btn" type="button" title="Run the plot advancer now"><i class="fa-solid fa-forward"></i> Advance now</button>
+                            <button id="rpg-world-reseed" class="rpg-accordion-action-btn" type="button" title="Throw this chat's world away and seed it again"><i class="fa-solid fa-seedling"></i> Re-seed this chat</button>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-divider rpg-world-sub">The advancer</div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Every N replies</span>
+                            <span class="rpg-setting-hint">How many new replies between runs. A swipe or a regenerate is not a
+                                new reply. A run whose answer fails its checks is retried on the very next reply.</span>
+                        </div>
+                        <input type="number" id="rpg-world-every" class="rpg-accordion-input" min="1" max="50" value="6" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Most a clock may move per run</span>
+                            <span class="rpg-setting-hint">Up or down. A clock with its own step in the pack keeps that.</span>
+                        </div>
+                        <input type="number" id="rpg-world-step" class="rpg-accordion-input" min="1" max="6" value="1" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Recent messages the advancer reads</span>
+                            <span class="rpg-setting-hint">The window of the chat that goes with each run.</span>
+                        </div>
+                        <input type="number" id="rpg-world-recent" class="rpg-accordion-input" min="2" max="40" value="12" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Spoiler-free</span>
+                            <span class="rpg-setting-hint">The blurb the dashboard shows is street-level common knowledge
+                                only: rumours, prices, news; never a clock's value or what drives it. Enforced in the
+                                advancer's prompt, not only hidden.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-world-spoiler" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-divider rpg-world-sub">What the narrator is told</div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Tell the narrator where things stand</span>
+                            <span class="rpg-setting-hint">One short line with every generation: each clock with its public
+                                effect, and where each known character was last seen. Fixed in size, overwritten, never
+                                appended. Not shown in the Context Inspector.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-world-inject" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-world-inject-sub rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;at depth, as</span>
+                            <span class="rpg-setting-hint">How many messages from the end the line sits, and whose voice it
+                                takes. Deeper keeps the prompt cache steadier.</span>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <input type="number" id="rpg-world-depth" class="rpg-accordion-input" min="0" max="20" value="2" style="width: 64px;" />
+                            <select id="rpg-world-role" class="rpg-accordion-select">
+                                <option value="system">System</option>
+                                <option value="user">User</option>
+                                <option value="assistant">Assistant</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-divider rpg-world-sub">Debugging</div>
+                    <div class="rpg-setting-row rpg-world-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Console lines</span>
+                            <span class="rpg-setting-hint">Every run, its result and every discard are written to the System
+                                Log always; this adds the browser console. Live World never toasts.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-world-debug" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══════ VOICES ═══════ -->
             <!-- Per-character Gemini voices (docs/google-tts-voices-plan.md §6.2).
                  Bound by src/systems/ui/voicesSettingsUI.js. -->

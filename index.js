@@ -165,6 +165,9 @@ import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInve
 import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
 // Cut to a quest (Phase 5b): the player's next message ends an armed cut
 import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
+// Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
+import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
+import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -366,6 +369,50 @@ function renderInventorySettings() {
     $('#rpg-inv-notify').prop('checked', cfg.notify);
 }
 
+/** The Live World rules block in settings, made to exist. */
+function getWorldRules() {
+    if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = defaultLiveWorldConfig();
+    if (!extensionSettings.liveWorld.customPacks || typeof extensionSettings.liveWorld.customPacks !== 'object') extensionSettings.liveWorld.customPacks = {};
+    return extensionSettings.liveWorld;
+}
+
+/** Settings → Live World: the switches, the pack list and this chat's status. */
+function renderLiveWorldSettings() {
+    if (!$('#rpg-world-enabled').length) return;
+    const cfg = liveWorldConfig(extensionSettings);
+    $('#rpg-world-enabled').prop('checked', cfg.enabled);
+    $('.rpg-world-sub').toggleClass('is-off', !cfg.enabled);
+    $('#rpg-world-every').val(cfg.every);
+    $('#rpg-world-step').val(cfg.maxStep);
+    $('#rpg-world-recent').val(cfg.recentMessages);
+    $('#rpg-world-spoiler').prop('checked', cfg.spoilerFree);
+    $('#rpg-world-inject').prop('checked', cfg.inject);
+    $('.rpg-world-inject-sub').toggleClass('is-off', !cfg.inject);
+    $('#rpg-world-depth').val(cfg.depth);
+    $('#rpg-world-role').val(cfg.role);
+    $('#rpg-world-debug').prop('checked', cfg.debug);
+    const ids = listPackIds();
+    const custom = new Set(Object.keys(cfg.customPacks));
+    $('#rpg-world-pack').html(ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}${custom.has(id) ? ' (pasted)' : ''}</option>`).join('')).val(ids.includes(cfg.pack) ? cfg.pack : ids[0]);
+    // The names arrive once the packs load; the ids stand until then.
+    ids.forEach(id => loadPack(id).then(r => {
+        if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? ' (pasted)' : ''}${r.pack.id !== r.pack.name.toLowerCase() ? ` · ${id}` : ''}`);
+    }).catch(() => {}));
+    const s = getWorldState();
+    const pack = getActivePack();
+    let status;
+    if (!cfg.enabled) status = 'Off. Nothing is read, written or sent.';
+    else if (getPackError()) status = `This chat has no world: ${getPackError()}`;
+    else if (!s || !pack) status = 'This chat has no world yet (open a chat, or re-seed).';
+    else {
+        const known = Object.values(s.known).filter(t => t === 'known').length;
+        const last = s.last && s.last.ok ? `last advanced ${s.last.gameDate ? `on ${s.last.gameDate}` : 'once'}${s.last.elapsed ? ` (${s.last.elapsed} passed)` : ''}` : 'not advanced yet';
+        const next = Math.max(0, cfg.every - s.sinceLast);
+        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${s.lastError ? ` Last attempt discarded: ${s.lastError.error}` : ''}`;
+    }
+    $('#rpg-world-status').text(status);
+}
+
 function renderAttributesSettings() {
     const $list = $('#rpg-attr-list');
     if (!$list.length) return;
@@ -480,6 +527,7 @@ async function addExtensionSettings() {
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
+    try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
@@ -1881,6 +1929,77 @@ function bindSettingsUI() {
         getInventoryRules().notify = $(this).prop('checked');
         _saveInv();
     });
+    // ── Live World ──
+    const _saveWorld = ({ reload = false } = {}) => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings save failed', e); }
+        if (reload) onWorldChatChanged().catch(e => console.warn('[Dooms Tracker] Live World reload failed', e)).then(() => renderLiveWorldSettings());
+        else renderLiveWorldSettings();
+    };
+    const _clampWorld = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+    $(document).on('change', '#rpg-world-enabled', function () {
+        getWorldRules().enabled = $(this).prop('checked');
+        $('.rpg-world-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveWorld({ reload: true });
+    });
+    $(document).on('change', '#rpg-world-pack', function () {
+        getWorldRules().pack = String($(this).val() || '');
+        _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-every', function () {
+        const w = getWorldRules(); w.every = _clampWorld($(this).val(), 1, 50, 6); $(this).val(w.every); _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-step', function () {
+        const w = getWorldRules(); w.maxStep = _clampWorld($(this).val(), 1, 6, 1); $(this).val(w.maxStep); _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-recent', function () {
+        const w = getWorldRules(); w.recentMessages = _clampWorld($(this).val(), 2, 40, 12); $(this).val(w.recentMessages); _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-spoiler', function () { getWorldRules().spoilerFree = $(this).prop('checked'); _saveWorld(); });
+    $(document).on('change', '#rpg-world-inject', function () {
+        getWorldRules().inject = $(this).prop('checked');
+        $('.rpg-world-inject-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-depth', function () {
+        const w = getWorldRules(); w.depth = _clampWorld($(this).val(), 0, 20, 2); $(this).val(w.depth); _saveWorld();
+    });
+    $(document).on('change', '#rpg-world-role', function () { getWorldRules().role = String($(this).val() || 'system'); _saveWorld(); });
+    $(document).on('change', '#rpg-world-debug', function () { getWorldRules().debug = $(this).prop('checked'); _saveWorld(); });
+    $(document).on('click', '#rpg-world-add-pack', function () {
+        const r = addCustomPack(String($('#rpg-world-paste').val() || ''));
+        if (!r.ok) { toastr.warning(r.errors.slice(0, 3).join(' '), 'Live World', { timeOut: 7000 }); return; }
+        getWorldRules().pack = r.pack.id;
+        $('#rpg-world-paste').val('');
+        toastr.success(`Pack "${r.pack.name}" added and chosen for new chats.`, 'Live World', { timeOut: 4000 });
+        _saveWorld();
+    });
+    $(document).on('click', '#rpg-world-remove-pack', function () {
+        const id = String($('#rpg-world-pack').val() || '');
+        if (!removeCustomPack(id)) { toastr.info('Only a pasted pack can be removed; the built-in ones stay.', 'Live World', { timeOut: 4000 }); return; }
+        const w = getWorldRules();
+        if (w.pack === id) w.pack = 'skyreach';
+        _saveWorld();
+    });
+    $(document).on('click', '#rpg-world-advance', async function () {
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await advanceNow({ reason: 'settings' });
+            if (r.ok) toastr.success('The world moved.', 'Live World', { timeOut: 3000 });
+            else toastr.warning(r.reason === 'off' ? 'Live World is off, or this chat has no world.' : r.reason === 'busy' ? 'Another request is running; the advance follows it.' : `Discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`, 'Live World', { timeOut: 7000 });
+        } finally {
+            $b.prop('disabled', false);
+            renderLiveWorldSettings();
+        }
+    });
+    $(document).on('click', '#rpg-world-reseed', async function () {
+        if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
+        const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
+        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
+        await reseedWorld();
+        renderLiveWorldSettings();
+    });
+    window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldSettings(); } catch (e) { /* non-fatal */ } });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
@@ -2690,6 +2809,7 @@ function bindSettingsUI() {
     try { renderVitalsSettings(); } catch (e) { console.warn('[Dooms Tracker] Vitals settings failed to render', e); }
     try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
     try { renderInventorySettings(); } catch (e) { console.warn('[Dooms Tracker] Inventory settings failed to render', e); }
+    try { renderLiveWorldSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
@@ -4194,11 +4314,11 @@ jQuery(async () => {
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
                 [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
-                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
-                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
-                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.GENERATION_STARTED]: [onGenerationStarted, onWorldGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onMessageReceivedVoices],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded],
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
