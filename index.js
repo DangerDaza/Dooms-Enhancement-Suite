@@ -3013,7 +3013,15 @@ function bindSettingsUI() {
             setTimeout(() => { try { window.location.reload(); } catch (e) { /* fallback */ } }, 1200);
         } catch (err) {
             console.error('[Dooms Tracker] Branch switch failed:', err);
-            $status.html(`<i class="fa-solid fa-triangle-exclamation" style="color:#e94560;"></i> Switch failed: ${err.message || err}`);
+            // SillyTavern answers a refused checkout with a bare 500; the
+            // reason (almost always a local edit inside the extension
+            // folder that the checkout would overwrite) is only in the
+            // server console. Say so, instead of "Internal Server Error".
+            const raw = String(err.message || err || '');
+            const text = /internal server error|^HTTP 5\d\d$/i.test(raw.trim())
+                ? 'SillyTavern refused the checkout. The usual cause is a file edited inside the extension folder that the switch would overwrite; the server console names it. Commit or stash that change there (or discard it), then switch again.'
+                : raw;
+            $status.html(`<i class="fa-solid fa-triangle-exclamation" style="color:#e94560;"></i> Switch failed: ${escapeHtml(text)}`);
             $btn.prop('disabled', false).html(originalHtml);
         }
     });
