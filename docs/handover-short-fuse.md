@@ -28,6 +28,17 @@ state and the next moves.
 - **Working style:** ask clarifying questions; say the plan before acting;
   one tested commit per step, pushed as you go; when you talk about removing
   something, Jordan likes "𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊" in that font.
+- **Never leave the installed clone dirty.** The extension folder under
+  `SillyTavern/public/scripts/extensions/third-party/` is the working
+  clone on Jordan's PC. Uncommitted edits there made a branch switch fail
+  on 2026-10-17 (git refuses to overwrite an edited file; SillyTavern
+  reports a bare 500). Commit to `Project-Short-Fuse` or `git stash`
+  before any switch or update. The settings guard left there as loose
+  files (`src/core/settingsGuard.js`, `src/utils/settingsGuard.js`,
+  `tools/install-settings-guard.mjs`, `tools/settings-guard-test.mjs`, a
+  `.bak` of persistence.js and a `plugins/` folder) is either committed
+  properly, test in the gate, or removed. No installer script may edit
+  tracked files in place.
 - **Tests run with a timeout** (`timeout 90 node tools/...`) on Linux and
   macOS. On Windows `timeout` is a different command: run the plain
   `node tools/...` lines, and kill the run if one hangs. The sandbox stubs
