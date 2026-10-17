@@ -17,10 +17,11 @@ state and the next moves.
 - **Commit as Jordan:** `git -c user.name="DangerDaza" -c user.email="jordan@howewire.com" commit ...`,
   ending the message with the attribution lines your harness supplies.
   No model identifiers anywhere in repo artifacts (commits, comments, docs).
-- **The beta release is prepared on the branch (2026-10-16), not pushed to
-  main.** Manifest 3.1.0-beta.1, CHANGELOG and What's New written, badges
-  and Report a problem in place. Pushing main waits for Jordan's word (§8).
-  README is untouched. When the word comes, the README
+- **The beta is live.** On 2026-10-17, on Jordan's word, main was
+  fast-forwarded to `29a6204` (3.1.0-beta.1). From here on, main is what
+  users update to; `Project-Short-Fuse` stays the working branch, and any
+  further push of main is again only on Jordan's word (§8). README is
+  untouched; the full 3.1.0 comes after the beta (§9). When the word comes, the README
   credits also get a courtesy line for Multihog's D&D framework (GPL-3.0;
   its design was read and compared, DES's dice were written from scratch,
   nothing copied, nothing owed; the credit was agreed for the release).
@@ -288,7 +289,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 - Tracker recovery: on by default, together mode only, toast always (see
   §3 for what to confirm before release).
 
-## 8. The beta (prepared 2026-10-16)
+## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 
 Jordan's call: ship the branch to main as `3.1.0-beta.1` with a visible
 BETA tag, so his users become the play-testers. Decided: recovery, the
