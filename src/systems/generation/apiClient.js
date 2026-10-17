@@ -242,6 +242,80 @@ export function getAvailableConnectionProfiles() {
         return [];
     }
 }
+/** Returned by withBackgroundProfile when another background request holds the flag. */
+export const BACKGROUND_BUSY = Symbol('background busy');
+
+/**
+ * Runs a background request on the tracker's connection profile
+ * (Settings → Generation → Connection Profile): switches to it when it is
+ * set and available and back again afterwards, preset included (profiles
+ * bundle their own preset, so a switch changes the active preset as a side
+ * effect), and holds DES's "generating" flag for the duration so two
+ * background requests never overlap and none runs inside the tracker
+ * request. The tracker request (updateRPGData) and Live World's advancer
+ * share it.
+ *
+ * @param {() => Promise<any>} fn - the request, run on the switched profile
+ * @param {{ external?: boolean }} [options] - external: the external API
+ *   is used, so no profile switch (the tracker's external mode)
+ * @returns {Promise<any>} fn's result, or BACKGROUND_BUSY when another
+ *   background request is running
+ */
+export async function withBackgroundProfile(fn, { external = false } = {}) {
+    if (isGenerating) return BACKGROUND_BUSY;
+    let originalProfileName = null;
+    let originalPresetName = null;
+    let profileSwitched = false;
+    setIsGenerating(true);
+    try {
+        if (!external && extensionSettings.connectionProfile) {
+            if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
+                originalProfileName = await getCurrentProfileName() || '<None>';
+                if (originalProfileName !== extensionSettings.connectionProfile) {
+                    // Save the current preset BEFORE switching profiles.
+                    originalPresetName = await getCurrentPresetName();
+                    console.log(`[Dooms Tracker] Switching to connection profile: ${extensionSettings.connectionProfile} (saving preset: ${originalPresetName})`);
+                    const switched = await switchToProfile(extensionSettings.connectionProfile);
+                    if (switched) {
+                        profileSwitched = true;
+                    } else {
+                        console.warn('[Dooms Tracker] Failed to switch connection profile, continuing with current');
+                    }
+                }
+            } else {
+                console.warn(`[Dooms Tracker] Connection profile "${extensionSettings.connectionProfile}" not found, using current connection`);
+            }
+        }
+        return await fn();
+    } finally {
+        // Restore connection profile AND preset if we switched, so the
+        // secondary profile's preset never leaks into the primary one.
+        if (profileSwitched) {
+            try {
+                console.log(`[Dooms Tracker] Restoring connection profile: ${originalProfileName}`);
+                const restored = await switchToProfile(originalProfileName);
+                if (!restored) {
+                    toastr.warning(
+                        `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
+                        "Doom's Tracker"
+                    );
+                }
+                if (originalPresetName) {
+                    console.log(`[Dooms Tracker] Restoring preset: ${originalPresetName}`);
+                    await switchToPreset(originalPresetName);
+                }
+            } catch (restoreError) {
+                console.error('[Dooms Tracker] Failed to restore connection profile:', restoreError);
+                toastr.warning(
+                    `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
+                    "Doom's Tracker"
+                );
+            }
+        }
+        setIsGenerating(false);
+    }
+}
+
 /**
  * Updates RPG tracker data using a separate API call. The standing request
  * of separate and external mode; in together mode it runs only when forced
@@ -275,229 +349,175 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
         return;
     }
     const isExternalMode = extensionSettings.generationMode === 'external';
-    let originalProfileName = null;
-    let originalPresetName = null;
-    let profileSwitched = false;
     try {
-        setIsGenerating(true);
         // Update button to show "Updating..." state
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
         const updatingText = i18n.getTranslation('template.mainPanel.updating') || 'Updating...';
         $updateBtn.html(`<i class="fa-solid fa-spinner fa-spin"></i> ${updatingText}`).prop('disabled', true);
         $stripRefreshBtn.html('<i class="fa-solid fa-spinner fa-spin"></i>').prop('disabled', true);
-        // Switch connection profile if configured (separate mode only, not external)
-        if (!isExternalMode && extensionSettings.connectionProfile) {
-            if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
-                originalProfileName = await getCurrentProfileName() || '<None>';
-                if (originalProfileName !== extensionSettings.connectionProfile) {
-                    // Save the current preset BEFORE switching profiles.
-                    // Connection profiles bundle their own preset, so switching
-                    // profiles changes the active preset as a side-effect.
-                    // We restore it in the finally block to avoid clobbering
-                    // the user's primary preset.
-                    originalPresetName = await getCurrentPresetName();
-                    console.log(`[Dooms Tracker] Switching to connection profile: ${extensionSettings.connectionProfile} (saving preset: ${originalPresetName})`);
-                    const switched = await switchToProfile(extensionSettings.connectionProfile);
-                    if (switched) {
-                        profileSwitched = true;
-                    } else {
-                        console.warn('[Dooms Tracker] Failed to switch connection profile, continuing with current');
+        // The request runs on the tracker's connection profile and under DES's
+        // generating flag; the wrapper switches and restores (withBackgroundProfile).
+        await withBackgroundProfile(async () => {
+            const prompt = await generateSeparateUpdatePrompt();
+            // Capture for the Context Inspector — this is the second API call
+            // DES makes per turn and is invisible to ST's Prompt Inspector. For
+            // chat-completion (external) mode `prompt` is a messages array; for
+            // raw mode it's a string.
+            try {
+                recordSeparateTrackerPrompt(
+                    typeof prompt === 'string' ? prompt : JSON.stringify(prompt, null, 2)
+                );
+            } catch (e) {
+                console.warn('[Dooms Tracker] Inspector: recordSeparateTrackerPrompt failed', e);
+            }
+            // Generate response based on mode
+            let response;
+            if (isExternalMode) {
+                // External mode: Use external OpenAI-compatible API directly
+                response = await generateWithExternalAPI(prompt);
+            } else {
+                // Separate mode: Use SillyTavern's generateRaw (with extended thinking fallback)
+                response = await safeGenerateRaw({
+                    prompt: prompt,
+                    quietToLoud: false
+                });
+            }
+            if (response) {
+                const parsedData = parseResponse(response);
+                // Check if parsing completely failed (no tracker data found)
+                if (parsedData.parsingFailed) {
+                    toastr.error(i18n.getTranslation('errors.parsingError'), '', { timeOut: 5000 });
+                }
+                // Remove locks from parsed data (JSON format only, text format is unaffected)
+                if (parsedData.quests) {
+                    parsedData.quests = removeLocks(parsedData.quests);
+                }
+                if (parsedData.infoBox) {
+                    parsedData.infoBox = removeLocks(parsedData.infoBox);
+                }
+                if (parsedData.characterThoughts) {
+                    parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
+                    // Canonicalize alias names at the parse chokepoint, BEFORE the
+                    // color harvest, swipe storage, and commit below see the data —
+                    // this covers both the auto-update and manual Refresh RPG Info
+                    // paths in separate/external mode.
+                    parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
+                }
+                // Vitals: same normalisation as together mode (see sillytavern.js).
+                if (!parsedData.parsingFailed && vitalsOn(extensionSettings)) {
+                    const defs = vitalDefs(extensionSettings);
+                    if (parsedData.characterThoughts) {
+                        parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
+                    }
+                    if (playerVitalsOn(extensionSettings)) {
+                        parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
                     }
                 }
-            } else {
-                console.warn(`[Dooms Tracker] Connection profile "${extensionSettings.connectionProfile}" not found, using current connection`);
-            }
-        }
-        const prompt = await generateSeparateUpdatePrompt();
-        // Capture for the Context Inspector — this is the second API call
-        // DES makes per turn and is invisible to ST's Prompt Inspector. For
-        // chat-completion (external) mode `prompt` is a messages array; for
-        // raw mode it's a string.
-        try {
-            recordSeparateTrackerPrompt(
-                typeof prompt === 'string' ? prompt : JSON.stringify(prompt, null, 2)
-            );
-        } catch (e) {
-            console.warn('[Dooms Tracker] Inspector: recordSeparateTrackerPrompt failed', e);
-        }
-        // Generate response based on mode
-        let response;
-        if (isExternalMode) {
-            // External mode: Use external OpenAI-compatible API directly
-            response = await generateWithExternalAPI(prompt);
-        } else {
-            // Separate mode: Use SillyTavern's generateRaw (with extended thinking fallback)
-            response = await safeGenerateRaw({
-                prompt: prompt,
-                quietToLoud: false
-            });
-        }
-        if (response) {
-            const parsedData = parseResponse(response);
-            // Check if parsing completely failed (no tracker data found)
-            if (parsedData.parsingFailed) {
-                toastr.error(i18n.getTranslation('errors.parsingError'), '', { timeOut: 5000 });
-            }
-            // Remove locks from parsed data (JSON format only, text format is unaffected)
-            if (parsedData.quests) {
-                parsedData.quests = removeLocks(parsedData.quests);
-            }
-            if (parsedData.infoBox) {
-                parsedData.infoBox = removeLocks(parsedData.infoBox);
-            }
-            if (parsedData.characterThoughts) {
-                parsedData.characterThoughts = removeLocks(parsedData.characterThoughts);
-                // Canonicalize alias names at the parse chokepoint, BEFORE the
-                // color harvest, swipe storage, and commit below see the data —
-                // this covers both the auto-update and manual Refresh RPG Info
-                // paths in separate/external mode.
-                parsedData.characterThoughts = applyCharacterAliases(parsedData.characterThoughts, { suggestSimilar: true });
-            }
-            // Vitals: same normalisation as together mode (see sillytavern.js).
-            if (!parsedData.parsingFailed && vitalsOn(extensionSettings)) {
-                const defs = vitalDefs(extensionSettings);
+                // Store RPG data for the last assistant message (separate mode)
+                const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;
+                // Update lastGeneratedData for display (regardless of message type)
+                if (parsedData.quests) {
+                    lastGeneratedData.quests = parsedData.quests;
+                    parseQuests(parsedData.quests);
+                }
+                if (parsedData.infoBox) {
+                    lastGeneratedData.infoBox = parsedData.infoBox;
+                }
                 if (parsedData.characterThoughts) {
-                    parsedData.characterThoughts = applyVitalsToCharacters(parsedData.characterThoughts, committedTrackerData.characterThoughts, defs);
+                    lastGeneratedData.characterThoughts = parsedData.characterThoughts;
+                    // Register any new (color → speaker) pairings the AI introduced.
+                    // together mode does this in onMessageReceived; separate/external
+                    // mode has to do it here or the color store never gets populated,
+                    // breaking both bubble color resolution and the reserved-colors
+                    // assignment list fed back to the model.
+                    try {
+                        harvestNewSpeakerColors(lastMessage?.mes || '', parsedData.characterThoughts);
+                    } catch (e) {
+                        console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
+                    }
                 }
-                if (playerVitalsOn(extensionSettings)) {
-                    parsedData.player = applyVitalsToPlayer(parsedData.player, committedTrackerData.player, defs);
+                // Vitals: the persona's own block.
+                if (parsedData.player) {
+                    lastGeneratedData.player = parsedData.player;
                 }
-            }
-            // Store RPG data for the last assistant message (separate mode)
-            const lastMessage = chat && chat.length > 0 ? chat[chat.length - 1] : null;
-            // Update lastGeneratedData for display (regardless of message type)
-            if (parsedData.quests) {
-                lastGeneratedData.quests = parsedData.quests;
-                parseQuests(parsedData.quests);
-            }
-            if (parsedData.infoBox) {
-                lastGeneratedData.infoBox = parsedData.infoBox;
-            }
-            if (parsedData.characterThoughts) {
-                lastGeneratedData.characterThoughts = parsedData.characterThoughts;
-                // Register any new (color → speaker) pairings the AI introduced.
-                // together mode does this in onMessageReceived; separate/external
-                // mode has to do it here or the color store never gets populated,
-                // breaking both bubble color resolution and the reserved-colors
-                // assignment list fed back to the model.
-                try {
-                    harvestNewSpeakerColors(lastMessage?.mes || '', parsedData.characterThoughts);
-                } catch (e) {
-                    console.warn('[Dooms Tracker] harvestNewSpeakerColors failed:', e);
+                // Also store on assistant message if present (existing behavior).
+                // Skip GuidedGenerations' synthetic tracker/note messages — they
+                // look like assistant turns (is_user=false) but contain GG's
+                // <details> HTML, not real model output, so we'd be writing
+                // tracker swipe data to a non-real message.
+                if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
+                    if (!lastMessage.extra) {
+                        lastMessage.extra = {};
+                    }
+                    if (!lastMessage.extra.dooms_tracker_swipes) {
+                        lastMessage.extra.dooms_tracker_swipes = {};
+                    }
+                    const currentSwipeId = lastMessage.swipe_id || 0;
+                    lastMessage.extra.dooms_tracker_swipes[currentSwipeId] = {
+                        quests: parsedData.quests,
+                        infoBox: parsedData.infoBox,
+                        characterThoughts: parsedData.characterThoughts,
+                        player: parsedData.player
+                    };
+                    // The reply's own text still lacks the block; the next
+                    // generation's reminder reads this mark.
+                    if (recovery && !parsedData.parsingFailed) {
+                        markRecovered(lastMessage);
+                    }
                 }
-            }
-            // Vitals: the persona's own block.
-            if (parsedData.player) {
-                lastGeneratedData.player = parsedData.player;
-            }
-            // Also store on assistant message if present (existing behavior).
-            // Skip GuidedGenerations' synthetic tracker/note messages — they
-            // look like assistant turns (is_user=false) but contain GG's
-            // <details> HTML, not real model output, so we'd be writing
-            // tracker swipe data to a non-real message.
-            if (lastMessage && !lastMessage.is_user && !isSyntheticTrackerMessage(lastMessage)) {
-                if (!lastMessage.extra) {
-                    lastMessage.extra = {};
+                // Only commit on TRULY first generation (no committed data exists at all)
+                const hasAnyCommittedContent = (
+                    (committedTrackerData.quests && committedTrackerData.quests.trim() !== '') ||
+                    (committedTrackerData.infoBox && committedTrackerData.infoBox.trim() !== '' && committedTrackerData.infoBox !== 'Info Box\n---\n') ||
+                    (committedTrackerData.characterThoughts && committedTrackerData.characterThoughts.trim() !== '' && committedTrackerData.characterThoughts !== 'Present Characters\n---\n')
+                );
+                if (!hasAnyCommittedContent) {
+                    committedTrackerData.quests = parsedData.quests;
+                    committedTrackerData.infoBox = parsedData.infoBox;
+                    committedTrackerData.characterThoughts = parsedData.characterThoughts;
+                    committedTrackerData.player = parsedData.player;
                 }
-                if (!lastMessage.extra.dooms_tracker_swipes) {
-                    lastMessage.extra.dooms_tracker_swipes = {};
+                // Render the updated data
+                renderInfoBox();
+                renderThoughts();
+                renderQuests();
+                // Insert inline thought dropdowns into the chat message
+                updateChatThoughts();
+                // Save to chat metadata (immediate: generation-end commit point)
+                saveChatData({ immediate: true });
+                if (isAutoPortraitModeEnabled()) {
+                    const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
+                    if (charactersForPortraits.length > 0) {
+                        generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
+                            renderThoughts();
+                        })
+                            .then(() => renderThoughts())
+                            .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
+                    }
                 }
-                const currentSwipeId = lastMessage.swipe_id || 0;
-                lastMessage.extra.dooms_tracker_swipes[currentSwipeId] = {
-                    quests: parsedData.quests,
-                    infoBox: parsedData.infoBox,
-                    characterThoughts: parsedData.characterThoughts,
-                    player: parsedData.player
-                };
-                // The reply's own text still lacks the block; the next
-                // generation's reminder reads this mark.
-                if (recovery && !parsedData.parsingFailed) {
-                    markRecovered(lastMessage);
-                }
-            }
-            // Only commit on TRULY first generation (no committed data exists at all)
-            const hasAnyCommittedContent = (
-                (committedTrackerData.quests && committedTrackerData.quests.trim() !== '') ||
-                (committedTrackerData.infoBox && committedTrackerData.infoBox.trim() !== '' && committedTrackerData.infoBox !== 'Info Box\n---\n') ||
-                (committedTrackerData.characterThoughts && committedTrackerData.characterThoughts.trim() !== '' && committedTrackerData.characterThoughts !== 'Present Characters\n---\n')
-            );
-            if (!hasAnyCommittedContent) {
-                committedTrackerData.quests = parsedData.quests;
-                committedTrackerData.infoBox = parsedData.infoBox;
-                committedTrackerData.characterThoughts = parsedData.characterThoughts;
-                committedTrackerData.player = parsedData.player;
-            }
-            // Render the updated data
-            renderInfoBox();
-            renderThoughts();
-            renderQuests();
-            // Insert inline thought dropdowns into the chat message
-            updateChatThoughts();
-            // Save to chat metadata (immediate: generation-end commit point)
-            saveChatData({ immediate: true });
-            if (isAutoPortraitModeEnabled()) {
-                const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
-                if (charactersForPortraits.length > 0) {
-                    generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
+                // Generate avatars if auto-generate is enabled (runs within this workflow)
+                // This uses the DES Trackers preset and keeps the button spinning
+                if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
+                    const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
+                    if (charactersNeedingAvatars.length > 0) {
+                        // Generate avatars - this awaits completion
+                        await generateAvatarsForCharacters(charactersNeedingAvatars, (names) => {
+                            // Callback when generation starts - re-render to show loading spinners
+                            renderThoughts();
+                        });
+                        // Re-render once all avatars are generated
                         renderThoughts();
-                    })
-                        .then(() => renderThoughts())
-                        .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
+                    }
                 }
             }
-            // Generate avatars if auto-generate is enabled (runs within this workflow)
-            // This uses the DES Trackers preset and keeps the button spinning
-            if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
-                const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
-                if (charactersNeedingAvatars.length > 0) {
-                    // Generate avatars - this awaits completion
-                    await generateAvatarsForCharacters(charactersNeedingAvatars, (names) => {
-                        // Callback when generation starts - re-render to show loading spinners
-                        renderThoughts();
-                    });
-                    // Re-render once all avatars are generated
-                    renderThoughts();
-                }
-            }
-        }
+        }, { external: isExternalMode });
     } catch (error) {
         console.error('[Dooms Tracker] Error updating RPG data:', error);
         if (isExternalMode) {
             toastr.error(error.message, "Doom's Enhancement Suite External API Error");
         }
     } finally {
-        // Restore connection profile AND preset if we switched.
-        // Profiles bundle their own preset, so switching profiles changes
-        // the active preset as a side-effect.  We saved the user's original
-        // preset before the switch and restore it here so the user's primary
-        // Chat Completion preset isn't silently overwritten.
-        if (profileSwitched) {
-            try {
-                console.log(`[Dooms Tracker] Restoring connection profile: ${originalProfileName}`);
-                const restored = await switchToProfile(originalProfileName);
-                if (!restored) {
-                    toastr.warning(
-                        `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
-                        "Doom's Tracker"
-                    );
-                }
-                // Restore the chat completion preset that was active before
-                // the profile switch.  Without this the secondary profile's
-                // preset leaks into the primary profile.
-                if (originalPresetName) {
-                    console.log(`[Dooms Tracker] Restoring preset: ${originalPresetName}`);
-                    await switchToPreset(originalPresetName);
-                }
-            } catch (restoreError) {
-                console.error('[Dooms Tracker] Failed to restore connection profile:', restoreError);
-                toastr.warning(
-                    `Failed to restore connection profile "${originalProfileName}". Please switch back manually.`,
-                    "Doom's Tracker"
-                );
-            }
-        }
-        setIsGenerating(false);
         // Restore button to original state
         const $updateBtn = $('#rpg-manual-update');
         const $stripRefreshBtn = $('#rpg-strip-refresh');
