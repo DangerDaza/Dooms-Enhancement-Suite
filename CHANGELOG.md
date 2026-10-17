@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — on `Project-Short-Fuse`
+
+### Added
+- **Inventory (beta).** Settings → Stats → Inventory: a pack for your character and one pouch the party shares, kept per chat, each a row of slots (16 and 8 by default) with a count, a note and an icon DES picks from the name. The AI records what changes hands with a line at the end of its reply or the `dooms_inventory` tool where the API can call tools; the line becomes a note in the reply, a swipe, an edit or a deletion puts the change back, and a full container turns a new kind away. With the inventory on, the Present Characters shelf flips between Characters, Inventory and Quests: square slots you add to, edit, move and remove, and quest boxes edited in place. Off by default; a default install's prompt and shelf are unchanged.
+
 ## [3.1.0-beta.1] - 2026-10-16 — Stats (beta)
 
 A beta. The Stats features below are built and covered by tests, but nobody except their author has played them through yet. Everything on Settings → Stats is off until you switch it on, so updating changes nothing on screen, and a default install's tracker prompt changes by one sentence (under Changed). **Settings → Stats → Report a problem** opens a GitHub issue with your DES version, your Stats switches and both logs filled in. Beta badges mark the Stats page, its groups, the Workshop's Attributes tab and the dice popover.

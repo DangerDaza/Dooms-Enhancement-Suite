@@ -20,6 +20,7 @@ says where things stand.
 | 4a | Saving throws and opposed actions, 2024 rules: the target saves against DC 8 + the actor's proficiency + modifier; the difficulty guide; verdicts say whose roll it is | Yes (`3c7969c` … `ee08db6`; `docs/stats-plan.md` §10, D15–D17) | `d20-test` §8, `dice-test` §10 | Not yet | Parity rows "Saving throws" and the NPC-verdict row |
 | 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
 | 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Yes (`7ce9335` … `9dddb03`; `docs/stats-plan.md` §12, D22–D27) | `d20-test` §10, `dice-test` §11 | Not yet | Parity rows "Casting checks" and "Talents" |
+| 5 | Inventory and the shelf's pages: a pack and a party pouch per chat, the end-of-reply tag and the `dooms_inventory` tool, swipes and deletions put changes back, Settings → Stats → Inventory, the shelf flipping between Characters, Inventory and Quests | Yes (`0c28e59` … `c59b43b`; `docs/stats-plan.md` §13, D28–D34) | `inventory-test`, `inventory-flow-test` | Not yet | Parity rows "Inventory" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0-beta.1 prepared on the branch 2026-10-16: version, CHANGELOG, What's New, Beta badges, Report a problem with both logs (`tools/beta-report-test.mjs`) | Yes, on the branch | `beta-report-test` | Not yet | Jordan's word, then a fast-forward push of main (handover §9); README and the full 3.1.0 after the beta |
 
@@ -337,6 +338,44 @@ talents show up as advantage in its calls; the Charisma fallback for an
 NPC with no casting ability (D27) may surprise in a story where the
 caster is an Intelligence wizard, and the fix is the Casting chip on
 their sheet.
+
+## Phase 5 — Inventory and the shelf's pages
+
+**Is it ready?** Built, tested, pushed (`0c28e59` model, `4a44abb` store,
+tag and tool, `60b0ab0` settings, `c59b43b` shelf pages, 2026-10-17). Not
+yet watched in play. Jordan's ask: an inventory, and the Present
+Characters panel flipping to show inventory and quests as boxes, not
+cards.
+
+**What exists.** A pack for the persona and one pouch the party shares,
+per chat (`chat_metadata.dooms_inventory`), each a row of slots (16 and
+8 by default, 1 to 64), one per kind of item, with a count, a note and an
+icon DES picks from the name. The AI records what changes hands with a
+line at the end of its reply, `[ITEM: +1 iron key (note) | -1 torch |
+pouch +3 silver coins]`, or the `dooms_inventory` tool where the API can
+call tools; the line becomes a note in the reply, a toast says the same,
+a swipe, an edit or a deletion puts the change back (an older change
+under a newer one gives up only its share), and a full container turns a
+new kind away with the AI told so. Settings → Stats → Inventory (Beta)
+holds the switch, the slot counts, Tell the AI what is carried, The AI
+may change it (line, tool) and Notify. With the inventory on, the shelf's
+header gets Characters | Inventory | Quests: square slots with an editor
+by each (name, count, note, icon, move, remove; an empty slot adds) and
+quest boxes edited in place. Off by default: the shelf and a default
+install's prompt are unchanged.
+
+**Prove it.** `node tools/inventory-test.mjs` and
+`timeout 120 node tools/inventory-flow-test.mjs` pass; then parity rows
+"Inventory".
+
+**Cost.** Measured 2026-10-17 (`docs/stats-plan.md` §13.4): about
+286 tokens a turn without tools and about 608 with them, the tool schema being
+most of the difference.
+
+**Open.** Whether the Quests page should show on its own, without the
+inventory (D34); whether models keep to "most replies change nothing";
+a second tool call in one turn that means to correct the first (today
+both apply).
 
 ## Phase 4 — if wanted (not started, not designed)
 

@@ -62,6 +62,8 @@ state and the next moves.
    node tools/tracker-recovery-test.mjs
    node tools/voice-logic-test.mjs
    timeout 90 node tools/sheet-suggest-test.mjs
+   node tools/inventory-test.mjs
+   timeout 120 node tools/inventory-flow-test.mjs
    ```
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
    current RP, with Settings → Generation → "Fetch the tracker when a reply
@@ -88,6 +90,12 @@ state and the next moves.
 5. **Tick the parity rows** in `docs/parity-checklist.md` as they pass:
    "Attributes and dice" (lines ~29–47) and the new "Generation & tracking"
    row for the recovery switch.
+6. **Try the inventory** (Phase 5, built 2026-10-17, `docs/stats-plan.md`
+   §13). Settings → Stats → Inventory on; flip the shelf to Inventory and
+   add a torch by hand; then play until something changes hands and watch
+   the toast and the line in the reply; swipe it and watch it go back.
+   Parity rows "Inventory". Jordan's open call: whether the Quests page
+   should show without the inventory (D34).
 
 ## 3. The open problem and what was done about it
 
@@ -200,6 +208,16 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `extra.dooms_tool_rolls`, `rollsForReply` reads tool invocations).
   Frequency clause ("only if the story calls for it"), notify toasts and
   console lines for every dice event (`diceNotice`).
+- **Phase 5, inventory (2026-10-17):** `src/utils/inventory.js` (the
+  model: a pack and a party pouch, stacks with a count, a note and an
+  icon, the `[ITEM: ...]` grammar, the `dooms_inventory` tool definition,
+  the prompt texts), `src/systems/features/inventory.js` (per-chat store
+  under `chat_metadata.dooms_inventory`, the tag applied once per swipe
+  with what it changed kept on the message itself, swipes, edits and
+  deletions put it back, tool outcomes claimed by the reply, the two
+  prompt slots), Settings → Stats → Inventory, and the shelf's pages
+  (`src/systems/ui/shelfPages.js`, lazy): Characters | Inventory | Quests.
+  `tools/inventory-test.mjs`, `tools/inventory-flow-test.mjs`.
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 
@@ -209,7 +227,10 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | --- | --- |
 | `src/utils/d20.js` | Pure dice model: attributes, skills, proficiency, roll math, verdicts, `parseCheckCall`/`resolveCheckCall`, the two AI instructions, the tool definition, config migration |
 | `src/systems/features/diceRolls.js` | Lifecycle: pending check, ruling at send, roll, verdict for the next generation (`buildDiceVerdictForGeneration`, `STILL_REQUIRED`), GM calls (`onDiceReplyRendered`), tool action, `rollsForReply`, `diceNotice` |
-| `src/systems/generation/injector.js` | `refreshDiceInjection` sets the verdict, rules and reminder slots at the tracker instructions' depth/role (`trackerInjectionTarget`); `onGenerationStarted` |
+| `src/systems/generation/injector.js` | `refreshDiceInjection` sets the verdict, rules and reminder slots, and the two inventory slots, at the tracker instructions' depth/role (`trackerInjectionTarget`); `onGenerationStarted` |
+| `src/utils/inventory.js` | Pure inventory model: the rules, stacks and icons, `applyChanges`/`revertApplied` (share-only), `setStack`/`moveStack`, `parseItemTags`, the tool definition, `buildInventoryLine` and the two instructions |
+| `src/systems/features/inventory.js` | Inventory lifecycle: the per-chat store, `onInventoryReplyRendered` (tag once per swipe, put back on swipe/edit), `inventoryToolAction` and the claim by the next reply, `onInventoryMessageDeleted` (ledger), the prompt slot builders, hand edits, `inventoryNotice` |
+| `src/systems/ui/shelfPages.js`, `portraitBar.js` | The shelf's Inventory and Quests pages (lazy) and the page control in the header (`syncShelfPages`, `setShelfPage`) |
 | `src/systems/generation/trackerRecovery.js` | Pure helpers: `hasTrackerData`, `swipeEntryOf`, `replyLacksTracker`, `lastReply`, `earlierPartsOfTurn`, `adoptBlockFromTurn`, `shouldRecoverTracker`, the recovered mark |
 | `src/systems/integration/sillytavern.js` | `onMessageReceived` (together parse, adoption, recovery trigger), `recoverTrackerForReply`, `onMessageSent`, `onGenerationEnded` (empty) |
 | `src/systems/generation/apiClient.js` | `updateRPGData(renderInfoBox, renderThoughts, { force, recovery })`: the separate-mode request |
@@ -218,7 +239,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/ui/dicePanel.js`, `attributesPane.js`, `characterWorkshop.js`, `characterRoster.js` | Popover and chip; Workshop sheets and proficiency ticks |
 | `src/systems/voices/delivery.js`, `voiceSettings.js`, `voiceEngine.js`, `src/systems/ui/voicesSettingsUI.js` | Never whisper |
 | `index.js` | Event wiring (see §6), Settings handlers (`#rpg-attr-*`, `#rpg-toggle-recover-tracker`), `updateGenerationModeUI` |
-| `template.html` | Settings rows, incl. Generation → "Fetch the tracker when a reply skips it" and Stats → Attributes & checks |
+| `template.html` | Settings rows, incl. Generation → "Fetch the tracker when a reply skips it", Stats → Attributes & checks and Stats → Inventory |
 | `src/core/config.js`, `src/core/state.js` | Defaults (`recoverMissingTracker: true` in both) |
 | `tools/*.mjs` | The gate (§2) |
 
@@ -299,6 +320,16 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 - Never whisper: a switch, Google API route.
 - Tracker recovery: on by default, together mode only, toast always (see
   §3 for what to confirm before release).
+- **D28–D34 (Jordan, 2026-10-17), the inventory:** the persona's pack plus
+  one shared party pouch, no NPC inventories; the AI changes it by an
+  end-of-reply tag or the `dooms_inventory` tool, never through tracker
+  JSON; an item is a name, a count and a note with an icon DES picks and
+  the player can change; a set number of slots per container; the shelf
+  flips between Characters, Inventory and Quests as boxes, not cards. The
+  defaults taken without him (say if wrong): 16 pack and 8 pouch slots; the
+  line goes to the AI whenever the inventory is on; both change ways on;
+  the page control shows only while the inventory is on, so the Quests page
+  rides with it. `docs/stats-plan.md` §13.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 
@@ -350,5 +381,7 @@ a problem once from a live install before telling anyone.
 ## 9. When Jordan says "release" (the full 3.1.0, after the beta)
 
 Version bump in `manifest.json` (and wherever else the repo keeps it),
-CHANGELOG, What's New, README (Stats section; the Multihog credit line in
-the credits), then the parity checklist walked once more. Not before.
+CHANGELOG (the Unreleased entry for the inventory moves under the
+version), What's New (an Inventory item), README (Stats section; the
+Multihog credit line in the credits), then the parity checklist walked
+once more. Not before.

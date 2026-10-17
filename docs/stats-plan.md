@@ -1188,3 +1188,198 @@ of about 120,000, so under two per cent of the prompt. A turn where the
 tool fires costs a second request's input, less with caching. The one
 duplicate is the full guide inside the tool schema while the instruction
 carries the brief one; dropping it would save about 400 a turn.
+
+## 13. Phase 5 — Inventory and the shelf's pages
+
+Status: **built on `Project-Short-Fuse` (`0c28e59` model, `4a44abb` store,
+tag and tool, `60b0ab0` settings, `c59b43b` shelf pages, 2026-10-17);
+awaiting in-browser verification (parity rows "Inventory").**
+
+The owner's ask: "I want to add an inventory system to this and a way for
+the present characters panel to flip and show inventory and quests", and,
+on the flip: "I want it to switch to an entirely new UI and not have
+character cards anymore but boxes with stuff in them". Built in one
+sitting, inventory first, each stage pushed to the branch.
+
+Decisions: **D28** the persona carries a pack and the party shares one
+pouch; NPCs carry nothing the system tracks (what a guard has is the
+story's business until it changes hands). **D29** the AI changes the
+inventory the way it calls for checks: a tag at the end of its reply,
+`[ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver
+coins]`, or the `dooms_inventory` function tool where the API can call
+tools; never through the tracker JSON, and it never rewrites the list: it
+is told what is carried in one read-only line, says what changed, and the
+code applies it. **D30** an item is a name, a count and an optional note;
+the icon is DES's pick from the name (about eighty rules, fantasy and
+modern) and editable by hand. **D31** a container is a set number of
+slots, one per kind of item, counts free: 16 for the pack and 8 for the
+pouch by default, 1 to 64 in Settings; a full container turns a new kind
+away and the AI is told so. **D32** the Present Characters shelf flips
+between three pages, Characters, Inventory and Quests, from a three-way
+control in its header; the other two pages are boxes, not cards, and the
+Quests page edits the existing quest data in place. **D33** off by
+default; while on, the inventory line rides every generation (a switch),
+the AI may change it both ways (a switch each), and a toast says what
+changed (a switch). **D34** the shelf's page control shows only while the
+inventory is on, so a default install's shelf is unchanged; the Quests
+page rides with it (open: whether Quests should stand on its own).
+
+### 13.1 Data model
+
+`chat_metadata.dooms_inventory = { v: 1, pack: [stack], pouch: [stack] }`,
+a stack being `{ name, count, note, icon }`; its own key, because
+`persistence.saveChatData` rebuilds `dooms_tracker` from a whitelist.
+Identity is the name, lower-cased with spaces collapsed; duplicates merge
+on load, spent stacks (count 0 or less) drop, and nothing is dropped for
+being past the slot count (the shelf marks the overflow and no new kind
+fits until it clears).
+
+What a reply changed lives on the message itself,
+`message.dooms_inventory = { live, swipes: { [swipeId]: { sig, tag, tool,
+applied, rejected } } }`, not under `message.extra`: SillyTavern swaps a
+reply's `extra` with each swipe, and the record has to outlive the swipe
+it was made on so the next one can put its changes back. Each applied
+change records the stack before and after, its slot and its delta. The
+player's message carries the turn's tool outcomes, `{ tool: [{ key,
+changes, applied, rejected, text, attached }] }`, until a reply claims
+them.
+
+The rules: `extensionSettings.inventory = { enabled, packSlots, pouchSlots,
+tellTheAI, notify, aiChanges: { enabled, endOfReply, tool } }`
+(`inventoryConfig` normalises on every read).
+
+### 13.2 The tag and the tool
+
+The tag: `[ITEM: ...]` or `[ITEMS: ...]`, entries split by `|`. An entry
+is an optional container word (`pouch`, `party pouch`, `the pouch`,
+`pack`; "pack of cards" and a bare "pouch" are items), a sign with an
+optional count (`+1`, `-`, the Unicode minus and the en dash too) or a
+verb (gains, takes, found, picks up, buys … add; uses, drops, sold, spent,
+hands over … remove), the name, an optional `×2` or `x2`, and a note in
+parentheses; articles and trailing periods are dropped; at most eight
+entries per tag. The shown reply gets a line in place of the tag,
+"🎒 +1 iron key (pack) · −1 torch (pack) · +3 silver coins (pouch)", with
+what would not fit.
+
+The tool: `dooms_inventory({ changes: [{ container, action, item, count,
+note }], reason })`, a draft-04 schema, `shouldRegister` tied to the
+switches, re-registered when the slots or the persona change. Its answer
+names what was recorded and ends with the shape reminder
+(`STILL_REQUIRED_ITEMS`), for the reason the dice verdict does.
+
+### 13.3 Lifecycle
+
+- **A reply renders** (CHARACTER_MESSAGE_RENDERED, MESSAGE_SWIPED,
+  MESSAGE_UPDATED): the tag is parsed and applied once for its swipe; the
+  record remembers the tag's signature. Rendering again applies nothing
+  twice.
+- **Another swipe shows**: the live swipe's changes go back first; a swipe
+  seen before has its own applied again, against whatever the state is
+  now (a hand edit made in between stays).
+- **An edit** that changes the tag counts as a new reply; a tag edited
+  away puts everything back.
+- **The tool**: applied as the model calls it; the same call again in the
+  same turn is kept, not applied twice; the outcome waits on the player's
+  message until the next reply claims it, after which the reply's swipe
+  owns it like a tag and a swipe puts it back too. Deleting the player's
+  message before a reply arrives puts an unclaimed outcome back.
+- **A deleted message** (MESSAGE_DELETED names no index): a ledger of
+  messages whose changes are in the state is checked against the chat;
+  the ones gone give their changes back.
+- **Revert is share-only**: a stack nothing moved since is restored
+  exactly (slot, note, icon); one that later changes touched gives up only
+  this change's share of the count, so undoing an older reply leaves the
+  newer ones standing.
+- **Off**: with the inventory off, or AI changes off, a re-render neither
+  applies nor puts back.
+
+### 13.4 Prompt
+
+Two slots beside the dice slots at the tracker instructions' depth and
+role (`dooms-inventory-line`, `dooms-inventory-rules`); their keys sort
+between the dice keys and `dooms-tracker-inject`, which still ends the
+message. Both are empty while the inventory is off: a default install's
+prompt is byte-identical (`tools/tracker-prompt-test.mjs` pins the
+tracker; `tools/inventory-flow-test.mjs` §2 pins the slots).
+
+The line: `[INVENTORY: Jordan's pack 5/16: rope ×2, torch, iron key (opens
+the cell); party pouch 1/8: silver coins ×3. Read-only here: say what
+changes, never rewrite the list.]`; notes go first when it runs past 700
+characters. The rules: the tool instruction when the tool is on and the
+API can call tools, else the tag form; both say to record only what the
+story showed, never to list what is carried, that most replies change
+nothing, and that a full container turns a new kind away.
+
+Cost, measured 2026-10-17 at four characters a token:
+
+| Piece | Tokens | When |
+| --- | --- | --- |
+| Inventory line, 11 stacks, three with notes | ~73 | every turn while Tell the AI is on |
+| Inventory line, empty | ~30 | the same |
+| ITEMS instruction, tag form | ~213 | every turn, tools not live |
+| ITEMS instruction, tool form | ~152 | every turn, tools live |
+| Tool schema (`dooms_inventory`) | ~383 | every turn, tools live |
+
+About 286 tokens a turn without tools and about 608 with them, on top of the
+stats features' ~1,900 (§12.9).
+
+### 13.5 UI
+
+Settings → Stats → Inventory (a Beta badge, a rail tab of its own): the
+switch; Slots (pack, pouch); The AI (Tell the AI what is carried; The AI
+may change it, with the line and the tool beneath); Debugging (Notify on
+inventory events). Rows dim under their masters.
+
+The shelf: a three-way control in the header (Characters | Inventory |
+Quests; the Classic strip's label follows), the page remembered on this
+browser. Inventory: the pack, then the party pouch, each a grid of square
+slots: icon, a count badge past one, the name beneath, a dot when there
+is a note (the note in the tooltip), dashed empties, a dotted mark past a
+lowered slot count, `n/slots` in the section head. A slot opens a small
+editor by it: name, count, note, the icon (Auto from the name, or the
+emoji picker), Move n to the other container, Remove; an empty slot adds,
+and adding a kind already carried adds to it. Quests: the main quest as a
+box of its own and the optional quests as boxes, each edited in place
+(Enter saves, Escape cancels), a tick to complete, an add box for each
+list; the same save and sync as the sidebar's quest panel, which repaints
+the page when it changes the data. Styles for Classic and the five looks,
+the docks and phone widths.
+
+### 13.6 Non-goals
+
+NPC inventories; weight or encumbrance; item effects on checks or vitals;
+currency as a number; drag and drop between containers (Move in the
+editor instead); the AI reading the Quests page (it reads the quests the
+tracker already carries).
+
+### 13.7 Files and tests
+
+`src/utils/inventory.js` (pure: the rules, items and icons, state, changes
+and their revert, hand edits, the tag grammar, the tool definition, the
+prompt texts), `tools/inventory-test.mjs` (213 checks);
+`src/systems/features/inventory.js` (the store, the reply and tool
+lifecycle, the slots, hand edits, notices), `tools/inventory-flow-test.mjs`
+(the whole flow in the load-check sandbox, and the pages' markup);
+`src/systems/generation/injector.js` (the slots); `index.js` (events,
+Stats handlers); `template.html`; `src/core/state.js`;
+`src/systems/ui/shelfPages.js` (lazy; `tools/lazy-graph-test.mjs` pins
+it), `src/systems/ui/portraitBar.js` (the control and the page
+container), `src/systems/rendering/quests.js` (`syncQuestsToCommittedData`
+exported, `dooms:quests-rendered`); `style.css`, `styles/overhaul.css`,
+`styles/modals.css`.
+
+### 13.8 Commits
+
+1. `0c28e59` the model and its tests.
+2. `4a44abb` the store, the tag and the tool; the slots; the flow test.
+3. `60b0ab0` the settings group.
+4. `c59b43b` the shelf's pages.
+5. This section, the phases row, the parity rows, the handover.
+
+### 13.9 Open
+
+Whether the Quests page should show without the inventory (D34); whether
+models obey "most replies change nothing" or sprinkle tags (the notify
+toasts will tell); a second tool call in the same turn that corrects the
+first (today both apply); drag and drop; whether the AI should know the
+party pouch's members by name (today "the party").
