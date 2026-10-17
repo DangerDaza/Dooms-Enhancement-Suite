@@ -10,7 +10,7 @@
  */
 import {
     environmentLines, condenseForUrl, tailOf, logsForUrl, buildReportText, buildIssueBody, buildIssueUrl,
-    reportFileName, URL_BUDGET, REPO_URL, LEFT_OUT_LINE,
+    reportFileName, describeApi, URL_BUDGET, REPO_URL, LEFT_OUT_LINE,
 } from '../src/utils/betaReport.js';
 
 let failures = 0;
@@ -41,6 +41,19 @@ console.log('\n§1 environmentLines');
     check('recovery off, dropdown on', on.includes('skips it: off') && on.includes('Tracker data in chat: on'));
     check('api and browser', on.includes('API: openai') && on.includes('Browser: TestBrowser/1'));
     check('no settings at all', environmentLines(null).includes('Vitals: off'));
+}
+
+console.log('\n§1b describeApi');
+{
+    check('a text-completion API is named as is', describeApi('textgenerationwebui', { chat_completion_source: 'claude' }) === 'textgenerationwebui');
+    check('no api, nothing', describeApi('', {}) === '' && describeApi(undefined, null) === '');
+    check('chat completion with source and model', describeApi('openai', { chat_completion_source: 'claude', claude_model: 'claude-sonnet-4-5' }) === 'openai (claude): claude-sonnet-4-5');
+    check('openrouter', describeApi('openai', { chat_completion_source: 'openrouter', openrouter_model: 'anthropic/claude-sonnet-4.5' }) === 'openai (openrouter): anthropic/claude-sonnet-4.5');
+    check('google is makersuite with google_model', describeApi('openai', { chat_completion_source: 'makersuite', google_model: 'gemini-2.5-pro' }) === 'openai (makersuite): gemini-2.5-pro');
+    check('an unknown source still finds a <stem>_model key', describeApi('openai', { chat_completion_source: 'newvendor', newvendor_model: 'x-1' }) === 'openai (newvendor): x-1');
+    check('source without a model', describeApi('openai', { chat_completion_source: 'custom' }) === 'openai (custom)');
+    check('no settings object', describeApi('openai', undefined) === 'openai');
+    check('a proxy-like object with non-string values is survived', describeApi('openai', { chat_completion_source: 'claude', claude_model: 42 }) === 'openai (claude)');
 }
 
 console.log('\n§2 condenseForUrl / tailOf');

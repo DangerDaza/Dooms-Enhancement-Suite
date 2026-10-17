@@ -31,6 +31,38 @@ export const LEFT_OUT_LINE = '…(earlier lines left out; the report file and yo
 
 const onOff = (v) => (v ? 'on' : 'off');
 
+/** Chat-completion sources whose model key is not simply `<source>_model`. */
+const MODEL_KEY_ALIASES = { makersuite: 'google_model', '01ai': 'zerooneai_model', windowai: 'windowai_model' };
+
+/**
+ * "openai (claude): claude-sonnet-4-5" for the chat-completion family, the
+ * bare API name otherwise. SillyTavern's mainApi says "openai" for every
+ * chat-completion provider; the source and the model are in its
+ * chat-completion settings, which the caller passes in.
+ * @param {string} mainApi - getContext().mainApi
+ * @param {object} [oai] - SillyTavern's oai_settings (chat_completion_source, <source>_model)
+ * @returns {string}
+ */
+export function describeApi(mainApi, oai) {
+    const api = typeof mainApi === 'string' ? mainApi.trim() : '';
+    if (!api) return '';
+    if (api !== 'openai' || !oai || typeof oai !== 'object') return api;
+    const source = typeof oai.chat_completion_source === 'string' ? oai.chat_completion_source.trim() : '';
+    if (!source) return api;
+    const keys = [MODEL_KEY_ALIASES[source], `${source}_model`].filter(Boolean);
+    let model = '';
+    for (const k of keys) {
+        if (typeof oai[k] === 'string' && oai[k].trim()) { model = oai[k].trim(); break; }
+    }
+    if (!model) {
+        const stem = source.slice(0, 4).toLowerCase();
+        for (const k of Object.keys(oai)) {
+            if (k.endsWith('_model') && k.toLowerCase().startsWith(stem) && typeof oai[k] === 'string' && oai[k].trim()) { model = oai[k].trim(); break; }
+        }
+    }
+    return model ? `${api} (${source}): ${model}` : `${api} (${source})`;
+}
+
 /**
  * One line per thing the maintainer asks first.
  * @param {object} settings - extensionSettings

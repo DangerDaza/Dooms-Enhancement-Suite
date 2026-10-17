@@ -10,10 +10,11 @@
 import { extensionSettings } from '../../core/state.js';
 import { getExtensionVersion } from '../../core/config.js';
 import { getContext } from '../../../../../../extensions.js';
+import { oai_settings } from '../../../../../../openai.js';
 import { getSystemLogText } from '../ui/systemLog.js';
 import { getNotificationLogText } from '../ui/notificationLog.js';
 import {
-    environmentLines, logsForUrl, buildReportText, buildIssueUrl, reportFileName,
+    environmentLines, logsForUrl, buildReportText, buildIssueUrl, reportFileName, describeApi,
     ISSUE_TITLE, ISSUE_FORM_CHECK_URL,
 } from '../../utils/betaReport.js';
 
@@ -91,7 +92,7 @@ export async function openBetaReport() {
     let api = '';
     try {
         const ctx = getContext();
-        if (ctx && ctx.mainApi) api = String(ctx.mainApi);
+        api = describeApi(ctx && ctx.mainApi ? String(ctx.mainApi) : '', oai_settings);
     } catch (e) { /* no context */ }
     let userAgent = '';
     try { userAgent = navigator.userAgent; } catch (e) { /* none */ }
