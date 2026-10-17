@@ -181,8 +181,9 @@ function headingText(el) {
     let src = el.matches('details') ? el.querySelector(':scope > summary') : el;
     if (!src) return '';
     // A card's summary wraps its name in a span; help buttons and their
-    // (hidden) popups sit beside it and must not leak into the label.
-    src = src.querySelector(':scope > span') || src;
+    // (hidden) popups sit beside it and must not leak into the label. A
+    // badge is a span too (the Stats beta's), and is never the name.
+    src = src.querySelector(':scope > span:not(.rpg-accordion-badge)') || src;
     const clone = src.cloneNode(true);
     clone.querySelectorAll('.rpg-accordion-badge, .rpg-subsection-chevron, i, button, [hidden], .rpg-section-info-popup, .rpg-setting-hint')
         .forEach(n => n.remove());
