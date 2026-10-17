@@ -161,7 +161,8 @@ import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDrop
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
 import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendered, onDiceToolCallsPerformed, registerDiceTool, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
 // Inventory (Project Short Fuse, Phase 5): the per-chat store, the end-of-reply tag and the tool
-import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed } from './src/systems/features/inventory.js';
+import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed, registerInventoryTool, notifyInventoryChanged } from './src/systems/features/inventory.js';
+import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -339,6 +340,30 @@ function uniqueAttrId(a, base) {
     while (taken.has(id)) { n++; id = `${base || 'attr'}_${n}`; }
     return id;
 }
+/** The inventory rules block in settings, made to exist (Stats → Inventory writes straight to it). */
+function getInventoryRules() {
+    if (!extensionSettings.inventory || typeof extensionSettings.inventory !== 'object') extensionSettings.inventory = defaultInventoryConfig();
+    const inv = extensionSettings.inventory;
+    if (!inv.aiChanges || typeof inv.aiChanges !== 'object') inv.aiChanges = { ...defaultInventoryConfig().aiChanges };
+    return inv;
+}
+
+/** Stats → Inventory: the switches and slot counts from settings, dependent rows dimmed under their master. */
+function renderInventorySettings() {
+    if (!$('#rpg-inv-enabled').length) return;
+    const cfg = inventoryConfig(extensionSettings);
+    $('#rpg-inv-enabled').prop('checked', cfg.enabled);
+    $('.rpg-inv-sub').toggleClass('is-off', !cfg.enabled);
+    $('#rpg-inv-pack-slots').val(cfg.packSlots);
+    $('#rpg-inv-pouch-slots').val(cfg.pouchSlots);
+    $('#rpg-inv-tell').prop('checked', cfg.tellTheAI);
+    $('#rpg-inv-changes').prop('checked', cfg.aiChanges.enabled);
+    $('#rpg-inv-changes-tag').prop('checked', cfg.aiChanges.endOfReply);
+    $('#rpg-inv-changes-tool').prop('checked', cfg.aiChanges.tool);
+    $('.rpg-inv-changes-sub').toggleClass('is-off', !cfg.aiChanges.enabled);
+    $('#rpg-inv-notify').prop('checked', cfg.notify);
+}
+
 function renderAttributesSettings() {
     const $list = $('#rpg-attr-list');
     if (!$list.length) return;
@@ -1805,6 +1830,55 @@ function bindSettingsUI() {
         _aiCalls().frequency = String($(this).val());
         _saveAttrs({ rerender: false });
     });
+    // ── Stats → Inventory ──
+    // Straight to extensionSettings.inventory, saved at once; then the tool
+    // re-registered (its description carries the slot counts) and the shelf told.
+    const _saveInv = () => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] inventory settings save failed', e); }
+        try { registerInventoryTool(); notifyInventoryChanged({ reason: 'settings' }); } catch (e) { /* non-fatal */ }
+    };
+    const _clampSlots = (v, dflt) => {
+        const n = Math.round(Number(v));
+        return Number.isFinite(n) ? Math.min(INV_MAX_SLOTS, Math.max(INV_MIN_SLOTS, n)) : dflt;
+    };
+    $(document).on('change', '#rpg-inv-enabled', function () {
+        getInventoryRules().enabled = $(this).prop('checked');
+        $('.rpg-inv-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-pack-slots', function () {
+        const inv = getInventoryRules();
+        inv.packSlots = _clampSlots($(this).val(), inv.packSlots);
+        $(this).val(inv.packSlots);
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-pouch-slots', function () {
+        const inv = getInventoryRules();
+        inv.pouchSlots = _clampSlots($(this).val(), inv.pouchSlots);
+        $(this).val(inv.pouchSlots);
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-tell', function () {
+        getInventoryRules().tellTheAI = $(this).prop('checked');
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-changes', function () {
+        getInventoryRules().aiChanges.enabled = $(this).prop('checked');
+        $('.rpg-inv-changes-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-changes-tag', function () {
+        getInventoryRules().aiChanges.endOfReply = $(this).prop('checked');
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-changes-tool', function () {
+        getInventoryRules().aiChanges.tool = $(this).prop('checked');
+        _saveInv();
+    });
+    $(document).on('change', '#rpg-inv-notify', function () {
+        getInventoryRules().notify = $(this).prop('checked');
+        _saveInv();
+    });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
@@ -2613,6 +2687,7 @@ function bindSettingsUI() {
     // Stats → Vitals (rows generated from the sheet)
     try { renderVitalsSettings(); } catch (e) { console.warn('[Dooms Tracker] Vitals settings failed to render', e); }
     try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
+    try { renderInventorySettings(); } catch (e) { console.warn('[Dooms Tracker] Inventory settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);

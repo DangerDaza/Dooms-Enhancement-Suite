@@ -5,6 +5,7 @@
 import { defaultVoiceSettings } from '../systems/voices/voiceSettings.js';
 import { defaultVitalsConfig } from '../utils/vitals.js';
 import { defaultAttributesConfig } from '../utils/d20.js';
+import { defaultInventoryConfig } from '../utils/inventory.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -79,6 +80,10 @@ export let extensionSettings = {
     // them on.
     attributes: defaultAttributesConfig(),
     characterAttributes: {},
+    // Inventory (Project Short Fuse, Phase 5; src/utils/inventory.js): the
+    // rules. The items themselves live per chat in chat_metadata. Off until
+    // Settings → Stats turns it on.
+    inventory: defaultInventoryConfig(),
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature

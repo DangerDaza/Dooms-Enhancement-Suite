@@ -1737,6 +1737,102 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="rpg-subsection-label" style="margin-top:12px;">Inventory <span class="rpg-accordion-badge rpg-beta-badge">Beta</span></div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Inventory</span>
+                            <span class="rpg-setting-hint">A pack for your character and one pouch the whole party
+                                shares, kept per chat. Each is a row of slots, one per kind of item, with a count,
+                                a note and an icon DES picks from the name. The Present Characters shelf gets an
+                                Inventory page where you add, edit and move things by hand; the AI records what
+                                changes hands in the story.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-divider rpg-inv-sub">Slots</div>
+                    <div class="rpg-setting-row rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Pack slots</span>
+                            <span class="rpg-setting-hint">Kinds of item your character can carry. Counts inside a
+                                slot are free: ten arrows take one slot.</span>
+                        </div>
+                        <input type="number" id="rpg-inv-pack-slots" class="rpg-accordion-input" min="1" max="64"
+                            value="16" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Pouch slots</span>
+                            <span class="rpg-setting-hint">Kinds of item in the party's shared pouch.</span>
+                        </div>
+                        <input type="number" id="rpg-inv-pouch-slots" class="rpg-accordion-input" min="1" max="64"
+                            value="8" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-divider rpg-inv-sub">The AI</div>
+                    <div class="rpg-setting-row rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Tell the AI what is carried</span>
+                            <span class="rpg-setting-hint">One line with every generation: both containers, counts
+                                and short notes, marked read-only. Off, the AI knows nothing of the inventory
+                                unless the story says it.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-tell" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">The AI may change it</span>
+                            <span class="rpg-setting-hint">As game master, your AI records what changes hands: an
+                                item picked up, bought, given, used up, dropped or sold. It is told to record only
+                                what the story showed, never to list what is already carried, and that most replies
+                                change nothing. A full container turns a new kind of item away, and the AI is told
+                                so. Off, only you change the inventory.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-changes" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-inv-changes-sub rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;as a line at the end of its reply</span>
+                            <span class="rpg-setting-hint">Works with any model. The line becomes a note in the
+                                reply saying what changed; a swipe puts it back.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-changes-tag" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-inv-changes-sub rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;as an inventory tool</span>
+                            <span class="rpg-setting-hint">Needs a chat-completion model with function calling on in
+                                its preset. The AI records the change mid-reply and is told what was kept; where
+                                tools are not available the line above is used instead.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-changes-tool" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-divider rpg-inv-sub">Debugging</div>
+                    <div class="rpg-setting-row rpg-inv-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Notify on inventory events</span>
+                            <span class="rpg-setting-hint">A small toast when the AI adds or takes something, when a
+                                swipe or a deletion puts it back, and when a container is full. Every event is also
+                                written to the browser console and the Notification Log.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-inv-notify" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
             </div>
 

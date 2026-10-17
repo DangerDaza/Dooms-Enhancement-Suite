@@ -9624,12 +9624,15 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-vital-row.is-off > .rpg-attr-remove { opacity: 1; }
 
 /* The game master's call rows follow their master switch. */
-.rpg-attr-calls-sub { padding-left: 14px; }
-.rpg-attr-calls-sub.is-off { opacity: 0.45; }
+.rpg-attr-calls-sub,
+.rpg-inv-changes-sub { padding-left: 14px; }
+.rpg-attr-calls-sub.is-off,
+.rpg-inv-changes-sub.is-off { opacity: 0.45; }
 /* Audit finding 3: every row under a switched-off master greys out, the
    way the calls sub-rows do; the page keeps its shape. */
 .rpg-vitals-sub.is-off,
-.rpg-attr-sub.is-off { opacity: 0.45; }
+.rpg-attr-sub.is-off,
+.rpg-inv-sub.is-off { opacity: 0.45; }
 
 .rpg-attr-dcs {
     display: flex;
