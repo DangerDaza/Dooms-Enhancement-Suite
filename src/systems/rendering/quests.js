@@ -10,7 +10,7 @@ import { escapeHtml } from '../../utils/html.js';
  * Syncs the current extensionSettings.quests to committedTrackerData.quests
  * This ensures quest changes made via UI are reflected in the data sent to AI
  */
-function syncQuestsToCommittedData() {
+export function syncQuestsToCommittedData() {
     const questsData = extensionSettings.quests || { main: 'None', optional: [] };
     const questsJSON = JSON.stringify(questsData, null, 2);
     committedTrackerData.quests = questsJSON;
@@ -177,6 +177,8 @@ export function renderQuests() {
     }
     html += '</div></div>';
     $questsContainer.html(html);
+    // The shelf's Quests page shows the same data; tell it.
+    try { window.dispatchEvent(new CustomEvent('dooms:quests-rendered')); } catch (e) { /* no window */ }
     // NOTE: Event handlers are registered ONCE via initQuestEventDelegation()
     // using delegated events on $questsContainer. No need to re-attach on each render.
 }

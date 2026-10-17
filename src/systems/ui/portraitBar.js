@@ -51,6 +51,8 @@ import { isOffScene } from '../../utils/offScene.js';
 // (a static edge would close a cycle).
 import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
 import { attributesOn } from '../../utils/d20.js';
+// Inventory (Project Short Fuse, Phase 5): the shelf's pages show while it is on.
+import { isInventoryOn, INVENTORY_CHANGED_EVENT } from '../features/inventory.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -219,6 +221,7 @@ export function initPortraitBar() {
             <div class="dooms-portrait-bar dooms-pb-expanded" id="dooms-portrait-bar">
                 <div class="dooms-pb-header">
                     <span class="dooms-pb-title"><i class="fa-solid fa-users"></i> Present Characters</span>
+                    <span class="dooms-pb-pages" id="dooms-pb-pages" style="display:none;"></span>
                     <span class="dooms-pb-count" id="dooms-pb-count">0 characters</span>
                     <button class="dooms-pb-restore-btn dooms-pb-roster-btn" id="dooms-pb-open-roster" title="Open Character Roster" type="button">
                         <i class="fa-solid fa-users-rectangle"></i>
@@ -228,6 +231,7 @@ export function initPortraitBar() {
                 <button class="dooms-pb-arrow dooms-pb-left" id="dooms-pb-left"><i class="fa-solid fa-chevron-left"></i></button>
                 <button class="dooms-pb-arrow dooms-pb-right" id="dooms-pb-right"><i class="fa-solid fa-chevron-right"></i></button>
                 <div class="dooms-pb-scroll" id="dooms-pb-scroll"></div>
+                <div class="dooms-pb-page" id="dooms-pb-page" hidden></div>
             </div>
         </div>
         <!-- Context menu (hidden by default) -->
@@ -527,6 +531,16 @@ export function initPortraitBar() {
         $('#dooms-pb-open-roster').hide();
     }
 
+    // ── Pages (Phase 5): Characters | Inventory | Quests ──
+    $('#dooms-portrait-bar').on('click', '.dooms-pb-page-btn', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setShelfPage($(this).attr('data-page'));
+    });
+    // The inventory and the quests change outside the shelf; repaint the page.
+    window.addEventListener(INVENTORY_CHANGED_EVENT, () => updatePortraitBar());
+    window.addEventListener('dooms:quests-rendered', () => updatePortraitBar());
+
     // Initial render
     updatePortraitBar();
 }
@@ -557,6 +571,87 @@ export function updatePortraitBar() {
     schedule('portraitBar', renderPortraitBarNow);
 }
 
+// ─────────────────────────────────────────────
+//  Pages (Project Short Fuse, Phase 5)
+// ─────────────────────────────────────────────
+//
+// With the inventory on, the shelf flips between Characters (the cards),
+// Inventory and Quests. The control sits in the header; the pages render
+// into #dooms-pb-page (shelfPages.js, loaded on first use) while the card
+// strip hides, so the cards' reconciler is never disturbed. The page is
+// remembered on this browser.
+
+const SHELF_PAGE_KEY = 'dooms-shelf-page';
+const SHELF_PAGES = {
+    characters: { label: 'Characters', title: 'Present Characters', icon: 'fa-users' },
+    inventory: { label: 'Inventory', title: 'Inventory', icon: 'fa-box-open' },
+    quests: { label: 'Quests', title: 'Quests', icon: 'fa-scroll' },
+};
+let shelfPage = 'characters';
+try { shelfPage = localStorage.getItem(SHELF_PAGE_KEY) || 'characters'; } catch (e) { /* no storage */ }
+let shelfPagesModule = null;
+
+function availableShelfPages() {
+    if (!isInventoryOn()) return ['characters'];
+    const pages = ['characters', 'inventory'];
+    if (extensionSettings.showQuests !== false) pages.push('quests');
+    return pages;
+}
+
+/** The page the shelf shows now ('characters' while the inventory is off). */
+export function getShelfPage() {
+    return availableShelfPages().includes(shelfPage) ? shelfPage : 'characters';
+}
+
+/** Flips the shelf to a page and remembers it on this browser. */
+export function setShelfPage(page) {
+    if (!SHELF_PAGES[page]) return;
+    shelfPage = page;
+    try { localStorage.setItem(SHELF_PAGE_KEY, page); } catch (e) { /* no storage */ }
+    updatePortraitBar();
+}
+
+/** Renders the page control and the active page. True when the cards show. */
+function syncShelfPages() {
+    const pages = availableShelfPages();
+    const headerShown = (extensionSettings.portraitBarSettings || {}).showHeader !== false;
+    const page = headerShown ? getShelfPage() : 'characters';
+    const onCards = page === 'characters';
+    const $pages = $('#dooms-pb-pages');
+    if (pages.length > 1) {
+        const html = pages.map(p => `<button type="button" class="dooms-pb-page-btn${p === page ? ' is-active' : ''}" data-page="${p}" title="${SHELF_PAGES[p].title}"><i class="fa-solid ${SHELF_PAGES[p].icon}" aria-hidden="true"></i><span>${SHELF_PAGES[p].label}</span></button>`).join('');
+        if ($pages.data('html') !== html) $pages.html(html).data('html', html);
+        $pages.show();
+    } else if ($pages.data('html')) {
+        $pages.hide().empty().removeData('html');
+    }
+    const $bar = $('#dooms-portrait-bar');
+    $bar.toggleClass('dooms-pb-on-page', !onCards).attr('data-page', page);
+    $('#dooms-pb-scroll').toggle(onCards);
+    $('#dooms-pb-count').toggle(onCards);
+    $('#dooms-pb-open-roster').toggle(onCards && extensionSettings.showPortraitBar !== false);
+    const titleHtml = `<i class="fa-solid ${SHELF_PAGES[page].icon}"></i> ${SHELF_PAGES[page].title}`;
+    const $title = $bar.find('.dooms-pb-title');
+    if ($title.data('html') !== titleHtml) $title.html(titleHtml).data('html', titleHtml);
+    $('.dooms-pb-toggle-label').text(SHELF_PAGES[page].label);
+    const pageEl = document.getElementById('dooms-pb-page');
+    if (!pageEl) return onCards;
+    if (onCards) {
+        pageEl.hidden = true;
+        if (pageEl.dataset.html) { pageEl.innerHTML = ''; delete pageEl.dataset.html; }
+        return true;
+    }
+    pageEl.hidden = false;
+    if (shelfPagesModule) {
+        shelfPagesModule.renderShelfPage(page, pageEl);
+    } else {
+        import('./shelfPages.js')
+            .then(m => { shelfPagesModule = m; if (getShelfPage() === page) m.renderShelfPage(page, pageEl); })
+            .catch(err => console.error('[Dooms Portrait Bar] Shelf pages failed to load:', err));
+    }
+    return false;
+}
+
 /**
  * Immediate render. Reconciles existing cards in place instead of rebuilding
  * the whole shelf, so unchanged cards keep their animations, scroll position,
@@ -571,6 +666,10 @@ function renderPortraitBarNow() {
         return;
     }
     $('#dooms-portrait-bar-wrapper').show();
+
+    // Pages (Phase 5): the control in the header and the active page. The
+    // cards below still reconcile while hidden, so flipping back is instant.
+    try { syncShelfPages(); } catch (e) { console.error('[Dooms Portrait Bar] Shelf pages failed:', e); }
 
     try {
     // Apply alignment setting

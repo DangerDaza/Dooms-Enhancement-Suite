@@ -2322,3 +2322,54 @@ body[data-dooms-ui] .dooms-gm-call { background: var(--ov-panel2); border-color:
 body[data-dooms-ui] .dooms-gm-call.is-npc.is-success { border-left-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-gm-call.is-npc.is-failure { border-left-color: var(--ov-accent2); }
 body[data-dooms-ui] .dooms-item-line { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
+
+
+/* ── Shelf pages (Phase 5) under the looks ── */
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-pb-collapsed .dooms-pb-page { display: none; }
+body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not(.dooms-pb-position-right) .dooms-portrait-bar.dooms-pb-expanded.dooms-pb-on-page { max-height: 460px; }
+body[data-dooms-ui] .dooms-pb-page-btn { border-color: var(--ov-line2); color: var(--ov-muted); border-radius: var(--ov-radius-sm); font-family: var(--ov-display); font-size: 0.55em; line-height: 1.5; }
+body[data-dooms-ui] .dooms-pb-page-btn.is-active { color: var(--ov-accent); border-color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 14%, transparent); }
+body[data-dooms-ui] .dooms-pb-page::-webkit-scrollbar-thumb { background: var(--ov-line); }
+body[data-dooms-ui] .dooms-inv-label,
+body[data-dooms-ui] .dooms-inv-fill { color: var(--ov-muted); font-family: var(--ov-display); }
+body[data-dooms-ui] .dooms-inv-fill { background: transparent; border: 1px solid var(--ov-line2); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-inv-fill.is-full { color: var(--ov-accent2); }
+body[data-dooms-ui] .dooms-inv-slot,
+body[data-dooms-ui] .dooms-quest-box { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); font-family: var(--ov-body); }
+body[data-dooms-ui] .dooms-inv-slot:hover { border-color: var(--ov-accent); box-shadow: var(--ov-shadow); }
+body[data-dooms-ui] .dooms-inv-slot.is-empty,
+body[data-dooms-ui] .dooms-quest-box.is-empty { background: transparent; border-color: var(--ov-line2); color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-inv-slot.is-empty:hover,
+body[data-dooms-ui] .dooms-quest-box.is-empty:hover { color: var(--ov-text); border-color: var(--ov-line); }
+body[data-dooms-ui] .dooms-inv-name { color: var(--ov-text); }
+body[data-dooms-ui] .dooms-inv-count { background: var(--ov-accent); color: var(--ov-on-accent); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-inv-dot { background: var(--ov-muted); }
+body[data-dooms-ui] .dooms-quest-box.is-main { border-color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 10%, var(--ov-panel2)); }
+body[data-dooms-ui] .dooms-quest-text:focus { background: color-mix(in srgb, var(--ov-text) 8%, transparent); }
+body[data-dooms-ui] .dooms-quest-text:empty::before { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-quest-done { border-color: var(--ov-line); color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-quest-done:hover { color: var(--ov-accent); border-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-inv-editor { background: var(--ov-panel); color: var(--ov-text); border-color: var(--ov-line); border-radius: var(--ov-radius); box-shadow: var(--ov-shadow); font-family: var(--ov-body); }
+body[data-dooms-ui] .dooms-inv-editor-title { color: var(--ov-muted); font-family: var(--ov-display); }
+body[data-dooms-ui] .dooms-inv-editor label { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-inv-editor input[type="text"],
+body[data-dooms-ui] .dooms-inv-editor input[type="number"],
+body[data-dooms-ui] .dooms-inv-editor-icon,
+body[data-dooms-ui] .dooms-inv-btn { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-inv-btn:hover { border-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-inv-btn.is-primary { background: var(--ov-accent); color: var(--ov-on-accent); border-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-inv-btn.is-danger { color: var(--ov-accent2); }
+body[data-dooms-ui="lumen"] .dooms-inv-slot,
+body[data-dooms-ui="lumen"] .dooms-quest-box { border-radius: 14px; border-color: transparent; }
+body[data-dooms-ui="lumen"] .dooms-inv-slot.is-empty,
+body[data-dooms-ui="lumen"] .dooms-quest-box.is-empty { border: 1px dashed var(--ov-line2); }
+body[data-dooms-ui="lumen"] .dooms-pb-page-btn,
+body[data-dooms-ui="lumen"] .dooms-inv-count,
+body[data-dooms-ui="lumen"] .dooms-inv-fill { border-radius: 999px; }
+body[data-dooms-ui="grimoire"] .dooms-inv-slot { outline: 1px solid var(--ov-line2); outline-offset: 2px; }
+body[data-dooms-ui="inked"] .dooms-inv-slot,
+body[data-dooms-ui="inked"] .dooms-quest-box { border: var(--ov-border-w) solid var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); }
+body[data-dooms-ui="inked"] .dooms-inv-name { color: var(--ov-ink); }
+body[data-dooms-ui="inked"] .dooms-inv-slot.is-empty,
+body[data-dooms-ui="inked"] .dooms-quest-box.is-empty { background: transparent; border-style: dashed; }
+body[data-dooms-ui="console"] .dooms-inv-icon { filter: none; }

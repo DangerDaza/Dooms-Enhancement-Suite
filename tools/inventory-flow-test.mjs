@@ -291,5 +291,41 @@ chat.push(ai('A coin.\n\n[ITEM: +1 coin]'));
 inv.onInventoryReplyRendered(1);
 check('...and writes to the new chat', meta.dooms_inventory.pack[0].name === 'coin');
 
+console.log('\n§12 the shelf pages markup');
+{
+    const pages = await import(`${DES}/src/systems/ui/shelfPages.js`);
+    resetMeta();
+    chat.length = 0;
+    globalThis.__DES_CTX__.chatId = 'pages-chat';
+    inv.onInventoryChatChanged();
+    inv.editStack('pack', 'iron key', { count: 1, note: 'opens the cell' });
+    inv.editStack('pack', 'torch', { count: 3 });
+    inv.editStack('pouch', 'silver coins', { count: 12 });
+    extensionSettings.inventory.packSlots = 6;
+    extensionSettings.inventory.pouchSlots = 2;
+    const html = pages.inventoryPageHtml();
+    const count = (s, re) => (s.match(re) || []).length;
+    check('the pack section names the persona and shows kinds over slots', html.includes('Jordan&#39;s pack') && html.includes('>2/6<') && html.includes('Party pouch') && html.includes('>1/2<'), html.slice(0, 300));
+    check('one slot per stack plus dashed empties up to the slot count', count(html, /class="dooms-inv-slot"/g) === 3 && count(html, /dooms-inv-slot is-empty/g) === 5, `${count(html, /class="dooms-inv-slot"/g)} / ${count(html, /dooms-inv-slot is-empty/g)}`);
+    check('a stack shows its icon, a count badge past one, its name and a note dot', html.includes('🗝️') && html.includes('<span class="dooms-inv-count">3</span>') && html.includes('<span class="dooms-inv-name">iron key</span>') && count(html, /dooms-inv-dot/g) === 1 && !html.includes('<span class="dooms-inv-count">1</span>'));
+    check('the note rides in the title', html.includes('title="iron key — opens the cell"'));
+    extensionSettings.inventory.pouchSlots = 1;
+    const html2 = pages.inventoryPageHtml();
+    check('a full container is marked', html2.includes('class="dooms-inv-fill is-full"') && html2.includes('>1/1<'));
+    extensionSettings.inventory.packSlots = 1;
+    const html3 = pages.inventoryPageHtml();
+    check('a stack past a lowered slot count is kept and marked over', html3.includes('>2/1<') && count(html3, /dooms-inv-slot is-over/g) === 1 && count(html3, /dooms-inv-slot is-empty/g) === 0);
+    extensionSettings.inventory.packSlots = 16;
+    extensionSettings.inventory.pouchSlots = 8;
+    extensionSettings.quests = { main: 'Find the warden', optional: ['Feed the cat', 'None', { value: 'Fix the roof' }] };
+    const qh = pages.questsPageHtml();
+    check('the main quest is a box of its own', qh.includes('dooms-quest-box is-main') && qh.includes('>Find the warden</div>'));
+    check('optional quests keep their indices and skip blanks', qh.includes('data-field="optional" data-index="0"') && qh.includes('data-index="2"') && !qh.includes('data-index="1"') && qh.includes('Fix the roof') && qh.includes('<span class="dooms-inv-fill">2</span>'));
+    check('an add box for the optional list, none for a set main quest', qh.includes('data-add="optional"') && !qh.includes('data-add="main"'));
+    extensionSettings.quests = { main: 'None', optional: [] };
+    const qe = pages.questsPageHtml();
+    check('with nothing set, both lists offer to add', qe.includes('data-add="main"') && qe.includes('data-add="optional"') && !qe.includes('dooms-quest-done'));
+}
+
 console.log(`\n${failures === 0 ? 'All inventory flow checks pass' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

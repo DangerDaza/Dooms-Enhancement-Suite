@@ -9685,6 +9685,372 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 }
 
 
+/* ── Shelf pages (Phase 5): Characters | Inventory | Quests ──
+   The control in the header; the pages render into .dooms-pb-page while the
+   card strip hides. Slots are square boxes: icon, count badge, name beneath;
+   empties are dashed. Quests are boxes edited in place. */
+.dooms-pb-pages {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: 4px;
+    align-items: center;
+}
+
+.dooms-pb-page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 1px solid rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.25);
+    color: #888;
+    border-radius: 10px;
+    font-size: 0.6em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.6;
+    padding: 1px 7px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.dooms-pb-page-btn i { font-size: 0.9em; }
+
+.dooms-pb-page-btn:hover { color: #ddd; }
+
+.dooms-pb-page-btn.is-active {
+    color: rgb(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96));
+    border-color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.6);
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.12);
+}
+
+@media (max-width: 600px) {
+    .dooms-pb-page-btn span { display: none; }
+    .dooms-pb-page-btn { padding: 1px 6px; }
+}
+
+.dooms-pb-page {
+    line-height: 1.3;
+    max-height: min(60vh, 340px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 2px 2px 4px;
+}
+
+.dooms-pb-page[hidden] { display: none; }
+
+.dooms-pb-page::-webkit-scrollbar { width: 4px; }
+
+.dooms-pb-page::-webkit-scrollbar-thumb {
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.25);
+    border-radius: 2px;
+}
+
+/* In the side docks the page takes the column and scrolls with it */
+#dooms-portrait-bar-wrapper.dooms-pb-position-left .dooms-pb-page,
+#dooms-portrait-bar-wrapper.dooms-pb-position-right .dooms-pb-page {
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.dooms-inv-section + .dooms-inv-section,
+.dooms-quest-section + .dooms-quest-section { margin-top: 8px; }
+
+.dooms-inv-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 2px 4px;
+}
+
+.dooms-inv-label {
+    font-size: 0.68em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #999;
+}
+
+.dooms-inv-fill {
+    font-size: 0.62em;
+    color: #666;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 0 6px;
+    line-height: 1.6;
+}
+
+.dooms-inv-fill.is-full { color: #e5a84d; }
+
+.dooms-inv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--dooms-inv-slot, 58px), 1fr));
+    gap: 6px;
+}
+
+.dooms-inv-slot {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    min-width: 0;
+    border-radius: var(--dooms-pb-card-radius, 8px);
+    border: 1px solid rgba(var(--dooms-pb-border-r, 255), var(--dooms-pb-border-g, 255), var(--dooms-pb-border-b, 255), calc(var(--dooms-pb-border-opacity, 0.06) + 0.08));
+    background: rgba(255, 255, 255, 0.04);
+    color: #ddd;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 3px 3px;
+    font: inherit;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.dooms-inv-slot:hover {
+    border-color: rgba(var(--dooms-pb-hover-r, 233), var(--dooms-pb-hover-g, 69), var(--dooms-pb-hover-b, 96), 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 3px var(--dooms-pb-hover-glow, 12px) rgba(var(--dooms-pb-hover-r, 233), var(--dooms-pb-hover-g, 69), var(--dooms-pb-hover-b, 96), 0.2);
+}
+
+.dooms-inv-icon {
+    font-size: 1.45em;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+
+.dooms-inv-name {
+    font-size: 0.62em;
+    line-height: 1.15;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #ccc;
+}
+
+.dooms-inv-count {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    font-size: 0.58em;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 7px;
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.85);
+    color: #fff;
+    font-weight: 600;
+}
+
+.dooms-inv-dot {
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.dooms-inv-slot.is-empty {
+    border-style: dashed;
+    background: transparent;
+    color: #555;
+}
+
+.dooms-inv-slot.is-empty:hover {
+    color: #999;
+    transform: none;
+    box-shadow: none;
+}
+
+.dooms-inv-plus { font-size: 1.2em; line-height: 1; opacity: 0.6; }
+
+.dooms-inv-slot.is-over { border-color: rgba(229, 168, 77, 0.6); border-style: dotted; }
+
+/* The item editor: a small dialog by the slot, on <body> so nothing clips it */
+.dooms-inv-editor {
+    position: fixed;
+    z-index: 10050;
+    width: 272px;
+    max-width: calc(100vw - 16px);
+    background: #1c1c22;
+    color: #ddd;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    font-size: 0.85em;
+    line-height: 1.3;
+}
+
+.dooms-inv-editor-title {
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #888;
+    margin: 0 0 6px;
+}
+
+.dooms-inv-editor-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.dooms-inv-editor input[type="text"],
+.dooms-inv-editor input[type="number"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: inherit;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font: inherit;
+}
+
+.dooms-inv-editor input[type="number"] { width: 64px; flex: 0 0 auto; }
+
+.dooms-inv-editor-icon {
+    width: 34px;
+    height: 30px;
+    flex: 0 0 auto;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 1.2em;
+    line-height: 1;
+    cursor: pointer;
+    color: inherit;
+}
+
+.dooms-inv-editor label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    color: #aaa;
+}
+
+.dooms-inv-editor-auto-label { margin-left: auto; }
+
+.dooms-inv-editor-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.dooms-inv-editor-spacer { flex: 1 1 auto; }
+
+.dooms-inv-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ddd;
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9em;
+}
+
+.dooms-inv-btn:hover { border-color: rgba(255, 255, 255, 0.3); }
+
+.dooms-inv-btn.is-primary {
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.25);
+    border-color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.5);
+}
+
+.dooms-inv-btn.is-danger { color: #f08080; }
+
+/* Quests page */
+.dooms-quest-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 6px;
+}
+
+.dooms-quest-box {
+    position: relative;
+    min-height: 44px;
+    border-radius: var(--dooms-pb-card-radius, 8px);
+    border: 1px solid rgba(var(--dooms-pb-border-r, 255), var(--dooms-pb-border-g, 255), var(--dooms-pb-border-b, 255), calc(var(--dooms-pb-border-opacity, 0.06) + 0.08));
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 26px 6px 8px;
+    color: #ddd;
+    font-size: 0.75em;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    text-align: left;
+}
+
+.dooms-quest-box.is-main {
+    grid-column: 1 / -1;
+    font-size: 0.82em;
+    border-color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.5);
+    background: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.08);
+}
+
+.dooms-quest-text {
+    outline: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-word;
+    cursor: text;
+}
+
+.dooms-quest-text:focus { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+
+.dooms-quest-text:empty::before { content: attr(data-placeholder); color: #666; }
+
+.dooms-quest-done {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid rgba(100, 200, 100, 0.35);
+    background: none;
+    color: rgba(100, 200, 100, 0.75);
+    font-size: 0.7em;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.dooms-quest-box:hover .dooms-quest-done { opacity: 1; }
+
+.dooms-quest-done:hover { color: rgba(100, 200, 100, 1); border-color: rgba(100, 200, 100, 0.7); }
+
+.dooms-quest-box.is-empty {
+    border-style: dashed;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    justify-content: center;
+    text-align: center;
+    font: inherit;
+    font-size: 0.72em;
+    padding: 6px 8px;
+}
+
+.dooms-quest-box.is-empty.is-main { font-size: 0.78em; }
+
+.dooms-quest-box.is-empty:hover { color: #aaa; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dooms-inv-slot, .dooms-pb-page-btn, .dooms-quest-done { transition: none; }
+    .dooms-inv-slot:hover { transform: none; }
+}
+
+
 /* ── Spotlight Slide entrance animation ── */
 
 /* Bounce-slide in from the right */

@@ -34,6 +34,8 @@ const MUST_BE_LAZY = [
     'src/systems/voices/consentPhrases.js',
     'src/systems/ui/voicePane.js',
     'src/systems/ui/voicesSettingsUI.js',
+    // The shelf's Inventory and Quests pages load on the first flip.
+    'src/systems/ui/shelfPages.js',
 ];
 
 // Static imports only: `import x from '…'`, `import {…} from '…'`,
