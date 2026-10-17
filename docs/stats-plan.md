@@ -1256,8 +1256,10 @@ is an optional container word (`pouch`, `party pouch`, `the pouch`,
 optional count (`+1`, `-`, the Unicode minus and the en dash too) or a
 verb (gains, takes, found, picks up, buys … add; uses, drops, sold, spent,
 hands over … remove), the name, an optional `×2` or `x2`, and a note in
-parentheses; articles and trailing periods are dropped; at most eight
-entries per tag. The shown reply gets a line in place of the tag,
+parentheses; `+2x arrows`, `2x arrows` and "the party's shared pouch"
+read as meant; articles and trailing periods are dropped; a placeholder
+("none", "no change", "N/A", a dash) is no item; at most eight entries per
+tag. The shown reply gets a line in place of the tag,
 "🎒 +1 iron key (pack) · −1 torch (pack) · +3 silver coins (pouch)", with
 what would not fit.
 
@@ -1290,6 +1292,17 @@ names what was recorded and ends with the shape reminder
   exactly (slot, note, icon); one that later changes touched gives up only
   this change's share of the count, so undoing an older reply leaves the
   newer ones standing.
+- **A swipe still generating**: SillyTavern moves `swipe_id` past the
+  swipes it holds while `mes` still carries the old text, then generates.
+  Nothing is read or claimed for it; the swipe before gives its changes
+  back and the real text applies once CHARACTER_MESSAGE_RENDERED brings it.
+- **Regenerate** deletes the reply after GENERATION_STARTED has set the
+  slots, so MESSAGE_DELETED re-injects them after the revert, before the
+  prompt is built.
+- **A branch, a checkpoint, an import**: the stored state names its chat;
+  a chat that arrives with another chat's metadata loads the snapshot on
+  its last message (every commit stamps the state on the chat's tail) and
+  takes the state over as its own.
 - **Off**: with the inventory off, or AI changes off, a re-render neither
   applies nor puts back.
 

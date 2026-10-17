@@ -4205,7 +4205,11 @@ jQuery(async () => {
                 // sees the final markup, and before the roll box sync.
                 [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
                 [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted],
+                // Regenerate deletes the last reply after GENERATION_STARTED has
+                // set the slots, so the inventory it put back must be re-injected
+                // here, before the prompt is built (wrapped: the event's argument
+                // is a number, not the options object).
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,

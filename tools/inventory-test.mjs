@@ -284,6 +284,15 @@ const grammar = [
     ['[ITEMS: +1 torch]', 'pack', 'add', 'torch', 1],
     ['[item: +1 torch]', 'pack', 'add', 'torch', 1],
     ['[ Item : +1 torch ]', 'pack', 'add', 'torch', 1],
+    ['[ITEM: +2x arrows]', 'pack', 'add', 'arrows', 2],
+    ['[ITEM: 2x arrows]', 'pack', 'add', 'arrows', 2],
+    ['[ITEM: +1x torch]', 'pack', 'add', 'torch', 1],
+    ['[ITEM: gains 2x arrows]', 'pack', 'add', 'arrows', 2],
+    ['[ITEM: +2 xylophone]', 'pack', 'add', 'xylophone', 2],
+    ["[ITEM: party's pouch -2 coins]", 'pouch', 'remove', 'coins', 2],
+    ['[ITEM: the party’s shared pouch +3 coins]', 'pouch', 'add', 'coins', 3],
+    ['[ITEM: shared pouch: lockpicks]', 'pouch', 'add', 'lockpicks', 1],
+    ['[ITEM: +1 nothing special]', 'pack', 'add', 'nothing special', 1],
 ];
 for (const [text, container, action, name, count, note] of grammar) {
     const ch = one(text);
@@ -299,6 +308,8 @@ for (const [text, container, action, name, count, note] of grammar) {
     check('names are cut to length', parseItemTags(`[ITEM: +1 ${'x'.repeat(100)}]`)[0].name.length === MAX_NAME);
     check('a tag entry carries no icon of its own', parseItemTags('[ITEM: +1 torch]')[0].icon === '');
     check('other brackets are not tags', parseItemTags('[Scene: night] [ITEMIZED: no] [ITEM] ITEM: +1 torch').length === 0);
+    const placeholders = ['[ITEM: none]', '[ITEM: nothing]', '[ITEM: no change]', '[ITEM: no changes]', '[ITEM: nothing changed]', '[ITEM: nothing changed hands.]', '[ITEM: N/A]', '[ITEM: n/a]', '[ITEM: null]', '[ITEM: —]', '[ITEM: -]', '[ITEM: pouch: none]', '[ITEM: No items changed hands.]', '[ITEM: none | nothing]'];
+    check('a placeholder for "nothing changed" is not an item', placeholders.every(t => parseItemTags(t).length === 0), JSON.stringify(placeholders.map(t => parseItemTags(t).length)));
 }
 
 console.log('\n§10 stripItemTags');
@@ -350,7 +361,7 @@ console.log('\n§13 what the game master reads');
 {
     const s = S();
     const tag = buildItemTagInstruction({ settings: settingsOn(), userName: 'Jordan', state: s });
-    check('the tag instruction shows the form and names the player', tag.startsWith('[ITEMS: ') && tag.includes('[ITEM: +1 iron key (from the warden\'s desk) | -1 torch | pouch +3 silver coins]') && tag.includes('Jordan picks up') && tag.includes('most replies have no line at all') && tag.endsWith(']'));
+    check('the tag instruction shows the form and names the player', tag.startsWith('[ITEMS: ') && tag.includes('[ITEM: +1 iron key (from the warden\'s desk) | -1 torch | pouch +3 silver coins]') && tag.includes('Jordan picks up') && tag.includes('most replies have no line at all') && tag.includes('never a placeholder like "[ITEM: none]"') && tag.endsWith(']'));
     check('…and says the tracker block still follows', tag.includes('The line replaces nothing'));
     check('no fullness clause while there is room', !tag.includes('is full'));
     const fullPack = buildItemTagInstruction({ settings: settingsOn({ packSlots: 3 }), userName: 'Jordan', state: s });

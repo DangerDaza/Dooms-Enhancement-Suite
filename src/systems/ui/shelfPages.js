@@ -168,12 +168,24 @@ function finishQuestEdit(el) {
     const index = el.dataset.index !== undefined ? Number(el.dataset.index) : null;
     if (cancel || !text) { forceRerender(); return; }
     const q = extensionSettings.quests || {};
+    let wrote = false;
     if (isNew) {
         writeQuests(d => { if (field === 'main') d.main = text; else d.optional.push(text); });
+        wrote = true;
+        // The rebuild may wait while another box has focus: make this box
+        // an ordinary edit box now, so a later blur edits rather than adds again.
+        delete el.dataset.new;
+        if (field === 'optional') el.dataset.index = String(((extensionSettings.quests || {}).optional || []).length - 1);
+        el.parentElement?.classList.remove('is-new');
     } else if (field === 'main') {
-        if (questText(q.main) !== text) writeQuests(d => { d.main = text; });
+        if (questText(q.main) !== text) { writeQuests(d => { d.main = text; }); wrote = true; }
     } else if (index !== null && Number.isInteger(index)) {
-        if (questText(Array.isArray(q.optional) ? q.optional[index] : '') !== text) writeQuests(d => { d.optional[index] = text; });
+        if (questText(Array.isArray(q.optional) ? q.optional[index] : '') !== text) { writeQuests(d => { d.optional[index] = text; }); wrote = true; }
+    }
+    // Nothing written, but a rebuild was owed (skipped while this box had focus): do it now.
+    if (!wrote) {
+        const c = document.getElementById(PAGE_ID);
+        if (c && !c.dataset.html) updatePortraitBar();
     }
 }
 

@@ -147,16 +147,17 @@ inv.onInventoryReplyRendered(1);
 check('and back again', names('pack') === 'iron key:1');
 
 console.log('\n§5 swipes');
-chat[1].swipes.push('');
+// SillyTavern's swipe right: swipe_id moves past the swipes it holds, mes
+// still carries the old text and extra is swapped; then it generates.
 chat[1].swipe_id = 1;
-chat[1].mes = '';
-chat[1].extra = {};   // SillyTavern swaps extra per swipe
+chat[1].extra = {};
 inv.onInventoryReplyRendered(1);
-check("a new swipe puts the old swipe's changes back", names('pack') === '' && chat[1].dooms_inventory.live === null && !!chat[1].dooms_inventory.swipes[0], both());
+check("a swipe still generating puts the old swipe's changes back and reads nothing", names('pack') === '' && chat[1].dooms_inventory.live === null && !!chat[1].dooms_inventory.swipes[0] && !chat[1].dooms_inventory.swipes[1], `${both()} ${JSON.stringify(Object.keys(chat[1].dooms_inventory.swipes))}`);
+check('...and the game master is told the pack is empty meanwhile', inv.buildInventoryLineForGeneration().includes('pack 0/16: empty'));
 chat[1].mes = 'Dust, and two torches.\n\n[ITEM: +2 torches]';
 chat[1].swipes[1] = chat[1].mes;
 inv.onInventoryReplyRendered(1);
-check("the new swipe's tag applies", names('pack') === 'torches:2' && chat[1].dooms_inventory.live === 1, both());
+check("the new swipe's tag applies once its text exists", names('pack') === 'torches:2' && chat[1].dooms_inventory.live === 1, both());
 chat[1].swipe_id = 0;
 chat[1].mes = chat[1].swipes[0];
 inv.onInventoryReplyRendered(1);
@@ -189,12 +190,10 @@ chat.push(ai('You lift the lantern down and leave the frayed rope behind.'));
 inv.onInventoryReplyRendered(3);
 check("the reply claims the turn's tool outcomes", chat[2].dooms_inventory.tool.every(e => e.attached === 3) && chat[3].dooms_inventory.live === 0 && chat[3].dooms_inventory.swipes[0].tool.length === 3 && chat[3].dooms_inventory.swipes[0].applied.length === 2, JSON.stringify(chat[3].dooms_inventory));
 check('...without applying them again', names('pack') === 'iron key:1,lantern:1');
-chat[3].swipes.push('');
 chat[3].swipe_id = 1;
-chat[3].mes = '';
 chat[3].extra = {};
 inv.onInventoryReplyRendered(3);
-check("swiping that reply puts the tool's changes back too", names('pack') === 'rope:1,iron key:1', both());
+check("swiping that reply puts the tool's changes back too", names('pack') === 'rope:1,iron key:1' && chat[3].dooms_inventory.live === null, both());
 answer = inv.inventoryToolAction({ changes: [{ action: 'add', item: 'lantern' }] });
 check('the regenerated reply may call the tool afresh', answer.startsWith('Recorded: +1 lantern') && names('pack') === 'rope:1,iron key:1,lantern:1', answer);
 chat[3].mes = 'You take only the lantern.';
@@ -325,6 +324,79 @@ console.log('\n§12 the shelf pages markup');
     extensionSettings.quests = { main: 'None', optional: [] };
     const qe = pages.questsPageHtml();
     check('with nothing set, both lists offer to add', qe.includes('data-add="main"') && qe.includes('data-add="optional"') && !qe.includes('dooms-quest-done'));
+}
+
+console.log('\n§13 an edit on a reply that owns a tool outcome');
+{
+    resetMeta();
+    chat.length = 0;
+    globalThis.__DES_CTX__.chatId = 'edit-chat';
+    inv.onInventoryChatChanged();
+    chat.push(user('I take the lantern and the rope.'));
+    inv.inventoryToolAction({ changes: [{ action: 'add', item: 'lantern' }] });
+    chat.push(ai('You take both.\n\n[ITEM: +1 rope]'));
+    inv.onInventoryReplyRendered(1);
+    check('the tool and the tag together', names('pack') === 'lantern:1,rope:1' && chat[1].dooms_inventory.swipes[0].tool.length === 1, both());
+    chat[1].mes = 'You take both.\n\n[ITEM: +2 rope]';
+    chat[1].swipes[0] = chat[1].mes;
+    inv.onInventoryReplyRendered(1);
+    check("editing the tag keeps the tool's lantern and applies the new tag", names('pack') === 'lantern:1,rope:2' && chat[1].dooms_inventory.swipes[0].tool.length === 1, both());
+    chat[1].mes = 'You take only the lantern.';
+    chat[1].swipes[0] = chat[1].mes;
+    inv.onInventoryReplyRendered(1);
+    check('editing the tag away keeps the lantern', names('pack') === 'lantern:1' && chat[1].dooms_inventory.live === 0, both());
+    chat[1].swipe_id = 1;
+    inv.onInventoryReplyRendered(1);
+    check('a swipe then puts the lantern back too', names('pack') === '' && chat[1].dooms_inventory.live === null, both());
+    chat[1].swipe_id = 0;
+    chat[1].mes = chat[1].swipes[0];
+    inv.onInventoryReplyRendered(1);
+    check('and swiping back brings it again', names('pack') === 'lantern:1', both());
+}
+
+console.log('\n§14 a branch or a checkpoint');
+{
+    resetMeta();
+    chat.length = 0;
+    globalThis.__DES_CTX__.chatId = 'main-chat';
+    inv.onInventoryChatChanged();
+    chat.push(user('A'));
+    chat.push(ai('Key.\n\n[ITEM: +1 iron key]'));
+    inv.onInventoryReplyRendered(1);
+    chat.push(user('B'));
+    chat.push(ai('Torch.\n\n[ITEM: +1 torch]'));
+    inv.onInventoryReplyRendered(3);
+    chat.push(user('C'));
+    chat.push(ai('Map.\n\n[ITEM: +1 map]'));
+    inv.onInventoryReplyRendered(5);
+    check('the main chat holds all three and its state names the chat', names('pack') === 'iron key:1,torch:1,map:1' && meta.dooms_inventory.chat === 'main-chat', both());
+    check('each reply that changed something carries a snapshot of the state after it', chat[1].dooms_inventory.state.pack.length === 1 && chat[3].dooms_inventory.state.pack.length === 2 && chat[5].dooms_inventory.state.pack.length === 3);
+    // A branch from reply 3: the messages up to it, the metadata as it is now.
+    const branchMeta = JSON.parse(JSON.stringify(meta.dooms_inventory));
+    const branchChat = chat.slice(0, 4).map(m => JSON.parse(JSON.stringify(m)));
+    chat.length = 0;
+    chat.push(...branchChat);
+    resetMeta();
+    meta.dooms_inventory = branchMeta;
+    meta.main_chat = 'main-chat';
+    globalThis.__DES_CTX__.chatId = 'main-chat branch #1';
+    inv.onInventoryChatChanged();
+    check("the branch starts with what was carried at its last message, not the main chat's whole inventory", names('pack') === 'iron key:1,torch:1', both());
+    check('...and now owns its state', meta.dooms_inventory.chat === 'main-chat branch #1');
+    globalThis.__DES_CTX__.chatId = 'renamed';
+    inv.onInventoryChatChanged();
+    check('a chat whose id changed with all its messages keeps its inventory', names('pack') === 'iron key:1,torch:1' && meta.dooms_inventory.chat === 'renamed', both());
+    resetMeta();
+    meta.dooms_inventory = { v: 1, pack: [{ name: 'lamp' }], pouch: [] };
+    chat.length = 0;
+    globalThis.__DES_CTX__.chatId = 'legacy';
+    inv.onInventoryChatChanged();
+    check('a stored state from before the marker is taken as it is', names('pack') === 'lamp:1');
+    chat.push(user('x'));
+    chat.push(ai('Nothing.'));
+    chat.pop();
+    inv.onInventoryMessageDeleted();
+    check('a deletion that puts nothing back still stamps the new tail', chat[0].dooms_inventory && chat[0].dooms_inventory.state.pack[0].name === 'lamp');
 }
 
 console.log(`\n${failures === 0 ? 'All inventory flow checks pass' : `${failures} FAILURE(S)`}`);

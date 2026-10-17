@@ -9734,9 +9734,17 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     overflow-y: auto;
     overflow-x: hidden;
     padding: 2px 2px 4px;
+    /* The composer's tray sets nowrap on the bars it holds; the pages wrap
+       their text and scroll vertically instead */
+    white-space: normal;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
 }
 
 .dooms-pb-page[hidden] { display: none; }
+
+/* The strip's scroll arrows have nothing to scroll on a page */
+.dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
 .dooms-pb-page::-webkit-scrollbar { width: 4px; }
 
@@ -9791,6 +9799,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     position: relative;
     aspect-ratio: 1 / 1;
     min-width: 0;
+    white-space: normal;
     border-radius: var(--dooms-pb-card-radius, 8px);
     border: 1px solid rgba(var(--dooms-pb-border-r, 255), var(--dooms-pb-border-g, 255), var(--dooms-pb-border-b, 255), calc(var(--dooms-pb-border-opacity, 0.06) + 0.08));
     background: rgba(255, 255, 255, 0.04);
@@ -9967,7 +9976,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* Quests page */
 .dooms-quest-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
     gap: 6px;
 }
 
@@ -9982,8 +9991,12 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     font-size: 0.75em;
     line-height: 1.3;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     text-align: left;
+    min-width: 0;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .dooms-quest-box.is-main {
@@ -9997,6 +10010,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     outline: none;
     flex: 1 1 auto;
     min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
     word-break: break-word;
     cursor: text;
 }

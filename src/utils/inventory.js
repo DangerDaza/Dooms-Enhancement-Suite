@@ -437,8 +437,10 @@ export function moveStack(state, name, from, to, count, cfg) {
 export const ITEM_TAG_RE = /\[\s*ITEMS?\s*:\s*([^\]]*?)\s*\]/gi;
 
 // Verbs a model may write instead of a sign. "takes" is picking up.
-const ADD_VERB_RE = /^(?:add|adds|added|gain|gains|gained|take|takes|took|get|gets|got|find|finds|found|buy|buys|bought|receive|receives|received|pick(?:s|ed)? up|keep|keeps|kept)\s+(\d+)?\s*/i;
-const REMOVE_VERB_RE = /^(?:remove|removes|removed|lose|loses|lost|use|uses|used|drop|drops|dropped|give|gives|gave|sell|sells|sold|spend|spends|spent|discard|discards|discarded|hand(?:s|ed)? over|throw(?:s)? away|threw away)\s+(\d+)?\s*/i;
+const ADD_VERB_RE = /^(?:add|adds|added|gain|gains|gained|take|takes|took|get|gets|got|find|finds|found|buy|buys|bought|receive|receives|received|pick(?:s|ed)? up|keep|keeps|kept)\s+(\d+)?(?:\s*[x×](?=\s))?\s*/i;
+const REMOVE_VERB_RE = /^(?:remove|removes|removed|lose|loses|lost|use|uses|used|drop|drops|dropped|give|gives|gave|sell|sells|sold|spend|spends|spent|discard|discards|discarded|hand(?:s|ed)? over|throw(?:s)? away|threw away)\s+(\d+)?(?:\s*[x×](?=\s))?\s*/i;
+// What a model writes when told about the tag but nothing changed hands: not an item.
+const NOTHING_RE = /^(?:none|nothing(?:\s+changed(?:\s+hands)?)?|no\s+(?:changes?|items?\b.*)|n\/?a|null|nil|[-–—]+)\.?$/i;
 
 /**
  * "[ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver
@@ -468,14 +470,14 @@ function parseTagEntry(piece) {
     let container = 'pack';
     // A container word, then a colon or a space, then the item. "pack of
     // cards" and "pouch of herbs" are items; so is a bare "pouch".
-    const cm = p.match(/^(pack|pouch|party pouch|shared pouch|the pouch|the pack)\b(?!\s+of\b)\s*:?\s*/i);
+    const cm = p.match(/^(?:the\s+)?(?:party(?:['’]s)?\s+)?(?:shared\s+)?(pack|pouch)\b(?!\s+of\b)\s*:?\s*/i);
     if (cm && p.slice(cm[0].length).trim()) {
         container = /pouch/i.test(cm[1]) ? 'pouch' : 'pack';
         p = p.slice(cm[0].length).trim();
     }
     let action = 'add';
     let count = 1;
-    const sm = p.match(/^([+\-−–])\s*(\d+)?\s*/);
+    const sm = p.match(/^([+\-−–])\s*(\d+)?(?:\s*[x×](?=\s))?\s*/);
     if (sm) {
         action = sm[1] === '+' ? 'add' : 'remove';
         if (sm[2]) count = clampInt(sm[2], 1, MAX_COUNT, 1);
@@ -503,12 +505,13 @@ function parseTagEntry(piece) {
         count = clampInt(xm[1], 1, MAX_COUNT, count);
         p = p.slice(0, xm.index).trim();
     }
-    const lead = p.match(/^(\d+)\s+(.+)$/);
+    const lead = p.match(/^(\d+)(?:\s*[x×](?=\s))?\s+(.+)$/);
     if (lead && !sm?.[2]) {
         count = clampInt(lead[1], 1, MAX_COUNT, count);
         p = lead[2];
     }
     p = p.replace(/^(an?|the|some)\s+/i, '');
+    if (NOTHING_RE.test(p)) return null;
     const name = cleanName(p);
     if (!name) return null;
     return { container, action, name, count, note: cleanNote(note), icon: '' };
@@ -610,7 +613,7 @@ function fullness(state, cfg, userName) {
  */
 export function buildItemTagInstruction({ settings, userName = 'the player', state } = {}) {
     const cfg = inventoryConfig(settings);
-    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, record it with ONE line in exactly this form at the very end of your narration: [ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver coins]. One entry per kind of item, separated by |; + adds and - removes; a count before the name; a short note in parentheses only when it will matter later; start an entry with "pouch" for the shared pouch, otherwise it is ${userName}'s pack. Record only what the story showed; never list what is already carried, never invent gear, and most replies have no line at all.${fullness(state, cfg, userName)} The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual.]`;
+    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, record it with ONE line in exactly this form at the very end of your narration: [ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver coins]. One entry per kind of item, separated by |; + adds and - removes; a count before the name; a short note in parentheses only when it will matter later; start an entry with "pouch" for the shared pouch, otherwise it is ${userName}'s pack. Record only what the story showed; never list what is already carried, never invent gear, and most replies have no line at all: when nothing changed hands, write no line, never a placeholder like "[ITEM: none]".${fullness(state, cfg, userName)} The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual.]`;
 }
 
 /** What the game master is told when the inventory tool is available to it. */

@@ -621,15 +621,18 @@ function syncShelfPages() {
     if (pages.length > 1) {
         const html = pages.map(p => `<button type="button" class="dooms-pb-page-btn${p === page ? ' is-active' : ''}" data-page="${p}" title="${SHELF_PAGES[p].title}"><i class="fa-solid ${SHELF_PAGES[p].icon}" aria-hidden="true"></i><span>${SHELF_PAGES[p].label}</span></button>`).join('');
         if ($pages.data('html') !== html) $pages.html(html).data('html', html);
-        $pages.show();
+        $pages.css('display', '');
     } else if ($pages.data('html')) {
-        $pages.hide().empty().removeData('html');
+        $pages.css('display', 'none').empty().removeData('html');
     }
     const $bar = $('#dooms-portrait-bar');
     $bar.toggleClass('dooms-pb-on-page', !onCards).attr('data-page', page);
-    $('#dooms-pb-scroll').toggle(onCards);
-    $('#dooms-pb-count').toggle(onCards);
-    $('#dooms-pb-open-roster').toggle(onCards && extensionSettings.showPortraitBar !== false);
+    // Inline values only, never jQuery's show(): on an element a stylesheet
+    // hides (the strip under a collapsed shelf in the looks) show() writes
+    // display:block, which outlives the collapse and stacks the cards.
+    $('#dooms-pb-scroll').css('display', onCards ? '' : 'none');
+    $('#dooms-pb-count').css('display', onCards ? '' : 'none');
+    $('#dooms-pb-open-roster').css('display', onCards && extensionSettings.showPortraitBar !== false ? '' : 'none');
     const titleHtml = `<i class="fa-solid ${SHELF_PAGES[page].icon}"></i> ${SHELF_PAGES[page].title}`;
     const $title = $bar.find('.dooms-pb-title');
     if ($title.data('html') !== titleHtml) $title.html(titleHtml).data('html', titleHtml);

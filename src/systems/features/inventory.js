@@ -129,10 +129,43 @@ export function inventoryNotice(text, { kind = 'info', title = 'Inventory' } = {
 
 // ─── The store ──────────────────────────────────────────────────────────────
 
+/** The latest snapshot a message carries: what was carried when it was the chat's tail. */
+function lastSnapshot() {
+    const list = chatArray();
+    if (!list) return null;
+    for (let i = list.length - 1; i >= 0; i--) {
+        const rec = list[i] && list[i][MESSAGE_KEY];
+        if (rec && typeof rec === 'object' && rec.state && typeof rec.state === 'object') return rec.state;
+    }
+    return null;
+}
+
+/**
+ * Stamps the state on the chat's last message. A branch or a checkpoint is
+ * cut at a message and arrives with the metadata of the chat it came from,
+ * so its last message's snapshot, not that metadata, says what was carried
+ * at the cut (load).
+ */
+function stampSnapshot() {
+    const list = chatArray();
+    const m = list && list.length ? list[list.length - 1] : null;
+    if (!m || typeof m !== 'object') return;
+    let rec = m[MESSAGE_KEY];
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) rec = m[MESSAGE_KEY] = {};
+    rec.state = copyOf(state);
+}
+
 function load() {
     const raw = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[META_KEY] : null;
-    state = normalizeState(raw, LOAD_CFG);
-    loadedFor = chatId();
+    const id = chatId();
+    // The stored state names the chat it was written in. A branch, a
+    // checkpoint or an imported chat carries another chat's metadata, so
+    // its state is that chat's whole inventory: the last message that has a
+    // snapshot says what was carried at the cut instead.
+    const inherited = !!(raw && typeof raw === 'object' && raw.chat && id && raw.chat !== id);
+    const snap = inherited ? lastSnapshot() : null;
+    state = normalizeState(snap || raw, LOAD_CFG);
+    loadedFor = id;
     ledger = new Set();
     for (const m of chatArray() || []) {
         const rec = m && m[MESSAGE_KEY];
@@ -140,6 +173,10 @@ function load() {
         const liveReply = Number.isInteger(rec.live) && rec.swipes && rec.swipes[rec.live];
         const unclaimedTool = Array.isArray(rec.tool) && rec.tool.some(e => e && e.attached == null);
         if (liveReply || unclaimedTool) ledger.add(m);
+    }
+    if (inherited && chat_metadata && typeof chat_metadata === 'object') {
+        chat_metadata[META_KEY] = { ...copyOf(state), chat: id };
+        saveRecords();
     }
 }
 
@@ -150,8 +187,9 @@ function ensureLoaded() {
 
 function commit(next, detail) {
     state = next;
-    if (chat_metadata && typeof chat_metadata === 'object') chat_metadata[META_KEY] = copyOf(state);
-    try { saveChatDebounced(); } catch (e) { /* no chat open */ }
+    if (chat_metadata && typeof chat_metadata === 'object') chat_metadata[META_KEY] = { ...copyOf(state), chat: chatId() || null };
+    stampSnapshot();
+    saveRecords();
     notifyInventoryChanged(detail);
 }
 
@@ -238,14 +276,21 @@ export function onInventoryReplyRendered(messageId) {
     if (!cfg.aiChanges.endOfReply && !cfg.aiChanges.tool) return;
     ensureLoaded();
     const swipeId = m.swipe_id || 0;
-    const text = typeof m.mes === 'string' ? m.mes : '';
-    const tagChanges = cfg.aiChanges.endOfReply ? parseItemTags(text) : [];
+    // A swipe just made and not yet generated: SillyTavern moves swipe_id
+    // past the swipes it holds while mes still carries the text of the
+    // swipe before, then generates. Nothing is read or claimed for it; the
+    // swipe shown before gives its changes back here, and the real text
+    // comes with CHARACTER_MESSAGE_RENDERED once it exists.
+    const pending = Array.isArray(m.swipes) && swipeId >= m.swipes.length;
+    const text = !pending && typeof m.mes === 'string' ? m.mes : '';
+    const tagChanges = !pending && cfg.aiChanges.endOfReply ? parseItemTags(text) : [];
     const sig = signatureOf(tagChanges);
     const rec = replyRecord(m);
-    const claimed = claimToolOutcomes(i);
+    const claimed = pending ? [] : claimToolOutcomes(i);
     let next = state;
     let changed = false;
     let touched = claimed.length > 0;
+    let edited = false;
 
     // 1. The shown reply is no longer the one that made the live changes
     //    (another swipe, or an edit that changed its tag): put them back.
@@ -256,14 +301,24 @@ export function onInventoryReplyRendered(messageId) {
             changed = true;
             inventoryNotice(`${rec.live !== swipeId ? 'Swipe' : 'Edit'}: put back ${undoLine(liveEntry.applied)}`);
         }
-        if (rec.live === swipeId) delete rec.swipes[swipeId];
+        if (rec.live === swipeId) {
+            // The tag changed under the same swipe. Its tool outcomes still
+            // belong to it: kept, and applied again below ahead of the new tag.
+            edited = true;
+            if (liveEntry.tool.length) rec.swipes[swipeId] = { sig: '', tag: [], tool: liveEntry.tool, applied: [], rejected: [] };
+            else delete rec.swipes[swipeId];
+        }
         rec.live = null;
         touched = true;
     }
 
     // 2. This swipe's own changes.
     let entry = rec.live === swipeId ? rec.swipes[swipeId] : null;
-    if (entry) {
+    if (pending) {
+        // Nothing to read yet; a record left under this id by an earlier
+        // visit would be replayed as this swipe's when its text arrives.
+        if (rec.swipes[swipeId]) { delete rec.swipes[swipeId]; touched = true; }
+    } else if (entry) {
         // Live and unchanged. A tool outcome claimed now joins it (already in the state).
         for (const e of claimed) {
             entry.tool.push(...e.changes);
@@ -272,6 +327,7 @@ export function onInventoryReplyRendered(messageId) {
         }
     } else {
         const prior = rec.swipes[swipeId] || null;
+        const label = edited ? 'Edit' : prior ? 'Swipe back' : 'Reply';
         if (sig || claimed.length || (prior && (prior.tool.length || prior.tag.length))) {
             entry = { sig, tag: tagChanges, tool: [], applied: [], rejected: [] };
             // A swipe seen before has its changes applied again, in the order
@@ -296,10 +352,10 @@ export function onInventoryReplyRendered(messageId) {
                 entry.rejected.push(...r.rejected);
                 if (r.applied.length) changed = true;
                 if (r.applied.length || r.rejected.length) {
-                    inventoryNotice(`${prior ? 'Swipe back' : 'Reply'}: ${describeApplied(r.applied, r.rejected, { userName: persona() })}`, { kind: r.rejected.length ? 'warning' : 'success' });
+                    inventoryNotice(`${label}: ${describeApplied(r.applied, r.rejected, { userName: persona() })}`, { kind: r.rejected.length ? 'warning' : 'success' });
                 }
             } else if (prior && prior.tool.length) {
-                inventoryNotice(`Swipe back: ${describeApplied(entry.applied, entry.rejected, { userName: persona() })}`);
+                inventoryNotice(`${label}: ${describeApplied(entry.applied, entry.rejected, { userName: persona() })}`);
             }
             rec.swipes[swipeId] = entry;
             rec.live = swipeId;
@@ -320,7 +376,7 @@ export function onInventoryReplyRendered(messageId) {
  * went, so this looks for the ones it remembers.
  */
 export function onInventoryMessageDeleted() {
-    if (!ledger.size) return;
+    if (!isInventoryOn()) return;
     const list = chatArray();
     if (!list) return;
     ensureLoaded();
@@ -341,7 +397,13 @@ export function onInventoryMessageDeleted() {
         changed = true;
         inventoryNotice(`Deleted message: put back ${undoLine(applied)}`);
     }
-    if (changed) commit(next, { source: 'delete' });
+    if (changed) {
+        commit(next, { source: 'delete' });
+    } else {
+        // The new tail carries the state as it stands, for a branch cut here.
+        stampSnapshot();
+        saveRecords();
+    }
 }
 
 function itemLineHtml(entry) {
