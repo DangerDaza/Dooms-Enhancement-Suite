@@ -301,10 +301,18 @@ page title, Vitals, Attributes & checks, Workshop → Attributes and the
 dice popover; the report row at the top of the Stats page with
 `#rpg-stats-report` (index.js) → `src/systems/features/betaReport.js`
 (lazy) → `src/utils/betaReport.js` (pure, `tools/beta-report-test.mjs`),
-which reads `getNotificationLogText()` and `getSystemLogText()`, copies
-the full report to the clipboard (or downloads it), and opens
+which reads `getNotificationLogText()` and `getSystemLogText()`, saves
+the full report as `des-beta-report-<stamp>.txt` on every press (the one
+channel that carries a whole log; the body and the toast name the file),
+copies it to the clipboard as well, and opens
 `.github/ISSUE_TEMPLATE/stats-beta.yml` prefilled through URL fields
-`title`, `environment`, `logs`, the logs tail cut to a 7,000-character URL.
+`title`, `environment`, `logs`. GitHub refuses a URL past about 8,150
+characters (measured 2026-10-17: 8,150 accepted, 8,208 refused with 414),
+so the budget is 8,000 and the logs field carries a condensed tail: stack
+traces folded to one line, the tail opening on a whole entry, the System
+Log taking two thirds of the room or all of it when there are no
+notifications. Log text grows about 1.5× when encoded; the builder
+measures the real ratio and fills the budget.
 GitHub reads issue forms from the default branch only, so until the
 beta is on main the button finds no form: it asks the GitHub API once
 per session whether `.github/ISSUE_TEMPLATE/stats-beta.yml` is on the

@@ -1,16 +1,21 @@
 /**
  * Stats beta: "Report a problem" (Settings → Stats). Loaded on the first
- * press. Builds the report from the settings and the two logs, copies the
- * full text to the clipboard (or downloads it when the clipboard is not
- * available), and opens a GitHub issue with the environment and the tail
- * of the logs filled in. The pure part is src/utils/betaReport.js.
+ * press. Builds the report from the settings and the two logs, saves the
+ * whole of it as a text file to drag into the issue, copies it to the
+ * clipboard as well, and opens a GitHub issue with the environment and a
+ * condensed tail of the logs filled in: the issue form once it is on the
+ * default branch, the issue body until then. The pure part is
+ * src/utils/betaReport.js.
  */
 import { extensionSettings } from '../../core/state.js';
 import { getExtensionVersion } from '../../core/config.js';
 import { getContext } from '../../../../../../extensions.js';
 import { getSystemLogText } from '../ui/systemLog.js';
 import { getNotificationLogText } from '../ui/notificationLog.js';
-import { environmentLines, logsForUrl, buildReportText, buildIssueUrl, ISSUE_TITLE, ISSUE_FORM_CHECK_URL } from '../../utils/betaReport.js';
+import {
+    environmentLines, logsForUrl, buildReportText, buildIssueUrl, reportFileName,
+    ISSUE_TITLE, ISSUE_FORM_CHECK_URL,
+} from '../../utils/betaReport.js';
 
 const TITLE = "Doom's Enhancement Suite";
 
@@ -73,7 +78,7 @@ function downloadText(text, filename) {
 }
 
 /**
- * Gather, copy, open.
+ * Gather, save, copy, open.
  * @param {{ win?: Window|null }} [options] - a tab opened inside the click
  *   (so pop-up blockers allow it) for the report to land in; otherwise one
  *   is opened here.
@@ -93,15 +98,16 @@ export async function openBetaReport({ win = null } = {}) {
     const notifications = getNotificationLogText();
     const system = getSystemLogText();
     const full = buildReportText({ environment, notifications, system });
-    const mode = (await issueFormExists()) ? 'form' : 'body';
-    const { url, truncated } = buildIssueUrl({ title: ISSUE_TITLE, environment, logs: logsForUrl(notifications, system), mode });
 
+    // The file first, while the click is still fresh: it is the one channel
+    // that carries the whole log whatever its size.
+    const wanted = reportFileName();
+    const saved = downloadText(full, wanted);
+    const fileName = saved ? wanted : '';
     const copied = await copyText(full);
-    let saved = false;
-    if (!copied) {
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        saved = downloadText(full, `des-beta-report-${stamp}.txt`);
-    }
+
+    const mode = (await issueFormExists()) ? 'form' : 'body';
+    const { url } = buildIssueUrl({ title: ISSUE_TITLE, environment, logs: logsForUrl(notifications, system), mode, fileName });
 
     let opened = false;
     if (win && !win.closed) {
@@ -117,17 +123,14 @@ export async function openBetaReport({ win = null } = {}) {
         opened = !!fresh;
     }
     if (!opened) {
-        toastr.warning('The browser blocked the new window. Allow pop-ups for SillyTavern and press Report a problem again.', TITLE, { timeOut: 8000 });
+        toastr.warning(`The browser blocked the new window. Allow pop-ups for SillyTavern and press Report a problem again.${saved ? ` The full report is in your Downloads as ${wanted}.` : ''}`, TITLE, { timeOut: 10000 });
         return;
     }
-    const where = mode === 'body' ? 'the Logs block of the issue body' : 'the Logs box';
-    if (copied) {
-        toastr.info(truncated
-            ? `The issue has your version, switches and the last log lines. The full logs are on your clipboard: paste them over ${where}.`
-            : 'The issue has your version, switches and both logs. The full report is on your clipboard too.', TITLE, { timeOut: 8000 });
-    } else if (saved) {
-        toastr.info('The issue has your version and switches. The clipboard was not available, so the full logs were saved as a text file: drag it into the issue.', TITLE, { timeOut: 10000 });
+    if (saved) {
+        toastr.info(`The issue has your version, switches and the last log lines. The full report is in your Downloads as ${wanted}: drag it into the issue.${copied ? ' It is on your clipboard too.' : ''}`, TITLE, { timeOut: 10000 });
+    } else if (copied) {
+        toastr.info('The issue has your version, switches and the last log lines. The file could not be saved, but the full report is on your clipboard: paste it over the Logs block.', TITLE, { timeOut: 10000 });
     } else {
-        toastr.warning('The issue opened, but the logs could not be copied or saved. Use Copy All in the Notification Log and the System Log (Settings → Tools) and paste them in.', TITLE, { timeOut: 10000 });
+        toastr.warning('The issue opened, but the full logs could be neither saved nor copied. Use Copy All in the Notification Log and the System Log (Settings → Tools) and paste them in.', TITLE, { timeOut: 10000 });
     }
 }
