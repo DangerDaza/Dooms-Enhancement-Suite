@@ -205,6 +205,31 @@ extensionSettings.liveWorld.enabled = false;
 await lw.onWorldChatChanged();
 check('off: no state, no lines, no advance', lw.getWorldState() === null && (lw.onWorldGenerationStarted(undefined, {}, false), slots['dooms-world-state'].value === '') && (await lw.advanceNow()).reason === 'off');
 extensionSettings.liveWorld.enabled = true;
+await lw.onWorldChatChanged();
+
+console.log('\n§6 the dashboard\'s reading');
+{
+    const M = await import(`${DES}/src/utils/liveWorld.js`);
+    const dash = await import(`${DES}/src/systems/ui/worldDashboard.js`);
+    const pack = lw.getActivePack();
+    const cfg = M.liveWorldConfig(extensionSettings);
+    let st = lw.getWorldState();
+    const v = M.validateAdvance({ elapsed: 'a day', clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }], blurb: 'The quay is quiet.', heard: ['Maeve'] }, pack, st);
+    st = M.applyAdvance(st, v.clean, pack, { msgId: 'm1', gameDate: 'Thursday', gameTime: 'dawn', ranAt: 1 });
+    const html = dash.renderWorldDashboardHtml({ state: st, pack, cfg, facts: { date: 'Thursday', time: 'dawn', location: 'the quay' }, portraits: () => '' });
+    check('the head: the pack, the date from the tracker, the blurb, when it advanced and when it runs next', html.includes('<h4>Harbourside</h4>') && html.includes('Thursday, dawn · at the quay') && html.includes('The quay is quiet.') && html.includes('Last advanced on Thursday (a day passed)') && html.includes('next run in 3 replies'), html);
+    check('what people say: the effect text with the clock\'s name, never the number', html.includes('<b>The blockade:</b> Cargo is searched on the quay') && !html.includes('2/6'));
+    check('known characters with where they were last seen and before', html.includes('Old Marit') && html.includes("Last seen: The Anchor&#39;s back room, The Anchor, a tavern") && html.includes('Before that: The Anchor, a tavern, The old town') && html.includes('Seen Thursday, dawn') && html.includes('Captain Reyes'));
+    check('heard-of names as dimmed chips, not cards', html.includes('rpg-world-chip" title="Heard of, not met">Maeve') && !html.includes('Last seen: nowhere yet</div></div></div><div class="rpg-world-card">' + 'Maeve'));
+    check('recent changes with the date', html.includes("Old Marit: The Anchor, a tavern, The old town → The Anchor&#39;s back room, The Anchor, a tavern (hiding)<time>Thursday</time>"));
+    check('a portrait when the store has one, an emoji otherwise', dash.renderWorldDashboardHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img class="rpg-world-portrait" src="data:image/png;base64,x"') && html.includes('>👤</div>'));
+    const spoilerFree = dash.renderWorldDashboardHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } });
+    check('spoiler-free: effects without the clock names, and said so', !spoilerFree.includes('<b>The blockade:</b>') && spoilerFree.includes('Cargo is searched') && spoilerFree.includes('Spoiler-free: common knowledge only.'));
+    check('off, a pack problem, no world: each says so', dash.renderWorldDashboardHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && dash.renderWorldDashboardHtml({ cfg, packError: 'No pack named "x".' }).includes('This chat has no world: No pack named') && dash.renderWorldDashboardHtml({ cfg, state: null, pack: null }).includes('no world yet'));
+    const failed = M.failAdvance(st, { error: 'The clock "blockade" moved by 3, more than 1.' });
+    check('a discarded attempt and the retry are shown', dash.renderWorldDashboardHtml({ state: failed, pack, cfg }).includes('Last attempt discarded: The clock') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg }).includes('runs again on the next reply'));
+    check('model-written text is escaped', dash.renderWorldDashboardHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
+}
 
 console.log(`\n${failures === 0 ? 'All Live World flow checks pass' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

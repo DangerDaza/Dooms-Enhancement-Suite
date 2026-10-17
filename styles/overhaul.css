@@ -2376,3 +2376,15 @@ body[data-dooms-ui="console"] .dooms-inv-icon { filter: none; }
 body[data-dooms-ui] .dooms-quest-menu-item { color: var(--ov-text); font-family: var(--ov-body); }
 body[data-dooms-ui] .dooms-quest-menu-item:hover { background: var(--ov-line2); color: var(--ov-accent2); }
 body[data-dooms-ui="inked"] .dooms-quest-menu-item:hover { background: var(--ov-caption); color: var(--ov-ink); }
+body[data-dooms-ui] .rpg-world-card,
+body[data-dooms-ui] .rpg-world-effects li { background: var(--ov-panel2); border: 1px solid var(--ov-line); border-radius: var(--ov-radius-sm); color: var(--ov-text); }
+body[data-dooms-ui] .rpg-world-blurb { background: var(--ov-panel2); border-left-color: var(--ov-accent); color: var(--ov-text); }
+body[data-dooms-ui] .rpg-world-section-title,
+body[data-dooms-ui] .rpg-world-status,
+body[data-dooms-ui] .rpg-world-date,
+body[data-dooms-ui] .rpg-world-empty,
+body[data-dooms-ui] .rpg-world-card-line,
+body[data-dooms-ui] .rpg-world-chip,
+body[data-dooms-ui] .rpg-world-changes time { color: var(--ov-muted); }
+body[data-dooms-ui] .rpg-world-chip { border-color: var(--ov-line2); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .rpg-world-changes li { border-bottom-color: var(--ov-line2); }

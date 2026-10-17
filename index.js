@@ -1980,6 +1980,9 @@ function bindSettingsUI() {
         if (w.pack === id) w.pack = 'skyreach';
         _saveWorld();
     });
+    $(document).on('click', '#rpg-world-dashboard', function () {
+        import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World dashboard failed to load:', err));
+    });
     $(document).on('click', '#rpg-world-advance', async function () {
         const $b = $(this);
         $b.prop('disabled', true);

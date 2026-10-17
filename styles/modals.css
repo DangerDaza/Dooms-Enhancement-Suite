@@ -9898,3 +9898,30 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 /* Dice popover: a borrowed skill shows its home attribute; the row of other skills sits under the toggle. */
 .rpg-dice-skill-home { opacity: 0.6; font-size: 0.85em; letter-spacing: 0.04em; }
 .rpg-dice-skills-other { margin-top: -4px; border-left-style: dashed; }
+
+/* ── Live World dashboard (docs/live-world-spec.md, D1) ── */
+.rpg-world-body { padding: 10px 14px 14px; font-size: 0.9em; line-height: 1.4; }
+.rpg-world-head h4 { margin: 0 0 4px; font-size: 1.15em; }
+.rpg-world-date { color: #aaa; font-size: 0.9em; }
+.rpg-world-blurb { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--rpg-highlight, #e94560); background: rgba(255, 255, 255, 0.04); font-style: italic; }
+.rpg-world-status { font-size: 0.85em; color: #999; }
+.rpg-world-status.is-error, .rpg-world-empty.is-error { color: #e5a84d; }
+.rpg-world-section { margin-top: 14px; }
+.rpg-world-section-title { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 6px; }
+.rpg-world-effects { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.rpg-world-effects li { padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); }
+.rpg-world-cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.rpg-world-card { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.03); min-width: 0; }
+.rpg-world-portrait { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; object-position: center top; flex: 0 0 auto; background: rgba(255, 255, 255, 0.06); display: flex; align-items: center; justify-content: center; font-size: 1.3em; }
+.rpg-world-card-text { min-width: 0; }
+.rpg-world-card-name { font-weight: 600; overflow-wrap: anywhere; }
+.rpg-world-card-line { font-size: 0.82em; color: #bbb; overflow-wrap: anywhere; }
+.rpg-world-card-line.is-muted { color: #777; }
+.rpg-world-heard { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rpg-world-chip { font-size: 0.78em; padding: 2px 8px; border-radius: 10px; border: 1px dashed rgba(255, 255, 255, 0.2); color: #888; }
+.rpg-world-changes { list-style: none; padding: 0; margin: 0; }
+.rpg-world-changes li { padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.88em; overflow-wrap: anywhere; }
+.rpg-world-changes time { color: #777; font-size: 0.85em; margin-left: 6px; }
+.rpg-world-empty { color: #777; font-style: italic; }
+.rpg-world-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rpg-world-result { font-size: 0.85em; color: #999; margin-left: auto; }

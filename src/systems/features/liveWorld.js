@@ -411,6 +411,24 @@ function registerWorldCommands() {
     } catch (e) {
         console.warn('[Live World] /advance could not be registered', e);
     }
+    try {
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'world',
+            callback: async () => {
+                try {
+                    const m = await import('../ui/worldDashboard.js');
+                    m.openWorldDashboard();
+                    return '';
+                } catch (e) {
+                    return `The dashboard could not open: ${e && e.message ? e.message : e}`;
+                }
+            },
+            helpString: 'Live World: opens the dashboard (clocks as what people say, who was last seen where, recent changes).',
+            returns: 'nothing',
+        }));
+    } catch (e) {
+        console.warn('[Live World] /world could not be registered', e);
+    }
 }
 
 /** Registers the command and listens for the tracker request's end. */
