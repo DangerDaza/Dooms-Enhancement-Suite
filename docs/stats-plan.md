@@ -1488,3 +1488,148 @@ Open: whether the montage should be allowed to touch the other quests
 from the sidebar's Quests panel too (today the shelf only); a way to undo
 a cut other than deleting the montage (deleting it ends nothing: the next
 message ends the cut anyway).
+
+## 15. Phase 6 — Live World
+
+Status: **the groundwork, the pack, the per-chat state, the advancer and
+the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
+`docs/live-world-spec.md`, the owner's own spec); the map (C1–C3), the
+dashboard's feed and timelines (D2, D3) are not; awaiting in-browser
+verification (parity rows "Live World") and the Skyreach pack's real
+content.**
+
+The spec is the design source; this section records what was built
+against it and the calls made on its open items.
+
+Decisions on the spec's open items: **D40** the advancer runs every 6 new
+replies by default (1 to 50 in Settings). **D41** a clock moves by at most
+1 per run by default (1 to 6); a clock's own `step` in the pack wins.
+**D42** "known" is a name the tracker lists as present (the Present
+Characters block), not a speaker tag: it covers every model and format
+the tracker already handles; the advancer's `heard` list and a newcomer
+it moves are heard-of; a known name never drops back. **D43** the world
+line rides at depth 2 as a system message by default (depth and role in
+Settings), through SillyTavern's own `setExtensionPrompt`, so the Context
+Inspector does not record it (G4). **D44** a message's identity is an id
+stamped on the message itself (`dooms_world_id`), never its index; a
+swipe keeps it, so it counts once (G3). **D45** built-in packs live in the
+repository's `worldpacks/` (read-only; an update may overwrite them) and
+pasted packs in Settings (`liveWorld.customPacks`); a chat keeps the pack
+it was seeded with, by id. **D46** the advancer's request runs on the
+tracker's connection profile through `withBackgroundProfile` (G1), one
+background request at a time; it waits for the tracker request when both
+are due; external mode uses the external API. **D47** no time module: the
+advancer judges elapsed story time from the tracker's date and time
+against the last run's, as the spec says; the facts of now come from the
+info box. **D48** the dashboard opens from Settings → Live World and from
+`/world`; no rail button yet. **D49** Live World never toasts: the System
+Log always, the console on request. **D50** the Skyreach pack is a draft
+from the spec's own examples until the campaign notes fill it in.
+
+### 15.1 Data
+
+The pack (`worldpacks/<id>.json`, or pasted): `{ id, name, version,
+description, places: [{ id, label, parent, image, zoom, x, y }], clocks:
+[{ id, label, start, max, step, effects: { value: text }, hidden }], cast:
+[{ name, place, tier, portrait }], template, blurb }`. `normalizePack`
+makes it safe and lists what is wrong: duplicate ids, parents that do not
+exist, loops, clocks outside their range, cast members at no place.
+
+The chat's state, `chat_metadata.dooms_world` (G2, its own key): `{ v,
+pack, packVersion, clocks: { id: value }, where: { name: "a/b/c" },
+known: { name: "heard" | "known" }, log: [{ who, from, to, msgId,
+gameDate, gameTime, reason }], last: { msgId, gameDate, gameTime, ranAt,
+ok, elapsed }, lastError, blurb, counted: [ids], sinceLast, retryNext,
+seeded }`. The log keeps about 20 entries per character and 300 in all;
+`counted` keeps the last 400 ids. Seeding copies the pack's starting
+clocks, places and tiers.
+
+The rules, `extensionSettings.liveWorld`: `{ enabled, pack, every,
+maxStep, spoilerFree, inject, depth, role, recentMessages, debug,
+customPacks }`.
+
+### 15.2 The advancer (Part A)
+
+Trigger: every `every` counted replies, at once after a failed run, from
+`/advance`, Settings or the dashboard; never while DES is generating (the
+flag `withBackgroundProfile` holds), and after the tracker request when
+both are due. The prompt: the clocks with their current value, range,
+step and the text of each step; the place tree (ids with labels, nested);
+who is where and whether known; the last run's date and time and now's;
+the last `recentMessages` messages as "Name: text" with tracker blocks
+and tags stripped; the exact JSON asked for: `{ elapsed, clocks, moved:
+[{ who, to, reason }], blurb, heard }`. Spoiler-free adds that the blurb
+is common knowledge only.
+
+The reply is parsed (bare, fenced or inside prose) and validated whole:
+clocks are integers within range that move by at most the step, and
+name real clocks; moves name someone and a place of the tree (id, path or
+label); heard-of names are strings. Any failure discards the reply,
+records why, and the very next reply runs it again. A pass overwrites the
+clocks, logs each move with the message and the date, adds heard-of
+names, replaces the blurb and stamps the run.
+
+Cost, measured 2026-10-17 at four characters a token with the example
+pack: about 647 tokens for the prompt without the chat window, plus
+the window (12 messages, each cut to 700 characters, at most ~2,100
+tokens); the world line is about 88 tokens a turn. One background
+request every six replies.
+
+### 15.3 The line (Part B's injection)
+
+`[WORLD OF HARBOURSIDE: clocks: The blockade 2/6: Cargo is searched on
+the quay…; The dock fever 0/4. Last seen: Old Marit: The Anchor's back
+room, The Anchor, a tavern (Thursday); Captain Reyes: The customs house,
+The docks. The world moves between scenes; these are its facts as they
+stand, not instructions to the scene.]` One line per clock that is not
+hidden, one per known character; heard-of names, the log and the blurb
+never ride; cut at 1,200 characters; a pack may give its own template
+with `{name}`, `{clocks}` and `{where}`. Never for a quiet prompt, an
+impersonation or a dry run; emptied when the world is off or `inject` is.
+
+### 15.4 UI
+
+Settings → Live World (Beta, its own rail page): the switch, the pack for
+new chats (built-in and pasted), a box to paste a pack with Add and
+Remove, Dashboard, Advance now, Re-seed this chat (confirmed), every N,
+the step, the window, spoiler-free, the line with its depth and role,
+console lines, and a status line for this chat. The dashboard (D1):
+`src/systems/ui/worldDashboard.js`, §14.3 of this document's neighbour
+describes the rest; in short the pack, the date, the blurb, the run
+status, what people say, the known characters with portraits and
+last-seen places, the heard-of chips, the recent moves, Advance now.
+
+### 15.5 Not built yet
+
+The map (C1 province node view, C2 nesting, C3 room grids and tokens
+with Silly Map's pathfinding, credited); D2 the dashboard's feed with a
+time filter; D3 timelines and map links; a pack editor; speaker-tag
+detection for known characters if tracker presence proves too generous;
+"seen N days ago" (the dates are prose, so the dashboard says "seen
+<date>").
+
+### 15.6 Files and tests
+
+`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (84 checks);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs`;
+`src/systems/generation/apiClient.js` (`withBackgroundProfile`,
+`BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
+`worldpacks/example.json`, `worldpacks/skyreach.json`; `index.js`,
+`template.html`, `src/core/state.js`, `styles/modals.css`,
+`styles/overhaul.css`; `docs/live-world-spec.md`.
+
+### 15.7 Commits
+
+1. `6524ad1` the groundwork: `withBackgroundProfile`, the spec in the repo.
+2. `b122cba` the model and two packs.
+3. `f99d9b5` the store, the advancer, the line and the settings.
+4. The dashboard.
+5. This section, the phases row, the parity rows, the handover.
+
+### 15.8 Open
+
+The Skyreach pack's places, clocks and cast (D50); whether the known
+tier should also come from speaker tags; whether the world line should
+move to the tracker's depth and role for one message fewer in the
+prompt; a shelf page for the world beside Characters, Inventory and
+Quests (the owner fixed three pages; this would be a fourth); the map.

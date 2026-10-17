@@ -66,6 +66,8 @@ state and the next moves.
    timeout 120 node tools/inventory-flow-test.mjs
    node tools/quest-cut-test.mjs
    timeout 120 node tools/quest-cut-flow-test.mjs
+   node tools/live-world-test.mjs
+   timeout 120 node tools/live-world-flow-test.mjs
    ```
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
    current RP, with Settings → Generation → "Fetch the tracker when a reply
@@ -99,6 +101,11 @@ state and the next moves.
    Parity rows "Inventory". Jordan's open call: whether the Quests page
    should show without the inventory (D34). Then right-click a quest and
    Cut to it (§14): parity rows "Cut to a quest".
+7. **Try Live World** (Phase 6, built 2026-10-17 from `docs/live-world-spec.md`;
+   `docs/stats-plan.md` §15). Settings → Live World on, Example as the pack,
+   a new chat; play six replies and watch the System Log and the dashboard
+   (/world). Parity rows "Live World". The Skyreach pack is a draft: its
+   places, clocks and cast want the campaign notes (D50).
 
 ## 3. The open problem and what was done about it
 
@@ -221,6 +228,14 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   prompt slots), Settings → Stats → Inventory, and the shelf's pages
   (`src/systems/ui/shelfPages.js`, lazy): Characters | Inventory | Quests.
   `tools/inventory-test.mjs`, `tools/inventory-flow-test.mjs`.
+- **Phase 6, Live World (2026-10-17):** `src/utils/liveWorld.js` (packs,
+  per-chat state, the advancer's prompt, validation and apply, the
+  narrator's line), `src/systems/features/liveWorld.js` (the store under
+  `chat_metadata.dooms_world`, counting by a stamped id, the advancer
+  through `withBackgroundProfile`, blind injection, `/advance`, `/world`),
+  `src/systems/ui/worldDashboard.js` (lazy), Settings → Live World, two
+  packs in `worldpacks/`. `tools/live-world-test.mjs`,
+  `tools/live-world-flow-test.mjs`.
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 
@@ -234,6 +249,8 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/utils/inventory.js` | Pure inventory model: the rules, stacks and icons, `applyChanges`/`revertApplied` (share-only), `setStack`/`moveStack`, `parseItemTags`, the tool definition, `buildInventoryLine` and the two instructions |
 | `src/systems/features/inventory.js` | Inventory lifecycle: the per-chat store, `onInventoryReplyRendered` (tag once per swipe, put back on swipe/edit), `inventoryToolAction` and the claim by the next reply, `onInventoryMessageDeleted` (ledger), the prompt slot builders, hand edits, `inventoryNotice` |
 | `src/systems/ui/shelfPages.js`, `portraitBar.js` | The shelf's Inventory and Quests pages (lazy), the quest menu (Cut to it), and the page control in the header (`syncShelfPages`, `setShelfPage`) |
+| `src/utils/liveWorld.js`, `src/systems/features/liveWorld.js`, `src/systems/ui/worldDashboard.js` | Live World: the pack and the per-chat state, `buildAdvancePrompt`/`validateAdvance`/`applyAdvance`, `buildWorldLines`; the store, counting, `advanceNow`, `onWorldGenerationStarted` (raw slot), `/advance` and `/world`; the dashboard |
+| `src/systems/generation/apiClient.js` | `withBackgroundProfile(fn, { external })`: the generating flag and the tracker's connection profile around any background request; `updateRPGData` runs through it |
 | `src/utils/questCut.js`, `src/systems/features/questCut.js` | Cut to a quest: the quest list after a cut, the facts of now, the instruction; the armed cut in `chat_metadata.dooms_quest_cut`, `/trigger`, the `dooms-quest-cut` slot, the clear on MESSAGE_SENT |
 | `src/systems/generation/trackerRecovery.js` | Pure helpers: `hasTrackerData`, `swipeEntryOf`, `replyLacksTracker`, `lastReply`, `earlierPartsOfTurn`, `adoptBlockFromTurn`, `shouldRecoverTracker`, the recovered mark |
 | `src/systems/integration/sillytavern.js` | `onMessageReceived` (together parse, adoption, recovery trigger), `recoverTrackerForReply`, `onMessageSent`, `onGenerationEnded` (empty) |
@@ -342,6 +359,13 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 - **D39 (Jordan, 2026-10-17):** DES is not intended for group chats.
   Nothing is built or tested for them; a review finding about group
   `/trigger` behaviour was closed on that ground.
+- **D40–D50 (defaults taken, 2026-10-17), Live World:** every 6 replies;
+  step 1; known = present in the tracker; the line at depth 2 as system,
+  raw (not in the Inspector); message identity by a stamped id; built-in
+  packs in the repo, pasted ones in settings, a chat keeps its first pack;
+  the advancer on the tracker's profile through `withBackgroundProfile`;
+  no time module; the dashboard from Settings and `/world`; no toasts;
+  Skyreach is a draft. `docs/stats-plan.md` §15.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 

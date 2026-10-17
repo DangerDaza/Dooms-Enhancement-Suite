@@ -22,6 +22,7 @@ says where things stand.
 | 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Yes (`7ce9335` … `9dddb03`; `docs/stats-plan.md` §12, D22–D27) | `d20-test` §10, `dice-test` §11 | Not yet | Parity rows "Casting checks" and "Talents" |
 | 5 | Inventory and the shelf's pages: a pack and a party pouch per chat, the end-of-reply tag and the `dooms_inventory` tool, swipes and deletions put changes back, Settings → Stats → Inventory, the shelf flipping between Characters, Inventory and Quests | Yes (`0c28e59` … `c59b43b`; `docs/stats-plan.md` §13, D28–D34) | `inventory-test`, `inventory-flow-test` | Not yet | Parity rows "Inventory" |
 | 5b | Cut to a quest: right-click or hold a quest box, the next reply is a montage up to the quest and its opening beat with no message of the player's, the quest becomes the main quest, "when…" for a named time | Yes (2026-10-17; `docs/stats-plan.md` §14, D35–D38) | `quest-cut-test`, `quest-cut-flow-test` | Not yet | Parity rows "Cut to a quest" |
+| 6 | Live World (`docs/live-world-spec.md`): world packs, per-chat clocks and last-seen places, the background advancer every N replies with its reply validated or discarded, the narrator's one line, `/advance`, `/world`, Settings → Live World, the D1 dashboard | Yes for G1–G5, the pack, Part B, Part A and D1 (`6524ad1` … the dashboard; `docs/stats-plan.md` §15, D40–D50). Not the map or D2/D3. | `live-world-test`, `live-world-flow-test` | Not yet | Parity rows "Live World"; the Skyreach pack's content; then C1 |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0-beta.1 prepared on the branch 2026-10-16: version, CHANGELOG, What's New, Beta badges, Report a problem with both logs (`tools/beta-report-test.mjs`) | Yes, on the branch | `beta-report-test` | Not yet | Jordan's word, then a fast-forward push of main (handover §9); README and the full 3.1.0 after the beta |
 
@@ -402,6 +403,35 @@ keep the instruction; the player's next message ends it.
 
 **Open.** Whether the montage may touch the other quests; the same menu
 in the sidebar's Quests panel.
+
+## Phase 6 — Live World
+
+**Is it ready?** The groundwork, the pack, the per-chat state, the
+advancer and the D1 dashboard are built, tested and pushed (2026-10-17).
+The map and the dashboard's feed and timelines are not. Not yet watched
+in play. Jordan's spec: `docs/live-world-spec.md`.
+
+**What exists.** A world pack (places as a tree, plot clocks with the
+public effect of each step, a cast with starting places) seeds a chat's
+world under its own key. Every six new replies a quiet background
+request on the tracker's connection profile reads the recent scenes and
+answers with strict JSON: clocks moved by at most a step, characters
+moved to places of the tree, a blurb, heard-of names; anything that
+breaks a rule is discarded whole and retried on the next reply. One
+fixed-size line tells the narrator each clock's public effect and where
+each known character was last seen, at a depth and role of your choice,
+not recorded by the Context Inspector. `/advance` runs it now; `/world`
+and Settings → Live World → Dashboard open the dashboard: what people
+say, who was last seen where, recent moves, Advance now. Two packs ship:
+Harbourside (an example to copy) and a Skyreach draft that needs the
+campaign notes. Off by default; nothing changes until it is on.
+
+**Prove it.** `node tools/live-world-test.mjs` and
+`timeout 120 node tools/live-world-flow-test.mjs` pass; then parity rows
+"Live World".
+
+**Open.** The Skyreach pack's content (D50); the map (C1); whether known
+should also come from speaker tags; a fourth shelf page for the world.
 
 ## Phase 4 — if wanted (not started, not designed)
 
