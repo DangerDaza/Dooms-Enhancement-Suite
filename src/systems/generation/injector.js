@@ -31,6 +31,8 @@ import { DEFAULT_PLOT_TWIST_TEMPLATE_PROMPT, DEFAULT_KNIFE_TEMPLATE_PROMPT, DEFA
 // Dice (Phase 2): the verdict for a rolled message rides every generation that answers it.
 import { buildDiceVerdictForGeneration, buildDiceRulesForGeneration, DICE_VERDICT_SLOT, DICE_RULES_SLOT } from '../features/diceRolls.js';
 import { buildInventoryLineForGeneration, buildInventoryRulesForGeneration, INVENTORY_LINE_SLOT, INVENTORY_RULES_SLOT } from '../features/inventory.js';
+import { buildQuestCutForGeneration } from '../features/questCut.js';
+import { QUEST_CUT_SLOT } from '../../utils/questCut.js';
 import { lastReply, replyLacksTracker } from './trackerRecovery.js';
 // Track suppression state for event handler
 let currentSuppressionState = false;
@@ -713,6 +715,10 @@ export function refreshDiceInjection({ suppress = false } = {}) {
         setExtensionPrompt(INVENTORY_LINE_SLOT, carried ? `\n${carried}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
         const itemRules = on ? buildInventoryRulesForGeneration() : '';
         setExtensionPrompt(INVENTORY_RULES_SLOT, itemRules ? `\n${itemRules}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
+        // A cut to a quest the player asked for on the shelf (Phase 5b): rides
+        // the montage's generation and its swipes, until their next message.
+        const cut = on ? buildQuestCutForGeneration() : '';
+        setExtensionPrompt(QUEST_CUT_SLOT, cut ? `\n${cut}\n` : '', extension_prompt_types.IN_CHAT, depth, false, role);
         // A reply that dropped the block tends to be copied by the next one;
         // say so once, in the same message, ahead of the instructions.
         const again = on && lastReplyLackedTracker() ? TRACKER_AGAIN_TEXT : '';
@@ -746,6 +752,7 @@ export async function onGenerationStarted(type, data, dryRun) {
         setExtensionPrompt(DICE_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(INVENTORY_LINE_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(INVENTORY_RULES_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt(QUEST_CUT_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt(TRACKER_AGAIN_SLOT, '', extension_prompt_types.IN_CHAT, 0, false);
         // Also drop any historical-context payload queued from a prior
         // generation while the extension was enabled. Without this, the

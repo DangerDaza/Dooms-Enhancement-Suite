@@ -163,6 +163,8 @@ import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendere
 // Inventory (Project Short Fuse, Phase 5): the per-chat store, the end-of-reply tag and the tool
 import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed, registerInventoryTool, notifyInventoryChanged } from './src/systems/features/inventory.js';
 import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
+// Cut to a quest (Phase 5b): the player's next message ends an armed cut
+import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -4191,7 +4193,7 @@ jQuery(async () => {
                 // sets the verdict slot while SillyTavern is still awaiting this
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
