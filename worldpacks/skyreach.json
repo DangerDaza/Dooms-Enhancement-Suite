@@ -1,0 +1,43 @@
+{
+  "id": "skyreach",
+  "name": "Skyreach",
+  "version": 1,
+  "description": "Skyreach, drafted from the build spec's examples. The places, clock steps and starting locations are placeholders until the campaign notes (SR - Campaign Complete, the two narrator-only entries) fill them in.",
+  "places": [
+    { "id": "gilead", "label": "Gilead", "parent": null, "zoom": 0 },
+    { "id": "low-market", "label": "The Low Market", "parent": "gilead", "zoom": 1 },
+    { "id": "gilded-hand", "label": "The Gilded Hand", "parent": "low-market", "zoom": 2 },
+    { "id": "high-table", "label": "The high table", "parent": "gilded-hand", "zoom": 3 },
+    { "id": "highwatch", "label": "Highwatch", "parent": null, "zoom": 0 },
+    { "id": "skar-crossings", "label": "The Skar crossings", "parent": null, "zoom": 0 }
+  ],
+  "clocks": [
+    {
+      "id": "varrow_war", "label": "The Varrow war", "start": 2, "max": 6, "step": 1,
+      "effects": {
+        "0": "Peace, as far as anyone in Gilead can tell.",
+        "1": "Riders on the border roads; grain is dearer.",
+        "2": "The Skar crossings are watched; carters wait a day to pass.",
+        "3": "The Skar crossings are closed.",
+        "4": "Levies are called in the Low Market; the young men are gone.",
+        "5": "Smoke on the horizon at night; refugees at the gates.",
+        "6": "The war is at Gilead's walls."
+      }
+    },
+    {
+      "id": "highwatch", "label": "Highwatch", "start": 1, "max": 4, "step": 1,
+      "effects": {
+        "0": "Highwatch keeps to itself.",
+        "1": "Highwatch's lanterns burn late; messengers come and go.",
+        "2": "Highwatch has sent word to the Gilded Hand.",
+        "3": "Highwatch's banner flies over the Low Market.",
+        "4": "Highwatch rules Gilead in all but name."
+      }
+    }
+  ],
+  "cast": [
+    { "name": "One Feather", "place": "high-table", "tier": "known" },
+    { "name": "Maeve", "place": "", "tier": "heard" }
+  ],
+  "blurb": "Gilead waits on news from the crossings."
+}
