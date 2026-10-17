@@ -21,6 +21,7 @@ says where things stand.
 | 4b | Tiers and NPC sheets: a five-tier scale on the sheet, Fill by tier, Suggest from the story, automatic suggestion for new characters (off by default), the tier word to the AI | Yes (`bc48864` … `734b0c2`; `docs/stats-plan.md` §11, D18–D21) | `d20-test` §9, `sheet-suggest-test` | Not yet | Parity rows "Tiers" |
 | 4c | Casting checks and talents, freeform magic: no spell list, three resolutions (a target saves, the caster makes a casting check, or nothing rolls), the Casting skill on the casting ability, talents on the sheet with Practised and Master | Yes (`7ce9335` … `9dddb03`; `docs/stats-plan.md` §12, D22–D27) | `d20-test` §10, `dice-test` §11 | Not yet | Parity rows "Casting checks" and "Talents" |
 | 5 | Inventory and the shelf's pages: a pack and a party pouch per chat, the end-of-reply tag and the `dooms_inventory` tool, swipes and deletions put changes back, Settings → Stats → Inventory, the shelf flipping between Characters, Inventory and Quests | Yes (`0c28e59` … `c59b43b`; `docs/stats-plan.md` §13, D28–D34) | `inventory-test`, `inventory-flow-test` | Not yet | Parity rows "Inventory" |
+| 5b | Cut to a quest: right-click or hold a quest box, the next reply is a montage up to the quest and its opening beat with no message of the player's, the quest becomes the main quest, "when…" for a named time | Yes (2026-10-17; `docs/stats-plan.md` §14, D35–D38) | `quest-cut-test`, `quest-cut-flow-test` | Not yet | Parity rows "Cut to a quest" |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
 | Release | 3.1.0-beta.1 prepared on the branch 2026-10-16: version, CHANGELOG, What's New, Beta badges, Report a problem with both logs (`tools/beta-report-test.mjs`) | Yes, on the branch | `beta-report-test` | Not yet | Jordan's word, then a fast-forward push of main (handover §9); README and the full 3.1.0 after the beta |
 
@@ -376,6 +377,31 @@ most of the difference.
 inventory (D34); whether models keep to "most replies change nothing";
 a second tool call in one turn that means to correct the first (today
 both apply).
+
+## Phase 5b — Cut to a quest
+
+**Is it ready?** Built, tested, pushed (2026-10-17). Not yet watched in
+play. Jordan's ask: right-click a quest, "let's start", and the story
+moves to the beginning of the quest with a summary of what happened in
+between.
+
+**What exists.** Right-click or hold a quest box on the shelf's Quests
+page: Cut to it, Cut to it when…, Make it the main quest, Complete. The
+cut arms itself on the chat and asks SillyTavern for a reply with nothing
+from the player in the log; the reply gets a one-shot instruction: a
+brief montage from now (the tracker's date, time and place) to the
+moment the quest begins, then the quest's first scene at its threshold,
+the first move left to the player, never the quest itself, and the
+tracker block moved to where the cut lands. The quest becomes the main
+quest and the old main drops to the optional list. Swipes of the montage
+keep the instruction; the player's next message ends it.
+
+**Prove it.** `node tools/quest-cut-test.mjs` and
+`timeout 120 node tools/quest-cut-flow-test.mjs` pass; then parity rows
+"Cut to a quest".
+
+**Open.** Whether the montage may touch the other quests; the same menu
+in the sidebar's Quests panel.
 
 ## Phase 4 — if wanted (not started, not designed)
 

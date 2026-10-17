@@ -64,6 +64,8 @@ state and the next moves.
    timeout 90 node tools/sheet-suggest-test.mjs
    node tools/inventory-test.mjs
    timeout 120 node tools/inventory-flow-test.mjs
+   node tools/quest-cut-test.mjs
+   timeout 120 node tools/quest-cut-flow-test.mjs
    ```
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
    current RP, with Settings → Generation → "Fetch the tracker when a reply
@@ -95,7 +97,8 @@ state and the next moves.
    add a torch by hand; then play until something changes hands and watch
    the toast and the line in the reply; swipe it and watch it go back.
    Parity rows "Inventory". Jordan's open call: whether the Quests page
-   should show without the inventory (D34).
+   should show without the inventory (D34). Then right-click a quest and
+   Cut to it (§14): parity rows "Cut to a quest".
 
 ## 3. The open problem and what was done about it
 
@@ -230,7 +233,8 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/generation/injector.js` | `refreshDiceInjection` sets the verdict, rules and reminder slots, and the two inventory slots, at the tracker instructions' depth/role (`trackerInjectionTarget`); `onGenerationStarted` |
 | `src/utils/inventory.js` | Pure inventory model: the rules, stacks and icons, `applyChanges`/`revertApplied` (share-only), `setStack`/`moveStack`, `parseItemTags`, the tool definition, `buildInventoryLine` and the two instructions |
 | `src/systems/features/inventory.js` | Inventory lifecycle: the per-chat store, `onInventoryReplyRendered` (tag once per swipe, put back on swipe/edit), `inventoryToolAction` and the claim by the next reply, `onInventoryMessageDeleted` (ledger), the prompt slot builders, hand edits, `inventoryNotice` |
-| `src/systems/ui/shelfPages.js`, `portraitBar.js` | The shelf's Inventory and Quests pages (lazy) and the page control in the header (`syncShelfPages`, `setShelfPage`) |
+| `src/systems/ui/shelfPages.js`, `portraitBar.js` | The shelf's Inventory and Quests pages (lazy), the quest menu (Cut to it), and the page control in the header (`syncShelfPages`, `setShelfPage`) |
+| `src/utils/questCut.js`, `src/systems/features/questCut.js` | Cut to a quest: the quest list after a cut, the facts of now, the instruction; the armed cut in `chat_metadata.dooms_quest_cut`, `/trigger`, the `dooms-quest-cut` slot, the clear on MESSAGE_SENT |
 | `src/systems/generation/trackerRecovery.js` | Pure helpers: `hasTrackerData`, `swipeEntryOf`, `replyLacksTracker`, `lastReply`, `earlierPartsOfTurn`, `adoptBlockFromTurn`, `shouldRecoverTracker`, the recovered mark |
 | `src/systems/integration/sillytavern.js` | `onMessageReceived` (together parse, adoption, recovery trigger), `recoverTrackerForReply`, `onMessageSent`, `onGenerationEnded` (empty) |
 | `src/systems/generation/apiClient.js` | `updateRPGData(renderInfoBox, renderThoughts, { force, recovery })`: the separate-mode request |
@@ -330,6 +334,11 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   line goes to the AI whenever the inventory is on; both change ways on;
   the page control shows only while the inventory is on, so the Quests page
   rides with it. `docs/stats-plan.md` §13.
+- **D35–D38 (Jordan, 2026-10-17), cut to a quest:** the button press alone
+  (nothing of the player's in the chat); the reply is the montage and the
+  opening beat; the quest becomes the main quest and the old main drops to
+  optional; the AI judges the time, "when…" for a named one.
+  `docs/stats-plan.md` §14.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 

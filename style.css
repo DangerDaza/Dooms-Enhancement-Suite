@@ -9746,6 +9746,33 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
+/* The quest menu: the shelf's menu look, its own items */
+.dooms-quest-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 0.82em;
+    color: #ccc;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+
+.dooms-quest-menu-item:hover {
+    background: rgba(233, 69, 96, 0.15);
+    color: var(--rpg-highlight, #e94560);
+}
+
+.dooms-quest-menu-item i {
+    width: 16px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.dooms-quest-when { width: 300px; }
+
+.dooms-quest-when .dooms-quest-when-input { width: 100%; }
+
 .dooms-pb-page::-webkit-scrollbar { width: 4px; }
 
 .dooms-pb-page::-webkit-scrollbar-thumb {

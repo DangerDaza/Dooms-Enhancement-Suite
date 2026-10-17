@@ -1396,3 +1396,85 @@ models obey "most replies change nothing" or sprinkle tags (the notify
 toasts will tell); a second tool call in the same turn that corrects the
 first (today both apply); drag and drop; whether the AI should know the
 party pouch's members by name (today "the party").
+
+## 14. Phase 5b — Cut to a quest
+
+Status: **built on `Project-Short-Fuse` (2026-10-17, the same sitting as
+Phase 5); awaiting in-browser verification (parity rows "Cut to a
+quest").**
+
+The owner's ask: "I want the user to be able to right click a quest and
+say 'Lets start' or something. I want that to send a command to the AI to
+move the story to the beginning of the quest and summarize everything
+that happened in between."
+
+Decisions: **D35** nothing of the player's shows in the chat: the button
+press alone arms the cut and asks SillyTavern for a reply; the instruction
+rides that generation. **D36** the reply is the montage and the opening
+beat: a paragraph or two of what passes between now and the moment the
+quest begins, told in summary, then the quest's first scene at its
+threshold with the first move left to the player; never the quest itself.
+**D37** the quest becomes the main quest and the main quest it displaces
+drops to the top of the optional list (the main quest itself changes
+nothing). **D38** how much time passes is the AI's to judge from the
+quest, with "Cut to it, when…" for a time the player names ("by
+nightfall", "after the thaw").
+
+### 14.1 Data
+
+`chat_metadata.dooms_quest_cut = { quest, when, at }` while a cut is
+armed; it survives a reload mid-montage. The cut stays armed through
+swipes and regenerates of the montage (each gets the same instruction)
+and ends with the player's next message (MESSAGE_SENT clears it before
+the slots are re-set for that generation). No settings: the menu is
+there whenever the shelf's Quests page is.
+
+### 14.2 Prompt
+
+One slot, `dooms-quest-cut`, beside the dice and inventory slots at the
+tracker instructions' depth and role (its key sorts after the inventory
+keys and before `dooms-tracker-again`, so the tracker instructions still
+end the message). `[CUT TO A QUEST: Jordan has chosen to skip ahead to
+this quest: "…". This reply is the cut. First, a brief montage … from now
+(<date>, <time>, at <location>) until the moment this quest begins … told
+in summary and never played out. <It begins <when>. | How much time
+passes is yours to judge …> Then open on the quest's first scene at its
+threshold … stop with the first move still Jordan's. Do not play the
+quest or resolve any part of it in this reply. The other quests (…) stay
+as they are … the tracker data block … still follow as usual, with the
+date, time and location moved to where the cut lands and what Jordan
+carries kept consistent with the skip.]` About 230 tokens, once.
+
+The facts of now come from the info box (`lastGeneratedData.infoBox`,
+else the committed one), in its JSON form (strings or `{ value }`
+objects, time as "start → end" or `{ start, end }`, fenced or not) or the
+older text form; missing facts are left out rather than guessed. The
+tracker block the reply writes moves the date, time and place; the
+inventory and vitals follow if the montage spends or gains anything.
+
+### 14.3 UI
+
+Right-click a quest box on the shelf's Quests page, or hold it on a
+phone: Cut to it, Cut to it when… (a small dialog with one field), Make
+it the main quest (not on the main quest), Complete. A toast says
+"Cutting to …" while the reply generates. The reply is asked for with
+SillyTavern's `/trigger`, so a group chat picks its speaker as it would
+for any reply without a message.
+
+### 14.4 Files and tests
+
+`src/utils/questCut.js` (pure: the quest list after a cut, the facts of
+now, the instruction), `tools/quest-cut-test.mjs`;
+`src/systems/features/questCut.js` (arm, slot text, trigger, the clear
+on MESSAGE_SENT), `tools/quest-cut-flow-test.mjs`;
+`src/systems/generation/injector.js` (the slot), `index.js`
+(MESSAGE_SENT), `src/systems/ui/shelfPages.js` (the menu and the when
+dialog), `style.css`, `styles/overhaul.css`.
+
+### 14.5 Open
+
+Whether the montage should be allowed to touch the other quests (today:
+"stay as they are unless the skip plainly touches them"); a cut from the
+sidebar's Quests panel too (today the shelf only); a way to undo a cut
+other than deleting the montage (deleting it ends nothing: the next
+message ends the cut anyway).
