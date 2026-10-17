@@ -69,6 +69,8 @@ const calls = globalThis.__DES_SLASH_CALLS__;
 const state = await import(`${DES}/src/core/state.js`);
 const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const qc = await import(`${DES}/src/systems/features/questCut.js`);
+const inj = await import(`${DES}/src/systems/generation/injector.js`);
+const chat = globalThis.__DES_CHAT__;
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -96,6 +98,9 @@ check('the instruction names the player, the quest and the facts of now', text.s
 check('the other quests ride without None and without the quest itself', text.includes('The other quests (Feed the cat; Fix the roof) stay as they are'), text);
 check('the AI judges the time when none is given', text.includes('yours to judge from the quest'));
 check('a regenerate or swipe of the montage keeps the cut', qc.buildQuestCutForGeneration() === text);
+lastGeneratedData.infoBox = '{"date":"Friday","time":"dawn","location":"The Sunken Chapel"}';
+check('...anchored at the now the cut was armed from, not where the first montage landed', qc.buildQuestCutForGeneration().includes('from now (Tuesday, 3 Harvest, dusk → night, at The Knife Wall)') && !qc.buildQuestCutForGeneration().includes('Sunken Chapel'));
+lastGeneratedData.infoBox = '{"date":"Tuesday, 3 Harvest","time":{"start":"dusk","end":"night"},"location":{"value":"The Knife Wall"}}';
 extensionSettings.enabled = false;
 check('DES off: nothing rides', qc.buildQuestCutForGeneration() === '');
 extensionSettings.enabled = true;
@@ -126,6 +131,38 @@ meta.dooms_quest_cut = { quest: 'From a reload', when: '', at: 1 };
 check('a cut saved with the chat survives a reload', qc.buildQuestCutForGeneration().includes('"From a reload"'));
 meta.dooms_quest_cut = { junk: true };
 check('junk in the slot is no cut', qc.getPendingQuestCut() === null);
+
+console.log('\n§5 the together-mode commit around a cut');
+{
+    extensionSettings.generationMode = 'together';
+    const r1 = '{"date":"Tuesday","time":"dusk","location":"The Knife Wall"}';
+    const m = '{"date":"Friday","time":"dawn","location":"The Sunken Chapel"}';
+    chat.length = 0;
+    chat.push({ is_user: true, mes: 'I look around.', extra: {} });
+    chat.push({ is_user: false, mes: 'The wall rises.', swipe_id: 0, swipes: ['The wall rises.'], extra: {} });
+    lastGeneratedData.infoBox = r1;
+    committedTrackerData.infoBox = null;
+    await inj.onGenerationStarted('normal', {}, false);          // /trigger: the cut's generation
+    check("the cut's generation commits the previous reply's block", committedTrackerData.infoBox === r1);
+    chat.push({ is_user: false, mes: 'Three days pass…', swipe_id: 0, swipes: ['Three days pass…'], extra: {} });
+    lastGeneratedData.infoBox = m;
+    await inj.onGenerationStarted(undefined, {}, false);         // the player's first message after the montage
+    check("the player's first message after the montage commits the montage's block, though two replies sit in a row", committedTrackerData.infoBox === m, String(committedTrackerData.infoBox));
+    chat.push({ is_user: true, mes: 'I push the door.', extra: {} });
+    chat.push({ is_user: false, mes: 'It gives.', swipe_id: 0, swipes: ['It gives.'], extra: {} });
+    lastGeneratedData.infoBox = '{"date":"Friday","time":"noon","location":"Inside"}';
+    await inj.onGenerationStarted('swipe', {}, false);
+    check('a swipe commits nothing', committedTrackerData.infoBox === m);
+    await inj.onGenerationStarted('regenerate', {}, false);
+    check('a regenerate commits nothing', committedTrackerData.infoBox === m);
+    await inj.onGenerationStarted('impersonate', {}, false);
+    await inj.onGenerationStarted('quiet', {}, false);
+    check('an impersonation or a quiet prompt commits nothing', committedTrackerData.infoBox === m);
+    await inj.onGenerationStarted(undefined, {}, false);
+    check('the next send commits the latest reply', committedTrackerData.infoBox === '{"date":"Friday","time":"noon","location":"Inside"}');
+    await inj.onGenerationStarted(undefined, {}, false);
+    check('the same length is not committed twice', committedTrackerData.infoBox === '{"date":"Friday","time":"noon","location":"Inside"}');
+}
 
 console.log(`\n${failures === 0 ? 'All quest cut flow checks pass' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -339,6 +339,9 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   opening beat; the quest becomes the main quest and the old main drops to
   optional; the AI judges the time, "when…" for a named one.
   `docs/stats-plan.md` §14.
+- **D39 (Jordan, 2026-10-17):** DES is not intended for group chats.
+  Nothing is built or tested for them; a review finding about group
+  `/trigger` behaviour was closed on that ground.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 

@@ -48,16 +48,23 @@ function setPending(p) {
     notify({ pending: !!p });
 }
 
+/** The tracker's date, time and place as they stand. */
+function factsNow() {
+    try { return sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { return {}; }
+}
+
 /**
  * Arms the cut and asks SillyTavern for the reply. The quest list has been
- * changed by the caller already (the quest is the main quest now).
+ * changed by the caller already (the quest is the main quest now). The
+ * facts of now are captured here: a swipe of the montage must start from
+ * the same now, not from where the first montage landed.
  * @param {{ quest: string, when?: string }} args
  * @returns {Promise<boolean>} whether a reply was asked for
  */
 export async function startQuestCut({ quest, when = '' } = {}) {
     const q = String(quest || '').replace(/\s+/g, ' ').trim().slice(0, MAX_QUEST);
     if (!q) return false;
-    setPending({ quest: q, when: cleanWhen(when), at: Date.now() });
+    setPending({ quest: q, when: cleanWhen(when), at: Date.now(), facts: factsNow() });
     toast('info', `Cutting to "${q}"…`);
     try {
         await executeSlashCommandsOnChatInput('/trigger', { quiet: true });
@@ -85,8 +92,7 @@ export function buildQuestCutForGeneration() {
     if (!extensionSettings.enabled) return '';
     const p = getPendingQuestCut();
     if (!p) return '';
-    let facts = {};
-    try { facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { facts = {}; }
+    const facts = p.facts && typeof p.facts === 'object' ? p.facts : factsNow();
     const quests = normalizeQuests(extensionSettings.quests);
     const others = quests.optional.filter(t => t && t !== 'None' && t !== p.quest).slice(0, 6);
     return buildQuestCutInstruction({ quest: p.quest, when: p.when, userName: resolvePersonaName() || 'the player', facts, otherQuests: others });

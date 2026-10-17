@@ -838,15 +838,20 @@ export async function onGenerationStarted(type, data, dryRun) {
     const currentChatLength = chat ? chat.length : 0;
     // For TOGETHER mode: Commit when user sends message (before first generation)
     if (extensionSettings.generationMode === 'together') {
-        // By the time onGenerationStarted fires, ST has already added the placeholder AI message
-        // So we check the second-to-last message to see if user just sent a message
-        const secondToLastMessage = chat && chat.length > 1 ? chat[chat.length - 2] : null;
-        const isUserMessage = secondToLastMessage && secondToLastMessage.is_user;
+        // GENERATION_STARTED fires before SillyTavern adds the message being
+        // sent, so the chat's tail is the previous reply, whose block is the
+        // one to commit. Decided from the generation's type, never from the
+        // message before the tail: a cut to a quest (any /trigger) puts two
+        // replies in a row, and the message before the tail is then a reply,
+        // not the player's, which used to skip the commit on the quest's
+        // opening turn. A swipe or a regenerate still sees the reply it
+        // replaces; an impersonation or a quiet prompt produces no reply.
         // Commit if:
-        // 1. Second-to-last message is from USER (user just sent message)
+        // 1. A fresh reply is being generated (a send, a /trigger, a Continue)
         // 2. Not a swipe (lastActionWasSwipe = false)
         // 3. Haven't already committed for this chat length (prevent streaming duplicates)
-        const shouldCommit = isUserMessage && !lastActionWasSwipe && currentChatLength !== lastCommittedChatLength;
+        const freshReply = type !== 'swipe' && type !== 'regenerate' && type !== 'quiet' && type !== 'impersonate';
+        const shouldCommit = freshReply && !lastActionWasSwipe && currentChatLength !== lastCommittedChatLength;
         if (shouldCommit) {
             //     userStats: committedTrackerData.userStats ? `${committedTrackerData.userStats.substring(0, 50)}...` : 'null',
             //     infoBox: committedTrackerData.infoBox ? 'exists' : 'null',
@@ -866,8 +871,6 @@ export async function onGenerationStarted(type, data, dryRun) {
             //     infoBox: committedTrackerData.infoBox ? 'exists' : 'null',
             //     characterThoughts: committedTrackerData.characterThoughts ? `${committedTrackerData.characterThoughts.substring(0, 100)}...` : 'null'
             // });
-        } else if (lastActionWasSwipe) {
-        } else if (!isUserMessage) {
         }
         //     userStats: committedTrackerData.userStats ? `${committedTrackerData.userStats.substring(0, 50)}...` : 'null',
         //     infoBox: committedTrackerData.infoBox ? 'exists' : 'null',

@@ -348,8 +348,14 @@ function openEditor(anchor, { mode, container, name }) {
 // quest), Cut to it, when… (the same with a time the player names), Make it
 // the main quest, Complete. The menu is the shelf's own menu, styled alike.
 
-let questMenu = null;    // { el, field, index, onDown, onKey }
+let questMenu = null;    // { el, field, index, expected, onDown, onKey }
 let whenDialog = null;   // { el, onDown, onKey }
+
+/** A rebuild the page owed while a menu or dialog was open happens once it closes. */
+function rebuildIfOwed() {
+    const c = document.getElementById(PAGE_ID);
+    if (c && !c.dataset.html) updatePortraitBar();
+}
 
 function closeQuestMenu() {
     if (!questMenu) return;
@@ -359,6 +365,13 @@ function closeQuestMenu() {
     document.removeEventListener('keydown', questMenu.onKey, true);
     window.removeEventListener('scroll', closeQuestMenu, true);
     questMenu = null;
+    rebuildIfOwed();
+}
+
+/** Commits an edit still open in a quest box, so an action reads the list as the player sees it. */
+function commitOpenQuestEdit() {
+    const a = document.activeElement;
+    if (a && a.classList && a.classList.contains('dooms-quest-text') && inPage(a)) a.blur();
 }
 
 function placeAt(el, x, y) {
@@ -375,6 +388,8 @@ function openQuestMenu(box, x, y) {
     closeWhenDialog();
     const field = box.dataset.field === 'main' ? 'main' : 'optional';
     const index = box.dataset.index !== undefined ? Number(box.dataset.index) : null;
+    // The quest as shown: an action checks the list still has it at that place.
+    const expected = questText(box.querySelector('.dooms-quest-text')?.textContent || '');
     const el = document.createElement('div');
     el.id = QUEST_MENU_ID;
     el.className = 'dooms-pb-context-menu dooms-quest-menu';
@@ -387,6 +402,8 @@ function openQuestMenu(box, x, y) {
         <div class="dooms-quest-menu-item" data-act="complete" role="menuitem" title="Complete and remove"><i class="fa-solid fa-check"></i> Complete</div>`;
     document.body.appendChild(el);
     placeAt(el, x, y);
+    // Pressing an item must not blur a quest text being edited; the action commits it first.
+    el.addEventListener('mousedown', (e) => e.preventDefault());
     el.addEventListener('click', (e) => {
         const item = e.target.closest('[data-act]');
         if (!item) return;
@@ -394,9 +411,10 @@ function openQuestMenu(box, x, y) {
         e.stopPropagation();
         const act = item.dataset.act;
         closeQuestMenu();
-        if (act === 'cut') cutToQuest(field, index, '');
-        else if (act === 'cut-when') openWhenDialog(box, field, index);
-        else if (act === 'promote') promoteToMain(field, index);
+        commitOpenQuestEdit();
+        if (act === 'cut') cutToQuest(field, index, '', expected);
+        else if (act === 'cut-when') openWhenDialog(box, field, index, expected);
+        else if (act === 'promote') promoteToMain(field, index, expected);
         else if (act === 'complete') removeQuest(field, index);
     });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -406,19 +424,31 @@ function openQuestMenu(box, x, y) {
     document.addEventListener('touchstart', onDown, true);
     document.addEventListener('keydown', onKey, true);
     window.addEventListener('scroll', closeQuestMenu, true);
-    questMenu = { el, field, index, onDown, onKey };
+    questMenu = { el, field, index, expected, onDown, onKey };
 }
 
-function promoteToMain(field, index) {
+/** The quest at this place in the list, or '' when the list changed under the menu. */
+function questStillThere(r, expected) {
+    if (!r.quest) return '';
+    if (expected && r.quest !== expected) return '';
+    return r.quest;
+}
+
+function promoteToMain(field, index, expected) {
     const r = promoteQuest(extensionSettings.quests, field, index);
+    if (!questStillThere(r, expected)) { toast('warning', 'The quests changed under the menu; try again.'); forceRerender(); return; }
     if (!r.changed) return;
     writeQuests(d => { d.main = r.quests.main; d.optional = r.quests.optional; });
 }
 
 /** The cut: the quest becomes the main quest, then the reply is asked for. */
-function cutToQuest(field, index, when) {
+function cutToQuest(field, index, when, expected) {
     const r = promoteQuest(extensionSettings.quests, field, index);
-    if (!r.quest) { toast('warning', 'There is no quest there to cut to.'); return; }
+    if (!questStillThere(r, expected)) {
+        toast('warning', r.quest ? 'The quests changed under the menu; try again.' : 'There is no quest there to cut to.');
+        forceRerender();
+        return;
+    }
     if (r.changed) writeQuests(d => { d.main = r.quests.main; d.optional = r.quests.optional; });
     startQuestCut({ quest: r.quest, when }).catch(err => console.error('[Dooms Tracker] Quest cut failed:', err));
 }
@@ -430,9 +460,10 @@ function closeWhenDialog() {
     document.removeEventListener('touchstart', whenDialog.onDown, true);
     document.removeEventListener('keydown', whenDialog.onKey, true);
     whenDialog = null;
+    rebuildIfOwed();
 }
 
-function openWhenDialog(box, field, index) {
+function openWhenDialog(box, field, index, expected) {
     closeWhenDialog();
     const el = document.createElement('div');
     el.id = WHEN_ID;
@@ -453,7 +484,7 @@ function openWhenDialog(box, field, index) {
     const go = () => {
         const when = input.value.trim();
         closeWhenDialog();
-        cutToQuest(field, index, when);
+        cutToQuest(field, index, when, expected);
     };
     el.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-act]');
@@ -523,28 +554,42 @@ function bindOnce() {
         const box = target.closest('.dooms-quest-box');
         return box && !box.classList.contains('is-empty') && !box.classList.contains('is-new') ? box : null;
     };
+    let press = null;
+    let longPressed = false;
+    const endPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
     document.addEventListener('contextmenu', (e) => {
+        endPress();
         const box = questBoxOf(e.target);
         if (!box) return;
+        // Inside a quest text being edited the browser's own menu (paste, spelling) stays.
+        const txt = e.target.closest('.dooms-quest-text');
+        if (txt && document.activeElement === txt) return;
         e.preventDefault();
         e.stopPropagation();
         openQuestMenu(box, e.clientX, e.clientY);
     });
-    let press = null;
     document.addEventListener('touchstart', (e) => {
         const box = questBoxOf(e.target);
         if (!box || e.touches.length !== 1) return;
         const t = e.touches[0];
-        press = { box, x: t.clientX, y: t.clientY, timer: setTimeout(() => { press = null; openQuestMenu(box, t.clientX, t.clientY); }, 550) };
+        press = { box, x: t.clientX, y: t.clientY, timer: setTimeout(() => { press = null; longPressed = true; openQuestMenu(box, t.clientX, t.clientY); }, 550) };
     }, { passive: true });
-    const endPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
     document.addEventListener('touchmove', (e) => {
         if (!press || e.touches.length !== 1) return;
         const t = e.touches[0];
         if (Math.abs(t.clientX - press.x) > 8 || Math.abs(t.clientY - press.y) > 8) endPress();
     }, { passive: true });
-    document.addEventListener('touchend', endPress, { passive: true });
-    document.addEventListener('touchcancel', endPress, { passive: true });
+    // After a long press the finger may rest over the menu that just opened:
+    // the click Safari makes of that touch would pick an item. Cancelling the
+    // touchend stops it; the other touch listeners stay passive for scrolling.
+    document.addEventListener('touchend', (e) => {
+        if (longPressed) {
+            longPressed = false;
+            if (e.cancelable) e.preventDefault();
+        }
+        endPress();
+    }, { passive: false });
+    document.addEventListener('touchcancel', () => { longPressed = false; endPress(); }, { passive: true });
     document.addEventListener('keydown', (e) => {
         const t = e.target;
         if (!t || !t.classList || !t.classList.contains('dooms-quest-text') || !inPage(t)) return;
@@ -567,8 +612,9 @@ export function renderShelfPage(page, container) {
     if (container.dataset.html === html) return;
     const active = document.activeElement;
     if (active && container.contains(active) && (active.isContentEditable || active.tagName === 'INPUT')) return;
+    // A menu or dialog over a box keeps its box until it closes (then rebuildIfOwed).
+    if (questMenu || whenDialog) return;
     if (editor) closeEditor();
-    closeQuestMenu();
     container.dataset.html = html;
     container.innerHTML = html;
 }

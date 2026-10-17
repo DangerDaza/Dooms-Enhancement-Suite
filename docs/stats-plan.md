@@ -1422,8 +1422,15 @@ nightfall", "after the thaw").
 
 ### 14.1 Data
 
-`chat_metadata.dooms_quest_cut = { quest, when, at }` while a cut is
-armed; it survives a reload mid-montage. The cut stays armed through
+`chat_metadata.dooms_quest_cut = { quest, when, at, facts }` while a cut
+is armed; it survives a reload mid-montage. The facts of now are captured
+when the cut is armed, so a swipe of the montage starts from the same now
+and not from where the first montage landed. A cut puts two replies in a
+row, which the together-mode commit at GENERATION_STARTED used to read as
+"no new message": it is decided from the generation's type now (a send, a
+/trigger or a Continue commits; a swipe, a regenerate, an impersonation or
+a quiet prompt does not), so the quest's opening turn sees the montage's
+block as the previous one. The cut stays armed through
 swipes and regenerates of the montage (each gets the same instruction)
 and ends with the player's next message (MESSAGE_SENT clears it before
 the slots are re-set for that generation). No settings: the menu is
@@ -1471,10 +1478,13 @@ on MESSAGE_SENT), `tools/quest-cut-flow-test.mjs`;
 (MESSAGE_SENT), `src/systems/ui/shelfPages.js` (the menu and the when
 dialog), `style.css`, `styles/overhaul.css`.
 
-### 14.5 Open
+### 14.5 Non-goals and open
 
-Whether the montage should be allowed to touch the other quests (today:
-"stay as they are unless the skip plainly touches them"); a cut from the
-sidebar's Quests panel too (today the shelf only); a way to undo a cut
-other than deleting the montage (deleting it ends nothing: the next
+Group chats: DES is not meant for them (Jordan, 2026-10-17, D39); a cut
+sends a bare `/trigger`, and nothing is built or tested for a group.
+
+Open: whether the montage should be allowed to touch the other quests
+(today: "stay as they are unless the skip plainly touches them"); a cut
+from the sidebar's Quests panel too (today the shelf only); a way to undo
+a cut other than deleting the montage (deleting it ends nothing: the next
 message ends the cut anyway).
