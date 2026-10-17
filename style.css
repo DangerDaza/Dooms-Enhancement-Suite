@@ -13398,6 +13398,20 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 .dooms-gm-call.is-npc.is-failure { border-left-color: #e5484d; }
 .dooms-gm-call-die { margin-right: 2px; }
 
+/* ── Inventory: what changed hands, in place of the reply's "[ITEM: ...]" line ── */
+.dooms-item-line {
+    display: inline-block;
+    margin: 4px 0 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.85em;
+    line-height: 1.45;
+    opacity: 0.95;
+}
+.dooms-item-line-icon { margin-right: 2px; }
+
 
 /* ── Dice: the d20 button in the message row and the chip above it ── */
 .dooms-dice-btn {

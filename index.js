@@ -160,6 +160,8 @@ import { messageHasFullSheet, injectFullSheetButtons, injectFullSheetButtonForMe
 import { initTrackerJsonInline, syncTrackerJsonForMessage, updateTrackerJsonDropdowns } from './src/systems/rendering/trackerJsonInline.js';
 // Dice (Project Short Fuse, Phase 2): the roll on a message, its card, the pending check
 import { initDiceRolls, onDiceMessageSent, onDiceChatChanged, onDiceReplyRendered, onDiceToolCallsPerformed, registerDiceTool, syncRollCardForMessage, updateRollCards, refreshDiceEntryPoints, notifyDiceChanged } from './src/systems/features/diceRolls.js';
+// Inventory (Project Short Fuse, Phase 5): the per-chat store, the end-of-reply tag and the tool
+import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInventoryMessageDeleted, onInventoryToolCallsPerformed } from './src/systems/features/inventory.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -450,6 +452,7 @@ async function addExtensionSettings() {
     // slot write that follows.
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
+    try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
@@ -4118,16 +4121,16 @@ jQuery(async () => {
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
-                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, syncRollCardForMessage],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
                 // onDiceReplyRendered reads a game-master call from the reply and
                 // decorates its tag; it runs after the bubble decorations so it
                 // sees the final markup, and before the roll box sync.
-                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
-                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, syncRollCardForMessage],
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards],
+                [event_types.CHARACTER_MESSAGE_RENDERED]: [onCharacterMessageRenderedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage, onGlintMessageRendered],
+                [event_types.MESSAGE_UPDATED]: [onMessageUpdatedDecorations, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
@@ -4136,9 +4139,9 @@ jQuery(async () => {
                 ...(event_types.MORE_MESSAGES_LOADED
                     ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
                     : {}),
-                // The dice tool's rolls ride on SillyTavern's tool-call messages.
+                // The dice tool's rolls and the inventory tool's outcomes ride on SillyTavern's tool-call messages.
                 ...(event_types.TOOL_CALLS_PERFORMED
-                    ? { [event_types.TOOL_CALLS_PERFORMED]: onDiceToolCallsPerformed }
+                    ? { [event_types.TOOL_CALLS_PERFORMED]: [onDiceToolCallsPerformed, onInventoryToolCallsPerformed] }
                     : {}),
             });
         } catch (error) {

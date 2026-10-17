@@ -343,21 +343,38 @@ export function applyChanges(state, changes, cfg) {
 }
 
 /**
- * Puts the stacks an applied list touched back to how they were, newest
- * change first. Used when a swipe replaces the reply that made them.
+ * Puts back what an applied list did, newest change first. A stack nothing
+ * has moved since is restored exactly (its slot, note and icon included);
+ * one that later changes touched gives up only this change's share of the
+ * count, so undoing an older reply leaves the newer ones standing.
  */
 export function revertApplied(state, applied) {
     const next = cloneState(state);
+    const at = (list, i) => Math.min(Number.isInteger(i) ? i : list.length, list.length);
     for (const a of [...(applied || [])].reverse()) {
         if (!a || !a.container) continue;
         const list = next[a.container];
         const key = itemKey(a.name);
         const idx = list.findIndex(i => itemKey(i.name) === key);
-        if (a.before) {
-            if (idx >= 0) list[idx] = { ...a.before };
-            else list.splice(Math.min(Number.isInteger(a.index) ? a.index : list.length, list.length), 0, { ...a.before });
-        } else if (idx >= 0) {
-            list.splice(idx, 1);
+        const cur = idx >= 0 ? list[idx] : null;
+        const untouched = a.after ? !!cur && cur.count === a.after.count : !cur;
+        if (untouched) {
+            if (a.before) {
+                if (idx >= 0) list[idx] = { ...a.before };
+                else list.splice(at(list, a.index), 0, { ...a.before });
+            } else if (idx >= 0) {
+                list.splice(idx, 1);
+            }
+            continue;
+        }
+        const delta = Number.isFinite(a.delta) ? a.delta : 0;
+        if (!delta) continue;
+        if (cur) {
+            cur.count = Math.min(MAX_COUNT, cur.count - delta);
+            if (cur.count <= 0) list.splice(idx, 1);
+        } else if (delta < 0) {
+            const base = a.before || a.after || { name: a.name, note: a.note || '', icon: a.icon || iconFor(a.name) };
+            list.splice(at(list, a.index), 0, { ...base, count: Math.min(MAX_COUNT, -delta) });
         }
     }
     return next;

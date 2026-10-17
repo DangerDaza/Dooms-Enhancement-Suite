@@ -158,12 +158,29 @@ console.log('\n§6 revertApplied');
     check('the batch changed things', names(r.state, 'pack') === 'torch:3,iron key:1,map:1' && names(r.state, 'pouch') === 'silver coins:1', `${names(r.state, 'pack')} / ${names(r.state, 'pouch')}`);
     const back = revertApplied(r.state, r.applied);
     check('reverting the batch restores the state exactly, slot order included', same(back, s), `${names(back, 'pack')} / ${names(back, 'pouch')}`);
-    check('reverting again changes nothing', same(revertApplied(back, r.applied), s));
+    // A revert is not idempotent: a second pass sees the restored stacks as touched by later changes and takes the share again. Callers revert a batch once (the lifecycle clears its live mark).
+    check('a second revert of the same batch takes the share again, by design', findStack(revertApplied(back, r.applied), 'pack', 'torch').count === 1);
     const later = applyChanges(r.state, [{ item: 'lantern' }], cfg).state;
     const partial = revertApplied(later, r.applied);
     check('an unrelated later add survives a revert of the earlier batch', names(partial, 'pack') === 'torch:2,rope:1,iron key:1,lantern:1' && partial.pack[1].note === 'fifty feet', names(partial, 'pack'));
     check('reverting nothing copies the state', same(revertApplied(s, []), s) && same(revertApplied(s, undefined), s) && revertApplied(s, []) !== s);
     check('the input state is untouched', same(s, S()) && same(r.state, applyChanges(s, [{ item: 'map', note: 'of the sewers' }, { item: 'torch' }, { item: 'rope', action: 'remove' }, { container: 'pouch', item: 'silver coins', action: 'remove', count: 2 }], cfg).state));
+}
+{
+    // An older change under newer ones gives up only its own share.
+    const s = S();
+    const a = applyChanges(s, [{ item: 'torch', count: 1 }, { item: 'map' }], cfg);           // torch 3, map 1
+    const b = applyChanges(a.state, [{ item: 'torch', count: 2 }, { item: 'map' }], cfg);     // torch 5, map 2
+    const older = revertApplied(b.state, a.applied);
+    check('undoing the older reply subtracts its share, the newer one stands', names(older, 'pack') === 'torch:4,rope:1,iron key:1,map:1', names(older, 'pack'));
+    const gone = applyChanges(a.state, [{ item: 'map', action: 'remove' }], cfg);             // map removed by a later reply
+    check('undoing an add of a stack a later reply removed changes nothing', same(revertApplied(gone.state, a.applied).pack.filter(i => i.name === 'map'), []) && findStack(revertApplied(gone.state, a.applied), 'pack', 'torch').count === 2);
+    const taken = applyChanges(s, [{ item: 'rope', action: 'remove' }], cfg);                 // rope gone
+    const refilled = applyChanges(taken.state, [{ item: 'rope', count: 3 }], cfg);            // a later reply brings three
+    check('undoing a removal under a later add gives the share back', names(refilled.state, 'pack') === 'torch:2,iron key:1,rope:3' && names(revertApplied(refilled.state, taken.applied), 'pack') === 'torch:2,iron key:1,rope:4', names(revertApplied(refilled.state, taken.applied), 'pack'));
+    const spent = applyChanges(s, [{ item: 'torch', action: 'remove', count: 2 }], cfg);     // torch gone
+    const partly = applyChanges(spent.state, [{ item: 'torch', count: 1 }], cfg);             // later: one torch back
+    check('undoing a removal when a later add partly refilled it adds the share', findStack(revertApplied(partly.state, spent.applied), 'pack', 'torch').count === 3);
 }
 
 console.log('\n§7 setStack (hand edits)');

@@ -2321,3 +2321,4 @@ body[data-dooms-ui] #character-workshop-popup .cw-attr-talent.is-master .cw-attr
 body[data-dooms-ui] .dooms-gm-call { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
 body[data-dooms-ui] .dooms-gm-call.is-npc.is-success { border-left-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-gm-call.is-npc.is-failure { border-left-color: var(--ov-accent2); }
+body[data-dooms-ui] .dooms-item-line { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
