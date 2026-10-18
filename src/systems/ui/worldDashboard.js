@@ -14,7 +14,7 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 import { resolvePortrait } from './portraitBar.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { liveWorldConfig, placeLabel, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { getWorldState, getActivePack, getPackError, advanceNow, isAdvancing, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 
 const POPUP_ID = 'rpg-world-popup';
 let built = false;
@@ -32,7 +32,8 @@ function lastSeenEntry(state, name) {
  * The dashboard's body as HTML. Pure apart from `portraits`, so tests can
  * render it without the portrait store.
  */
-export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packError = '', portraits = () => '' } = {}) {
+export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packError = '', portraits = () => '', masterOn = true } = {}) {
+    if (!masterOn) return '<p class="rpg-world-empty">Doom\'s Enhancement Suite is off; Live World runs only while it is on.</p>';
     if (!cfg || !cfg.enabled) return '<p class="rpg-world-empty">Live World is off. Settings → Live World switches it on.</p>';
     if (packError) return `<p class="rpg-world-empty is-error">This chat has no world: ${escapeHtml(packError)}</p>`;
     if (!state || !pack) return '<p class="rpg-world-empty">This chat has no world yet. Open a chat with Live World on, or re-seed it in Settings → Live World.</p>';
@@ -46,7 +47,7 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
     const effects = publicEffects(state, pack);
     const known = Object.entries(state.known).filter(([, t]) => t === 'known').map(([n]) => n);
     const heard = Object.entries(state.known).filter(([, t]) => t === 'heard').map(([n]) => n);
-    const changes = recentChanges(state, pack, { limit: 12 });
+    const changes = recentChanges(state, pack, { limit: 12, spoilerFree: cfg.spoilerFree });
     const cards = known.map(name => {
         const url = portraits(name);
         const face = url ? `<img class="rpg-world-portrait" src="${escapeHtml(url)}" alt="" />` : '<div class="rpg-world-portrait" aria-hidden="true">👤</div>';
@@ -88,12 +89,19 @@ function render() {
     if (!$body.length) return;
     let facts = {};
     try { facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { facts = {}; }
-    $body.html(renderWorldDashboardHtml({ state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), facts, packError: getPackError(), portraits: portraitOf }));
+    $body.html(renderWorldDashboardHtml({ state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), facts, packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled }));
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .rpg-world-result`).text(lastResult);
 }
 
-function onChanged() {
+function onChanged(e) {
+    // An advance that waited (on the tracker, on the main generation) ends here, not in the button's handler.
+    const source = e && e.detail && e.detail.source;
+    if (source === 'advance') lastResult = 'The world moved.';
+    else if (source === 'advance-failed') {
+        const s = getWorldState();
+        lastResult = `Discarded: ${s && s.lastError ? s.lastError.error : 'the reply broke a rule'}`;
+    }
     if (isOpen) render();
 }
 
@@ -121,12 +129,13 @@ function build() {
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
     $(document).on('click', '#rpg-world-advance-now', async function () {
-        $(this).prop('disabled', true);
+        // advanceNow takes the running flag before its first await, so the
+        // render that follows keeps the button disabled for the whole request.
+        const pending = advanceNow({ reason: 'dashboard' });
         lastResult = 'Advancing…';
         render();
         try {
-            const r = await advanceNow({ reason: 'dashboard' });
-            lastResult = r.ok ? 'The world moved.' : r.reason === 'off' ? 'Live World is off, or this chat has no world.' : r.reason === 'busy' ? 'Another request is running; the advance follows it.' : `Discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`;
+            lastResult = describeAdvanceResult(await pending);
         } catch (e) {
             lastResult = `Failed: ${e && e.message ? e.message : e}`;
         }

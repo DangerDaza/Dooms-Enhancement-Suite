@@ -73,26 +73,13 @@ export function extractTextFromResponse(response) {
  * @returns {Promise<string>} The generated text
  */
 export async function safeGenerateRaw(options) {
-    let capturedRawData = null;
-    const originalFetch = window.fetch;
-    window.fetch = async function (...args) {
-        const response = await originalFetch.apply(this, args);
-        try {
-            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-            if (url.includes('/api/backends/chat-completions/generate') ||
-                (url.includes('/api/backends/') && url.includes('/generate'))) {
-                const clone = response.clone();
-                capturedRawData = await clone.json();
-            }
-        } catch (e) {
-            /* ignore clone/parse errors */
-        }
-        return response;
-    };
+    installFetchCapture();
+    const before = lastCapture;
     try {
         const result = await generateRaw(options);
         return result;
     } catch (genErr) {
+        const capturedRawData = lastCapture && lastCapture !== before ? await lastCapture : null;
         if (genErr.message?.includes('No message generated') && capturedRawData) {
             console.warn(
                 '[Dooms Tracker] generateRaw failed (likely extended thinking). Extracting from raw API data.',
@@ -105,6 +92,44 @@ export async function safeGenerateRaw(options) {
         }
         throw genErr; // Re-throw non-related errors
     } finally {
-        window.fetch = originalFetch; // ALWAYS restore original fetch
+        removeFetchCapture();
     }
+}
+
+// The capture is shared by every safeGenerateRaw in flight (the tracker, the
+// dice ruling, Live World's advancer can overlap): installed once, counted,
+// and put back only when it is still the fetch in place. The body of a
+// /generate response is read from a clone in the background, so the caller
+// (and any streaming generation that overlaps) gets its response at once.
+let captureDepth = 0;
+let captureOriginal = null;
+let capturePatched = null;
+let lastCapture = null;    // Promise<object|null>: the newest /generate JSON body seen
+
+function installFetchCapture() {
+    if (captureDepth++ > 0) return;
+    const original = window.fetch;
+    captureOriginal = original;
+    capturePatched = async function (...args) {
+        const response = await original.apply(this, args);
+        try {
+            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+            const type = (response && response.headers && typeof response.headers.get === 'function' && response.headers.get('content-type')) || '';
+            if (url.includes('/api/backends/') && url.includes('/generate') && !/event-stream/i.test(type)) {
+                lastCapture = response.clone().json().catch(() => null);
+            }
+        } catch (e) {
+            /* ignore clone errors */
+        }
+        return response;
+    };
+    window.fetch = capturePatched;
+}
+
+function removeFetchCapture() {
+    if (--captureDepth > 0) return;
+    captureDepth = 0;
+    if (window.fetch === capturePatched) window.fetch = captureOriginal;
+    captureOriginal = null;
+    capturePatched = null;
 }

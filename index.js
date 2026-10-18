@@ -166,7 +166,7 @@ import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MA
 // Cut to a quest (Phase 5b): the player's next message ends an armed cut
 import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
-import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
+import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
@@ -398,10 +398,18 @@ function renderLiveWorldSettings() {
     ids.forEach(id => loadPack(id).then(r => {
         if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? ' (pasted)' : ''}${r.pack.id !== r.pack.name.toLowerCase() ? ` · ${id}` : ''}`);
     }).catch(() => {}));
+    renderLiveWorldStatus();
+}
+
+/** The status line alone: it follows every world change without touching the fields the user may be editing. */
+function renderLiveWorldStatus() {
+    if (!$('#rpg-world-status').length) return;
+    const cfg = liveWorldConfig(extensionSettings);
     const s = getWorldState();
     const pack = getActivePack();
     let status;
-    if (!cfg.enabled) status = 'Off. Nothing is read, written or sent.';
+    if (!extensionSettings.enabled) status = 'Doom\'s Enhancement Suite is off; Live World runs only while it is on.';
+    else if (!cfg.enabled) status = 'Off. Nothing is read, written or sent.';
     else if (getPackError()) status = `This chat has no world: ${getPackError()}`;
     else if (!s || !pack) status = 'This chat has no world yet (open a chat, or re-seed).';
     else {
@@ -549,6 +557,7 @@ async function addExtensionSettings() {
             clearExpressionSyncCache();
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
             refreshGlintWords(); // unwraps every glint while DES is off
+            onWorldChatChanged().catch(() => {}); // Live World: the world and its line go with the switch
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
@@ -560,6 +569,7 @@ async function addExtensionSettings() {
                 initExpressionSync();
                 syncExpressionFromLatestMessage();
             }
+            onWorldChatChanged().catch(() => {}); // Live World: the chat's world comes back with the switch
         }
     });
     // Set up "Open Settings" button in the extension dropdown
@@ -1973,12 +1983,17 @@ function bindSettingsUI() {
         toastr.success(`Pack "${r.pack.name}" added and chosen for new chats.`, 'Live World', { timeOut: 4000 });
         _saveWorld();
     });
-    $(document).on('click', '#rpg-world-remove-pack', function () {
+    $(document).on('click', '#rpg-world-remove-pack', async function () {
         const id = String($('#rpg-world-pack').val() || '');
-        if (!removeCustomPack(id)) { toastr.info('Only a pasted pack can be removed; the built-in ones stay.', 'Live World', { timeOut: 4000 }); return; }
+        if (!(id in (getWorldRules().customPacks || {}))) { toastr.info('Only a pasted pack can be removed; the built-in ones stay.', 'Live World', { timeOut: 4000 }); return; }
+        const active = getActivePack();
+        const mine = !!(active && active.id === id);
+        const confirmed = await callGenericPopup(`Remove the pasted pack "${id}"? Its JSON is gone from Settings (keep a copy of the file).${mine ? ' This chat was seeded from it and will have no world until it is pasted again or re-seeded from another pack.' : ''}`, POPUP_TYPE.CONFIRM);
+        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
+        if (!removeCustomPack(id)) return;
         const w = getWorldRules();
         if (w.pack === id) w.pack = 'skyreach';
-        _saveWorld();
+        _saveWorld({ reload: true });
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
         import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World dashboard failed to load:', err));
@@ -1988,8 +2003,8 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await advanceNow({ reason: 'settings' });
-            if (r.ok) toastr.success('The world moved.', 'Live World', { timeOut: 3000 });
-            else toastr.warning(r.reason === 'off' ? 'Live World is off, or this chat has no world.' : r.reason === 'busy' ? 'Another request is running; the advance follows it.' : `Discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`, 'Live World', { timeOut: 7000 });
+            if (r.ok) toastr.success(describeAdvanceResult(r), 'Live World', { timeOut: 3000 });
+            else toastr.warning(describeAdvanceResult(r), 'Live World', { timeOut: 7000 });
         } finally {
             $b.prop('disabled', false);
             renderLiveWorldSettings();
@@ -1999,10 +2014,11 @@ function bindSettingsUI() {
         if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
         const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
-        await reseedWorld();
+        const ok = await reseedWorld();
+        if (!ok) toastr.warning(`The world was kept: ${getPackError() || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });
         renderLiveWorldSettings();
     });
-    window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldSettings(); } catch (e) { /* non-fatal */ } });
+    window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldStatus(); } catch (e) { /* non-fatal */ } });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
@@ -4334,7 +4350,7 @@ jQuery(async () => {
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
@@ -4357,6 +4373,7 @@ jQuery(async () => {
         // initial render never happened. Trigger it now as a safety net.
         if (chat && chat.length > 0) {
             onCharacterChanged();
+            onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
         }
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();

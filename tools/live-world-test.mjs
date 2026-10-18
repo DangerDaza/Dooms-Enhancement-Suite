@@ -15,7 +15,7 @@ import {
     emptyWorldState, seedWorldState, normalizeWorldState, countMessage, advanceDue, markHeard, markKnown,
     buildWorldLines, buildAdvancePrompt, parseAdvanceReply, validateAdvance, applyAdvance, failAdvance,
     recentChanges, publicEffects, LOG_PER_CHARACTER, LOG_TOTAL, COUNTED_KEEP, WORLD_SLOT,
-    defaultLiveWorldConfig, liveWorldConfig, buildRecentText,
+    defaultLiveWorldConfig, liveWorldConfig, buildRecentText, stripSceneNoise, reconcileWithChat,
 } from '../src/utils/liveWorld.js';
 
 let failures = 0;
@@ -108,7 +108,7 @@ check('garbage, arrays and nothing are null', parseAdvanceReply('no json here') 
 console.log('\n§7 the reply validated');
 {
     const good = validateAdvance({ elapsed: 'two days', clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }, { who: 'Captain Reyes', to: "harbourside/the-docks/customs-house" }], blurb: 'Talk of the cutter.', heard: ['Maeve', 7] }, pack, seeded, { maxStep: 1 });
-    check('a sound reply', !good.ok === false || true);
+    check('one bad entry fails the whole reply: nothing is cleaned', !good.ok && good.clean === null);
     check('a heard-of entry that is not a string fails the whole reply', !good.ok && good.errors.some(e => e.includes('heard-of name is not a string')));
     const fine = validateAdvance({ elapsed: 'two days', clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }, { who: 'Captain Reyes', to: 'harbourside/the-docks/customs-house' }], blurb: 'Talk of the cutter.', heard: ['Maeve'] }, pack, seeded, { maxStep: 1 });
     check('a sound reply passes, cleaned: places as ids, strings trimmed', fine.ok && same(fine.clean.clocks, { blockade: 2 }) && fine.clean.moved[0].to === 'back-room' && fine.clean.moved[1].to === 'customs-house' && fine.clean.heard[0] === 'Maeve' && fine.clean.blurb === 'Talk of the cutter.' && fine.clean.elapsed === 'two days', JSON.stringify(fine));
@@ -147,7 +147,9 @@ console.log('\n§8 the advance applied');
     const a = applyAdvance(seeded, v.clean, pack, { msgId: 'm12', gameDate: 'Thursday', gameTime: 'dawn', ranAt: 100 });
     check('the input is never touched', JSON.stringify(seeded) === snap);
     check('clocks overwritten, only the ones that moved', a.clocks.blockade === 2 && a.clocks.fever === 0);
-    check('a move writes where and the log, with from, to, the message and the date', a.where['Old Marit'] === 'harbourside/old-town/the-anchor/back-room' && a.log.length === 2 && a.log[0].who === 'Old Marit' && a.log[0].from === 'harbourside/old-town/the-anchor' && a.log[0].msgId === 'm12' && a.log[0].gameDate === 'Thursday' && a.log[0].reason === 'hiding', JSON.stringify(a.log));
+    const marit = a.log.find(e => e.who === 'Old Marit');
+    check('a move writes where and the log, with from, to, the message and the date', a.where['Old Marit'] === 'harbourside/old-town/the-anchor/back-room' && a.log.filter(e => e.kind === 'move').length === 2 && marit.from === 'harbourside/old-town/the-anchor' && marit.msgId === 'm12' && marit.gameDate === 'Thursday' && marit.reason === 'hiding', JSON.stringify(a.log));
+    check('a clock that moved is logged too, with its old and new value', a.log[0].kind === 'clock' && a.log[0].clock === 'blockade' && a.log[0].from === 1 && a.log[0].to === 2 && a.log[0].msgId === 'm12' && a.log.length === 3);
     check('a move to where someone already is logs nothing', !a.log.some(e => e.who === 'Captain Reyes'));
     check('a newcomer moved is placed and becomes heard-of', a.where['Newcomer'] === 'harbourside/the-hill' && a.known['Newcomer'] === 'heard');
     check('heard-of names added, the known one stays known', a.known['Maeve'] === 'heard' && a.known['Old Marit'] === 'known');
@@ -177,7 +179,8 @@ console.log('\n§9 the dashboard\'s reading');
     const v = validateAdvance({ clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }] }, pack, seeded);
     const a = applyAdvance(seeded, v.clean, pack, { msgId: 'm1', gameDate: 'Thursday' });
     const rc = recentChanges(a, pack);
-    check('recent changes read as moves between labelled places, newest first', rc.length === 1 && rc[0].kind === 'move' && rc[0].text === "Old Marit: The Anchor, a tavern, The old town → The Anchor's back room, The Anchor, a tavern (hiding)" && rc[0].gameDate === 'Thursday', JSON.stringify(rc));
+    check('recent changes read as moves between labelled places, newest first', rc.length === 2 && rc[0].kind === 'move' && rc[0].text === "Old Marit: The Anchor, a tavern, The old town → The Anchor's back room, The Anchor, a tavern (hiding)" && rc[0].gameDate === 'Thursday', JSON.stringify(rc));
+    check('a clock change reads as its public effect with the clock named; spoiler-free drops the name; a step with no text stays out', rc[1].kind === 'clock' && rc[1].text === 'The blockade: Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(a, pack, { spoilerFree: true })[1].text === 'Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(applyAdvance(seeded, { clocks: { fever: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack).length === 0 && recentChanges(applyAdvance(seeded, { clocks: { blockade: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack)[0].text.startsWith('The blockade: Ships come and go'), JSON.stringify(recentChanges(a, pack, { spoilerFree: true })));
     const pe = publicEffects(a, pack);
     check('public effects are the clocks\' texts, never the numbers', pe.length === 1 && pe[0].id === 'blockade' && pe[0].text.startsWith('Cargo is searched') && !JSON.stringify(pe).includes('"value"'));
     check('a clock at a step with no text says nothing', publicEffects(seeded, pack).length === 1);
@@ -201,6 +204,59 @@ console.log('\n§10 the rules and the recent scenes');
     check('recent scenes: names, no system notes or tool records, blocks and tags stripped, lines cut', r.split('\n').length === 3 && r.startsWith('Jordan: I run for the Anchor.\nNarrator: The cutter fires.\nNarrator: ' + 'w'.repeat(99) + '…') && !r.includes('tracker') && !r.includes('[ITEM'), r);
     check('the last N only', buildRecentText(chat, { count: 1 }).startsWith('Narrator: www'));
     check('nothing', buildRecentText(null) === '' && buildRecentText([]) === '');
+}
+
+console.log('\n§11 what the review found');
+{
+    // the parser reads past reasoning and prose
+    const thought = parseAdvanceReply('<think>Let me see {the clocks}... {"clocks":"draft"}</think>\nHere it is:\n{"elapsed":"a night","clocks":{"blockade":2},"moved":[],"blurb":"Quiet.","heard":[]}\nI also considered {"other": 1}. Done.');
+    check('a reasoning block and prose with braces around the object do not hide it', thought && thought.clocks.blockade === 2 && thought.elapsed === 'a night', JSON.stringify(thought));
+    check('two objects: the one shaped like an advance wins', parseAdvanceReply('{"note":"x"} then {"moved":[{"who":"A","to":"the-hill"}]}').moved[0].who === 'A' && parseAdvanceReply('{"note":"x"}').note === 'x');
+    check('a fenced object after a fenced non-object', parseAdvanceReply('```\n[1,2]\n```\n```json\n{"clocks":{}}\n```').clocks !== undefined);
+    check('only reasoning: nothing', parseAdvanceReply('<think>{"clocks":{"blockade":2}}</think>') === null);
+    // the scene window holds prose, not blocks
+    const noisy = `<think>I should move {the plot}</think>Dawn breaks over the quay. {"infoBox":{"date":"Wednesday","time":"dawn","location":"the quay"},"characterThoughts":[]} <trackers>stuff</trackers>\n\`\`\`json\n{"a":1}\n\`\`\` The captain {frowns} and says "{that}" is fine. [ITEM: +1 rope]`;
+    check('reasoning, the tracker block, bare JSON, fences and tags are stripped; braces in prose stay', stripSceneNoise(noisy) === 'Dawn breaks over the quay. The captain {frowns} and says "{that}" is fine.', stripSceneNoise(noisy));
+    const windowed = buildRecentText([{ is_user: false, name: 'Narrator', mes: `{"infoBox":${JSON.stringify({ date: 'x'.repeat(800) })}}\nThe quay at dawn.`, extra: {} }], { truncation: 100 });
+    check('a reply that opens with a long tracker block still gives its prose to the advancer', windowed === 'Narrator: The quay at dawn.', windowed);
+    check('an unterminated reasoning block is cut away', stripSceneNoise('Night. <think>I wonder whether') === 'Night.');
+    // the player is nobody the world places
+    const pp = buildAdvancePrompt({ pack, state: seeded, player: 'Jordan' });
+    check('the prompt names the player and keeps them out of the cast', pp.system.includes('The player is Jordan: never move them') && pp.user.includes('The player: Jordan (not part of the cast).') && !buildAdvancePrompt({ pack, state: seeded }).system.includes('The player is'));
+    const pv = validateAdvance({ moved: [{ who: 'jordan', to: 'the-hill' }, { who: 'Old Marit', to: 'back-room' }], heard: ['JORDAN', 'Maeve'] }, pack, seeded, { player: 'Jordan' });
+    check("the player's own moves and mentions are dropped, the rest kept, the reply still sound", pv.ok && pv.clean.moved.length === 1 && pv.clean.moved[0].who === 'Old Marit' && same(pv.clean.heard, ['Maeve']), JSON.stringify(pv));
+    // a clock stored above the pack's range
+    const high = { ...seeded, clocks: { ...seeded.clocks, blockade: 9 } };
+    check('a stored value above max is read as max: it can come down, it shows as max', validateAdvance({ clocks: { blockade: 5 } }, pack, high).ok && validateAdvance({ clocks: { blockade: 4 } }, pack, high).errors[0].includes('more than 1') && publicEffects(high, pack)[0].text.startsWith('The harbour is closed') && buildWorldLines(high, pack).includes('The blockade 6/6') && buildAdvancePrompt({ pack, state: high }).user.includes('now 6 of 6'));
+    // the template is filled, not interpreted
+    const tpl = normalizePack({ ...raw, template: '[{name}] {clocks} | {where} | {clocks}' }).pack;
+    const dollar = seedWorldState(tpl);
+    dollar.known['Mr $& Big'] = 'known';
+    dollar.where['Mr $& Big'] = 'harbourside/the-hill';
+    const line = buildWorldLines(dollar, tpl);
+    check("a pack's template keeps $-patterns literal and fills every placeholder", line.startsWith('[Harbourside] The blockade 1/6') && line.includes('Mr $& Big: The hill, Harbourside') && line.split('The blockade 1/6').length === 3 && !line.includes('{clocks}'), line);
+    // ids in any script
+    const uni = normalizePack({ id: 'Kyōto', places: [{ id: '市場', label: 'The market' }, { id: 'Café Noir', parent: '市場' }], clocks: [{ id: 'Ночь', max: 3 }], cast: [{ name: 'Aiko', place: 'Café Noir' }] });
+    check('place, clock and pack ids keep letters of any script', uni.ok && uni.pack.id === 'kyōto' && uni.pack.places[1].id === 'café-noir' && uni.pack.places[1].parent === '市場' && uni.pack.clocks[0].id === 'ночь' && resolvePlace(uni.pack, 'café noir') === 'café-noir' && uni.pack.cast[0].place === 'café-noir', JSON.stringify(uni.errors));
+    // a pack author hears about mistakes
+    const bad = normalizePack({ id: 'b', places: [{ id: 'a' }], clocks: [{ id: 'c1', max: 0 }, { id: 'c2', max: '6' }, { id: 'c3', effects: { '': 'zero?', 2: 'two', x: 'no' } }], cast: [{ name: 'Twin', place: 'a' }, { name: 'twin' }] });
+    check('a max of 0 or a string is an error, a missing one is 6, an empty effects key is ignored, a cast name used twice is an error', !bad.ok && bad.errors.some(e => e.includes('"c1" has a max of 0')) && bad.errors.some(e => e.includes('"c2" has a max of "6"')) && bad.pack.clocks[2].max === 6 && same(Object.keys(bad.pack.clocks[2].effects), ['2']) && bad.errors.some(e => e.includes('names "twin" twice')) && bad.pack.cast.length === 1, JSON.stringify(bad.errors));
+    // the state wound back to a shorter chat
+    const r1 = applyAdvance(seeded, validateAdvance({ clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room' }] }, pack, seeded).clean, pack, { msgId: 'a', gameDate: 'Mon' });
+    const c1 = countMessage(countMessage(r1, 'a').state, 'b').state;
+    const r2 = applyAdvance(c1, validateAdvance({ clocks: { blockade: 3 }, moved: [{ who: 'Old Marit', to: 'the-hill' }, { who: 'Captain Reyes', to: 'the-hill' }] }, pack, c1).clean, pack, { msgId: 'b', gameDate: 'Tue' });
+    const c2 = countMessage(r2, 'c').state;
+    const back = reconcileWithChat(c2, ['a']);
+    check('runs stamped on messages the chat no longer holds are undone from the tail: clocks and places back, the last run the newest standing, the count from it', back.undone === 3 && back.state.clocks.blockade === 2 && back.state.where['Old Marit'].endsWith('back-room') && back.state.where['Captain Reyes'].endsWith('customs-house') && back.state.last.msgId === 'a' && back.state.last.gameDate === 'Mon' && back.state.log.length === 2 && back.state.sinceLast === 0, JSON.stringify(back.state));
+    check('a chat that still holds the messages is left alone (same object)', reconcileWithChat(c2, ['a', 'b', 'c']).state === c2 && reconcileWithChat(c2, ['a', 'b']).state === c2);
+    const allGone = reconcileWithChat(c2, []);
+    check('every run gone: back to the seed values, no last run, nothing counted', allGone.state.clocks.blockade === 1 && !('Captain Reyes' in allGone.state.where && allGone.state.where['Captain Reyes'].endsWith('the-hill')) && allGone.state.where['Old Marit'].endsWith('the-anchor') && allGone.state.last === null && allGone.state.sinceLast === 0);
+    const withNull = applyAdvance(seeded, { clocks: { blockade: 2 }, moved: [], heard: [], blurb: '' }, pack, { msgId: null });
+    check('a run with no message id (manual, before any reply) is never undone', reconcileWithChat(withNull, []).state === withNull);
+    const failedGone = failAdvance(r1, { msgId: 'b', error: 'x' });
+    const fg = reconcileWithChat(failedGone, ['a']);
+    check('a failed attempt on a message that is gone is forgotten with its retry', fg.state.lastError === null && fg.state.retryNext === false && fg.state.clocks.blockade === 2);
+    check('a chat that holds the last run but not an older one is not ahead: left alone', reconcileWithChat(c2, ['b']).state === c2);
 }
 
 console.log(`\n${failures === 0 ? 'All Live World checks pass' : `${failures} FAILURE(S)`}`);

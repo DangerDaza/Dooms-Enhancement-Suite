@@ -261,12 +261,13 @@ export const BACKGROUND_BUSY = Symbol('background busy');
  * @returns {Promise<any>} fn's result, or BACKGROUND_BUSY when another
  *   background request is running
  */
-export async function withBackgroundProfile(fn, { external = false } = {}) {
+export async function withBackgroundProfile(fn, { external = false, label = 'tracker' } = {}) {
     if (isGenerating) return BACKGROUND_BUSY;
     let originalProfileName = null;
     let originalPresetName = null;
     let profileSwitched = false;
     setIsGenerating(true);
+    backgroundLabel = label;
     try {
         if (!external && extensionSettings.connectionProfile) {
             if (isConnectionProfileAvailable(extensionSettings.connectionProfile)) {
@@ -313,7 +314,24 @@ export async function withBackgroundProfile(fn, { external = false } = {}) {
             }
         }
         setIsGenerating(false);
+        backgroundLabel = '';
+        const waiters = backgroundWaiters.splice(0);
+        for (const resolve of waiters) { try { resolve(); } catch (e) { /* a waiter's problem */ } }
     }
+}
+
+let backgroundLabel = '';           // who holds the flag through withBackgroundProfile: 'tracker' or 'world'
+const backgroundWaiters = [];
+
+/** The label of the background request running through withBackgroundProfile, '' when none. */
+export function backgroundHolder() {
+    return isGenerating ? backgroundLabel : '';
+}
+
+/** Resolves when the background request now running has finished (at once when none is). */
+export function waitForBackground() {
+    if (!isGenerating) return Promise.resolve();
+    return new Promise(resolve => backgroundWaiters.push(resolve));
 }
 
 /**
@@ -332,7 +350,11 @@ export async function withBackgroundProfile(fn, { external = false } = {}) {
  */
 export async function updateRPGData(renderInfoBox, renderThoughts, { force = false, recovery = false } = {}) {
     if (isGenerating) {
-        return;
+        // The tracker's own request, or the main generation of together mode: one at a time.
+        // Live World's advancer is the exception: the tracker waits for it rather than losing the turn.
+        if (backgroundHolder() !== 'world') return;
+        await waitForBackground();
+        if (isGenerating) return;
     }
     if (!extensionSettings.enabled) {
         return;

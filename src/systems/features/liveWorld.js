@@ -12,13 +12,14 @@
  *   - blind injection (G4): the world lines through SillyTavern's own
  *     setExtensionPrompt, at a configurable depth and role, never through
  *     the Context Inspector's recorder; no toasts, the System Log only;
- *   - the /advance slash command (G5).
+ *   - the /advance and /liveworld slash commands (G5).
  *
  * The pure parts are src/utils/liveWorld.js; the dashboard is
  * src/systems/ui/worldDashboard.js (lazy).
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, chat_metadata, saveChatDebounced, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource } from '../../../../../../../script.js';
+import { chat, chat_metadata, saveChatDebounced, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource } from '../../../../../../../script.js';
+import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../../../../../scripts/slash-commands/SlashCommand.js';
 import { extensionFolderPath } from '../../core/config.js';
@@ -36,6 +37,7 @@ import {
     countMessage,
     advanceDue,
     markKnown,
+    reconcileWithChat,
     buildWorldLines,
     buildAdvancePrompt,
     buildRecentText,
@@ -48,17 +50,18 @@ import {
 export const WORLD_CHANGED_EVENT = 'dooms:world-changed';
 export const BUILTIN_PACKS = Object.freeze(['skyreach', 'example']);
 const META_KEY = 'dooms_world';
-const NOT_LOADED = Symbol('not loaded');
 
 let state = null;            // this chat's world state, or null while off or unseeded
 let activePack = null;       // the pack the state belongs to
 let packError = '';          // why the pack could not be used, for the dashboard
-let loadedFor = NOT_LOADED;
-let loadToken = 0;
+let loadToken = 0;           // bumped by every chat load; an advance that outlives its chat is discarded
 let advancing = false;
-let pendingReason = '';      // an advance that waited on another background request
+let pendingReason = '';      // an advance that waits: on the tracker request, another background request or the main generation
+let pendingTimer = null;     // the fallback for a wait that nothing ends (the tracker skipped its request)
+let inherit = null;          // a regenerate: { id, index } the new reply takes over from the deleted one
 let transport = null;        // test hook: ({ system, user }) => Promise<string>
 const packCache = new Map();
+const PENDING_FALLBACK_MS = 20000;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -180,11 +183,42 @@ export function getWorldState() {
     return state ? clone(state) : null;
 }
 
-function commit(next, detail) {
+/**
+ * Writes the state to the chat. Commit points (a seed, an advance, a
+ * failed advance, a rewind) save at once: a debounced write is lost when
+ * the user switches chats before it fires. A count saves debounced.
+ */
+function commit(next, detail, { immediate = false } = {}) {
     state = next;
     if (chat_metadata && typeof chat_metadata === 'object') chat_metadata[META_KEY] = clone(state);
-    try { saveChatDebounced(); } catch (e) { /* no chat open */ }
+    try {
+        if (immediate) Promise.resolve(saveChatConditional()).catch(e => log('chat save failed', String(e && e.message || e)));
+        else saveChatDebounced();
+    } catch (e) { /* no chat open */ }
     notify(detail);
+}
+
+function clearWorldSlot() {
+    try { setExtensionPrompt(WORLD_SLOT, '', extension_prompt_types.IN_CHAT, cfg().depth, false, extension_prompt_roles.SYSTEM); } catch (e) { /* no ST */ }
+}
+
+/** The chat's stamped reply ids, in order. */
+function presentReplyIds() {
+    const list = chatArray();
+    if (!list) return [];
+    const ids = [];
+    for (const m of list) if (m && !m.is_user && !m.is_system && typeof m.dooms_world_id === 'string' && m.dooms_world_id) ids.push(m.dooms_world_id);
+    return ids;
+}
+
+/** A state ahead of its chat (a branch, a checkpoint, deleted replies) is wound back to it. */
+function reconcile(detail) {
+    if (!state) return false;
+    const r = reconcileWithChat(state, presentReplyIds());
+    if (r.state === state) return false;
+    log(`wound back ${r.undone} change(s) the chat no longer holds`);
+    commit(r.state, { source: 'rewind', ...detail }, { immediate: true });
+    return true;
 }
 
 /**
@@ -195,12 +229,13 @@ function commit(next, detail) {
  */
 export async function onWorldChatChanged() {
     const token = ++loadToken;
-    loadedFor = chatId();
     state = null;
     activePack = null;
     packError = '';
     pendingReason = '';
-    if (!isLiveWorldOn()) { notify({ source: 'chat' }); return; }
+    inherit = null;
+    if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+    if (!isLiveWorldOn()) { clearWorldSlot(); notify({ source: 'chat' }); return; }
     const raw = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[META_KEY] : null;
     const stored = raw && typeof raw === 'object' && raw.seeded === true ? normalizeWorldState(raw) : null;
     const packId = stored && stored.pack ? stored.pack : cfg().pack;
@@ -215,16 +250,29 @@ export async function onWorldChatChanged() {
     activePack = res.pack;
     if (stored) {
         state = stored;
+        reconcile({ at: 'load' });
     } else {
         state = seedWorldState(activePack);
-        commit(state, { source: 'seed' });
+        commit(state, { source: 'seed' }, { immediate: true });
         log(`seeded from "${activePack.name}"`);
     }
     notify({ source: 'chat' });
 }
 
-/** Throws the chat's world away and seeds it again from the chosen pack (Settings). */
+/**
+ * Throws the chat's world away and seeds it again from the chosen pack
+ * (Settings). The pack is loaded first: when it cannot be used the old
+ * world stays and `getPackError()` says why.
+ */
 export async function reseedWorld() {
+    if (!isLiveWorldOn()) return false;
+    const res = await loadPack(cfg().pack, { fresh: true });
+    if (!res.ok) {
+        packError = res.errors.join(' ');
+        log(`re-seed refused: the pack "${cfg().pack}" cannot be used`, res.errors);
+        notify({ source: 'chat' });
+        return false;
+    }
     if (chat_metadata && typeof chat_metadata === 'object') delete chat_metadata[META_KEY];
     await onWorldChatChanged();
     return !!state;
@@ -251,7 +299,8 @@ function lastReplyKey() {
 function knownNamesFromTracker() {
     try {
         const entries = parseCharacterEntriesFromThoughts(lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts);
-        return (entries || []).map(c => c && c.name).filter(Boolean);
+        const player = String(resolvePersonaName() || '').trim().toLowerCase();
+        return (entries || []).map(c => c && c.name).filter(n => n && String(n).trim().toLowerCase() !== player);
     } catch (e) {
         return [];
     }
@@ -261,10 +310,16 @@ function knownNamesFromTracker() {
  * MESSAGE_RECEIVED: a fresh reply counts once; the tracker's present
  * characters become known; every N, the advancer runs.
  */
-export function onWorldMessageReceived() {
-    if (!ready()) return;
+export function onWorldMessageReceived(messageId, type) {
     const list = chatArray();
     const m = list && list.length ? list[list.length - 1] : null;
+    // A regenerate deleted the reply this one replaces: same slot, same id, counted once.
+    if (inherit && m && !m.is_user && list.length - 1 === inherit.index && !(typeof m.dooms_world_id === 'string' && m.dooms_world_id) && !list.some(x => x && x.dooms_world_id === inherit.id)) {
+        m.dooms_world_id = inherit.id;
+    }
+    inherit = null;
+    if (!ready()) return;
+    if (type === 'first_message') return;    // the greeting of a new chat is not a reply
     if (!m || m.is_user || m.is_system || Array.isArray(m.extra && m.extra.tool_invocations)) return;
     const r = countMessage(state, messageKey(m));
     let next = r.state;
@@ -272,34 +327,79 @@ export function onWorldMessageReceived() {
     if (names.length) next = markKnown(next, names);
     if (!r.counted && next === state) return;
     commit(next, { source: 'count', counted: r.counted });
-    if (r.counted && advanceDue(next, cfg().every)) scheduleAdvance('count');
+    if (r.counted && advanceDue(next, cfg().every)) {
+        if (trackerRequestExpected()) waitFor('count');    // the tracker's own request first (D46), the advance after it
+        else scheduleAdvance('count');
+    }
+}
+
+/** Whether DES will run its separate tracker request for the reply that just landed. */
+function trackerRequestExpected() {
+    if (!extensionSettings.enabled || !extensionSettings.autoUpdate) return false;
+    if (extensionSettings.generationMode !== 'separate' && extensionSettings.generationMode !== 'external') return false;
+    return !!(extensionSettings.showInfoBox || extensionSettings.showCharacterThoughts || extensionSettings.showQuests);
+}
+
+/** Parks an advance until the tracker request ends or the main generation ends; a fallback runs it when nothing does. */
+function waitFor(reason) {
+    pendingReason = reason;
+    const token = loadToken;
+    if (pendingTimer) clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(() => {
+        pendingTimer = null;
+        if (token !== loadToken || !pendingReason) return;
+        log('the wait ended by the fallback');
+        flushPending();
+    }, PENDING_FALLBACK_MS);
+}
+
+/** Runs the advance that waited, if any. */
+function flushPending() {
+    if (!pendingReason) return;
+    const reason = pendingReason;
+    pendingReason = '';
+    if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+    scheduleAdvance(reason);
+}
+
+/** MESSAGE_DELETED: the last replies gone (not a regenerate, whose new reply takes the old id) wind the state back. */
+export function onWorldMessageDeleted() {
+    if (!ready() || inherit) return;
+    reconcile({ at: 'delete' });
 }
 
 /** After the tracker request (separate mode): names it brought become known, and an advance that waited runs. */
-function onTrackerUpdateComplete() {
+export function onWorldTrackerUpdateComplete() {
     if (!ready()) return;
     const names = knownNamesFromTracker();
     if (names.length) {
         const next = markKnown(state, names);
         if (JSON.stringify(next.known) !== JSON.stringify(state.known)) commit(next, { source: 'known' });
     }
-    if (pendingReason) {
-        const reason = pendingReason;
-        pendingReason = '';
-        scheduleAdvance(reason);
-    }
+    flushPending();
 }
 
-/** GENERATION_ENDED: an advance that waited on the main generation runs now. */
+/** GENERATION_ENDED and GENERATION_STOPPED: the main generation is over; an advance that waited on it runs now. */
 export function onWorldGenerationEnded() {
-    if (!ready() || !pendingReason) return;
-    const reason = pendingReason;
-    pendingReason = '';
-    scheduleAdvance(reason);
+    inherit = null;
+    if (!ready()) return;
+    flushPending();
+}
+
+/**
+ * SillyTavern's own generation is running: its send flag, which every path
+ * out of Generate clears (a slash command typed as a message never sets
+ * it, so /advance runs at once). The advancer never starts under it: the
+ * tracker's connection profile would otherwise catch the user's request.
+ */
+function mainGenerationBusy() {
+    return ST.is_send_press === true;
 }
 
 function scheduleAdvance(reason) {
+    const token = loadToken;
     setTimeout(() => {
+        if (token !== loadToken) return;    // the chat changed while the timer ran
         advanceNow({ reason }).catch(err => log('advance threw', String(err && err.message || err)));
     }, 400);
 }
@@ -319,48 +419,75 @@ export function __setWorldTransport(fn) {
  */
 export async function advanceNow({ reason = 'manual' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
-    if (advancing) return { ok: false, reason: 'busy' };
+    if (advancing) return { ok: false, reason: 'running' };
+    if (mainGenerationBusy()) {
+        waitFor(reason);
+        log('advance waits on the main generation');
+        return { ok: false, reason: 'busy' };
+    }
     advancing = true;
+    const token = loadToken;    // the chat this run belongs to; its reply is discarded when another chat is open by then
     try {
         const c = cfg();
         const pack = activePack;
+        const player = resolvePersonaName() || '';
         const now = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
-        const recent = buildRecentText(chatArray(), { count: c.recentMessages, persona: resolvePersonaName() || 'Player' });
-        const prompt = buildAdvancePrompt({ pack, state, recent, now, maxStep: c.maxStep, spoilerFree: c.spoilerFree });
+        const recent = buildRecentText(chatArray(), { count: c.recentMessages, persona: player || 'Player' });
+        const prompt = buildAdvancePrompt({ pack, state, recent, now, maxStep: c.maxStep, spoilerFree: c.spoilerFree, player });
         const external = extensionSettings.generationMode === 'external';
+        const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
         const run = async () => {
             if (transport) return transport(prompt);
-            if (external) return generateWithExternalAPI([{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }]);
-            return safeGenerateRaw({ prompt: `${prompt.system}\n\n${prompt.user}`, quietToLoud: false });
+            if (external) return generateWithExternalAPI(messages);
+            return safeGenerateRaw({ prompt: messages, quietToLoud: false });
         };
         log(`advance (${reason}) requested`, { pack: pack.id, sinceLast: state.sinceLast });
-        const result = await withBackgroundProfile(run, { external });
+        const result = await withBackgroundProfile(run, { external, label: 'world' });
+        if (token !== loadToken) {
+            log('advance discarded: the chat changed while it ran');
+            return { ok: false, reason: 'stale' };
+        }
         if (result === BACKGROUND_BUSY) {
-            pendingReason = reason;
+            waitFor(reason);
             log('advance waits on another background request');
             return { ok: false, reason: 'busy' };
         }
         const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
         const parsed = parseAdvanceReply(text);
-        const v = validateAdvance(parsed, pack, state, { maxStep: c.maxStep });
+        const v = validateAdvance(parsed, pack, state, { maxStep: c.maxStep, player });
         const msgId = lastReplyKey();
         if (!v.ok) {
-            commit(failAdvance(state, { msgId, ranAt: Date.now(), error: v.errors.join(' ') }), { source: 'advance-failed' });
+            commit(failAdvance(state, { msgId, ranAt: Date.now(), error: v.errors.join(' ') }), { source: 'advance-failed' }, { immediate: true });
             log('advance discarded', { errors: v.errors, reply: text.slice(0, 400) });
             return { ok: false, reason: 'invalid', errors: v.errors };
         }
         const next = applyAdvance(state, v.clean, pack, { msgId, gameDate: now.date, gameTime: now.time, ranAt: Date.now() });
-        commit(next, { source: 'advance' });
+        commit(next, { source: 'advance' }, { immediate: true });
         log('advanced', v.clean);
         return { ok: true, clean: v.clean };
     } catch (e) {
         const error = String(e && e.message || e);
-        if (state) commit(failAdvance(state, { ranAt: Date.now(), error }), { source: 'advance-failed' });
+        if (token !== loadToken) {
+            log('advance failed after the chat changed; nothing written', error);
+            return { ok: false, reason: 'stale', error };
+        }
+        if (state) commit(failAdvance(state, { msgId: lastReplyKey(), ranAt: Date.now(), error }), { source: 'advance-failed' }, { immediate: true });
         log('advance failed', error);
         return { ok: false, reason: 'error', error };
     } finally {
         advancing = false;
     }
+}
+
+/** One line for a result of advanceNow, for /advance, Settings and the dashboard. */
+export function describeAdvanceResult(r) {
+    if (!r) return 'Nothing happened.';
+    if (r.ok) return 'The world moved.';
+    if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
+    if (r.reason === 'running') return 'An advance is already running.';
+    if (r.reason === 'busy') return 'Another request is running; the advance follows it.';
+    if (r.reason === 'stale') return 'The chat changed while the advance ran; nothing was written.';
+    return `The advance was discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`;
 }
 
 export function isAdvancing() {
@@ -376,6 +503,14 @@ export function isAdvancing() {
  */
 export function onWorldGenerationStarted(type, data, dryRun) {
     if (dryRun) return;
+    if (type === 'regenerate') {
+        // The last reply is about to be deleted and replaced: the new one is the same slot.
+        const list = chatArray();
+        const m = list && list.length ? list[list.length - 1] : null;
+        inherit = m && !m.is_user && !m.is_system && typeof m.dooms_world_id === 'string' && m.dooms_world_id ? { id: m.dooms_world_id, index: list.length - 1 } : null;
+    } else {
+        inherit = null;
+    }
     const c = cfg();
     const quiet = type === 'quiet' || type === 'impersonate' || !!(data && (data.quiet_prompt || data.quietImage || data.quiet_image));
     const text = ready() && c.inject && !quiet ? buildWorldLines(state, activePack) : '';
@@ -398,13 +533,7 @@ function registerWorldCommands() {
     try {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'advance',
-            callback: async () => {
-                const r = await advanceNow({ reason: 'command' });
-                if (r.ok) return 'The world moved.';
-                if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
-                if (r.reason === 'busy') return 'Another request is running; the advance follows it.';
-                return `The advance was discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`;
-            },
+            callback: async () => describeAdvanceResult(await advanceNow({ reason: 'command' })),
             helpString: 'Live World: runs the plot advancer now, moving the clocks and the last-seen places from the recent scenes.',
             returns: 'one line saying what happened',
         }));
@@ -412,8 +541,9 @@ function registerWorldCommands() {
         console.warn('[Live World] /advance could not be registered', e);
     }
     try {
+        // Not /world: that is SillyTavern's own World Info command.
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
-            name: 'world',
+            name: 'liveworld',
             callback: async () => {
                 try {
                     const m = await import('../ui/worldDashboard.js');
@@ -427,12 +557,12 @@ function registerWorldCommands() {
             returns: 'nothing',
         }));
     } catch (e) {
-        console.warn('[Live World] /world could not be registered', e);
+        console.warn('[Live World] /liveworld could not be registered', e);
     }
 }
 
 /** Registers the command and listens for the tracker request's end. */
 export function initLiveWorld() {
     registerWorldCommands();
-    try { eventSource.on(DOOMS_TRACKER_UPDATE_COMPLETE, onTrackerUpdateComplete); } catch (e) { /* no event source */ }
+    try { eventSource.on(DOOMS_TRACKER_UPDATE_COMPLETE, onWorldTrackerUpdateComplete); } catch (e) { /* no event source */ }
 }
