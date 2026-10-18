@@ -642,6 +642,37 @@ export function reconcileWithChat(state, presentIds) {
     return { state: next, undone };
 }
 
+/** The feed's entries gathered under their game date, in the order given (newest first from recentChanges); entries with no date under ''. */
+export function groupChangesByDate(changes) {
+    const groups = [];
+    for (const c of changes || []) {
+        const date = c.gameDate || '';
+        const last = groups[groups.length - 1];
+        if (last && last.date === date) last.items.push(c);
+        else groups.push({ date, items: [c] });
+    }
+    return groups;
+}
+
+/**
+ * One character's moves, oldest first, with labelled places: where they
+ * started (the first entry's `from`, when the log holds it), each move
+ * with its date and reason, and where they stand now.
+ * @returns {{ name: string, now: string, steps: Array<{ from: string, to: string, gameDate: string, gameTime: string, reason: string, msgId: * }> }}
+ */
+export function characterTimeline(state, pack, name) {
+    const steps = (state.log || []).filter(e => e.who === name).map(e => ({
+        from: e.from ? placeLabel(pack, e.from) : '',
+        to: placeLabel(pack, e.to),
+        gameDate: e.gameDate || '',
+        gameTime: e.gameTime || '',
+        reason: e.reason || '',
+        msgId: e.msgId ?? null,
+    }));
+    const now = state.where && state.where[name] ? placeLabel(pack, state.where[name]) : '';
+    return { name, now, steps };
+}
+
 /** What people would say about each clock now: the effect text of its value, never the number. */
 export function publicEffects(state, pack) {
     return pack.clocks.filter(c => !c.hidden).map(c => {

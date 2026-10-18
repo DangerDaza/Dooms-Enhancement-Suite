@@ -1,29 +1,47 @@
 /**
- * Live World dashboard (docs/live-world-spec.md, D1).
+ * Live World dashboard (docs/live-world-spec.md, D1–D3).
  *
  * One modal, read-only state and no model calls: the pack's name, the
  * in-game date the tracker holds, the blurb, when the world last advanced
  * and when it runs next, what people say about each clock (its public
  * effect, never a number), the known characters with their portrait and
- * where they were last seen, the heard-of names dimmed, and the recent
- * moves. Advance now runs the same path as /advance. Spoiler-free governs
- * the effects list as well as the blurb. Loaded on first open.
+ * where they were last seen (a tap opens their timeline, a link shows
+ * them on the map), the heard-of names dimmed, and the feed of changes
+ * under their dates with a filter for how far back it reaches. The Map
+ * view (src/systems/ui/worldMap.js) sits beside it; a token there opens
+ * the character's timeline here. Advance now runs the same path as
+ * /advance. Spoiler-free governs the effects and the feed as well as
+ * the blurb. Loaded on first open.
  */
 import { escapeHtml } from '../../utils/html.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { resolvePortrait } from './portraitBar.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
-import { liveWorldConfig, placeLabel, recentChanges, publicEffects } from '../../utils/liveWorld.js';
+import { liveWorldConfig, placeLabel, recentChanges, publicEffects, groupChangesByDate, characterTimeline } from '../../utils/liveWorld.js';
 import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 import { renderWorldMapHtml, worldEmptyMessage } from './worldMap.js';
 
 const POPUP_ID = 'rpg-world-popup';
 const VIEW_KEY = 'dooms-world-view';
+const FEED_KEY = 'dooms-world-feed';
 const VIEWS = ['overview', 'map'];
+export const FEED_LIMITS = Object.freeze([12, 50, 0]);    // 0: everything the log holds
 let built = false;
 let isOpen = false;
 let lastResult = '';
 let view = readView();
+let feedLimit = readFeedLimit();
+let openTimeline = '';      // the known character whose timeline is open in the overview
+let focusPlace = '';        // the map node to pick out, from a card's map link
+
+function readFeedLimit() {
+    try { const n = Number(localStorage.getItem(FEED_KEY)); return FEED_LIMITS.includes(n) ? n : FEED_LIMITS[0]; } catch (e) { return FEED_LIMITS[0]; }
+}
+
+function setFeedLimit(n) {
+    feedLimit = FEED_LIMITS.includes(Number(n)) ? Number(n) : FEED_LIMITS[0];
+    try { localStorage.setItem(FEED_KEY, String(feedLimit)); } catch (e) { /* no storage */ }
+}
 
 function readView() {
     try { const v = localStorage.getItem(VIEW_KEY); return VIEWS.includes(v) ? v : 'overview'; } catch (e) { return 'overview'; }
@@ -45,7 +63,7 @@ function lastSeenEntry(state, name) {
  * The dashboard's body as HTML. Pure apart from `portraits`, so tests can
  * render it without the portrait store.
  */
-export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packError = '', portraits = () => '', masterOn = true } = {}) {
+export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packError = '', portraits = () => '', masterOn = true, feed = FEED_LIMITS[0], timeline = '' } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return empty;
     const date = [facts.date, facts.time].filter(Boolean).join(', ');
@@ -58,16 +76,27 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
     const effects = publicEffects(state, pack);
     const known = Object.entries(state.known).filter(([, t]) => t === 'known').map(([n]) => n);
     const heard = Object.entries(state.known).filter(([, t]) => t === 'heard').map(([n]) => n);
-    const changes = recentChanges(state, pack, { limit: 12, spoilerFree: cfg.spoilerFree });
+    const limit = FEED_LIMITS.includes(Number(feed)) ? Number(feed) : FEED_LIMITS[0];
+    const changes = recentChanges(state, pack, { limit: limit || Number.MAX_SAFE_INTEGER, spoilerFree: cfg.spoilerFree });
+    const groups = groupChangesByDate(changes);
     const cards = known.map(name => {
         const url = portraits(name);
         const face = url ? `<img class="rpg-world-portrait" src="${escapeHtml(url)}" alt="" />` : '<div class="rpg-world-portrait" aria-hidden="true">👤</div>';
-        const here = state.where[name] ? placeLabel(pack, state.where[name]) : 'nowhere yet';
+        const path = state.where[name] || '';
+        const here = path ? placeLabel(pack, path) : 'nowhere yet';
         const e = lastSeenEntry(state, name);
         const before = e && e.from ? `<div class="rpg-world-card-line is-muted">Before that: ${escapeHtml(placeLabel(pack, e.from))}</div>` : '';
         const seen = e && e.gameDate ? `<div class="rpg-world-card-line is-muted">Seen ${escapeHtml(e.gameDate)}${e.gameTime ? `, ${escapeHtml(e.gameTime)}` : ''}</div>` : '';
-        return `<div class="rpg-world-card">${face}<div class="rpg-world-card-text"><div class="rpg-world-card-name">${escapeHtml(name)}</div><div class="rpg-world-card-line">Last seen: ${escapeHtml(here)}</div>${before}${seen}</div></div>`;
+        const open = timeline === name;
+        const tl = open ? timelineHtml(characterTimeline(state, pack, name)) : '';
+        const placeId = path ? path.split('/').filter(Boolean).pop() : '';
+        const mapLink = placeId ? `<button type="button" class="rpg-world-card-map" data-place="${escapeHtml(placeId)}" title="Show on the map"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i></button>` : '';
+        return `<div class="rpg-world-card${open ? ' is-open' : ''}" data-name="${escapeHtml(name)}">${face}<div class="rpg-world-card-text"><div class="rpg-world-card-head"><button type="button" class="rpg-world-card-name" aria-expanded="${open ? 'true' : 'false'}" title="${open ? 'Hide' : 'Show'} the timeline">${escapeHtml(name)}</button>${mapLink}</div><div class="rpg-world-card-line">Last seen: ${escapeHtml(here)}</div>${before}${seen}${tl}</div></div>`;
     }).join('');
+    const feedOptions = FEED_LIMITS.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n ? `Latest ${n}` : 'Everything'}</option>`).join('');
+    const feedHtml = groups.length
+        ? groups.map(g => `${g.date ? `<div class="rpg-world-feed-date">${escapeHtml(g.date)}</div>` : ''}<ul class="rpg-world-changes">${g.items.map(c => `<li class="is-${c.kind}">${escapeHtml(c.text)}</li>`).join('')}</ul>`).join('')
+        : '<p class="rpg-world-empty">No changes yet.</p>';
     return `
         <div class="rpg-world-head">
             <h4>${escapeHtml(pack.name)}</h4>
@@ -86,9 +115,24 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
             ${heard.length ? `<div class="rpg-world-heard">${heard.map(n => `<span class="rpg-world-chip" title="Heard of, not met">${escapeHtml(n)}</span>`).join('')}</div>` : ''}
         </div>
         <div class="rpg-world-section">
-            <div class="rpg-world-section-title">Recent changes</div>
-            ${changes.length ? `<ul class="rpg-world-changes">${changes.map(c => `<li>${escapeHtml(c.text)}${c.gameDate ? `<time>${escapeHtml(c.gameDate)}</time>` : ''}</li>`).join('')}</ul>` : '<p class="rpg-world-empty">No moves yet.</p>'}
+            <div class="rpg-world-feed-head">
+                <div class="rpg-world-section-title">Changes</div>
+                <label class="rpg-world-feed-filter-label">Show <select class="rpg-world-feed-filter" aria-label="How far back the changes reach">${feedOptions}</select></label>
+            </div>
+            ${feedHtml}
         </div>`;
+}
+
+/** A character's timeline as HTML: where they started, each move with its date and reason, where they stand now. */
+function timelineHtml(t) {
+    if (!t.steps.length) return `<ol class="rpg-world-timeline"><li class="is-now">${t.now ? `Now: ${escapeHtml(t.now)}` : 'Nowhere yet'}${t.now ? ' (from the start, or before the log)' : ''}</li></ol>`;
+    const items = [];
+    if (t.steps[0].from) items.push(`<li class="is-start">Started at ${escapeHtml(t.steps[0].from)}</li>`);
+    for (const s of t.steps) {
+        const when = s.gameDate ? `<time>${escapeHtml(s.gameDate)}${s.gameTime ? `, ${escapeHtml(s.gameTime)}` : ''}</time>` : '';
+        items.push(`<li>${when}${escapeHtml(s.to)}${s.reason ? ` <span class="is-muted">(${escapeHtml(s.reason)})</span>` : ''}</li>`);
+    }
+    return `<ol class="rpg-world-timeline">${items.join('')}</ol>`;
 }
 
 function portraitOf(name) {
@@ -100,11 +144,12 @@ function render() {
     if (!$body.length) return;
     const common = { state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled };
     if (view === 'map') {
-        $body.html(renderWorldMapHtml(common));
+        $body.html(renderWorldMapHtml({ ...common, focus: focusPlace }));
+        focusPlace = '';
     } else {
         let facts = {};
         try { facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { facts = {}; }
-        $body.html(renderWorldDashboardHtml({ ...common, facts }));
+        $body.html(renderWorldDashboardHtml({ ...common, facts, feed: feedLimit, timeline: openTimeline }));
     }
     $body.toggleClass('is-map', view === 'map');
     $(`#${POPUP_ID} .rpg-world-tab`).each(function () { $(this).toggleClass('is-active', $(this).data('view') === view).attr('aria-selected', $(this).data('view') === view ? 'true' : 'false'); });
@@ -151,6 +196,25 @@ function build() {
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
     $(document).on('click', `#${POPUP_ID} .rpg-world-tab`, function () { setView($(this).data('view')); render(); });
+    $(document).on('change', `#${POPUP_ID} .rpg-world-feed-filter`, function () { setFeedLimit($(this).val()); render(); });
+    // D3: a name opens its timeline; the map link picks the character's place out on the map; a token on the map opens the timeline here.
+    $(document).on('click', `#${POPUP_ID} .rpg-world-card-name`, function () {
+        const name = String($(this).closest('.rpg-world-card').data('name') || '');
+        openTimeline = openTimeline === name ? '' : name;
+        render();
+    });
+    $(document).on('click', `#${POPUP_ID} .rpg-world-card-map`, function () {
+        focusPlace = String($(this).data('place') || '');
+        setView('map');
+        render();
+    });
+    $(document).on('click', `#${POPUP_ID} .rpg-wmap-token[data-name]`, function () {
+        openTimeline = String($(this).data('name') || '');
+        setView('overview');
+        render();
+        const card = document.querySelector(`#${POPUP_ID} .rpg-world-card.is-open`);
+        if (card && typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'nearest' });
+    });
     $(document).on('click', '#rpg-world-advance-now', async function () {
         // advanceNow takes the running flag before its first await, so the
         // render that follows keeps the button disabled for the whole request.
@@ -173,6 +237,8 @@ export function openWorldDashboard() {
     build();
     isOpen = true;
     lastResult = '';
+    openTimeline = '';
+    focusPlace = '';
     render();
     $(`#${POPUP_ID}`).css('display', 'flex');
 }

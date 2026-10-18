@@ -33,7 +33,7 @@ export function worldEmptyMessage({ state, pack, cfg, packError = '', masterOn =
  * The map as HTML. Pure apart from `portraits`, so tests can render it
  * without the portrait store.
  */
-export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1 } = {}) {
+export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1, focus = '' } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return empty;
     const view = buildProvinceView(pack, state, { depth });
@@ -45,15 +45,16 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
             const url = portraits(t.name);
             const title = `${t.name} · ${t.exact ? 'here' : placeLabel(pack, t.place)}`;
             return url
-                ? `<img class="rpg-wmap-token" src="${escapeHtml(url)}" alt="${escapeHtml(t.name)}" title="${escapeHtml(title)}" />`
-                : `<span class="rpg-wmap-token is-initials" title="${escapeHtml(title)}" aria-label="${escapeHtml(t.name)}">${escapeHtml(initials(t.name))}</span>`;
+                ? `<img class="rpg-wmap-token" src="${escapeHtml(url)}" alt="${escapeHtml(t.name)}" title="${escapeHtml(title)}" data-name="${escapeHtml(t.name)}" role="button" tabindex="0" />`
+                : `<span class="rpg-wmap-token is-initials" title="${escapeHtml(title)}" aria-label="${escapeHtml(t.name)}" data-name="${escapeHtml(t.name)}" role="button" tabindex="0">${escapeHtml(initials(t.name))}</span>`;
         }).join('');
         const rest = n.tokens.slice(TOKENS_SHOWN);
         const more = rest.length ? `<span class="rpg-wmap-token is-more" title="${escapeHtml(rest.map(t => t.name).join(', '))}">+${rest.length}</span>` : '';
         const within = n.tokens.filter(t => !t.exact).length;
         const countTitle = `${n.count} known ${n.count === 1 ? 'character' : 'characters'} here${within ? `, ${within} somewhere within` : ''}`;
         const style = `left:${f(n.x)}%;top:${f(n.y)}%;${img ? `background-image:url(&quot;${escapeHtml(img)}&quot;);` : ''}`;
-        return `<div class="rpg-wmap-node${n.depth === 0 ? ' is-root' : ''}${img ? ' has-image' : ''}" style="${style}" data-place="${escapeHtml(n.id)}" title="${escapeHtml(placeLabel(pack, n.id, { full: true }))}">
+        const picked = focus && (n.id === focus || n.tokens.some(t => t.place === focus));
+        return `<div class="rpg-wmap-node${n.depth === 0 ? ' is-root' : ''}${img ? ' has-image' : ''}${picked ? ' is-focus' : ''}" style="${style}" data-place="${escapeHtml(n.id)}" title="${escapeHtml(placeLabel(pack, n.id, { full: true }))}">
             <div class="rpg-wmap-label">${escapeHtml(n.label)}</div>
             ${n.tokens.length ? `<div class="rpg-wmap-tokens">${tokens}${more}</div>` : ''}
             ${n.count ? `<span class="rpg-wmap-count" title="${escapeHtml(countTitle)}">${n.count}</span>` : ''}
@@ -67,5 +68,5 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
             <svg class="rpg-wmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>
             ${cards}
         </div>
-        <div class="rpg-wmap-legend">Known characters only; heard-of names stay off the map.${notes.length ? ` ${notes.join(' ')}` : ''}</div>`;
+        <div class="rpg-wmap-legend">Known characters only; heard-of names stay off the map. A token opens the character's timeline.${notes.length ? ` ${notes.join(' ')}` : ''}</div>`;
 }

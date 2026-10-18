@@ -9968,6 +9968,31 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
     display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .rpg-wmap-legend { margin-top: 8px; font-size: 0.8em; color: #888; }
+.rpg-wmap-token[data-name] { cursor: pointer; }
+.rpg-wmap-token[data-name]:hover, .rpg-wmap-token[data-name]:focus-visible { transform: translateY(-2px); outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 1px; z-index: 1; }
+.rpg-wmap-node.is-focus { animation: rpg-wmap-pulse 1.6s ease-out 2; border-color: var(--rpg-highlight, #e94560); }
+@keyframes rpg-wmap-pulse { 0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.55), 0 8px 22px rgba(0, 0, 0, 0.4); } 100% { box-shadow: 0 0 0 16px rgba(233, 69, 96, 0), 0 8px 22px rgba(0, 0, 0, 0.4); } }
+/* D2, D3: the feed under its dates, a character's timeline */
+.rpg-world-feed-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rpg-world-feed-filter-label { font-size: 0.78em; color: #888; }
+.rpg-world-feed-filter { font: inherit; font-size: 0.95em; color: inherit; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 6px; padding: 2px 6px; margin-left: 4px; }
+.rpg-world-feed-date { font-size: 0.74em; text-transform: uppercase; letter-spacing: 0.6px; color: #9a8fb8; margin: 10px 0 2px; }
+.rpg-world-feed-date:first-child { margin-top: 0; }
+.rpg-world-changes li.is-clock { font-style: italic; }
+.rpg-world-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.rpg-world-card-name { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.rpg-world-card-name:hover, .rpg-world-card-name:focus-visible { text-decoration: underline; outline: none; }
+.rpg-world-card-map { background: none; border: 0; padding: 2px 4px; color: #999; cursor: pointer; font-size: 0.9em; border-radius: 4px; flex: 0 0 auto; }
+.rpg-world-card-map:hover, .rpg-world-card-map:focus-visible { color: var(--rpg-highlight, #e94560); outline: none; }
+.rpg-world-card.is-open { border-color: rgba(233, 69, 96, 0.5); }
+.rpg-world-cast .rpg-world-card.is-open { grid-column: 1 / -1; }
+.rpg-world-timeline { margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid rgba(255, 255, 255, 0.12); list-style: none; font-size: 0.82em; }
+.rpg-world-timeline li { position: relative; padding: 2px 0 6px; color: #ccc; }
+.rpg-world-timeline li::before { content: ''; position: absolute; left: -19px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: #666; }
+.rpg-world-timeline li:last-child::before { background: var(--rpg-highlight, #e94560); }
+.rpg-world-timeline li.is-start { color: #888; }
+.rpg-world-timeline time { display: block; font-size: 0.85em; color: #777; }
+.rpg-world-timeline .is-muted { color: #777; }
 @media (max-width: 600px) {
     .rpg-wmap { aspect-ratio: 1 / 1; min-height: 300px; }
     .rpg-wmap-node { min-width: 76px; max-width: 130px; font-size: 0.74em; padding: 5px 6px 6px; }

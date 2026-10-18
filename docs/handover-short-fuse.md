@@ -105,7 +105,8 @@ state and the next moves.
 7. **Try Live World** (Phase 6, built 2026-10-17 from `docs/live-world-spec.md`;
    `docs/stats-plan.md` §15). Settings → Live World on, Example as the pack,
    a new chat; play six replies and watch the System Log and the dashboard
-   (/liveworld), then its Map view. Parity rows "Live World". The Skyreach pack is a draft: its
+   (/liveworld), its feed and timelines, then its Map view. Parity rows
+   "Live World". The Skyreach pack is a draft: its
    places, clocks and cast want the campaign notes (D50).
 
 ## 3. The open problem and what was done about it
@@ -234,9 +235,10 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   narrator's line), `src/systems/features/liveWorld.js` (the store under
   `chat_metadata.dooms_world`, counting by a stamped id, the advancer
   through `withBackgroundProfile`, blind injection, `/advance`, `/liveworld`),
-  `src/systems/ui/worldDashboard.js` (lazy) with its Map view
-  (`src/systems/ui/worldMap.js` over the pure `src/utils/worldMap.js`,
-  C1), Settings → Live World, two packs in `worldpacks/`.
+  `src/systems/ui/worldDashboard.js` (lazy; D1, the D2 feed, D3 timelines
+  and map links) with its Map view (`src/systems/ui/worldMap.js` over the
+  pure `src/utils/worldMap.js`, C1), Settings → Live World, two packs in
+  `worldpacks/`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18
   (`docs/stats-plan.md` §15.9).

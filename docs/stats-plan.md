@@ -1495,10 +1495,10 @@ Status: **the groundwork, the pack, the per-chat state, the advancer and
 the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
 `docs/live-world-spec.md`, the owner's own spec) and reviewed (2026-10-18,
 an adversarial review of 85 agents: 38 confirmed findings, all fixed, §15.9);
-the C1 province map is built (2026-10-18); C2 nesting, C3 room grids, the
-dashboard's feed and timelines (D2, D3) are not; awaiting in-browser
-verification (parity rows "Live World") and the Skyreach pack's real
-content.**
+the C1 province map and the dashboard's feed and timelines (D2, D3) are
+built (2026-10-18); C2 nesting and C3 room grids are not; awaiting
+in-browser verification (parity rows "Live World") and the Skyreach
+pack's real content.**
 
 The spec is the design source; this section records what was built
 against it and the calls made on its open items.
@@ -1629,6 +1629,21 @@ describes the rest; in short the pack, the date, the blurb, the run
 status, what people say, the known characters with portraits and
 last-seen places, the heard-of chips, the recent moves, Advance now.
 
+The feed (D2): the overview's last section lists every change the log
+holds, moves and clock effects alike, newest first and gathered under
+their game dates (a heading per date; undated entries first under none),
+with a filter for how far back it reaches: the latest twelve, the latest
+fifty, or everything; the choice is remembered. The dates are prose from
+the tracker, so the filter counts entries rather than days. Timelines
+(D3): a known character's name on their card opens their timeline under
+it, oldest first: where they started (the first logged move's origin),
+each move with its date, time and reason, the newest marked; a character
+who never moved shows where they stand. Map links (D3): a small map
+button on each placed character's card switches to the Map view and
+picks out the card they stand on (a short pulse); a token on the map
+switches back to the overview with that character's timeline open and
+scrolled into view.
+
 The map (C1, the province node view; D54): the dashboard's Map view,
 `src/systems/ui/worldMap.js` over the pure `src/utils/worldMap.js`.
 It reads state only. Drawn at depth 1: the roots and their districts
@@ -1657,16 +1672,17 @@ tokens. On a phone the canvas is square and the cards smaller.
 C2 nesting and zoom (the province shows a city with a count, zooming
 shows districts, then the building, then a room), C3 room grids and
 tokens with Silly Map's pathfinding, credited; Leaflet for drawn art;
-D2 the dashboard's feed with a time filter; D3 timelines and map links;
-a pack editor; speaker-tag detection for known characters if tracker
-presence proves too generous; "seen N days ago" (the dates are prose, so
-the dashboard says "seen <date>").
+a rail button for the dashboard; a pack editor; speaker-tag detection
+for known characters if tracker presence proves too generous; "seen N
+days ago" and a filter by days (the dates are prose, so the dashboard
+says "seen <date>" and the feed counts entries).
 
 ### 15.6 Files and tests
 
-`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (90 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (71
-checks, the review's cases in §7–§9, the map in §6);
+`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (95 checks);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (76
+checks, the review's cases in §7–§9, the map, the feed and the timelines
+in §6);
 `src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (20 checks),
 `src/systems/ui/worldMap.js` (lazy, with the dashboard);
 `src/utils/responseExtractor.js` (the shared fetch capture);
@@ -1684,7 +1700,8 @@ checks, the review's cases in §7–§9, the map in §6);
 4. `134e764` the dashboard.
 5. `e1c795e` this section, the phases row, the parity rows, the handover.
 6. `9f6bea7` the review's fixes (§15.9); `d3de94e` its docs.
-7. The map (C1).
+7. `0cd9649` the map (C1).
+8. The feed and the timelines (D2, D3).
 
 ### 15.8 Open
 

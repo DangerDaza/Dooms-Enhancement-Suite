@@ -16,6 +16,7 @@ import {
     buildWorldLines, buildAdvancePrompt, parseAdvanceReply, validateAdvance, applyAdvance, failAdvance,
     recentChanges, publicEffects, LOG_PER_CHARACTER, LOG_TOTAL, COUNTED_KEEP, WORLD_SLOT,
     defaultLiveWorldConfig, liveWorldConfig, buildRecentText, stripSceneNoise, reconcileWithChat,
+    groupChangesByDate, characterTimeline,
 } from '../src/utils/liveWorld.js';
 
 let failures = 0;
@@ -257,6 +258,20 @@ console.log('\n§11 what the review found');
     const fg = reconcileWithChat(failedGone, ['a']);
     check('a failed attempt on a message that is gone is forgotten with its retry', fg.state.lastError === null && fg.state.retryNext === false && fg.state.clocks.blockade === 2);
     check('a chat that holds the last run but not an older one is not ahead: left alone', reconcileWithChat(c2, ['b']).state === c2);
+}
+
+console.log('\n§12 the feed and the timelines');
+{
+    let s = applyAdvance(seeded, validateAdvance({ clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }] }, pack, seeded).clean, pack, { msgId: 'a', gameDate: 'Monday', gameTime: 'dusk' });
+    s = applyAdvance(s, validateAdvance({ moved: [{ who: 'Old Marit', to: 'the-hill' }, { who: 'Captain Reyes', to: 'the-docks' }] }, pack, s).clean, pack, { msgId: 'b', gameDate: 'Tuesday' });
+    s = applyAdvance(s, validateAdvance({ clocks: { fever: 1 } }, pack, s).clean, pack, { msgId: 'c' });
+    const groups = groupChangesByDate(recentChanges(s, pack, { limit: 50 }));
+    check('the feed gathers entries under their dates, newest first, the undated under an empty date', groups.length === 3 && groups[0].date === '' && groups[0].items[0].kind === 'clock' && groups[1].date === 'Tuesday' && groups[1].items.length === 2 && groups[2].date === 'Monday' && groups[2].items.length === 2, JSON.stringify(groups.map(g => [g.date, g.items.length])));
+    check('an empty feed is no groups', groupChangesByDate([]).length === 0 && groupChangesByDate(null).length === 0);
+    const t = characterTimeline(s, pack, 'Old Marit');
+    check("a character's timeline: oldest first, labelled places, dates and reasons, where they stand now", t.name === 'Old Marit' && t.steps.length === 2 && t.steps[0].from === 'The Anchor, a tavern, The old town' && t.steps[0].to === "The Anchor's back room, The Anchor, a tavern" && t.steps[0].gameDate === 'Monday' && t.steps[0].gameTime === 'dusk' && t.steps[0].reason === 'hiding' && t.steps[1].to === 'The hill, Harbourside' && t.now === 'The hill, Harbourside', JSON.stringify(t));
+    check('a character who never moved: no steps, their place as now; an unknown name: nothing', characterTimeline(seeded, pack, 'Captain Reyes').steps.length === 0 && characterTimeline(seeded, pack, 'Captain Reyes').now === 'The customs house, The docks' && characterTimeline(seeded, pack, 'Nobody').now === '' && characterTimeline(seeded, pack, 'Nobody').steps.length === 0);
+    check('clock entries never enter a timeline', !JSON.stringify(characterTimeline(s, pack, 'Old Marit')).includes('blockade'));
 }
 
 console.log(`\n${failures === 0 ? 'All Live World checks pass' : `${failures} FAILURE(S)`}`);

@@ -2402,3 +2402,18 @@ body[data-dooms-ui] .rpg-wmap-node.is-root { border-color: var(--ov-accent); }
 body[data-dooms-ui] .rpg-wmap-token { border-color: var(--ov-panel); background: var(--ov-panel2); color: var(--ov-text); }
 body[data-dooms-ui] .rpg-wmap-count { background: var(--ov-accent); color: var(--ov-on-accent); }
 body[data-dooms-ui] .rpg-wmap-legend { color: var(--ov-muted); }
+body[data-dooms-ui] .rpg-wmap-node.is-focus { border-color: var(--ov-accent); animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ov-accent) 45%, transparent); }
+body[data-dooms-ui] .rpg-world-feed-filter { background: var(--ov-panel2); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .rpg-world-feed-date,
+body[data-dooms-ui] .rpg-world-feed-filter-label,
+body[data-dooms-ui] .rpg-world-card-map,
+body[data-dooms-ui] .rpg-world-timeline li.is-start,
+body[data-dooms-ui] .rpg-world-timeline time,
+body[data-dooms-ui] .rpg-world-timeline .is-muted { color: var(--ov-muted); }
+body[data-dooms-ui] .rpg-world-card-map:hover,
+body[data-dooms-ui] .rpg-world-card-map:focus-visible { color: var(--ov-accent); }
+body[data-dooms-ui] .rpg-world-card.is-open { border-color: var(--ov-accent); }
+body[data-dooms-ui] .rpg-world-timeline { border-left-color: var(--ov-line2); }
+body[data-dooms-ui] .rpg-world-timeline li { color: var(--ov-text); }
+body[data-dooms-ui] .rpg-world-timeline li::before { background: var(--ov-line2); }
+body[data-dooms-ui] .rpg-world-timeline li:last-child::before { background: var(--ov-accent); }
