@@ -1952,6 +1952,7 @@ function bindSettingsUI() {
         getWorldRules().enabled = $(this).prop('checked');
         $('.rpg-world-sub').toggleClass('is-off', !$(this).prop('checked'));
         _saveWorld({ reload: true });
+        try { updatePortraitBar(); } catch (e) { /* the shelf's Map page (D56) follows the switch */ }
     });
     $(document).on('change', '#rpg-world-pack', function () {
         getWorldRules().pack = String($(this).val() || '');

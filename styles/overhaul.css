@@ -2330,6 +2330,8 @@ body[data-dooms-ui] #dooms-portrait-bar-wrapper:not(.dooms-pb-position-left):not
 body[data-dooms-ui] .dooms-pb-page-btn { border-color: var(--ov-line2); color: var(--ov-muted); border-radius: var(--ov-radius-sm); font-family: var(--ov-display); font-size: 0.55em; line-height: 1.5; }
 body[data-dooms-ui] .dooms-pb-page-btn.is-active { color: var(--ov-accent); border-color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 14%, transparent); }
 body[data-dooms-ui] .dooms-pb-page::-webkit-scrollbar-thumb { background: var(--ov-line); }
+body[data-dooms-ui] .dooms-map-dashboard { border-color: var(--ov-line2); color: var(--ov-muted); border-radius: var(--ov-radius-sm); font-family: var(--ov-display); font-size: 0.55em; line-height: 1.5; }
+body[data-dooms-ui] .dooms-map-dashboard:hover { color: var(--ov-accent); border-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-inv-label,
 body[data-dooms-ui] .dooms-inv-fill { color: var(--ov-muted); font-family: var(--ov-display); }
 body[data-dooms-ui] .dooms-inv-fill { background: transparent; border: 1px solid var(--ov-line2); border-radius: var(--ov-radius-sm); }

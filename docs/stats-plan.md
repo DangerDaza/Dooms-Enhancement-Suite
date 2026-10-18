@@ -1222,7 +1222,8 @@ default; while on, the inventory line rides every generation (a switch),
 the AI may change it both ways (a switch each), and a toast says what
 changed (a switch). **D34** the shelf's page control shows only while the
 inventory is on, so a default install's shelf is unchanged; the Quests
-page rides with it (open: whether Quests should stand on its own).
+page rides with it (open: whether Quests should stand on its own). Since
+D56 (§15) the control also shows while Live World is on, for its Map page.
 
 ### 13.1 Data model
 
@@ -1497,9 +1498,10 @@ the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
 an adversarial review of 85 agents: 38 confirmed findings, all fixed, then
 verified in a second and a third pass, §15.9);
 the map (C1 the province, C2 nesting and zoom) and the dashboard's feed
-and timelines (D2, D3) are built (2026-10-18); C3 room grids and tokens
-are not; awaiting in-browser verification (parity rows "Live World") and
-the Skyreach pack's real content.**
+and timelines (D2, D3) are built (2026-10-18), and the map is the shelf's
+fourth page (D56, 2026-10-18); C3 room grids and tokens are not built;
+awaiting in-browser verification (parity rows "Live World") and the
+Skyreach pack's real content.**
 
 The spec is the design source; this section records what was built
 against it and the calls made on its open items.
@@ -1585,6 +1587,15 @@ every place of the pack at its depth: the place tree is the pack
 author's geography, not a secret the player earns; "known" governs
 characters (their tokens), and heard-of names stay off. The spec's
 "known places" would need a per-chat record of places seen; not built.
+**D56** (Jordan, 2026-10-18) the map is also the Present Characters
+shelf's fourth page, Map, beside Characters, Inventory and Quests: the
+same map, drawn by the same renderer, with a zoom of its own and the
+trail; a token opens the dashboard on that character's timeline and a
+small button opens the dashboard itself. The page shows while Live World
+is on, whatever the inventory's switch, so a default install's shelf is
+unchanged (D34 holds; alone, the control reads Characters | Map). This
+settles the open question of a fourth page, and D54's one entry point now
+reads: one popup, reached from Settings, `/liveworld` and the shelf.
 
 ### 15.1 Data
 
@@ -1735,6 +1746,20 @@ listed as elsewhere; a pack's fixed `x`/`y` holds in the province only.
 Tokens inside a card stay the character's: a click on one opens the
 timeline, not the place.
 
+The shelf's Map page (D56): with Live World on, the Present Characters
+shelf's header gains a fourth button, Map, and the page draws the same
+map (`renderWorldMapHtml`, from `src/systems/ui/shelfPages.js`) at the
+renderer's own floor height (280 px, more when dense) rather than the
+popup's 16:10: the layout is told a canvas of at most 448 px, the width
+at which its 16:10 canvas is that tall, and the wider strip only spreads
+the cards. The trail sits above it and a Dashboard button at the trail's
+right end. Cards open to what is inside and the trail leads back up; the zoom
+is the shelf's own, kept while the pages flip and reset when the chat's
+world changes pack. A token opens the dashboard on that character's
+timeline (`openWorldDashboard({ timeline, view })`); the page repaints
+when the world changes, as the dashboard does, and the button appears
+and goes with the Live World switch.
+
 ### 15.5 Not built yet
 
 C3 room grids and tokens with Silly Map's pathfinding (AGPL, credited:
@@ -1747,11 +1772,13 @@ says "seen <date>" and the feed counts entries).
 ### 15.6 Files and tests
 
 `src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (120 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (108
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (114
 checks, the review's cases in §7–§9, the map with its zoom, the feed and
-the timelines in §6);
+the timelines in §6, the shelf's Map page in §10);
 `src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (40 checks),
 `src/systems/ui/worldMap.js` (lazy, with the dashboard);
+`src/systems/ui/shelfPages.js` (the shelf's Map page, D55) and
+`src/systems/ui/portraitBar.js` (its button);
 `src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
 `BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
@@ -1772,14 +1799,14 @@ the timelines in §6);
 9. `37fb59f` nesting and zoom (C2).
 10. `c20fe51` the second pass (§15.9).
 11. The third pass (§15.9).
+12. The shelf's Map page (D56).
 
 ### 15.8 Open
 
 The Skyreach pack's places, clocks and cast (D50); whether the known
 tier should also come from speaker tags; whether the world line should
 move to the tracker's depth and role for one message fewer in the
-prompt; a shelf page for the world beside Characters, Inventory and
-Quests (the owner fixed three pages; this would be a fourth).
+prompt.
 
 ### 15.9 The review (2026-10-18)
 

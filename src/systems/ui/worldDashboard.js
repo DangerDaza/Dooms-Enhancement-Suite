@@ -286,16 +286,25 @@ function focusTrail() {
     } catch (e) { /* no DOM */ }
 }
 
-/** Opens the dashboard (building it the first time) and keeps it current while open. */
-export function openWorldDashboard() {
+/**
+ * Opens the dashboard (building it the first time) and keeps it current
+ * while open. `timeline` opens on that character's timeline and `view`
+ * picks Overview or Map; the shelf's Map page asks for both (D56).
+ */
+export function openWorldDashboard({ timeline = '', view: wanted = '' } = {}) {
     build();
     isOpen = true;
     lastResult = '';
-    openTimeline = '';
+    openTimeline = typeof timeline === 'string' ? timeline : '';
     focusPlace = '';
     mapRoot = '';
+    if (VIEWS.includes(wanted)) setView(wanted);
     render();
     $(`#${POPUP_ID}`).css('display', 'flex');
+    if (openTimeline) {
+        const card = document.querySelector(`#${POPUP_ID} .rpg-world-card.is-open`);
+        if (card && typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'nearest' });
+    }
 }
 
 export function closeWorldDashboard() {

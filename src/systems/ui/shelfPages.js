@@ -1,14 +1,17 @@
 /**
  * The shelf's pages (Project Short Fuse, Phase 5).
  *
- * With the inventory on, the Present Characters shelf flips between three
- * pages: Characters (the cards, rendered by portraitBar.js as always),
- * Inventory and Quests. This module renders the latter two into the shelf's
- * page container as boxes: square slots for the pack and the party pouch
- * (icon, count badge, name beneath, dashed empties), and quest boxes edited
- * in place. A slot opens a small editor (name, count, note, icon, move,
- * remove); an empty slot adds. Loaded the first time a page other than
- * Characters shows.
+ * With the inventory on, the Present Characters shelf flips between
+ * Characters (the cards, rendered by portraitBar.js as always), Inventory
+ * and Quests; with Live World on, Map joins them (Phase 6, D56). This
+ * module renders the pages other than Characters into the shelf's page
+ * container. Inventory and Quests are boxes: square slots for the pack and
+ * the party pouch (icon, count badge, name beneath, dashed empties), and
+ * quest boxes edited in place. A slot opens a small editor (name, count,
+ * note, icon, move, remove); an empty slot adds. Map is the dashboard's map
+ * (worldMap.js) sized for the strip, zoomed where the shelf left it; a
+ * token opens the dashboard on that character's timeline. Loaded the first
+ * time a page other than Characters shows.
  */
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
@@ -18,10 +21,14 @@ import { getInventoryState, getInventoryConfig, editStack, removeStack, moveItem
 import { resolvePersonaName } from '../features/diceRolls.js';
 import { renderQuests, syncQuestsToCommittedData } from '../rendering/quests.js';
 import { openEmojiPicker, closeEmojiPicker } from './emojiPicker.js';
-import { updatePortraitBar } from './portraitBar.js';
+import { updatePortraitBar, resolvePortrait } from './portraitBar.js';
 // Cut to a quest (Phase 5b): the menu on a quest box
 import { questText, promoteQuest } from '../../utils/questCut.js';
 import { startQuestCut } from '../features/questCut.js';
+// The Map page (Phase 6, D56): the dashboard's map on the shelf
+import { liveWorldConfig } from '../../utils/liveWorld.js';
+import { getWorldState, getActivePack, getPackError, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { renderWorldMapHtml } from './worldMap.js';
 
 const PAGE_ID = 'dooms-pb-page';
 const EDITOR_ID = 'dooms-inv-editor';
@@ -509,6 +516,66 @@ function openWhenDialog(box, field, index, expected) {
 
 // ─── Wiring and render ──────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+//  The Map page (Phase 6, D56)
+// ─────────────────────────────────────────────
+//
+// The dashboard's map (worldMap.js), drawn on the shelf. The zoom root is
+// the shelf's own: kept while the pages flip, reset when the chat (or its
+// world) changes. A token opens the dashboard on the character's timeline;
+// a small button over the trail opens the dashboard itself.
+//
+// The strip's canvas is the renderer's floor height (280px, more when
+// dense; style.css lets the inline min-height rule) rather than the
+// popup's 16:10, so the layout is told a canvas no wider than the width
+// at which its 16:10 canvas is that tall; the wider strip only spreads
+// the cards.
+
+const SHELF_CANVAS_WIDTH = 448;    // 280 / 0.625
+let mapRoot = '';
+try { window.addEventListener(WORLD_CHANGED_EVENT, (e) => { if (e && e.detail && e.detail.source === 'chat') mapRoot = ''; }); } catch (e) { /* no window (tests) */ }
+
+function portraitOf(name) {
+    try { return resolvePortrait(name) || ''; } catch (e) { return ''; }
+}
+
+function openDashboard(opts) {
+    import('./worldDashboard.js')
+        .then(m => m.openWorldDashboard(opts))
+        .catch(err => console.error('[Dooms Portrait Bar] Live World dashboard failed to load:', err));
+}
+
+/** The width the layout is told: the strip's own when narrower, the 16:10 match of the floor height otherwise. */
+function shelfCanvasWidth() {
+    try {
+        const el = document.getElementById(PAGE_ID);
+        const w = el ? Number(el.clientWidth) : 0;
+        return Number.isFinite(w) && w > 0 ? Math.min(w, SHELF_CANVAS_WIDTH) : SHELF_CANVAS_WIDTH;
+    } catch (e) { return SHELF_CANVAS_WIDTH; }
+}
+
+/** The render replaced the map under the keyboard; its place moves to the trail's current step. */
+function focusShelfTrail() {
+    const go = () => {
+        try {
+            const here = document.querySelector(`#${PAGE_ID} .rpg-wmap-crumb.is-here`);
+            if (here && typeof here.focus === 'function') here.focus();
+        } catch (e) { /* no DOM */ }
+    };
+    // The page repaints on the scheduler's next frame; look after it.
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(go));
+}
+
+/** The Map page as HTML. `root` zooms into a place; omitted, the shelf's own zoom holds. */
+export function mapPageHtml({ root } = {}) {
+    const map = renderWorldMapHtml({
+        state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(),
+        portraits: portraitOf, masterOn: !!extensionSettings.enabled, root: root === undefined ? mapRoot : root,
+        canvasWidth: shelfCanvasWidth(), narrow: false,
+    });
+    return `<div class="dooms-map-page"><button type="button" class="dooms-map-dashboard" title="Open the Live World dashboard (the same as /liveworld)"><i class="fa-solid fa-table-columns" aria-hidden="true"></i><span>Dashboard</span></button>${map}</div>`;
+}
+
 let bound = false;
 
 function inPage(target) {
@@ -541,7 +608,47 @@ function bindOnce() {
             e.preventDefault();
             e.stopPropagation();
             startNewQuest(add);
+            return;
         }
+        // The Map page (D56): a token is the character's (the dashboard, on
+        // their timeline); a card with places inside opens to them; the
+        // trail leads back up; the button opens the dashboard.
+        const token = e.target.closest('.rpg-wmap-token[data-name]');
+        if (token) {
+            e.preventDefault();
+            e.stopPropagation();
+            openDashboard({ timeline: token.getAttribute('data-name') || '', view: 'overview' });
+            return;
+        }
+        const zoom = e.target.closest('.rpg-wmap-zoom[data-zoom]');
+        if (zoom) {
+            e.preventDefault();
+            e.stopPropagation();
+            mapRoot = zoom.getAttribute('data-zoom') || '';    // as written: a place called "0" or "null" stays a string
+            forceRerender();
+            focusShelfTrail();
+            return;
+        }
+        const crumb = e.target.closest('.rpg-wmap-crumb');
+        if (crumb) {
+            e.preventDefault();
+            e.stopPropagation();
+            mapRoot = crumb.getAttribute('data-root') || '';
+            forceRerender();
+            focusShelfTrail();
+            return;
+        }
+        if (e.target.closest('.dooms-map-dashboard')) {
+            e.preventDefault();
+            e.stopPropagation();
+            openDashboard();
+        }
+    });
+    // Enter or Space on a focused token clicks it (a card's zoom is a real button already).
+    document.addEventListener('keydown', (e) => {
+        const t = e.target;
+        if (!t || typeof t.matches !== 'function' || !inPage(t) || (e.key !== 'Enter' && e.key !== ' ')) return;
+        if (t.matches('.rpg-wmap-token[data-name]')) { e.preventDefault(); t.click(); }
     });
     document.addEventListener('focusout', (e) => {
         const t = e.target;
@@ -602,13 +709,13 @@ function bindOnce() {
 /**
  * Renders a page into the shelf's page container. Skips the DOM when the
  * markup is unchanged, and never pulls a box out from under an edit.
- * @param {'inventory'|'quests'} page
+ * @param {'inventory'|'quests'|'map'} page
  * @param {HTMLElement} container - #dooms-pb-page
  */
 export function renderShelfPage(page, container) {
     if (!container) return;
     bindOnce();
-    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : '';
+    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : page === 'map' ? mapPageHtml() : '';
     if (container.dataset.html === html) return;
     const active = document.activeElement;
     if (active && container.contains(active) && (active.isContentEditable || active.tagName === 'INPUT')) return;

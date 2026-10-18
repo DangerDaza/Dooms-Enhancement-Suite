@@ -247,8 +247,9 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   through `withBackgroundProfile`, blind injection, `/advance`, `/liveworld`),
   `src/systems/ui/worldDashboard.js` (lazy; D1, the D2 feed, D3 timelines
   and map links) with its Map view (`src/systems/ui/worldMap.js` over the
-  pure `src/utils/worldMap.js`, C1), Settings → Live World, two packs in
-  `worldpacks/`.
+  pure `src/utils/worldMap.js`, C1 and C2), the same map as the shelf's
+  fourth page Map (D56, `src/systems/ui/shelfPages.js`), Settings → Live
+  World, two packs in `worldpacks/`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
   two further passes (`docs/stats-plan.md` §15.9).
@@ -383,6 +384,9 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   the advancer on the tracker's profile through `withBackgroundProfile`;
   no time module; the dashboard from Settings and `/liveworld`; no toasts;
   Skyreach is a draft. `docs/stats-plan.md` §15.
+- **D56 (Jordan, 2026-10-18):** the map is the Present Characters shelf's
+  fourth button, Map, beside Characters, Inventory and Quests, shown while
+  Live World is on; the dashboard stays as it is.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)
 

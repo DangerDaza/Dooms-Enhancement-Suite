@@ -53,6 +53,8 @@ import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vi
 import { attributesOn } from '../../utils/d20.js';
 // Inventory (Project Short Fuse, Phase 5): the shelf's pages show while it is on.
 import { isInventoryOn, INVENTORY_CHANGED_EVENT } from '../features/inventory.js';
+// Live World (Phase 6, D56): the shelf's Map page shows while it is on.
+import { isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -531,15 +533,16 @@ export function initPortraitBar() {
         $('#dooms-pb-open-roster').hide();
     }
 
-    // ── Pages (Phase 5): Characters | Inventory | Quests ──
+    // ── Pages (Phase 5, Phase 6): Characters | Inventory | Quests | Map ──
     $('#dooms-portrait-bar').on('click', '.dooms-pb-page-btn', function (e) {
         e.preventDefault();
         e.stopPropagation();
         setShelfPage($(this).attr('data-page'));
     });
-    // The inventory and the quests change outside the shelf; repaint the page.
+    // The inventory, the quests and the world change outside the shelf; repaint the page.
     window.addEventListener(INVENTORY_CHANGED_EVENT, () => updatePortraitBar());
     window.addEventListener('dooms:quests-rendered', () => updatePortraitBar());
+    window.addEventListener(WORLD_CHANGED_EVENT, () => updatePortraitBar());
 
     // Initial render
     updatePortraitBar();
@@ -576,29 +579,34 @@ export function updatePortraitBar() {
 // ─────────────────────────────────────────────
 //
 // With the inventory on, the shelf flips between Characters (the cards),
-// Inventory and Quests. The control sits in the header; the pages render
-// into #dooms-pb-page (shelfPages.js, loaded on first use) while the card
-// strip hides, so the cards' reconciler is never disturbed. The page is
-// remembered on this browser.
+// Inventory and Quests; with Live World on, Map joins them (Phase 6, D56).
+// The control sits in the header; the pages render into #dooms-pb-page
+// (shelfPages.js, loaded on first use) while the card strip hides, so the
+// cards' reconciler is never disturbed. The page is remembered on this
+// browser.
 
 const SHELF_PAGE_KEY = 'dooms-shelf-page';
 const SHELF_PAGES = {
     characters: { label: 'Characters', title: 'Present Characters', icon: 'fa-users' },
     inventory: { label: 'Inventory', title: 'Inventory', icon: 'fa-box-open' },
     quests: { label: 'Quests', title: 'Quests', icon: 'fa-scroll' },
+    map: { label: 'Map', title: 'World map', icon: 'fa-map' },
 };
 let shelfPage = 'characters';
 try { shelfPage = localStorage.getItem(SHELF_PAGE_KEY) || 'characters'; } catch (e) { /* no storage */ }
 let shelfPagesModule = null;
 
 function availableShelfPages() {
-    if (!isInventoryOn()) return ['characters'];
-    const pages = ['characters', 'inventory'];
-    if (extensionSettings.showQuests !== false) pages.push('quests');
+    const pages = ['characters'];
+    if (isInventoryOn()) {
+        pages.push('inventory');
+        if (extensionSettings.showQuests !== false) pages.push('quests');
+    }
+    if (isLiveWorldOn()) pages.push('map');
     return pages;
 }
 
-/** The page the shelf shows now ('characters' while the inventory is off). */
+/** The page the shelf shows now ('characters' while nothing else is on). */
 export function getShelfPage() {
     return availableShelfPages().includes(shelfPage) ? shelfPage : 'characters';
 }

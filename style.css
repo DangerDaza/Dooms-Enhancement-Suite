@@ -9746,6 +9746,48 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
+/* The Map page (Phase 6, D56): the dashboard's map (styles/modals.css,
+   .rpg-wmap) on the strip, and a button to the dashboard itself at the
+   trail's right end. The popup's 16:10 canvas is too tall for the strip:
+   here the canvas is as tall as the renderer's inline min-height says
+   (its floor, more when dense), and shelfPages.js tells the layout a
+   width to match. */
+.dooms-map-page { position: relative; padding-top: 2px; }
+.dooms-map-page .rpg-wmap { aspect-ratio: auto; }
+.dooms-map-page .rpg-wmap-crumbs { padding-right: 104px; min-height: 22px; }
+.dooms-map-page .rpg-wmap-legend { font-size: 0.72em; }
+
+.dooms-map-dashboard {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 1px solid rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.25);
+    color: #888;
+    border-radius: 10px;
+    font-size: 0.6em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.6;
+    padding: 1px 7px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.dooms-map-dashboard:hover {
+    color: #ddd;
+    border-color: rgba(var(--dooms-pb-accent-r, 233), var(--dooms-pb-accent-g, 69), var(--dooms-pb-accent-b, 96), 0.6);
+}
+
+@media (max-width: 600px) {
+    .dooms-map-dashboard span { display: none; }
+    .dooms-map-page .rpg-wmap-crumbs { padding-right: 36px; }
+}
+
 /* The quest menu: the shelf's menu look, its own items */
 .dooms-quest-menu-item {
     display: flex;
