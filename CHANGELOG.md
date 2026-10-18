@@ -3,7 +3,9 @@
 ## [3.1.3-beta.1] - 2026-10-18 — The die is the button
 
 ### Changed
-- **Changing a result is one press on the die.** The ✎ and its form of 3.1.2 are gone. With Let me change the ruling on, the die number on the roll box is the button: press it and ▼ ▲ appear either side, each press moves the die one face (20 wraps to 1) and the total and the outcome follow at once; press the number again (or Escape) to close. The arrow keys work too. The version reads `3.1.3-beta.1`.
+- **Changing a result is one press on the die.** The ✎ and its form of 3.1.2 are gone. With Let me change the ruling on, the die number is the button: press it and ▼ ▲ appear either side, each press moves the die one face (20 wraps to 1) and the total and the outcome follow at once; press the number again (or Escape) to close. The arrow keys work too. The version reads `3.1.3-beta.1`.
+- **The dice tool's rolls can be changed too, on the "Tool calls: Dice check" line.** Each roll the tool made shows there with its die as the button; a change rewrites the result the AI is handed on the next regenerate, the box on the reply below, and what a repeated call for the same check answers with.
+- **Closing a changed die asks whether to regenerate.** Press the number again, Escape, or click anywhere else: when the die moved and the reply is the chat's last, a prompt offers Regenerate so the story follows the new result.
 
 ## [3.1.2-beta.1] - 2026-10-18 — A result you can set
 

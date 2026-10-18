@@ -12,13 +12,16 @@
  *   - the verdict handed to the next generation, and the box at the top of
  *     the reply that answers the rolled message, where the die number is a
  *     button that steps the result after the die has landed (D57), behind
- *     Settings → Stats → Let me change the ruling.
+ *     Settings → Stats → Let me change the ruling; the dice tool's rolls get
+ *     the same buttons on SillyTavern's "Tool calls" line, and a change
+ *     rewrites the result the model is given on the next regenerate.
  *
  * It imports no UI module. The popover (src/systems/ui/dicePanel.js) and the
  * shelf listen for DICE_CHANGED_EVENT instead.
  */
 import { getContext } from '../../../../../../extensions.js';
 import { chat, saveChatDebounced } from '../../../../../../../script.js';
+import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../../../../popup.js';
 import { extensionSettings, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -261,7 +264,8 @@ let pending = null;
 let transport = null;          // test hook: (messages) => Promise<string>
 let rulingTimeoutMs = 20000;   // the game master gets this long before the default stands
 let listenersBound = false;
-let openStep = -1;           // the player message whose die is open for stepping on the boxes under it (D57)
+let openKey = '';            // the roll whose die is open for stepping, as "index:slot" (slot -1: the player's own roll; k: a tool invocation) (D57)
+let openStart = null;        // what that die showed when it was opened: closing it on a different face asks whether to regenerate
 
 /** The check waiting for a message, or null. Read-only to callers. */
 export function getPendingCheck() {
@@ -656,9 +660,11 @@ function verdictFor(roll) {
 // the next player message), inserted before .mes_text in the reply's
 // .mes_block so SillyTavern's own re-renders of the text leave it alone.
 // Nothing on it removes the roll. With Let me change the ruling on, the die
-// number of the player's own roll is a button: pressed, arrows appear either
-// side of it and step the result (D57); the reply already written stands until
-// its next swipe or regenerate, which follow the set result.
+// number is a button: pressed, arrows appear either side of it and step the
+// result (D57); the reply already written stands until its next swipe or
+// regenerate, which follow the set result. A roll is located by the message it
+// sits on and a slot: -1 for the player's own roll (message.extra.dooms_roll),
+// k for the k-th invocation of a tool-call message.
 
 const CARD_CLASS = 'dooms-roll-card';
 
@@ -671,9 +677,22 @@ export function rollsForReply(index) {
     return rollsForReplyDetailed(index).rolls;
 }
 
-/** The same, with the roll on the player's message (`own`) and that message's index, for the ✎. */
+const rollKey = (index, slot) => `${index}:${slot}`;
+const isToolMessage = (m) => !!(m && Array.isArray(m.extra && m.extra.tool_invocations));
+
+/** The dice tool's invocations of a message with their rolls, as [{ inv, roll, slot }]. */
+function toolRollsOf(m) {
+    if (!isToolMessage(m)) return [];
+    const out = [];
+    m.extra.tool_invocations.forEach((inv, slot) => {
+        if (inv && inv.name === DICE_TOOL_NAME && inv.dooms_roll && typeof inv.dooms_roll === 'object') out.push({ inv, roll: inv.dooms_roll, slot });
+    });
+    return out;
+}
+
+/** The same as rollsForReply, each roll with the message it sits on and its slot, and the player's own roll apart. */
 function rollsForReplyDetailed(index) {
-    const none = { rolls: [], own: null, ownIndex: -1 };
+    const none = { rolls: [], items: [], own: null, ownIndex: -1 };
     const list = chatArray();
     if (!list || !Number.isFinite(index) || index < 0 || index >= list.length) return none;
     const m = list[index];
@@ -684,17 +703,39 @@ function rollsForReplyDetailed(index) {
         const p = list[i];
         if (!p) continue;
         if (p.is_user) break;
-        if (p.is_system && Array.isArray(p.extra?.tool_invocations)) {
-            // Walking back message by message; within a message, in the order the model called.
-            const here = p.extra.tool_invocations
-                .filter(inv => inv && inv.name === DICE_TOOL_NAME && inv.dooms_roll && typeof inv.dooms_roll === 'object')
-                .map(inv => inv.dooms_roll);
-            tool.unshift(...here);
-        }
+        // Walking back message by message; within a message, in the order the model called.
+        if (p.is_system && isToolMessage(p)) tool.unshift(...toolRollsOf(p).map(t => ({ roll: t.roll, index: i, slot: t.slot })));
     }
     const r = i >= 0 ? list[i].extra?.dooms_roll : null;
     const own = r && typeof r === 'object' ? r : null;
-    return { rolls: (own ? [own] : []).concat(tool), own, ownIndex: own ? i : -1 };
+    const items = (own ? [{ roll: own, index: i, slot: -1 }] : []).concat(tool);
+    return { rolls: items.map(x => x.roll), items, own, ownIndex: own ? i : -1 };
+}
+
+/** The die number as a button; open, with ▼ ▲ either side of it. */
+function dieControlHtml(roll, open) {
+    const keptText = Number.isFinite(roll.kept) ? String(roll.kept) : '?';
+    const btn = `<button type="button" class="dooms-roll-die-btn${open ? ' is-open' : ''}" title="${open ? 'Done' : 'Change the die'}" aria-label="The die shows ${keptText}. ${open ? 'Done changing it' : 'Change it'}" aria-expanded="${open ? 'true' : 'false'}">${keptText}</button>`;
+    return open
+        ? `<span class="dooms-roll-step"><button type="button" class="dooms-roll-step-down" title="Down one (1 wraps to 20)" aria-label="Lower the die by one">▼</button>${btn}<button type="button" class="dooms-roll-step-up" title="Up one (20 wraps to 1)" aria-label="Raise the die by one">▲</button></span>`
+        : btn;
+}
+
+/**
+ * The dice tool's rolls for SillyTavern's "Tool calls" line of a tool-call
+ * message at `index`: each with its die as a button (the result changes
+ * right there, D57), or '' when there is nothing to show. Pure.
+ */
+export function toolDiceHtml(message, index, { editable = false, openKey: openNow = '' } = {}) {
+    if (!editable) return '';
+    const rolls = toolRollsOf(message);
+    if (!rolls.length) return '';
+    const parts = rolls.map(({ roll, slot }) => {
+        const who = roll.isUser === false ? `${escapeHtml(roll.who || 'NPC')}: ` : '';
+        const set = roll.setBy === 'player' && roll.before && Number.isFinite(roll.before.kept) ? ` <small class="dooms-tool-roll-was" title="${escapeHtml(beforeWords(roll.before))}">(was ${roll.before.kept})</small>` : '';
+        return `<span class="dooms-tool-roll" data-index="${index}" data-slot="${slot}"><span class="dooms-roll-die" aria-hidden="true">🎲</span> ${who}${escapeHtml(checkLabel(roll))}${isSaveRoll(roll) ? ' save' : ''} · d20 ${dieControlHtml(roll, openNow === rollKey(index, slot))} ${escapeHtml(formatModifier(roll.mod))}${roll.prof ? ` +${roll.prof}` : ''} = <b>${roll.total}</b> vs DC ${roll.dc} · <span class="dooms-tool-roll-outcome ${roll.success ? 'is-success' : 'is-failure'}">${escapeHtml(outcomeLabel(roll))}</span>${set}</span>`;
+    });
+    return `<span class="dooms-tool-dice" role="group" aria-label="Dice results">${parts.join('')}</span>`;
 }
 
 /** What the die first showed, for the note on a set result. */
@@ -710,19 +751,14 @@ function beforeWords(before) {
  * the ▼ ▲ either side of it; `canRegenerate` adds Regenerate the reply to a
  * set result on the chat's last reply.
  */
-export function rollCardHtml(roll, { editable = false, index = -1, canRegenerate = false, open = false } = {}) {
+export function rollCardHtml(roll, { editable = false, index = -1, slot = -1, canRegenerate = false, open = false } = {}) {
     const set = roll.setBy === 'player';
     const cls = [CARD_CLASS, roll.success ? 'is-success' : 'is-failure', roll.critical ? 'is-crit' : '', set ? 'is-set' : ''].filter(Boolean).join(' ');
     const whoLabel = roll.isUser === false ? `${escapeHtml(roll.who || 'NPC')}: ` : '';
     const asked = roll.calledBy === 'gm' || roll.calledBy === 'tool' ? ' <small>(the game master called for it)</small>' : '';
     const twoDice = roll.advantage !== 'none' && Array.isArray(roll.rolls) && roll.rolls.length === 2;
     const keptText = Number.isFinite(roll.kept) ? String(roll.kept) : '?';
-    const dieBtn = `<button type="button" class="dooms-roll-die-btn${open ? ' is-open' : ''}" title="${open ? 'Done' : 'Change the die'}" aria-label="The die shows ${keptText}. ${open ? 'Done changing it' : 'Change it'}" aria-expanded="${open ? 'true' : 'false'}">${keptText}</button>`;
-    const face = !editable
-        ? keptText
-        : open
-            ? `<span class="dooms-roll-step"><button type="button" class="dooms-roll-step-down" title="Down one (1 wraps to 20)" aria-label="Lower the die by one">▼</button>${dieBtn}<button type="button" class="dooms-roll-step-up" title="Up one (20 wraps to 1)" aria-label="Raise the die by one">▲</button></span>`
-            : dieBtn;
+    const face = editable ? dieControlHtml(roll, open) : keptText;
     const dice = twoDice
         ? `${face} <small>(${roll.rolls[0]}/${roll.rolls[1]}, ${roll.advantage === 'adv' ? 'advantage' : 'disadvantage'})</small>`
         : face;
@@ -737,7 +773,7 @@ export function rollCardHtml(roll, { editable = false, index = -1, canRegenerate
     const regen = set && canRegenerate ? ' <button type="button" class="dooms-roll-regen" title="Generate the reply again, with this result">Regenerate the reply</button>' : '';
     const whyParts = [attempt, why, setNote ? `<span class="dooms-roll-set-note">${setNote}</span>${regen}` : ''].filter(Boolean);
     const why2 = whyParts.length ? `<div class="dooms-roll-why">${whyParts.join(' · ')}</div>` : '';
-    return `<div class="${cls}" role="note"${editable ? ` data-index="${index}"` : ''}>
+    return `<div class="${cls}" role="note"${editable ? ` data-index="${index}" data-slot="${slot}"` : ''}>
         <div class="dooms-roll-line">
             <span class="dooms-roll-die" aria-hidden="true">🎲</span>
             <span class="dooms-roll-label">${whoLabel}${escapeHtml(kindLabel(roll))}${asked}</span>
@@ -748,40 +784,116 @@ export function rollCardHtml(roll, { editable = false, index = -1, canRegenerate
     </div>`;
 }
 
+/** The roll at a locator: the player's own roll on their message (slot -1) or a dice-tool invocation's (slot k). */
+function rollAt(index, slot = -1) {
+    const list = chatArray();
+    const m = list && Number.isFinite(index) ? list[index] : null;
+    if (!m) return null;
+    if (slot >= 0) {
+        const inv = isToolMessage(m) ? m.extra.tool_invocations[slot] : null;
+        const roll = inv && inv.name === DICE_TOOL_NAME ? inv.dooms_roll : null;
+        return roll && typeof roll === 'object' ? { m, inv, roll } : null;
+    }
+    const roll = m.is_user && m.extra ? m.extra.dooms_roll : null;
+    return roll && typeof roll === 'object' ? { m, inv: null, roll } : null;
+}
+
+/** The tool-roll memo on the nearest player message above `index` (what a repeated call for the same check answers with). */
+function memoAbove(index) {
+    const list = chatArray();
+    if (!list) return null;
+    for (let i = index - 1; i >= 0; i--) {
+        const p = list[i];
+        if (p && p.is_user) return p.extra && p.extra.dooms_tool_rolls && typeof p.extra.dooms_tool_rolls === 'object' ? p.extra.dooms_tool_rolls : null;
+    }
+    return null;
+}
+
+/** After a tool roll changed: the stored "Tool calls" text shows the invocations as they now are (SillyTavern wrote it before the roll was attached). */
+function refreshToolMessageText(m) {
+    try {
+        if (typeof m.mes !== 'string' || !m.mes.includes('<code class="language-json">')) return;
+        const data = JSON.parse(JSON.stringify(m.extra.tool_invocations)).map(inv => {
+            if (!inv || typeof inv !== 'object') return inv;
+            const { dooms_roll, ...rest } = inv;    // the roll record is DES's own, not part of what SillyTavern printed
+            for (const k of ['parameters', 'result']) {
+                if (typeof rest[k] === 'string') { try { rest[k] = JSON.parse(rest[k]); } catch (e) { /* plain text stays */ } }
+            }
+            return rest;
+        });
+        m.mes = m.mes.replace(/(<code class="language-json">)[\s\S]*?(<\/code>)/, (_, a, b) => a + escapeHtml(JSON.stringify(data, null, 2)) + b);
+    } catch (e) { /* the text stands */ }
+}
+
 /**
- * Sets the result of the roll on the player's message at `index` (D57):
- * a die face, or an outcome (the face that just makes or just misses the
- * DC). Refused while Let me change the ruling is off, for a message with no
- * roll, and for a bad face. Returns the new roll, or null.
+ * Sets the result of a roll (D57): the player's own roll on their message
+ * at `index`, or the dice tool's roll in invocation `slot` of a tool-call
+ * message there. A die face, or an outcome (the face that just makes or
+ * just misses the DC). A tool roll's change also rewrites the result text
+ * the model is given (the invocation's `result`), the memo a repeated call
+ * answers with, and the "Tool calls" text. Refused while Let me change the
+ * ruling is off, for no roll, and for a bad face. Returns the new roll, or
+ * null.
  */
-export function setRollResult(index, { kept = null, success = null, quiet = false } = {}) {
+export function setRollResult(index, { kept = null, success = null, slot = -1, quiet = false } = {}) {
     if (!attributesOn(extensionSettings)) return null;
     const cfg = attributesConfig(extensionSettings);
     if (!cfg.allowOverride) return null;
-    const list = chatArray();
-    const m = list && Number.isFinite(index) ? list[index] : null;
-    const roll = m && m.is_user && m.extra && m.extra.dooms_roll;
-    if (!roll || typeof roll !== 'object') return null;
-    const next = overrideRoll(roll, { kept, success, criticals: cfg.criticals });
+    const at = rollAt(index, slot);
+    if (!at) return null;
+    const next = overrideRoll(at.roll, { kept, success, criticals: cfg.criticals });
     if (!next) return null;
-    m.extra.dooms_roll = next;
+    if (at.inv) {
+        at.inv.dooms_roll = next;
+        at.inv.result = `${verdictFor(next)} ${STILL_REQUIRED}`;
+        const memo = memoAbove(index);
+        if (memo) for (const key of Object.keys(memo)) { const r = memo[key]; if (r && typeof r === 'object' && r.ts === at.roll.ts && r.who === at.roll.who) memo[key] = next; }
+        refreshToolMessageText(at.m);
+    } else {
+        at.m.extra.dooms_roll = next;
+    }
     saveRollChange();
     syncRollCardForMessage(index);
-    notifyDiceChanged({ source: 'set', index });
+    notifyDiceChanged({ source: 'set', index, slot });
     diceNotice(`Result set by you · ${rollLine(next)}`, { kind: next.success ? 'success' : 'warning', toast: !quiet });
     return next;
 }
 
-/** Moves the die of the roll on the player's message at `index` by `delta` faces, 20 wrapping to 1 (the arrows). Quiet: the box shows it. */
-export function stepRollResult(index, delta) {
-    const list = chatArray();
-    const m = list && Number.isFinite(index) ? list[index] : null;
-    const roll = m && m.is_user && m.extra && m.extra.dooms_roll;
-    if (!roll || typeof roll !== 'object') return null;
-    const from = Number.isFinite(roll.kept) ? Math.round(roll.kept) : 10;
+/** Moves a roll's die by `delta` faces, 20 wrapping to 1 (the arrows). Quiet: the box shows it. */
+export function stepRollResult(index, delta, slot = -1) {
+    const at = rollAt(index, slot);
+    if (!at) return null;
+    const from = Number.isFinite(at.roll.kept) ? Math.round(at.roll.kept) : 10;
     const d = Math.round(Number(delta) || 0);
     const next = ((((from - 1 + d) % 20) + 20) % 20) + 1;
-    return setRollResult(index, { kept: next, quiet: true });
+    return setRollResult(index, { kept: next, slot, quiet: true });
+}
+
+/** Whether the chat's last reply is the one that answers the roll on the message at `index` (nothing of the player's after it). */
+function canRegenerateAfter(index) {
+    const list = chatArray();
+    if (!list || !list.length || !Number.isFinite(index)) return false;
+    const last = list[list.length - 1];
+    if (!last || last.is_user) return false;
+    for (let i = index + 1; i < list.length; i++) if (list[i] && list[i].is_user) return false;
+    return true;
+}
+
+/**
+ * After the die was changed and closed: asks whether to regenerate the reply
+ * so the story follows the new result (only when that reply is the chat's
+ * last). Nothing when the face is back where it started.
+ */
+async function offerRegenerate(index, slot, startedAt) {
+    const at = rollAt(index, slot);
+    if (!at || !Number.isFinite(startedAt) || at.roll.kept === startedAt || !canRegenerateAfter(index)) return false;
+    const text = `The die now shows ${at.roll.kept}: ${kindLabel(at.roll)}, ${outcomeLabel(at.roll).toLowerCase()}. Regenerate the reply so the story follows it?`;
+    let yes = false;
+    try {
+        yes = (await callGenericPopup(text, POPUP_TYPE.CONFIRM, '', { okButton: 'Regenerate', cancelButton: 'Not now' })) === POPUP_RESULT.AFFIRMATIVE;
+    } catch (e) { yes = false; }
+    if (yes) regenerateLastReply();
+    return yes;
 }
 
 /** Plays a set result out: SillyTavern's own Regenerate (its options-menu entry works with the menu closed). */
@@ -804,11 +916,12 @@ function syncCardOnReply(messageElement, index) {
     if (!rolls.length) return;
     const list = chatArray();
     const editable = attributesConfig(extensionSettings).allowOverride;
-    const html = rolls.map(roll => rollCardHtml(roll, {
-        editable: editable && roll === detail.own,
-        index: detail.ownIndex,
+    const html = detail.items.map(item => rollCardHtml(item.roll, {
+        editable,
+        index: item.index,
+        slot: item.slot,
         canRegenerate: !!list && index === list.length - 1,
-        open: detail.ownIndex >= 0 && detail.ownIndex === openStep,
+        open: openKey === rollKey(item.index, item.slot),
     })).join('');
     const $text = $block.children('.mes_text').first();
     if ($text.length) $text.before(html);
@@ -830,14 +943,32 @@ export function syncRollCardForMessage(messageId) {
     const mesId = parseInt(messageId, 10);
     if (!list || !Number.isFinite(mesId) || !list[mesId]) return;
     if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
-    if (!list[mesId].is_user) {
+    const m = list[mesId];
+    if (!m.is_user && !isToolMessage(m)) {
         syncReplyAt(list, mesId);
         return;
     }
+    if (isToolMessage(m)) decorateToolLine(mesId);    // its own line, then the replies under it, which show its rolls
     for (let i = mesId + 1; i < list.length; i++) {
         if (list[i] && list[i].is_user) break;
         syncReplyAt(list, i);
     }
+}
+
+/** The dice tool's die buttons on a tool-call message's "Tool calls" line (inside SillyTavern's summary, so they sit on that line). */
+function decorateToolLine(index) {
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+    const list = chatArray();
+    const m = list ? list[index] : null;
+    const el = document.querySelector(`#chat .mes[mesid="${index}"]`);
+    if (!m || !el || typeof el !== 'object' || typeof el.querySelector !== 'function') return;
+    const old = el.querySelector('.dooms-tool-dice');
+    if (old) old.remove();
+    const editable = !!extensionSettings.enabled && attributesOn(extensionSettings) && attributesConfig(extensionSettings).allowOverride;
+    const html = toolDiceHtml(m, index, { editable, openKey });
+    if (!html) return;
+    const host = el.querySelector('.mes_text details > summary') || el.querySelector('.mes_text summary') || el.querySelector('.mes_text');
+    if (host) host.insertAdjacentHTML('beforeend', html);
 }
 
 /** Full sweep (CHAT_CHANGED, "show more messages", deletions). */
@@ -847,12 +978,13 @@ export function updateRollCards() {
     const any = extensionSettings.enabled && attributesOn(extensionSettings)
         && list.some(m => m && m.extra && (m.extra.dooms_roll || m.extra.dooms_gm_calls || (Array.isArray(m.extra.tool_invocations) && m.extra.tool_invocations.some(inv => inv && inv.dooms_roll))));
     if (!any) {
-        $(`#chat .${CARD_CLASS}`).remove();
+        $(`#chat .${CARD_CLASS}, #chat .dooms-tool-dice`).remove();
         return;
     }
     $('#chat .mes').each(function () {
         const mesId = parseInt($(this).attr('mesid'), 10);
         if (!Number.isFinite(mesId) || !list[mesId] || list[mesId].is_user) return;
+        if (isToolMessage(list[mesId])) { decorateToolLine(mesId); return; }
         syncCardOnReply(this, mesId);
     });
 }
@@ -860,7 +992,7 @@ export function updateRollCards() {
 /** CHAT_CHANGED: a pending check belongs to the chat it was tagged in. */
 export function onDiceChatChanged() {
     clearPendingCheck({ silent: true });
-    openStep = -1;
+    openKey = '';
     try { mountDiceButton(); } catch (e) { /* no DOM */ }
     try { updateRollCards(); } catch (e) { /* no DOM */ }
     // A call the game master made at the end of the chat's last reply is
@@ -891,46 +1023,73 @@ function bindRollCardControls() {
     if (typeof $ !== 'function' || typeof document === 'undefined') return;
     try {
         const $doc = $(document);
-        const indexOf = (el) => parseInt($(el).closest(`.${CARD_CLASS}`).attr('data-index'), 10);
-        const focusIn = (index, selector) => {
+        // A roll's locator from the control pressed: the box on a reply or the entry on a "Tool calls" line.
+        const whereOf = (el) => {
+            const $host = $(el).closest('[data-index][data-slot]');
+            const index = parseInt($host.attr('data-index'), 10);
+            const slot = parseInt($host.attr('data-slot'), 10);
+            return Number.isFinite(index) ? { index, slot: Number.isFinite(slot) ? slot : -1, key: rollKey(index, Number.isFinite(slot) ? slot : -1) } : null;
+        };
+        const focusIn = (w, selector) => {
             try {
-                const el = document.querySelector(`#chat .${CARD_CLASS}[data-index="${index}"] ${selector}`);
+                const el = document.querySelector(`#chat [data-index="${w.index}"][data-slot="${w.slot}"] ${selector}`);
                 if (el && typeof el.focus === 'function') el.focus({ preventScroll: true });
             } catch (e) { /* no DOM */ }
         };
-        const openOn = (index) => {    // one die open at a time: the box of the one open before is redrawn closed
-            const prev = openStep;
-            openStep = index;
-            if (prev >= 0 && prev !== index) syncRollCardForMessage(prev);
+        const indexOfKey = (key) => parseInt(String(key).split(':')[0], 10);
+        const openOn = (w) => {    // one die open at a time: what was open before is redrawn closed
+            const prev = openKey;
+            if (prev === w.key) return;
+            openKey = w.key;
+            const at = rollAt(w.index, w.slot);
+            openStart = at && Number.isFinite(at.roll.kept) ? at.roll.kept : null;
+            if (prev) syncRollCardForMessage(indexOfKey(prev));
         };
-        const step = (index, delta, selector) => {
-            if (!Number.isFinite(index)) return;
-            openOn(index);
-            if (stepRollResult(index, delta)) focusIn(index, selector);
+        const step = (w, delta, selector) => {
+            if (!w) return;
+            openOn(w);
+            if (stepRollResult(w.index, delta, w.slot)) focusIn(w, selector);
         };
-        const close = (index) => {
-            if (!Number.isFinite(index)) return;
-            openStep = -1;
-            syncRollCardForMessage(index);
-            focusIn(index, '.dooms-roll-die-btn');
+        const close = (w, { ask = true } = {}) => {
+            if (!w) return;
+            const startedAt = openStart;
+            openKey = '';
+            openStart = null;
+            syncRollCardForMessage(w.index);
+            focusIn(w, '.dooms-roll-die-btn');
+            if (ask) offerRegenerate(w.index, w.slot, startedAt).catch(() => {});
         };
-        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-die-btn`, function () {
-            const index = indexOf(this);
-            if (!Number.isFinite(index)) return;
-            if (openStep === index) { close(index); return; }
-            openOn(index);
-            syncRollCardForMessage(index);
-            focusIn(index, '.dooms-roll-die-btn');
+        const whereOfKey = (key) => { const [i, s] = String(key).split(':').map(Number); return Number.isFinite(i) ? { index: i, slot: Number.isFinite(s) ? s : -1, key } : null; };
+        // Inside SillyTavern's <summary>, a click would also fold the tool calls open or shut: ours do not.
+        const own = (e) => { e.preventDefault(); e.stopPropagation(); };
+        $doc.on('click', '#chat .dooms-roll-die-btn', function (e) {
+            own(e);
+            const w = whereOf(this);
+            if (!w) return;
+            if (openKey === w.key) { close(w); return; }
+            openOn(w);
+            syncRollCardForMessage(w.index);
+            focusIn(w, '.dooms-roll-die-btn');
         });
-        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-step-up`, function () { step(indexOf(this), 1, '.dooms-roll-step-up'); });
-        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-step-down`, function () { step(indexOf(this), -1, '.dooms-roll-step-down'); });
-        $doc.on('keydown', `#chat .${CARD_CLASS} .dooms-roll-die-btn, #chat .${CARD_CLASS} .dooms-roll-step button`, function (e) {
-            const index = indexOf(this);
-            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(index, 1, '.dooms-roll-die-btn'); }
-            else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(index, -1, '.dooms-roll-die-btn'); }
-            else if (e.key === 'Escape' && openStep === index) { e.preventDefault(); close(index); }
+        $doc.on('click', '#chat .dooms-roll-step-up', function (e) { own(e); step(whereOf(this), 1, '.dooms-roll-step-up'); });
+        $doc.on('click', '#chat .dooms-roll-step-down', function (e) { own(e); step(whereOf(this), -1, '.dooms-roll-step-down'); });
+        $doc.on('keydown', '#chat .dooms-roll-die-btn, #chat .dooms-roll-step button', function (e) {
+            const w = whereOf(this);
+            if (!w) return;
+            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { own(e); step(w, 1, '.dooms-roll-die-btn'); }
+            else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { own(e); step(w, -1, '.dooms-roll-die-btn'); }
+            else if (e.key === 'Escape' && openKey === w.key) { own(e); close(w); }
         });
-        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-regen`, function () { regenerateLastReply(); });
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-regen`, function () {
+            if (openKey) close(whereOfKey(openKey), { ask: false });    // the player is regenerating already
+            regenerateLastReply();
+        });
+        // A click anywhere else ends the stepping (and asks about regenerating when the die moved).
+        $doc.on('click', function (e) {
+            if (!openKey) return;
+            if ($(e.target).closest('.dooms-roll-step, .dooms-roll-die-btn, .dooms-roll-regen').length) return;
+            close(whereOfKey(openKey));
+        });
     } catch (e) { /* no jQuery events (tests) */ }
 }
 

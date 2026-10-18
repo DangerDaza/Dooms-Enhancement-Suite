@@ -13397,6 +13397,13 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 }
 .dooms-roll-regen:hover, .dooms-roll-regen:focus-visible { border-color: var(--rpg-highlight, #e94560); outline: none; }
 .dooms-roll-set-note { font-style: normal; }
+/* The dice tool's rolls on SillyTavern's "Tool calls" line, each with its die as the button (D57). */
+.dooms-tool-dice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-left: 12px; font-style: normal; font-size: 0.92em; vertical-align: middle; }
+.dooms-tool-roll { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dooms-tool-roll-outcome { font-weight: 700; }
+.dooms-tool-roll-outcome.is-success { color: #5fd38d; }
+.dooms-tool-roll-outcome.is-failure { color: #ff8a8a; }
+.dooms-tool-roll-was { opacity: 0.7; }
 
 /* ── Dice: the game master's call, in place of its "[CHECK: ...]" line ──
    For the player: what was called and that it rolls on the next send. For an

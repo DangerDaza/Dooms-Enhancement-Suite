@@ -431,6 +431,30 @@ check('a bad face is refused and changes nothing', dice.setRollResult(1, { kept:
 check('a message without a roll, a reply, or no message cannot be set', dice.setRollResult(0, { kept: 5 }) === null && dice.setRollResult(2, { kept: 5 }) === null && dice.setRollResult(99, { kept: 5 }) === null && dice.setRollResult(-1, { kept: 5 }) === null);
 extensionSettings.attributes.allowOverride = false;
 check('with the switch off again the set result still reads as set', dice.rollCardHtml(chat[1].extra.dooms_roll, { editable: false }).includes('Set by you') && !dice.rollCardHtml(chat[1].extra.dooms_roll, { editable: false }).includes('dooms-roll-die-btn'));
+// the dice tool's rolls: the button on the "Tool calls" line, the result text the model is handed, the memo
+extensionSettings.attributes.allowOverride = true;
+chat.length = 0;
+chat.push(ai('The planks sway.'));
+chat.push(user('I cross the rope bridge.'));
+const bridgeArgs = { attribute: 'Dexterity', skill: 'Acrobatics', difficulty: 'Hard', advantage: 'none', reason: 'the planks are wet' };
+const bridgeText = dice.diceToolAction(bridgeArgs);
+const bridgeInv = [{ id: 't1', name: 'dooms_roll_check', displayName: 'Dice check', parameters: JSON.stringify(bridgeArgs), result: bridgeText }];
+dice.onDiceToolCallsPerformed(bridgeInv);
+chat.push({ is_user: false, is_system: true, name: 'System', mes: `<details><summary>Tool calls: Dice check</summary><pre><code class="language-json">${JSON.stringify([{ id: 't1', name: 'dooms_roll_check', displayName: 'Dice check', parameters: bridgeArgs, result: bridgeText }], null, 2)}</code></pre></details>`, extra: { isSmallSys: true, tool_invocations: bridgeInv } });
+chat.push(ai('You wobble across.'));
+const toolIdx = 2;
+const toolRoll = bridgeInv[0].dooms_roll;
+const line = dice.toolDiceHtml(chat[toolIdx], toolIdx, { editable: true });
+check('the tool roll shows on the "Tool calls" line with its die as the button, nothing when the switch is off', !!toolRoll && line.includes('class="dooms-tool-dice"') && line.includes(`data-index="${toolIdx}" data-slot="0"`) && line.includes('Dexterity (Acrobatics)') && line.includes(`aria-expanded="false">${toolRoll.kept}</button>`) && line.includes('vs DC 20') && dice.toolDiceHtml(chat[toolIdx], toolIdx, { editable: false }) === '' && dice.toolDiceHtml(chat[1], 1, { editable: true }) === '', line);
+check('open, the arrows sit either side of it on the line', dice.toolDiceHtml(chat[toolIdx], toolIdx, { editable: true, openKey: `${toolIdx}:0` }).includes('class="dooms-roll-step-down"') && !dice.toolDiceHtml(chat[toolIdx], toolIdx, { editable: true, openKey: `${toolIdx}:1` }).includes('dooms-roll-step-down'));
+const toolSet = dice.setRollResult(toolIdx, { kept: 20, slot: 0 });
+const toolSetParts = [!!toolSet, bridgeInv[0].dooms_roll === toolSet, toolSet && toolSet.kept === 20, toolSet && toolSet.critical === 'success', toolSet && toolSet.before.kept === toolRoll.kept, bridgeInv[0].result.includes('d20 = 20'), bridgeInv[0].result.includes('NATURAL 20'), Object.values(chat[1].extra.dooms_tool_rolls || {}).some(r => r === toolSet), chat[toolIdx].mes.includes('d20 = 20'), !chat[toolIdx].mes.includes('&quot;dooms_roll&quot;'), chat[toolIdx].mes.includes('&quot;dooms_roll_check&quot;')];
+check('setting a tool roll rewrites the invocation, the result the model is handed, the memo and the "Tool calls" text (without DES\'s own record)', toolSetParts.every(Boolean), JSON.stringify(toolSetParts));
+check('the reply below shows the changed tool roll, with the button and the note', dice.rollsForReply(3)[0] === toolSet && dice.rollCardHtml(toolSet, { editable: true, index: toolIdx, slot: 0, canRegenerate: true }).includes(`data-index="${toolIdx}" data-slot="0"`) && dice.rollCardHtml(toolSet, { editable: true, index: toolIdx, slot: 0, canRegenerate: true }).includes(`Set by you: the die showed ${toolRoll.kept}`) && dice.toolDiceHtml(chat[toolIdx], toolIdx, { editable: true }).includes(`(was ${toolRoll.kept})`));
+check('a repeated call for the same check answers with the changed roll', dice.diceToolAction(bridgeArgs).includes('d20 = 20'));
+check('the arrows step a tool roll too, 20 wrapping to 1; a slot with no roll is refused', dice.stepRollResult(toolIdx, 1, 0).kept === 1 && bridgeInv[0].result.includes('d20 = 1,') && dice.stepRollResult(toolIdx, -1, 0).kept === 20 && dice.stepRollResult(toolIdx, 1, 1) === null && dice.setRollResult(toolIdx, { kept: 5 }) === null);
+extensionSettings.attributes.allowOverride = false;
+check('with the switch off a tool roll cannot be changed', dice.setRollResult(toolIdx, { kept: 5, slot: 0 }) === null && bridgeInv[0].dooms_roll.kept === 20);
 
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);
