@@ -612,13 +612,14 @@ once.
    left alone.
 6. Nothing is stored anywhere but the message, so branching and copying a
    chat take the rolls along and deleting the message deletes the roll.
-7. **Set (3.1.2-beta.1, D57).** With `allowOverride` on, the box on the reply
-   carries a ✎: the player sets the d20 (`overrideRoll`, pure), or an outcome,
-   and the roll on their message is rewritten with `setBy: 'player'` and the
-   first result under `before`. The verdict is derived from the message, so
-   the next swipe or regenerate narrates the set result; the reply already
-   written is left alone. Only the roll on the player's message: NPC and tool
-   rolls have no ✎.
+7. **Set (3.1.2-beta.1, then 3.1.3-beta.1; D57).** With `allowOverride` on,
+   the die number on the box is a button: pressed, arrows appear either side
+   and step the d20 (`stepRollResult` over `overrideRoll`, pure), and the roll
+   on the player's message is rewritten with `setBy: 'player'` and the first
+   result under `before`; the box re-renders on each press. The verdict is
+   derived from the message, so the next swipe or regenerate narrates the set
+   result; the reply already written is left alone. Only the roll on the
+   player's message: NPC and tool rolls stay plain.
 
 ### 7.6 Prompt
 
@@ -701,7 +702,7 @@ Settings group; 16 parity rows.
 | D9 | NPC attributes in this phase | Yes: same tab, same store, sent only when not all 10s |
 | D10 | AI-suggested NPC sheets | Later |
 | D11 | Who sets the difficulty | **The AI, as game master**, in one small call at tag time; player override behind a setting, off by default |
-| D57 | A result the player can set (2026-10-18, 3.1.2-beta.1; the owner's call, users asked) | **After the roll, on the box**, behind the same switch as the ruling override: a ✎ sets the d20, or picks the face that just makes or just misses the DC for "a success" / "a failure"; the first result is kept and shown ("Set by you: the die showed 3, a failure"); the verdict for the next generation follows, so a swipe or a regenerate plays it out (Regenerate the reply on the last reply); NPC and tool rolls stay as rolled |
+| D57 | A result the player can set (2026-10-18, 3.1.2-beta.1 then 3.1.3-beta.1; the owner's call, users asked) | **After the roll, on the box, on the die itself**, behind the same switch as the ruling override: the die number is a button; pressed, ▼ ▲ appear either side and each press moves the die one face (20 wraps to 1), written and shown at once with the total and the outcome following; the first result is kept and shown ("Set by you: the die showed 3, a failure"); the verdict for the next generation follows, so a swipe or a regenerate plays it out (Regenerate the reply on the last reply); NPC and tool rolls stay as rolled. The owner rejected 3.1.2's ✎ with a form ("a success" / "a failure" shortcuts, a typed face): the control sits on the result itself |
 
 ## 8. Phase 3 — The game master's own calls
 
