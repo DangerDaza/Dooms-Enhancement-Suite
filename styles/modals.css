@@ -9968,6 +9968,14 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
     display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .rpg-wmap-legend { margin-top: 8px; font-size: 0.8em; color: #888; }
+.rpg-wmap-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 8px; font-size: 0.82em; }
+.rpg-wmap-crumb { background: none; border: 0; padding: 2px 6px; border-radius: 6px; color: #aaa; font: inherit; cursor: pointer; }
+.rpg-wmap-crumb:hover, .rpg-wmap-crumb:focus-visible { color: inherit; background: rgba(255, 255, 255, 0.08); outline: none; }
+.rpg-wmap-crumb.is-here { color: inherit; font-weight: 600; cursor: default; }
+.rpg-wmap-crumb-sep { color: #666; }
+.rpg-wmap-node.has-children { cursor: pointer; }
+.rpg-wmap-node.has-children:hover, .rpg-wmap-node.has-children:focus-visible { border-color: rgba(255, 255, 255, 0.4); outline: none; transform: translate(-50%, -50%) scale(1.03); }
+.rpg-wmap-more { color: #999; font-weight: 400; }
 .rpg-wmap-token[data-name] { cursor: pointer; }
 .rpg-wmap-token[data-name]:hover, .rpg-wmap-token[data-name]:focus-visible { transform: translateY(-2px); outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 1px; z-index: 1; }
 .rpg-wmap-node.is-focus { animation: rpg-wmap-pulse 1.6s ease-out 2; border-color: var(--rpg-highlight, #e94560); }

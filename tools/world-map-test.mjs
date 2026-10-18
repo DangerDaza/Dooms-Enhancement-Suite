@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { normalizePack, seedWorldState, markKnown } from '../src/utils/liveWorld.js';
-import { placeDepths, layoutProvince, provinceLines, placeTokens, buildProvinceView, safeImageUrl } from '../src/utils/worldMap.js';
+import { placeDepths, layoutProvince, provinceLines, placeTokens, buildProvinceView, safeImageUrl, provinceCrumbs, resolveRoot } from '../src/utils/worldMap.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -76,7 +76,22 @@ console.log('\n§3 who stands where');
     check('Skyreach: One Feather at the high table stands on the Low Market; Maeve, heard of, does not appear', skyView.nodes.find(n => n.id === 'low-market').tokens[0].name === 'One Feather' && !JSON.stringify(skyView).includes('Maeve'));
 }
 
-console.log('\n§4 place images');
+console.log('\n§4 zooming in (C2)');
+{
+    const s = seedWorldState(harbour);
+    const town = buildProvinceView(harbour, s, { root: 'old-town' });
+    check('zoomed into a district: it sits at the centre with its children around it, nothing else drawn', town.root === 'old-town' && town.nodes.map(n => n.id).sort().join() === 'old-town,the-anchor' && Math.abs(town.nodes.find(n => n.id === 'old-town').x - 50) < 1 && town.nodes.every(inside) && town.lines.length === 1);
+    check('the trail leads from the province down to it', town.crumbs.map(c => c.label).join(' › ') === 'Harbourside › The old town' && provinceCrumbs(harbour, 'back-room').map(c => c.id).join('/') === 'harbourside/old-town/the-anchor/back-room' && provinceCrumbs(harbour, '').length === 0);
+    check('a character deeper down stands on the child drawn; one outside the branch is elsewhere', town.nodes.find(n => n.id === 'the-anchor').tokens[0].name === 'Old Marit' && town.nodes.find(n => n.id === 'the-anchor').tokens[0].exact === true && town.elsewhere.join() === 'Captain Reyes' && town.unplaced.length === 0);
+    check('each node says whether there is more inside', town.nodes.find(n => n.id === 'the-anchor').children === 1 && town.nodes.find(n => n.id === 'old-town').children === 1 && buildProvinceView(harbour, s).nodes.find(n => n.id === 'the-hill').children === 1);
+    const room = buildProvinceView(harbour, s, { root: 'back-room' });
+    check('the deepest place: itself alone, nobody elsewhere lost', room.nodes.length === 1 && room.nodes[0].children === 0 && room.elsewhere.join() === 'Captain Reyes,Old Marit' && room.lines.length === 0);
+    check('a root the pack does not know falls back to the province; a label or a path works too', buildProvinceView(harbour, s, { root: 'atlantis' }).nodes.length === 4 && resolveRoot(harbour, 'The old town') === 'old-town' && resolveRoot(harbour, 'harbourside/old-town/the-anchor') === 'the-anchor' && resolveRoot(harbour, '') === '');
+    const fixedPack = normalizePack({ id: 'f', places: [{ id: 'a' }, { id: 'b', parent: 'a', x: 5, y: 5 }, { id: 'c', parent: 'b' }] }).pack;
+    check("a pack's x/y holds in the province but not when zoomed (the centre is the place looked into)", layoutProvince(fixedPack).find(n => n.id === 'b').x === 9 && Math.abs(layoutProvince(fixedPack, { root: 'b' }).find(n => n.id === 'b').x - 50) < 1);
+}
+
+console.log('\n§5 place images');
 check('plain URLs pass, scripts and odd characters do not', safeImageUrl('https://x/y.png') === 'https://x/y.png' && safeImageUrl('/user/images/a.png') === '/user/images/a.png' && safeImageUrl('data:image/png;base64,AAA=') === 'data:image/png;base64,AAA=' && safeImageUrl('worldpacks/art/gilead.jpg') === 'worldpacks/art/gilead.jpg' && safeImageUrl('javascript:alert(1)') === '' && safeImageUrl('https://x/a b.png') === '' && safeImageUrl('x") url(javascript:1') === '' && safeImageUrl('') === '');
 
 console.log(`\n${failures === 0 ? 'All world map checks pass' : `${failures} FAILURE(S)`}`);

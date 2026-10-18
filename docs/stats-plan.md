@@ -1495,10 +1495,10 @@ Status: **the groundwork, the pack, the per-chat state, the advancer and
 the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
 `docs/live-world-spec.md`, the owner's own spec) and reviewed (2026-10-18,
 an adversarial review of 85 agents: 38 confirmed findings, all fixed, §15.9);
-the C1 province map and the dashboard's feed and timelines (D2, D3) are
-built (2026-10-18); C2 nesting and C3 room grids are not; awaiting
-in-browser verification (parity rows "Live World") and the Skyreach
-pack's real content.**
+the map (C1 the province, C2 nesting and zoom) and the dashboard's feed
+and timelines (D2, D3) are built (2026-10-18); C3 room grids and tokens
+are not; awaiting in-browser verification (parity rows "Live World") and
+the Skyreach pack's real content.**
 
 The spec is the design source; this section records what was built
 against it and the calls made on its open items.
@@ -1667,11 +1667,21 @@ the pack no longer has. The canvas is a textured gradient with a noise
 filter, no art; under the looks it takes the panel, line and accent
 tokens. On a phone the canvas is square and the cards smaller.
 
+Nesting and zoom (C2): a card with places inside (marked ›) opens to
+them, the place at the centre and its children around it, so the
+province shows a city with a count, the city its districts, a district
+its buildings, a building its rooms; a breadcrumb trail above the canvas
+(the pack's name, then each place down) leads back up, and the trail is
+reset when the dashboard opens or a card's map link asks for the
+province. Zoomed in, known characters standing outside the branch are
+listed as elsewhere; a pack's fixed `x`/`y` holds in the province only.
+Tokens inside a card stay the character's: a click on one opens the
+timeline, not the place.
+
 ### 15.5 Not built yet
 
-C2 nesting and zoom (the province shows a city with a count, zooming
-shows districts, then the building, then a room), C3 room grids and
-tokens with Silly Map's pathfinding, credited; Leaflet for drawn art;
+C3 room grids and tokens with Silly Map's pathfinding (AGPL, credited:
+the owner's call before any of its code comes in); Leaflet for drawn art;
 a rail button for the dashboard; a pack editor; speaker-tag detection
 for known characters if tracker presence proves too generous; "seen N
 days ago" and a filter by days (the dates are prose, so the dashboard
@@ -1680,10 +1690,10 @@ says "seen <date>" and the feed counts entries).
 ### 15.6 Files and tests
 
 `src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (95 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (76
-checks, the review's cases in §7–§9, the map, the feed and the timelines
-in §6);
-`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (20 checks),
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (78
+checks, the review's cases in §7–§9, the map with its zoom, the feed and
+the timelines in §6);
+`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (27 checks),
 `src/systems/ui/worldMap.js` (lazy, with the dashboard);
 `src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
@@ -1701,7 +1711,8 @@ in §6);
 5. `e1c795e` this section, the phases row, the parity rows, the handover.
 6. `9f6bea7` the review's fixes (§15.9); `d3de94e` its docs.
 7. `0cd9649` the map (C1).
-8. The feed and the timelines (D2, D3).
+8. `3fce5bb` the feed and the timelines (D2, D3).
+9. Nesting and zoom (C2).
 
 ### 15.8 Open
 

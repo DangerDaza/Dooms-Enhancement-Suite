@@ -1,6 +1,6 @@
 /**
- * Live World map (docs/live-world-spec.md, Part C; C1, the province node
- * view): the pure part.
+ * Live World map (docs/live-world-spec.md, Part C; C1 the province node
+ * view, C2 nesting and zoom): the pure part.
  *
  * Which places are drawn at a zoom, where each sits on the canvas (in
  * percent, so the view scales), the soft lines along the place tree, and
@@ -9,11 +9,14 @@
  * off the map. A pack may fix a place's spot with `x` and `y` (0..100);
  * the rest are laid out radially, the roots on an inner ring (or centred
  * when there is one) and each root's districts on an arc outside it.
+ * Zoomed into a place, that place sits at the centre with its children
+ * around it (the province shows a city with a count; zooming shows its
+ * districts, then a building, then a room), and a breadcrumb leads back.
  *
  * No SillyTavern imports: tools/world-map-test.mjs imports this directly.
  * The view is src/systems/ui/worldMap.js, drawn inside the dashboard.
  */
-import { placeChain } from './liveWorld.js';
+import { placeChain, resolvePlace } from './liveWorld.js';
 
 const RING_ROOTS = 24;         // several roots: their ring around the centre
 const RING_CHILDREN_ONE = 30;  // one root: its districts' ring
@@ -34,25 +37,42 @@ export function placeDepths(pack) {
     return out;
 }
 
+/** The place zoomed into, or '' for the province: an id, path or label the pack knows. */
+export function resolveRoot(pack, root) {
+    return root ? resolvePlace(pack, root) : '';
+}
+
+/** The trail from the province down to `root`: [{ id, label }], empty for the province itself. */
+export function provinceCrumbs(pack, root) {
+    const id = resolveRoot(pack, root);
+    return id ? placeChain(pack, id).map(p => ({ id: p.id, label: p.label || p.id })) : [];
+}
+
 /**
- * The nodes drawn at `depth` (0: the roots only; 1: the roots and their
- * districts), each with its spot. Roots are the drawn places with no
- * drawn parent.
+ * The nodes drawn, each with its spot. For the province: the places at
+ * `depth` or above (0: the roots only; 1: the roots and their districts);
+ * roots are the drawn places with no drawn parent. Zoomed into `root`:
+ * that place and its children, the place at the centre. Each node says
+ * whether it has children of its own to zoom into.
  */
-export function layoutProvince(pack, { depth = 1 } = {}) {
+export function layoutProvince(pack, { depth = 1, root = '' } = {}) {
     const places = (pack && pack.places) || [];
     const depths = placeDepths(pack);
-    const drawn = places.filter(p => depths[p.id] <= depth);
+    const rootId = resolveRoot(pack, root);
+    const drawn = rootId
+        ? places.filter(p => p.id === rootId || p.parent === rootId)
+        : places.filter(p => depths[p.id] <= depth);
     const ids = new Set(drawn.map(p => p.id));
     const nodes = drawn.map(p => ({
         id: p.id,
         label: p.label || p.id,
-        depth: depths[p.id],
+        depth: rootId ? (p.id === rootId ? 0 : 1) : depths[p.id],
         parent: p.parent && ids.has(p.parent) ? p.parent : null,
         image: typeof p.image === 'string' ? p.image : '',
-        fixed: Number.isFinite(p.x) && Number.isFinite(p.y),
-        x: Number.isFinite(p.x) ? clampPct(p.x) : null,
-        y: Number.isFinite(p.y) ? clampPct(p.y) : null,
+        children: places.filter(q => q.parent === p.id).length,
+        fixed: !rootId && Number.isFinite(p.x) && Number.isFinite(p.y),
+        x: !rootId && Number.isFinite(p.x) ? clampPct(p.x) : null,
+        y: !rootId && Number.isFinite(p.y) ? clampPct(p.y) : null,
     }));
     const roots = nodes.filter(n => !n.parent);
     const childrenOf = (id) => nodes.filter(n => n.parent === id);
@@ -114,13 +134,15 @@ export function provinceLines(nodes) {
  * The known characters on the drawn nodes. A character stands on the
  * deepest drawn place of its `where` path; `exact` says whether that is
  * the place itself or an ancestor of a deeper one. Known characters with
- * no place are `unplaced`; a place the pack no longer has is `offMap`.
+ * no place are `unplaced`; a place the pack no longer has is `offMap`;
+ * zoomed in, those standing outside the drawn branch are `elsewhere`.
  */
 export function placeTokens(nodes, pack, state) {
     const ids = new Set(nodes.map(n => n.id));
     const tokens = Object.fromEntries(nodes.map(n => [n.id, []]));
     const unplaced = [];
     const offMap = [];
+    const elsewhere = [];
     const known = Object.entries((state && state.known) || {}).filter(([, t]) => t === 'known').map(([n]) => n).sort((a, b) => a.localeCompare(b));
     for (const name of known) {
         const path = state.where && state.where[name];
@@ -130,22 +152,26 @@ export function placeTokens(nodes, pack, state) {
         if (!chain.length) { offMap.push(name); continue; }
         let node = null;
         for (const p of chain) if (ids.has(p.id)) node = p.id;
-        if (!node) { offMap.push(name); continue; }
+        if (!node) { elsewhere.push(name); continue; }
         tokens[node].push({ name, place: chain[chain.length - 1].id, exact: node === chain[chain.length - 1].id });
     }
-    return { tokens, unplaced, offMap };
+    return { tokens, unplaced, offMap, elsewhere };
 }
 
-/** Everything the view draws at a depth: nodes with their tokens, the lines, the names that stand nowhere drawn. */
-export function buildProvinceView(pack, state, { depth = 1 } = {}) {
-    if (!pack || !state) return { nodes: [], lines: [], unplaced: [], offMap: [] };
-    const nodes = layoutProvince(pack, { depth });
-    const { tokens, unplaced, offMap } = placeTokens(nodes, pack, state);
+/**
+ * Everything the view draws: nodes with their tokens, the lines, the trail
+ * down to the place zoomed into, and the names that stand nowhere drawn.
+ */
+export function buildProvinceView(pack, state, { depth = 1, root = '' } = {}) {
+    if (!pack || !state) return { nodes: [], lines: [], crumbs: [], root: '', unplaced: [], offMap: [], elsewhere: [] };
+    const rootId = resolveRoot(pack, root);
+    const nodes = layoutProvince(pack, { depth, root: rootId });
+    const { tokens, unplaced, offMap, elsewhere } = placeTokens(nodes, pack, state);
     for (const n of nodes) {
         n.tokens = tokens[n.id];
         n.count = n.tokens.length;
     }
-    return { nodes, lines: provinceLines(nodes), unplaced, offMap };
+    return { nodes, lines: provinceLines(nodes), crumbs: provinceCrumbs(pack, rootId), root: rootId, unplaced, offMap, elsewhere };
 }
 
 /** An image reference a pack may give a place, or '' when it is not a plain http(s), data-image or relative URL. */

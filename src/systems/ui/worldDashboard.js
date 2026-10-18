@@ -33,6 +33,7 @@ let view = readView();
 let feedLimit = readFeedLimit();
 let openTimeline = '';      // the known character whose timeline is open in the overview
 let focusPlace = '';        // the map node to pick out, from a card's map link
+let mapRoot = '';           // the place the map is zoomed into ('' is the province)
 
 function readFeedLimit() {
     try { const n = Number(localStorage.getItem(FEED_KEY)); return FEED_LIMITS.includes(n) ? n : FEED_LIMITS[0]; } catch (e) { return FEED_LIMITS[0]; }
@@ -144,7 +145,7 @@ function render() {
     if (!$body.length) return;
     const common = { state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled };
     if (view === 'map') {
-        $body.html(renderWorldMapHtml({ ...common, focus: focusPlace }));
+        $body.html(renderWorldMapHtml({ ...common, focus: focusPlace, root: mapRoot }));
         focusPlace = '';
     } else {
         let facts = {};
@@ -205,7 +206,21 @@ function build() {
     });
     $(document).on('click', `#${POPUP_ID} .rpg-world-card-map`, function () {
         focusPlace = String($(this).data('place') || '');
+        mapRoot = '';    // the province, where every place has a card to pick out
         setView('map');
+        render();
+    });
+    // C2: a card with places inside opens to them; the trail leads back up.
+    $(document).on('click', `#${POPUP_ID} .rpg-wmap-node[data-zoom]`, function (e) {
+        if ($(e.target).closest('.rpg-wmap-token').length) return;    // a token is the character's, not the place's
+        mapRoot = String($(this).data('zoom') || '');
+        render();
+    });
+    $(document).on('keydown', `#${POPUP_ID} .rpg-wmap-node[data-zoom], #${POPUP_ID} .rpg-wmap-token[data-name]`, function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); }
+    });
+    $(document).on('click', `#${POPUP_ID} .rpg-wmap-crumb`, function () {
+        mapRoot = String($(this).data('root') || '');
         render();
     });
     $(document).on('click', `#${POPUP_ID} .rpg-wmap-token[data-name]`, function () {
@@ -239,6 +254,7 @@ export function openWorldDashboard() {
     lastResult = '';
     openTimeline = '';
     focusPlace = '';
+    mapRoot = '';
     render();
     $(`#${POPUP_ID}`).css('display', 'flex');
 }
