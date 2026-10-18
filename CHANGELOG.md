@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.1-beta.1] - 2026-10-18 — Roll a check, readable
+
+### Fixed
+- **The dice popover is opaque.** Roll a check let the chat show through under every look, so its text fought the messages behind it; the window is now solid in the look's own colours (the glass look keeps its tint, not its see-through).
+- **Cancel and Discard check are secondary buttons.** They read as plain buttons against the window in every look, instead of a washed-out pill under the glass look or a second OK under the others.
+- **The popover scrolls on a short screen**, so OK and Cancel are always within reach.
+- The version reads `3.1.1-beta.1`; What's New opens once more with this note on top.
+
 ## [3.1.0-beta.1] - 2026-10-16 — Stats (beta)
 
 A beta. The Stats features below are built and covered by tests, but nobody except their author has played them through yet. Everything on Settings → Stats is off until you switch it on, so updating changes nothing on screen, and a default install's tracker prompt changes by one sentence (under Changed). **Settings → Stats → Report a problem** opens a GitHub issue with your DES version, your Stats switches and both logs filled in. Beta badges mark the Stats page, its groups, the Workshop's Attributes tab and the dice popover.

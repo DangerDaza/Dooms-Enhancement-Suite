@@ -190,8 +190,8 @@ function render() {
         <div class="rpg-dice-actions">
             <button type="button" class="rpg-btn rpg-btn-primary rpg-dice-ok"${def ? '' : ' disabled'}>OK</button>
             ${pending
-                ? '<button type="button" class="rpg-btn rpg-dice-discard" title="Drop the tagged check; nothing rolls">Discard check</button>'
-                : '<button type="button" class="rpg-btn rpg-dice-cancel">Cancel</button>'}
+                ? '<button type="button" class="rpg-btn rpg-btn-secondary rpg-dice-discard" title="Drop the tagged check; nothing rolls">Discard check</button>'
+                : '<button type="button" class="rpg-btn rpg-btn-secondary rpg-dice-cancel">Cancel</button>'}
         </div>
     `);
 }
