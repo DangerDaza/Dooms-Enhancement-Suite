@@ -336,5 +336,21 @@ check('the instructions and the tool know Casting',
     D.buildCheckCallInstruction({ settings, userName: 'Jordan' }).includes('[CHECK: Casting | Hard | the ward is old] for a casting check') && D.buildToolCallInstruction({ settings, userName: 'Jordan' }).includes('(or Casting for a casting check)')
     && D.buildDiceToolDefinition({ settings }).parameters.properties.attribute.description.includes('Casting is a casting check') && D.buildDiceToolDefinition({ settings }).parameters.properties.skill.description.includes('Casting with the casting ability is the casting check'));
 
+// ── 11. A result set by the player (3.1.2, D57) ──
+const base = D.rollCheck({ attribute: 'Strength', abbr: 'STR', score: 15, dc: 15, rng: faces(9) });    // 9 +2 = 11 vs 15: a failure
+const set17 = D.overrideRoll(base, { kept: 17 });
+check('setting the die recomputes the total, the outcome and the margin, and keeps the first result', set17.kept === 17 && set17.total === 19 && set17.success === true && set17.margin === 4 && set17.setBy === 'player' && set17.before.kept === 9 && set17.before.success === false && set17.before.total === 11 && base.kept === 9 && !base.setBy);
+check('a second setting keeps the first record, not the middle one', D.overrideRoll(set17, { kept: 3 }).before.kept === 9 && D.overrideRoll(set17, { kept: 3 }).success === false);
+check('a 20 or a 1 set is a critical, unless criticals are off', D.overrideRoll(base, { kept: 20 }).critical === 'success' && D.overrideRoll(base, { kept: 1 }).critical === 'failure' && D.overrideRoll(base, { kept: 1, criticals: false }).critical === null && D.overrideRoll(base, { kept: 1, criticals: false }).success === false);
+check('"a success" takes the face that just makes the DC; "a failure" the one that just misses', D.overrideRoll(base, { success: true }).kept === 13 && D.overrideRoll(base, { success: true }).total === 15 && D.overrideRoll(base, { success: true }).success === true && D.overrideRoll(base, { success: false }).kept === 12 && D.overrideRoll(base, { success: false }).success === false && D.thresholdFace(base, true) === 13 && D.thresholdFace(base, false) === 12);
+const adv = D.rollCheck({ attribute: 'Dexterity', abbr: 'DEX', score: 10, dc: 15, advantage: 'adv', rng: faces(3, 7) });
+check('with advantage the second die leaves the record: nothing was rolled', D.overrideRoll(adv, { kept: 16 }).rolls.length === 1 && D.overrideRoll(adv, { kept: 16 }).dropped === null && !D.verdictText(D.overrideRoll(adv, { kept: 16 })).includes('rolled 3 and 7') && D.formatRollShort(D.overrideRoll(adv, { kept: 16 })).includes('d20 16 +0 = 16'));
+const far = D.rollCheck({ attribute: 'Strength', score: 1, dc: 30, criticals: false, rng: faces(5) });    // −5; no face reaches 30
+const granted = D.overrideRoll(far, { success: true, criticals: false });
+check('an outcome no face gives is granted outright, with a flat margin', granted.success === true && granted.kept === 20 && granted.margin === 0 && granted.critical === null && D.overrideRoll(far, { success: true }).critical === 'success');
+check('a bad face or nothing to set is refused', D.overrideRoll(base, { kept: 21 }) === null && D.overrideRoll(base, { kept: 0 }) === null && D.overrideRoll(base, { kept: 7.5 }) === null && D.overrideRoll(base, {}) === null && D.overrideRoll(null, { kept: 5 }) === null && D.overrideRoll({ attribute: 'x' }, { kept: 5 }) === null);
+check('the verdict of a set result reads like any other, and final', D.verdictText(set17, { userName: 'Jordan' }).includes('Strength check: d20 = 17, +2 (STR 15) = 19 vs DC 15. SUCCESS, clearly (by 4). This outcome is final'));
+check('the labels follow the set result', D.outcomeLabel(set17) === 'Success' && D.outcomeLabel(D.overrideRoll(base, { kept: 20 })) === 'Critical success');
+
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

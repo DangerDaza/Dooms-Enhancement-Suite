@@ -394,6 +394,36 @@ check('the tool: an NPC with no casting ability casts with Charisma, unpractised
 const noAttr = dice.diceToolAction({ attribute: 'Luck', difficulty: 'Medium', reason: 'x' });
 check('...and the refusal names Casting', noAttr.startsWith('Nothing was rolled') && noAttr.includes(', or Casting for a casting check.'), noAttr);
 
+// ── 12. A result set by the player (3.1.2, D57) ──
+extensionSettings.attributes.allowOverride = false;
+extensionSettings.attributes.criticals = true;
+globalThis.__DES_CTX__.isToolCallingSupported = () => false;
+chat.length = 0;
+chat.push(ai('The gate is barred.'));
+dice.__setDiceTransport(async () => '{"difficulty": "medium", "advantage": "none", "reason": "a heavy bar"}');
+dice.tagCheck({ attributeId: 'str', skill: 'Athletics', context: 'lift the bar' });
+chat.push(user('I heave at the bar.'));
+await dice.onDiceMessageSent();
+chat.push(ai('It does not budge.'));
+const barRoll = chat[1].extra.dooms_roll;
+const barWas = barRoll.critical === 'success' ? 'a critical success' : barRoll.critical === 'failure' ? 'a critical failure' : barRoll.success ? 'a success' : 'a failure';    // the first die is random
+check('with the switch off a result cannot be set, and the box has no pencil', !!barRoll && dice.setRollResult(1, { kept: 20 }) === null && chat[1].extra.dooms_roll === barRoll && !dice.rollCardHtml(barRoll, { editable: false }).includes('dooms-roll-edit') && !dice.rollCardHtml(barRoll, { editable: false }).includes('is-set'));
+extensionSettings.attributes.allowOverride = true;
+const setRoll = dice.setRollResult(1, { kept: 20 });
+check('with it on, the die is set on the message and the first result is kept', !!setRoll && chat[1].extra.dooms_roll === setRoll && setRoll.kept === 20 && setRoll.critical === 'success' && setRoll.success === true && setRoll.setBy === 'player' && setRoll.before.kept === barRoll.kept && setRoll.before.success === barRoll.success, JSON.stringify(setRoll));
+const setVerdict = dice.buildDiceVerdictForGeneration();
+check('the next generation gets the set verdict, final, with nothing about the setting', setVerdict.includes('d20 = 20') && setVerdict.includes('NATURAL 20, a critical success') && setVerdict.includes('This outcome is final') && !setVerdict.toLowerCase().includes('set by'), setVerdict);
+check('the reply shows the set roll', dice.rollsForReply(2)[0] === setRoll);
+const setHtml = dice.rollCardHtml(setRoll, { editable: true, index: 1, canRegenerate: true });
+check('the box: the pencil, the form, what the die showed, and Regenerate on the last reply', setHtml.includes('class="dooms-roll-edit"') && setHtml.includes('class="dooms-roll-set" hidden') && setHtml.includes(`Set by you: the die showed ${barRoll.kept}, ${barWas}.`) && setHtml.includes('data-index="1"') && setHtml.includes('class="dooms-roll-regen"') && setHtml.includes(' is-set') && setHtml.includes('value="20"'), setHtml);
+check('an older reply offers no Regenerate; an unset roll shows no note; an NPC or tool roll gets no pencil', !dice.rollCardHtml(setRoll, { editable: true, index: 1, canRegenerate: false }).includes('dooms-roll-regen') && !dice.rollCardHtml(barRoll, { editable: true, index: 1, canRegenerate: true }).includes('Set by you') && !dice.rollCardHtml({ ...barRoll, isUser: false, who: 'Guard' }, { editable: false }).includes('dooms-roll-edit'));
+const turned = dice.setRollResult(1, { success: false });
+check('"a failure" picks the face that just misses, and the first result is still the one kept', turned.kept === D.thresholdFace(barRoll, false) && turned.success === false && chat[1].extra.dooms_roll.before.kept === barRoll.kept && dice.buildDiceVerdictForGeneration().includes('FAILURE'));
+check('a bad face is refused and changes nothing', dice.setRollResult(1, { kept: 42 }) === null && dice.setRollResult(1, {}) === null && chat[1].extra.dooms_roll === turned);
+check('a message without a roll, a reply, or no message cannot be set', dice.setRollResult(0, { kept: 5 }) === null && dice.setRollResult(2, { kept: 5 }) === null && dice.setRollResult(99, { kept: 5 }) === null && dice.setRollResult(-1, { kept: 5 }) === null);
+extensionSettings.attributes.allowOverride = false;
+check('with the switch off again the set result still reads as set', dice.rollCardHtml(chat[1].extra.dooms_roll, { editable: false }).includes('Set by you') && !dice.rollCardHtml(chat[1].extra.dooms_roll, { editable: false }).includes('dooms-roll-edit'));
+
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

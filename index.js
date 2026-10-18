@@ -1776,6 +1776,7 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-attr-override', function () {
         getAttributesRules().allowOverride = $(this).prop('checked');
         _saveAttrs({ rerender: false });
+        try { updateRollCards(); } catch (e) { /* no chat open */ }    // the ✎ on the roll boxes follows the switch
     });
     $(document).on('change', '#rpg-attr-criticals', function () {
         getAttributesRules().criticals = $(this).prop('checked');

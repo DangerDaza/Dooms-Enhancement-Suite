@@ -1,10 +1,14 @@
 {
-    "version": "3.1.1-beta.1",
+    "version": "3.1.2-beta.1",
     "title": "Stats (beta)",
     "items": [
         {
+            "title": "✎ 3.1.2: a result you can set",
+            "body": "With Settings → Stats → Let me change the ruling on, the roll box at the top of a reply grows a ✎. Set the d20 yourself, or make the result a success or a failure (DES picks the face that just makes or just misses the DC), and the box says what the die really showed. The reply already written stands; its next swipe or regenerate follows the new result, and when it is the last reply a Regenerate the reply button sits right there. NPC and tool rolls stay as rolled."
+        },
+        {
             "title": "🩹 3.1.1: Roll a check, readable",
-            "body": "A small fix on top of the Stats beta. The Roll a check window is now solid under every look (the chat used to show through it and fight its text), its Cancel and Discard buttons are plain secondary buttons you can read against the window, and its body scrolls on a short screen so OK is always within reach. Nothing else changed; the notes below are the beta's."
+            "body": "The Roll a check window is solid under every look (the chat used to show through it and fight its text), its Cancel and Discard buttons are plain secondary buttons you can read against the window, and its body scrolls on a short screen so OK is always within reach. The notes below are the beta's."
         },
         {
             "title": "🧪 A beta: nothing changes until you switch something on",

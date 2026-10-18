@@ -7,6 +7,12 @@
 - **Cut to a quest.** Right-click a quest on the shelf's Quests page (hold it on a phone) and Cut to it: with nothing of yours in the chat, the next reply is a short montage of what passes between now and the moment the quest begins, then its first scene with the first move left to you; the quest becomes the main quest and the old main drops to the optional list. "Cut to it, when…" names the time; swipes of the montage keep the cut, your next message ends it.
 - **Live World (beta).** Settings → Live World: a world pack (places, plot clocks with the public effect of each step, a cast) seeds each chat's own world. Every six new replies a quiet background request on the tracker's connection profile reads the recent scenes and moves the clocks and the last-seen places, by at most a step, with anything that breaks a rule discarded and retried; one fixed-size line tells the narrator where things stand. `/advance` runs it now; `/liveworld` opens the dashboard: what people say, who was last seen where, the feed of changes under their dates with a filter, a timeline per known character, and a Map view (place cards, lines along the place tree, known characters as portrait tokens; any card opens to what is inside it, with a trail back) linked both ways with the cards; a feed filter, a timeline per character, and every card kept clear of the others and inside the canvas, on a phone too. The same map is the Present Characters shelf's fourth page, Map, while Live World is on. Two packs ship: Harbourside to copy, and a Skyreach draft. Off by default.
 
+## [3.1.2-beta.1] - 2026-10-18 — A result you can set
+
+### Added
+- **Set a roll's result.** With Settings → Stats → Let me change the ruling on, the roll box at the top of a reply shows a ✎: set the d20 yourself, or make the result a success or a failure (the face that just makes or just misses the DC), and the box says what the die really showed. The reply already written stands; its next swipe or regenerate follows the new result, and on the last reply a Regenerate the reply button sits right there. NPC and tool rolls stay as rolled. The version reads `3.1.2-beta.1`; What's New opens once more with this note on top.
+
+
 ## [3.1.1-beta.1] - 2026-10-18 — Roll a check, readable
 
 ### Fixed
