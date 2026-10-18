@@ -104,7 +104,7 @@ state and the next moves.
 7. **Try Live World** (Phase 6, built 2026-10-17 from `docs/live-world-spec.md`;
    `docs/stats-plan.md` §15). Settings → Live World on, Example as the pack,
    a new chat; play six replies and watch the System Log and the dashboard
-   (/world). Parity rows "Live World". The Skyreach pack is a draft: its
+   (/liveworld). Parity rows "Live World". The Skyreach pack is a draft: its
    places, clocks and cast want the campaign notes (D50).
 
 ## 3. The open problem and what was done about it
@@ -232,7 +232,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   per-chat state, the advancer's prompt, validation and apply, the
   narrator's line), `src/systems/features/liveWorld.js` (the store under
   `chat_metadata.dooms_world`, counting by a stamped id, the advancer
-  through `withBackgroundProfile`, blind injection, `/advance`, `/world`),
+  through `withBackgroundProfile`, blind injection, `/advance`, `/liveworld`),
   `src/systems/ui/worldDashboard.js` (lazy), Settings → Live World, two
   packs in `worldpacks/`. `tools/live-world-test.mjs`,
   `tools/live-world-flow-test.mjs`.
@@ -364,7 +364,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   raw (not in the Inspector); message identity by a stamped id; built-in
   packs in the repo, pasted ones in settings, a chat keeps its first pack;
   the advancer on the tracker's profile through `withBackgroundProfile`;
-  no time module; the dashboard from Settings and `/world`; no toasts;
+  no time module; the dashboard from Settings and `/liveworld`; no toasts;
   Skyreach is a draft. `docs/stats-plan.md` §15.
 
 ## 8. The beta (prepared 2026-10-16, pushed to main 2026-10-17 as `29a6204`)

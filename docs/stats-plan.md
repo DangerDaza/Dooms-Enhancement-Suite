@@ -1493,10 +1493,11 @@ message ends the cut anyway).
 
 Status: **the groundwork, the pack, the per-chat state, the advancer and
 the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
-`docs/live-world-spec.md`, the owner's own spec); the map (C1–C3), the
-dashboard's feed and timelines (D2, D3) are not; awaiting in-browser
-verification (parity rows "Live World") and the Skyreach pack's real
-content.**
+`docs/live-world-spec.md`, the owner's own spec) and reviewed (2026-10-18,
+an adversarial review of 85 agents: 38 confirmed findings, all fixed, §15.9);
+the map (C1–C3), the dashboard's feed and timelines (D2, D3) are not built;
+awaiting in-browser verification (parity rows "Live World") and the
+Skyreach pack's real content.**
 
 The spec is the design source; this section records what was built
 against it and the calls made on its open items.
@@ -1512,19 +1513,38 @@ line rides at depth 2 as a system message by default (depth and role in
 Settings), through SillyTavern's own `setExtensionPrompt`, so the Context
 Inspector does not record it (G4). **D44** a message's identity is an id
 stamped on the message itself (`dooms_world_id`), never its index; a
-swipe keeps it, so it counts once (G3). **D45** built-in packs live in the
+swipe keeps it, and a regenerate's new reply takes over the deleted
+reply's id, so a slot counts once (G3). **D45** built-in packs live in the
 repository's `worldpacks/` (read-only; an update may overwrite them) and
 pasted packs in Settings (`liveWorld.customPacks`); a chat keeps the pack
 it was seeded with, by id. **D46** the advancer's request runs on the
 tracker's connection profile through `withBackgroundProfile` (G1), one
-background request at a time; it waits for the tracker request when both
-are due; external mode uses the external API. **D47** no time module: the
+background request at a time; when both are due the tracker's own
+request goes first and the advance follows it (a fallback of twenty
+seconds covers a tracker request that never comes), the tracker waits
+for a running advance rather than skipping its turn, and the advancer
+never starts while SillyTavern itself is generating (its send flag),
+since the tracker's profile would catch the user's request; external
+mode uses the external API. **D47** no time module: the
 advancer judges elapsed story time from the tracker's date and time
 against the last run's, as the spec says; the facts of now come from the
 info box. **D48** the dashboard opens from Settings → Live World and from
-`/world`; no rail button yet. **D49** Live World never toasts: the System
+`/liveworld` (not `/world`: that is SillyTavern's own World Info command,
+which a same-named registration would replace); no rail button yet. **D49** Live World never toasts: the System
 Log always, the console on request. **D50** the Skyreach pack is a draft
 from the spec's own examples until the campaign notes fill it in.
+**D51** a state ahead of its chat (a branch or checkpoint cut earlier, the
+last replies deleted) is wound back through the log: the runs stamped on
+messages the chat no longer holds are undone from the tail (clocks to
+their old value, characters to where they came from), the last run falls
+back to the newest still standing, the count restarts from it; a run
+with no message id is never undone. **D52** the player is nobody the
+world places: the advancer is told who they are, and a move or a
+heard-of entry naming them is dropped, not a reason to discard the
+reply; the tracker's presence list never makes the player known.
+**D53** an advance whose chat changed while its request ran is discarded
+whole (a load token), on success and on failure alike; a count-driven
+advance armed in one chat never fires in the next.
 
 ### 15.1 Data
 
@@ -1561,13 +1581,19 @@ and tags stripped; the exact JSON asked for: `{ elapsed, clocks, moved:
 [{ who, to, reason }], blurb, heard }`. Spoiler-free adds that the blurb
 is common knowledge only.
 
-The reply is parsed (bare, fenced or inside prose) and validated whole:
-clocks are integers within range that move by at most the step, and
-name real clocks; moves name someone and a place of the tree (id, path or
-label); heard-of names are strings. Any failure discards the reply,
-records why, and the very next reply runs it again. A pass overwrites the
-clocks, logs each move with the message and the date, adds heard-of
-names, replaces the blurb and stamps the run.
+The reply is parsed (reasoning blocks dropped, then every fenced block
+and every balanced `{…}` tried, the first shaped like an advance taken)
+and validated whole: clocks are integers within range that move by at
+most the step from the stored value clamped to the pack's range, and
+name real clocks; moves name someone and a place of the tree (id, path
+or label); heard-of names are strings; the player's entries are dropped.
+Any failure discards the reply, records why, and the very next reply runs
+it again. A pass overwrites the clocks, logs each clock change and each
+move with the message and the date, adds heard-of names, replaces the
+blurb and stamps the run. The scene window the advancer reads is prose
+only: reasoning blocks, `<trackers>` blocks, code fences, bare JSON
+objects and DES's own tags are stripped before each message is cut to
+length. The request goes as a system and a user message in every mode.
 
 Cost, measured 2026-10-17 at four characters a token with the example
 pack: about 647 tokens for the prompt without the chat window, plus
@@ -1610,8 +1636,10 @@ detection for known characters if tracker presence proves too generous;
 
 ### 15.6 Files and tests
 
-`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (84 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs`;
+`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (90 checks);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (65
+checks, the review's cases in §7–§9); `src/utils/responseExtractor.js`
+(the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
 `BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
 `worldpacks/example.json`, `worldpacks/skyreach.json`; `index.js`,
@@ -1623,8 +1651,9 @@ detection for known characters if tracker presence proves too generous;
 1. `6524ad1` the groundwork: `withBackgroundProfile`, the spec in the repo.
 2. `b122cba` the model and two packs.
 3. `f99d9b5` the store, the advancer, the line and the settings.
-4. The dashboard.
-5. This section, the phases row, the parity rows, the handover.
+4. `134e764` the dashboard.
+5. `e1c795e` this section, the phases row, the parity rows, the handover.
+6. The review's fixes (§15.9).
 
 ### 15.8 Open
 
@@ -1633,3 +1662,54 @@ tier should also come from speaker tags; whether the world line should
 move to the tracker's depth and role for one message fewer in the
 prompt; a shelf page for the world beside Characters, Inventory and
 Quests (the owner fixed three pages; this would be a fourth); the map.
+
+### 15.9 The review (2026-10-18)
+
+An adversarial workflow (five finders: the lifecycle against SillyTavern,
+the model and the prompt, the settings wiring, the dashboard, the
+background request; two refuters per finding) confirmed 38 of 40
+findings, many the same defect seen from several sides. All fixed:
+
+- **State written into the wrong chat.** An advance validated and
+  applied against the module's state after its request, so a chat
+  switch during the request put chat A's clocks, moves and blurb into
+  chat B (and a failure's retry flag into C). D53: a load token, checked
+  after the request and in the catch; the count timer checks it too.
+- **A regenerate counted twice** (a new message object, a new id). D44:
+  GENERATION_STARTED of type regenerate remembers the last reply's id
+  and index; the reply that lands in that slot takes it over.
+- **A branch, a checkpoint or deleted replies kept a world ahead of the
+  chat.** D51: the log now records clock changes as well as moves, so
+  the tail can be undone; reconciled on load and on MESSAGE_DELETED.
+- **The advancer pre-empted the tracker's separate request** (400 ms
+  against 500 ms; the tracker then returned on the shared flag with no
+  retry) and **started under a main generation**. D46 as now written:
+  the advance waits for `DOOMS_TRACKER_UPDATE_COMPLETE` when a tracker
+  request is expected, `updateRPGData` waits for a running advance
+  (`backgroundHolder`, `waitForBackground`), and `is_send_press` gates
+  the start; GENERATION_ENDED and a twenty-second fallback release a wait.
+- **`/world` replaced SillyTavern's World Info command.** D48: `/liveworld`.
+- **The first chat after a page load had no world** (the startup
+  safety net replayed only the tracker's CHAT_CHANGED), and **the master
+  switch** neither dropped nor reloaded it. Both call `onWorldChatChanged`.
+- **A reasoning model's reply never parsed; the scene window fed the
+  advancer tracker blocks** (cut to 700 characters from the start).
+  §15.2 as now written.
+- **The player was moved and heard of** like an NPC. D52.
+- **A clock above a shrunk pack max could never come down**: clamped.
+- Smaller: `String.replace` `$`-patterns in a pack's template; ids in
+  other scripts reduced to nothing by the slug; a silent max of 6 for a
+  max of 0; an empty effects key as step 0; a duplicate cast name; a
+  debounced save lost to a fast chat switch (commit points save at once);
+  "busy" reported for a second advance that nothing would follow (now
+  "running"); the dashboard's button re-enabled before the request and
+  its result line stale after a deferred advance; the dashboard telling a
+  user with DES off to re-seed; the warning colour lost under a UI setup;
+  re-seed deleting the world before the pack was known to load; remove
+  pack without a confirmation and with a stale status; settings fields
+  rewritten on every count; the shared fetch capture in `safeGenerateRaw`
+  holding streaming responses and leaking its patch when calls overlap;
+  three test checks that could not fail. The two refuted findings: a
+  pasted pack under a built-in's id (D45 says the pasted one wins) and a
+  console-only load failure for the dashboard (the Settings button
+  reports it).
