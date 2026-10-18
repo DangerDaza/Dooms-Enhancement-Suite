@@ -11,16 +11,27 @@
  * Usage:  node tools/load-check.mjs        (from the repo root)
  * Exit:   0 = whole graph loads, 1 = failure (error printed)
  *
+ * The sandbox is per process: $TMPDIR/des-load-check-<pid>, wiped before
+ * the build and removed on exit, so two runs never collide. SillyTavern's
+ * public/ is the `public` folder inside it, the repo copied to
+ * public/scripts/extensions/third-party/DES, so an import that climbs one
+ * level above public/ (src/utils/responseExtractor.js does) still lands
+ * inside this process's directory. Set DES_SANDBOX=/some/dir to build
+ * there instead and keep the directory afterwards (the sandbox tests do,
+ * through tools/sandbox.mjs). The root used is printed as "SANDBOX: ...".
+ *
  * Run this before EVERY push that touches JS.
  */
 import { mkdirSync, rmSync, cpSync, writeFileSync, readFileSync } from 'node:fs';
-import { dirname, join, normalize } from 'node:path';
+import { dirname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { globSync } from 'node:fs';
+import { resolveSandbox, removeOnExit } from './sandbox.mjs';
 
 const repo = normalize(join(dirname(fileURLToPath(import.meta.url)), '..'));
-const sandbox = '/tmp/des-load-check';
-const repoAt = join(sandbox, 'scripts/extensions/third-party/DES');
+const { sandbox, root, owned } = resolveSandbox();
+const repoAt = join(root, 'scripts/extensions/third-party/DES');
+if (owned) removeOnExit(sandbox);
 
 rmSync(sandbox, { recursive: true, force: true });
 mkdirSync(dirname(repoAt), { recursive: true });
@@ -28,6 +39,7 @@ cpSync(repo, repoAt, {
     recursive: true,
     filter: (src) => !/\/(\.git|docs|styles|tools)(\/|$)|\.(png|html|css|md)$/.test(src),
 });
+console.log(`SANDBOX: ${root}${owned ? ' (removed on exit; set DES_SANDBOX to keep one)' : ''}`);
 
 // Collect external (SillyTavern-core) imports and the names pulled from them
 const importRe = /import\s+(?:([\w$]+)\s*,\s*)?(?:\{([^}]*)\}|\*\s+as\s+[\w$]+|([\w$]+))?\s*from\s*['"]([^'"]+)['"]/gs;
@@ -42,6 +54,11 @@ for (const f of files) {
         if (!spec.startsWith('.')) continue;
         const target = normalize(join(fileDir, spec));
         if (target.startsWith(repoAt)) continue;
+        if (!target.startsWith(sandbox + sep)) {
+            console.error(`IMPORT ESCAPES THE SANDBOX: ${f} imports '${spec}', which resolves above ${sandbox}.`);
+            console.error('A SillyTavern-core import may climb to public/ or one level above it, no further.');
+            process.exit(1);
+        }
         if (!stubs.has(target)) stubs.set(target, new Set());
         if (def) stubs.get(target).add('__default__');
         if (named) {

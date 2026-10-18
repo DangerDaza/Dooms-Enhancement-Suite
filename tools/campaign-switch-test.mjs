@@ -14,14 +14,11 @@
  * tools/load-check.mjs builds — but replaces the world-info stub with a
  * tiny functional one so activation is observable.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+import { buildSandbox } from './sandbox.mjs';
 
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
-
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/lorebook/campaignManager.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);

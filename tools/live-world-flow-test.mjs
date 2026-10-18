@@ -11,13 +11,10 @@
  * Same sandbox as tools/dice-test.mjs; the request is replaced through the
  * module's test hook, so no profile switch and no network.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { buildSandbox } from './sandbox.mjs';
 
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
-
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/features/liveWorld.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);

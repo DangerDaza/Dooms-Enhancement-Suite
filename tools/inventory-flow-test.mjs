@@ -11,13 +11,10 @@
  * Same sandbox as tools/dice-test.mjs: load-check's stubs with chat,
  * chat_metadata and getContext() made real.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { buildSandbox } from './sandbox.mjs';
 
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
-
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/features/inventory.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);

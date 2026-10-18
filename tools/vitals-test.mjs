@@ -11,13 +11,10 @@
  * and `getContext()` — because the swipe store and the chat save live there.
  * Everything else SillyTavern-side stays the "anything" proxy.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { buildSandbox } from './sandbox.mjs';
 
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
-
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/generation/parser.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);

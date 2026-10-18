@@ -12,13 +12,10 @@
  * chat_metadata and getContext() made real. The game master call is
  * replaced through the module's test hook.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { buildSandbox } from './sandbox.mjs';
 
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
-
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/features/diceRolls.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);

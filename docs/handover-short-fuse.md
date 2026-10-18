@@ -43,6 +43,14 @@ state and the next moves.
   macOS. On Windows `timeout` is a different command: run the plain
   `node tools/...` lines, and kill the run if one hangs. The sandbox stubs
   are proxies; a DOM walk on a proxy once looped forever (guarded since).
+- **The sandbox is per process.** `tools/load-check.mjs` and the sandbox
+  tests each build their own copy under `$TMPDIR/des-load-check-<pid>`
+  (SillyTavern's `public/` inside it, the repo under
+  `public/scripts/extensions/third-party/DES`) and remove it on exit, so two
+  may run at the same time (two terminals, a CI matrix, an agent running one
+  while the gate runs). `DES_SANDBOX=/some/dir` pins the directory and keeps
+  it afterwards, for a look inside; the root used is printed as
+  `SANDBOX: …`. `tools/sandbox.mjs` is the one place that names it.
 
 ## 2. Immediate actions
 
@@ -70,6 +78,8 @@ state and the next moves.
    node tools/world-map-test.mjs
    timeout 120 node tools/live-world-flow-test.mjs
    ```
+   Each sandbox test builds its own sandbox (§1), so these lines may also
+   run in parallel.
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
    current RP, with Settings → Generation → "Fetch the tracker when a reply
    skips it" on (default) and Settings → Display & Features → "Tracker Data in Chat" on:
@@ -328,9 +338,10 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   Run it as `node scan.mjs /path/to/export.jsonl`. The pattern to look for:
   an AI line reading `no-block data:false` right after a `roll:` or a
   `tool:` line.
-- **Sandbox tests** (`tools/load-check.mjs` builds `/tmp/des-load-check`
-  with proxy stubs): anything that walks the DOM must guard against
-  non-DOM (`typeof el.textContent !== 'string'`). Use `timeout`.
+- **Sandbox tests** (`tools/load-check.mjs` builds `$TMPDIR/des-load-check-<pid>/public`,
+  or `$DES_SANDBOX/public`, with proxy stubs; `tools/sandbox.mjs` names it): anything
+  that walks the DOM must guard against non-DOM
+  (`typeof el.textContent !== 'string'`). Use `timeout`.
 
 ## 7. Decisions on record
 

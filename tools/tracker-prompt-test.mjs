@@ -15,17 +15,14 @@
  *
  * Mechanism: promptBuilder.js imports SillyTavern modules that don't exist
  * outside the browser, so this reuses the stub sandbox tools/load-check.mjs
- * already builds (it runs load-check first, then imports from /tmp/des-load-check).
- * Run it after load-check in the same push.
+ * builds (it runs load-check first, then imports from the per-process
+ * sandbox tools/sandbox.mjs names). Run it after load-check in the same push.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-
-const SANDBOX = '/tmp/des-load-check';
-const DES = `${SANDBOX}/scripts/extensions/third-party/DES`;
+import { buildSandbox } from './sandbox.mjs';
 
 // Rebuild the sandbox from the current working tree.
-execFileSync(process.execPath, ['tools/load-check.mjs'], { stdio: 'pipe' });
+const { SANDBOX, DES } = buildSandbox();
 if (!existsSync(`${DES}/src/systems/generation/promptBuilder.js`)) {
     console.error('FAIL: sandbox missing after load-check — cannot run.');
     process.exit(1);
