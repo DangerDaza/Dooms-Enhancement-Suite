@@ -2303,6 +2303,10 @@ body[data-dooms-ui] .dooms-roll-card {
 body[data-dooms-ui] .dooms-roll-card.is-success { border-left-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-roll-card.is-failure { border-left-color: var(--ov-accent2); }
 body[data-dooms-ui] .dooms-roll-why { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-roll-edit, body[data-dooms-ui] .dooms-roll-set button, body[data-dooms-ui] .dooms-roll-regen { background: var(--ov-panel); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); font-family: var(--ov-display); }
+body[data-dooms-ui] .dooms-roll-edit:hover, body[data-dooms-ui] .dooms-roll-edit:focus-visible, body[data-dooms-ui] .dooms-roll-set button:hover, body[data-dooms-ui] .dooms-roll-set button:focus-visible, body[data-dooms-ui] .dooms-roll-regen:hover, body[data-dooms-ui] .dooms-roll-regen:focus-visible { border-color: var(--ov-accent); color: var(--ov-accent2); }
+body[data-dooms-ui] .dooms-roll-face { background: var(--ov-ground); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-roll-set-note { color: var(--ov-text); }
 body[data-dooms-ui="lumen"] .dooms-dice-chip,
 body[data-dooms-ui="lumen"] .rpg-dice-chip-btn { border-radius: 999px; }
 body[data-dooms-ui="inked"] .dooms-dice-chip { border-color: var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); }

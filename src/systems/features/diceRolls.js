@@ -10,7 +10,9 @@
  *   - at send: the game master's ruling (one small separate call), the roll,
  *     and the roll on the message it rode with (message.extra.dooms_roll);
  *   - the verdict handed to the next generation, and the box at the top of
- *     the reply that answers the rolled message.
+ *     the reply that answers the rolled message, with the ✎ that lets the
+ *     player set the result after the die has landed (3.1.2, D57), behind
+ *     Settings → Stats → Let me change the ruling.
  *
  * It imports no UI module. The popover (src/systems/ui/dicePanel.js) and the
  * shelf listen for DICE_CHANGED_EVENT instead.
@@ -41,6 +43,7 @@ import {
     buildDifficultyRatingPrompt,
     parseDifficultyRating,
     rollCheck,
+    overrideRoll,
     isSaveRoll,
     saveDC,
     applySaveDC,
@@ -651,7 +654,9 @@ function verdictFor(roll) {
 // reply that answers it (each swipe alike, and each reply in a group until
 // the next player message), inserted before .mes_text in the reply's
 // .mes_block so SillyTavern's own re-renders of the text leave it alone.
-// Nothing on it removes the roll: an outcome is final.
+// Nothing on it removes the roll. With Let me change the ruling on, the ✎ on
+// the player's own roll sets its result (D57); the reply already written
+// stands until its next swipe or regenerate, which follow the set result.
 
 const CARD_CLASS = 'dooms-roll-card';
 
@@ -661,10 +666,16 @@ const CARD_CLASS = 'dooms-roll-card';
  * (kept on SillyTavern's tool-call messages in between). [] when none.
  */
 export function rollsForReply(index) {
+    return rollsForReplyDetailed(index).rolls;
+}
+
+/** The same, with the roll on the player's message (`own`) and that message's index, for the ✎. */
+function rollsForReplyDetailed(index) {
+    const none = { rolls: [], own: null, ownIndex: -1 };
     const list = chatArray();
-    if (!list || !Number.isFinite(index) || index < 0 || index >= list.length) return [];
+    if (!list || !Number.isFinite(index) || index < 0 || index >= list.length) return none;
     const m = list[index];
-    if (!m || m.is_user || m.is_system) return [];
+    if (!m || m.is_user || m.is_system) return none;
     const tool = [];
     let i = index - 1;
     for (; i >= 0; i--) {
@@ -679,16 +690,26 @@ export function rollsForReply(index) {
             tool.unshift(...here);
         }
     }
-    const out = [];
-    if (i >= 0) {
-        const r = list[i].extra?.dooms_roll;
-        if (r && typeof r === 'object') out.push(r);
-    }
-    return out.concat(tool);
+    const r = i >= 0 ? list[i].extra?.dooms_roll : null;
+    const own = r && typeof r === 'object' ? r : null;
+    return { rolls: (own ? [own] : []).concat(tool), own, ownIndex: own ? i : -1 };
 }
 
-function cardHtml(roll) {
-    const cls = [CARD_CLASS, roll.success ? 'is-success' : 'is-failure', roll.critical ? 'is-crit' : ''].filter(Boolean).join(' ');
+/** What the die first showed, for the note on a set result. */
+function beforeWords(before) {
+    if (!before || typeof before !== 'object' || !Number.isFinite(before.kept)) return '';
+    const was = before.critical === 'success' ? 'a critical success' : before.critical === 'failure' ? 'a critical failure' : before.success ? 'a success' : 'a failure';
+    return `Set by you: the die showed ${before.kept}, ${was}.`;
+}
+
+/**
+ * The box for one roll. `editable` adds the ✎ and its form (the roll on the
+ * player's message at `index`, with the setting on); `canRegenerate` adds
+ * Regenerate the reply to a set result on the chat's last reply.
+ */
+export function rollCardHtml(roll, { editable = false, index = -1, canRegenerate = false } = {}) {
+    const set = roll.setBy === 'player';
+    const cls = [CARD_CLASS, roll.success ? 'is-success' : 'is-failure', roll.critical ? 'is-crit' : '', set ? 'is-set' : ''].filter(Boolean).join(' ');
     const whoLabel = roll.isUser === false ? `${escapeHtml(roll.who || 'NPC')}: ` : '';
     const asked = roll.calledBy === 'gm' || roll.calledBy === 'tool' ? ' <small>(the game master called for it)</small>' : '';
     const twoDice = roll.advantage !== 'none' && Array.isArray(roll.rolls) && roll.rolls.length === 2;
@@ -702,26 +723,80 @@ function cardHtml(roll) {
     else if (roll.rulingSource === 'override') why = 'Your ruling.';
     else if (roll.rulingError) why = 'The game master could not be asked; the default difficulty stood.';
     const attempt = roll.attempt ? `<span class="dooms-roll-attempt">${escapeHtml(roll.attempt)}</span>` : '';
-    const why2 = attempt || why ? `<div class="dooms-roll-why">${attempt}${attempt && why ? ' · ' : ''}${why}</div>` : '';
+    const setNote = set ? escapeHtml(beforeWords(roll.before)) : '';
+    const regen = set && canRegenerate ? ' <button type="button" class="dooms-roll-regen" title="Generate the reply again, with this result">Regenerate the reply</button>' : '';
+    const whyParts = [attempt, why, setNote ? `<span class="dooms-roll-set-note">${setNote}</span>${regen}` : ''].filter(Boolean);
+    const why2 = whyParts.length ? `<div class="dooms-roll-why">${whyParts.join(' · ')}</div>` : '';
+    const edit = editable ? ` <button type="button" class="dooms-roll-edit" title="Set the result yourself" aria-label="Set the result yourself" aria-expanded="false">✎</button>` : '';
+    const form = editable ? `
+        <div class="dooms-roll-set" hidden>
+            <label>Set the d20 to <input type="number" class="dooms-roll-face" min="1" max="20" step="1" value="${Number.isFinite(roll.kept) ? roll.kept : 10}" /></label>
+            <button type="button" class="dooms-roll-apply" data-index="${index}">Apply</button>
+            <span class="dooms-roll-set-or">or make it</span>
+            <button type="button" class="dooms-roll-turn" data-index="${index}" data-success="1">a success</button>
+            <button type="button" class="dooms-roll-turn" data-index="${index}" data-success="0">a failure</button>
+            <button type="button" class="dooms-roll-set-close">Cancel</button>
+        </div>` : '';
     return `<div class="${cls}" role="note">
         <div class="dooms-roll-line">
             <span class="dooms-roll-die" aria-hidden="true">🎲</span>
             <span class="dooms-roll-label">${whoLabel}${escapeHtml(kindLabel(roll))}${asked}</span>
             <span class="dooms-roll-math">${math}</span>
-            <span class="dooms-roll-outcome">${escapeHtml(outcome)}</span>
+            <span class="dooms-roll-outcome">${escapeHtml(outcome)}${edit}</span>
         </div>
-        ${why2}
+        ${why2}${form}
     </div>`;
+}
+
+/**
+ * Sets the result of the roll on the player's message at `index` (D57):
+ * a die face, or an outcome (the face that just makes or just misses the
+ * DC). Refused while Let me change the ruling is off, for a message with no
+ * roll, and for a bad face. Returns the new roll, or null.
+ */
+export function setRollResult(index, { kept = null, success = null } = {}) {
+    if (!attributesOn(extensionSettings)) return null;
+    const cfg = attributesConfig(extensionSettings);
+    if (!cfg.allowOverride) return null;
+    const list = chatArray();
+    const m = list && Number.isFinite(index) ? list[index] : null;
+    const roll = m && m.is_user && m.extra && m.extra.dooms_roll;
+    if (!roll || typeof roll !== 'object') return null;
+    const next = overrideRoll(roll, { kept, success, criticals: cfg.criticals });
+    if (!next) return null;
+    m.extra.dooms_roll = next;
+    saveRollChange();
+    syncRollCardForMessage(index);
+    notifyDiceChanged({ source: 'set', index });
+    diceNotice(`Result set by you · ${rollLine(next)}`, { kind: next.success ? 'success' : 'warning' });
+    return next;
+}
+
+/** Plays a set result out: SillyTavern's own Regenerate (its options-menu entry works with the menu closed). */
+function regenerateLastReply() {
+    try {
+        const el = typeof document !== 'undefined' && typeof document.getElementById === 'function' ? document.getElementById('option_regenerate') : null;
+        if (el && typeof $ === 'function') { $(el).trigger('click'); return true; }
+    } catch (e) { /* no DOM */ }
+    diceNotice('Regenerate the reply from its menu to play the result out.');
+    return false;
 }
 
 function syncCardOnReply(messageElement, index) {
     const $block = $(messageElement).find('.mes_block').first();
     if (!$block.length) return;
     const $existing = $block.children(`.${CARD_CLASS}`);
-    const rolls = extensionSettings.enabled && attributesOn(extensionSettings) ? rollsForReply(index) : [];
+    const detail = extensionSettings.enabled && attributesOn(extensionSettings) ? rollsForReplyDetailed(index) : null;
+    const rolls = detail ? detail.rolls : [];
     $existing.remove();
     if (!rolls.length) return;
-    const html = rolls.map(cardHtml).join('');
+    const list = chatArray();
+    const editable = attributesConfig(extensionSettings).allowOverride;
+    const html = rolls.map(roll => rollCardHtml(roll, {
+        editable: editable && roll === detail.own,
+        index: detail.ownIndex,
+        canRegenerate: !!list && index === list.length - 1,
+    })).join('');
     const $text = $block.children('.mes_text').first();
     if ($text.length) $text.before(html);
     else $block.prepend(html);
@@ -790,6 +865,40 @@ export function initDiceRolls() {
     if (listenersBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     listenersBound = true;
     window.addEventListener(DICE_CHANGED_EVENT, () => { try { refreshDiceEntryPoints(); } catch (e) { /* no DOM */ } });
+    bindRollCardControls();
+}
+
+/** The ✎ and its form on the roll boxes (D57), delegated once; a re-render of the box keeps them working. */
+function bindRollCardControls() {
+    if (typeof $ !== 'function' || typeof document === 'undefined') return;
+    try {
+        const $doc = $(document);
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-edit`, function () {
+            const $form = $(this).closest(`.${CARD_CLASS}`).find('.dooms-roll-set').first();
+            const open = !!$form.prop('hidden');
+            $form.prop('hidden', !open);
+            $(this).attr('aria-expanded', open ? 'true' : 'false');
+            if (open) $form.find('.dooms-roll-face').trigger('focus');
+        });
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-set-close`, function () {
+            const $card = $(this).closest(`.${CARD_CLASS}`);
+            $card.find('.dooms-roll-set').prop('hidden', true);
+            $card.find('.dooms-roll-edit').attr('aria-expanded', 'false').trigger('focus');
+        });
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-apply`, function () {
+            const index = parseInt($(this).attr('data-index'), 10);
+            const face = parseInt($(this).closest('.dooms-roll-set').find('.dooms-roll-face').val(), 10);
+            if (!setRollResult(index, { kept: face })) diceNotice('The result was not set: the d20 takes 1 to 20.', { kind: 'warning' });
+        });
+        $doc.on('keydown', `#chat .${CARD_CLASS} .dooms-roll-face`, function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $(this).closest('.dooms-roll-set').find('.dooms-roll-apply').trigger('click'); }
+        });
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-turn`, function () {
+            const index = parseInt($(this).attr('data-index'), 10);
+            setRollResult(index, { success: $(this).attr('data-success') === '1' });
+        });
+        $doc.on('click', `#chat .${CARD_CLASS} .dooms-roll-regen`, function () { regenerateLastReply(); });
+    } catch (e) { /* no jQuery events (tests) */ }
 }
 
 // ─── The game master's own calls (Phase 3) ──────────────────────────────────

@@ -964,6 +964,47 @@ export function formatRollShort(roll) {
     return `${checkLabel(roll)} ${isSaveRoll(roll) ? 'save' : 'check'} · d20 ${dice} ${formatModifier(roll.mod)}${roll.prof ? ` +${roll.prof}` : ''} = ${roll.total} vs DC ${roll.dc} · ${outcomeLabel(roll)}`;
 }
 
+// ─── A result set by the player (3.1.2, D57) ────────────────────────────────
+
+/** The die face that just makes the DC (success) or just misses it (failure), kept to 1..20: the honest number for "make it a success". */
+export function thresholdFace(roll, success) {
+    const need = Math.round(Number(roll.dc) || 0) - (Number(roll.mod) || 0) - (Number(roll.prof) || 0);    // the smallest face that succeeds
+    return success ? Math.min(20, Math.max(1, need)) : Math.max(1, Math.min(20, need - 1));
+}
+
+/**
+ * A roll with its result set by the player: the kept d20 is replaced by
+ * `kept` (or, for `success`, by the face that just makes or just misses the
+ * DC) and the arithmetic follows, criticals included; with advantage the
+ * second die leaves the record, since nothing was rolled. The first result
+ * stays under `before` so the box can say what the die really showed, and a
+ * second setting keeps that first record. An outcome no face gives (a DC out
+ * of reach with criticals off) is granted outright with a flat margin. Null
+ * for a bad input. Never mutates the input.
+ */
+export function overrideRoll(roll, { kept = null, success = null, criticals = true } = {}) {
+    if (!roll || typeof roll !== 'object' || !Number.isFinite(Number(roll.dc))) return null;
+    let face = Number.isInteger(kept) ? kept : null;
+    if (face === null && typeof success === 'boolean') face = thresholdFace(roll, success);
+    if (!Number.isInteger(face) || face < 1 || face > 20) return null;
+    const dc = Math.round(Number(roll.dc));
+    const mod = Number(roll.mod) || 0;
+    const prof = Number(roll.prof) || 0;
+    const total = face + mod + prof;
+    let won = total >= dc;
+    let critical = null;
+    if (criticals) {
+        if (face === 20) { won = true; critical = 'success'; }
+        else if (face === 1) { won = false; critical = 'failure'; }
+    }
+    let forced = false;
+    if (typeof success === 'boolean' && won !== success) { won = success; critical = null; forced = true; }
+    const before = roll.before && typeof roll.before === 'object'
+        ? roll.before
+        : { kept: roll.kept, total: roll.total, success: roll.success, critical: roll.critical ?? null, margin: roll.margin };
+    return { ...roll, kept: face, rolls: [face], dropped: null, total, success: won, critical, margin: forced ? 0 : total - dc, setBy: 'player', before };
+}
+
 // ─── Prompt text ────────────────────────────────────────────────────────────
 
 /**

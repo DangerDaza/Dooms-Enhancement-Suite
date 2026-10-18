@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.1.2-beta.1] - 2026-10-18 — A result you can set
+
+### Added
+- **Set a roll's result.** With Settings → Stats → Let me change the ruling on, the roll box at the top of a reply shows a ✎: set the d20 yourself, or make the result a success or a failure (the face that just makes or just misses the DC), and the box says what the die really showed. The reply already written stands; its next swipe or regenerate follows the new result, and on the last reply a Regenerate the reply button sits right there. NPC and tool rolls stay as rolled. The version reads `3.1.2-beta.1`; What's New opens once more with this note on top.
+
 ## [3.1.1-beta.1] - 2026-10-18 — Roll a check, readable
 
 ### Fixed
