@@ -1495,9 +1495,10 @@ Status: **the groundwork, the pack, the per-chat state, the advancer and
 the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
 `docs/live-world-spec.md`, the owner's own spec) and reviewed (2026-10-18,
 an adversarial review of 85 agents: 38 confirmed findings, all fixed, §15.9);
-the map (C1–C3), the dashboard's feed and timelines (D2, D3) are not built;
-awaiting in-browser verification (parity rows "Live World") and the
-Skyreach pack's real content.**
+the C1 province map is built (2026-10-18); C2 nesting, C3 room grids, the
+dashboard's feed and timelines (D2, D3) are not; awaiting in-browser
+verification (parity rows "Live World") and the Skyreach pack's real
+content.**
 
 The spec is the design source; this section records what was built
 against it and the calls made on its open items.
@@ -1544,7 +1545,10 @@ heard-of entry naming them is dropped, not a reason to discard the
 reply; the tracker's presence list never makes the player known.
 **D53** an advance whose chat changed while its request ran is discarded
 whole (a load token), on success and on failure alike; a count-driven
-advance armed in one chat never fires in the next.
+advance armed in one chat never fires in the next. **D54** the map is a
+view of the dashboard popup (Overview | Map in its header, the last view
+remembered), not a popup of its own: one entry point, one footer, one
+set of empty-state lines; a rail button can come with the rest of Part D.
 
 ### 15.1 Data
 
@@ -1625,21 +1629,47 @@ describes the rest; in short the pack, the date, the blurb, the run
 status, what people say, the known characters with portraits and
 last-seen places, the heard-of chips, the recent moves, Advance now.
 
+The map (C1, the province node view; D54): the dashboard's Map view,
+`src/systems/ui/worldMap.js` over the pure `src/utils/worldMap.js`.
+It reads state only. Drawn at depth 1: the roots and their districts
+(a pack's integer `zoom` is a place's depth; without one, its distance
+from a root). A pack may fix a place's spot with `x` and `y` (0..100,
+kept away from the edge); the rest are laid out radially, one root at
+the centre with its districts on a ring, or several roots on an inner
+ring with each root's districts on an arc outside it; anything deeper
+that a pack's zoom pulls in falls beside its parent. Soft dashed curves
+run along the tree (an SVG under the cards, strokes that do not scale).
+Each place is a card: its label, the known characters standing on it as
+portrait tokens (initials when there is no portrait, at most six and a
+"+N"), a count badge with a title that says how many are somewhere
+within, and the pack's `image` for the place as the card's backdrop when
+it is a plain http(s), data-image or relative URL (anything else is
+dropped). A character's single `where` path resolves to the deepest
+place drawn, so someone in the Anchor's back room stands on the old
+town; heard-of names stay off the map; known names with no place are
+listed under it ("Somewhere, not yet placed"), as are names whose place
+the pack no longer has. The canvas is a textured gradient with a noise
+filter, no art; under the looks it takes the panel, line and accent
+tokens. On a phone the canvas is square and the cards smaller.
+
 ### 15.5 Not built yet
 
-The map (C1 province node view, C2 nesting, C3 room grids and tokens
-with Silly Map's pathfinding, credited); D2 the dashboard's feed with a
-time filter; D3 timelines and map links; a pack editor; speaker-tag
-detection for known characters if tracker presence proves too generous;
-"seen N days ago" (the dates are prose, so the dashboard says "seen
-<date>").
+C2 nesting and zoom (the province shows a city with a count, zooming
+shows districts, then the building, then a room), C3 room grids and
+tokens with Silly Map's pathfinding, credited; Leaflet for drawn art;
+D2 the dashboard's feed with a time filter; D3 timelines and map links;
+a pack editor; speaker-tag detection for known characters if tracker
+presence proves too generous; "seen N days ago" (the dates are prose, so
+the dashboard says "seen <date>").
 
 ### 15.6 Files and tests
 
 `src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (90 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (65
-checks, the review's cases in §7–§9); `src/utils/responseExtractor.js`
-(the shared fetch capture);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (71
+checks, the review's cases in §7–§9, the map in §6);
+`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (20 checks),
+`src/systems/ui/worldMap.js` (lazy, with the dashboard);
+`src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
 `BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
 `worldpacks/example.json`, `worldpacks/skyreach.json`; `index.js`,
@@ -1653,7 +1683,8 @@ checks, the review's cases in §7–§9); `src/utils/responseExtractor.js`
 3. `f99d9b5` the store, the advancer, the line and the settings.
 4. `134e764` the dashboard.
 5. `e1c795e` this section, the phases row, the parity rows, the handover.
-6. The review's fixes (§15.9).
+6. `9f6bea7` the review's fixes (§15.9); `d3de94e` its docs.
+7. The map (C1).
 
 ### 15.8 Open
 

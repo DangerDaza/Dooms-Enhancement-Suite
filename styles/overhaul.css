@@ -2392,3 +2392,13 @@ body[data-dooms-ui] .rpg-world-status.is-error,
 body[data-dooms-ui] .rpg-world-empty.is-error { color: #e5a84d; }
 body[data-dooms-ui] .rpg-world-result { color: var(--ov-muted); }
 body[data-dooms-ui] .rpg-world-portrait { background: var(--ov-panel2); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .rpg-world-tabs { background: var(--ov-panel2); border: 1px solid var(--ov-line); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .rpg-world-tab { color: var(--ov-muted); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .rpg-world-tab.is-active { background: var(--ov-accent); color: var(--ov-on-accent); opacity: 1; }
+body[data-dooms-ui] .rpg-wmap { border-color: var(--ov-line); border-radius: var(--ov-radius); box-shadow: none; background: radial-gradient(ellipse at 28% 22%, color-mix(in srgb, var(--ov-accent) 14%, transparent), transparent 55%), var(--ov-panel2); }
+body[data-dooms-ui] .rpg-wmap-lines path { stroke: var(--ov-line2); }
+body[data-dooms-ui] .rpg-wmap-node { background-color: color-mix(in srgb, var(--ov-panel) 90%, transparent); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); box-shadow: var(--ov-shadow); }
+body[data-dooms-ui] .rpg-wmap-node.is-root { border-color: var(--ov-accent); }
+body[data-dooms-ui] .rpg-wmap-token { border-color: var(--ov-panel); background: var(--ov-panel2); color: var(--ov-text); }
+body[data-dooms-ui] .rpg-wmap-count { background: var(--ov-accent); color: var(--ov-on-accent); }
+body[data-dooms-ui] .rpg-wmap-legend { color: var(--ov-muted); }

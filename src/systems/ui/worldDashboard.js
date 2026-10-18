@@ -15,11 +15,24 @@ import { resolvePortrait } from './portraitBar.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { liveWorldConfig, placeLabel, recentChanges, publicEffects } from '../../utils/liveWorld.js';
 import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { renderWorldMapHtml, worldEmptyMessage } from './worldMap.js';
 
 const POPUP_ID = 'rpg-world-popup';
+const VIEW_KEY = 'dooms-world-view';
+const VIEWS = ['overview', 'map'];
 let built = false;
 let isOpen = false;
 let lastResult = '';
+let view = readView();
+
+function readView() {
+    try { const v = localStorage.getItem(VIEW_KEY); return VIEWS.includes(v) ? v : 'overview'; } catch (e) { return 'overview'; }
+}
+
+function setView(next) {
+    view = VIEWS.includes(next) ? next : 'overview';
+    try { localStorage.setItem(VIEW_KEY, view); } catch (e) { /* no storage */ }
+}
 
 function lastSeenEntry(state, name) {
     for (let i = state.log.length - 1; i >= 0; i--) {
@@ -33,10 +46,8 @@ function lastSeenEntry(state, name) {
  * render it without the portrait store.
  */
 export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packError = '', portraits = () => '', masterOn = true } = {}) {
-    if (!masterOn) return '<p class="rpg-world-empty">Doom\'s Enhancement Suite is off; Live World runs only while it is on.</p>';
-    if (!cfg || !cfg.enabled) return '<p class="rpg-world-empty">Live World is off. Settings → Live World switches it on.</p>';
-    if (packError) return `<p class="rpg-world-empty is-error">This chat has no world: ${escapeHtml(packError)}</p>`;
-    if (!state || !pack) return '<p class="rpg-world-empty">This chat has no world yet. Open a chat with Live World on, or re-seed it in Settings → Live World.</p>';
+    const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
+    if (empty) return empty;
     const date = [facts.date, facts.time].filter(Boolean).join(', ');
     const where = facts.location ? ` · at ${escapeHtml(facts.location)}` : '';
     const last = state.last && state.last.ok
@@ -87,9 +98,16 @@ function portraitOf(name) {
 function render() {
     const $body = $(`#${POPUP_ID} .rpg-world-body`);
     if (!$body.length) return;
-    let facts = {};
-    try { facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { facts = {}; }
-    $body.html(renderWorldDashboardHtml({ state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), facts, packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled }));
+    const common = { state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled };
+    if (view === 'map') {
+        $body.html(renderWorldMapHtml(common));
+    } else {
+        let facts = {};
+        try { facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox); } catch (e) { facts = {}; }
+        $body.html(renderWorldDashboardHtml({ ...common, facts }));
+    }
+    $body.toggleClass('is-map', view === 'map');
+    $(`#${POPUP_ID} .rpg-world-tab`).each(function () { $(this).toggleClass('is-active', $(this).data('view') === view).attr('aria-selected', $(this).data('view') === view ? 'true' : 'false'); });
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .rpg-world-result`).text(lastResult);
 }
@@ -113,6 +131,10 @@ function build() {
             <div class="rpg-settings-popup-content" style="max-width: 820px;">
                 <header class="rpg-settings-popup-header">
                     <h3 id="rpg-world-title"><i class="fa-solid fa-globe" aria-hidden="true"></i> <span>Live World</span></h3>
+                    <div class="rpg-world-tabs" role="tablist" aria-label="Live World views">
+                        <button type="button" class="rpg-world-tab" role="tab" data-view="overview">Overview</button>
+                        <button type="button" class="rpg-world-tab" role="tab" data-view="map">Map</button>
+                    </div>
                     <button id="rpg-close-world" class="rpg-popup-close" type="button" aria-label="Close">&times;</button>
                 </header>
                 <div class="rpg-settings-popup-body">
@@ -128,6 +150,7 @@ function build() {
     $(document).on('click', '#rpg-close-world', closeWorldDashboard);
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
+    $(document).on('click', `#${POPUP_ID} .rpg-world-tab`, function () { setView($(this).data('view')); render(); });
     $(document).on('click', '#rpg-world-advance-now', async function () {
         // advanceNow takes the running flag before its first await, so the
         // render that follows keeps the button disabled for the whole request.

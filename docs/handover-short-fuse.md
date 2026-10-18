@@ -67,6 +67,7 @@ state and the next moves.
    node tools/quest-cut-test.mjs
    timeout 120 node tools/quest-cut-flow-test.mjs
    node tools/live-world-test.mjs
+   node tools/world-map-test.mjs
    timeout 120 node tools/live-world-flow-test.mjs
    ```
 3. **Verify the tracker fix in play** (the open problem; see §3). In the
@@ -104,7 +105,7 @@ state and the next moves.
 7. **Try Live World** (Phase 6, built 2026-10-17 from `docs/live-world-spec.md`;
    `docs/stats-plan.md` §15). Settings → Live World on, Example as the pack,
    a new chat; play six replies and watch the System Log and the dashboard
-   (/liveworld). Parity rows "Live World". The Skyreach pack is a draft: its
+   (/liveworld), then its Map view. Parity rows "Live World". The Skyreach pack is a draft: its
    places, clocks and cast want the campaign notes (D50).
 
 ## 3. The open problem and what was done about it
@@ -233,9 +234,12 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   narrator's line), `src/systems/features/liveWorld.js` (the store under
   `chat_metadata.dooms_world`, counting by a stamped id, the advancer
   through `withBackgroundProfile`, blind injection, `/advance`, `/liveworld`),
-  `src/systems/ui/worldDashboard.js` (lazy), Settings → Live World, two
-  packs in `worldpacks/`. `tools/live-world-test.mjs`,
-  `tools/live-world-flow-test.mjs`.
+  `src/systems/ui/worldDashboard.js` (lazy) with its Map view
+  (`src/systems/ui/worldMap.js` over the pure `src/utils/worldMap.js`,
+  C1), Settings → Live World, two packs in `worldpacks/`.
+  `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
+  `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18
+  (`docs/stats-plan.md` §15.9).
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 
@@ -249,7 +253,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/utils/inventory.js` | Pure inventory model: the rules, stacks and icons, `applyChanges`/`revertApplied` (share-only), `setStack`/`moveStack`, `parseItemTags`, the tool definition, `buildInventoryLine` and the two instructions |
 | `src/systems/features/inventory.js` | Inventory lifecycle: the per-chat store, `onInventoryReplyRendered` (tag once per swipe, put back on swipe/edit), `inventoryToolAction` and the claim by the next reply, `onInventoryMessageDeleted` (ledger), the prompt slot builders, hand edits, `inventoryNotice` |
 | `src/systems/ui/shelfPages.js`, `portraitBar.js` | The shelf's Inventory and Quests pages (lazy), the quest menu (Cut to it), and the page control in the header (`syncShelfPages`, `setShelfPage`) |
-| `src/utils/liveWorld.js`, `src/systems/features/liveWorld.js`, `src/systems/ui/worldDashboard.js` | Live World: the pack and the per-chat state, `buildAdvancePrompt`/`validateAdvance`/`applyAdvance`, `buildWorldLines`; the store, counting, `advanceNow`, `onWorldGenerationStarted` (raw slot), `/advance` and `/world`; the dashboard |
+| `src/utils/liveWorld.js`, `src/systems/features/liveWorld.js`, `src/systems/ui/worldDashboard.js`, `src/utils/worldMap.js`, `src/systems/ui/worldMap.js` | Live World: the pack and the per-chat state, `buildAdvancePrompt`/`validateAdvance`/`applyAdvance`, `buildWorldLines`, `reconcileWithChat`; the store, counting, `advanceNow` (load token, waits), `onWorldGenerationStarted` (raw slot, the regenerate's id), `/advance` and `/liveworld`; the dashboard and its Map view (`buildProvinceView`) |
 | `src/systems/generation/apiClient.js` | `withBackgroundProfile(fn, { external })`: the generating flag and the tracker's connection profile around any background request; `updateRPGData` runs through it |
 | `src/utils/questCut.js`, `src/systems/features/questCut.js` | Cut to a quest: the quest list after a cut, the facts of now, the instruction; the armed cut in `chat_metadata.dooms_quest_cut`, `/trigger`, the `dooms-quest-cut` slot, the clear on MESSAGE_SENT |
 | `src/systems/generation/trackerRecovery.js` | Pure helpers: `hasTrackerData`, `swipeEntryOf`, `replyLacksTracker`, `lastReply`, `earlierPartsOfTurn`, `adoptBlockFromTurn`, `shouldRecoverTracker`, the recovered mark |

@@ -38,6 +38,7 @@ const MUST_BE_LAZY = [
     'src/systems/ui/shelfPages.js',
     // The Live World dashboard loads on first open.
     'src/systems/ui/worldDashboard.js',
+    'src/systems/ui/worldMap.js',
 ];
 
 // Static imports only: `import x from '…'`, `import {…} from '…'`,

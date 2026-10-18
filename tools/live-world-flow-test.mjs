@@ -237,6 +237,18 @@ console.log('\n§6 the dashboard\'s reading');
     check('model-written text is escaped', dash.renderWorldDashboardHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
     check("the master switch off says so, not 're-seed'", dash.renderWorldDashboardHtml({ state: st, pack, cfg, masterOn: false }).includes("Enhancement Suite is off") && !dash.renderWorldDashboardHtml({ state: st, pack, cfg, masterOn: false }).includes('re-seed'));
     check('a clock change sits in recent changes as its public face', html.includes('The blockade: Cargo is searched on the quay') && dash.renderWorldDashboardHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } }).includes('<li>Cargo is searched on the quay'));
+    // the map view (C1)
+    const wm = await import(`${DES}/src/systems/ui/worldMap.js`);
+    const map = wm.renderWorldMapHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' });
+    check('the map: the root and its districts as cards, a line to each district', map.includes('class="rpg-wmap-node is-root"') && (map.match(/class="rpg-wmap-node/g) || []).length === 4 && (map.match(/<path /g) || []).length === 3 && map.includes('>Harbourside</div>') && map.includes('>The old town</div>'), map);
+    check('known characters as tokens on the deepest drawn place: a portrait when there is one, initials otherwise, heard-of names absent', map.includes('<img class="rpg-wmap-token" src="data:image/png;base64,x" alt="Old Marit" title="Old Marit · The Anchor&#39;s back room, The Anchor, a tavern"') && map.includes('aria-label="Captain Reyes">CR</span>') && !map.includes('Maeve') && !map.includes('The governor'));
+    check('a count on each card that holds someone, none on an empty one', map.includes('<span class="rpg-wmap-count" title="1 known character here, 1 somewhere within">1</span>') && (map.match(/rpg-wmap-count/g) || []).length === 2);
+    const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', parent: 'h', image: 'https://x/y.png' }] }).pack;
+    const hostile = wm.renderWorldMapHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg });
+    check('labels are escaped, a scripted image is dropped and a plain one wears the card', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('background-image:url(&quot;https://x/y.png&quot;)') && hostile.includes('has-image'), hostile);
+    check('the map says the same as the overview when there is nothing to draw', wm.renderWorldMapHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && wm.renderWorldMapHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off') && wm.renderWorldMapHtml({ cfg, packError: 'x' }).includes('no world: x'));
+    const loner = M.markKnown(M.seedWorldState(pack), ['Wanderer']);
+    check('a known name with no place is listed under the map', wm.renderWorldMapHtml({ state: loner, pack, cfg }).includes('Somewhere, not yet placed: Wanderer.'));
 }
 
 console.log('\n§7 an advance that outlives its chat');
