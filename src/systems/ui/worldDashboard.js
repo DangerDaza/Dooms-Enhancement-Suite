@@ -36,7 +36,12 @@ let focusPlace = '';        // the map node to pick out, from a card's map link
 let mapRoot = '';           // the place the map is zoomed into ('' is the province)
 
 function readFeedLimit() {
-    try { const n = Number(localStorage.getItem(FEED_KEY)); return FEED_LIMITS.includes(n) ? n : FEED_LIMITS[0]; } catch (e) { return FEED_LIMITS[0]; }
+    try {
+        const raw = localStorage.getItem(FEED_KEY);
+        if (raw === null || raw === '') return FEED_LIMITS[0];    // nothing stored: the latest twelve, not Number(null) === 0
+        const n = Number(raw);
+        return FEED_LIMITS.includes(n) ? n : FEED_LIMITS[0];
+    } catch (e) { return FEED_LIMITS[0]; }
 }
 
 function setFeedLimit(n) {
@@ -96,7 +101,7 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
     }).join('');
     const feedOptions = FEED_LIMITS.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n ? `Latest ${n}` : 'Everything'}</option>`).join('');
     const feedHtml = groups.length
-        ? groups.map(g => `${g.date ? `<div class="rpg-world-feed-date">${escapeHtml(g.date)}</div>` : ''}<ul class="rpg-world-changes">${g.items.map(c => `<li class="is-${c.kind}">${escapeHtml(c.text)}</li>`).join('')}</ul>`).join('')
+        ? groups.map(g => `${g.date || groups.length > 1 ? `<div class="rpg-world-feed-date">${g.date ? escapeHtml(g.date) : 'No date'}</div>` : ''}<ul class="rpg-world-changes">${g.items.map(c => `<li class="is-${c.kind}">${escapeHtml(c.text)}</li>`).join('')}</ul>`).join('')
         : '<p class="rpg-world-empty">No changes yet.</p>';
     return `
         <div class="rpg-world-head">
@@ -104,7 +109,7 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
             <div class="rpg-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</div>
             ${state.blurb ? `<div class="rpg-world-blurb">${escapeHtml(state.blurb)}</div>` : ''}
             <div class="rpg-world-status">${last} · ${next}.${cfg.spoilerFree ? ' Spoiler-free: common knowledge only.' : ''}</div>
-            ${state.lastError ? `<div class="rpg-world-status is-error">Last attempt discarded: ${escapeHtml(state.lastError.error)}</div>` : ''}
+            ${state.lastError ? `<div class="rpg-world-status is-error">Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : escapeHtml(state.lastError.error)}</div>` : ''}
         </div>
         <div class="rpg-world-section">
             <div class="rpg-world-section-title">What people say</div>
@@ -128,7 +133,8 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
 function timelineHtml(t) {
     if (!t.steps.length) return `<ol class="rpg-world-timeline"><li class="is-now">${t.now ? `Now: ${escapeHtml(t.now)}` : 'Nowhere yet'}${t.now ? ' (from the start, or before the log)' : ''}</li></ol>`;
     const items = [];
-    if (t.steps[0].from) items.push(`<li class="is-start">Started at ${escapeHtml(t.steps[0].from)}</li>`);
+    // "Started at" only when the log still reaches the cast's starting place; older moves may have fallen off the ring
+    if (t.steps[0].from) items.push(`<li class="is-start">${t.startIsSeed ? 'Started at' : 'Earlier at'} ${escapeHtml(t.steps[0].from)}${t.startIsSeed ? '' : ' <span class="is-muted">(older moves are no longer in the log)</span>'}</li>`);
     for (const s of t.steps) {
         const when = s.gameDate ? `<time>${escapeHtml(s.gameDate)}${s.gameTime ? `, ${escapeHtml(s.gameTime)}` : ''}</time>` : '';
         items.push(`<li>${when}${escapeHtml(s.to)}${s.reason ? ` <span class="is-muted">(${escapeHtml(s.reason)})</span>` : ''}</li>`);
@@ -153,7 +159,7 @@ function render() {
         $body.html(renderWorldDashboardHtml({ ...common, facts, feed: feedLimit, timeline: openTimeline }));
     }
     $body.toggleClass('is-map', view === 'map');
-    $(`#${POPUP_ID} .rpg-world-tab`).each(function () { $(this).toggleClass('is-active', $(this).data('view') === view).attr('aria-selected', $(this).data('view') === view ? 'true' : 'false'); });
+    $(`#${POPUP_ID} .rpg-world-tab`).each(function () { const mine = $(this).attr('data-view') === view; $(this).toggleClass('is-active', mine).attr('aria-selected', mine ? 'true' : 'false'); });
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .rpg-world-result`).text(lastResult);
 }
@@ -164,7 +170,14 @@ function onChanged(e) {
     if (source === 'advance') lastResult = 'The world moved.';
     else if (source === 'advance-failed') {
         const s = getWorldState();
-        lastResult = `Discarded: ${s && s.lastError ? s.lastError.error : 'the reply broke a rule'}`;
+        const spoilerFree = liveWorldConfig(extensionSettings).spoilerFree;
+        lastResult = `Discarded: ${s && s.lastError && !spoilerFree ? s.lastError.error : 'the reply broke a rule'}`;
+    } else if (source === 'chat') {
+        // another chat, or the world reloaded: what was open belongs to the old one
+        lastResult = '';
+        openTimeline = '';
+        focusPlace = '';
+        mapRoot = '';
     }
     if (isOpen) render();
 }
@@ -196,35 +209,38 @@ function build() {
     $(document).on('click', '#rpg-close-world', closeWorldDashboard);
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
-    $(document).on('click', `#${POPUP_ID} .rpg-world-tab`, function () { setView($(this).data('view')); render(); });
+    $(document).on('click', `#${POPUP_ID} .rpg-world-tab`, function () { setView(String($(this).attr('data-view') || '')); render(); });
     $(document).on('change', `#${POPUP_ID} .rpg-world-feed-filter`, function () { setFeedLimit($(this).val()); render(); });
     // D3: a name opens its timeline; the map link picks the character's place out on the map; a token on the map opens the timeline here.
+    // Attributes are read as written (.attr): jQuery's .data() would turn a place called "0", "null" or "true" into a number or a boolean.
     $(document).on('click', `#${POPUP_ID} .rpg-world-card-name`, function () {
-        const name = String($(this).closest('.rpg-world-card').data('name') || '');
+        const name = String($(this).closest('.rpg-world-card').attr('data-name') || '');
         openTimeline = openTimeline === name ? '' : name;
         render();
     });
     $(document).on('click', `#${POPUP_ID} .rpg-world-card-map`, function () {
-        focusPlace = String($(this).data('place') || '');
+        focusPlace = String($(this).attr('data-place') || '');
         mapRoot = '';    // the province, where every place has a card to pick out
         setView('map');
         render();
     });
-    // C2: a card with places inside opens to them; the trail leads back up.
-    $(document).on('click', `#${POPUP_ID} .rpg-wmap-node[data-zoom]`, function (e) {
-        if ($(e.target).closest('.rpg-wmap-token').length) return;    // a token is the character's, not the place's
-        mapRoot = String($(this).data('zoom') || '');
+    // C2: a card's label opens to the places inside it; the trail leads back up. The render replaces the
+    // map, so the keyboard's place is kept by moving focus to the trail's current step.
+    $(document).on('click', `#${POPUP_ID} .rpg-wmap-zoom[data-zoom]`, function () {
+        mapRoot = String($(this).attr('data-zoom') || '');
         render();
+        focusTrail();
     });
-    $(document).on('keydown', `#${POPUP_ID} .rpg-wmap-node[data-zoom], #${POPUP_ID} .rpg-wmap-token[data-name]`, function (e) {
+    $(document).on('keydown', `#${POPUP_ID} .rpg-wmap-token[data-name]`, function (e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); }
     });
     $(document).on('click', `#${POPUP_ID} .rpg-wmap-crumb`, function () {
-        mapRoot = String($(this).data('root') || '');
+        mapRoot = String($(this).attr('data-root') || '');
         render();
+        focusTrail();
     });
     $(document).on('click', `#${POPUP_ID} .rpg-wmap-token[data-name]`, function () {
-        openTimeline = String($(this).data('name') || '');
+        openTimeline = String($(this).attr('data-name') || '');
         setView('overview');
         render();
         const card = document.querySelector(`#${POPUP_ID} .rpg-world-card.is-open`);
@@ -237,7 +253,7 @@ function build() {
         lastResult = 'Advancing…';
         render();
         try {
-            lastResult = describeAdvanceResult(await pending);
+            lastResult = describeAdvanceResult(await pending, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree });
         } catch (e) {
             lastResult = `Failed: ${e && e.message ? e.message : e}`;
         }
@@ -245,6 +261,13 @@ function build() {
     });
     $(document).on('keydown', (e) => { if (e.key === 'Escape' && isOpen) closeWorldDashboard(); });
     window.addEventListener(WORLD_CHANGED_EVENT, onChanged);
+}
+
+function focusTrail() {
+    try {
+        const here = document.querySelector(`#${POPUP_ID} .rpg-wmap-crumb.is-here`);
+        if (here && typeof here.focus === 'function') here.focus();
+    } catch (e) { /* no DOM */ }
 }
 
 /** Opens the dashboard (building it the first time) and keeps it current while open. */

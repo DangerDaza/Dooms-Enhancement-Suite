@@ -3,6 +3,7 @@
  * Handles API calls for RPG tracker generation
  */
 import { chat, eventSource } from '../../../../../../../script.js';
+import * as ST from '../../../../../../../script.js';    // is_send_press by name: a build without it reads undefined
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { getContext } from '../../../../../../extensions.js';
 import { safeGenerateRaw, extractTextFromResponse } from '../../utils/responseExtractor.js';
@@ -355,6 +356,9 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
         if (backgroundHolder() !== 'world') return;
         await waitForBackground();
         if (isGenerating) return;
+        // The user may have sent while the advance ran: a tracker request now would switch the
+        // connection profile under their generation and store its result on the wrong reply.
+        if (ST.is_send_press === true) return;
     }
     if (!extensionSettings.enabled) {
         return;

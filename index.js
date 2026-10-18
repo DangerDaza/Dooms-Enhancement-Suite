@@ -166,7 +166,7 @@ import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MA
 // Cut to a quest (Phase 5b): the player's next message ends an armed cut
 import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
-import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
+import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
@@ -416,7 +416,7 @@ function renderLiveWorldStatus() {
         const known = Object.values(s.known).filter(t => t === 'known').length;
         const last = s.last && s.last.ok ? `last advanced ${s.last.gameDate ? `on ${s.last.gameDate}` : 'once'}${s.last.elapsed ? ` (${s.last.elapsed} passed)` : ''}` : 'not advanced yet';
         const next = Math.max(0, cfg.every - s.sinceLast);
-        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${s.lastError ? ` Last attempt discarded: ${s.lastError.error}` : ''}`;
+        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${s.lastError ? ` Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : s.lastError.error}` : ''}`;
     }
     $('#rpg-world-status').text(status);
 }
@@ -1993,7 +1993,7 @@ function bindSettingsUI() {
         if (!removeCustomPack(id)) return;
         const w = getWorldRules();
         if (w.pack === id) w.pack = 'skyreach';
-        _saveWorld({ reload: true });
+        _saveWorld({ reload: mine });    // another chat's pack: nothing in this chat refers to it, and a reload would discard an advance in flight
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
         import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World dashboard failed to load:', err));
@@ -2003,19 +2003,20 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await advanceNow({ reason: 'settings' });
-            if (r.ok) toastr.success(describeAdvanceResult(r), 'Live World', { timeOut: 3000 });
-            else toastr.warning(describeAdvanceResult(r), 'Live World', { timeOut: 7000 });
+            const text = describeAdvanceResult(r, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree });
+            if (r.ok) toastr.success(text, 'Live World', { timeOut: 3000 });
+            else toastr.warning(text, 'Live World', { timeOut: 7000 });
         } finally {
             $b.prop('disabled', false);
-            renderLiveWorldSettings();
+            renderLiveWorldStatus();    // not the full render: a value being typed in a field would be reset
         }
     });
     $(document).on('click', '#rpg-world-reseed', async function () {
         if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
         const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
-        const ok = await reseedWorld();
-        if (!ok) toastr.warning(`The world was kept: ${getPackError() || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });
+        const r = await reseedWorld();
+        if (!r.ok) toastr.warning(`The world was kept: ${r.error || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });
         renderLiveWorldSettings();
     });
     window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldStatus(); } catch (e) { /* non-fatal */ } });
@@ -4332,7 +4333,7 @@ jQuery(async () => {
                 // sets the verdict slot while SillyTavern is still awaiting this
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices],
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onWorldGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded],
@@ -4373,6 +4374,8 @@ jQuery(async () => {
         // initial render never happened. Trigger it now as a safety net.
         if (chat && chat.length > 0) {
             onCharacterChanged();
+        }
+        if (getContext().chatId) {    // a chat with no greeting has no messages yet but still has a world
             onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
         }
         // DES voices: pause SillyTavern's own auto-read if voices are on.

@@ -24,10 +24,19 @@ export const MAX_REASON = 160;
 export const MAX_NAME = 60;
 export const TIERS = Object.freeze(['heard', 'known']);
 
-const clean = (v, max = 200) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-const slug = (v) => clean(v, 60).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
+const slug = (v) => clean(v, 60).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const isInt = (n) => Number.isInteger(n);
 const sameName = (a, b) => clean(a, MAX_NAME).toLowerCase() === clean(b, MAX_NAME).toLowerCase();
+
+/** The spelling the state already uses for a name (case apart), else the name cleaned: one character, one key. */
+export function canonicalName(state, raw) {
+    const n = clean(raw, MAX_NAME);
+    if (!n || !state) return n;
+    for (const k of Object.keys(state.known || {})) if (sameName(k, n)) return k;
+    for (const k of Object.keys(state.where || {})) if (sameName(k, n)) return k;
+    return n;
+}
 
 /** A clock's value as the pack allows it: a stored value outside the range (the pack's max shrank) is clamped. */
 function clockValue(state, c) {
@@ -69,11 +78,11 @@ export function stripSceneNoise(text) {
     let t = String(text || '').replace(THINK_RE, '').replace(THINK_OPEN_RE, '').replace(TRACKERS_RE, '').replace(/```[\s\S]*?```/g, '').replace(/```[\s\S]*$/g, '');
     let from = 0;
     let guard = 0;
-    while (guard++ < 50) {
+    while (guard++ < 400) {
         const i = t.indexOf('{', from);
         if (i < 0) break;
         const end = balancedEnd(t, i);
-        if (end < 0) break;
+        if (end < 0) { from = i + 1; continue; }    // a brace in prose that never closes: try the next one
         const slice = t.slice(i, end + 1);
         let isJson = false;
         try { const v = JSON.parse(slice); isJson = !!v && typeof v === 'object'; } catch (e) { isJson = false; }
@@ -193,7 +202,7 @@ export function normalizePack(raw) {
     const clockIds = new Set();
     for (const c of Array.isArray(r.clocks) ? r.clocks : []) {
         if (!c || typeof c !== 'object') continue;
-        const cid = clean(c.id || c.label, 60).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
+        const cid = clean(c.id || c.label, 60).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
         if (!cid) { errors.push('A clock has no id.'); continue; }
         if (clockIds.has(cid)) { errors.push(`The clock id "${cid}" is used twice.`); continue; }
         clockIds.add(cid);
@@ -208,7 +217,9 @@ export function normalizePack(raw) {
             for (const [k, v] of Object.entries(c.effects)) {
                 if (!/^\d+$/.test(String(k).trim())) continue;
                 const n = Number(k);
-                if (isInt(n) && n >= 0 && n <= max && typeof v === 'string' && v.trim()) effects[n] = clean(v, 240);
+                if (!(isInt(n) && n >= 0 && n <= max && typeof v === 'string' && v.trim())) continue;
+                if (n in effects) { errors.push(`The clock "${cid}" gives step ${n} twice.`); continue; }
+                effects[n] = clean(v, 240);
             }
         }
         clocks.push({ id: cid, label: clean(c.label || c.id, 80), start, max, step: isInt(c.step) && c.step > 0 ? c.step : null, effects, hidden: c.hidden === true });
@@ -358,7 +369,7 @@ export function advanceDue(state, every) {
 export function markHeard(state, names) {
     const next = cloneState(state);
     for (const raw of names || []) {
-        const n = clean(raw, MAX_NAME);
+        const n = canonicalName(next, raw);
         if (n && !next.known[n]) next.known[n] = 'heard';
     }
     return next;
@@ -368,10 +379,34 @@ export function markHeard(state, names) {
 export function markKnown(state, names) {
     const next = cloneState(state);
     for (const raw of names || []) {
-        const n = clean(raw, MAX_NAME);
+        const n = canonicalName(next, raw);
         if (n) next.known[n] = 'known';
     }
     return next;
+}
+
+/** Stored clocks brought into the pack's range (a pack whose max shrank, a clock the pack added). */
+export function clampClocksToPack(state, pack) {
+    let next = state;
+    let changed = false;
+    for (const c of (pack && pack.clocks) || []) {
+        const v = clockValue(state, c);
+        if (state.clocks[c.id] === v) continue;
+        if (!changed) { next = cloneState(state); changed = true; }
+        next.clocks[c.id] = v;
+    }
+    return { state: next, changed };
+}
+
+/** A counted reply that turned out not to exist (a regenerate that never produced one): its count withdrawn. */
+export function uncountMessage(state, id) {
+    if (!id || !state.counted.includes(id)) return { state, uncounted: false };
+    const next = cloneState(state);
+    const pos = next.counted.indexOf(id);
+    const lastPos = next.last && next.last.msgId ? next.counted.indexOf(next.last.msgId) : -1;
+    next.counted.splice(pos, 1);
+    if (pos > lastPos && next.sinceLast > 0) next.sinceLast -= 1;
+    return { state: next, uncounted: true };
 }
 
 // ─── The lines the narrator reads ───────────────────────────────────────────
@@ -424,6 +459,7 @@ function lastSeenDate(state, name) {
  * @returns {{ system: string, user: string }}
  */
 export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep = 1, spoilerFree = false, player = '' } = {}) {
+    const players = playerList(player);
     const clocks = pack.clocks.map(c => {
         const v = clockValue(state, c);
         const steps = Object.entries(c.effects).map(([k, t]) => `${k}: ${t}`).join(' | ');
@@ -434,7 +470,7 @@ export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep
     const nowText = `${now.date || 'unknown date'}${now.time ? `, ${now.time}` : ''}${now.location ? `, at ${now.location}` : ''}`;
     const system = `You are the clockwork of the world of ${pack.name}, running between scenes. You never write story. You read the recent scenes and the time that passed, and you answer with one JSON object and nothing else, in exactly this shape:
 {"elapsed": "<how much story time passed since the last run, in words>", "clocks": {"<clock id>": <new integer value>}, "moved": [{"who": "<character name>", "to": "<place id from the tree>", "reason": "<a few words>"}], "blurb": "<two or three sentences of what people in the streets would say is going on>", "heard": ["<names of people mentioned for the first time>"]}
-Rules: clocks move with story time, not with how many messages were exchanged; a clock may move by at most the step given, up or down, and stays within its range; include a clock only when it moves; "to" must be a place id from the tree, the deepest that fits; move a character only when the scenes showed or plainly implied it; "moved" may be empty; names are strings exactly as the story spells them; no prose outside the JSON.${player ? ` The player is ${player}: never move them and never list them as heard of; the places are for everyone else.` : ''}${spoilerFree ? ' The blurb is common knowledge only: rumours, prices, news, weather; never a clock\'s value, name or mechanism, and nothing the player has not had a chance to learn.' : ''}`;
+Rules: clocks move with story time, not with how many messages were exchanged; a clock may move by at most the step given, up or down, and stays within its range; include a clock only when it moves; "to" must be a place id from the tree, the deepest that fits; move a character only when the scenes showed or plainly implied it; "moved" may be empty; names are strings exactly as the story spells them; no prose outside the JSON.${players.length ? ` The player is ${players[0]}${players.length > 1 ? ` (also written ${players.slice(1).join(', ')})` : ''}: never move them and never list them as heard of; the places are for everyone else.` : ''}${spoilerFree ? ' The blurb is common knowledge only: rumours, prices, news, weather; never a clock\'s value, name or mechanism, and nothing the player has not had a chance to learn.' : ''}`;
     const user = `World: ${pack.name}${pack.description ? ` — ${pack.description}` : ''}
 
 Clocks:
@@ -446,13 +482,18 @@ ${placeTreeText(pack)}
 Last seen:
 ${where}
 
-Last run: ${last}. Now: ${nowText}.${player ? `\nThe player: ${player} (not part of the cast).` : ''}
+Last run: ${last}. Now: ${nowText}.${players.length ? `\nThe player: ${players.join(' / ')} (not part of the cast).` : ''}
 
 Recent scenes:
 ${recent || '(none)'}
 
 Answer with the JSON object only.`;
     return { system, user };
+}
+
+/** The player's names as given: one string or a list, cleaned, empty entries dropped. */
+function playerList(player) {
+    return (Array.isArray(player) ? player : [player]).map(p => clean(p, MAX_NAME)).filter(Boolean);
 }
 
 /** The first JSON object in a reply, fences and prose around it ignored; null when none parses. */
@@ -463,12 +504,11 @@ export function parseAdvanceReply(text) {
     for (const m of s.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1]);
     let from = 0;
     let guard = 0;
-    while (guard++ < 50) {
+    while (guard++ < 400) {
         const i = s.indexOf('{', from);
         if (i < 0) break;
         const end = balancedEnd(s, i);
-        if (end < 0) break;
-        candidates.push(s.slice(i, end + 1));
+        if (end >= 0) candidates.push(s.slice(i, end + 1));
         from = i + 1;
     }
     candidates.push(s);
@@ -492,6 +532,8 @@ const ADVANCE_KEYS = ['elapsed', 'clocks', 'moved', 'blurb', 'heard'];
  */
 export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' } = {}) {
     const errors = [];
+    const players = playerList(player);
+    const isPlayer = (n) => players.some(p => sameName(p, n));
     if (!reply || typeof reply !== 'object' || Array.isArray(reply)) return { ok: false, errors: ['The reply is not a JSON object.'], clean: null };
     const clocks = {};
     if (reply.clocks !== undefined) {
@@ -516,9 +558,9 @@ export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' }
         else {
             for (const m of reply.moved) {
                 if (!m || typeof m !== 'object') { errors.push('A move is not an object.'); continue; }
-                const who = clean(m.who, MAX_NAME);
+                const who = canonicalName(state, m.who);
                 if (!who) { errors.push('A move names nobody.'); continue; }
-                if (player && sameName(who, player)) continue;    // the player is not placed by the world
+                if (isPlayer(who)) continue;    // the player is not placed by the world
                 const to = resolvePlace(pack, m.to);
                 if (!to) { errors.push(`"${clean(m.to, 60)}" is not a place of this pack (for ${who}).`); continue; }
                 moved.push({ who, to, reason: clean(m.reason, MAX_REASON) });
@@ -528,7 +570,7 @@ export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' }
     const heard = [];
     if (reply.heard !== undefined) {
         if (!Array.isArray(reply.heard)) errors.push('"heard" is not a list.');
-        else for (const h of reply.heard) { if (typeof h !== 'string') { errors.push('A heard-of name is not a string.'); continue; } const n = clean(h, MAX_NAME); if (n && !(player && sameName(n, player))) heard.push(n); }
+        else for (const h of reply.heard) { if (typeof h !== 'string') { errors.push('A heard-of name is not a string.'); continue; } const n = canonicalName(state, h); if (n && !isPlayer(n)) heard.push(n); }
     }
     if (reply.blurb !== undefined && typeof reply.blurb !== 'string') errors.push('"blurb" is not a string.');
     if (reply.elapsed !== undefined && typeof reply.elapsed !== 'string') errors.push('"elapsed" is not a string.');
@@ -550,20 +592,21 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
         if (from !== v) next.log.push({ kind: 'clock', clock: id, from, to: v, msgId, gameDate, gameTime });
     }
     for (const m of clean.moved || []) {
+        const who = canonicalName(next, m.who);
         const to = placePath(pack, m.to);
-        const from = next.where[m.who] || '';
+        const from = next.where[who] || '';
         if (from === to) continue;
-        next.where[m.who] = to;
-        if (!next.known[m.who]) next.known[m.who] = 'heard';
-        next.log.push({ kind: 'move', who: m.who, from, to, msgId, gameDate, gameTime, reason: m.reason || '' });
-        const mine = next.log.filter(e => e.who === m.who);
+        next.where[who] = to;
+        if (!next.known[who]) next.known[who] = 'heard';
+        next.log.push({ kind: 'move', who, from, to, msgId, gameDate, gameTime, reason: m.reason || '' });
+        const mine = next.log.filter(e => e.who === who);
         if (mine.length > LOG_PER_CHARACTER) {
             const oldest = mine[0];
             next.log.splice(next.log.indexOf(oldest), 1);
         }
     }
     if (next.log.length > LOG_TOTAL) next.log.splice(0, next.log.length - LOG_TOTAL);
-    for (const h of clean.heard || []) if (!next.known[h]) next.known[h] = 'heard';
+    for (const h of clean.heard || []) { const n = canonicalName(next, h); if (n && !next.known[n]) next.known[n] = 'heard'; }
     if (clean.blurb) next.blurb = clean.blurb;
     next.last = { msgId, gameDate, gameTime, ranAt, ok: true, elapsed: clean.elapsed || '' };
     next.lastError = null;
@@ -609,37 +652,68 @@ export function recentChanges(state, pack, { limit = 12, spoilerFree = false } =
  * reply) are never undone.
  * @returns {{ state: object, undone: number }}
  */
-export function reconcileWithChat(state, presentIds) {
+export function reconcileWithChat(state, presentIds, { pack = null } = {}) {
     const ids = Array.isArray(presentIds) ? presentIds : [];
     const present = new Set(ids);
     const gone = (id) => id !== null && id !== undefined && id !== '' && !present.has(id);
+    const lastId = state.last ? state.last.msgId : null;
+    const lastPos = lastId ? state.counted.indexOf(lastId) : -1;
     const tail = state.log.length ? state.log[state.log.length - 1] : null;
-    const ahead = (state.last && gone(state.last.msgId)) || (tail && gone(tail.msgId)) || (state.lastError && gone(state.lastError.msgId));
-    if (!ahead) return { state, undone: 0 };
+    const runsGone = !!((state.last && gone(lastId)) || (tail && gone(tail.msgId)) || (state.lastError && gone(state.lastError.msgId)));
+    // A counted reply newer than the last run still standing means the gone message sat in the middle:
+    // the story went on from the advanced world, so the runs stay and only the counts are tidied.
+    const newerStanding = state.counted.slice(lastPos + 1).some(id => present.has(id));
+    const goneCounted = state.counted.filter(id => gone(id));
+    if (!runsGone && !goneCounted.length) return { state, undone: 0, pruned: 0 };
     const next = cloneState(state);
     let undone = 0;
-    while (next.log.length && gone(next.log[next.log.length - 1].msgId)) {
-        const e = next.log.pop();
-        undone++;
-        if (e.kind === 'clock') {
-            if (isInt(e.from)) next.clocks[e.clock] = e.from;
-        } else if (e.who) {
-            if (e.from) next.where[e.who] = e.from;
-            else delete next.where[e.who];
+    const rewind = runsGone && !newerStanding;
+    const lastGone = rewind && !!(next.last && gone(next.last.msgId));
+    if (rewind) {
+        while (next.log.length && gone(next.log[next.log.length - 1].msgId)) {
+            const e = next.log.pop();
+            undone++;
+            if (e.kind === 'clock') {
+                if (isInt(e.from)) next.clocks[e.clock] = e.from;
+            } else if (e.who) {
+                if (e.from) next.where[e.who] = e.from;
+                else delete next.where[e.who];
+            }
+        }
+        if (next.last && gone(next.last.msgId)) {
+            const stand = next.log.length ? next.log[next.log.length - 1] : null;
+            next.last = stand ? { msgId: stand.msgId ?? null, gameDate: stand.gameDate || '', gameTime: stand.gameTime || '', ranAt: 0, ok: true, elapsed: '' } : null;
+        }
+        if (next.lastError && gone(next.lastError.msgId)) {
+            next.lastError = null;
+            next.retryNext = false;
+        }
+        if (undone && !next.log.length && pack) {
+            // The log ran out before the branch point: back to the pack's starting values. The names stay known.
+            for (const c of pack.clocks) next.clocks[c.id] = c.start;
+            for (const name of Object.keys(next.where)) delete next.where[name];
+            for (const m of pack.cast) if (m.place) next.where[m.name] = placePath(pack, m.place);
+            next.blurb = pack.blurb || '';
+            next.last = null;
+        } else if (undone || lastGone) {
+            // The blurb of an undone run is not kept anywhere: the next run writes a new one.
+            next.blurb = next.last ? '' : ((pack && pack.blurb) || '');
         }
     }
-    if (next.last && gone(next.last.msgId)) {
-        const stand = next.log.length ? next.log[next.log.length - 1] : null;
-        next.last = stand ? { msgId: stand.msgId ?? null, gameDate: stand.gameDate || '', gameTime: stand.gameTime || '', ranAt: 0, ok: true, elapsed: '' } : null;
+    let pruned = 0;
+    for (const id of goneCounted) {
+        const pos = next.counted.indexOf(id);
+        if (pos < 0) continue;
+        const lp = next.last && next.last.msgId ? next.counted.indexOf(next.last.msgId) : -1;
+        next.counted.splice(pos, 1);
+        if (pos > lp && next.sinceLast > 0) next.sinceLast -= 1;
+        pruned++;
     }
-    if (next.lastError && gone(next.lastError.msgId)) {
-        next.lastError = null;
-        next.retryNext = false;
+    if (rewind) {
+        const lp = next.last && next.last.msgId ? ids.indexOf(next.last.msgId) : -1;
+        next.sinceLast = ids.slice(lp + 1).filter(id => next.counted.includes(id)).length;
     }
-    const lastId = next.last ? next.last.msgId : null;
-    const at = lastId ? ids.indexOf(lastId) : -1;
-    next.sinceLast = ids.slice(at + 1).filter(id => next.counted.includes(id)).length;
-    return { state: next, undone };
+    return { state: next, undone, pruned };
 }
 
 /** The feed's entries gathered under their game date, in the order given (newest first from recentChanges); entries with no date under ''. */
@@ -670,7 +744,11 @@ export function characterTimeline(state, pack, name) {
         msgId: e.msgId ?? null,
     }));
     const now = state.where && state.where[name] ? placeLabel(pack, state.where[name]) : '';
-    return { name, now, steps };
+    const member = ((pack && pack.cast) || []).find(m => sameName(m.name, name));
+    const seed = member && member.place ? placeLabel(pack, placePath(pack, member.place)) : '';
+    const first = steps.length ? steps[0].from : '';
+    // "Started at" only when the log still reaches the cast's starting place; a ring that dropped older moves cannot vouch for it
+    return { name, now, steps, start: first, startIsSeed: !!first && !!seed && first === seed };
 }
 
 /** What people would say about each clock now: the effect text of its value, never the number. */

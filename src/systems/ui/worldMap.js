@@ -1,11 +1,15 @@
 /**
- * Live World map (docs/live-world-spec.md, Part C; C1, the province node
- * view): the view. Drawn inside the dashboard popup as its Map view.
+ * Live World map (docs/live-world-spec.md, Part C; C1 the province node
+ * view, C2 nesting and zoom): the view. Drawn inside the dashboard popup
+ * as its Map view.
  *
  * Reads state only, never the model: place cards with their labels, soft
  * lines along the place tree, the known characters as portrait tokens on
  * the deepest place drawn (initials when there is no portrait), a count
- * on each card, and a textured canvas that needs no art. A place with an
+ * on each card, a trail above the canvas when zoomed in, and a textured
+ * canvas that needs no art. A card with places inside opens to them
+ * through its label, which is the button; the tokens beside it are the
+ * characters' own controls and open their timelines. A place with an
  * image in the pack wears it as the card's backdrop. Heard-of names stay
  * off the map; known names with no place are listed under it.
  */
@@ -17,7 +21,7 @@ const TOKENS_SHOWN = 6;
 const f = (n) => Number(n).toFixed(2);
 
 function initials(name) {
-    return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+    return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => Array.from(w)[0].toUpperCase()).join('') || '?';
 }
 
 /** The line both views show when there is nothing to draw, or '' when there is a world. */
@@ -27,6 +31,11 @@ export function worldEmptyMessage({ state, pack, cfg, packError = '', masterOn =
     if (packError) return `<p class="rpg-world-empty is-error">This chat has no world: ${escapeHtml(packError)}</p>`;
     if (!state || !pack) return '<p class="rpg-world-empty">This chat has no world yet. Open a chat with Live World on, or re-seed it in Settings → Live World.</p>';
     return '';
+}
+
+/** A card's spot: the percent the layout gave it, kept a card's half-width and half-height inside the canvas by the stylesheet's limits. */
+function spotStyle(x, y) {
+    return `left:clamp(var(--wmap-hx),${f(x)}%,calc(100% - var(--wmap-hx)));top:clamp(var(--wmap-hy),${f(y)}%,calc(100% - var(--wmap-hy)));`;
 }
 
 /**
@@ -53,12 +62,15 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
         const more = rest.length ? `<span class="rpg-wmap-token is-more" title="${escapeHtml(rest.map(t => t.name).join(', '))}">+${rest.length}</span>` : '';
         const within = n.tokens.filter(t => !t.exact).length;
         const countTitle = `${n.count} known ${n.count === 1 ? 'character' : 'characters'} here${within ? `, ${within} somewhere within` : ''}`;
-        const style = `left:${f(n.x)}%;top:${f(n.y)}%;${img ? `background-image:url(&quot;${escapeHtml(img)}&quot;);` : ''}`;
+        const style = `${spotStyle(n.x, n.y)}${img ? `background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.6)),url(&quot;${escapeHtml(img)}&quot;);` : ''}`;
         const picked = focus && (n.id === focus || n.tokens.some(t => t.place === focus));
         const zoomable = n.children > 0 && n.id !== view.root;
-        const title = `${placeLabel(pack, n.id, { full: true })}${zoomable ? ` · ${n.children} within, click to look inside` : ''}`;
-        return `<div class="rpg-wmap-node${n.depth === 0 ? ' is-root' : ''}${img ? ' has-image' : ''}${picked ? ' is-focus' : ''}${zoomable ? ' has-children' : ''}" style="${style}" data-place="${escapeHtml(n.id)}"${zoomable ? ` data-zoom="${escapeHtml(n.id)}" role="button" tabindex="0"` : ''} title="${escapeHtml(title)}">
-            <div class="rpg-wmap-label">${escapeHtml(n.label)}${zoomable ? ' <span class="rpg-wmap-more" aria-hidden="true">›</span>' : ''}</div>
+        const full = placeLabel(pack, n.id, { full: true });
+        const label = zoomable
+            ? `<button type="button" class="rpg-wmap-label rpg-wmap-zoom" data-zoom="${escapeHtml(n.id)}" title="${escapeHtml(`${full} · ${n.children} within, open to look inside`)}">${escapeHtml(n.label)} <span class="rpg-wmap-more" aria-hidden="true">›</span></button>`
+            : `<div class="rpg-wmap-label" title="${escapeHtml(full)}">${escapeHtml(n.label)}</div>`;
+        return `<div class="rpg-wmap-node${n.depth === 0 ? ' is-root' : ''}${img ? ' has-image' : ''}${picked ? ' is-focus' : ''}${zoomable ? ' has-children' : ''}" style="${style}" data-place="${escapeHtml(n.id)}">
+            ${label}
             ${n.tokens.length ? `<div class="rpg-wmap-tokens">${tokens}${more}</div>` : ''}
             ${n.count ? `<span class="rpg-wmap-count" title="${escapeHtml(countTitle)}">${n.count}</span>` : ''}
         </div>`;
@@ -68,9 +80,10 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
     if (view.unplaced.length) notes.push(`Somewhere, not yet placed: ${view.unplaced.map(escapeHtml).join(', ')}.`);
     if (view.offMap.length) notes.push(`Off the map (a place the pack no longer has): ${view.offMap.map(escapeHtml).join(', ')}.`);
     const here = view.crumbs.length ? view.crumbs[view.crumbs.length - 1].label : 'the province';
+    const height = Math.max(280, 34 * view.nodes.length);
     return `
         ${crumbs}
-        <div class="rpg-wmap" role="img" aria-label="${escapeHtml(pack.name)}: ${escapeHtml(here)}">
+        <div class="rpg-wmap${view.dense ? ' is-dense' : ''}" role="group" aria-label="${escapeHtml(pack.name)}: ${escapeHtml(here)}" style="min-height:${height}px">
             <svg class="rpg-wmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>
             ${cards}
         </div>

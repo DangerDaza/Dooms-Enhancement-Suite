@@ -30,7 +30,10 @@ writeFileSync(scriptStub, readFileSync(scriptStub, 'utf8')
     .replace('export const setExtensionPrompt = anything;', 'export const setExtensionPrompt = (key, value, position, depth, scan, role) => { globalThis.__DES_SLOTS__[key] = { value, position, depth, role }; };')
     .replace('export const extension_prompt_roles = anything;', 'export const extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };')
     .replace('export const extension_prompt_types = anything;', 'export const extension_prompt_types = { IN_PROMPT: 0, IN_CHAT: 1 };')
+    .replace('export const saveChatDebounced = anything;', 'export const saveChatDebounced = () => { globalThis.__DES_SAVES__.debounced++; };')
+    .replace('export const saveChatConditional = anything;', 'export const saveChatConditional = async () => { globalThis.__DES_SAVES__.immediate++; };')
     + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n');
+globalThis.__DES_SAVES__ = { debounced: 0, immediate: 0 };
 const extStub = `${SANDBOX}/scripts/extensions.js`;
 writeFileSync(extStub, readFileSync(extStub, 'utf8')
     .replace('export const getContext = anything;', 'export const getContext = () => globalThis.__DES_CTX__;'));
@@ -68,6 +71,7 @@ globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({})
 const chat = globalThis.__DES_CHAT__;
 const meta = globalThis.__DES_CHAT_METADATA__;
 const slots = globalThis.__DES_SLOTS__;
+const saves = globalThis.__DES_SAVES__;
 const state = await import(`${DES}/src/core/state.js`);
 const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
@@ -124,13 +128,15 @@ extensionSettings.liveWorld.depth = 4;
 check('role and depth follow the settings', (lw.onWorldGenerationStarted(undefined, {}, false), slots['dooms-world-state'].depth === 4 && slots['dooms-world-state'].role === 1));
 extensionSettings.liveWorld.role = 'system';
 extensionSettings.liveWorld.depth = 2;
+lw.onWorldGenerationEnded();
+check('a seed is saved at once, a count debounced', saves.immediate >= 1 && saves.debounced === 0);
 
 console.log('\n§3 counting');
 chat.push(user('I run for the Anchor.'));
 chat.push(ai('The cutter fires a warning shot.'));
 lw.onWorldMessageReceived();
 s = lw.getWorldState();
-check('a fresh reply counts once and gets a stable id', s.sinceLast === 1 && typeof chat[1].dooms_world_id === 'string' && s.counted.includes(chat[1].dooms_world_id));
+check('a fresh reply counts once and gets a stable id', s.sinceLast === 1 && typeof chat[1].dooms_world_id === 'string' && s.counted.includes(chat[1].dooms_world_id) && saves.debounced === 1);
 lw.onWorldMessageReceived();
 check('the same reply again (a swipe, a re-render) does not count', lw.getWorldState().sinceLast === 1);
 chat.push(user('I duck inside.'));
@@ -151,10 +157,11 @@ lw.onWorldMessageReceived();
 check('the third counted reply makes the advance due', lw.getWorldState().sinceLast === 3);
 await wait(600);
 s = lw.getWorldState();
+const immediateBefore = saves.immediate;
 check('the advancer ran through the wrapper and wrote the validated reply', !!lastPrompt && s.clocks.blockade === 2 && s.where['Old Marit'] === 'harbourside/old-town/the-anchor/back-room' && s.known['Maeve'] === 'heard' && s.blurb === 'The quay is quiet.' && s.sinceLast === 0 && s.last && s.last.ok && s.last.gameDate === 'Tuesday' && s.last.msgId === chat[5].dooms_world_id, JSON.stringify(s.last));
 check('the prompt carried the recent scenes, the clocks, the tree and now', lastPrompt.user.includes('Narrator: Night falls over Harbourside.') && lastPrompt.user.includes('- blockade ("The blockade"): now 1 of 6') && lastPrompt.user.includes('back-room (The Anchor\'s back room)') && lastPrompt.user.includes('Now: Tuesday, dusk, at the quay.'), lastPrompt.user);
 check('the lines now carry the move', lw.buildWorldLinesNow().includes("Old Marit: The Anchor's back room, The Anchor, a tavern (Tuesday)"));
-check('the state is saved on the chat, the clock change and the move logged', meta.dooms_world.clocks.blockade === 2 && meta.dooms_world.log.length === 2 && meta.dooms_world.log[0].kind === 'clock');
+check('the state is saved on the chat at once, the clock change and the move logged', meta.dooms_world.clocks.blockade === 2 && meta.dooms_world.log.length === 2 && meta.dooms_world.log[0].kind === 'clock' && saves.immediate === immediateBefore);
 lw.__setWorldTransport(async () => '{"clocks":{"blockade":5}}');
 let r = await lw.advanceNow({ reason: 'manual' });
 s = lw.getWorldState();
@@ -200,15 +207,17 @@ extensionSettings.liveWorld.pack = 'skyreach';
 await lw.onWorldChatChanged();
 check('a chat keeps the pack it was seeded with', lw.getActivePack().id === 'harbourside');
 const reseeded = await lw.reseedWorld();
-check('a re-seed with a pack that cannot load keeps the world and says why', reseeded === false && lw.getWorldState().clocks.blockade === 4 && lw.getPackError().includes('No pack named "skyreach"'));
+check('a re-seed with a pack that cannot load keeps the world and says why, without calling the kept world missing', !reseeded.ok && reseeded.error.includes('No pack named "skyreach"') && lw.getWorldState().clocks.blockade === 4 && lw.getPackError() === '');
 extensionSettings.liveWorld.pack = 'harbourside';
 await lw.reseedWorld();
 check('...here the pasted one, since the built-in cannot be fetched in the sandbox', lw.getActivePack().id === 'harbourside' && lw.getWorldState().clocks.blockade === 1 && lw.getWorldState().log.length === 0);
 extensionSettings.liveWorld.enabled = false;
 await lw.onWorldChatChanged();
 check('off: no state, no lines, no advance', lw.getWorldState() === null && (lw.onWorldGenerationStarted(undefined, {}, false), slots['dooms-world-state'].value === '') && (await lw.advanceNow()).reason === 'off');
+lw.onWorldGenerationEnded();
 extensionSettings.liveWorld.enabled = true;
 await lw.onWorldChatChanged();
+check('the master switch off drops the world and clears the line without a generation; on brings it back', (slots['dooms-world-state'].value = 'stale', extensionSettings.enabled = false, await lw.onWorldChatChanged(), lw.getWorldState() === null && slots['dooms-world-state'].value === '') && (extensionSettings.enabled = true, await lw.onWorldChatChanged(), lw.getWorldState() !== null && lw.getWorldState().clocks.blockade === 1));
 
 console.log('\n§6 the dashboard\'s reading');
 {
@@ -237,26 +246,34 @@ console.log('\n§6 the dashboard\'s reading');
     // the map view (C1)
     const wm = await import(`${DES}/src/systems/ui/worldMap.js`);
     const map = wm.renderWorldMapHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' });
-    check('the map: the root and its districts as cards, a line to each district', map.includes('class="rpg-wmap-node is-root has-children"') && (map.match(/class="rpg-wmap-node/g) || []).length === 4 && (map.match(/<path /g) || []).length === 3 && map.includes('>Harbourside <span class="rpg-wmap-more" aria-hidden="true">›</span></div>') && map.includes('>The old town <span class="rpg-wmap-more"'), map);
+    check('the map: the root and its districts as cards, a line to each district', map.includes('class="rpg-wmap-node is-root has-children"') && (map.match(/class="rpg-wmap-node/g) || []).length === 4 && (map.match(/<path /g) || []).length === 3 && map.includes('data-zoom="harbourside" title="Harbourside · 3 within, open to look inside">Harbourside <span class="rpg-wmap-more" aria-hidden="true">›</span></button>') && map.includes('>The old town <span class="rpg-wmap-more"') && map.includes('role="group" aria-label="Harbourside: the province"') && !map.includes('role="img"') && map.includes('left:clamp(var(--wmap-hx),'), map);
     check('known characters as tokens on the deepest drawn place: a portrait when there is one, initials otherwise, heard-of names absent', map.includes('<img class="rpg-wmap-token" src="data:image/png;base64,x" alt="Old Marit" title="Old Marit · The Anchor&#39;s back room, The Anchor, a tavern"') && map.includes('aria-label="Captain Reyes" data-name="Captain Reyes" role="button" tabindex="0">CR</span>') && !map.includes('Maeve') && !map.includes('The governor'));
     check('a count on each card that holds someone, none on an empty one', map.includes('<span class="rpg-wmap-count" title="1 known character here, 1 somewhere within">1</span>') && (map.match(/rpg-wmap-count/g) || []).length === 2);
     const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', parent: 'h', image: 'https://x/y.png' }] }).pack;
     const hostile = wm.renderWorldMapHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg });
-    check('labels are escaped, a scripted image is dropped and a plain one wears the card', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('background-image:url(&quot;https://x/y.png&quot;)') && hostile.includes('has-image'), hostile);
+    check('labels are escaped, a scripted image is dropped and a plain one wears the card', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('url(&quot;https://x/y.png&quot;)') && hostile.includes('has-image'), hostile);
     check('the map says the same as the overview when there is nothing to draw', wm.renderWorldMapHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && wm.renderWorldMapHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off') && wm.renderWorldMapHtml({ cfg, packError: 'x' }).includes('no world: x'));
     const loner = M.markKnown(M.seedWorldState(pack), ['Wanderer']);
     check('a known name with no place is listed under the map', wm.renderWorldMapHtml({ state: loner, pack, cfg }).includes('Somewhere, not yet placed: Wanderer.'));
     // D2, D3: the feed, the timelines, the links between the views
     check('the feed sits under its dates with a filter that remembers its choice', html.includes('<div class="rpg-world-feed-date">Thursday</div>') && html.includes('<option value="12" selected>Latest 12</option>') && html.includes('<option value="0">Everything</option>') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, feed: 0 }).includes('<option value="0" selected>Everything</option>') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, feed: 7 }).includes('<option value="12" selected>'));
     let busy = st;
-    for (let i = 0; i < 30; i++) busy = M.applyAdvance(busy, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }], heard: [], blurb: '' }, pack, { msgId: `m${i}`, gameDate: `Day ${i}` });
-    check('the filter bounds the feed: twelve, fifty, everything', (dash.renderWorldDashboardHtml({ state: busy, pack, cfg }).match(/<li class="is-/g) || []).length === 12 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg, feed: 0 }).match(/<li class="is-/g) || []).length === busy.log.length);
+    for (let i = 0; i < 25; i++) busy = M.applyAdvance(busy, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }, { who: 'Captain Reyes', to: i % 2 ? 'the-docks' : 'the-hill' }, { who: 'The governor', to: i % 2 ? 'old-town' : 'the-docks' }], heard: [], blurb: '' }, pack, { msgId: `m${i}`, gameDate: `Day ${i}` });
+    check('the filter bounds the feed: twelve, fifty, everything', busy.log.length > 50 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg }).match(/<li class="is-/g) || []).length === 12 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg, feed: 50 }).match(/<li class="is-/g) || []).length === 50 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg, feed: 0 }).match(/<li class="is-/g) || []).length === busy.log.length, String(busy.log.length));
+    const undated = M.applyAdvance(st, { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' });
+    check('entries with no date get their own heading when dated ones exist', dash.renderWorldDashboardHtml({ state: undated, pack, cfg }).includes('<div class="rpg-world-feed-date">No date</div><ul class="rpg-world-changes"><li class="is-move">Captain Reyes:') && !dash.renderWorldDashboardHtml({ state: M.applyAdvance(M.seedWorldState(pack), { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' }), pack, cfg }).includes('rpg-world-feed-date">No date</div>'));
+    check('spoiler-free keeps the rule a reply broke out of the dashboard', !dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('blockade') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('Last attempt discarded: the reply broke a rule') && lw.describeAdvanceResult({ ok: false, reason: 'invalid', errors: ['The clock "blockade" moved by 3, more than 1.'] }, { spoilerFree: true }) === 'The advance was discarded: the reply broke a rule (the System Log has the detail).' && lw.describeAdvanceResult({ ok: false, reason: 'invalid', errors: ['x'] }).includes('x'));
+    let ring = st;
+    for (let i = 0; i < 25; i++) ring = M.applyAdvance(ring, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }], heard: [], blurb: '' }, pack, { msgId: `t${i}`, gameDate: `Day ${i}` });
+    check('a timeline the ring has trimmed says "Earlier at", not "Started at"', dash.renderWorldDashboardHtml({ state: ring, pack, cfg, timeline: 'Old Marit' }).includes('<li class="is-start">Earlier at ') && dash.renderWorldDashboardHtml({ state: ring, pack, cfg, timeline: 'Old Marit' }).includes('older moves are no longer in the log') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, timeline: 'Old Marit' }).includes('<li class="is-start">Started at The Anchor, a tavern, The old town</li>'));
     const open = dash.renderWorldDashboardHtml({ state: st, pack, cfg, timeline: 'Old Marit' });
     check("a card opens the character's timeline: started where, each move with its date, the link to the map", open.includes('class="rpg-world-card is-open" data-name="Old Marit"') && open.includes('aria-expanded="true"') && open.includes('<li class="is-start">Started at The Anchor, a tavern, The old town</li>') && open.includes('<time>Thursday, dawn</time>The Anchor&#39;s back room, The Anchor, a tavern <span class="is-muted">(hiding)</span>') && open.includes('class="rpg-world-card-map" data-place="back-room"') && !html.includes('rpg-world-timeline'));
     check('a token on the map carries the name and the map picks a place out when asked', map.includes('data-name="Old Marit" role="button"') && wm.renderWorldMapHtml({ state: st, pack, cfg, focus: 'back-room' }).includes('class="rpg-wmap-node is-focus has-children" style') && !wm.renderWorldMapHtml({ state: st, pack, cfg }).includes('is-focus'));
     const zoomed = wm.renderWorldMapHtml({ state: st, pack, cfg, root: 'old-town' });
     check('zoomed in: the trail, the place at the centre with what is inside, the rest elsewhere', zoomed.includes('<nav class="rpg-wmap-crumbs"') && zoomed.includes('class="rpg-wmap-crumb is-here" data-root="old-town">The old town</button>') && zoomed.includes('data-root="">Harbourside</button>') && (zoomed.match(/class="rpg-wmap-node/g) || []).length === 2 && zoomed.includes('Elsewhere in Harbourside: Captain Reyes.') && zoomed.includes('aria-label="Harbourside: The old town"'));
-    check('a card with places inside is a button that opens to them, the one looked into is not', map.includes('has-children" style') && map.includes('data-zoom="old-town" role="button" tabindex="0"') && !zoomed.includes('data-zoom="old-town"') && zoomed.includes('data-zoom="the-anchor"'));
+    check('a card\'s label is the button that opens it, tokens stay its siblings, the place looked into has none', map.includes('<button type="button" class="rpg-wmap-label rpg-wmap-zoom" data-zoom="old-town"') && !zoomed.includes('data-zoom="old-town"') && zoomed.includes('data-zoom="the-anchor"') && !/<button[^>]*>(?:(?!<\/button>)[\s\S])*<(?:img|span) class="rpg-wmap-token"/.test(map) && !map.includes('rpg-wmap-node is-root has-children" style="left:clamp(var(--wmap-hx),50.00%') === false);
+    check('a backdrop image is dimmed under the label and the text stays light; a name opening with an emoji keeps it whole', hostile.includes('background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.6)),url(&quot;https://x/y.png&quot;)') && wm.renderWorldMapHtml({ state: (() => { const st2 = M.markKnown(M.seedWorldState(pack), ['🦊 Fox']); st2.where['🦊 Fox'] = 'harbourside/the-hill'; return st2; })(), pack, cfg }).includes('>🦊F</span>') && wm.renderWorldMapHtml({ state: M.markKnown(M.seedWorldState(pack), ['🦊 Fox']), pack, cfg }).isWellFormed());
+    check('a crowded pack gets the dense canvas and a taller one', wm.renderWorldMapHtml({ state: M.seedWorldState(M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack), pack: M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack, cfg }).includes('class="rpg-wmap is-dense" role="group"') && map.includes('style="min-height:280px"'));
     check("a timeline's text is escaped", dash.renderWorldDashboardHtml({ state: { ...st, log: [...st.log, { kind: 'move', who: 'Old Marit', from: '', to: 'the-hill', reason: '<script>x</script>', gameDate: 'Fri' }] }, pack, cfg, timeline: 'Old Marit' }).includes('(&lt;script&gt;x&lt;/script&gt;)'));
 }
 
@@ -292,6 +309,15 @@ console.log('\n§7 an advance that outlives its chat');
     rejectReply(new Error('network down'));
     const rf = await failing;
     check('a request that fails after the switch writes no failure into the new chat', rf.reason === 'stale' && lw.getWorldState().retryNext === false && lw.getWorldState().lastError === null);
+    // SillyTavern swaps the chat and its metadata before CHAT_CHANGED reaches the module: a reply in that window is stale too
+    lw.__setWorldTransport(() => new Promise(res => { resolveReply = res; }));
+    const during = lw.advanceNow({ reason: 'manual' });
+    await wait(20);
+    globalThis.__DES_CTX__.chatId = 'chat-e-early';
+    resolveReply('{"clocks":{"blockade":2}}');
+    const rd = await during;
+    check('a reply that lands after the chat id changed but before the load is discarded', rd.reason === 'stale' && meta.dooms_world.clocks.blockade === 1);
+    await lw.onWorldChatChanged();
 }
 
 console.log('\n§8 a greeting, a regenerate, a deleted reply, a branch');
@@ -323,10 +349,37 @@ console.log('\n§8 a greeting, a regenerate, a deleted reply, a branch');
     await wait(600);
     let s = lw.getWorldState();
     check('the third reply advanced, stamped on it', s.clocks.blockade === 2 && s.last.msgId === chat[6].dooms_world_id && s.where['Old Marit'].endsWith('back-room') && s.sinceLast === 0 && s.log.length === 2);
+    // regenerating the reply that carried the advance keeps the advance: same slot
+    const advancedId = chat[6].dooms_world_id;
+    lw.onWorldGenerationStarted('regenerate', {}, false);
     chat.pop();
     lw.onWorldMessageDeleted();
+    check('the regenerate\'s own deletion leaves the advance standing', lw.getWorldState().clocks.blockade === 2 && lw.getWorldState().last.msgId === advancedId);
+    chat.push(ai('Night, again.'));
+    lw.onWorldMessageReceived(6);
+    lw.onWorldGenerationEnded();
+    check('the regenerated reply takes the advanced reply\'s id; nothing counted or undone', chat[6].dooms_world_id === advancedId && lw.getWorldState().clocks.blockade === 2 && lw.getWorldState().sinceLast === 0);
+    // a regenerate that never produces its reply: the slot is void, its count withdrawn when the player moves on
+    lw.onWorldGenerationStarted('regenerate', {}, false);
+    chat.pop();
+    lw.onWorldMessageDeleted();
+    lw.onWorldGenerationEnded();    // the request failed or was stopped: no reply
+    check('after a failed regenerate the state still waits for the slot', lw.getWorldState().counted.includes(advancedId) && lw.getWorldState().clocks.blockade === 2);
+    chat.push(user('Never mind.'));
+    lw.onWorldMessageSent();
     s = lw.getWorldState();
-    check('deleting that reply undoes its advance: clock and place back, no last run, the count resumed, saved', s.clocks.blockade === 1 && s.where['Old Marit'].endsWith('the-anchor') && s.last === null && s.sinceLast === 2 && s.log.length === 0 && meta.dooms_world.clocks.blockade === 1, JSON.stringify(s));
+    check('a new message from the player voids the slot: its count withdrawn and, nothing newer standing, its run undone', !s.counted.includes(advancedId) && s.sinceLast === 2 && s.clocks.blockade === 1 && s.last === null && s.where['Old Marit'].endsWith('the-anchor'), JSON.stringify(s));
+    chat.push(ai('Rain.'));
+    lw.onWorldMessageReceived(7);
+    s = lw.getWorldState();
+    check('the next reply is counted fresh and, the third since the last standing run, is due', s.sinceLast === 3 && chat[7].dooms_world_id !== advancedId);
+    await wait(600);
+    s = lw.getWorldState();
+    check('it advanced again, stamped on the new reply', s.clocks.blockade === 2 && s.last.msgId === chat[7].dooms_world_id);
+    chat.pop(); chat.pop();
+    lw.onWorldMessageDeleted();
+    s = lw.getWorldState();
+    check('deleting back past that slot undoes its advance: clock and place back, no last run, the count resumed, saved', s.clocks.blockade === 1 && s.where['Old Marit'].endsWith('the-anchor') && s.last === null && s.sinceLast === 2 && s.log.length === 0 && meta.dooms_world.clocks.blockade === 1, JSON.stringify(s));
     chat.push(ai('Night.')); lw.onWorldMessageReceived(6); await wait(600);
     const full = JSON.parse(JSON.stringify(meta.dooms_world));
     check('a new reply in its place advances again', full.clocks.blockade === 2 && lw.getWorldState().last.msgId === chat[6].dooms_world_id);
@@ -346,9 +399,9 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     extensionSettings.generationMode = 'separate';
     extensionSettings.autoUpdate = true;
     extensionSettings.showInfoBox = true;
-    for (let i = 0; i < 3; i++) { chat.push(user('…')); chat.push(ai(`Scene ${i}.`)); lw.onWorldMessageReceived(); }
+    for (let i = 0; i < 3; i++) { lw.onWorldGenerationStarted(undefined, {}, false); chat.push(user('…')); chat.push(ai(`Scene ${i}.`)); lw.onWorldMessageReceived(); lw.onWorldGenerationEnded(); }
     await wait(600);
-    check("separate mode: the advance waits for the tracker's own request", calls === 0 && lw.getWorldState().sinceLast === 3);
+    check("separate mode: the advance waits for the tracker's own request, and the generation's end does not release it", calls === 0 && lw.getWorldState().sinceLast === 3);
     lw.onWorldTrackerUpdateComplete();
     await wait(600);
     check('...and runs when it ends', calls === 1 && lw.getWorldState().clocks.blockade === 2 && lw.getWorldState().sinceLast === 0);
@@ -361,6 +414,16 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     lw.onWorldGenerationEnded();
     await wait(600);
     check('...and runs when that generation ends', calls === 2);
+    // a generation that has started but not yet raised the send flag holds an automatic advance, not a manual one
+    lw.onWorldGenerationStarted(undefined, {}, false);
+    for (let i = 0; i < 3; i++) { chat.push(user('…')); chat.push(ai(`Later ${i}.`)); lw.onWorldMessageReceived(); }
+    await wait(600);
+    check('an automatic advance waits from GENERATION_STARTED even before the send flag', calls === 2 && lw.getWorldState().sinceLast === 3);
+    r = await lw.advanceNow({ reason: 'command' });
+    check('a typed /advance in that window runs at once', calls === 3 && r.ok);
+    lw.onWorldGenerationEnded();
+    await wait(600);
+    check('the parked automatic advance runs when the generation ends (and finds nothing new to do)', calls === 4);
     let resolveReply = null;
     lw.__setWorldTransport(() => new Promise(res => { resolveReply = res; }));
     const first = lw.advanceNow({ reason: 'manual' });

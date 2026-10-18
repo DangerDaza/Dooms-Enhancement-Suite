@@ -1515,18 +1515,28 @@ Settings), through SillyTavern's own `setExtensionPrompt`, so the Context
 Inspector does not record it (G4). **D44** a message's identity is an id
 stamped on the message itself (`dooms_world_id`), never its index; a
 swipe keeps it, and a regenerate's new reply takes over the deleted
-reply's id, so a slot counts once (G3). **D45** built-in packs live in the
+reply's id, so a slot counts once (G3); a regenerate that never produces
+its reply leaves the slot void, and when the player moves on (a new
+message, another regenerate, a deletion past the slot) the state follows
+the chat as after any deletion: the deleted reply's count goes, and a run
+stamped on it goes too when nothing newer stands (D51). A chat's first
+message (the greeting, an opener) is never a reply. **D45** built-in packs live in the
 repository's `worldpacks/` (read-only; an update may overwrite them) and
 pasted packs in Settings (`liveWorld.customPacks`); a chat keeps the pack
 it was seeded with, by id. **D46** the advancer's request runs on the
 tracker's connection profile through `withBackgroundProfile` (G1), one
-background request at a time; when both are due the tracker's own
-request goes first and the advance follows it (a fallback of twenty
-seconds covers a tracker request that never comes), the tracker waits
-for a running advance rather than skipping its turn, and the advancer
-never starts while SillyTavern itself is generating (its send flag),
-since the tracker's profile would catch the user's request; external
-mode uses the external API. **D47** no time module: the
+background request at a time. A waiting advance knows what it waits for:
+the tracker's request (when one is expected for the reply, the advance
+follows it, and the generation's end does not release it; a fallback of
+twenty seconds covers a tracker request that never comes), another
+background request, or SillyTavern's own generation. The tracker waits
+for a running advance rather than skipping its turn, and skips it after
+all when the player sent meanwhile. The advancer never starts under a
+generation: a manual advance trusts SillyTavern's send flag (so a typed
+`/advance` runs at once), an automatic one also waits from
+GENERATION_STARTED to its end (a start with no end is forgotten after
+fifteen seconds); the tracker's profile would otherwise catch the user's
+request. External mode uses the external API. **D47** no time module: the
 advancer judges elapsed story time from the tracker's date and time
 against the last run's, as the spec says; the facts of now come from the
 info box. **D48** the dashboard opens from Settings → Live World and from
@@ -1537,18 +1547,33 @@ from the spec's own examples until the campaign notes fill it in.
 **D51** a state ahead of its chat (a branch or checkpoint cut earlier, the
 last replies deleted) is wound back through the log: the runs stamped on
 messages the chat no longer holds are undone from the tail (clocks to
-their old value, characters to where they came from), the last run falls
-back to the newest still standing, the count restarts from it; a run
-with no message id is never undone. **D52** the player is nobody the
-world places: the advancer is told who they are, and a move or a
-heard-of entry naming them is dropped, not a reason to discard the
-reply; the tracker's presence list never makes the player known.
+their old value, characters to where they came from, the blurb of an
+undone run dropped), the last run falls back to the newest still
+standing, the count restarts from it; a run with no message id is never
+undone. A reply gone from the middle, with newer counted replies still
+standing, undoes nothing: the story went on from the advanced world, so
+only its count is dropped. A branch older than the log reaches (the
+ring of twenty moves a character, three hundred in all) goes back to the
+pack's starting clocks and places rather than a wrong middle; the names
+stay known. Stored clocks are brought into the pack's range on load. **D52** the player is nobody the
+world places: the advancer is told who they are under every name the
+chat may carry (DES's persona name, SillyTavern's, the name on their last
+message), and a move or a heard-of entry naming any of them is dropped,
+not a reason to discard the reply; the tracker's presence list never
+makes the player known. A character has one spelling: a name that
+differs only in case lands on the existing one.
 **D53** an advance whose chat changed while its request ran is discarded
-whole (a load token), on success and on failure alike; a count-driven
+whole, on success and on failure alike: the load token, the identity of
+the chat's metadata and the chat id are all checked, since SillyTavern
+swaps the chat before CHAT_CHANGED reaches the module; a count-driven
 advance armed in one chat never fires in the next. **D54** the map is a
 view of the dashboard popup (Overview | Map in its header, the last view
 remembered), not a popup of its own: one entry point, one footer, one
-set of empty-state lines; a rail button can come with the rest of Part D.
+set of empty-state lines; a rail button can come with the rest of Part D. **D55** the map draws
+every place of the pack at its depth: the place tree is the pack
+author's geography, not a secret the player earns; "known" governs
+characters (their tokens), and heard-of names stay off. The spec's
+"known places" would need a per-chat record of places seen; not built.
 
 ### 15.1 Data
 
@@ -1629,16 +1654,20 @@ describes the rest; in short the pack, the date, the blurb, the run
 status, what people say, the known characters with portraits and
 last-seen places, the heard-of chips, the recent moves, Advance now.
 
-The feed (D2): the overview's last section lists every change the log
-holds, moves and clock effects alike, newest first and gathered under
-their game dates (a heading per date; undated entries first under none),
-with a filter for how far back it reaches: the latest twelve, the latest
-fifty, or everything; the choice is remembered. The dates are prose from
-the tracker, so the filter counts entries rather than days. Timelines
+The feed (D2): the overview's last section lists every move and every
+clock step with a public effect on a clock that is not hidden, newest
+first, gathered under their game dates (a heading per run of a date;
+entries with no date keep their place in the order under a "No date"
+heading when dated ones exist), with a filter for how far back it
+reaches: the latest twelve (the default), the latest fifty, or
+everything; the choice is remembered. The dates are prose from the
+tracker, so the filter counts entries rather than days. Under
+spoiler-free the rule a discarded reply broke stays in the System Log. Timelines
 (D3): a known character's name on their card opens their timeline under
 it, oldest first: where they started (the first logged move's origin),
 each move with its date, time and reason, the newest marked; a character
-who never moved shows where they stand. Map links (D3): a small map
+who never moved shows where they stand; when the ring has dropped older
+moves the first line says "Earlier at" rather than "Started at". Map links (D3): a small map
 button on each placed character's card switches to the Map view and
 picks out the card they stand on (a short pulse); a token on the map
 switches back to the overview with that character's timeline open and
@@ -1646,17 +1675,24 @@ scrolled into view.
 
 The map (C1, the province node view; D54): the dashboard's Map view,
 `src/systems/ui/worldMap.js` over the pure `src/utils/worldMap.js`.
-It reads state only. Drawn at depth 1: the roots and their districts
+It reads state only (D55: every place of the pack). Drawn at depth 1: the roots and their districts
 (a pack's integer `zoom` is a place's depth; without one, its distance
-from a root). A pack may fix a place's spot with `x` and `y` (0..100,
-kept away from the edge); the rest are laid out radially, one root at
-the centre with its districts on a ring, or several roots on an inner
-ring with each root's districts on an arc outside it; anything deeper
-that a pack's zoom pulls in falls beside its parent. Soft dashed curves
+from a root); a drawn place hangs off its nearest drawn ancestor. A pack
+may fix a place's spot with `x` and `y` (0..100, kept away from the
+edge); the rest are laid out radially, one root at the centre with its
+districts on a ring, or several roots on an inner ring with each root's
+districts on an arc outside it, a second ring when a place has more than
+eight; anything deeper that a pack's zoom pulls in falls beside its
+parent, parents first. The whole is then scaled to fit the canvas and
+nudged apart until no two cards sit closer than a card in both axes; the
+stylesheet keeps each card's own box inside the canvas, and a crowded
+map (more than ten cards) takes smaller cards and a taller canvas.
+Soft dashed curves
 run along the tree (an SVG under the cards, strokes that do not scale).
-Each place is a card: its label, the known characters standing on it as
-portrait tokens (initials when there is no portrait, at most six and a
-"+N"), a count badge with a title that says how many are somewhere
+Each place is a card (the canvas is a group for assistive tech, each
+label with places inside a button): its label, the known characters
+standing on it as portrait tokens (initials when there is no portrait,
+at most six and a "+N"), a count badge with a title that says how many are somewhere
 within, and the pack's `image` for the place as the card's backdrop when
 it is a plain http(s), data-image or relative URL (anything else is
 dropped). A character's single `where` path resolves to the deepest
@@ -1689,11 +1725,11 @@ says "seen <date>" and the feed counts entries).
 
 ### 15.6 Files and tests
 
-`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (95 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (78
+`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (110 checks);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (95
 checks, the review's cases in §7–§9, the map with its zoom, the feed and
 the timelines in §6);
-`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (27 checks),
+`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (33 checks),
 `src/systems/ui/worldMap.js` (lazy, with the dashboard);
 `src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
@@ -1712,7 +1748,8 @@ the timelines in §6);
 6. `9f6bea7` the review's fixes (§15.9); `d3de94e` its docs.
 7. `0cd9649` the map (C1).
 8. `3fce5bb` the feed and the timelines (D2, D3).
-9. Nesting and zoom (C2).
+9. `37fb59f` nesting and zoom (C2).
+10. The second pass (§15.9).
 
 ### 15.8 Open
 
@@ -1720,7 +1757,7 @@ The Skyreach pack's places, clocks and cast (D50); whether the known
 tier should also come from speaker tags; whether the world line should
 move to the tracker's depth and role for one message fewer in the
 prompt; a shelf page for the world beside Characters, Inventory and
-Quests (the owner fixed three pages; this would be a fourth); the map.
+Quests (the owner fixed three pages; this would be a fourth).
 
 ### 15.9 The review (2026-10-18)
 
@@ -1772,3 +1809,64 @@ findings, many the same defect seen from several sides. All fixed:
   pasted pack under a built-in's id (D45 says the pasted one wins) and a
   console-only load failure for the dashboard (the Settings button
   reports it).
+
+**The second pass.** A verification workflow checked each fix (all 25
+close their finding) and found the residue below; a review of the map,
+the feed and the timelines added fourteen confirmed findings and a
+dozen unjudged candidates (a usage limit stopped their refuters; each
+was read and judged by hand). All fixed:
+
+- **Ordering.** GENERATION_ENDED, which SillyTavern emits moments after
+  the reply, released an advance parked for the tracker's request, so
+  the advance still went first. A wait now knows its cause (D46). The
+  tracker, once it had waited for an advance, started under a send the
+  player made meanwhile: it skips that turn instead.
+- **The chat swap.** SillyTavern swaps the chat and its metadata before
+  CHAT_CHANGED reaches the module, so a reply landing during the load
+  still wrote the old chat's advance into the new one. D53: the metadata
+  object and the chat id are checked as well as the token.
+- **The regenerate slot.** A regenerate that ended with no reply (stopped,
+  failed, a tool call's follow-up) counted the slot twice, and its
+  deletion guard could stick. D44: the slot is inherited by the next
+  reply whatever its index, voided by the player moving on, and the
+  deleted reply's count withdrawn.
+- **The rewind.** It undid runs under replies that still stood (a reply
+  deleted from the middle), never restored the blurb, rewound to a
+  wrong middle once the ring had dropped the branch point's moves, and
+  left the count of a deleted reply standing. D51 as now written.
+- **Names and clocks.** A name in another case became a second
+  character; the player's other spellings (SillyTavern's persona name,
+  the name on their message) were not filtered; stored clocks above a
+  shrunk max stayed above it on disk; combining marks fell out of ids;
+  an effects step given twice was taken silently. D52 and D51.
+- **The map.** With several roots the districts' arcs ran past the edge
+  and the clamp stacked them on their root; a pulled-in grandchild sat
+  on its parent or in the corner when listed before it; a place whose
+  parent was not drawn became a second root; more than about twelve
+  children overlapped on one ring; a card centred near the edge was
+  clipped; `role="img"` on the canvas hid every card and token from
+  assistive tech and buttons sat inside buttons; `.data()` coerced a
+  place called "0" or "null"; a backslash slipped through the image
+  rule; an emoji opening a name was split in two; the keyboard lost its
+  place on every zoom; the image card's label was dark under the looks.
+- **The feed and the timelines.** The filter defaulted to everything
+  when nothing was stored; undated entries sat under the previous date's
+  heading; "Started at" named a place the ring no longer vouched for;
+  the dashboard's zoom and open timeline survived a chat switch; the
+  rule a discarded reply broke was printed under spoiler-free; the fifty
+  of the filter was never tested.
+- **Smaller.** A brace in prose before the object stopped both scans;
+  the re-seed's refusal called the kept world missing; removing another
+  chat's pack discarded this chat's advance; the Advance button's full
+  re-render reset a field being typed; the dashboard's button stayed
+  disabled after an advance it did not await; `/liveworld`'s empty chat
+  guard; a streaming request body is no longer captured; the parser's
+  and the strip's guard raised to four hundred braces.
+
+Known and left: SillyTavern's save waits a hundred milliseconds before
+it starts, so a switch inside that window can still lose a commit (its
+API); overlapping raw requests share one capture slot for the
+"No message generated" fallback (pre-existing, narrow); a pasted pack
+under a built-in's id falls through to the built-in when removed (D45).
+Not reached by the repository's tests: the role structure of the raw
+request and the fetch capture (both exercised by hand).

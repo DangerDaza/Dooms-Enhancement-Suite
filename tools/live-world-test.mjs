@@ -16,7 +16,7 @@ import {
     buildWorldLines, buildAdvancePrompt, parseAdvanceReply, validateAdvance, applyAdvance, failAdvance,
     recentChanges, publicEffects, LOG_PER_CHARACTER, LOG_TOTAL, COUNTED_KEEP, WORLD_SLOT,
     defaultLiveWorldConfig, liveWorldConfig, buildRecentText, stripSceneNoise, reconcileWithChat,
-    groupChangesByDate, characterTimeline,
+    groupChangesByDate, characterTimeline, canonicalName, clampClocksToPack, uncountMessage,
 } from '../src/utils/liveWorld.js';
 
 let failures = 0;
@@ -181,7 +181,7 @@ console.log('\n§9 the dashboard\'s reading');
     const a = applyAdvance(seeded, v.clean, pack, { msgId: 'm1', gameDate: 'Thursday' });
     const rc = recentChanges(a, pack);
     check('recent changes read as moves between labelled places, newest first', rc.length === 2 && rc[0].kind === 'move' && rc[0].text === "Old Marit: The Anchor, a tavern, The old town → The Anchor's back room, The Anchor, a tavern (hiding)" && rc[0].gameDate === 'Thursday', JSON.stringify(rc));
-    check('a clock change reads as its public effect with the clock named; spoiler-free drops the name; a step with no text stays out', rc[1].kind === 'clock' && rc[1].text === 'The blockade: Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(a, pack, { spoilerFree: true })[1].text === 'Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(applyAdvance(seeded, { clocks: { fever: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack).length === 0 && recentChanges(applyAdvance(seeded, { clocks: { blockade: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack)[0].text.startsWith('The blockade: Ships come and go'), JSON.stringify(recentChanges(a, pack, { spoilerFree: true })));
+    check('a clock change reads as its public effect with the clock named; spoiler-free drops the name; a step with no text stays out', rc[1].kind === 'clock' && rc[1].text === 'The blockade: Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(a, pack, { spoilerFree: true })[1].text === 'Cargo is searched on the quay; prices of salt and lamp oil rise.' && recentChanges(applyAdvance({ ...seeded, clocks: { ...seeded.clocks, fever: 1 } }, { clocks: { fever: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack).length === 0 && recentChanges(applyAdvance(seeded, { clocks: { blockade: 0 }, moved: [], heard: [], blurb: '' }, pack, { msgId: 'z' }), pack)[0].text.startsWith('The blockade: Ships come and go'), JSON.stringify(recentChanges(a, pack, { spoilerFree: true })));
     const pe = publicEffects(a, pack);
     check('public effects are the clocks\' texts, never the numbers', pe.length === 1 && pe[0].id === 'blockade' && pe[0].text.startsWith('Cargo is searched') && !JSON.stringify(pe).includes('"value"'));
     check('a clock at a step with no text says nothing', publicEffects(seeded, pack).length === 1);
@@ -249,7 +249,7 @@ console.log('\n§11 what the review found');
     const c2 = countMessage(r2, 'c').state;
     const back = reconcileWithChat(c2, ['a']);
     check('runs stamped on messages the chat no longer holds are undone from the tail: clocks and places back, the last run the newest standing, the count from it', back.undone === 3 && back.state.clocks.blockade === 2 && back.state.where['Old Marit'].endsWith('back-room') && back.state.where['Captain Reyes'].endsWith('customs-house') && back.state.last.msgId === 'a' && back.state.last.gameDate === 'Mon' && back.state.log.length === 2 && back.state.sinceLast === 0, JSON.stringify(back.state));
-    check('a chat that still holds the messages is left alone (same object)', reconcileWithChat(c2, ['a', 'b', 'c']).state === c2 && reconcileWithChat(c2, ['a', 'b']).state === c2);
+    check('a chat that still holds the messages is left alone (same object); a counted reply gone after the last run drops its count only', reconcileWithChat(c2, ['a', 'b', 'c']).state === c2 && reconcileWithChat(c2, ['a', 'b']).state.sinceLast === 0 && !reconcileWithChat(c2, ['a', 'b']).state.counted.includes('c') && reconcileWithChat(c2, ['a', 'b']).state.clocks.blockade === 3);
     const allGone = reconcileWithChat(c2, []);
     check('every run gone: back to the seed values, no last run, nothing counted', allGone.state.clocks.blockade === 1 && !('Captain Reyes' in allGone.state.where && allGone.state.where['Captain Reyes'].endsWith('the-hill')) && allGone.state.where['Old Marit'].endsWith('the-anchor') && allGone.state.last === null && allGone.state.sinceLast === 0);
     const withNull = applyAdvance(seeded, { clocks: { blockade: 2 }, moved: [], heard: [], blurb: '' }, pack, { msgId: null });
@@ -257,7 +257,49 @@ console.log('\n§11 what the review found');
     const failedGone = failAdvance(r1, { msgId: 'b', error: 'x' });
     const fg = reconcileWithChat(failedGone, ['a']);
     check('a failed attempt on a message that is gone is forgotten with its retry', fg.state.lastError === null && fg.state.retryNext === false && fg.state.clocks.blockade === 2);
-    check('a chat that holds the last run but not an older one is not ahead: left alone', reconcileWithChat(c2, ['b']).state === c2);
+    check('a chat that holds the last run but not an older one is not ahead: the runs stand, the gone counts go', reconcileWithChat(c2, ['b']).state.last.msgId === 'b' && reconcileWithChat(c2, ['b']).state.clocks.blockade === 3 && reconcileWithChat(c2, ['b']).state.counted.join() === 'b' && reconcileWithChat(c2, ['b']).state.sinceLast === 0);
+    // a reply gone from the middle: the story went on from the advanced world, so the runs stay and only its count goes
+    const c3 = countMessage(c2, 'd').state;
+    const mid = reconcileWithChat(c3, ['a', 'c', 'd']);
+    check('the last run\'s message gone while newer counted replies stand: nothing undone, the gone count dropped', mid.undone === 0 && mid.pruned === 1 && mid.state.clocks.blockade === 3 && mid.state.where['Old Marit'].endsWith('the-hill') && mid.state.last.msgId === 'b' && !mid.state.counted.includes('b') && mid.state.sinceLast === 2, JSON.stringify(mid.state));
+    check('a counted reply gone before the last run drops without touching the count since it', reconcileWithChat(c3, ['b', 'c', 'd']).state.sinceLast === 2 && !reconcileWithChat(c3, ['b', 'c', 'd']).state.counted.includes('a'));
+    const withBlurb = applyAdvance(c1, { clocks: {}, moved: [], heard: [], blurb: 'Rumours of war.' }, pack, { msgId: 'b' });
+    check('an undone run takes its blurb with it; the pack\'s own returns when no run stands', reconcileWithChat(withBlurb, ['a'], { pack }).state.blurb === '' && reconcileWithChat(withBlurb, [], { pack }).state.blurb === pack.blurb);
+    let far = seeded;
+    for (let i = 0; i < 30; i++) far = countMessage(applyAdvance(far, validateAdvance({ moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }, { who: 'Captain Reyes', to: i % 2 ? 'the-docks' : 'the-hill' }], clocks: {} }, pack, far).clean, pack, { msgId: `m${i}` }), `m${i}`).state;
+    const drained = reconcileWithChat(far, ['m0', 'm1'], { pack });
+    check('a branch older than the log reaches: back to the pack\'s starting values rather than a wrong middle', drained.state.where['Old Marit'].endsWith('the-anchor') && drained.state.where['Captain Reyes'].endsWith('customs-house') && drained.state.last === null && drained.state.blurb === pack.blurb && drained.state.sinceLast === 2, JSON.stringify(drained.state.where));
+    // one spelling per character
+    const cased = markKnown(seeded, ['THE GOVERNOR', 'old marit']);
+    check('a name in another case lands on the existing key', Object.keys(cased.known).length === 3 && cased.known['The governor'] === 'known' && cased.known['Old Marit'] === 'known' && canonicalName(seeded, 'the Governor') === 'The governor' && canonicalName(seeded, 'Maeve') === 'Maeve');
+    const casedMove = applyAdvance(seeded, validateAdvance({ moved: [{ who: 'old marit', to: 'back-room' }], heard: ['CAPTAIN REYES'] }, pack, seeded).clean, pack, { msgId: 'x' });
+    check('a move and a heard-of name in another case update the character, not a twin', casedMove.where['Old Marit'].endsWith('back-room') && !('old marit' in casedMove.where) && Object.keys(casedMove.known).length === 3 && casedMove.known['Captain Reyes'] === 'known');
+    // the clocks follow the pack
+    const shrunk = normalizePack({ ...raw, clocks: raw.clocks.map(c => c.id === 'blockade' ? { ...c, max: 3 } : c) }).pack;
+    const over = { ...seeded, clocks: { ...seeded.clocks, blockade: 6 } };
+    const cl = clampClocksToPack(over, shrunk);
+    check('a stored clock above a shrunk max is written down to it; nothing else changes; a fitting state is the same object', cl.changed && cl.state.clocks.blockade === 3 && cl.state.clocks.fever === 0 && clampClocksToPack(seeded, pack).state === seeded && !clampClocksToPack(seeded, pack).changed);
+    // a count withdrawn
+    const twice = countMessage(countMessage(seeded, 'p').state, 'q').state;
+    const un = uncountMessage(twice, 'q');
+    check('withdrawing a count removes the id and the count; an unknown id changes nothing', un.uncounted && un.state.sinceLast === 1 && !un.state.counted.includes('q') && uncountMessage(twice, 'zz').state === twice);
+    const afterRun = countMessage(applyAdvance(twice, { clocks: {}, moved: [], heard: [], blurb: '' }, pack, { msgId: 'q' }), 'r').state;
+    check('a count before the last run withdrawn leaves the count since it alone', uncountMessage(afterRun, 'p').state.sinceLast === 1 && uncountMessage(afterRun, 'r').state.sinceLast === 0);
+    // the scans and the player's names
+    check('a brace in prose before the object no longer hides it from the parser', parseAdvanceReply('I think { maybe... here it is:\n{"clocks":{"blockade":2},"moved":[]}').clocks.blockade === 2 && parseAdvanceReply('He said {"hi} and left. {"moved":[{"who":"A","to":"the-hill"}]}').moved[0].who === 'A');
+    check('a brace in prose before a tracker block no longer stops the strip', stripSceneNoise('He muttered {wait— no. The quay at dawn. {"infoBox":{"date":"x"},"characters":[]}') === 'He muttered {wait— no. The quay at dawn.' && stripSceneNoise(`${'{sigh} '.repeat(60)}Dawn. {"infoBox":{"date":"x"}}`).endsWith('Dawn.'));
+    const pn = buildAdvancePrompt({ pack, state: seeded, player: ['Jordan Howe', 'Jordan'] });
+    check('the player under several names: told once, every spelling kept out', pn.system.includes('The player is Jordan Howe (also written Jordan)') && pn.user.includes('The player: Jordan Howe / Jordan (not part of the cast).') && validateAdvance({ moved: [{ who: 'Jordan', to: 'the-hill' }], heard: ['jordan howe', 'Maeve'] }, pack, seeded, { player: ['Jordan Howe', 'Jordan'] }).clean.heard.join() === 'Maeve' && validateAdvance({ moved: [{ who: 'Jordan', to: 'the-hill' }] }, pack, seeded, { player: ['Jordan Howe', 'Jordan'] }).clean.moved.length === 0);
+    // marks and steps given twice
+    const marks = normalizePack({ id: 'm', places: [{ id: 'बाज़ार', label: 'Market' }, { id: 'मंदिर', parent: 'बाज़ार' }], clocks: [{ id: 'भूख', max: 3 }], cast: [{ name: 'Café', place: 'मंदिर' }] });
+    check('combining marks and composed accents survive the slug', marks.ok && marks.pack.places[0].id === 'बाज़ार' && marks.pack.places[1].id === 'मंदिर' && marks.pack.clocks[0].id === 'भूख' && resolvePlace(marks.pack, 'Cafe\u0301' === 'Café' ? 'मंदिर' : 'मंदिर') === 'मंदिर' && canonicalName(seedWorldState(marks.pack), 'Cafe\u0301') === 'Café');
+    check('a step given twice is an error', normalizePack({ id: 'd', places: [{ id: 'a' }], clocks: [{ id: 'c', max: 6, effects: { '2': 'two', '02': 'again' } }] }).errors.some(e => e.includes('gives step 2 twice')));
+    // the timeline's first line
+    let ring = seeded;
+    for (let i = 0; i < 25; i++) ring = applyAdvance(ring, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }], heard: [], blurb: '' }, pack, { msgId: `t${i}`, gameDate: `Day ${i}` });
+    const tl = characterTimeline(ring, pack, 'Old Marit');
+    const short = characterTimeline(applyAdvance(seeded, { clocks: {}, moved: [{ who: 'Old Marit', to: 'back-room' }], heard: [], blurb: '' }, pack, { msgId: 't' }), pack, 'Old Marit');
+    check('a timeline knows whether its first entry is the cast\'s starting place or a survivor of the ring', short.startIsSeed === true && short.start === 'The Anchor, a tavern, The old town' && tl.startIsSeed === false && tl.steps.length === LOG_PER_CHARACTER && characterTimeline(applyAdvance(seeded, { clocks: {}, moved: [{ who: 'Newcomer', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'n' }), pack, 'Newcomer').startIsSeed === false);
 }
 
 console.log('\n§12 the feed and the timelines');

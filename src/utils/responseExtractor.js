@@ -115,7 +115,9 @@ function installFetchCapture() {
         try {
             const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
             const type = (response && response.headers && typeof response.headers.get === 'function' && response.headers.get('content-type')) || '';
-            if (url.includes('/api/backends/') && url.includes('/generate') && !/event-stream/i.test(type)) {
+            const body = args[1] && typeof args[1].body === 'string' ? args[1].body : '';
+            const streaming = /event-stream/i.test(type) || /"stream(?:ing)?"\s*:\s*true/.test(body);
+            if (url.includes('/api/backends/') && url.includes('/generate') && !streaming) {
                 lastCapture = response.clone().json().catch(() => null);
             }
         } catch (e) {
