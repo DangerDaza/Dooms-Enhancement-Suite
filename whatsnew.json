@@ -1,7 +1,11 @@
 {
-    "version": "3.1.0-beta.1",
+    "version": "3.1.1-beta.1",
     "title": "Stats (beta)",
     "items": [
+        {
+            "title": "🩹 3.1.1: Roll a check, readable",
+            "body": "A small fix on top of the Stats beta. The Roll a check window is now solid under every look (the chat used to show through it and fight its text), its Cancel and Discard buttons are plain secondary buttons you can read against the window, and its body scrolls on a short screen so OK is always within reach. Nothing else changed; the notes below are the beta's."
+        },
         {
             "title": "🧪 A beta: nothing changes until you switch something on",
             "body": "Everything on the new Settings → Stats page is off until you turn it on, so this update changes nothing on screen, and nothing in your prompt beyond the one sentence noted under the tracker below. The Stats features are built and covered by tests, but nobody except their author has played them through yet: that is what the Beta badges mean. When something breaks, Settings → Stats → Report a problem opens a GitHub issue with your DES version, your Stats switches and the last lines of the Notification and System logs already filled in, and copies the full logs to your clipboard for the Logs box. A chat export (the chat menu → Manage chat files → Export) is the single most useful thing to attach."

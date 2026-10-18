@@ -9503,11 +9503,19 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-glint-empty { margin: 0; }
 
 /* ── Dice: the "Roll a check" popover (Project Short Fuse, Phase 2) ── */
+/* The popover is opaque: the chat behind it made its text hard to read (3.1.1). The looks paint their own colour over it in overhaul.css. */
+#rpg-dice-popup .rpg-dice-content { background: #1e1e1e; }
 .rpg-dice-body {
     display: flex;
     flex-direction: column;
     gap: 10px;
     padding: 12px 14px 14px;
+    /* a short screen scrolls the body, so OK and Cancel are always within reach (3.1.1) */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .rpg-dice-who { font-size: 0.9em; opacity: 0.85; }

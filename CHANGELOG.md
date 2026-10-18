@@ -7,6 +7,15 @@
 - **Cut to a quest.** Right-click a quest on the shelf's Quests page (hold it on a phone) and Cut to it: with nothing of yours in the chat, the next reply is a short montage of what passes between now and the moment the quest begins, then its first scene with the first move left to you; the quest becomes the main quest and the old main drops to the optional list. "Cut to it, when…" names the time; swipes of the montage keep the cut, your next message ends it.
 - **Live World (beta).** Settings → Live World: a world pack (places, plot clocks with the public effect of each step, a cast) seeds each chat's own world. Every six new replies a quiet background request on the tracker's connection profile reads the recent scenes and moves the clocks and the last-seen places, by at most a step, with anything that breaks a rule discarded and retried; one fixed-size line tells the narrator where things stand. `/advance` runs it now; `/liveworld` opens the dashboard: what people say, who was last seen where, the feed of changes under their dates with a filter, a timeline per known character, and a Map view (place cards, lines along the place tree, known characters as portrait tokens; any card opens to what is inside it, with a trail back) linked both ways with the cards; a feed filter, a timeline per character, and every card kept clear of the others and inside the canvas, on a phone too. The same map is the Present Characters shelf's fourth page, Map, while Live World is on. Two packs ship: Harbourside to copy, and a Skyreach draft. Off by default.
 
+## [3.1.1-beta.1] - 2026-10-18 — Roll a check, readable
+
+### Fixed
+- **The dice popover is opaque.** Roll a check let the chat show through under every look, so its text fought the messages behind it; the window is now solid in the look's own colours (the glass look keeps its tint, not its see-through).
+- **Cancel and Discard check are secondary buttons.** They read as plain buttons against the window in every look, instead of a washed-out pill under the glass look or a second OK under the others.
+- **The popover scrolls on a short screen**, so OK and Cancel are always within reach.
+- The version reads `3.1.1-beta.1`; What's New opens once more with this note on top.
+
+
 ## [3.1.0-beta.1] - 2026-10-16 — Stats (beta)
 
 A beta. The Stats features below are built and covered by tests, but nobody except their author has played them through yet. Everything on Settings → Stats is off until you switch it on, so updating changes nothing on screen, and a default install's tracker prompt changes by one sentence (under Changed). **Settings → Stats → Report a problem** opens a GitHub issue with your DES version, your Stats switches and both logs filled in. Beta badges mark the Stats page, its groups, the Workshop's Attributes tab and the dice popover.
