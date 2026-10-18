@@ -624,6 +624,13 @@ export let lastActionWasSwipe = false;
  */
 export let isGenerating = false;
 /**
+ * When SillyTavern's own generation started (GENERATION_STARTED) and has
+ * not ended, as Date.now(); 0 otherwise. Live World keeps it; the tracker
+ * reads it so a request of its own never starts under the user's send,
+ * whose flag SillyTavern raises only after the slash commands and a ping.
+ */
+export let mainGenerationStartedAt = 0;
+/**
  * Flag indicating if we're actively expecting a new message from generation
  * (as opposed to loading chat history)
  */
@@ -686,6 +693,7 @@ export function updateCommittedTrackerData(updates) {
 export function setLastActionWasSwipe(value) {
     lastActionWasSwipe = value;
 }
+export function setMainGenerationStartedAt(value) { mainGenerationStartedAt = Number(value) || 0; }
 export function setIsGenerating(value) {
     isGenerating = value;
 }

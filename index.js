@@ -416,7 +416,9 @@ function renderLiveWorldStatus() {
         const known = Object.values(s.known).filter(t => t === 'known').length;
         const last = s.last && s.last.ok ? `last advanced ${s.last.gameDate ? `on ${s.last.gameDate}` : 'once'}${s.last.elapsed ? ` (${s.last.elapsed} passed)` : ''}` : 'not advanced yet';
         const next = Math.max(0, cfg.every - s.sinceLast);
-        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${s.lastError ? ` Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : s.lastError.error}` : ''}`;
+        const err = s.lastError;
+        const errText = !err ? '' : err.kind === 'error' ? ` The last advance failed: ${err.error || 'the request did not complete'}; it runs again on the next reply.` : ` Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : err.error}`;
+        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${errText}`;
     }
     $('#rpg-world-status').text(status);
 }
@@ -1981,7 +1983,9 @@ function bindSettingsUI() {
         getWorldRules().pack = r.pack.id;
         $('#rpg-world-paste').val('');
         toastr.success(`Pack "${r.pack.name}" added and chosen for new chats.`, 'Live World', { timeOut: 4000 });
-        _saveWorld();
+        const active = getActivePack();
+        // This chat waits on a pack it could not load, or was seeded from the one pasted again: it takes the new text now.
+        _saveWorld({ reload: !!getPackError() || !!(active && active.id === r.pack.id) });
     });
     $(document).on('click', '#rpg-world-remove-pack', async function () {
         const id = String($('#rpg-world-pack').val() || '');
@@ -2013,6 +2017,7 @@ function bindSettingsUI() {
     });
     $(document).on('click', '#rpg-world-reseed', async function () {
         if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
+        if (!getContext().chatId) { toastr.info('Open a chat first.', 'Live World', { timeOut: 3000 }); return; }
         const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
         const r = await reseedWorld();

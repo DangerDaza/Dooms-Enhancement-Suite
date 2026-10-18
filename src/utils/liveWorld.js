@@ -19,6 +19,7 @@ export const WORLD_SLOT = 'dooms-world-state';
 export const LOG_PER_CHARACTER = 20;
 export const LOG_TOTAL = 300;
 export const COUNTED_KEEP = 400;
+export const RUNS_KEEP = 50;        // the run records kept: what a rewind falls back to when the newest run's reply is gone
 export const MAX_BLURB = 600;
 export const MAX_REASON = 160;
 export const MAX_NAME = 60;
@@ -27,7 +28,7 @@ export const TIERS = Object.freeze(['heard', 'known']);
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const slug = (v) => clean(v, 60).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const isInt = (n) => Number.isInteger(n);
-const sameName = (a, b) => clean(a, MAX_NAME).toLowerCase() === clean(b, MAX_NAME).toLowerCase();
+export const sameName = (a, b) => clean(a, MAX_NAME).toLowerCase() === clean(b, MAX_NAME).toLowerCase();
 
 /** The spelling the state already uses for a name (case apart), else the name cleaned: one character, one key. */
 export function canonicalName(state, raw) {
@@ -304,7 +305,7 @@ export function placeTreeText(pack) {
 
 /** Empty state for a pack id. */
 export function emptyWorldState(packId = '') {
-    return { v: 1, pack: packId, packVersion: 0, clocks: {}, where: {}, known: {}, log: [], last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false };
+    return { v: 1, pack: packId, packVersion: 0, clocks: {}, where: {}, known: {}, log: [], runs: [], trimmed: false, last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false };
 }
 
 /** A new chat's state from the pack: starting clocks, starting places, the cast's tiers. */
@@ -327,9 +328,18 @@ export function normalizeWorldState(raw) {
     const s = emptyWorldState(clean(r.pack, 60));
     s.packVersion = isInt(r.packVersion) ? r.packVersion : 0;
     if (r.clocks && typeof r.clocks === 'object') for (const [k, v] of Object.entries(r.clocks)) if (isInt(v)) s.clocks[k] = v;
-    if (r.where && typeof r.where === 'object') for (const [k, v] of Object.entries(r.where)) if (typeof v === 'string' && v) s.where[clean(k, MAX_NAME)] = v;
-    if (r.known && typeof r.known === 'object') for (const [k, v] of Object.entries(r.known)) if (TIERS.includes(v)) s.known[clean(k, MAX_NAME)] = v;
-    s.log = (Array.isArray(r.log) ? r.log : []).filter(e => e && typeof e === 'object' && (e.who || (e.kind === 'clock' && e.clock))).slice(-LOG_TOTAL);
+    // One spelling per name (NFC, case apart): a state saved before the fold may hold twins; 'known' beats 'heard', and the log follows the surviving spelling.
+    const spelling = {};
+    const fold = (raw) => { const n = clean(raw, MAX_NAME); if (!n) return ''; const key = n.toLowerCase(); if (!spelling[key]) spelling[key] = n; return spelling[key]; };
+    if (r.known && typeof r.known === 'object') for (const [k, v] of Object.entries(r.known)) { if (!TIERS.includes(v)) continue; const n = fold(k); if (n && s.known[n] !== 'known') s.known[n] = v; }
+    if (r.where && typeof r.where === 'object') for (const [k, v] of Object.entries(r.where)) { if (typeof v !== 'string' || !v) continue; const n = fold(k); if (n) s.where[n] = v; }
+    s.log = (Array.isArray(r.log) ? r.log : []).filter(e => e && typeof e === 'object' && (e.who || (e.kind === 'clock' && e.clock))).slice(-LOG_TOTAL).map(e => (typeof e.who === 'string' ? { ...e, who: fold(e.who) || e.who } : e));
+    s.runs = (Array.isArray(r.runs) ? r.runs : []).filter(x => x && typeof x === 'object').slice(-RUNS_KEEP).map(x => ({ msgId: typeof x.msgId === 'string' ? x.msgId : null, gameDate: clean(x.gameDate, 80), gameTime: clean(x.gameTime, 80), ranAt: isInt(x.ranAt) ? x.ranAt : 0, elapsed: clean(x.elapsed, 120), blurb: clean(x.blurb, MAX_BLURB) }));
+    // Whether the ring has dropped entries (a rewind that empties the log then cannot vouch for the values before it); a state saved before the flag counts a full ring as trimmed.
+    const perWho = {};
+    let fullest = 0;
+    for (const e of s.log) if (e.who) { perWho[e.who] = (perWho[e.who] || 0) + 1; if (perWho[e.who] > fullest) fullest = perWho[e.who]; }
+    s.trimmed = r.trimmed === true || (r.trimmed === undefined && (s.log.length >= LOG_TOTAL || fullest >= LOG_PER_CHARACTER));
     s.last = r.last && typeof r.last === 'object' ? { ...r.last } : null;
     s.lastError = r.lastError && typeof r.lastError === 'object' ? { ...r.lastError } : null;
     s.blurb = clean(r.blurb, MAX_BLURB);
@@ -403,9 +413,10 @@ export function uncountMessage(state, id) {
     if (!id || !state.counted.includes(id)) return { state, uncounted: false };
     const next = cloneState(state);
     const pos = next.counted.indexOf(id);
-    const lastPos = next.last && next.last.msgId ? next.counted.indexOf(next.last.msgId) : -1;
+    // `counted` is appended in chat order and a run resets the count, so the last `sinceLast` ids are the ones since the run.
+    const boundary = Math.max(0, next.counted.length - next.sinceLast);
     next.counted.splice(pos, 1);
-    if (pos > lastPos && next.sinceLast > 0) next.sinceLast -= 1;
+    if (pos >= boundary && next.sinceLast > 0) next.sinceLast -= 1;
     return { state: next, uncounted: true };
 }
 
@@ -519,8 +530,8 @@ export function parseAdvanceReply(text) {
             if (v && typeof v === 'object' && !Array.isArray(v)) parsed.push(v);
         } catch (e) { /* next */ }
     }
-    if (!parsed.length) return null;
-    return parsed.find(v => ADVANCE_KEYS.some(k => k in v)) || parsed[0];
+    // Only an object shaped like an advance counts: a reply cut off mid-object must not pass as its inner clocks map.
+    return parsed.find(v => ADVANCE_KEYS.some(k => k in v)) || null;
 }
 
 const ADVANCE_KEYS = ['elapsed', 'clocks', 'moved', 'blurb', 'heard'];
@@ -535,6 +546,7 @@ export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' }
     const players = playerList(player);
     const isPlayer = (n) => players.some(p => sameName(p, n));
     if (!reply || typeof reply !== 'object' || Array.isArray(reply)) return { ok: false, errors: ['The reply is not a JSON object.'], clean: null };
+    if (!ADVANCE_KEYS.some(k => k in reply)) return { ok: false, errors: ['The reply carries none of the fields asked for (elapsed, clocks, moved, blurb, heard).'], clean: null };
     const clocks = {};
     if (reply.clocks !== undefined) {
         if (!reply.clocks || typeof reply.clocks !== 'object' || Array.isArray(reply.clocks)) errors.push('"clocks" is not an object.');
@@ -558,12 +570,14 @@ export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' }
         else {
             for (const m of reply.moved) {
                 if (!m || typeof m !== 'object') { errors.push('A move is not an object.'); continue; }
+                if (typeof m.who !== 'string') { errors.push("A move's who is not a string."); continue; }
                 const who = canonicalName(state, m.who);
                 if (!who) { errors.push('A move names nobody.'); continue; }
                 if (isPlayer(who)) continue;    // the player is not placed by the world
+                if (typeof m.to !== 'string') { errors.push(`A move's place is not a string (for ${who}).`); continue; }
                 const to = resolvePlace(pack, m.to);
                 if (!to) { errors.push(`"${clean(m.to, 60)}" is not a place of this pack (for ${who}).`); continue; }
-                moved.push({ who, to, reason: clean(m.reason, MAX_REASON) });
+                moved.push({ who, to, reason: typeof m.reason === 'string' ? clean(m.reason, MAX_REASON) : '' });
             }
         }
     }
@@ -603,12 +617,16 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
         if (mine.length > LOG_PER_CHARACTER) {
             const oldest = mine[0];
             next.log.splice(next.log.indexOf(oldest), 1);
+            next.trimmed = true;
         }
     }
-    if (next.log.length > LOG_TOTAL) next.log.splice(0, next.log.length - LOG_TOTAL);
+    if (next.log.length > LOG_TOTAL) { next.log.splice(0, next.log.length - LOG_TOTAL); next.trimmed = true; }
     for (const h of clean.heard || []) { const n = canonicalName(next, h); if (n && !next.known[n]) next.known[n] = 'heard'; }
     if (clean.blurb) next.blurb = clean.blurb;
     next.last = { msgId, gameDate, gameTime, ranAt, ok: true, elapsed: clean.elapsed || '' };
+    if (!Array.isArray(next.runs)) next.runs = [];
+    next.runs.push({ msgId, gameDate, gameTime, ranAt, elapsed: clean.elapsed || '', blurb: next.blurb });    // the blurb in force after the run
+    if (next.runs.length > RUNS_KEEP) next.runs.splice(0, next.runs.length - RUNS_KEEP);
     next.lastError = null;
     next.sinceLast = 0;
     next.retryNext = false;
@@ -616,10 +634,10 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
 }
 
 /** A failed run: nothing written, the next new message runs it again. */
-export function failAdvance(state, { msgId = null, ranAt = 0, error = '' } = {}) {
+export function failAdvance(state, { msgId = null, ranAt = 0, error = '', kind = 'invalid' } = {}) {
     const next = cloneState(state);
     next.retryNext = true;
-    next.lastError = { msgId, ranAt, error: clean(error, 300) };
+    next.lastError = { msgId, ranAt, error: clean(error, 300), kind: kind === 'error' ? 'error' : 'invalid' };    // 'invalid': the reply broke a rule; 'error': the request failed
     return next;
 }
 
@@ -643,73 +661,101 @@ export function recentChanges(state, pack, { limit = 12, spoilerFree = false } =
 
 /**
  * The state brought back to the chat it sits in. A branch, a checkpoint or
- * the deletion of the last replies leaves a state ahead of its chat: the
- * runs stamped on messages that are gone are undone from the log's tail
- * (moves back to where they came from, clocks back to their old value),
- * the last run falls back to the newest one still standing, and the
- * count starts again from it. `presentIds` is the chat's stamped reply
- * ids in order. Entries with no message id (a manual run before any
- * reply) are never undone.
- * @returns {{ state: object, undone: number }}
+ * the deletion of the last replies leaves a state ahead of its chat.
+ *
+ * The rule: a run, or a logged change, is undone only when the message it
+ * is stamped on is gone AND no reply newer than it still stands (counted
+ * order; a reply the ring no longer lists counts as older than everything
+ * standing). So the tail is undone down to the newest reply still
+ * standing, while a reply deleted from the middle keeps the runs after it
+ * and loses only its count. `presentIds` is the chat's stamped reply ids
+ * in order; an entry with no message id (a manual run before any reply)
+ * is never undone.
+ *
+ * What an undo restores: a clock to its old value (within the pack's
+ * range), a character to where they came from, or to the cast's starting
+ * place when the ring has dropped their older moves (the honest answer
+ * once the branch point is gone); the newest run still standing, from the
+ * run records, with the blurb in force after it; the pack's starting
+ * values when the log ran out. The count restarts from the standing run.
+ * @returns {{ state: object, undone: number, pruned: number }}
  */
 export function reconcileWithChat(state, presentIds, { pack = null } = {}) {
-    const ids = Array.isArray(presentIds) ? presentIds : [];
+    const ids = Array.isArray(presentIds) ? [...new Set(presentIds)] : [];
     const present = new Set(ids);
     const gone = (id) => id !== null && id !== undefined && id !== '' && !present.has(id);
     const lastId = state.last ? state.last.msgId : null;
-    const lastPos = lastId ? state.counted.indexOf(lastId) : -1;
+    const lastStands = !!state.last && !gone(lastId);
+    const newestStandingPos = state.counted.reduce((m, id, i) => (present.has(id) ? i : m), -1);
+    const newerCountedStands = (id) => newestStandingPos > state.counted.indexOf(id);    // -1 for an id the ring lost: older than all
+    const newerStands = (id) => (lastStands && id !== lastId) || newerCountedStands(id);
     const tail = state.log.length ? state.log[state.log.length - 1] : null;
-    const runsGone = !!((state.last && gone(lastId)) || (tail && gone(tail.msgId)) || (state.lastError && gone(state.lastError.msgId)));
-    // A counted reply newer than the last run still standing means the gone message sat in the middle:
-    // the story went on from the advanced world, so the runs stay and only the counts are tidied.
-    const newerStanding = state.counted.slice(lastPos + 1).some(id => present.has(id));
+    const tailGone = !!(tail && gone(tail.msgId) && !newerStands(tail.msgId));
+    const lastGone = !!(state.last && gone(lastId) && !newerStands(lastId));
+    const errorGone = !!(state.lastError && gone(state.lastError.msgId) && !newerCountedStands(state.lastError.msgId));
     const goneCounted = state.counted.filter(id => gone(id));
-    if (!runsGone && !goneCounted.length) return { state, undone: 0, pruned: 0 };
+    if (!tailGone && !lastGone && !errorGone && !goneCounted.length) return { state, undone: 0, pruned: 0 };
     const next = cloneState(state);
+    if (!Array.isArray(next.runs)) next.runs = [];
     let undone = 0;
-    const rewind = runsGone && !newerStanding;
-    const lastGone = rewind && !!(next.last && gone(next.last.msgId));
-    if (rewind) {
-        while (next.log.length && gone(next.log[next.log.length - 1].msgId)) {
-            const e = next.log.pop();
-            undone++;
-            if (e.kind === 'clock') {
-                if (isInt(e.from)) next.clocks[e.clock] = e.from;
-            } else if (e.who) {
-                if (e.from) next.where[e.who] = e.from;
-                else delete next.where[e.who];
+    while (next.log.length) {
+        const e = next.log[next.log.length - 1];
+        if (!gone(e.msgId) || newerStands(e.msgId)) break;
+        next.log.pop();
+        undone++;
+        if (e.kind === 'clock') {
+            if (isInt(e.from)) {
+                const def = pack ? pack.clocks.find(c => c.id === e.clock) : null;
+                next.clocks[e.clock] = def ? Math.min(def.max, Math.max(0, e.from)) : e.from;
             }
+        } else if (e.who) {
+            const older = next.log.some(x => x.who === e.who);
+            if (!older && pack) {
+                // No older move left for them: the ring may have dropped the branch point; the cast's starting place is the honest answer.
+                const member = pack.cast.find(m => sameName(m.name, e.who));
+                if (member && member.place) next.where[e.who] = placePath(pack, member.place);
+                else delete next.where[e.who];
+            } else if (e.from) next.where[e.who] = e.from;
+            else delete next.where[e.who];
         }
-        if (next.last && gone(next.last.msgId)) {
+    }
+    const standingRun = next.runs.slice().reverse().find(r => r.msgId === null || r.msgId === undefined || present.has(r.msgId)) || null;
+    if (lastGone) {
+        if (standingRun) {
+            next.last = { msgId: standingRun.msgId ?? null, gameDate: standingRun.gameDate || '', gameTime: standingRun.gameTime || '', ranAt: standingRun.ranAt || 0, ok: true, elapsed: standingRun.elapsed || '' };
+            next.blurb = standingRun.blurb || '';
+        } else {
             const stand = next.log.length ? next.log[next.log.length - 1] : null;
             next.last = stand ? { msgId: stand.msgId ?? null, gameDate: stand.gameDate || '', gameTime: stand.gameTime || '', ranAt: 0, ok: true, elapsed: '' } : null;
-        }
-        if (next.lastError && gone(next.lastError.msgId)) {
-            next.lastError = null;
-            next.retryNext = false;
-        }
-        if (undone && !next.log.length && pack) {
-            // The log ran out before the branch point: back to the pack's starting values. The names stay known.
-            for (const c of pack.clocks) next.clocks[c.id] = c.start;
-            for (const name of Object.keys(next.where)) delete next.where[name];
-            for (const m of pack.cast) if (m.place) next.where[m.name] = placePath(pack, m.place);
-            next.blurb = pack.blurb || '';
-            next.last = null;
-        } else if (undone || lastGone) {
-            // The blurb of an undone run is not kept anywhere: the next run writes a new one.
             next.blurb = next.last ? '' : ((pack && pack.blurb) || '');
         }
     }
+    if (errorGone) {
+        next.lastError = null;
+        next.retryNext = false;
+    }
+    if (undone && !next.log.length && pack && next.trimmed) {
+        // The ring had dropped entries, so the emptied log ran out before the branch point and the values it left are
+        // a wrong middle: back to the pack's starting values (the names stay known). An untrimmed log undone whole
+        // is exact and keeps what it restored.
+        for (const c of pack.clocks) next.clocks[c.id] = c.start;
+        for (const name of Object.keys(next.where)) delete next.where[name];
+        for (const m of pack.cast) if (m.place) next.where[m.name] = placePath(pack, m.place);
+        if (!standingRun) { next.blurb = pack.blurb || ''; next.last = null; }
+        next.trimmed = false;
+    }
+    // The run records of undone runs go; a run kept through a middle deletion stays listed (its reply is gone, newer ones stand).
+    next.runs = next.runs.filter(r => !(gone(r.msgId) && !newerStands(r.msgId)));
     let pruned = 0;
     for (const id of goneCounted) {
         const pos = next.counted.indexOf(id);
         if (pos < 0) continue;
-        const lp = next.last && next.last.msgId ? next.counted.indexOf(next.last.msgId) : -1;
+        const boundary = Math.max(0, next.counted.length - next.sinceLast);    // the last `sinceLast` ids are the ones since the run
         next.counted.splice(pos, 1);
-        if (pos > lp && next.sinceLast > 0) next.sinceLast -= 1;
+        if (pos >= boundary && next.sinceLast > 0) next.sinceLast -= 1;
         pruned++;
     }
-    if (rewind) {
+    if (undone || lastGone) {
         const lp = next.last && next.last.msgId ? ids.indexOf(next.last.msgId) : -1;
         next.sinceLast = ids.slice(lp + 1).filter(id => next.counted.includes(id)).length;
     }
@@ -735,7 +781,8 @@ export function groupChangesByDate(changes) {
  * @returns {{ name: string, now: string, steps: Array<{ from: string, to: string, gameDate: string, gameTime: string, reason: string, msgId: * }> }}
  */
 export function characterTimeline(state, pack, name) {
-    const steps = (state.log || []).filter(e => e.who === name).map(e => ({
+    const mine = (state.log || []).filter(e => e.who === name);
+    const steps = mine.map(e => ({
         from: e.from ? placeLabel(pack, e.from) : '',
         to: placeLabel(pack, e.to),
         gameDate: e.gameDate || '',
@@ -745,10 +792,10 @@ export function characterTimeline(state, pack, name) {
     }));
     const now = state.where && state.where[name] ? placeLabel(pack, state.where[name]) : '';
     const member = ((pack && pack.cast) || []).find(m => sameName(m.name, name));
-    const seed = member && member.place ? placeLabel(pack, placePath(pack, member.place)) : '';
-    const first = steps.length ? steps[0].from : '';
-    // "Started at" only when the log still reaches the cast's starting place; a ring that dropped older moves cannot vouch for it
-    return { name, now, steps, start: first, startIsSeed: !!first && !!seed && first === seed };
+    const firstFrom = mine.length ? (mine[0].from || '') : '';
+    // "Started at" only when the log still reaches the cast's starting place (by place, not by label: two places may share
+    // their labels); a ring that dropped older moves cannot vouch for it
+    return { name, now, steps, start: steps.length ? steps[0].from : '', startIsSeed: !!firstFrom && !!(member && member.place) && resolvePlace(pack, firstFrom) === member.place };
 }
 
 /** What people would say about each clock now: the effect text of its value, never the number. */

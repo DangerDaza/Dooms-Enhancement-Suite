@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { normalizePack, seedWorldState, markKnown } from '../src/utils/liveWorld.js';
-import { placeDepths, layoutProvince, provinceLines, placeTokens, buildProvinceView, safeImageUrl, provinceCrumbs, resolveRoot } from '../src/utils/worldMap.js';
+import { placeDepths, layoutProvince, provinceLines, placeTokens, buildProvinceView, safeImageUrl, provinceCrumbs, resolveRoot, canvasMetrics, overlappingPairs } from '../src/utils/worldMap.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -116,6 +116,31 @@ console.log('\n§4 zooming in (C2)');
 console.log('\n§5 place images');
 check('plain URLs pass, scripts and odd characters do not', safeImageUrl('https://x/y.png') === 'https://x/y.png' && safeImageUrl('/user/images/a.png') === '/user/images/a.png' && safeImageUrl('data:image/png;base64,AAA=') === 'data:image/png;base64,AAA=' && safeImageUrl('worldpacks/art/gilead.jpg') === 'worldpacks/art/gilead.jpg' && safeImageUrl('javascript:alert(1)') === '' && safeImageUrl('https://x/a b.png') === '' && safeImageUrl('x") url(javascript:1') === '' && safeImageUrl('') === '' && safeImageUrl('worldpacks/art\\gilead.jpg') === '' && safeImageUrl('worldpacks/art\\') === '');
 check('a crowded province is marked dense', buildProvinceView(grid(1, 12), seedWorldState(grid(1, 12))).dense === true && buildProvinceView(harbour, seedWorldState(harbour)).dense === false);
+
+console.log('\n§6 the canvas and its capacity (the third pass)');
+{
+    for (const [r, k] of [[2, 10], [3, 7], [4, 5], [6, 3], [1, 15], [8, 1]]) {
+        const v = buildProvinceView(grid(r, k), seedWorldState(grid(r, k)));
+        check(`${r} root${r === 1 ? '' : 's'} with ${k} district${k === 1 ? '' : 's'} each: ${v.nodes.length} cards kept apart on the default canvas`, allApart(v.nodes) && v.nodes.every(inside) && v.crowded === false && overlappingPairs(v.nodes, v.metrics).length === 0, JSON.stringify(v.nodes.map(q => [q.id, Math.round(q.x), Math.round(q.y)])));
+    }
+    for (const [r, k] of [[1, 30], [5, 5]]) {
+        const v = buildProvinceView(grid(r, k), seedWorldState(grid(r, k)));
+        check(`${r * (k + 1)} cards are more than the canvas holds: the view says so rather than pretending`, v.crowded === true && v.nodes.every(inside), JSON.stringify(overlappingPairs(v.nodes, v.metrics).length));
+    }
+    const row = normalizePack({ id: 'row', places: [0, 1, 2, 3, 4].flatMap(i => [{ id: `p${i}`, x: 10 + 20 * i, y: 50 }, { id: `p${i}k`, parent: `p${i}` }]) }).pack;
+    const rowNodes = layoutProvince(row);
+    check('a row of pinned roots across the middle: each child finds a clear spot near its own root', allApart(rowNodes) && rowNodes.every(inside) && [0, 1, 2, 3, 4].every(i => Math.hypot(rowNodes.find(n => n.id === `p${i}k`).x - rowNodes.find(n => n.id === `p${i}`).x, rowNodes.find(n => n.id === `p${i}k`).y - rowNodes.find(n => n.id === `p${i}`).y) < 45), JSON.stringify(rowNodes.map(q => [q.id, Math.round(q.x), Math.round(q.y)])));
+    const wedge = normalizePack({ id: 'w', places: [{ id: 'a', x: 10, y: 10 }, { id: 'b', x: 24, y: 10 }, ...[0, 1, 2, 3].map(i => ({ id: `a${i}`, parent: 'a' })), ...[0, 1, 2, 3].map(i => ({ id: `b${i}`, parent: 'b' }))] }).pack;
+    const wedgeNodes = layoutProvince(wedge);
+    check('two pinned roots in a corner with four children each: nothing left on a pinned card, nothing off the canvas', allApart(wedgeNodes) && wedgeNodes.every(inside), JSON.stringify(wedgeNodes.map(q => [q.id, Math.round(q.x), Math.round(q.y)])));
+    const phone = canvasMetrics({ count: 4, canvasWidth: 360, narrow: true });
+    const wide = canvasMetrics({ count: 4, canvasWidth: 790 });
+    check('a phone canvas asks for wider gaps and edges than the dashboard at its widest; eleven cards make it dense', phone.gapX > wide.gapX && phone.gapY > wide.gapY && phone.edgeX > wide.edgeX && phone.height === 360 && wide.height === 790 * 0.625 && phone.dense === false && canvasMetrics({ count: 11 }).dense === true && canvasMetrics({}).width === 790, JSON.stringify([phone, wide]));
+    const phoneView = buildProvinceView(harbour, seedWorldState(harbour), { canvasWidth: 360, narrow: true });
+    check('Harbourside on a phone: four cards kept apart by the wider gaps, their centres a card\'s half inside', phoneView.crowded === false && phoneView.nodes.every(n => n.x >= phone.edgeX - 0.01 && n.x <= 100 - phone.edgeX + 0.01 && n.y >= phone.edgeY - 0.01 && n.y <= 100 - phone.edgeY + 0.01), JSON.stringify([phone.edgeX, phoneView.nodes.map(q => [q.id, Math.round(q.x), Math.round(q.y)])]));
+    const pair = [{ id: 'a', x: 50, y: 50 }, { id: 'b', x: 55, y: 55 }, { id: 'c', x: 90, y: 90 }];
+    check('overlappingPairs names the cards too close in both axes and no others', overlappingPairs(pair).length === 1 && overlappingPairs(pair)[0].join() === 'a,b' && overlappingPairs([{ id: 'a', x: 10, y: 10 }, { id: 'b', x: 30, y: 10 }]).length === 0 && overlappingPairs([]).length === 0);
+}
 
 console.log(`\n${failures === 0 ? 'All world map checks pass' : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

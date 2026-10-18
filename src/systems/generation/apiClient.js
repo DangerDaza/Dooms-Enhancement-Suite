@@ -16,6 +16,7 @@ import {
     committedTrackerData,
     isGenerating,
     lastActionWasSwipe,
+    mainGenerationStartedAt,
     setIsGenerating,
     setLastActionWasSwipe
 } from '../../core/state.js';
@@ -354,11 +355,15 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
         // The tracker's own request, or the main generation of together mode: one at a time.
         // Live World's advancer is the exception: the tracker waits for it rather than losing the turn.
         if (backgroundHolder() !== 'world') return;
+        const waitedFrom = Date.now();
         await waitForBackground();
         if (isGenerating) return;
         // The user may have sent while the advance ran: a tracker request now would switch the
-        // connection profile under their generation and store its result on the wrong reply.
+        // connection profile under their generation and store its result on the wrong reply. The
+        // send flag is raised late (after the slash commands and a server ping), so a generation
+        // that started during the wait and has not ended counts as well.
         if (ST.is_send_press === true) return;
+        if (mainGenerationStartedAt && mainGenerationStartedAt >= waitedFrom && Date.now() - mainGenerationStartedAt < 15000) return;
     }
     if (!extensionSettings.enabled) {
         return;

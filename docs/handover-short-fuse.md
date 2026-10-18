@@ -250,8 +250,8 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   pure `src/utils/worldMap.js`, C1), Settings → Live World, two packs in
   `worldpacks/`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
-  `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18
-  (`docs/stats-plan.md` §15.9).
+  `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
+  two further passes (`docs/stats-plan.md` §15.9).
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 

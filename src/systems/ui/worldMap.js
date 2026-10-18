@@ -20,8 +20,22 @@ import { buildProvinceView, safeImageUrl } from '../../utils/worldMap.js';
 const TOKENS_SHOWN = 6;
 const f = (n) => Number(n).toFixed(2);
 
+/** The first grapheme of each of the first two words (an emoji or a flag stays whole); a letter is upper-cased when that keeps it one letter. */
 function initials(name) {
-    return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => Array.from(w)[0].toUpperCase()).join('') || '?';
+    const first = (w) => {
+        try {
+            if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+                const it = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(w)[Symbol.iterator]().next();
+                if (!it.done) return it.value.segment;
+            }
+        } catch (e) { /* no segmenter */ }
+        return Array.from(w)[0] || '';
+    };
+    return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => {
+        const g = first(w);
+        const up = g.toUpperCase();
+        return Array.from(up).length === Array.from(g).length ? up : g;
+    }).join('') || '?';
 }
 
 /** The line both views show when there is nothing to draw, or '' when there is a world. */
@@ -40,12 +54,14 @@ function spotStyle(x, y) {
 
 /**
  * The map as HTML. Pure apart from `portraits`, so tests can render it
- * without the portrait store.
+ * without the portrait store. `canvasWidth` (px) and `narrow` (a phone's
+ * square canvas) let the layout keep the cards apart on the real canvas;
+ * without them it assumes the dashboard at its widest.
  */
-export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1, focus = '', root = '' } = {}) {
+export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1, focus = '', root = '', canvasWidth = 0, narrow = false } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return empty;
-    const view = buildProvinceView(pack, state, { depth, root });
+    const view = buildProvinceView(pack, state, { depth, root, canvasWidth, narrow });
     if (!view.nodes.length) return '<p class="rpg-world-empty">This pack has no places to draw.</p>';
     const crumbs = `<nav class="rpg-wmap-crumbs" aria-label="Where the map is"><button type="button" class="rpg-wmap-crumb${view.root ? '' : ' is-here'}" data-root="">${escapeHtml(pack.name)}</button>${view.crumbs.map((c, i) => `<span class="rpg-wmap-crumb-sep" aria-hidden="true">›</span><button type="button" class="rpg-wmap-crumb${i === view.crumbs.length - 1 ? ' is-here' : ''}" data-root="${escapeHtml(c.id)}">${escapeHtml(c.label)}</button>`).join('')}</nav>`;
     const paths = view.lines.map(l => `<path d="M ${f(l.x1)} ${f(l.y1)} Q ${f(l.cx)} ${f(l.cy)} ${f(l.x2)} ${f(l.y2)}" vector-effect="non-scaling-stroke" />`).join('');
@@ -79,6 +95,7 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
     if (view.elsewhere.length) notes.push(`Elsewhere in ${escapeHtml(pack.name)}: ${view.elsewhere.map(escapeHtml).join(', ')}.`);
     if (view.unplaced.length) notes.push(`Somewhere, not yet placed: ${view.unplaced.map(escapeHtml).join(', ')}.`);
     if (view.offMap.length) notes.push(`Off the map (a place the pack no longer has): ${view.offMap.map(escapeHtml).join(', ')}.`);
+    if (view.crowded) notes.push('More places here than the canvas can keep apart: a card\'s › opens a smaller part of the map.');
     const here = view.crumbs.length ? view.crumbs[view.crumbs.length - 1].label : 'the province';
     const height = Math.max(280, 34 * view.nodes.length);
     return `

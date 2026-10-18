@@ -109,7 +109,7 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
             <div class="rpg-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</div>
             ${state.blurb ? `<div class="rpg-world-blurb">${escapeHtml(state.blurb)}</div>` : ''}
             <div class="rpg-world-status">${last} · ${next}.${cfg.spoilerFree ? ' Spoiler-free: common knowledge only.' : ''}</div>
-            ${state.lastError ? `<div class="rpg-world-status is-error">Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : escapeHtml(state.lastError.error)}</div>` : ''}
+            ${state.lastError ? `<div class="rpg-world-status is-error">${errorLine(state.lastError, cfg)}</div>` : ''}
         </div>
         <div class="rpg-world-section">
             <div class="rpg-world-section-title">What people say</div>
@@ -127,6 +127,12 @@ export function renderWorldDashboardHtml({ state, pack, cfg, facts = {}, packErr
             </div>
             ${feedHtml}
         </div>`;
+}
+
+/** The last failed attempt in a line: a request that failed says so (no spoiler in that); a reply that broke a rule names the rule unless spoiler-free. */
+function errorLine(err, cfg) {
+    if (err.kind === 'error') return `The last advance failed: ${escapeHtml(err.error || 'the request did not complete')}; it runs again on the next reply.`;
+    return `Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : escapeHtml(err.error)}`;
 }
 
 /** A character's timeline as HTML: where they started, each move with its date and reason, where they stand now. */
@@ -151,7 +157,12 @@ function render() {
     if (!$body.length) return;
     const common = { state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled };
     if (view === 'map') {
-        $body.html(renderWorldMapHtml({ ...common, focus: focusPlace, root: mapRoot }));
+        // The real canvas: the body's content width (the canvas fills it) and whether the phone layout's square canvas applies.
+        let canvasWidth = 0;
+        let narrow = false;
+        try { canvasWidth = Math.max(0, Number($body.width()) || 0); } catch (e) { canvasWidth = 0; }
+        try { narrow = !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches); } catch (e) { narrow = false; }
+        $body.html(renderWorldMapHtml({ ...common, focus: focusPlace, root: mapRoot, canvasWidth, narrow }));
         focusPlace = '';
     } else {
         let facts = {};
@@ -170,8 +181,10 @@ function onChanged(e) {
     if (source === 'advance') lastResult = 'The world moved.';
     else if (source === 'advance-failed') {
         const s = getWorldState();
+        const err = s && s.lastError;
         const spoilerFree = liveWorldConfig(extensionSettings).spoilerFree;
-        lastResult = `Discarded: ${s && s.lastError && !spoilerFree ? s.lastError.error : 'the reply broke a rule'}`;
+        if (err && err.kind === 'error') lastResult = `Failed: ${err.error || 'the request did not complete'}; it runs again on the next reply.`;
+        else lastResult = `Discarded: ${err && !spoilerFree ? err.error : 'the reply broke a rule'}`;
     } else if (source === 'chat') {
         // another chat, or the world reloaded: what was open belongs to the old one
         lastResult = '';
@@ -245,6 +258,9 @@ function build() {
         render();
         const card = document.querySelector(`#${POPUP_ID} .rpg-world-card.is-open`);
         if (card && typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'nearest' });
+        // The render replaced the token that had focus: the keyboard's place moves to the card it opened.
+        const name = card ? card.querySelector('.rpg-world-card-name') : null;
+        if (name && typeof name.focus === 'function') { try { name.focus({ preventScroll: true }); } catch (e) { /* no focus */ } }
     });
     $(document).on('click', '#rpg-world-advance-now', async function () {
         // advanceNow takes the running flag before its first await, so the

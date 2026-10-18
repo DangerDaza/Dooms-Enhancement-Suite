@@ -1494,7 +1494,8 @@ message ends the cut anyway).
 Status: **the groundwork, the pack, the per-chat state, the advancer and
 the D1 dashboard are built on `Project-Short-Fuse` (2026-10-17, from
 `docs/live-world-spec.md`, the owner's own spec) and reviewed (2026-10-18,
-an adversarial review of 85 agents: 38 confirmed findings, all fixed, §15.9);
+an adversarial review of 85 agents: 38 confirmed findings, all fixed, then
+verified in a second and a third pass, §15.9);
 the map (C1 the province, C2 nesting and zoom) and the dashboard's feed
 and timelines (D2, D3) are built (2026-10-18); C3 room grids and tokens
 are not; awaiting in-browser verification (parity rows "Live World") and
@@ -1520,7 +1521,11 @@ its reply leaves the slot void, and when the player moves on (a new
 message, another regenerate, a deletion past the slot) the state follows
 the chat as after any deletion: the deleted reply's count goes, and a run
 stamped on it goes too when nothing newer stands (D51). A chat's first
-message (the greeting, an opener) is never a reply. **D45** built-in packs live in the
+message (the greeting, an opener) is never a reply. A tool call's turn
+(the reply that made the call, the record SillyTavern saves with no
+event, the reply that continues) shares one id and counts once. A reply
+hidden with `/hide` still stands: its count and any run stamped on it
+stay until it is deleted. **D45** built-in packs live in the
 repository's `worldpacks/` (read-only; an update may overwrite them) and
 pasted packs in Settings (`liveWorld.customPacks`); a chat keeps the pack
 it was seeded with, by id. **D46** the advancer's request runs on the
@@ -1545,17 +1550,23 @@ which a same-named registration would replace); no rail button yet. **D49** Live
 Log always, the console on request. **D50** the Skyreach pack is a draft
 from the spec's own examples until the campaign notes fill it in.
 **D51** a state ahead of its chat (a branch or checkpoint cut earlier, the
-last replies deleted) is wound back through the log: the runs stamped on
-messages the chat no longer holds are undone from the tail (clocks to
-their old value, characters to where they came from, the blurb of an
-undone run dropped), the last run falls back to the newest still
-standing, the count restarts from it; a run with no message id is never
-undone. A reply gone from the middle, with newer counted replies still
-standing, undoes nothing: the story went on from the advanced world, so
-only its count is dropped. A branch older than the log reaches (the
-ring of twenty moves a character, three hundred in all) goes back to the
-pack's starting clocks and places rather than a wrong middle; the names
-stay known. Stored clocks are brought into the pack's range on load. **D52** the player is nobody the
+last replies deleted) is wound back through the log: a run or an entry is
+undone only when its message is gone and no counted reply newer than it
+still stands; undone from the tail (clocks to their old value, no higher
+than the pack allows; characters to where they came from, or to the
+cast's seat when no older move of theirs is left; the blurb to the newest
+standing run's), the last run falls back to the newest run whose reply
+stands (a ring of fifty run records keeps them, quiet runs included), the
+count restarts from it; a run with no message id is never undone. A reply
+gone from the middle, with newer counted replies still standing, undoes
+nothing: the story went on from the advanced world, so only its count is
+dropped (from the count since the last run only when it came after it).
+A branch older than the log reaches (the ring of twenty moves a
+character, three hundred in all; the state knows when it has dropped
+any) goes back to the pack's starting clocks and places rather than a
+wrong middle; the names stay known and the newest standing run record
+stays the last run. An untrimmed log undone whole is exact and keeps what
+it restored. Stored clocks are brought into the pack's range on load. **D52** the player is nobody the
 world places: the advancer is told who they are under every name the
 chat may carry (DES's persona name, SillyTavern's, the name on their last
 message), and a move or a heard-of entry naming any of them is dropped,
@@ -1586,12 +1597,16 @@ exist, loops, clocks outside their range, cast members at no place.
 
 The chat's state, `chat_metadata.dooms_world` (G2, its own key): `{ v,
 pack, packVersion, clocks: { id: value }, where: { name: "a/b/c" },
-known: { name: "heard" | "known" }, log: [{ who, from, to, msgId,
-gameDate, gameTime, reason }], last: { msgId, gameDate, gameTime, ranAt,
-ok, elapsed }, lastError, blurb, counted: [ids], sinceLast, retryNext,
-seeded }`. The log keeps about 20 entries per character and 300 in all;
-`counted` keeps the last 400 ids. Seeding copies the pack's starting
-clocks, places and tiers.
+known: { name: "heard" | "known" }, log: [{ kind: "move", who, from, to,
+msgId, gameDate, gameTime, reason } | { kind: "clock", clock, from, to,
+msgId, gameDate, gameTime }], runs: [{ msgId, gameDate, gameTime, ranAt,
+elapsed, blurb }], trimmed, last: { msgId, gameDate, gameTime, ranAt, ok,
+elapsed }, lastError: { msgId, ranAt, error, kind: "invalid" | "error" },
+blurb, counted: [ids], sinceLast, retryNext, seeded }`. The log keeps
+about 20 entries per character and 300 in all (`trimmed` says whether it
+has ever dropped one); `runs` keeps the last 50 run records; `counted`
+keeps the last 400 ids. Seeding copies the pack's starting clocks, places
+and tiers.
 
 The rules, `extensionSettings.liveWorld`: `{ enabled, pack, every,
 maxStep, spoilerFree, inject, depth, role, recentMessages, debug,
@@ -1684,9 +1699,15 @@ districts on a ring, or several roots on an inner ring with each root's
 districts on an arc outside it, a second ring when a place has more than
 eight; anything deeper that a pack's zoom pulls in falls beside its
 parent, parents first. The whole is then scaled to fit the canvas and
-nudged apart until no two cards sit closer than a card in both axes; the
-stylesheet keeps each card's own box inside the canvas, and a crowded
-map (more than ten cards) takes smaller cards and a taller canvas.
+nudged apart until no two cards sit closer than a card in both axes (a
+card wedged against a pinned one steps aside; what the nudge cannot
+settle takes a cell on a card-sized lattice), the gaps measured against
+the real canvas: the dashboard tells the view its width and whether the
+phone layout applies, so a phone's square canvas and its smaller cards
+get wider gaps in percent. The stylesheet keeps each card's own box
+inside the canvas, a crowded map (more than ten cards) takes smaller
+cards and a taller canvas, and past the canvas's capacity the legend
+says so and points at the cards' own zoom rather than pretending.
 Soft dashed curves
 run along the tree (an SVG under the cards, strokes that do not scale).
 Each place is a card (the canvas is a group for assistive tech, each
@@ -1725,11 +1746,11 @@ says "seen <date>" and the feed counts entries).
 
 ### 15.6 Files and tests
 
-`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (110 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (95
+`src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (120 checks);
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (108
 checks, the review's cases in §7–§9, the map with its zoom, the feed and
 the timelines in §6);
-`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (33 checks),
+`src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (40 checks),
 `src/systems/ui/worldMap.js` (lazy, with the dashboard);
 `src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
@@ -1749,7 +1770,8 @@ the timelines in §6);
 7. `0cd9649` the map (C1).
 8. `3fce5bb` the feed and the timelines (D2, D3).
 9. `37fb59f` nesting and zoom (C2).
-10. The second pass (§15.9).
+10. `c20fe51` the second pass (§15.9).
+11. The third pass (§15.9).
 
 ### 15.8 Open
 
@@ -1862,6 +1884,54 @@ was read and judged by hand). All fixed:
   disabled after an advance it did not await; `/liveworld`'s empty chat
   guard; a streaming request body is no longer captured; the parser's
   and the strip's guard raised to four hundred braces.
+
+**The third pass.** A second verification workflow (a reader per fix of
+the second pass, two refuters per residue) closed all of them and left
+the residue below, all fixed:
+
+- **The state and its chat.** The loaded state is bound to the chat it
+  came from (the metadata object and the chat id at the load): a reply,
+  a deletion or a tracker completion that reaches the module after
+  SillyTavern swapped the chat, before CHAT_CHANGED, touches nothing; a
+  pack load that resolves after a swap seeds nothing into the new chat;
+  a count-driven advance that wakes after a manual run or a withdrawn
+  count finds nothing due and makes no request; a tracker completion no
+  reply of this chat asked for (another chat's, in flight across the
+  switch) marks nothing known and releases no wait. D53.
+- **Replies that are not plain.** A tool call's turn counted twice (the
+  reply that made the call and the one that continued it); a reply
+  hidden with `/hide` read as gone and wound the world back; a
+  regenerate of a hidden reply did not inherit; a run after a hidden
+  reply was stamped on nothing. D44.
+- **The rewind.** A run that moved nothing left no trace to fall back to,
+  so a deletion from the middle could lose the last run; a character
+  whose older moves the ring had dropped was rewound to a hole; a clock
+  could be restored above a shrunk max; two counts gone from either side
+  of the last run were pruned wrong; an untrimmed log undone whole was
+  reset to the pack's start instead of what it had exactly restored. Run
+  records (fifty), the cast's seat, the clamp, boundary arithmetic and a
+  trimmed flag; D51.
+- **The reply.** An object with none of the advance's fields (a stray
+  `{"note": …}` in prose, an empty `{}`) counted as a quiet run; a move
+  whose `who` or `to` was not a string threw; a failed request and a
+  reply that broke a rule were one kind of failure, so spoiler-free hid a
+  network error; a tracker name differing only in accents or case from
+  the player's slipped through. D52.
+- **The map.** The gaps were percentages of an assumed canvas, so a
+  phone's square canvas and its smaller cards overlapped; a card wedged
+  between two pinned cards bounced; packs the review built (two roots of
+  ten, three of seven, a row of pinned roots, two in a corner)
+  overlapped; past the canvas's capacity nothing said so; two initials
+  split a flag or a joined emoji; the keyboard's place was lost when a
+  token opened a timeline. Canvas-aware gaps, escapes, a lattice
+  fallback, a capacity note, grapheme initials, focus to the card.
+- **Smaller.** The tracker, having waited for an advance, could still
+  start under a send whose flag SillyTavern had not yet raised (it reads
+  the generation's start as well); a pack pasted again under this chat's
+  id, or while this chat waited on a pack it could not load, was not
+  taken up; re-seed with no chat open; the feed's first date heading
+  under the filter row; a name differing only in accents in a saved
+  state stayed a twin.
 
 Known and left: SillyTavern's save waits a hundred milliseconds before
 it starts, so a switch inside that window can still lose a commit (its

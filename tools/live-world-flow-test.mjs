@@ -275,6 +275,14 @@ console.log('\n§6 the dashboard\'s reading');
     check('a backdrop image is dimmed under the label and the text stays light; a name opening with an emoji keeps it whole', hostile.includes('background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.6)),url(&quot;https://x/y.png&quot;)') && wm.renderWorldMapHtml({ state: (() => { const st2 = M.markKnown(M.seedWorldState(pack), ['🦊 Fox']); st2.where['🦊 Fox'] = 'harbourside/the-hill'; return st2; })(), pack, cfg }).includes('>🦊F</span>') && wm.renderWorldMapHtml({ state: M.markKnown(M.seedWorldState(pack), ['🦊 Fox']), pack, cfg }).isWellFormed());
     check('a crowded pack gets the dense canvas and a taller one', wm.renderWorldMapHtml({ state: M.seedWorldState(M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack), pack: M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack, cfg }).includes('class="rpg-wmap is-dense" role="group"') && map.includes('style="min-height:280px"'));
     check("a timeline's text is escaped", dash.renderWorldDashboardHtml({ state: { ...st, log: [...st.log, { kind: 'move', who: 'Old Marit', from: '', to: 'the-hill', reason: '<script>x</script>', gameDate: 'Fri' }] }, pack, cfg, timeline: 'Old Marit' }).includes('(&lt;script&gt;x&lt;/script&gt;)'));
+    // the third pass: a failed request told apart from a broken rule; initials by grapheme; the canvas's own measure
+    const broken = M.failAdvance(st, { error: 'network down', kind: 'error' });
+    check('a request that failed says so, spoiler-free or not, and that it runs again; a run not due says so', dash.renderWorldDashboardHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true } }).includes('The last advance failed: network down; it runs again on the next reply.') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('the reply broke a rule') && lw.describeAdvanceResult({ ok: false, reason: 'error', error: 'network down' }, { spoilerFree: true }) === 'The advance failed: network down; it runs again on the next reply.' && lw.describeAdvanceResult({ ok: false, reason: 'not-due' }) === 'Nothing to do: the world is not due an advance.');
+    const flags = (() => { const s2 = M.markKnown(M.seedWorldState(pack), ['🇬🇧 Bill', '👨‍👩‍👧 Fam', 'ßen Low']); s2.where['🇬🇧 Bill'] = 'harbourside/the-hill'; s2.where['👨‍👩‍👧 Fam'] = 'harbourside/old-town'; s2.where['ßen Low'] = 'harbourside/the-docks'; return s2; })();
+    const flagMap = wm.renderWorldMapHtml({ state: flags, pack, cfg });
+    check('a flag, a joined emoji or a letter with no single upper case opens a name as one initial', flagMap.includes('>🇬🇧B</span>') && flagMap.includes('>👨‍👩‍👧F</span>') && flagMap.includes('>ßL</span>'), (flagMap.match(/is-initials[^>]*>[^<]*</g) || []).join(' '));
+    const big = M.normalizePack({ id: 'big', places: [{ id: 'r' }, ...Array.from({ length: 30 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack;
+    check('a canvas too small for its places says so under the map; Harbourside on a phone does not', wm.renderWorldMapHtml({ state: M.seedWorldState(big), pack: big, cfg, canvasWidth: 360, narrow: true }).includes('More places here than the canvas can keep apart') && !wm.renderWorldMapHtml({ state: st, pack, cfg, canvasWidth: 360, narrow: true }).includes('More places here'));
 }
 
 console.log('\n§7 an advance that outlives its chat');
@@ -388,6 +396,41 @@ console.log('\n§8 a greeting, a regenerate, a deleted reply, a branch');
     await lw.onWorldChatChanged();
     s = lw.getWorldState();
     check('a branch cut before the advance loads wound back to its own messages', s.clocks.blockade === 1 && s.where['Old Marit'].endsWith('the-anchor') && s.last === null && s.sinceLast === 2 && s.pack === 'harbourside' && meta.dooms_world.clocks.blockade === 1, JSON.stringify(s));
+    // the third pass: a hidden reply still stands (D44), a manual run lands on it, a regenerate of it inherits
+    chat[4].is_system = true;    // /hide: the reply leaves the prompt, not the chat
+    await lw.onWorldChatChanged();
+    s = lw.getWorldState();
+    check('a reply hidden with /hide keeps its count across a reload: hidden is not gone', s.sinceLast === 2 && s.counted.includes(chat[4].dooms_world_id), JSON.stringify(s.counted));
+    const onHidden = await lw.advanceNow({ reason: 'manual' });
+    s = lw.getWorldState();
+    check('a manual advance is stamped on the newest reply even when that reply is hidden', onHidden.ok && s.last.msgId === chat[4].dooms_world_id && s.clocks.blockade === 2 && s.sinceLast === 0, JSON.stringify([onHidden, s.last]));
+    const hiddenId = chat[4].dooms_world_id;
+    lw.onWorldGenerationStarted('regenerate', {}, false);
+    chat.pop(); lw.onWorldMessageDeleted();
+    chat.push(ai('Then rain, again.')); lw.onWorldMessageReceived(4); lw.onWorldGenerationEnded();
+    check('regenerating a hidden reply hands its id to the new one; the run on it stands', chat[4].dooms_world_id === hiddenId && lw.getWorldState().last.msgId === hiddenId && lw.getWorldState().clocks.blockade === 2 && !chat[4].is_system);
+    // a tool call: the prose part, the record SillyTavern saves with no event, the continuation: one turn, one id, one count (D44)
+    extensionSettings.liveWorld.every = 50;    // no automatic run under this block
+    const sinceBefore = lw.getWorldState().sinceLast;
+    chat.push(user('Search the room.')); chat.push(ai('Let me look.')); lw.onWorldMessageReceived(chat.length - 1);
+    const turnId = chat[chat.length - 1].dooms_world_id;
+    chat.push({ is_user: false, is_system: true, name: 'Narrator', mes: '', extra: { tool_invocations: [{ name: 'search', result: 'a key' }] } });
+    chat.push(ai('A key, under the mat.')); lw.onWorldMessageReceived(chat.length - 1);
+    s = lw.getWorldState();
+    check("a tool call's continuation shares the turn's id and is not counted again", typeof turnId === 'string' && chat[chat.length - 1].dooms_world_id === turnId && s.sinceLast === sinceBefore + 1 && s.counted.filter(id => id === turnId).length === 1, JSON.stringify([turnId, s.counted]));
+    lw.onWorldGenerationStarted('regenerate', {}, false);
+    chat.pop(); lw.onWorldMessageDeleted();
+    chat.push(ai('A key, under the rug.')); lw.onWorldMessageReceived(chat.length - 1); lw.onWorldGenerationEnded();
+    s = lw.getWorldState();
+    check('regenerating the continuation keeps the one id and the one count', chat[chat.length - 1].dooms_world_id === turnId && s.sinceLast === sinceBefore + 1, JSON.stringify(s.counted));
+    const onTurn = await lw.advanceNow({ reason: 'manual' });
+    chat.pop(); lw.onWorldMessageDeleted();
+    s = lw.getWorldState();
+    check("a run on a tool turn survives the continuation's deletion while the turn's first part stands", onTurn.ok && s.last.msgId === turnId && s.sinceLast === 0, JSON.stringify([onTurn, s.last]));
+    chat.pop(); chat.pop(); lw.onWorldMessageDeleted();    // the tool record and the prose part: the turn is gone
+    s = lw.getWorldState();
+    check('the whole turn gone undoes its run and its count; the run before it is the last again', s.last.msgId === hiddenId && !s.counted.includes(turnId) && s.sinceLast === 0, JSON.stringify([s.last, s.counted, s.sinceLast]));
+    extensionSettings.liveWorld.every = 3;
 }
 
 console.log('\n§9 the tracker first, the main generation, a second advance');
@@ -423,7 +466,7 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     check('a typed /advance in that window runs at once', calls === 3 && r.ok);
     lw.onWorldGenerationEnded();
     await wait(600);
-    check('the parked automatic advance runs when the generation ends (and finds nothing new to do)', calls === 4);
+    check('the parked automatic advance wakes when the generation ends and, the typed one having run, finds nothing due: no request', calls === 3 && lw.getWorldState().sinceLast === 0);
     let resolveReply = null;
     lw.__setWorldTransport(() => new Promise(res => { resolveReply = res; }));
     const first = lw.advanceNow({ reason: 'manual' });
@@ -433,6 +476,22 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     resolveReply('{"clocks":{}}');
     await first;
     check('the first finished on its own', !lw.isAdvancing());
+    // the third pass: a tracker request that completes after a chat switch is another chat's
+    extensionSettings.generationMode = 'separate'; extensionSettings.autoUpdate = true; extensionSettings.showInfoBox = true;
+    lw.__setWorldTransport(async () => '{"clocks":{}}');
+    resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-h';
+    await lw.onWorldChatChanged();
+    lastGeneratedData.characterThoughts = JSON.stringify({ characters: [{ name: 'Maeve', thoughts: 'x' }] });
+    lw.onWorldTrackerUpdateComplete();
+    check("a tracker completion no reply of this chat asked for marks nothing known (another chat's request, in flight across the switch)", lw.getWorldState().known['Maeve'] !== 'known');
+    lastGeneratedData.characterThoughts = null;
+    chat.push(user('…')); chat.push(ai('Someone waves.')); lw.onWorldMessageReceived();
+    lastGeneratedData.characterThoughts = JSON.stringify({ characters: [{ name: 'Maeve', thoughts: 'x' }] });
+    lw.onWorldTrackerUpdateComplete();
+    check("after a reply of this chat asked for the tracker's request, the completion's names become known", lw.getWorldState().known['Maeve'] === 'known');
+    lastGeneratedData.characterThoughts = null;
+    extensionSettings.generationMode = 'together'; extensionSettings.autoUpdate = false;
+    check('re-seeding with no chat open is refused with a reason', (globalThis.__DES_CTX__.chatId = undefined, true) && (await lw.reseedWorld()).error === 'No chat is open.' && (globalThis.__DES_CTX__.chatId = 'chat-h', true));
 }
 
 console.log(`\n${failures === 0 ? 'All Live World flow checks pass' : `${failures} FAILURE(S)`}`);

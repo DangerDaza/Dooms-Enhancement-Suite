@@ -23,7 +23,7 @@ import * as ST from '../../../../../../../script.js';    // is_send_press read b
 import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../../../../../scripts/slash-commands/SlashCommand.js';
 import { extensionFolderPath } from '../../core/config.js';
-import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog, setMainGenerationStartedAt } from '../../core/state.js';
 import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_TRACKER_UPDATE_COMPLETE, parseCharacterEntriesFromThoughts } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -46,6 +46,7 @@ import {
     validateAdvance,
     applyAdvance,
     failAdvance,
+    sameName,
 } from '../../utils/liveWorld.js';
 
 export const WORLD_CHANGED_EVENT = 'dooms:world-changed';
@@ -56,6 +57,9 @@ let state = null;            // this chat's world state, or null while off or un
 let activePack = null;       // the pack the state belongs to
 let packError = '';          // why the pack could not be used, for the dashboard
 let loadToken = 0;           // bumped by every chat load; an advance that outlives its chat is discarded
+let loadedMeta = null;       // the chat_metadata object the state was loaded from: SillyTavern swaps it before CHAT_CHANGED reaches this module
+let loadedChat = undefined;  // and the chat id at that load
+let trackerToken = 0;        // the load whose reply asked for the tracker's request; a completion from another chat is not this chat's
 let advancing = false;
 let pendingReason = '';      // an advance that waits: on the tracker request, another background request or the main generation
 let pendingOn = '';          // what it waits for: 'tracker', 'background' or 'generation'
@@ -78,9 +82,15 @@ export function isLiveWorldOn() {
     return !!extensionSettings.enabled && cfg().enabled;
 }
 
+/** The state is usable only for the chat it was loaded from. */
 function ready() {
-    return isLiveWorldOn() && !!state && !!activePack;
+    if (!isLiveWorldOn() || !state || !activePack) return false;
+    if (chat_metadata !== loadedMeta) return false;    // the chat was swapped under the state and its CHAT_CHANGED is still to come
+    const id = chatId();
+    return id === undefined || id === loadedChat;      // undefined for a moment while SillyTavern reloads its character list: not another chat
 }
+
+const isToolRecord = (m) => !!(m && m.extra && Array.isArray(m.extra.tool_invocations));
 
 function chatArray() {
     if (Array.isArray(chat)) return chat;
@@ -206,18 +216,22 @@ function clearWorldSlot() {
     try { setExtensionPrompt(WORLD_SLOT, '', extension_prompt_types.IN_CHAT, cfg().depth, false, extension_prompt_roles.SYSTEM); } catch (e) { /* no ST */ }
 }
 
-/** The chat's stamped reply ids, in order. */
+/** The chat's stamped ids, in order, once each: a hidden reply (/hide) still stands; a tool record and a user message never carry one. */
 function presentReplyIds() {
     const list = chatArray();
     if (!list) return [];
     const ids = [];
-    for (const m of list) if (m && !m.is_user && !m.is_system && typeof m.dooms_world_id === 'string' && m.dooms_world_id) ids.push(m.dooms_world_id);
+    const seen = new Set();
+    for (const m of list) {
+        const id = m && typeof m.dooms_world_id === 'string' ? m.dooms_world_id : '';
+        if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+    }
     return ids;
 }
 
 /** A state ahead of its chat (a branch, a checkpoint, deleted replies) is wound back to it. */
 function reconcile(detail) {
-    if (!state) return false;
+    if (!ready()) return false;
     const r = reconcileWithChat(state, presentReplyIds(), { pack: activePack });
     if (r.state === state) return false;
     log(`the chat no longer holds ${r.undone} change(s) and ${r.pruned} counted repl${r.pruned === 1 ? 'y' : 'ies'}; the state follows it`);
@@ -239,14 +253,21 @@ export async function onWorldChatChanged() {
     pendingReason = '';
     pendingOn = '';
     inherit = null;
+    trackerToken = 0;
+    loadedMeta = null;
+    loadedChat = undefined;
     if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
     if (!isLiveWorldOn()) { clearWorldSlot(); notify({ source: 'chat' }); return; }
-    if (!chatId()) { clearWorldSlot(); notify({ source: 'chat' }); return; }    // no chat open: nothing to seed or keep
-    const raw = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata[META_KEY] : null;
+    const id = chatId();
+    if (!id) { clearWorldSlot(); notify({ source: 'chat' }); return; }    // no chat open: nothing to seed or keep
+    const meta = chat_metadata;
+    const raw = meta && typeof meta === 'object' ? meta[META_KEY] : null;
     const stored = raw && typeof raw === 'object' && raw.seeded === true ? normalizeWorldState(raw) : null;
     const packId = stored && stored.pack ? stored.pack : cfg().pack;
     const res = await loadPack(packId);
-    if (token !== loadToken) return;    // another chat opened meanwhile
+    if (token !== loadToken || chat_metadata !== meta) return;    // another chat opened meanwhile (or was swapped in, its CHAT_CHANGED to come)
+    loadedMeta = meta;
+    loadedChat = id;
     if (!res.ok) {
         packError = res.errors.join(' ');
         log(`the pack "${packId}" cannot be used`, res.errors);
@@ -274,6 +295,7 @@ export async function onWorldChatChanged() {
  */
 export async function reseedWorld() {
     if (!isLiveWorldOn()) return { ok: false, error: 'Live World is off.' };
+    if (!chatId()) return { ok: false, error: 'No chat is open.' };
     const res = await loadPack(cfg().pack, { fresh: true });
     if (!res.ok) {
         log(`re-seed refused: the pack "${cfg().pack}" cannot be used`, res.errors);
@@ -292,14 +314,31 @@ function messageKey(m) {
     return m.dooms_world_id;
 }
 
+/** The id of the newest reply, hidden or not, for a run to be stamped on; null when it has none. A tool record and a user message are skipped. */
 function lastReplyKey() {
     const list = chatArray();
     if (!list) return null;
     for (let i = list.length - 1; i >= 0; i--) {
         const m = list[i];
-        if (m && !m.is_user && !m.is_system) return typeof m.dooms_world_id === 'string' ? m.dooms_world_id : null;
+        if (!m || m.is_user || isToolRecord(m)) continue;
+        if (typeof m.dooms_world_id === 'string' && m.dooms_world_id) return m.dooms_world_id;
+        if (!m.is_system) return null;    // a reply from before the world was on: the run is stamped on nothing, so it is never undone
     }
     return null;
+}
+
+/**
+ * The id of the reply before the tool records that end just above `index`,
+ * or '' when no tool record lies between: a reply that continues a tool call
+ * is the same turn as the reply that made the call, one id and one count (D44).
+ */
+function turnIdBefore(list, index) {
+    let i = index - 1;
+    let records = 0;
+    while (i >= 0 && isToolRecord(list[i])) { i--; records++; }
+    if (!records || i < 0) return '';
+    const prev = list[i];
+    return prev && !prev.is_user && typeof prev.dooms_world_id === 'string' ? prev.dooms_world_id : '';
 }
 
 /** The player under every name the chat may carry: DES's persona name, SillyTavern's, and the name on their last message. */
@@ -316,8 +355,8 @@ function playerNames() {
 function knownNamesFromTracker() {
     try {
         const entries = parseCharacterEntriesFromThoughts(lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts);
-        const players = playerNames().map(n => n.toLowerCase());
-        return (entries || []).map(c => c && c.name).filter(n => n && !players.includes(String(n).trim().toLowerCase()));
+        const players = playerNames();
+        return (entries || []).map(c => c && c.name).filter(n => n && !players.some(p => sameName(p, n)));
     } catch (e) {
         return [];
     }
@@ -325,21 +364,28 @@ function knownNamesFromTracker() {
 
 /**
  * MESSAGE_RECEIVED: a fresh reply counts once; the tracker's present
- * characters become known; every N, the advancer runs.
+ * characters become known; every N, the advancer runs. A reply that
+ * continues a tool call shares the turn's id; a regenerate's reply takes
+ * the deleted reply's; a reply hidden later (/hide) keeps standing.
  */
 export function onWorldMessageReceived(messageId, type) {
     const list = chatArray();
     const m = list && list.length ? list[list.length - 1] : null;
-    const reply = !!(m && !m.is_user && !m.is_system && !Array.isArray(m.extra && m.extra.tool_invocations));
+    const reply = !!(m && !m.is_user && !m.is_system && !isToolRecord(m));
+    if (reply && !(typeof m.dooms_world_id === 'string' && m.dooms_world_id)) {
+        const shared = turnIdBefore(list, list.length - 1);    // the continuation of a tool call: the turn's own id
+        if (shared) m.dooms_world_id = shared;
+    }
     if (inherit && reply) {
         // A regenerate deleted the reply this one replaces: same slot, same id, counted once.
         const stamped = typeof m.dooms_world_id === 'string' && m.dooms_world_id;
         if (!stamped && !list.some(x => x && x.dooms_world_id === inherit.id)) { m.dooms_world_id = inherit.id; inherit = null; }
-        else if (stamped) abandonInherit();    // a reply with its own id: the deleted one is not coming back
+        else abandonInherit();    // a reply with its own id, or the slot's id standing elsewhere: the deleted one is not coming back
     }
     if (!ready()) return;
     if (type === 'first_message' || !list || list.length <= 1) return;    // a chat's first message is the greeting or an opener, not a reply
     if (!reply) return;
+    if (trackerRequestExpected()) trackerToken = loadToken;    // the tracker's request for this reply is this chat's
     const r = countMessage(state, messageKey(m));
     let next = r.state;
     const names = knownNamesFromTracker();
@@ -424,6 +470,8 @@ export function onWorldMessageDeleted() {
 /** After the tracker request (separate mode): names it brought become known, and an advance that waited runs. */
 export function onWorldTrackerUpdateComplete() {
     if (!ready()) return;
+    if (trackerToken !== loadToken) return;    // a request this chat's replies did not ask for (another chat's, in flight across the switch): not its names, not its wait
+    trackerToken = 0;
     const names = knownNamesFromTracker();
     if (names.length) {
         const next = markKnown(state, names);
@@ -435,6 +483,7 @@ export function onWorldTrackerUpdateComplete() {
 /** GENERATION_ENDED and GENERATION_STOPPED: the main generation is over; an advance that waited on it runs now. */
 export function onWorldGenerationEnded() {
     generationStartedAt = 0;
+    setMainGenerationStartedAt(0);
     if (!ready()) return;
     flushPending('generation');
 }
@@ -453,7 +502,7 @@ export function onWorldGenerationEnded() {
 function mainGenerationBusy({ manual = false } = {}) {
     if (ST.is_send_press === true) return true;
     if (manual || !generationStartedAt) return false;
-    if (Date.now() - generationStartedAt > GENERATION_START_STALE_MS) { generationStartedAt = 0; return false; }
+    if (Date.now() - generationStartedAt > GENERATION_START_STALE_MS) { generationStartedAt = 0; setMainGenerationStartedAt(0); return false; }
     return true;
 }
 
@@ -481,6 +530,7 @@ export function __setWorldTransport(fn) {
 export async function advanceNow({ reason = 'manual' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
     if (advancing) return { ok: false, reason: 'running' };
+    if (reason === 'count' && !advanceDue(state, cfg().every)) return { ok: false, reason: 'not-due' };    // the count that armed it was withdrawn, or a manual run went first
     const manual = reason !== 'count';
     if (mainGenerationBusy({ manual })) {
         waitFor(reason, 'generation');
@@ -488,13 +538,12 @@ export async function advanceNow({ reason = 'manual' } = {}) {
         return { ok: false, reason: 'busy' };
     }
     advancing = true;
-    // The chat this run belongs to: the load token, the metadata object and the chat id. SillyTavern swaps the
-    // chat and its metadata before CHAT_CHANGED reaches this module, so the token alone would miss a reply that
-    // lands during the load; a run whose chat is gone by the time its reply arrives is discarded whole.
+    // The chat this run belongs to: the load token, the metadata object and the chat id the state was loaded
+    // with. SillyTavern swaps the chat and its metadata before CHAT_CHANGED reaches this module, so the token
+    // alone would miss a reply that lands during the load; a run whose chat is gone by the time its reply arrives
+    // is discarded whole. A chat id that is undefined for a moment (the character list reloading) is not a switch.
     const token = loadToken;
-    const metaRef = chat_metadata;
-    const chatRef = chatId();
-    const stale = () => token !== loadToken || chat_metadata !== metaRef || chatId() !== chatRef;
+    const stale = () => token !== loadToken || chat_metadata !== loadedMeta || (chatId() !== undefined && chatId() !== loadedChat);
     try {
         const c = cfg();
         const pack = activePack;
@@ -525,7 +574,7 @@ export async function advanceNow({ reason = 'manual' } = {}) {
         const v = validateAdvance(parsed, pack, state, { maxStep: c.maxStep, player: players });
         const msgId = lastReplyKey();
         if (!v.ok) {
-            commit(failAdvance(state, { msgId, ranAt: Date.now(), error: v.errors.join(' ') }), { source: 'advance-failed' }, { immediate: true });
+            commit(failAdvance(state, { msgId, ranAt: Date.now(), error: v.errors.join(' '), kind: 'invalid' }), { source: 'advance-failed' }, { immediate: true });
             log('advance discarded', { errors: v.errors, reply: text.slice(0, 400) });
             return { ok: false, reason: 'invalid', errors: v.errors };
         }
@@ -539,7 +588,7 @@ export async function advanceNow({ reason = 'manual' } = {}) {
             log('advance failed after the chat changed; nothing written', error);
             return { ok: false, reason: 'stale', error };
         }
-        if (state) commit(failAdvance(state, { msgId: lastReplyKey(), ranAt: Date.now(), error }), { source: 'advance-failed' }, { immediate: true });
+        if (state) commit(failAdvance(state, { msgId: lastReplyKey(), ranAt: Date.now(), error, kind: 'error' }), { source: 'advance-failed' }, { immediate: true });
         log('advance failed', error);
         return { ok: false, reason: 'error', error };
     } finally {
@@ -548,7 +597,7 @@ export async function advanceNow({ reason = 'manual' } = {}) {
     }
 }
 
-/** One line for a result of advanceNow, for /advance, Settings and the dashboard; spoiler-free keeps the rule broken to the System Log. */
+/** One line for a result of advanceNow, for /advance, Settings and the dashboard; spoiler-free keeps the rule a reply broke to the System Log (a failed request is no spoiler). */
 export function describeAdvanceResult(r, { spoilerFree = false } = {}) {
     if (!r) return 'Nothing happened.';
     if (r.ok) return 'The world moved.';
@@ -556,6 +605,8 @@ export function describeAdvanceResult(r, { spoilerFree = false } = {}) {
     if (r.reason === 'running') return 'An advance is already running.';
     if (r.reason === 'busy') return 'Another request is running; the advance follows it.';
     if (r.reason === 'stale') return 'The chat changed, or the world was reloaded, while the advance ran; nothing was written.';
+    if (r.reason === 'not-due') return 'Nothing to do: the world is not due an advance.';
+    if (r.reason === 'error') return `The advance failed: ${r.error || 'the request did not complete'}; it runs again on the next reply.`;
     if (spoilerFree) return 'The advance was discarded: the reply broke a rule (the System Log has the detail).';
     return `The advance was discarded: ${(r.errors || [r.error || r.reason]).join(' ')}`;
 }
@@ -574,12 +625,13 @@ export function isAdvancing() {
 export function onWorldGenerationStarted(type, data, dryRun) {
     if (dryRun) return;
     generationStartedAt = Date.now();
+    setMainGenerationStartedAt(generationStartedAt);
     if (type === 'regenerate') {
-        // The last reply is about to be deleted and replaced: the new one is the same slot. With no reply to
-        // replace (an earlier regenerate never produced one), that earlier slot is void.
+        // The last reply is about to be deleted and replaced: the new one is the same slot, a hidden reply
+        // included. With no reply to replace (an earlier regenerate never produced one), that earlier slot is void.
         const list = chatArray();
         const m = list && list.length ? list[list.length - 1] : null;
-        if (m && !m.is_user && !m.is_system && typeof m.dooms_world_id === 'string' && m.dooms_world_id) inherit = { id: m.dooms_world_id, index: list.length - 1 };
+        if (m && !m.is_user && typeof m.dooms_world_id === 'string' && m.dooms_world_id) inherit = { id: m.dooms_world_id, index: list.length - 1 };
         else abandonInherit();
     }
     const c = cfg();

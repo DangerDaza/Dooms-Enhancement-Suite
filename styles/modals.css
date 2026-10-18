@@ -9993,7 +9993,7 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 .rpg-world-feed-filter-label { font-size: 0.78em; color: #888; }
 .rpg-world-feed-filter { font: inherit; font-size: 0.95em; color: inherit; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 6px; padding: 2px 6px; margin-left: 4px; }
 .rpg-world-feed-date { font-size: 0.74em; text-transform: uppercase; letter-spacing: 0.6px; color: #9a8fb8; margin: 10px 0 2px; }
-.rpg-world-feed-date:first-child { margin-top: 0; }
+.rpg-world-feed-head + .rpg-world-feed-date { margin-top: 4px; }
 .rpg-world-changes li.is-clock { font-style: italic; }
 .rpg-world-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .rpg-world-card-name { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
