@@ -9926,68 +9926,12 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 .rpg-world-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .rpg-world-result { font-size: 0.85em; color: #999; margin-left: auto; }
 
-/* ── Live World: the dashboard's two views and the province map (C1) ── */
+/* ── Live World: the dashboard's two views. The map's own rules (.rpg-wmap*) are in
+   style.css: the shelf draws the map at page load, before this sheet has loaded. ── */
 .rpg-world-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
 .rpg-world-tab { border: 0; background: transparent; color: inherit; opacity: 0.7; font: inherit; font-size: 0.8em; padding: 3px 10px; border-radius: 6px; cursor: pointer; }
 .rpg-world-tab.is-active { background: rgba(255, 255, 255, 0.14); opacity: 1; }
 .rpg-world-tab:focus-visible { outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 1px; }
-.rpg-wmap {
-    --wmap-hx: 86px; --wmap-hy: 44px;    /* half a card at its widest, plus the count badge's overhang: a card's centre never comes closer to an edge */
-    position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 280px; border-radius: 12px; overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background:
-        radial-gradient(ellipse at 28% 22%, rgba(255, 255, 255, 0.07), transparent 55%),
-        radial-gradient(ellipse at 76% 78%, rgba(233, 69, 96, 0.10), transparent 52%),
-        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.18'/></svg>"),
-        linear-gradient(160deg, #1d1b24 0%, #13121a 60%, #0f0e14 100%);
-    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
-}
-.rpg-wmap-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
-.rpg-wmap-lines path { fill: none; stroke: rgba(255, 255, 255, 0.22); stroke-width: 1.6; stroke-dasharray: 3 4; stroke-linecap: round; }
-.rpg-wmap-node {
-    position: absolute; transform: translate(-50%, -50%); min-width: 96px; max-width: 170px; padding: 7px 9px 8px; border-radius: 11px;
-    background: rgba(22, 21, 29, 0.84); background-size: cover; background-position: center;
-    border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    text-align: center; color: #e8e6ef; font-size: 0.85em; line-height: 1.25;
-    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-}
-.rpg-wmap-node.is-root { min-width: 120px; font-size: 0.95em; border-color: var(--rpg-highlight, #e94560); box-shadow: 0 0 0 1px rgba(233, 69, 96, 0.25), 0 10px 26px rgba(0, 0, 0, 0.45); }
-.rpg-wmap-node.has-image, .rpg-wmap-node.has-image .rpg-wmap-label, .rpg-wmap-node.has-image .rpg-wmap-more { color: #fff; }
-.rpg-wmap-node.has-image .rpg-wmap-label { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.7); }
-.rpg-wmap-label { font-weight: 600; overflow-wrap: anywhere; }
-.rpg-wmap-zoom { display: block; width: 100%; background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 600; text-align: center; cursor: pointer; border-radius: 6px; }
-.rpg-wmap-zoom:hover, .rpg-wmap-zoom:focus-visible { text-decoration: underline; outline: none; }
-.rpg-wmap-node:has(.rpg-wmap-zoom:focus-visible) { outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 2px; }
-.rpg-wmap.is-dense .rpg-wmap-node { min-width: 76px; max-width: 130px; font-size: 0.74em; padding: 5px 6px 6px; }
-.rpg-wmap.is-dense .rpg-wmap-node.is-root { min-width: 92px; }
-.rpg-wmap.is-dense .rpg-wmap-token { width: 22px; height: 22px; }
-.rpg-wmap.is-dense { --wmap-hx: 66px; --wmap-hy: 36px; }
-.rpg-wmap-tokens { display: flex; justify-content: center; margin-top: 6px; }
-.rpg-wmap-token {
-    width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: center top; flex: 0 0 auto;
-    border: 2px solid rgba(22, 21, 29, 0.95); margin-left: -7px; background: #2a2834;
-    display: inline-flex; align-items: center; justify-content: center; font-size: 0.7em; font-weight: 700; color: #ddd;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.rpg-wmap-token:first-child { margin-left: 0; }
-.rpg-wmap-token.is-more { font-size: 0.65em; }
-.rpg-wmap-count {
-    position: absolute; top: -8px; right: -8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
-    background: var(--rpg-highlight, #e94560); color: #fff; font-size: 0.72em; font-weight: 700;
-    display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.rpg-wmap-legend { margin-top: 8px; font-size: 0.8em; color: #888; }
-.rpg-wmap-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 8px; font-size: 0.82em; }
-.rpg-wmap-crumb { background: none; border: 0; padding: 2px 6px; border-radius: 6px; color: #aaa; font: inherit; cursor: pointer; }
-.rpg-wmap-crumb:hover, .rpg-wmap-crumb:focus-visible { color: inherit; background: rgba(255, 255, 255, 0.08); outline: none; }
-.rpg-wmap-crumb.is-here { color: inherit; font-weight: 600; cursor: default; }
-.rpg-wmap-crumb-sep { color: #666; }
-.rpg-wmap-node.has-children:hover { border-color: rgba(255, 255, 255, 0.4); }
-.rpg-wmap-more { color: #999; font-weight: 400; }
-.rpg-wmap-token[data-name] { cursor: pointer; }
-.rpg-wmap-token[data-name]:hover, .rpg-wmap-token[data-name]:focus-visible { transform: translateY(-2px); outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 1px; z-index: 1; }
-.rpg-wmap-node.is-focus { animation: rpg-wmap-pulse 1.6s ease-out 2; border-color: var(--rpg-highlight, #e94560); }
-@keyframes rpg-wmap-pulse { 0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.55), 0 8px 22px rgba(0, 0, 0, 0.4); } 100% { box-shadow: 0 0 0 16px rgba(233, 69, 96, 0), 0 8px 22px rgba(0, 0, 0, 0.4); } }
 /* D2, D3: the feed under its dates, a character's timeline */
 .rpg-world-feed-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .rpg-world-feed-filter-label { font-size: 0.78em; color: #888; }
@@ -10010,9 +9954,5 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 .rpg-world-timeline time { display: block; font-size: 0.85em; color: #777; }
 .rpg-world-timeline .is-muted { color: #777; }
 @media (max-width: 600px) {
-    .rpg-wmap { aspect-ratio: 1 / 1; min-height: 300px; --wmap-hx: 66px; --wmap-hy: 36px; }
-    .rpg-wmap-node { min-width: 76px; max-width: 130px; font-size: 0.74em; padding: 5px 6px 6px; }
-    .rpg-wmap-node.is-root { min-width: 92px; }
-    .rpg-wmap-token { width: 22px; height: 22px; }
     .rpg-world-tab { padding: 3px 8px; }
 }

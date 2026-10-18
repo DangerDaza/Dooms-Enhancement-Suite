@@ -56,9 +56,10 @@ function spotStyle(x, y) {
  * The map as HTML. Pure apart from `portraits`, so tests can render it
  * without the portrait store. `canvasWidth` (px) and `narrow` (a phone's
  * square canvas) let the layout keep the cards apart on the real canvas;
- * without them it assumes the dashboard at its widest.
+ * without them it assumes the dashboard at its widest. `legend: false`
+ * leaves out the line and the notes under the canvas (the shelf's page).
  */
-export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1, focus = '', root = '', canvasWidth = 0, narrow = false } = {}) {
+export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits = () => '', masterOn = true, depth = 1, focus = '', root = '', canvasWidth = 0, narrow = false, legend = true } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return empty;
     const view = buildProvinceView(pack, state, { depth, root, canvasWidth, narrow });
@@ -103,6 +104,6 @@ export function renderWorldMapHtml({ state, pack, cfg, packError = '', portraits
         <div class="rpg-wmap${view.dense ? ' is-dense' : ''}" role="group" aria-label="${escapeHtml(pack.name)}: ${escapeHtml(here)}" style="min-height:${height}px">
             <svg class="rpg-wmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>
             ${cards}
-        </div>
-        <div class="rpg-wmap-legend">Known characters only; heard-of names stay off the map. A token opens the character's timeline; a place with › opens to what is inside.${notes.length ? ` ${notes.join(' ')}` : ''}</div>`;
+        </div>${legend ? `
+        <div class="rpg-wmap-legend">Known characters only; heard-of names stay off the map. A token opens the character's timeline; a place with › opens to what is inside.${notes.length ? ` ${notes.join(' ')}` : ''}</div>` : ''}`;
 }

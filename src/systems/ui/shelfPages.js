@@ -520,10 +520,11 @@ function openWhenDialog(box, field, index, expected) {
 //  The Map page (Phase 6, D56)
 // ─────────────────────────────────────────────
 //
-// The dashboard's map (worldMap.js), drawn on the shelf. The zoom root is
-// the shelf's own: kept while the pages flip, reset when the chat (or its
-// world) changes. A token opens the dashboard on the character's timeline;
-// a small button over the trail opens the dashboard itself.
+// The dashboard's map (worldMap.js), drawn on the shelf and nothing else:
+// the trail and the canvas, no legend, no notes (Jordan: just the map, not
+// the world updates). The zoom root is the shelf's own: kept while the
+// pages flip, reset when the chat (or its world) changes. A token opens the
+// dashboard on the character's timeline.
 //
 // The strip's canvas is the renderer's floor height (280px, more when
 // dense; style.css lets the inline min-height rule) rather than the
@@ -571,9 +572,9 @@ export function mapPageHtml({ root } = {}) {
     const map = renderWorldMapHtml({
         state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(),
         portraits: portraitOf, masterOn: !!extensionSettings.enabled, root: root === undefined ? mapRoot : root,
-        canvasWidth: shelfCanvasWidth(), narrow: false,
+        canvasWidth: shelfCanvasWidth(), narrow: false, legend: false,
     });
-    return `<div class="dooms-map-page"><button type="button" class="dooms-map-dashboard" title="Open the Live World dashboard (the same as /liveworld)"><i class="fa-solid fa-table-columns" aria-hidden="true"></i><span>Dashboard</span></button>${map}</div>`;
+    return `<div class="dooms-map-page">${map}</div>`;
 }
 
 let bound = false;
@@ -612,7 +613,7 @@ function bindOnce() {
         }
         // The Map page (D56): a token is the character's (the dashboard, on
         // their timeline); a card with places inside opens to them; the
-        // trail leads back up; the button opens the dashboard.
+        // trail leads back up.
         const token = e.target.closest('.rpg-wmap-token[data-name]');
         if (token) {
             e.preventDefault();
@@ -637,11 +638,6 @@ function bindOnce() {
             forceRerender();
             focusShelfTrail();
             return;
-        }
-        if (e.target.closest('.dooms-map-dashboard')) {
-            e.preventDefault();
-            e.stopPropagation();
-            openDashboard();
         }
     });
     // Enter or Space on a focused token clicks it (a card's zoom is a real button already).

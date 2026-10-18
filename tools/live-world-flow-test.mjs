@@ -503,8 +503,10 @@ console.log('\n§10 the shelf\'s Map page (D56)');
     extensionSettings.liveWorld.enabled = true;
     extensionSettings.liveWorld.pack = 'harbourside';
     await lw.onWorldChatChanged();
+    const wm = await import(`${DES}/src/systems/ui/worldMap.js`);
     const page = pages.mapPageHtml();
-    check("the page is the dashboard's map with a button to the dashboard", page.includes('class="dooms-map-page"') && page.includes('class="dooms-map-dashboard"') && page.includes('class="rpg-wmap"') && page.includes('data-root="">Harbourside</button>') && (page.match(/class="rpg-wmap-node/g) || []).length === 4, page.slice(0, 400));
+    check("the page is the dashboard's map and nothing else: the trail and the canvas, no legend, no notes, no button", page.includes('class="dooms-map-page"') && page.includes('class="rpg-wmap') && page.includes('data-root="">Harbourside</button>') && (page.match(/class="rpg-wmap-node/g) || []).length === 4 && !page.includes('rpg-wmap-legend') && !page.includes('dooms-map-dashboard') && !page.includes('Known characters only'), page.slice(0, 400));
+    check('the dashboard keeps the legend the shelf leaves out', wm.renderWorldMapHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: extensionSettings.liveWorld }).includes('class="rpg-wmap-legend"'));
     check('known characters stand on it as tokens, heard-of names do not', page.includes('data-name="Captain Reyes"') && page.includes('data-name="Old Marit"') && !page.includes('The governor'));
     const zoomed = pages.mapPageHtml({ root: 'old-town' });
     check('zoomed into a place: the trail above, what is inside drawn', zoomed.includes('class="rpg-wmap-crumb is-here" data-root="old-town">The old town</button>') && zoomed.includes('data-zoom="the-anchor"') && (zoomed.match(/class="rpg-wmap-node/g) || []).length === 2);
@@ -515,7 +517,7 @@ console.log('\n§10 the shelf\'s Map page (D56)');
     check('off: the shelf falls back to Characters and the page says so', pb.getShelfPage() === 'characters' && pages.mapPageHtml().includes('Live World is off'));
     extensionSettings.liveWorld.enabled = true;
     await lw.onWorldChatChanged();
-    check('on again: Map is back, the choice remembered', pb.getShelfPage() === 'map' && pages.mapPageHtml().includes('class="rpg-wmap"'));
+    check('on again: Map is back, the choice remembered', pb.getShelfPage() === 'map' && pages.mapPageHtml().includes('class="rpg-wmap'));
     pb.setShelfPage('characters');
 }
 

@@ -1590,8 +1590,9 @@ characters (their tokens), and heard-of names stay off. The spec's
 **D56** (Jordan, 2026-10-18) the map is also the Present Characters
 shelf's fourth page, Map, beside Characters, Inventory and Quests: the
 same map, drawn by the same renderer, with a zoom of its own and the
-trail; a token opens the dashboard on that character's timeline and a
-small button opens the dashboard itself. The page shows while Live World
+trail, and nothing else: no legend, no notes, no button (Jordan, on first
+sight: "just the map and not the world updates"); a token opens the
+dashboard on that character's timeline. The page shows while Live World
 is on, whatever the inventory's switch, so a default install's shelf is
 unchanged (D34 holds; alone, the control reads Characters | Map). This
 settles the open question of a fourth page, and D54's one entry point now
@@ -1752,13 +1753,18 @@ map (`renderWorldMapHtml`, from `src/systems/ui/shelfPages.js`) at the
 renderer's own floor height (280 px, more when dense) rather than the
 popup's 16:10: the layout is told a canvas of at most 448 px, the width
 at which its 16:10 canvas is that tall, and the wider strip only spreads
-the cards. The trail sits above it and a Dashboard button at the trail's
-right end. Cards open to what is inside and the trail leads back up; the zoom
-is the shelf's own, kept while the pages flip and reset when the chat's
-world changes pack. A token opens the dashboard on that character's
-timeline (`openWorldDashboard({ timeline, view })`); the page repaints
-when the world changes, as the dashboard does, and the button appears
-and goes with the Live World switch.
+the cards. The trail sits above it and nothing below: the legend and
+the notes are the dashboard's (`legend: false`). Cards open to what is
+inside and the trail leads back up; the zoom is the shelf's own, kept
+while the pages flip and reset when the chat changes. A token opens the
+dashboard on that character's timeline (`openWorldDashboard({ timeline,
+view })`); the page repaints when the world changes, as the dashboard
+does, and the header's Map button appears and goes with the Live World
+switch. The map's rules (`.rpg-wmap*`) moved from `styles/modals.css` to
+`style.css`: the shelf draws the map at page load, before the deferred
+Settings UI has brought modals.css in, and the first look in a browser
+showed the canvas unstyled for that reason (the lines' path filled black,
+a token at its portrait's full size).
 
 ### 15.5 Not built yet
 
@@ -1772,7 +1778,7 @@ says "seen <date>" and the feed counts entries).
 ### 15.6 Files and tests
 
 `src/utils/liveWorld.js` (pure), `tools/live-world-test.mjs` (120 checks);
-`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (114
+`src/systems/features/liveWorld.js`, `tools/live-world-flow-test.mjs` (115
 checks, the review's cases in §7–§9, the map with its zoom, the feed and
 the timelines in §6, the shelf's Map page in §10);
 `src/utils/worldMap.js` (pure), `tools/world-map-test.mjs` (40 checks),
@@ -1783,8 +1789,8 @@ the timelines in §6, the shelf's Map page in §10);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
 `BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
 `worldpacks/example.json`, `worldpacks/skyreach.json`; `index.js`,
-`template.html`, `src/core/state.js`, `styles/modals.css`,
-`styles/overhaul.css`; `docs/live-world-spec.md`.
+`template.html`, `src/core/state.js`, `style.css` (the map's rules),
+`styles/modals.css`, `styles/overhaul.css`; `docs/live-world-spec.md`.
 
 ### 15.7 Commits
 
