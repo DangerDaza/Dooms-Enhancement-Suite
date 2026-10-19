@@ -7,6 +7,13 @@
 - **The dice tool's rolls can be changed too, on the "Tool calls: Dice check" line.** Each roll the tool made shows there with its die as the button; a change rewrites the result the AI is handed on the next regenerate, the box on the reply below, and what a repeated call for the same check answers with.
 - **Closing a changed die asks whether to regenerate.** Press the number again, Escape, or click anywhere else: when the die moved and the reply is the chat's last, a prompt offers Regenerate so the story follows the new result.
 
+### Added
+- **Show the Doom button** (Settings → Doom Button). Off hides the floating D; the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from `/des`.
+- **`/des`** opens Doom's Settings from the chat box; **`/des reset`** brings back SillyTavern's top bar, the Doom button and its fly-out.
+
+### Fixed
+- **No setting can hide every way into the settings any more.** Hide SillyTavern top bar used to stay in force with the extension switched off, and the fly-out could lose its Doom's Settings entry while the bar was hidden, which left people with no way back. Now the bar hides only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, and a stored combination that would leave no way in is repaired on load. People already stuck on an older version: `docs/support/restore-doom-button.md` has the one-off console script; once updated, `/des reset` does it.
+
 ## [3.1.2-beta.1] - 2026-10-18 — A result you can set
 
 ### Added

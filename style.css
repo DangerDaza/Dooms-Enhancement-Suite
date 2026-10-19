@@ -10177,6 +10177,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     z-index: 10001;
     touch-action: none;
 }
+/* Settings → Doom Button → Show the Doom button, off (D58). */
+.dooms-settings-fab.is-hidden { display: none !important; }
 
 
 /* Hides SillyTavern's native top button bar so the chat reclaims

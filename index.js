@@ -32,6 +32,9 @@ import {
     applyNewPlayerProfile
 } from './src/core/state.js';
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData, setDoomKnivesEnabled } from './src/core/persistence.js';
+import { SlashCommandParser } from '../../../slash-commands/SlashCommandParser.js';
+import { SlashCommand } from '../../../slash-commands/SlashCommand.js';
+import { topBarHidden, canHideFlyoutItem, repairFabSettings, rescuedFabSettings, SETTINGS_ITEM } from './src/utils/fabGuard.js';
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 import { ensureCss, removeCss } from './src/core/cssLoader.js';
@@ -450,6 +453,7 @@ async function addExtensionSettings() {
     // slot write that follows.
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
+    try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
     console.log('[Dooms Tracker] addExtensionSettings() called');
@@ -463,6 +467,7 @@ async function addExtensionSettings() {
         const wasEnabled = extensionSettings.enabled;
         extensionSettings.enabled = $(this).prop('checked');
         saveSettings();
+        try { applyHideStTopBar(); } catch (e) { /* not mounted yet */ }    // off: SillyTavern's top bar comes back (D58)
         if (!extensionSettings.enabled && wasEnabled) {
             // Disabling extension - remove UI elements
             clearExtensionPrompts();
@@ -818,10 +823,53 @@ function applyPerformanceMode() {
 let _wiInterceptBypassOnce = false;
 
 function applyHideStTopBar() {
-    const shouldHide = !!(extensionSettings.fab && extensionSettings.fab.hideStTopBar);
+    // Only while the Doom button stands in for the bar (D58): the extension off, or the button hidden, brings it back.
+    const shouldHide = topBarHidden(extensionSettings);
     document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
     // Also hide TopInfoBar extension
     $('#extensionTopBar').toggle(!shouldHide);
+}
+
+/** The Doom button itself follows Settings → Doom Button → Show the Doom button (D58). */
+function applyFabVisibility() {
+    const hidden = !!(extensionSettings.fab && extensionSettings.fab.hidden === true);
+    $('#dooms-settings-fab').toggleClass('is-hidden', hidden);
+}
+
+/**
+ * /des opens Doom's Settings from the chat box; /des reset brings back
+ * SillyTavern's top bar, the Doom button and its fly-out (D58): the way
+ * in that no setting can take away.
+ */
+function registerDesCommands() {
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'des',
+        callback: async (args, value) => {
+            const what = String(value || '').trim().toLowerCase();
+            if (what === 'reset') {
+                extensionSettings.enabled = true;
+                extensionSettings.fab = rescuedFabSettings(extensionSettings);
+                delete extensionSettings.fabPosition;
+                saveSettings();
+                try { applyHideStTopBar(); applyFabVisibility(); } catch (e) { /* not mounted yet */ }
+                const fab = document.getElementById('dooms-settings-fab');
+                if (fab) { fab.style.left = ''; fab.style.top = ''; fab.style.right = ''; fab.style.bottom = ''; }
+                $('#rpg-extension-enabled').prop('checked', true);
+                if (typeof window.__doomsFabPopulateToggles === 'function') window.__doomsFabPopulateToggles();
+                return "Doom's Enhancement Suite: the top bar, the Doom button and its fly-out are back.";
+            }
+            try {
+                await ensureSettingsUI();
+                const modal = getSettingsModal();
+                if (modal) modal.open(); else $('#rpg-settings-popup').show();
+            } catch (e) {
+                return `The settings could not open: ${e && e.message ? e.message : e}`;
+            }
+            return '';
+        },
+        helpString: "Opens Doom's Enhancement Suite settings. <code>/des reset</code> brings back SillyTavern's top bar, the Doom button and its fly-out when your way in has been hidden.",
+        returns: 'nothing, or one line after reset',
+    }));
 }
 
 /**
@@ -2827,27 +2875,59 @@ function bindSettingsUI() {
     if (!extensionSettings.fab || typeof extensionSettings.fab !== 'object') {
         extensionSettings.fab = { bypassFlyout: false, hiddenButtons: [] };
     }
+    if (typeof extensionSettings.fab.hidden !== 'boolean') extensionSettings.fab.hidden = false;
+    // There is always a way in (D58): the bar hides only while the button shows, the button hides only while the bar shows.
+    const syncDoomButtonRows = () => {
+        $('#rpg-toggle-fab-shown').prop('checked', !extensionSettings.fab.hidden);
+        $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar).prop('disabled', !!extensionSettings.fab.hidden)
+            .closest('.rpg-setting-row').toggleClass('is-off', !!extensionSettings.fab.hidden);
+        if (typeof window.__doomsFabPopulateToggles === 'function') window.__doomsFabPopulateToggles();
+    };
     $('#rpg-toggle-fab-bypass').prop('checked', !!extensionSettings.fab.bypassFlyout);
     $('#rpg-toggle-fab-bypass').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.bypassFlyout = $(this).prop('checked');
         saveSettings();
     });
-    $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar);
-    $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
-        extensionSettings.fab.hideStTopBar = $(this).prop('checked');
+    $('#rpg-toggle-fab-shown').off('change.fab').on('change.fab', function () {
+        extensionSettings.fab.hidden = !$(this).prop('checked');
+        if (extensionSettings.fab.hidden && extensionSettings.fab.hideStTopBar) {
+            extensionSettings.fab.hideStTopBar = false;
+            toastr.info('SillyTavern\'s top bar is back: it is your way to these settings while the Doom button is hidden.', "Doom's Enhancement Suite", { timeOut: 6000 });
+        }
+        applyFabVisibility();
         applyHideStTopBar();
         saveSettings();
+        syncDoomButtonRows();
+    });
+    $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
+        const want = $(this).prop('checked');
+        if (want && extensionSettings.fab.hidden) {
+            $(this).prop('checked', false);
+            toastr.warning('Show the Doom button first: with the button and the top bar both gone there is no way back to these settings.', "Doom's Enhancement Suite", { timeOut: 7000 });
+            return;
+        }
+        extensionSettings.fab.hideStTopBar = want;
+        if (want && (extensionSettings.fab.hiddenButtons || []).includes(SETTINGS_ITEM)) {
+            extensionSettings.fab.hiddenButtons = extensionSettings.fab.hiddenButtons.filter(x => x !== SETTINGS_ITEM);    // the fly-out keeps the way in
+        }
+        applyHideStTopBar();
+        saveSettings();
+        syncDoomButtonRows();
     });
     applyHideStTopBar();
+    applyFabVisibility();
     // Per-button toggles populate dynamically (top bar may not exist yet
     // on first call). Re-populate on every settings open so the list is fresh.
-    if (typeof window.__doomsFabPopulateToggles === 'function') {
-        window.__doomsFabPopulateToggles();
-    }
+    syncDoomButtonRows();
     $(document).off('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]');
     $(document).on('change.fabToggle', '#rpg-fab-menu-toggles input[data-fab-toggle-id]', function () {
         const id = $(this).attr('data-fab-toggle-id');
         const enabled = $(this).prop('checked');
+        if (!enabled && !canHideFlyoutItem(extensionSettings, id)) {
+            $(this).prop('checked', true);
+            toastr.warning("Doom's Settings stays in the fly-out while SillyTavern's top bar is hidden: it is your way back to these settings.", "Doom's Enhancement Suite", { timeOut: 7000 });
+            return;
+        }
         const hidden = new Set(extensionSettings.fab.hiddenButtons || []);
         if (enabled) hidden.delete(id); else hidden.add(id);
         extensionSettings.fab.hiddenButtons = Array.from(hidden);
@@ -3102,6 +3182,15 @@ async function initUI() {
     // binder: bubble CSS settings, ST top-bar visibility, the doom-counter
     // trigger listener, and fullsheet import buttons on the initial chat.
     try { applyChatBubbleSettings(); } catch (e) { console.error('[Dooms Tracker] applyChatBubbleSettings() FAILED:', e); }
+    try {
+        // A stored Doom button shape that would leave no way into the settings is repaired before the bar is hidden (D58).
+        const repaired = repairFabSettings(extensionSettings);
+        if (repaired.changed) {
+            extensionSettings.fab = repaired.fab;
+            saveSettings();
+            console.warn('[Dooms Tracker] Doom button settings repaired: ' + repaired.why.join('; '));
+        }
+    } catch (e) { console.error('[Dooms Tracker] repairFabSettings() FAILED:', e); }
     try { applyHideStTopBar(); } catch (e) { console.error('[Dooms Tracker] applyHideStTopBar() FAILED:', e); }
     try { applyPerformanceMode(); } catch (e) { console.error('[Dooms Tracker] applyPerformanceMode() FAILED:', e); }
     try { initDoomCounterListener(); } catch (e) { console.error('[Dooms Tracker] initDoomCounterListener() FAILED:', e); }
@@ -3151,6 +3240,7 @@ async function initUI() {
             </div>
         `;
         $('body').append(fabHtml);
+        applyFabVisibility();
         const fabEl = document.getElementById('dooms-settings-fab');
         let suppressClick = false;
         const openSettingsDirect = () => {
@@ -3274,8 +3364,10 @@ async function initUI() {
                     .append($('<span class="rpg-setting-label"></span>')
                         .append($('<i></i>').attr('class', item.iconClass).css({ marginRight: '8px', opacity: 0.85 }))
                         .append(document.createTextNode(item.label)));
+                const locked = !canHideFlyoutItem(extensionSettings, item.id);
                 const $toggle = $('<label class="rpg-toggle-switch"></label>')
-                    .append($('<input type="checkbox">').prop('checked', !hidden).attr('data-fab-toggle-id', item.id))
+                    .attr('title', locked ? "Stays while SillyTavern's top bar is hidden: it is your way back to these settings." : '')
+                    .append($('<input type="checkbox">').prop('checked', !hidden || locked).prop('disabled', locked).attr('data-fab-toggle-id', item.id))
                     .append($('<span class="rpg-toggle-slider"></span>'));
                 $row.append($label).append($toggle);
                 $container.append($row);
