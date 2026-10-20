@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.3-beta.1] - 2026-10-18 — The die is the button
+## [3.1.3-beta.1] - 2026-10-20 — The die is the button, a way in always
 
 ### Changed
 - **Changing a result is one press on the die.** The ✎ and its form of 3.1.2 are gone. With Let me change the ruling on, the die number is the button: press it and ▼ ▲ appear either side, each press moves the die one face (20 wraps to 1) and the total and the outcome follow at once; press the number again (or Escape) to close. The arrow keys work too. The version reads `3.1.3-beta.1`.

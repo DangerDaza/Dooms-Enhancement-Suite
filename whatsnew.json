@@ -1,14 +1,14 @@
 {
     "version": "3.1.3-beta.1",
-    "title": "Stats (beta)",
+    "title": "Stats (beta) and three hotfixes",
     "items": [
         {
-            "title": "🎲 3.1.2 and 3.1.3: a result you can change",
-            "body": "With Settings → Stats → Let me change the ruling on, the die number is a button: on the roll box at the top of a reply, and, for rolls the dice tool made, right on the \"Tool calls: Dice check\" line. Press it and arrows appear either side: each press moves the die one face (20 wraps round to 1), and the total and the outcome follow at once. Press the number again, or click anywhere else, to close it, and when the die moved a prompt asks whether to regenerate the reply. The box says what the die really showed. The reply already written stands; its next swipe or regenerate follows the new result (for a tool roll, the result the AI is handed is rewritten too), and when it is the last reply a Regenerate the reply button sits right there."
+            "title": "🛟 3.1.3: a way in, always, and a switch for the Doom button",
+            "body": "Settings → Doom Button has a new switch, Show the Doom button, for everyone who asked to hide the floating D. With it off the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from /des in the chat box. And nothing can lock you out any more: Hide SillyTavern top bar works only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, a saved combination that would have left no way in is repaired when the page loads, and /des reset puts the bar, the button and the fly-out back from the chat box."
         },
         {
-            "title": "🛟 3.1.3: a way in, always",
-            "body": "Settings → Doom Button has a new switch, Show the Doom button, for everyone who asked to hide the floating D; the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from /des in the chat box. And nothing can lock you out any more: Hide SillyTavern top bar works only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, and /des reset puts the bar, the button and the fly-out back from the chat box."
+            "title": "🎲 3.1.2 and 3.1.3: a roll result you can change",
+            "body": "With Settings → Stats → Let me change the ruling on, the die number is a button: on the roll box at the top of a reply, and, for rolls the dice tool made, right on the \"Tool calls: Dice check\" line. Press it and arrows appear either side; each press moves the die one face (20 wraps round to 1) and the total and the outcome follow at once. Press the number again, or click anywhere else, to close, and when the die moved a prompt asks whether to regenerate the reply so the story follows. The box says what the die really showed, and the result the AI is handed is rewritten with it. The game master's own NPC calls at the end of a reply stay as rolled."
         },
         {
             "title": "🩹 3.1.1: Roll a check, readable",
