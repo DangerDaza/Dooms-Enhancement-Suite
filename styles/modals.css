@@ -9964,3 +9964,5 @@ body.dooms-perf-mode #character-workshop-popup .cw-attr-grid.is-rolled .cw-attr-
 @media (max-width: 600px) {
     .rpg-world-tab { padding: 3px 8px; }
 }
+/* A settings row whose control is disabled by another row (the top bar toggle while the Doom button is hidden, D58). */
+.rpg-setting-row.is-off { opacity: 0.55; }

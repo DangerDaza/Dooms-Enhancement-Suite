@@ -7,6 +7,21 @@
 - **Cut to a quest.** Right-click a quest on the shelf's Quests page (hold it on a phone) and Cut to it: with nothing of yours in the chat, the next reply is a short montage of what passes between now and the moment the quest begins, then its first scene with the first move left to you; the quest becomes the main quest and the old main drops to the optional list. "Cut to it, when…" names the time; swipes of the montage keep the cut, your next message ends it.
 - **Live World (beta).** Settings → Live World: a world pack (places, plot clocks with the public effect of each step, a cast) seeds each chat's own world. Every six new replies a quiet background request on the tracker's connection profile reads the recent scenes and moves the clocks and the last-seen places, by at most a step, with anything that breaks a rule discarded and retried; one fixed-size line tells the narrator where things stand. `/advance` runs it now; `/liveworld` opens the dashboard: what people say, who was last seen where, the feed of changes under their dates with a filter, a timeline per known character, and a Map view (place cards, lines along the place tree, known characters as portrait tokens; any card opens to what is inside it, with a trail back) linked both ways with the cards; a feed filter, a timeline per character, and every card kept clear of the others and inside the canvas, on a phone too. The same map is the Present Characters shelf's fourth page, Map, while Live World is on. Two packs ship: Harbourside to copy, and a Skyreach draft. Off by default.
 
+## [3.1.3-beta.1] - 2026-10-20 — The die is the button, a way in always
+
+### Changed
+- **Changing a result is one press on the die.** The ✎ and its form of 3.1.2 are gone. With Let me change the ruling on, the die number is the button: press it and ▼ ▲ appear either side, each press moves the die one face (20 wraps to 1) and the total and the outcome follow at once; press the number again (or Escape) to close. The arrow keys work too. The version reads `3.1.3-beta.1`.
+- **The dice tool's rolls can be changed too, on the "Tool calls: Dice check" line.** Each roll the tool made shows there with its die as the button; a change rewrites the result the AI is handed on the next regenerate, the box on the reply below, and what a repeated call for the same check answers with.
+- **Closing a changed die asks whether to regenerate.** Press the number again, Escape, or click anywhere else: when the die moved and the reply is the chat's last, a prompt offers Regenerate so the story follows the new result.
+
+### Added
+- **Show the Doom button** (Settings → Doom Button). Off hides the floating D; the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from `/des`.
+- **`/des`** opens Doom's Settings from the chat box; **`/des reset`** brings back SillyTavern's top bar, the Doom button and its fly-out.
+
+### Fixed
+- **No setting can hide every way into the settings any more.** Hide SillyTavern top bar used to stay in force with the extension switched off, and the fly-out could lose its Doom's Settings entry while the bar was hidden, which left people with no way back. Now the bar hides only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, and a stored combination that would leave no way in is repaired on load. People already stuck on an older version: `docs/support/restore-doom-button.md` has the one-off console script; once updated, `/des reset` does it.
+
+
 ## [3.1.2-beta.1] - 2026-10-18 — A result you can set
 
 ### Added

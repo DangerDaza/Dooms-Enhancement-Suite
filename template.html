@@ -1617,9 +1617,10 @@
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Let me change the ruling</span>
                             <span class="rpg-setting-hint">Adds a difficulty row to the dice popover so you can fix
-                                the ruling yourself before OK instead of asking the game master, and a ✎ on the roll
-                                box at the top of the reply so you can set the result yourself after the die has
-                                landed; the next swipe or regenerate of that reply follows it.</span>
+                                the ruling yourself before OK instead of asking the game master, and makes the die
+                                number a button, on the roll box at the top of the reply and on the "Tool calls" line
+                                of a dice-tool roll: press it and arrows appear to change the result; the next swipe
+                                or regenerate of that reply follows it.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-attr-override" />
@@ -2622,6 +2623,18 @@
                 <div class="rpg-accordion-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Show the Doom button</span>
+                            <span class="rpg-setting-hint">Off hides the floating D. These settings stay reachable from
+                                Extensions → Doom's Enhancement Suite → Open Settings, and from <code>/des</code> in the
+                                chat box.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-fab-shown" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Open settings on click</span>
                             <span class="rpg-setting-hint">Bypass the fly-out menu — clicking the D opens Doom's
                                 Settings directly.</span>
@@ -2634,8 +2647,9 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Hide SillyTavern top bar</span>
-                            <span class="rpg-setting-hint">Reclaim screen space — access the same buttons through the
-                                D's fly-out instead.</span>
+                            <span class="rpg-setting-hint">Reclaim screen space — the same buttons live in the D's
+                                fly-out, which keeps Doom's Settings while the bar is hidden. Needs the Doom button
+                                shown; <code>/des reset</code> in the chat box undoes it all.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-toggle-hide-st-topbar" />
