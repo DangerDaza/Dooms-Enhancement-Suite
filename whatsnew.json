@@ -1,7 +1,11 @@
 {
-    "version": "3.1.3-beta.1",
-    "title": "Stats (beta) and three hotfixes",
+    "version": "3.1.4-beta.1",
+    "title": "Stats (beta) and four hotfixes",
     "items": [
+        {
+            "title": "🛟 3.1.4: hidden means hidden",
+            "body": "Some of you switched Show the Doom button off and the D stayed. 3.1.3 hid it with a stylesheet rule, which a Custom CSS line pinning the D in place, or a second, older copy of the extension loaded beside this one, could outrank. The button now also carries an inline display: none that nothing in a stylesheet outranks, on every Doom button on the page; the switch, /des reset and a reload all apply it. If the D still shows after this update, reload the page once, then check SillyTavern's Custom CSS for a dooms-settings-fab line and the extensions folder for a second copy."
+        },
         {
             "title": "🛟 3.1.3: a way in, always, and a switch for the Doom button",
             "body": "Settings → Doom Button has a new switch, Show the Doom button, for everyone who asked to hide the floating D. With it off the settings stay reachable from Extensions → Doom's Enhancement Suite → Open Settings and from /des in the chat box. And nothing can lock you out any more: Hide SillyTavern top bar works only while the Doom button shows with Doom's Settings in its fly-out, switching the extension off brings the bar back, a saved combination that would have left no way in is repaired when the page loads, and /des reset puts the bar, the button and the fly-out back from the chat box."

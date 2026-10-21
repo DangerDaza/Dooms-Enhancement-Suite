@@ -830,10 +830,26 @@ function applyHideStTopBar() {
     $('#extensionTopBar').toggle(!shouldHide);
 }
 
-/** The Doom button itself follows Settings → Doom Button → Show the Doom button (D58). */
+/**
+ * The Doom button itself follows Settings → Doom Button → Show the Doom button (D58).
+ * Hidden means hidden whatever else styles the button: the class carries the
+ * stylesheet rule, and an inline display: none !important outranks any rule a
+ * stylesheet can hold (a Custom CSS line pinning the D in place with !important
+ * at ID strength, a second, older copy of the extension loaded beside this one).
+ * Every Doom button element on the page is covered, not only the first.
+ */
 function applyFabVisibility() {
     const hidden = !!(extensionSettings.fab && extensionSettings.fab.hidden === true);
-    $('#dooms-settings-fab').toggleClass('is-hidden', hidden);
+    document.querySelectorAll('#dooms-settings-fab, .dooms-settings-fab').forEach((fab) => {
+        fab.classList.toggle('is-hidden', hidden);
+        if (hidden) {
+            fab.style.setProperty('display', 'none', 'important');
+            fab.setAttribute('aria-hidden', 'true');
+        } else {
+            fab.style.removeProperty('display');
+            fab.removeAttribute('aria-hidden');
+        }
+    });
 }
 
 /**
@@ -3241,6 +3257,14 @@ async function initUI() {
         `;
         $('body').append(fabHtml);
         applyFabVisibility();
+        // A Doom button that arrives later (an older copy of the extension loaded beside this one) follows the switch too.
+        try {
+            new MutationObserver((records) => {
+                if (!(extensionSettings.fab && extensionSettings.fab.hidden === true)) return;
+                const arrived = records.some(r => Array.from(r.addedNodes).some(n => n.nodeType === 1 && (n.id === 'dooms-settings-fab' || n.classList.contains('dooms-settings-fab'))));
+                if (arrived) applyFabVisibility();
+            }).observe(document.body, { childList: true });
+        } catch (e) { /* no observer, no harm: the switch still covers every button present when it is used */ }
         const fabEl = document.getElementById('dooms-settings-fab');
         let suppressClick = false;
         const openSettingsDirect = () => {
