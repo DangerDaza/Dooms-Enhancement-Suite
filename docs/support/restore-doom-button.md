@@ -66,10 +66,14 @@ button and its fly-out, and `/des` alone opens the settings.
 
 ## The D stays after Show the Doom button is switched off
 
-Hard-reload the page first (Ctrl+Shift+R; Cmd+Shift+R on a Mac). A browser,
-or a CDN in front of a hosted SillyTavern, can keep an older copy of the
-extension's scripts after an update: the new switch then renders from the
-fresh settings template and does nothing, with no error anywhere. From
+Make the browser fetch the extension's scripts again first. On a computer,
+hard-reload the page (Ctrl+Shift+R; Cmd+Shift+R on a Mac). On an iPhone or
+iPad there is no hard reload: Settings → Safari → Advanced → Website Data,
+remove the SillyTavern site, then open it again; a Home Screen app has to be
+closed from the app switcher first. A browser (Safari above all), or a CDN
+in front of a hosted SillyTavern, can keep an older copy of the extension's
+scripts after an update while the settings template comes fresh: the new
+switch then renders and does nothing, with no error anywhere. From
 3.1.4-beta.1 DES notices this and says so when the page loads, and the
 diagnostic bundle (Settings → Stats → Report a problem) prints both the
 version on the server and the version running in the browser.

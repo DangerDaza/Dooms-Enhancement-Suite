@@ -47,6 +47,17 @@ export async function checkCodeVersion() {
     if (!server || server === CODE_VERSION) return null;
     return { loaded: CODE_VERSION, server };
 }
+/**
+ * How to make this browser fetch the scripts again, for the device it is.
+ * Safari on an iPhone or iPad has no hard reload: the site's data has to go.
+ */
+export function staleScriptsAdvice() {
+    const ua = navigator.userAgent || '';
+    const onIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (onIOS) return 'On an iPhone or iPad: Settings → Safari → Advanced → Website Data, remove this site, then open it again (a Home Screen app: close it from the app switcher first).';
+    if (/Android/.test(ua)) return 'On Android: the browser\'s Settings → Site settings → this site → Clear data, then open it again.';
+    return 'Hard-reload the page (Ctrl+Shift+R; Cmd+Shift+R on a Mac).';
+}
 export function getExtensionVersion() {
     if (!_versionPromise) {
         _versionPromise = fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' })
