@@ -10665,7 +10665,10 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     z-index: 10001;
     touch-action: none;
 }
-/* Settings → Doom Button → Show the Doom button, off (D58). */
+/* Settings → Doom Button → Show the Doom button, off (D58). What hides the
+   button is the inline display: none !important applyFabVisibility() sets;
+   this is the stylesheet's word on it, at ID strength as well. */
+#dooms-settings-fab.is-hidden,
 .dooms-settings-fab.is-hidden { display: none !important; }
 
 

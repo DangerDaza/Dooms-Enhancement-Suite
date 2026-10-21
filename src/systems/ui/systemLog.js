@@ -5,7 +5,7 @@
  * need to triage a report.
  */
 import { extensionSettings } from '../../core/state.js';
-import { extensionVersion, getExtensionVersion } from '../../core/config.js';
+import { extensionVersion, getExtensionVersion, CODE_VERSION } from '../../core/config.js';
 
 /** @type {Array<{timestamp: string, level: string, message: string}>} */
 const logBuffer = [];
@@ -162,7 +162,8 @@ export function initSystemLog() {
 function buildDiagnosticHeader() {
     const lines = ['===== Doom\'s Enhancement Suite — Diagnostic Bundle ====='];
     lines.push(`Captured: ${new Date().toISOString()}`);
-    lines.push(`DES version: ${extensionVersion || 'unknown'}`);
+    lines.push(`DES version: ${extensionVersion || 'unknown'} (on the server)`);
+    lines.push(`Code running in this browser: ${CODE_VERSION}${extensionVersion && extensionVersion !== CODE_VERSION ? ' — NOT the server\'s version: a cached copy of the scripts' : ''}`);
     try {
         lines.push(`Browser: ${navigator.userAgent}`);
     } catch {}
@@ -189,6 +190,10 @@ function buildDiagnosticHeader() {
         lines.push(`theme: ${s.theme || '(unset)'}`);
         lines.push(`activeUserCharacter: ${s.activeUserCharacter || '(none)'}`);
         lines.push(`userCharacters count: ${Object.keys(s.userCharacters || {}).length}`);
+        lines.push(`fab: ${JSON.stringify(s.fab || null)}`);
+        const fabEl = document.getElementById('dooms-settings-fab');
+        const hideRule = Array.from(document.styleSheets).some(ss => { try { return Array.from(ss.cssRules).some(r => r.selectorText && r.selectorText.includes('.dooms-settings-fab.is-hidden')); } catch { return false; } });
+        lines.push(`Doom button: ${fabEl ? `display=${getComputedStyle(fabEl).display}, class="${fabEl.className}", inline display="${fabEl.style.display}"` : '(not on the page)'}; hide rule in a loaded stylesheet: ${hideRule}`);
     } catch (e) {
         lines.push(`(settings snapshot failed: ${e?.message || e})`);
     }

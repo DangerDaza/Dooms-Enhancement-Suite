@@ -4,7 +4,7 @@ import { selected_group, getGroupMembers } from '../../../group-chats.js';
 import { power_user } from '../../../power-user.js';
 import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 // Core modules
-import { extensionName, extensionFolderPath, getExtensionVersion } from './src/core/config.js';
+import { extensionName, extensionFolderPath, getExtensionVersion, checkCodeVersion, staleScriptsAdvice } from './src/core/config.js';
 import { i18n } from './src/core/i18n.js';
 import { migrateToV3JSON } from './src/utils/jsonMigration.js';
 import {
@@ -920,10 +920,26 @@ function applyHideStTopBar() {
     $('#extensionTopBar').toggle(!shouldHide);
 }
 
-/** The Doom button itself follows Settings → Doom Button → Show the Doom button (D58). */
+/**
+ * The Doom button itself follows Settings → Doom Button → Show the Doom button (D58).
+ * Hidden means hidden whatever else styles the button: the class carries the
+ * stylesheet rule, and an inline display: none !important outranks any rule a
+ * stylesheet can hold (a Custom CSS line pinning the D in place with !important
+ * at ID strength, a second, older copy of the extension loaded beside this one).
+ * Every Doom button element on the page is covered, not only the first.
+ */
 function applyFabVisibility() {
     const hidden = !!(extensionSettings.fab && extensionSettings.fab.hidden === true);
-    $('#dooms-settings-fab').toggleClass('is-hidden', hidden);
+    document.querySelectorAll('#dooms-settings-fab, .dooms-settings-fab').forEach((fab) => {
+        fab.classList.toggle('is-hidden', hidden);
+        if (hidden) {
+            fab.style.setProperty('display', 'none', 'important');
+            fab.setAttribute('aria-hidden', 'true');
+        } else {
+            fab.style.removeProperty('display');
+            fab.removeAttribute('aria-hidden');
+        }
+    });
 }
 
 /**
@@ -3475,6 +3491,14 @@ async function initUI() {
         `;
         $('body').append(fabHtml);
         applyFabVisibility();
+        // A Doom button that arrives later (an older copy of the extension loaded beside this one) follows the switch too.
+        try {
+            new MutationObserver((records) => {
+                if (!(extensionSettings.fab && extensionSettings.fab.hidden === true)) return;
+                const arrived = records.some(r => Array.from(r.addedNodes).some(n => n.nodeType === 1 && (n.id === 'dooms-settings-fab' || n.classList.contains('dooms-settings-fab'))));
+                if (arrived) applyFabVisibility();
+            }).observe(document.body, { childList: true });
+        } catch (e) { /* no observer, no harm: the switch still covers every button present when it is used */ }
         const fabEl = document.getElementById('dooms-settings-fab');
         let suppressClick = false;
         const openSettingsDirect = () => {
@@ -4480,6 +4504,14 @@ jQuery(async () => {
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
+        // A browser (or a CDN in front of the host) can keep an older copy of the scripts after an update:
+        // new settings then render from the fresh template and do nothing. Say so, once, with the fix.
+        checkCodeVersion().then((skew) => {
+            if (!skew) return;
+            const advice = staleScriptsAdvice();
+            console.warn(`[Dooms Tracker] This browser is running DES ${skew.loaded} but the server has ${skew.server}: a cached copy of the scripts. ${advice} If this keeps appearing, the host is caching old files.`);
+            try { toastr.warning(`This browser is running DES ${skew.loaded}; the server has ${skew.server}. ${advice}`, "Doom's Enhancement Suite", { timeOut: 20000 }); } catch (e) { /* no toastr, the console has it */ }
+        }).catch(() => {});
         // ── What's New screen (desktop, once per release, opt-out) ──
         // The gate is three cheap checks; the module, its CSS, and the
         // release-notes JSON only load when it will actually display.
