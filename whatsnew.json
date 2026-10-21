@@ -4,7 +4,7 @@
     "items": [
         {
             "title": "🛟 3.1.4: hidden means hidden",
-            "body": "Some of you switched Show the Doom button off and the D stayed. 3.1.3 hid it with a stylesheet rule, which a Custom CSS line pinning the D in place, or a second, older copy of the extension loaded beside this one, could outrank. The button now also carries an inline display: none that nothing in a stylesheet outranks, on every Doom button on the page; the switch, /des reset and a reload all apply it. If the D still shows after this update, reload the page once, then check SillyTavern's Custom CSS for a dooms-settings-fab line and the extensions folder for a second copy."
+            "body": "Some of you switched Show the Doom button off and the D stayed. 3.1.3 hid it with a stylesheet rule, which a Custom CSS line pinning the D in place, or a second, older copy of the extension loaded beside this one, could outrank. The button now also carries an inline display: none that nothing in a stylesheet outranks, on every Doom button on the page; the switch, /des reset and a reload all apply it. If the D still shows after this update, hard-reload the page (Ctrl+Shift+R): a browser, or a CDN in front of a hosted SillyTavern, can keep the old scripts after an update, and DES now tells you when that has happened. Then check SillyTavern's Custom CSS for a dooms-settings-fab line and the extensions folder for a second copy."
         },
         {
             "title": "🛟 3.1.3: a way in, always, and a switch for the Doom button",

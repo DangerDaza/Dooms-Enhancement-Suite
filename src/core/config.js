@@ -30,6 +30,23 @@ export const extensionFolderPath = isUserExtension
  */
 export let extensionVersion = '';
 let _versionPromise = null;
+/**
+ * The version this code was shipped as. manifest.json says what the server
+ * has; the two differ when a browser, or a CDN in front of the host, kept an
+ * older copy of the scripts after an update. Bumped with manifest.json and
+ * whatsnew.json (tools/version-test.mjs keeps the three in step).
+ */
+export const CODE_VERSION = '3.1.4-beta.1';
+/**
+ * Resolves to { loaded, server } when the scripts running in this browser
+ * are not the version the server has, null when they match or the manifest
+ * cannot be read.
+ */
+export async function checkCodeVersion() {
+    const server = await getExtensionVersion();
+    if (!server || server === CODE_VERSION) return null;
+    return { loaded: CODE_VERSION, server };
+}
 export function getExtensionVersion() {
     if (!_versionPromise) {
         _versionPromise = fetch(`/${extensionFolderPath}/manifest.json`, { cache: 'no-cache' })

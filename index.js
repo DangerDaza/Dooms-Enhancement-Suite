@@ -4,7 +4,7 @@ import { selected_group, getGroupMembers } from '../../../group-chats.js';
 import { power_user } from '../../../power-user.js';
 import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 // Core modules
-import { extensionName, extensionFolderPath, getExtensionVersion } from './src/core/config.js';
+import { extensionName, extensionFolderPath, getExtensionVersion, checkCodeVersion } from './src/core/config.js';
 import { i18n } from './src/core/i18n.js';
 import { migrateToV3JSON } from './src/utils/jsonMigration.js';
 import {
@@ -4263,6 +4263,13 @@ jQuery(async () => {
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();
         console.log('[Dooms Tracker] ✅ Extension loaded successfully.');
+        // A browser (or a CDN in front of the host) can keep an older copy of the scripts after an update:
+        // new settings then render from the fresh template and do nothing. Say so, once, with the fix.
+        checkCodeVersion().then((skew) => {
+            if (!skew) return;
+            console.warn(`[Dooms Tracker] This browser is running DES ${skew.loaded} but the server has ${skew.server}: a cached copy of the scripts. Hard-reload the page (Ctrl+Shift+R, Cmd+Shift+R on a Mac) to pick up the update; if this keeps appearing, the host is caching old files.`);
+            try { toastr.warning(`This browser is running DES ${skew.loaded}; the server has ${skew.server}. Hard-reload the page (Ctrl+Shift+R) to pick up the update.`, "Doom's Enhancement Suite", { timeOut: 15000 }); } catch (e) { /* no toastr, the console has it */ }
+        }).catch(() => {});
         // ── What's New screen (desktop, once per release, opt-out) ──
         // The gate is three cheap checks; the module, its CSS, and the
         // release-notes JSON only load when it will actually display.

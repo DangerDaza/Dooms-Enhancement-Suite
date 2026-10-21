@@ -4,6 +4,7 @@
 
 ### Fixed
 - **Show the Doom button off now hides the D whatever else styles it.** Some people switched it off and the D stayed. 3.1.3 hid the button with a stylesheet rule, which any `!important` rule of ID strength outranks: a Custom CSS line pinning the D in place, or a second, older copy of the extension loaded beside this one. The button now also carries an inline `display: none !important`, which nothing in a stylesheet outranks, on every Doom button element on the page; the switch, `/des reset` and a reload all apply it. The version reads `3.1.4-beta.1`.
+- **A browser running an older copy of the scripts is told so.** A browser, or a CDN in front of a hosted SillyTavern, can keep the old scripts after an update, and a new switch then renders from the fresh template and does nothing. DES now compares the version its code was shipped as with the server's manifest when the page loads and, when they differ, says so once with the fix (a hard reload). The diagnostic bundle prints both versions, the Doom button settings and the button's state on the page.
 
 ## [3.1.3-beta.1] - 2026-10-20 — The die is the button, a way in always
 

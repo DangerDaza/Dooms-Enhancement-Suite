@@ -63,3 +63,19 @@ whenever the page saves settings.)
 
 Type `/des reset` in the chat box. It brings back the top bar, the Doom
 button and its fly-out, and `/des` alone opens the settings.
+
+## The D stays after Show the Doom button is switched off
+
+Hard-reload the page first (Ctrl+Shift+R; Cmd+Shift+R on a Mac). A browser,
+or a CDN in front of a hosted SillyTavern, can keep an older copy of the
+extension's scripts after an update: the new switch then renders from the
+fresh settings template and does nothing, with no error anywhere. From
+3.1.4-beta.1 DES notices this and says so when the page loads, and the
+diagnostic bundle (Settings → Stats → Report a problem) prints both the
+version on the server and the version running in the browser.
+
+If the versions match and the D still shows, look at SillyTavern's Custom
+CSS for a line on `dooms-settings-fab` (a `display: block !important` there
+outranked the 3.1.3 hide rule; 3.1.4 hides the button inline, which nothing
+in a stylesheet outranks) and at the `third-party` folder for a second copy
+of the extension.
