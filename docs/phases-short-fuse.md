@@ -447,8 +447,9 @@ a rail button for the dashboard.
 ## Phase 7 — Scene pictures (Moss Studio)
 
 Status: **being built** (2026-10-22). Every N of the player's turns a
-background request turns the recent messages into one caption, Moss Studio
-(the owner's local MOSS-Image pipeline) renders it with the chat's LoRAs,
+background request turns the recent messages into one caption, the owner's
+Moss workflow renders it on ComfyUI (through SillyTavern's own endpoints) with
+the chat's LoRAs spliced in,
 and the picture lands in the chat as a message from the narrator. The
 design, the decisions (D60–D65) and the studio's API contract are in
 `docs/scene-pictures-plan.md`.

@@ -100,28 +100,39 @@ extensionSettings.enabled = true;
 extensionSettings.generationMode = 'together';
 extensionSettings.connectionProfile = '';
 extensionSettings.userCharacters = {};
-extensionSettings.scenePictures = { enabled: true, every: 2, window: 6, size: 'landscape', notify: false, preamble: 'Anime-style digital illustration. ', timeoutSec: 20 };
+extensionSettings.scenePictures = { enabled: true, every: 2, window: 6, size: 'landscape', notify: false, preamble: 'Anime-style digital illustration. ', timeoutSec: 20, workflow: 'DES Scene Moss.json', model: 'moss_image_sft_int8_convrot.safetensors', vae: 'flux2-vae_small.safetensors' };
 lastGeneratedData.characterThoughts = JSON.stringify([{ name: 'Mara Vane', thoughts: 'x' }]);
 committedTrackerData.characterThoughts = null;
-sp.__setSceneTiming({ idleMaxMs: 60, idleStepMs: 10, pollMs: 5 });
+sp.__setSceneTiming({ idleMaxMs: 60, idleStepMs: 10 });
 
-// The caption and the studio behind the hook: what each was given is recorded.
-const seen = { prompts: [], studio: [] };
-let studioMode = 'ok';
+// The caption and SillyTavern's ComfyUI endpoints behind the hook: what each was given is recorded.
+const WORKFLOW = `{
+  "1": { "class_type": "UNETLoader", "inputs": { "unet_name": "%model%", "weight_dtype": "default" } },
+  "2": { "class_type": "CLIPLoader", "inputs": { "clip_name": "qwen.safetensors", "type": "moss_image" } },
+  "4": { "class_type": "VAELoader", "inputs": { "vae_name": "%vae%" } },
+  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "%prompt%", "clip": ["2", 0] } },
+  "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "%negative_prompt%", "clip": ["2", 0] } },
+  "8": { "class_type": "EmptyFlux2LatentImage", "inputs": { "width": "%width%", "height": "%height%", "batch_size": 1 } },
+  "9": { "class_type": "SkipLayerGuidanceDiTSimple", "inputs": { "model": ["1", 0], "double_layers": "22", "single_layers": "22", "start_percent": 0.01, "end_percent": 0.8 } },
+  "3": { "class_type": "KSampler", "inputs": { "seed": "%seed%", "steps": "%steps%", "cfg": "%scale%", "sampler_name": "%sampler%", "scheduler": "%scheduler%", "denoise": 1, "model": ["9", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["8", 0] } },
+  "10": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 0] } },
+  "11": { "class_type": "SaveImage", "inputs": { "images": ["10", 0], "filename_prefix": "ST_moss/scene" } }
+}`;
+const seen = { prompts: [], comfy: [] };
+let comfyMode = 'ok';
 const CAPTION = 'Anime-style digital illustration of a red-haired woman in a grey coat on a rain-dark quay at dusk, looking up from a crate of lamps, warm light on her face, the harbour behind her.';
 sp.__setSceneTransport({
     caption: async (prompt) => { seen.prompts.push(prompt); return `"${CAPTION}"`; },
-    studio: async (kind, url, body) => {
-        seen.studio.push({ kind, url, body });
-        if (url.endsWith('/api/generate')) return studioMode === 'noid' ? {} : { job: { id: 'job-7', status: 'queued' } };
-        if (url.endsWith('/api/jobs')) {
-            if (studioMode === 'fail') return [{ id: 'job-7', status: 'error', error: 'out of memory' }];
-            if (studioMode === 'slow') { await wait(60); return [{ id: 'job-7', status: 'done', images: ['MossStudio/d/1.png'] }]; }
-            return [{ id: 'job-7', status: 'done', images: ['MossStudio/d/1.png'] }];
+    comfy: async (kind, body) => {
+        seen.comfy.push({ kind, body });
+        if (kind === 'ping') return {};
+        if (kind === 'workflows') return ['DES Scene Moss.json', 'Default_Comfy_Workflow.json'];
+        if (kind === 'workflow') return comfyMode === 'noworkflow' ? '' : WORKFLOW;
+        if (kind === 'generate') {
+            if (comfyMode === 'fail') throw new Error('generate: ComfyUI generation did not succeed.\n\nValue not in list: lora_name');
+            if (comfyMode === 'slow') { await wait(60); return { format: 'png', data: 'AAAA' }; }
+            return { format: 'png', data: 'AAAA' };
         }
-        if (url.includes('/api/image?f=')) return { dataUrl: 'data:image/png;base64,AAAA' };
-        if (url.includes('/api/preflight')) return { reachable: true, version: '0.42.1' };
-        if (url.includes('/api/loras')) return ['BunnySlop_MOSS', 'Flat_Anime_Moss-Image-'];
         return {};
     },
 });
@@ -156,14 +167,16 @@ check('the run posted the narrator\'s message with the picture', chat.length ===
 check('the message text is the caption\'s first line, in italics', posted.mes.startsWith('*Anime-style digital illustration of a red-haired woman') && posted.mes.endsWith('*'));
 check('the picture was saved under the character\'s folder as a png', savedFiles.length === 1 && savedFiles[0].folder === 'Mara Vane' && savedFiles[0].format === 'png' && savedFiles[0].b64 === 'AAAA');
 check('the events and the render SillyTavern expects, then the chat saved', events.some(e => e[0] === 'message_received') && events.some(e => e[0] === 'character_message_rendered') && rendered.length === 1 && saves.immediate === 1);
-const gen = seen.studio.find(s => s.url.endsWith('/api/generate'));
-check('the studio got the preamble, the caption, this chat\'s LoRAs and the size', gen && gen.body.positive === `Anime-style digital illustration. ${CAPTION}` && gen.body.loras[0].name === 'BunnySlop_MOSS' && gen.body.loras[0].strength === 0.8 && gen.body.width === 1536 && gen.body.height === 864 && gen.body.card === 'card2');
+const gen = seen.comfy.find(s => s.kind === 'generate');
+const graph = gen ? JSON.parse(gen.body.prompt).prompt : null;
+check('ComfyUI got the workflow filled: the preamble and the caption, the size, the models, the sampling', gen && gen.body.url === 'http://127.0.0.1:8189' && graph['6'].inputs.text === `Anime-style digital illustration. ${CAPTION}` && graph['8'].inputs.width === 1536 && graph['8'].inputs.height === 864 && graph['1'].inputs.unet_name === 'moss_image_sft_int8_convrot.safetensors' && graph['4'].inputs.vae_name === 'flux2-vae_small.safetensors' && graph['3'].inputs.steps === 25 && graph['3'].inputs.cfg === 2.5 && Number.isInteger(graph['3'].inputs.seed));
+check('…with this chat\'s LoRA spliced after the loader, feeding the guidance node', graph.des_lora_1 && graph.des_lora_1.inputs.lora_name === 'BunnySlop_MOSS.safetensors' && graph.des_lora_1.inputs.strength_model === 0.8 && graph.des_lora_1.inputs.model.join() === '1,0' && graph['9'].inputs.model.join() === 'des_lora_1,0');
 check('the caption request saw the recent scene, who is present and the identity notes', seen.prompts.length === 1 && seen.prompts[0].user.includes('Jordan: I wave.') && seen.prompts[0].user.includes('Characters present: Mara Vane.') && seen.prompts[0].system.includes('red hair in a long braid') && seen.prompts[0].system.includes('a wide landscape frame'));
-check('the count is back to zero and the last picture is kept', sp.getSceneState().sinceLast === 0 && sp.getSceneState().last.ok && sp.getSceneState().last.file === 'MossStudio/d/1.png' && meta.dooms_scene.last.ok);
+check('the count is back to zero and the last picture is kept', sp.getSceneState().sinceLast === 0 && sp.getSceneState().last.ok && sp.getSceneState().last.file === 'DES Scene Moss.json' && meta.dooms_scene.last.ok);
 check('the same reply end does not run twice', (sp.onSceneGenerationEnded(), chat.length === before + 1));
 
 console.log('\n§3 a failed run, then the retry');
-studioMode = 'fail';
+comfyMode = 'fail';
 chat.push(user('I follow her.'));
 sp.onSceneMessageSent();
 chat.push(user('I follow her further.'));
@@ -172,8 +185,8 @@ chat.push(ai('She leads.'));
 const before3 = chat.length;
 sp.onSceneGenerationEnded();
 await wait(150);
-check('a failed job posts nothing and arms a retry', chat.length === before3 && sp.getSceneState().retryNext && !sp.getSceneState().last.ok && sp.getSceneState().last.error.includes('out of memory') && sp.getSceneState().last.file === 'MossStudio/d/1.png');
-studioMode = 'ok';
+check('a failed render posts nothing, keeps ComfyUI\'s reason and arms a retry', chat.length === before3 && sp.getSceneState().retryNext && !sp.getSceneState().last.ok && sp.getSceneState().last.error.includes('Value not in list: lora_name') && sp.getSceneState().last.file === 'DES Scene Moss.json');
+comfyMode = 'ok';
 chat.push(user('I keep up.'));
 sp.onSceneMessageSent();
 check('the next turn is due at once', sp.getSceneStatus().armed);
@@ -187,10 +200,16 @@ STUB.__setSendPress(true);
 let r = await sp.illustrateNow({ reason: 'command' });
 STUB.__setSendPress(false);
 check('a chat that stays busy gives up and arms a retry', !r.ok && r.reason === 'busy' && sp.getSceneState().retryNext);
-studioMode = 'noid';
+comfyMode = 'noworkflow';
 r = await sp.illustrateNow({ reason: 'command' });
-studioMode = 'ok';
-check('a studio answer with no job id is a failure named', !r.ok && r.reason === 'error' && r.error.includes('no job id'));
+comfyMode = 'ok';
+check('a workflow missing from the store is a failure named', !r.ok && r.reason === 'error' && r.error.includes('empty or missing'));
+extensionSettings.scenePictures.model = '';
+r = await sp.illustrateNow({ reason: 'command' });
+extensionSettings.scenePictures.model = 'moss_image_sft_int8_convrot.safetensors';
+check('a placeholder nothing fills is a failure named', !r.ok && r.error.includes('%model%'));
+const test = await sp.testComfy();
+check('Test connection: ComfyUI answers, the store listed, the workflow ready', test.ok && test.line.includes('ComfyUI answers at http://127.0.0.1:8189') && test.line.includes('is ready') && test.workflows.length === 2);
 extensionSettings.scenePictures.enabled = false;
 r = await sp.illustrateNow({ reason: 'command' });
 check('/scene with the feature off says so', !r.ok && r.reason === 'disabled');
@@ -201,7 +220,7 @@ extensionSettings.scenePictures.toAI = true;
 r = await sp.illustrateNow({ reason: 'manual' });
 check('with captions reaching the AI the message is a narrator message, not a system one', r.ok && chat[chat.length - 1].is_system === false && chat[chat.length - 1].name === 'Narrator');
 extensionSettings.scenePictures.toAI = false;
-studioMode = 'slow';
+comfyMode = 'slow';
 const lenBefore = chat.length;
 const running = sp.illustrateNow({ reason: 'manual' });
 await wait(20);
@@ -209,7 +228,7 @@ await wait(20);
 globalThis.__DES_CTX__.chatId = 'other-chat';
 sp.onSceneChatChanged();
 r = await running;
-studioMode = 'ok';
+comfyMode = 'ok';
 check('a run whose chat changed is discarded whole', !r.ok && r.reason === 'stale' && chat.length === lenBefore);
 globalThis.__DES_CTX__.chatId = 'test-chat';
 sp.onSceneChatChanged();

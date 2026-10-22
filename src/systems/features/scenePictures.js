@@ -2,8 +2,9 @@
  * Scene pictures — the lifecycle (Project Short Fuse, Phase 7; docs/scene-pictures-plan.md).
  *
  * Every N of the player's turns (D64) a background request on the tracker's
- * connection profile turns the recent messages into one caption (D61),
- * Moss Studio renders it with this chat's LoRAs (D62, D63) and the picture
+ * connection profile turns the recent messages into one caption (D61), the
+ * owner's Moss workflow renders it on ComfyUI with this chat's LoRAs spliced
+ * in, through SillyTavern's own ComfyUI endpoints (D62, D63), and the picture
  * lands in the chat as a message from the narrator (D60). The model
  * (src/utils/scenePictures.js) holds every rule; this module holds the
  * chat, the clock and the network.
@@ -14,11 +15,12 @@
  *     that is due, once the main generation and any other background
  *     request are over;
  *   - the caption through withBackgroundProfile (external mode respected),
- *     the picture through the studio's API, saved into SillyTavern, posted
- *     the way SillyTavern's own image extension posts;
+ *     the picture through /api/sd/comfy (the workflow from SillyTavern's
+ *     store, filled and spliced), saved into SillyTavern, posted the way
+ *     SillyTavern's own image extension posts;
  *   - /scene runs one now; the settings page reads getSceneStatus().
  */
-import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar } from '../../../../../../../script.js';
+import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
@@ -32,8 +34,8 @@ import { buildRecentText } from '../../utils/liveWorld.js';
 import { resolvePersonaName } from './diceRolls.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
-    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, studioEndpoints, buildGenerateBody, readJobId, readJobs,
-    readLoraNames, preflightLine,
+    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, fillWorkflow, injectLoras,
+    comfyGenerateBody, readComfyResult,
 } from '../../utils/scenePictures.js';
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -46,8 +48,8 @@ let loadedMeta = null;      // the chat_metadata object the state was loaded fro
 let loadedChat = undefined; // the chat id it was loaded with
 let running = false;
 let armed = false;          // a run is due and waits for the generation to end
-let transport = null;       // tests: { caption(prompt) → text, studio(kind, url, body) → json | { blob } | { dataUrl } }
-let timing = { idleMaxMs: 120000, idleStepMs: 1500, pollMs: 2000 };
+let transport = null;       // tests: { caption(prompt) → text, comfy(kind, body) → json }
+let timing = { idleMaxMs: 120000, idleStepMs: 1500 };
 
 const log = (message, data = null) => {
     const line = `[Dooms Tracker] Scene pictures: ${message}`;
@@ -181,87 +183,98 @@ async function writeCaption(c) {
     return parseCaptionReply(text);
 }
 
-/** One request to the studio: JSON in and out, or a blob for an image; a refused origin named for what it is. */
-async function studio(kind, url, body = null, { timeoutMs = 20000 } = {}) {
-    if (transport && transport.studio) return transport.studio(kind, url, body);
+/**
+ * One request to SillyTavern's ComfyUI endpoints (/api/sd/comfy/<kind>):
+ * the server talks to ComfyUI, so no header and no second server. A
+ * refused answer carries the server's text (ComfyUI's own error for a
+ * generate, which names the node and the input that failed).
+ */
+async function comfy(kind, body, { timeoutMs = 20000 } = {}) {
+    if (transport && transport.comfy) return transport.comfy(kind, body);
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
-        const init = { method: body ? 'POST' : 'GET', signal: controller ? controller.signal : undefined };
-        if (body) { init.headers = { 'Content-Type': 'application/json' }; init.body = JSON.stringify(body); }
         let response;
         try {
-            response = await fetch(url, init);
+            response = await fetch(`/api/sd/comfy/${kind}`, { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify(body || {}), signal: controller ? controller.signal : undefined });
         } catch (e) {
-            if (e && e.name === 'AbortError') throw new Error(`the studio did not answer within ${Math.round(timeoutMs / 1000)} s (${url})`);
-            throw new Error(`the studio could not be reached at ${url}: it is not running, or it refused this page's origin (it has to send Access-Control-Allow-Origin)`);
+            if (e && e.name === 'AbortError') throw new Error(`${kind === 'generate' ? 'ComfyUI did not finish the picture' : `the ${kind} request did not answer`} within ${Math.round(timeoutMs / 1000)} s`);
+            throw new Error(`SillyTavern's server could not be reached for ${kind}: ${e && e.message ? e.message : e}`);
         }
-        if (!response.ok) throw new Error(`the studio answered ${response.status} for ${url}`);
-        if (kind === 'blob') return { blob: await response.blob() };
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error(kind === 'ping' ? `ComfyUI at ${body && body.url} did not answer: is that card running?` : `${kind}: ${text || `SillyTavern answered ${response.status}`}`);
+        }
         return await response.json();
     } finally {
         if (timer) clearTimeout(timer);
     }
 }
 
+/** The workflows in SillyTavern's own store (Image Generation → ComfyUI). */
+export async function listWorkflows() {
+    const list = await comfy('workflows', {});
+    return (Array.isArray(list) ? list : []).map(String);
+}
+
+/** One workflow's text from the store, '' for none. */
+export async function loadWorkflow(name) {
+    const text = await comfy('workflow', { file_name: name });
+    return typeof text === 'string' ? text : '';
+}
+
+/** A pasted workflow saved into the store under a name, so it can be picked. */
+export async function saveWorkflow(name, text) {
+    JSON.parse(text);    // not JSON: throws, and the page says so
+    await comfy('save-workflow', { file_name: name, workflow: text });
+    return name;
+}
+
 /**
- * Settings → Test connection, in three parts so a slow card is not read as
- * a dead studio: /api/config (quick: the studio is up and this page's
- * origin is allowed), /api/loras (the list, from disk), and the preflight,
- * which asks the ComfyUI card and may wait on it (60 s).
- * Throws only when the studio itself cannot be reached.
+ * Settings → Test connection: ComfyUI answers at the address, the store's
+ * workflows, and the chosen workflow read with its placeholders checked
+ * against what DES fills. Throws only when ComfyUI cannot be reached.
  */
-export async function testStudio() {
+export async function testComfy() {
     const c = cfg();
-    const e = studioEndpoints(c);
-    const config = await studio('json', e.config, null, { timeoutMs: 10000 });
-    log('config', config);
-    const [lorasResult, preResult] = await Promise.allSettled([
-        studio('json', e.loras, null, { timeoutMs: 30000 }),
-        studio('json', e.preflight, null, { timeoutMs: 60000 }),
-    ]);
-    const loras = lorasResult.status === 'fulfilled' ? readLoraNames(lorasResult.value) : [];
-    const lorasError = lorasResult.status === 'rejected' ? (lorasResult.reason && lorasResult.reason.message) || 'the LoRA list did not come' : '';
-    let line;
-    if (preResult.status === 'fulfilled') { log('preflight', preResult.value); line = preflightLine(preResult.value); }
-    else line = `Moss Studio is up, but its preflight for ${c.card} did not answer${/within/.test(String(preResult.reason && preResult.reason.message)) ? ' within 60 s' : ''}: is that ComfyUI card running, or mid-render? Pictures go through once it answers.`;
-    return { line, loras, lorasError, raw: preResult.status === 'fulfilled' ? preResult.value : null, config };
-}
-
-export async function listStudioLoras() {
-    return readLoraNames(await studio('json', studioEndpoints(cfg()).loras));
-}
-
-/** The picture: generate, poll the job, fetch the file; { file, dataUrl }. */
-async function renderPicture(c, caption, stale) {
-    const e = studioEndpoints(c);
-    const body = buildGenerateBody(c, state, caption, { title: `DES scene ${new Date().toISOString().slice(0, 16)}` });
-    log('generate', body);
-    const started = await studio('json', e.generate, body, { timeoutMs: 45000 });
-    const id = readJobId(started);
-    if (!id) throw new Error(`the studio gave no job id (${JSON.stringify(started).slice(0, 200)})`);
-    const deadline = Date.now() + c.timeoutSec * 1000;
-    let job = null;
-    while (Date.now() < deadline) {
-        await sleep(timing.pollMs);
-        if (stale()) throw new Error('the chat changed while the studio rendered');
-        job = readJobs(await studio('json', e.jobs, null, { timeoutMs: 30000 }), id);
-        if (job.failed) throw new Error(`the studio reported the job failed${job.error ? `: ${job.error}` : ''}`);
-        if (job.done) break;
-    }
-    if (!job || !job.done) throw new Error(`the studio did not finish job ${id} within ${c.timeoutSec} s`);
-    if (!job.images.length) throw new Error(`job ${id} finished with no image`);
-    const file = job.images[0];
-    const got = await studio('blob', e.image(file), null, { timeoutMs: 60000 });
-    const dataUrl = got && typeof got.dataUrl === 'string' ? got.dataUrl : await new Promise((resolve, reject) => {
+    await comfy('ping', { url: c.comfyUrl }, { timeoutMs: 15000 });
+    let workflows = [];
+    try { workflows = await listWorkflows(); } catch (e) { /* the ping is the answer */ }
+    let line = `ComfyUI answers at ${c.comfyUrl}.`;
+    let ok = true;
+    if (!c.workflow) { line += ' Pick a workflow.'; ok = false; }
+    else {
         try {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result || ''));
-            reader.onerror = () => reject(new Error('the image could not be read'));
-            reader.readAsDataURL(got.blob);
-        } catch (err) { reject(err); }
-    });
-    return { file, dataUrl };
+            const text = await loadWorkflow(c.workflow);
+            const found = workflowPlaceholders(text);
+            const { missing } = fillWorkflow(text, workflowValues(c, { caption: 'test', seed: 1 }));
+            if (!found.includes('prompt')) { line += ` The workflow "${c.workflow}" has no %prompt%: the caption would go nowhere.`; ok = false; }
+            else if (missing.length) { line += ` The workflow needs ${missing.map(m => `%${m}%`).join(', ')} and nothing fills ${missing.length === 1 ? 'it' : 'them'}: set the models below.`; ok = false; }
+            else line += ` The workflow "${c.workflow}" is ready (${found.length} placeholders filled).`;
+        } catch (e) {
+            line += ` The workflow "${c.workflow}" could not be read: ${e && e.message ? e.message : e}`;
+            ok = false;
+        }
+    }
+    return { line, ok, workflows };
+}
+
+/** The picture: the workflow filled and spliced, posted through the server; { file, dataUrl }. */
+async function renderPicture(c, caption) {
+    if (!c.workflow) throw new Error('no workflow is chosen (Settings → Scene pictures)');
+    const text = await loadWorkflow(c.workflow);
+    if (!text) throw new Error(`the workflow "${c.workflow}" is empty or missing from SillyTavern's store`);
+    const filled = fillWorkflow(text, workflowValues(c, { caption }));
+    if (filled.missing.length) throw new Error(`the workflow needs ${filled.missing.map(m => `%${m}%`).join(', ')} and nothing fills ${filled.missing.length === 1 ? 'it' : 'them'}`);
+    let graph;
+    try { graph = JSON.parse(filled.text); } catch (e) { throw new Error(`the workflow "${c.workflow}" is not valid JSON once filled: ${e && e.message ? e.message : e}`); }
+    const spliced = injectLoras(graph, state.loras);
+    if (state.loras.length && !spliced.inserted) log('no model loader found in the workflow: the LoRAs were not applied');
+    log('generate', { workflow: c.workflow, loras: spliced.inserted, placeholders: workflowPlaceholders(text).length });
+    const result = await comfy('generate', comfyGenerateBody(c.comfyUrl, spliced.graph), { timeoutMs: c.timeoutSec * 1000 });
+    const dataUrl = readComfyResult(result);
+    if (!dataUrl) throw new Error('ComfyUI returned no image');
+    return { file: c.workflow, dataUrl };
 }
 
 /** The picture saved into SillyTavern's own images and posted as the narrator's message (D60). */
@@ -325,7 +338,7 @@ export async function illustrateNow({ reason = 'manual' } = {}) {
         if (caption === BACKGROUND_BUSY) { commit({ ...state, retryNext: true }); log('waits: another background request holds the flag'); return { ok: false, reason: 'busy' }; }
         if (!caption) throw new Error('the caption request gave nothing usable');
         log('caption', caption);
-        const picture = await renderPicture(c, caption, stale);
+        const picture = await renderPicture(c, caption);
         if (stale()) return { ok: false, reason: 'stale' };
         const posted = await postPicture(c, { caption, file: picture.file, dataUrl: picture.dataUrl, loras: state.loras });
         commit(afterPicture(state, { at: Date.now(), caption, file: picture.file, url: posted.url }));
@@ -355,7 +368,7 @@ function registerSceneCommands() {
                 const why = { off: 'Doom\'s Enhancement Suite is off.', disabled: 'Scene pictures are off (Settings → Scene pictures).', 'no-chat': 'No chat is open.', running: 'A picture is already being made.', busy: 'The chat is busy; it tries again after the next reply.', stale: 'The chat changed meanwhile.' };
                 return why[r.reason] || `No picture: ${r.error || r.reason}`;
             },
-            helpString: 'Scene pictures: makes one picture of the recent scene now, through Moss Studio, and posts it as the narrator.',
+            helpString: 'Scene pictures: makes one picture of the recent scene now, with the Moss workflow on ComfyUI, and posts it as the narrator.',
             returns: 'one line saying what happened',
         }));
     } catch (e) {
@@ -368,6 +381,6 @@ export function initScenePictures() {
     registerSceneCommands();
 }
 
-/** Tests: the caption and the studio behind functions, and the waits made short. */
+/** Tests: the caption and SillyTavern's ComfyUI endpoints behind functions, and the waits made short. */
 export function __setSceneTransport(fn) { transport = fn || null; }
 export function __setSceneTiming(t) { timing = { ...timing, ...(t || {}) }; }

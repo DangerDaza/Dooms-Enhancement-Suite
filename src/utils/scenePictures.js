@@ -2,9 +2,10 @@
  * Scene pictures — the model (Project Short Fuse, Phase 7; docs/scene-pictures-plan.md).
  *
  * Every N of the player's turns a background request turns the recent
- * messages into one caption for MOSS-Image, Moss Studio (the owner's local
- * pipeline in front of ComfyUI) renders it with this chat's LoRAs, and the
- * picture lands in the chat as a message from the narrator.
+ * messages into one caption for MOSS-Image, the owner's Moss workflow renders
+ * it on ComfyUI with this chat's LoRAs spliced in (through SillyTavern's own
+ * ComfyUI endpoints, so nothing but ComfyUI has to run), and the picture lands
+ * in the chat as a message from the narrator.
  *
  * Pure: no SillyTavern or DES state imports. The feature module
  * (src/systems/features/scenePictures.js) does the fetching and the chat;
@@ -27,8 +28,8 @@ export const SIZE_PRESETS = Object.freeze([
 
 export const CONFIG_DEFAULTS = Object.freeze({
     enabled: false,
-    studioUrl: 'http://127.0.0.1:8791',   // Moss Studio
-    card: 'card2',                        // the ComfyUI the studio renders on
+    comfyUrl: 'http://127.0.0.1:8189',    // the ComfyUI the Moss workflow runs on (card 2 in the owner's setup)
+    workflow: '',                         // a workflow in SillyTavern's own store (Image Generation → ComfyUI), with %prompt% and friends
     every: 5,                             // a picture every N of the player's turns
     window: 12,                           // the messages the caption is written from
     size: 'portrait',
@@ -36,9 +37,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
     cfg: 2.5,
     sampler: 'er_sde',
     scheduler: 'simple',
-    slg: true,                            // SkipLayerGuidance, the studio's default
-    enhancer: false,                      // the studio's prompt enhancer
-    unet: '',                             // empty: the studio's defaults
+    model: '',                            // what fills %model%, %clip% and %vae% when the workflow has them; empty leaves them to the workflow
     clip: '',
     vae: '',
     narrator: 'Narrator',                 // the name on the message
@@ -46,7 +45,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
     preamble: 'Anime-style digital illustration. ',
     negative: 'nsfw, worst quality, bad anatomy, watermark, jpeg artifact',
     guide: '',                            // extra caption rules, the owner's
-    timeoutSec: 180,                      // the studio gets this long per picture
+    timeoutSec: 180,                      // ComfyUI gets this long per picture
     notify: true,                         // a toast when a picture lands or fails
     debug: false,
 });
@@ -62,11 +61,11 @@ export function scenePicturesConfig(settings) {
     const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
     const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
     const str = (v, d) => (typeof v === 'string' ? v : d);
-    const url = str(c.studioUrl, '').trim().replace(/\/+$/, '');
+    const url = str(c.comfyUrl, '').trim().replace(/\/+$/, '');
     return {
         enabled: c.enabled === true,
-        studioUrl: url || CONFIG_DEFAULTS.studioUrl,
-        card: c.card === 'card1' ? 'card1' : 'card2',
+        comfyUrl: url || CONFIG_DEFAULTS.comfyUrl,
+        workflow: str(c.workflow, '').trim(),
         every: int(c.every, 1, 50, CONFIG_DEFAULTS.every),
         window: int(c.window, 2, 40, CONFIG_DEFAULTS.window),
         size: SIZE_PRESETS.some(p => p.id === c.size) ? c.size : CONFIG_DEFAULTS.size,
@@ -74,9 +73,7 @@ export function scenePicturesConfig(settings) {
         cfg: num(c.cfg, 0, 20, CONFIG_DEFAULTS.cfg),
         sampler: str(c.sampler, '').trim() || CONFIG_DEFAULTS.sampler,
         scheduler: str(c.scheduler, '').trim() || CONFIG_DEFAULTS.scheduler,
-        slg: c.slg !== false,
-        enhancer: c.enhancer === true,
-        unet: str(c.unet, '').trim(),
+        model: str(c.model, '').trim(),
         clip: str(c.clip, '').trim(),
         vae: str(c.vae, '').trim(),
         narrator: str(c.narrator, '').trim() || CONFIG_DEFAULTS.narrator,
@@ -223,106 +220,143 @@ export function captionLine(caption, max = 160) {
     return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
 }
 
-// ─── The studio ─────────────────────────────────────────────────────────────
+// ─── ComfyUI, through SillyTavern (D62) ─────────────────────────────────────
+//
+// SillyTavern's own image extension drives a ComfyUI from its server: a
+// workflow from the user's store with "%placeholder%" values filled in,
+// posted as {"prompt": graph}; the server queues it, waits on the history
+// and hands the first image back as base64. DES does the same with the
+// owner's Moss workflow and this chat's LoRA chain spliced in, so no header,
+// no second server and nothing but ComfyUI has to be running.
 
-export function studioEndpoints(cfg) {
-    const base = (cfg && cfg.studioUrl ? cfg.studioUrl : CONFIG_DEFAULTS.studioUrl).replace(/\/+$/, '');
-    const card = encodeURIComponent(cfg && cfg.card ? cfg.card : 'card2');
-    return {
-        base,
-        config: `${base}/api/config`,
-        preflight: `${base}/api/preflight?card=${card}`,
-        loras: `${base}/api/loras?card=${card}`,
-        generate: `${base}/api/generate`,
-        jobs: `${base}/api/jobs`,
-        image: (file) => `${base}/api/image?f=${encodeURIComponent(String(file || ''))}`,
-    };
-}
+/** A 1×1 transparent PNG, what the image extension puts in %user_avatar% and %char_avatar% when there is none. */
+export const PNG_PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-/** The body of POST /api/generate for one picture of this chat. */
-export function buildGenerateBody(cfg, state, caption, { seed = -1, title = '', character = '' } = {}) {
-    const size = sizeOf(cfg);
-    const body = {
-        card: cfg.card,
-        positive: `${cfg.preamble || ''}${caption}`.trim(),
-        negative: cfg.negative || '',
-        width: size.width,
-        height: size.height,
-        steps: cfg.steps,
-        cfg: cfg.cfg,
-        sampler: cfg.sampler,
-        scheduler: cfg.scheduler,
-        seed: Number.isInteger(seed) ? seed : -1,
-        count: 1,
-        slg: cfg.slg,
-        loras: normalizeLoras(state && state.loras),
-        enhancer: cfg.enhancer,
-        title: title || 'DES scene',
-    };
-    if (character) body.character = character;
-    for (const k of ['unet', 'clip', 'vae']) if (cfg[k]) body[k] = cfg[k];
-    return body;
-}
-
-/** The job id out of the generate answer, '' when none can be read. */
-export function readJobId(json) {
-    const j = json && typeof json === 'object' ? json : {};
-    const job = j.job && typeof j.job === 'object' ? j.job : j;
-    const id = job.id ?? job.job_id ?? job.prompt_id ?? j.id ?? j.job_id ?? j.prompt_id;
-    return id === undefined || id === null ? '' : String(id);
-}
-
-const DONE_WORDS = new Set(['done', 'finished', 'complete', 'completed', 'success', 'succeeded', 'ok']);
-const FAILED_WORDS = new Set(['error', 'failed', 'failure', 'cancelled', 'canceled', 'interrupted']);
-
-/**
- * The state of one job in the /api/jobs answer, read tolerantly: the job by
- * id (as `id`, `job_id` or `prompt_id`, in a list, under `jobs`, or as a
- * key), done when its status says so or images exist and nothing says it is
- * still running, failed when its status says so; the images as paths.
- */
-export function readJobs(json, id) {
-    const want = String(id || '');
-    const out = { found: false, done: false, failed: false, status: '', images: [], error: '' };
-    if (!want) return out;
-    const root = json && typeof json === 'object' ? json : {};
-    let list = Array.isArray(root) ? root : Array.isArray(root.jobs) ? root.jobs : null;
-    let job = null;
-    if (list) {
-        job = list.find(j => j && typeof j === 'object' && [j.id, j.job_id, j.prompt_id].some(v => v !== undefined && String(v) === want)) || null;
-    } else {
-        const store = root.jobs && typeof root.jobs === 'object' ? root.jobs : root;
-        if (store[want] && typeof store[want] === 'object') job = store[want];
-        else job = Object.values(store).find(j => j && typeof j === 'object' && [j.id, j.job_id, j.prompt_id].some(v => v !== undefined && String(v) === want)) || null;
+/** The placeholders a workflow text carries, as "%name%" string values, lower-cased, each once. */
+export function workflowPlaceholders(text) {
+    const out = [];
+    const seen = new Set();
+    for (const m of String(text || '').matchAll(/"%([A-Za-z_][A-Za-z0-9_]*)%"/g)) {
+        const k = m[1].toLowerCase();
+        if (!seen.has(k)) { seen.add(k); out.push(k); }
     }
-    if (!job) return out;
-    out.found = true;
-    const statusRaw = job.status ?? job.state ?? (job.prompt && typeof job.prompt === 'object' ? job.prompt.status : job.prompt);
-    const status = typeof statusRaw === 'string' ? statusRaw.toLowerCase() : '';
-    out.status = status;
-    const images = Array.isArray(job.images) ? job.images : Array.isArray(job.outputs) ? job.outputs : [];
-    out.images = images.map(i => typeof i === 'string' ? i : (i && typeof i === 'object' ? (i.file || i.path || i.f || i.filename || '') : '')).filter(Boolean);
-    if (typeof job.error === 'string' && job.error) out.error = job.error;
-    if (FAILED_WORDS.has(status) || (out.error && !DONE_WORDS.has(status))) { out.failed = true; return out; }
-    if (DONE_WORDS.has(status) || job.done === true) { out.done = true; return out; }
-    if (out.images.length && !/running|queued|pending|rendering|waiting/.test(status)) out.done = true;
     return out;
 }
 
-/** The LoRA names out of /api/loras, whatever shape the list takes. */
-export function readLoraNames(json) {
-    const root = json && typeof json === 'object' ? json : {};
-    const list = Array.isArray(root) ? root : Array.isArray(root.loras) ? root.loras : Array.isArray(root.files) ? root.files : [];
-    return list.map(i => typeof i === 'string' ? i : (i && typeof i === 'object' ? (i.name || i.file || i.filename || '') : '')).map(s => String(s).trim()).filter(Boolean);
+/**
+ * The values for a workflow's placeholders: the caption and the negative,
+ * the sampling, the size, and the models when set. Keys are the image
+ * extension's names, so a workflow made for it works here unchanged.
+ */
+export function workflowValues(cfg, { caption = '', seed = -1 } = {}) {
+    const size = sizeOf(cfg);
+    const v = {
+        prompt: `${cfg.preamble || ''}${caption}`.trim(),
+        negative_prompt: cfg.negative || '',
+        seed: Number.isInteger(seed) && seed >= 0 ? seed : Math.floor(Math.random() * 2147483647),
+        steps: cfg.steps,
+        scale: cfg.cfg,
+        sampler: cfg.sampler,
+        scheduler: cfg.scheduler,
+        width: size.width,
+        height: size.height,
+        denoise: 1,
+        clip_skip: 1,
+        user_avatar: PNG_PIXEL,
+        char_avatar: PNG_PIXEL,
+    };
+    if (cfg.model) v.model = cfg.model;
+    if (cfg.clip) v.clip = cfg.clip;
+    if (cfg.vae) v.vae = cfg.vae;
+    return v;
 }
 
-/** What the preflight says, in a line. */
-export function preflightLine(json) {
+/**
+ * The workflow text with its placeholders filled the way the image extension
+ * fills them: the quoted token "%name%" becomes the JSON of the value, so a
+ * number stays a number. Placeholders with no value are left and listed.
+ */
+export function fillWorkflow(text, values) {
+    let out = String(text || '');
+    const given = values && typeof values === 'object' ? values : {};
+    const lower = {};
+    for (const [k, v] of Object.entries(given)) lower[k.toLowerCase()] = v;
+    const missing = [];
+    for (const name of workflowPlaceholders(out)) {
+        const v = lower[name];
+        if (v === undefined || v === null || v === '') { missing.push(name); continue; }
+        out = out.replace(new RegExp(`"%${name}%"`, 'gi'), () => JSON.stringify(v));
+    }
+    return { text: out, missing };
+}
+
+/** A LoRA's file name as ComfyUI lists it: ".safetensors" added when the name has no extension. */
+export function ensureLoraFile(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    const last = n.split(/[\\/]/).pop();
+    return /\.[A-Za-z0-9]{2,12}$/.test(last) ? n : `${n}.safetensors`;
+}
+
+const LOADER_TYPES = new Set(['UNETLoader', 'CheckpointLoaderSimple', 'UnetLoaderGGUF', 'ImageOnlyCheckpointLoader', 'CheckpointLoader']);
+const SAMPLER_TYPES = new Set(['KSampler', 'KSamplerAdvanced', 'SamplerCustom', 'SamplerCustomAdvanced']);
+
+function isRef(v, id) { return Array.isArray(v) && v.length === 2 && String(v[0]) === String(id) && Number(v[1]) === 0; }
+
+/** The node id of the model loader a sampler's model input leads back to, or the first loader in the graph, or null. */
+export function findModelLoader(graph) {
+    const g = graph && typeof graph === 'object' ? graph : {};
+    const sampler = Object.keys(g).find(id => g[id] && SAMPLER_TYPES.has(g[id].class_type));
+    let id = sampler || null;
+    const seen = new Set();
+    while (id && g[id] && !seen.has(id)) {
+        seen.add(id);
+        const node = g[id];
+        if (LOADER_TYPES.has(node.class_type)) return id;
+        const ref = node.inputs && Array.isArray(node.inputs.model) ? node.inputs.model : null;
+        id = ref ? String(ref[0]) : null;
+    }
+    const any = Object.keys(g).find(k => g[k] && LOADER_TYPES.has(g[k].class_type));
+    return any || null;
+}
+
+/**
+ * The graph with this chat's LoRA chain spliced in right after the model
+ * loader (the studio's own order: loader → LoRAs → guidance → sampler):
+ * every input that took the loader's model now takes the last LoRA's, each
+ * LoRA a LoraLoaderModelOnly on the one before. A copy; the graph given is
+ * untouched. No loader, or no LoRAs: the copy unchanged.
+ */
+export function injectLoras(graph, loras) {
+    const copy = JSON.parse(JSON.stringify(graph && typeof graph === 'object' ? graph : {}));
+    const list = normalizeLoras(loras);
+    const loader = findModelLoader(copy);
+    if (!loader || !list.length) return { graph: copy, inserted: 0, loader };
+    const consumers = [];
+    for (const [id, node] of Object.entries(copy)) {
+        if (!node || typeof node !== 'object' || !node.inputs || typeof node.inputs !== 'object') continue;
+        for (const [input, value] of Object.entries(node.inputs)) if (isRef(value, loader)) consumers.push([id, input]);
+    }
+    let prev = loader;
+    list.forEach((l, i) => {
+        const id = `des_lora_${i + 1}`;
+        copy[id] = { class_type: 'LoraLoaderModelOnly', inputs: { lora_name: ensureLoraFile(l.name), strength_model: l.strength, model: [prev, 0] }, _meta: { title: `DES LoRA: ${l.name}` } };
+        prev = id;
+    });
+    for (const [id, input] of consumers) copy[id].inputs[input] = [prev, 0];
+    return { graph: copy, inserted: list.length, loader };
+}
+
+/** The body SillyTavern's /api/sd/comfy/generate takes: the ComfyUI address and the graph as the text it posts to /prompt. */
+export function comfyGenerateBody(comfyUrl, graph) {
+    return { url: String(comfyUrl || '').replace(/\/+$/, ''), prompt: JSON.stringify({ prompt: graph }) };
+}
+
+/** The data URL out of the server's answer ({ format, data } in base64), '' when there is none. */
+export function readComfyResult(json) {
     const j = json && typeof json === 'object' ? json : {};
-    const ok = j.reachable !== false && j.ok !== false;
-    const bits = [];
-    if (j.version) bits.push(`ComfyUI ${j.version}`);
-    if (j.moss_supported === false) bits.push('MOSS not supported on this ComfyUI');
-    if (j.busy) bits.push('busy rendering');
-    return `${ok ? 'Moss Studio answers' : 'Moss Studio does not answer'}${bits.length ? ` (${bits.join(', ')})` : ''}.`;
+    if (typeof j.data !== 'string' || !j.data) return '';
+    const format = typeof j.format === 'string' && j.format ? j.format.toLowerCase() : 'png';
+    const mime = format === 'jpg' ? 'jpeg' : format;
+    return `data:image/${mime};base64,${j.data}`;
 }

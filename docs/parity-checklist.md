@@ -274,11 +274,12 @@ re-enable → feature fully functional without page reload; repeat twice
 ## Scene pictures (Phase 7, beta; docs/scene-pictures-plan.md)
 
 - [ ] Off by default: a fresh install shows Settings → Scene pictures with the switch off and the status "Off. Nothing is read, written or sent."; no request leaves the page
-- [ ] Test connection with Moss Studio running (the desktop icon; card 2 on 8189): a toast "Moss Studio answers (ComfyUI 0.42.1…)" and the studio's LoRA names in the "From the studio…" list; with the studio stopped, a toast naming the address and the CORS header
-- [ ] This chat: a LoRA typed as `BunnySlop_MOSS:0.8`, one added from the list, identity notes written; switch chats and back: both come back; a new chat has neither
-- [ ] Every 2 turns (set for the test): send twice; after the second reply finishes, a narrator message with the picture appears, the chat scrolls to it, the status says 2 turns to the next picture, the picture file is under user/images/<character>/des-scene-…png; the AI's next reply does not mention the picture (the message is a system message)
+- [ ] The workflow: paste ST_Moss_FAST_workflow.json into "Or paste one", Save and choose: a toast names the file, it is chosen in the select, and SillyTavern's Image Generation → ComfyUI lists it too; the refresh button lists the store
+- [ ] Test connection with ComfyUI card 2 running (8189): "ComfyUI answers at http://127.0.0.1:8189. The workflow … is ready (N placeholders filled)"; with %model% in the workflow and the Models fields empty, the toast names %model%; with card 2 stopped, "did not answer: is that card running?"
+- [ ] This chat: a LoRA typed as `BunnySlop_MOSS:0.8`, identity notes written; switch chats and back: both come back; a new chat has neither
+- [ ] Every 2 turns (set for the test): send twice; after the second reply finishes, a narrator message with the picture appears, the chat scrolls to it, the status says 2 turns to the next picture, the picture file is under user/images/<character>/des-scene-…png; the AI's next reply does not mention the picture (the message is a system message); ComfyUI's queue shows the LoRA node "DES LoRA: BunnySlop_MOSS" between the loader and the guidance node
 - [ ] Captions reach the AI on: the next picture's message is a narrator message and the caption's first line is in the prompt
 - [ ] `/scene` with the feature off answers that it is off; on, with a chat open, makes one picture at once; while one is being made, says so
-- [ ] A studio failure (stop the studio mid-run): a toast "No picture this time: …", nothing posted, the status says the last run failed and the next turn tries again; the next turn with the studio back posts the picture
-- [ ] A chat switch while the studio renders: nothing lands in either chat
-- [ ] The caption, in the studio's log or the message's title: natural language, one paragraph, no character names, the identity notes' looks, the frame named for the chosen size
+- [ ] A wrong LoRA name: a toast "No picture this time: … Value not in list: lora_name …", nothing posted, the status says the last run failed and the next turn tries again; the name fixed, the next turn posts the picture
+- [ ] A chat switch while ComfyUI renders: nothing lands in either chat
+- [ ] The caption, in the message's title: natural language, one paragraph, no character names, the identity notes' looks, the frame named for the chosen size

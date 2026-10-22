@@ -9,9 +9,9 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
 // ── 1. Config ──
 {
     const d = S.scenePicturesConfig({});
-    check('defaults: off, the studio on 8791, card2, every 5, 12 messages, portrait', !d.enabled && d.studioUrl === 'http://127.0.0.1:8791' && d.card === 'card2' && d.every === 5 && d.window === 12 && d.size === 'portrait' && !d.toAI && d.narrator === 'Narrator');
-    const c = S.scenePicturesConfig({ scenePictures: { enabled: true, studioUrl: ' http://localhost:9000/// ', card: 'card1', every: '0', window: 99, size: 'tall', steps: 8, cfg: '1', narrator: '  ', timeoutSec: 5, unet: ' kromoss ' } });
-    check('normalised: url trimmed of slashes, card1, every clamps to 1, window to 40, a bad size falls back, narrator back to default, timeout to 20, unet trimmed', c.enabled && c.studioUrl === 'http://localhost:9000' && c.card === 'card1' && c.every === 1 && c.window === 40 && c.size === 'portrait' && c.steps === 8 && c.cfg === 1 && c.narrator === 'Narrator' && c.timeoutSec === 20 && c.unet === 'kromoss');
+    check('defaults: off, ComfyUI on 8189, no workflow, every 5, 12 messages, portrait', !d.enabled && d.comfyUrl === 'http://127.0.0.1:8189' && d.workflow === '' && d.every === 5 && d.window === 12 && d.size === 'portrait' && !d.toAI && d.narrator === 'Narrator');
+    const c = S.scenePicturesConfig({ scenePictures: { enabled: true, comfyUrl: ' http://localhost:9000/// ', workflow: ' Moss.json ', every: '0', window: 99, size: 'tall', steps: 8, cfg: '1', narrator: '  ', timeoutSec: 5, model: ' kromoss ' } });
+    check('normalised: url trimmed of slashes, workflow trimmed, every clamps to 1, window to 40, a bad size falls back, narrator back to default, timeout to 20, model trimmed', c.enabled && c.comfyUrl === 'http://localhost:9000' && c.workflow === 'Moss.json' && c.every === 1 && c.window === 40 && c.size === 'portrait' && c.steps === 8 && c.cfg === 1 && c.narrator === 'Narrator' && c.timeoutSec === 20 && c.model === 'kromoss');
     check('sizeOf', S.sizeOf({ size: 'landscape' }).width === 1536 && S.sizeOf({ size: 'nope' }).id === 'portrait');
 }
 
@@ -51,22 +51,43 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
     check('captionLine: the first sentence, cut when long', S.captionLine('A tall frame. More words after.') === 'A tall frame.' && S.captionLine('w'.repeat(200)).length === 160);
 }
 
-// ── 5. The studio ──
+// ── 5. ComfyUI through SillyTavern ──
 {
-    const cfg = S.scenePicturesConfig({ scenePictures: { studioUrl: 'http://127.0.0.1:8791/', card: 'card1', preamble: 'Anime-style digital illustration. ', unet: 'kromoss_v10_bf16' } });
-    const e = S.studioEndpoints(cfg);
-    check('endpoints', e.config === 'http://127.0.0.1:8791/api/config' && e.preflight === 'http://127.0.0.1:8791/api/preflight?card=card1' && e.generate === 'http://127.0.0.1:8791/api/generate' && e.image('MossStudio/2026-10-22/a b.png') === 'http://127.0.0.1:8791/api/image?f=MossStudio%2F2026-10-22%2Fa%20b.png');
-    const body = S.buildGenerateBody(cfg, { loras: [{ name: 'BunnySlop_MOSS', strength: 0.8 }] }, 'a woman in a grey coat', { seed: 7, title: 'Scene 3' });
-    check('generate body: positive with the preamble, size, sampling, loras, title, unet only when set', body.positive === 'Anime-style digital illustration. a woman in a grey coat' && body.width === 864 && body.height === 1536 && body.steps === 25 && body.cfg === 2.5 && body.sampler === 'er_sde' && body.seed === 7 && body.count === 1 && body.slg === true && body.loras[0].name === 'BunnySlop_MOSS' && body.title === 'Scene 3' && body.unet === 'kromoss_v10_bf16' && !('clip' in body) && !('character' in body));
-    check('readJobId: job, nested job, prompt_id, nothing', S.readJobId({ id: 12 }) === '12' && S.readJobId({ job: { job_id: 'ab' } }) === 'ab' && S.readJobId({ prompt_id: 'p1' }) === 'p1' && S.readJobId(null) === '');
-    const listDone = S.readJobs([{ id: 1, status: 'running' }, { id: 2, status: 'done', images: ['MossStudio/d/1.png'] }], 2);
-    check('readJobs: a list, done with images', listDone.found && listDone.done && !listDone.failed && listDone.images[0] === 'MossStudio/d/1.png');
-    check('readJobs: running', (() => { const r = S.readJobs({ jobs: [{ job_id: 'x', state: 'running' }] }, 'x'); return r.found && !r.done && !r.failed; })());
-    check('readJobs: keyed store, images as objects, no status', (() => { const r = S.readJobs({ jobs: { k1: { images: [{ file: 'a.png' }] } } }, 'k1'); return r.found && r.done && r.images[0] === 'a.png'; })());
-    check('readJobs: failed, and the prompt-as-status form', S.readJobs([{ id: 3, status: 'error', error: 'OOM' }], 3).failed && S.readJobs([{ id: 3, status: 'error', error: 'OOM' }], 3).error === 'OOM' && S.readJobs([{ id: 4, prompt: 'done', images: ['z'] }], 4).done);
-    check('readJobs: unknown id', !S.readJobs([{ id: 1 }], 9).found && !S.readJobs(null, 9).found);
-    check('readLoraNames: strings, objects, under loras or files', S.readLoraNames(['a', { name: 'b' }]).join() === 'a,b' && S.readLoraNames({ loras: [{ file: 'c.safetensors' }] }).join() === 'c.safetensors' && S.readLoraNames({}).length === 0);
-    check('preflightLine', S.preflightLine({ reachable: true, version: '0.42.1', busy: true }) === 'Moss Studio answers (ComfyUI 0.42.1, busy rendering).' && S.preflightLine({ reachable: false }).startsWith('Moss Studio does not answer'));
+    const WF = `{
+  "1": { "class_type": "UNETLoader", "inputs": { "unet_name": "%model%", "weight_dtype": "default" } },
+  "2": { "class_type": "CLIPLoader", "inputs": { "clip_name": "qwen.safetensors", "type": "moss_image" } },
+  "4": { "class_type": "VAELoader", "inputs": { "vae_name": "%vae%" } },
+  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "%prompt%", "clip": ["2", 0] } },
+  "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "%negative_prompt%", "clip": ["2", 0] } },
+  "8": { "class_type": "EmptyFlux2LatentImage", "inputs": { "width": "%width%", "height": "%height%", "batch_size": 1 } },
+  "9": { "class_type": "SkipLayerGuidanceDiTSimple", "inputs": { "model": ["1", 0], "double_layers": "22", "single_layers": "22", "start_percent": 0.01, "end_percent": 0.8 } },
+  "3": { "class_type": "KSampler", "inputs": { "seed": "%seed%", "steps": "%steps%", "cfg": "%scale%", "sampler_name": "%sampler%", "scheduler": "%scheduler%", "denoise": 1, "model": ["9", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["8", 0] } },
+  "10": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 0] } },
+  "11": { "class_type": "SaveImage", "inputs": { "images": ["10", 0], "filename_prefix": "ST_moss/scene" } }
+}`;
+    check('workflowPlaceholders: each once, lower-cased', S.workflowPlaceholders(WF).join() === 'model,vae,prompt,negative_prompt,width,height,seed,steps,scale,sampler,scheduler' && S.workflowPlaceholders('"%Prompt%" "%prompt%"').join() === 'prompt');
+    const cfg = S.scenePicturesConfig({ scenePictures: { preamble: 'Anime-style digital illustration. ', size: 'landscape', model: 'moss_image_sft_int8_convrot.safetensors', vae: 'flux2-vae_small.safetensors' } });
+    const values = S.workflowValues(cfg, { caption: 'a woman on a quay', seed: 7 });
+    check('workflowValues: the extension\'s names, the preamble in the prompt, the size, the models when set, avatars as the pixel', values.prompt === 'Anime-style digital illustration. a woman on a quay' && values.negative_prompt.startsWith('nsfw') && values.seed === 7 && values.steps === 25 && values.scale === 2.5 && values.sampler === 'er_sde' && values.width === 1536 && values.height === 864 && values.model === 'moss_image_sft_int8_convrot.safetensors' && values.user_avatar === S.PNG_PIXEL && !('clip' in values));
+    check('a random seed when none is given', (() => { const a = S.workflowValues(cfg, {}).seed; return Number.isInteger(a) && a >= 0; })());
+    const filled = S.fillWorkflow(WF, values);
+    const graph = JSON.parse(filled.text);
+    check('fillWorkflow: numbers stay numbers, strings are quoted, nothing is missing', filled.missing.length === 0 && graph['3'].inputs.steps === 25 && graph['3'].inputs.cfg === 2.5 && graph['3'].inputs.seed === 7 && graph['6'].inputs.text === 'Anime-style digital illustration. a woman on a quay' && graph['8'].inputs.width === 1536 && graph['1'].inputs.unet_name === 'moss_image_sft_int8_convrot.safetensors');
+    const bare = S.fillWorkflow(WF, S.workflowValues(S.scenePicturesConfig({}), { caption: 'x', seed: 1 }));
+    check('placeholders with no value are left and named', bare.missing.join() === 'model,vae' && bare.text.includes('"%model%"'));
+    check('a quote inside the caption survives as JSON', JSON.parse(S.fillWorkflow('{"a": {"inputs": {"text": "%prompt%"}}}', { prompt: 'she said "go"' }).text).a.inputs.text === 'she said "go"');
+    check('ensureLoraFile', S.ensureLoraFile('BunnySlop_MOSS') === 'BunnySlop_MOSS.safetensors' && S.ensureLoraFile('x/y.safetensors') === 'x/y.safetensors' && S.ensureLoraFile(' a.pt ') === 'a.pt' && S.ensureLoraFile('') === '');
+    check('findModelLoader walks back from the sampler', S.findModelLoader(graph) === '1' && S.findModelLoader({ a: { class_type: 'KSampler', inputs: {} }, b: { class_type: 'CheckpointLoaderSimple', inputs: {} } }) === 'b' && S.findModelLoader({}) === null);
+    const spliced = S.injectLoras(graph, [{ name: 'BunnySlop_MOSS', strength: 0.8 }, { name: 'Flat_Anime_Moss-Image-', strength: 1 }]);
+    const g = spliced.graph;
+    check('injectLoras: two LoRAs after the loader, the guidance node now fed by the last, the original untouched', spliced.inserted === 2 && spliced.loader === '1' && g.des_lora_1.class_type === 'LoraLoaderModelOnly' && g.des_lora_1.inputs.lora_name === 'BunnySlop_MOSS.safetensors' && g.des_lora_1.inputs.strength_model === 0.8 && g.des_lora_1.inputs.model.join() === '1,0' && g.des_lora_2.inputs.model.join() === 'des_lora_1,0' && g['9'].inputs.model.join() === 'des_lora_2,0' && graph['9'].inputs.model.join() === '1,0' && g['3'].inputs.model.join() === '9,0');
+    const baked = { '1': { class_type: 'UNETLoader', inputs: { unet_name: 'm' } }, '5': { class_type: 'LoraLoaderModelOnly', inputs: { lora_name: 'house.safetensors', strength_model: 1, model: ['1', 0] } }, '3': { class_type: 'KSampler', inputs: { model: ['5', 0] } } };
+    const b = S.injectLoras(baked, ['extra']).graph;
+    check('a LoRA baked into the workflow stays, downstream of the chat\'s', b.des_lora_1.inputs.model.join() === '1,0' && b['5'].inputs.model.join() === 'des_lora_1,0' && b['3'].inputs.model.join() === '5,0' && b.des_lora_1.inputs.lora_name === 'extra.safetensors');
+    check('no LoRAs or no loader: the copy unchanged', S.injectLoras(graph, []).inserted === 0 && JSON.stringify(S.injectLoras(graph, []).graph) === JSON.stringify(graph) && S.injectLoras({ a: { class_type: 'KSampler', inputs: {} } }, ['x']).loader === null);
+    const body = S.comfyGenerateBody('http://127.0.0.1:8189/', g);
+    check('comfyGenerateBody: the address and {"prompt": graph} as text', body.url === 'http://127.0.0.1:8189' && JSON.parse(body.prompt).prompt.des_lora_1.inputs.lora_name === 'BunnySlop_MOSS.safetensors');
+    check('readComfyResult', S.readComfyResult({ format: 'png', data: 'AAAA' }) === 'data:image/png;base64,AAAA' && S.readComfyResult({ format: 'JPG', data: 'B' }) === 'data:image/jpeg;base64,B' && S.readComfyResult({}) === '' && S.readComfyResult(null) === '');
 }
 
 console.log(failures === 0 ? '\nAll scene pictures checks pass' : `\n${failures} FAILURE(S)`);

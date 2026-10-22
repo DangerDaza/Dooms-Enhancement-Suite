@@ -13,7 +13,7 @@ note of 2026-10-22); its JSON API is what DES talks to.
 |---|---|---|
 | D60 | Where the picture lands | **In the chat, as a message from the narrator** (a name, default "Narrator", SillyTavern's default avatar). The message is a system message unless Settings → Scene pictures → "Captions reach the AI" is on: a picture is for the player, and a caption in the prompt would steer the story and cost tokens. The caption rides on the message (`extra.title`) and a line of it is the message text. |
 | D61 | Who writes the caption | **DES's own background request**, on the tracker's connection profile through `withBackgroundProfile` (external mode respected), exactly as the tracker and Live World do. It sees the recent chat, which the studio's own prompt writer cannot. |
-| D62 | How the picture is made | **Moss Studio's API, directly from the browser**: `POST /api/generate` with this chat's LoRAs, `GET /api/jobs` until the job is done, `GET /api/image?f=` for the file, which is saved into SillyTavern (`saveBase64AsFile`) so the chat keeps it when the studio is gone. The studio must answer with a CORS header (`Access-Control-Allow-Origin`), since the page is on another port. |
+| D62 | How the picture is made | **The owner's Moss workflow on ComfyUI, through SillyTavern's own ComfyUI endpoints** (`/api/sd/comfy/workflow`, `/generate`), the way its image extension renders: the workflow from SillyTavern's store with its placeholders filled, this chat's LoRA chain spliced in after the model loader, posted as `{"prompt": graph}`; the server queues it, waits on the history and returns the image, which DES saves into SillyTavern. Nothing but ComfyUI has to run and no header is needed. (Revised 2026-10-22: the first cut called Moss Studio's API from the browser, which needs a CORS header the owner would rather not add and waits on the studio's single-threaded server; the studio stays the owner's manual tool.) |
 | D63 | LoRAs | **Per chat**: a list of `{name, strength}` in `chat_metadata.dooms_scene.loras`, picked from the studio's `/api/loras` or typed. Per character (a field on the Workshop card, the studio's identity blocks by character id) comes later. |
 | D64 | When | **Every N of the player's turns** (default 5), counted on MESSAGE_SENT; the run starts after the reply that follows the Nth turn has finished generating, never inside a generation; a failed run tries again after the next turn; `/scene` runs one now. A chat's state is its own (`chat_metadata.dooms_scene`), like Live World's. |
 | D65 | The caption's grammar | Natural language, 150–300 words, medium and framing first, then the finished picture; no character names (the image model knows none), the chat's identity notes carried into each character's look; one paragraph. A style preamble (the positive prefix) and a negative prompt live in settings with the handover's defaults. |
@@ -21,12 +21,12 @@ note of 2026-10-22); its JSON API is what DES talks to.
 ## 2. Shapes
 
 **Settings** (`extensionSettings.scenePictures`, defaults in
-`src/utils/scenePictures.js`): `enabled` (off), `studioUrl`, `card`
-(`card1`|`card2`), `every`, `window` (messages read), `size`
+`src/utils/scenePictures.js`): `enabled` (off), `comfyUrl`, `workflow` (a
+name in SillyTavern's store), `every`, `window` (messages read), `size`
 (`portrait` 864×1536 | `square` 1024×1024 | `landscape` 1536×864), `steps`,
-`cfg`, `sampler`, `scheduler`, `slg`, `enhancer`, `unet`/`clip`/`vae`
-(empty: the studio's defaults), `narrator`, `toAI`, `preamble`,
-`negative`, `guide` (extra caption rules), `timeoutSec`, `debug`.
+`cfg`, `sampler`, `scheduler`, `model`/`clip`/`vae` (what fills those
+placeholders when the workflow has them), `narrator`, `toAI`, `preamble`,
+`negative`, `guide` (extra caption rules), `timeoutSec`, `notify`, `debug`.
 
 **Per chat** (`chat_metadata.dooms_scene`): `{ v: 1, sinceLast, retryNext,
 lastKey, loras: [{ name, strength }], identity: '', last: { at, ok,
@@ -52,50 +52,57 @@ reads; 1.19 migrates it into `extra.media` on load.
    (system notes and tool records skipped, each cut to length), the
    characters present (the shelf), the chat's identity notes, the
    preamble and the extra rules; one background request; `parseCaptionReply`.
-4. The picture: `buildGenerateBody` → `POST /api/generate` → the job id;
-   `GET /api/jobs` every 2 s until `readJobs` says done or failed, or the
-   timeout; `GET /api/image?f=<first image>` → blob → base64 →
-   `saveBase64AsFile` under `user/images/<chat folder>`.
+4. The picture: the workflow's text from the store, `fillWorkflow` with
+   `workflowValues`, `injectLoras` with this chat's list, `POST
+   /api/sd/comfy/generate` (the server queues, waits and returns the image
+   as base64) → `saveBase64AsFile` under `user/images/<character>`.
 5. The message, the state (`afterPicture`), a toast when "Notify" is on.
    A run whose chat changed meanwhile is discarded whole (the token and
    metadata checks Live World uses).
 
-## 4. The studio's API, as read from the handover
+## 4. The workflow and SillyTavern's ComfyUI endpoints
 
-`GET /api/preflight?card=` (reachable, version, `moss_supported`, `busy`),
-`GET /api/loras?card=`, `POST /api/generate` `{card, unet, clip, vae,
-positive, negative, width, height, steps, cfg, sampler, scheduler, seed,
-count, slg, slg_layers, slg_end, loras: [{name, strength}], enhancer,
-enhancer_seed, title, character}` → a job, `GET /api/jobs`, `GET
-/api/image?f=`.
+The owner's `ST_Moss_FAST_workflow.json` (the studio's graph in
+SillyTavern's placeholder format) goes into SillyTavern's workflow store,
+pasted in Settings → Scene pictures (saved through `/api/sd/comfy/save-workflow`)
+or in Image Generation → ComfyUI. DES fills `%prompt%` (the preamble and the
+caption), `%negative_prompt%`, `%seed%`, `%steps%`, `%scale%`, `%sampler%`,
+`%scheduler%`, `%width%`, `%height%`, and `%model%`/`%clip%`/`%vae%` from
+the Models fields when the workflow has them, exactly as the image
+extension does (the quoted token becomes the JSON of the value, so numbers
+stay numbers). `injectLoras` walks back from the sampler's `model` input to
+the loader (`UNETLoader`, `CheckpointLoaderSimple`…) and splices a
+`LoraLoaderModelOnly` per LoRA after it, in the chat's order, every former
+consumer of the loader's model now fed by the last LoRA; a LoRA baked into
+the workflow stays downstream. `.safetensors` is added to a LoRA name with no
+extension. The server's `/api/sd/comfy/generate` takes `{ url, prompt }` and
+answers `{ format, data }`; a ComfyUI validation error comes back as text
+naming the node and the input, which the toast and the status carry.
 
-**Assumptions to confirm on the first run** (the Test connection button
-prints what comes back): the job's id field and the finished state in
-`/api/jobs` (`readJobs` accepts `id`/`job_id`/`prompt_id`, a status of
-`done`/`finished`/`complete`/`success`, images as paths or `{file|path}`),
-and that the studio sends `Access-Control-Allow-Origin` for the
-SillyTavern origin. Without the header the browser refuses the response
-and the status line says so, with the fix.
+**Confirmed on the first run:** the workflow's placeholders (Test connection
+names any DES cannot fill), the LoRA file names (ComfyUI's "Value not in
+list: lora_name" names a wrong one), and the ComfyUI address (card 2 on 8189).
 
 ## 5. Settings → Scene pictures (Beta)
 
-The switch; Moss Studio URL and card; every N turns; messages read; size;
-steps, CFG, sampler, scheduler, SLG, enhancer; narrator name; captions
-reach the AI; style preamble; negative prompt; extra caption rules. For
-this chat: LoRAs (one per line, `name:strength`, with a list fetched from
-the studio to add from) and identity notes. A status line (this chat's
-count, the last picture, the last error), Test connection and Picture
-now.
+The switch; the ComfyUI address; the workflow (picked from the store, or
+pasted and saved); every N turns; messages read; size; steps, CFG, sampler,
+scheduler; the models for `%model%`, `%clip%`, `%vae%`; narrator name;
+captions reach the AI; style preamble; negative prompt; extra caption rules.
+For this chat: LoRAs (one per line, `name:strength`) and identity notes. A
+status line (this chat's count, the last picture, the last error), Test
+connection and Picture now.
 
 ## 6. Tests
 
-`tools/scene-pictures-test.mjs` (the model, pure) and
-`tools/scene-pictures-flow-test.mjs` (the lifecycle in the sandbox with
-the caption and the studio behind injected transports).
+`tools/scene-pictures-test.mjs` (the model, pure: the placeholders, the
+LoRA splice, the result) and `tools/scene-pictures-flow-test.mjs` (the
+lifecycle in the sandbox with the caption and SillyTavern's ComfyUI
+endpoints behind injected transports).
 
 ## 7. Later
 
-Per-character LoRAs and identity blocks from the studio (`/api/character?id=`)
-on the Workshop card; the picture on the shelf as well; a narrator avatar
+Per-character LoRAs and identity blocks (the studio's `/api/character?id=`,
+or typed) on the Workshop card; the picture on the shelf as well; a narrator avatar
 of DES's own; the studio's enhancer as a per-chat choice; a picture on
 demand from a message's menu.

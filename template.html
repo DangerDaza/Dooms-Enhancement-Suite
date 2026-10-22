@@ -1996,9 +1996,9 @@
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Scene pictures</span>
                             <span class="rpg-setting-hint">Every few of your turns, a quiet background request reads the
-                                recent messages and writes one caption; Moss Studio renders it with this chat's LoRAs; the
-                                picture lands in the chat as a message from the narrator. <code>/scene</code> makes one
-                                now. Needs Moss Studio running on this computer.</span>
+                                recent messages and writes one caption; your Moss workflow renders it on ComfyUI with this
+                                chat's LoRAs; the picture lands in the chat as a message from the narrator.
+                                <code>/scene</code> makes one now. Needs ComfyUI running with the MOSS nodes.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-scene-enabled" />
@@ -2006,30 +2006,46 @@
                         </label>
                     </div>
                     <p class="rpg-note-text rpg-scene-sub" id="rpg-scene-status" style="margin-top:4px;"></p>
-                    <div class="rpg-setting-divider rpg-scene-sub">Moss Studio</div>
+                    <div class="rpg-setting-divider rpg-scene-sub">ComfyUI and the workflow</div>
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Studio address</span>
-                            <span class="rpg-setting-hint">Where Moss Studio answers. It must send
-                                <code>Access-Control-Allow-Origin</code> for this page, or the browser refuses its answers.</span>
+                            <span class="rpg-setting-label">ComfyUI address</span>
+                            <span class="rpg-setting-hint">The ComfyUI the Moss workflow runs on. SillyTavern's server talks to it,
+                                the way its own Image Generation does, so nothing else has to run.</span>
                         </div>
-                        <input type="text" id="rpg-scene-url" class="rpg-accordion-input" placeholder="http://127.0.0.1:8791" style="width: 220px;" />
+                        <input type="text" id="rpg-scene-url" class="rpg-accordion-input" placeholder="http://127.0.0.1:8189" style="width: 220px;" />
                     </div>
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Card</span>
-                            <span class="rpg-setting-hint">The ComfyUI the studio renders on.</span>
+                            <span class="rpg-setting-label">Workflow</span>
+                            <span class="rpg-setting-hint">A ComfyUI workflow from SillyTavern's own store (Image Generation → ComfyUI),
+                                with <code>%prompt%</code>, <code>%negative_prompt%</code>, <code>%width%</code>, <code>%height%</code>,
+                                <code>%seed%</code>, <code>%steps%</code>, <code>%scale%</code>, <code>%sampler%</code>,
+                                <code>%scheduler%</code> and, if you like, <code>%model%</code>, <code>%clip%</code>, <code>%vae%</code>.
+                                This chat's LoRAs are spliced in after the model loader.</span>
                         </div>
-                        <select id="rpg-scene-card" class="rpg-accordion-select">
-                            <option value="card2">Card 2</option>
-                            <option value="card1">Card 1</option>
-                        </select>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <select id="rpg-scene-workflow" class="rpg-accordion-select" style="min-width: 200px;"><option value="">(none chosen)</option></select>
+                            <button id="rpg-scene-workflow-refresh" class="rpg-accordion-action-btn" type="button" title="List the store's workflows"><i class="fa-solid fa-rotate"></i></button>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-scene-sub" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Or paste one</span>
+                            <span class="rpg-setting-hint">The workflow's JSON (your ST_Moss workflow file), saved into the store under
+                                the name and chosen above.</span>
+                            <textarea id="rpg-scene-workflow-paste" class="rpg-accordion-input" rows="3" style="width:100%; margin-top:6px;" placeholder='{ "1": { "class_type": "UNETLoader", … } }'></textarea>
+                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+                                <input type="text" id="rpg-scene-workflow-name" class="rpg-accordion-input" value="DES Scene Moss" style="width: 180px;" title="The name it is saved under" />
+                                <button id="rpg-scene-workflow-save" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-floppy-disk"></i> Save and choose</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Try it</span>
-                            <span class="rpg-setting-hint">Test connection asks the studio for its preflight and its LoRA list;
-                                Picture now makes one picture of the recent scene.</span>
+                            <span class="rpg-setting-hint">Test connection asks ComfyUI for a sign of life, lists the store's workflows
+                                and checks the chosen one's placeholders; Picture now makes one picture of the recent scene.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                                 <button id="rpg-scene-test" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plug"></i> Test connection</button>
                                 <button id="rpg-scene-now" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-image"></i> Picture now</button>
@@ -2088,32 +2104,14 @@
                     </div>
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Skip-layer guidance</span>
-                            <span class="rpg-setting-hint">The studio's SLG on layer 22; off for the few-step models.</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-scene-slg" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">The studio's prompt enhancer</span>
-                            <span class="rpg-setting-hint">Runs the caption through the studio's enhancer before rendering (about 7 s more).</span>
-                        </div>
-                        <label class="rpg-toggle-switch">
-                            <input type="checkbox" id="rpg-scene-enhancer" />
-                            <span class="rpg-toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Models</span>
-                            <span class="rpg-setting-hint">Diffusion model, text encoder and VAE as the studio names them; empty uses the studio's defaults.</span>
+                            <span class="rpg-setting-hint">What fills <code>%model%</code>, <code>%clip%</code> and <code>%vae%</code> when the
+                                workflow has them, as the files are named in ComfyUI (<code>moss_image_sft_int8_convrot.safetensors</code>…).
+                                A workflow with the names baked in needs nothing here.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                                <input type="text" id="rpg-scene-unet" class="rpg-accordion-input" placeholder="diffusion (unet)" style="width: 180px;" />
-                                <input type="text" id="rpg-scene-clip" class="rpg-accordion-input" placeholder="text encoder (clip)" style="width: 180px;" />
-                                <input type="text" id="rpg-scene-vae" class="rpg-accordion-input" placeholder="vae" style="width: 120px;" />
+                                <input type="text" id="rpg-scene-model" class="rpg-accordion-input" placeholder="%model% (diffusion model)" style="width: 200px;" />
+                                <input type="text" id="rpg-scene-clip" class="rpg-accordion-input" placeholder="%clip% (text encoder)" style="width: 180px;" />
+                                <input type="text" id="rpg-scene-vae" class="rpg-accordion-input" placeholder="%vae%" style="width: 120px;" />
                             </div>
                         </div>
                     </div>
@@ -2163,13 +2161,10 @@
                     <div class="rpg-setting-row rpg-scene-sub" style="align-items:flex-start;">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">LoRAs for this chat</span>
-                            <span class="rpg-setting-hint">One per line, <code>name:strength</code> (a bare name is strength 1).
-                                Pick from the studio's list to add one. Kept with the chat.</span>
+                            <span class="rpg-setting-hint">One per line, <code>name:strength</code> (a bare name is strength 1), the file's
+                                name in ComfyUI's loras folder (<code>.safetensors</code> is added when missing). Spliced in after the
+                                model loader, in this order. Kept with the chat.</span>
                             <textarea id="rpg-scene-loras" class="rpg-accordion-input" rows="3" style="width:100%; margin-top:6px;" placeholder="BunnySlop_MOSS:0.8"></textarea>
-                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
-                                <select id="rpg-scene-lora-pick" class="rpg-accordion-select" style="min-width: 220px;"><option value="">From the studio…</option></select>
-                                <button id="rpg-scene-lora-add" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plus"></i> Add</button>
-                            </div>
                         </div>
                     </div>
                     <div class="rpg-setting-row rpg-scene-sub" style="align-items:flex-start;">

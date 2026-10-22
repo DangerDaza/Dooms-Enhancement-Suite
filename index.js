@@ -171,7 +171,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
-import { initScenePictures, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testStudio, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
+import { initScenePictures, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
@@ -385,8 +385,8 @@ function renderScenePicturesSettings() {
     const cfg = scenePicturesConfig(extensionSettings);
     $('#rpg-scene-enabled').prop('checked', cfg.enabled);
     $('.rpg-scene-sub').toggleClass('is-off', !cfg.enabled);
-    $('#rpg-scene-url').val(cfg.studioUrl);
-    $('#rpg-scene-card').val(cfg.card);
+    $('#rpg-scene-url').val(cfg.comfyUrl);
+    renderSceneWorkflowPick(cfg.workflow);
     $('#rpg-scene-every').val(cfg.every);
     $('#rpg-scene-window').val(cfg.window);
     $('#rpg-scene-notify').prop('checked', cfg.notify);
@@ -396,9 +396,7 @@ function renderScenePicturesSettings() {
     $('#rpg-scene-cfg').val(cfg.cfg);
     $('#rpg-scene-sampler').val(cfg.sampler);
     $('#rpg-scene-scheduler').val(cfg.scheduler);
-    $('#rpg-scene-slg').prop('checked', cfg.slg);
-    $('#rpg-scene-enhancer').prop('checked', cfg.enhancer);
-    $('#rpg-scene-unet').val(cfg.unet);
+    $('#rpg-scene-model').val(cfg.model);
     $('#rpg-scene-clip').val(cfg.clip);
     $('#rpg-scene-vae').val(cfg.vae);
     $('#rpg-scene-narrator').val(cfg.narrator);
@@ -408,6 +406,16 @@ function renderScenePicturesSettings() {
     $('#rpg-scene-guide').val(cfg.guide);
     renderSceneChatFields();
     renderSceneStatus();
+}
+/** The workflow select: the chosen name always an option, the store's names once fetched (Test connection or the refresh button). */
+function renderSceneWorkflowPick(chosen, names = null) {
+    const $sel = $('#rpg-scene-workflow');
+    if (!$sel.length) return;
+    const list = Array.isArray(names) ? names : ($sel.data('names') || []);
+    if (Array.isArray(names)) $sel.data('names', names);
+    const all = [...new Set([...(chosen ? [chosen] : []), ...list])];
+    $sel.html(['<option value="">(none chosen)</option>', ...all.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)].join(''));
+    $sel.val(chosen || '');
 }
 /** This chat's LoRAs and identity notes; not touched while one of them has the focus. */
 function renderSceneChatFields() {
@@ -2163,8 +2171,27 @@ function bindSettingsUI() {
         $('.rpg-scene-sub').toggleClass('is-off', !$(this).prop('checked'));
         _saveScene();
     });
-    $(document).on('change', '#rpg-scene-url', function () { getSceneRules().studioUrl = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).studioUrl); _saveScene(); });
-    $(document).on('change', '#rpg-scene-card', function () { getSceneRules().card = String($(this).val() || 'card2'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-url', function () { getSceneRules().comfyUrl = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).comfyUrl); _saveScene(); });
+    $(document).on('change', '#rpg-scene-workflow', function () { getSceneRules().workflow = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('click', '#rpg-scene-workflow-refresh', async function () {
+        try { renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, await listWorkflows()); }
+        catch (e) { toastr.error(`The workflow list did not come: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 6000 }); }
+    });
+    $(document).on('click', '#rpg-scene-workflow-save', async function () {
+        const text = String($('#rpg-scene-workflow-paste').val() || '').trim();
+        const name = String($('#rpg-scene-workflow-name').val() || '').trim().replace(/[^\w .-]+/g, '') || 'DES Scene Moss';
+        if (!text) { toastr.info('Paste the workflow JSON first.', 'Scene pictures', { timeOut: 3000 }); return; }
+        try {
+            const file = await saveWorkflow(name.endsWith('.json') ? name : `${name}.json`, text);
+            getSceneRules().workflow = file;
+            $('#rpg-scene-workflow-paste').val('');
+            renderSceneWorkflowPick(file, await listWorkflows().catch(() => null));
+            _saveScene();
+            toastr.success(`Saved as "${file}" and chosen.`, 'Scene pictures', { timeOut: 4000 });
+        } catch (e) {
+            toastr.error(`Not saved: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 8000 });
+        }
+    });
     $(document).on('change', '#rpg-scene-every', function () { const r = getSceneRules(); r.every = _sceneNum($(this).val(), 1, 50, 5); $(this).val(r.every); _saveScene(); });
     $(document).on('change', '#rpg-scene-window', function () { const r = getSceneRules(); r.window = _sceneNum($(this).val(), 2, 40, 12); $(this).val(r.window); _saveScene(); });
     $(document).on('change', '#rpg-scene-notify', function () { getSceneRules().notify = $(this).prop('checked'); _saveScene(); });
@@ -2173,9 +2200,7 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-scene-cfg', function () { const r = getSceneRules(); r.cfg = _sceneNum($(this).val(), 0, 20, 2.5, false); $(this).val(r.cfg); _saveScene(); });
     $(document).on('change', '#rpg-scene-sampler', function () { getSceneRules().sampler = String($(this).val() || '').trim() || 'er_sde'; $(this).val(getSceneRules().sampler); _saveScene(); });
     $(document).on('change', '#rpg-scene-scheduler', function () { getSceneRules().scheduler = String($(this).val() || '').trim() || 'simple'; $(this).val(getSceneRules().scheduler); _saveScene(); });
-    $(document).on('change', '#rpg-scene-slg', function () { getSceneRules().slg = $(this).prop('checked'); _saveScene(); });
-    $(document).on('change', '#rpg-scene-enhancer', function () { getSceneRules().enhancer = $(this).prop('checked'); _saveScene(); });
-    $(document).on('change', '#rpg-scene-unet', function () { getSceneRules().unet = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-model', function () { getSceneRules().model = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-clip', function () { getSceneRules().clip = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-vae', function () { getSceneRules().vae = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-narrator', function () { getSceneRules().narrator = String($(this).val() || '').trim() || 'Narrator'; $(this).val(getSceneRules().narrator); _saveScene(); });
@@ -2186,22 +2211,13 @@ function bindSettingsUI() {
     // This chat's part (chat_metadata), saved with the chat.
     $(document).on('change', '#rpg-scene-loras', function () { setSceneLoras(parseLoraList($(this).val())); $(this).val(formatLoraList(getSceneState().loras)); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
     $(document).on('change', '#rpg-scene-identity', function () { setSceneIdentity(String($(this).val() || '')); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
-    $(document).on('click', '#rpg-scene-lora-add', function () {
-        const name = String($('#rpg-scene-lora-pick').val() || '').trim();
-        if (!name) { toastr.info('Pick a LoRA from the studio\'s list first (Test connection fills it).', 'Scene pictures', { timeOut: 3000 }); return; }
-        setSceneLoras([...getSceneState().loras, { name, strength: 1 }]);
-        $('#rpg-scene-loras').val(formatLoraList(getSceneState().loras));
-        try { saveChatDebounced(); } catch (e) { /* the next save carries it */ }
-    });
     $(document).on('click', '#rpg-scene-test', async function () {
         const $b = $(this);
         $b.prop('disabled', true);
         try {
-            const r = await testStudio();
-            const lorasText = r.lorasError ? `The LoRA list did not come: ${r.lorasError}` : `${r.loras.length} LoRA${r.loras.length === 1 ? '' : 's'} listed.`;
-            const kind = r.raw ? 'success' : 'warning';
-            toastr[kind](`${r.line} ${lorasText}`, 'Scene pictures', { timeOut: 10000 });
-            $('#rpg-scene-lora-pick').html(['<option value="">From the studio…</option>', ...r.loras.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)].join(''));
+            const r = await testComfy();
+            renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, r.workflows);
+            toastr[r.ok ? 'success' : 'warning'](r.line, 'Scene pictures', { timeOut: 10000 });
         } catch (e) {
             toastr.error(`No answer: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 10000 });
         } finally {
