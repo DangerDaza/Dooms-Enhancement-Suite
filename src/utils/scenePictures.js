@@ -230,6 +230,7 @@ export function studioEndpoints(cfg) {
     const card = encodeURIComponent(cfg && cfg.card ? cfg.card : 'card2');
     return {
         base,
+        config: `${base}/api/config`,
         preflight: `${base}/api/preflight?card=${card}`,
         loras: `${base}/api/loras?card=${card}`,
         generate: `${base}/api/generate`,

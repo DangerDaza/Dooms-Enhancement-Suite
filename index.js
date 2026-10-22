@@ -2198,7 +2198,9 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await testStudio();
-            toastr.success(`${r.line} ${r.loras.length} LoRA${r.loras.length === 1 ? '' : 's'} listed.`, 'Scene pictures', { timeOut: 6000 });
+            const lorasText = r.lorasError ? `The LoRA list did not come: ${r.lorasError}` : `${r.loras.length} LoRA${r.loras.length === 1 ? '' : 's'} listed.`;
+            const kind = r.raw ? 'success' : 'warning';
+            toastr[kind](`${r.line} ${lorasText}`, 'Scene pictures', { timeOut: 10000 });
             $('#rpg-scene-lora-pick').html(['<option value="">From the studio…</option>', ...r.loras.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)].join(''));
         } catch (e) {
             toastr.error(`No answer: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 10000 });

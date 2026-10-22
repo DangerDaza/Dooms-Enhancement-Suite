@@ -204,15 +204,28 @@ async function studio(kind, url, body = null, { timeoutMs = 20000 } = {}) {
     }
 }
 
-/** Settings → Test connection: the preflight in a line, and the LoRA names the studio lists. */
+/**
+ * Settings → Test connection, in three parts so a slow card is not read as
+ * a dead studio: /api/config (quick: the studio is up and this page's
+ * origin is allowed), /api/loras (the list, from disk), and the preflight,
+ * which asks the ComfyUI card and may wait on it (60 s).
+ * Throws only when the studio itself cannot be reached.
+ */
 export async function testStudio() {
     const c = cfg();
     const e = studioEndpoints(c);
-    const pre = await studio('json', e.preflight);
-    let loras = [];
-    try { loras = readLoraNames(await studio('json', e.loras)); } catch (err) { /* the preflight is the answer */ }
-    log('preflight', pre);
-    return { line: preflightLine(pre), loras, raw: pre };
+    const config = await studio('json', e.config, null, { timeoutMs: 10000 });
+    log('config', config);
+    const [lorasResult, preResult] = await Promise.allSettled([
+        studio('json', e.loras, null, { timeoutMs: 30000 }),
+        studio('json', e.preflight, null, { timeoutMs: 60000 }),
+    ]);
+    const loras = lorasResult.status === 'fulfilled' ? readLoraNames(lorasResult.value) : [];
+    const lorasError = lorasResult.status === 'rejected' ? (lorasResult.reason && lorasResult.reason.message) || 'the LoRA list did not come' : '';
+    let line;
+    if (preResult.status === 'fulfilled') { log('preflight', preResult.value); line = preflightLine(preResult.value); }
+    else line = `Moss Studio is up, but its preflight for ${c.card} did not answer${/within/.test(String(preResult.reason && preResult.reason.message)) ? ' within 60 s' : ''}: is that ComfyUI card running, or mid-render? Pictures go through once it answers.`;
+    return { line, loras, lorasError, raw: preResult.status === 'fulfilled' ? preResult.value : null, config };
 }
 
 export async function listStudioLoras() {
@@ -224,7 +237,7 @@ async function renderPicture(c, caption, stale) {
     const e = studioEndpoints(c);
     const body = buildGenerateBody(c, state, caption, { title: `DES scene ${new Date().toISOString().slice(0, 16)}` });
     log('generate', body);
-    const started = await studio('json', e.generate, body);
+    const started = await studio('json', e.generate, body, { timeoutMs: 45000 });
     const id = readJobId(started);
     if (!id) throw new Error(`the studio gave no job id (${JSON.stringify(started).slice(0, 200)})`);
     const deadline = Date.now() + c.timeoutSec * 1000;
@@ -232,7 +245,7 @@ async function renderPicture(c, caption, stale) {
     while (Date.now() < deadline) {
         await sleep(timing.pollMs);
         if (stale()) throw new Error('the chat changed while the studio rendered');
-        job = readJobs(await studio('json', e.jobs), id);
+        job = readJobs(await studio('json', e.jobs, null, { timeoutMs: 30000 }), id);
         if (job.failed) throw new Error(`the studio reported the job failed${job.error ? `: ${job.error}` : ''}`);
         if (job.done) break;
     }
