@@ -239,11 +239,20 @@ export async function saveWorkflow(name, text) {
  */
 export async function testComfy() {
     const c = cfg();
-    await comfy('ping', { url: c.comfyUrl }, { timeoutMs: 15000 });
+    // The ping goes through SillyTavern's server to ComfyUI's /system_stats; a
+    // card mid-render answers it slowly, so a slow ping is noted, not fatal:
+    // the workflow checks below need only SillyTavern, and the picture
+    // itself waits up to timeoutSec.
+    let ping = 'ok';
+    let pingError = '';
+    try { await comfy('ping', { url: c.comfyUrl }, { timeoutMs: 60000 }); }
+    catch (e) { pingError = e && e.message ? e.message : String(e); ping = /within \d+ s/.test(pingError) ? 'slow' : 'down'; }
     let workflows = [];
-    try { workflows = await listWorkflows(); } catch (e) { /* the ping is the answer */ }
-    let line = `ComfyUI answers at ${c.comfyUrl}.`;
-    let ok = true;
+    try { workflows = await listWorkflows(); } catch (e) { /* the store is SillyTavern's; a miss here is its answer */ }
+    let line = ping === 'ok' ? `ComfyUI answers at ${c.comfyUrl}.`
+        : ping === 'slow' ? `ComfyUI at ${c.comfyUrl} did not answer within 60 s: a card mid-render answers slowly, and the picture itself waits up to ${c.timeoutSec} s. Try again when it is idle.`
+            : pingError;
+    let ok = ping === 'ok';
     if (!c.workflow) { line += ' Pick a workflow.'; ok = false; }
     else {
         try {
@@ -258,7 +267,7 @@ export async function testComfy() {
             ok = false;
         }
     }
-    return { line, ok, workflows };
+    return { line, ok, workflows, ping };
 }
 
 /** The picture: the workflow filled and spliced, posted through the server; { file, dataUrl }. */
