@@ -169,6 +169,19 @@ const sheet = (patch = {}) => ({ trackerConfig: { presentCharacters: { character
     { id: 'mana', name: 'Mana', enabled: false, start: 100, ai: true },
 ], player: { enabled: true }, ...patch } } } });
 const defs = V.vitalDefs(sheet());
+{
+    // stripVitals: what the prompt sends while vitals are off. Both shapes, the
+    // wrapper, the legacy object form; the same reference back when there is nothing to strip.
+    const arr = [{ name: 'Mara', emoji: '🗡️', stats: [{ name: 'Health', value: 72 }] }, { name: 'Tom' }];
+    const bare = V.stripVitals(arr);
+    check('stripVitals: array shape loses stats, keeps the rest, leaves the input alone', bare[0].stats === undefined && bare[0].emoji === '🗡️' && bare[1].name === 'Tom' && arr[0].stats.length === 1);
+    const wrapped = V.stripVitals({ characters: [{ name: 'Mara', stats: { Health: 40 } }], note: 'x' });
+    check('stripVitals: the wrapper shape and the legacy object form', wrapped.characters[0].stats === undefined && wrapped.note === 'x');
+    const one = { stats: [{ name: 'Health', value: 91 }], mood: 'wary' };
+    check('stripVitals: a single block (the player)', V.stripVitals(one).stats === undefined && V.stripVitals(one).mood === 'wary');
+    const plain = [{ name: 'Mara' }];
+    check('stripVitals: nothing to strip gives the same reference back', V.stripVitals(plain) === plain && V.stripVitals(null) === null && V.stripVitals('text') === 'text');
+}
 check('readVitals: array shape, case-insensitive names, percent strings',
     V.readVitals([{ name: 'Health', value: 72 }, { name: 'energy', value: '50%' }], defs).Energy === 50);
 check('readVitals: object shape, locked wrapper, invented vital dropped', (() => {
