@@ -255,6 +255,60 @@ export function findStack(state, container, name) {
     return (state?.[container] || []).find(i => itemKey(i.name) === key) || null;
 }
 
+// ─── The stack a change means ──────────────────────────────────────────────
+
+const FILLER_WORDS = new Set(['of', 'a', 'an', 'the', 'some']);
+// Plurals in -ves whose singular ends in -f or -fe; "gloves" and "sleeves" stay.
+const VES_RE = /^(?:kni|wol|loa|lea|thie|hal|cal|shel|wi|li|el|sel|scar|hoo|dwar)ves$/;
+
+/**
+ * One word's stem, the same for its singular and its plural: cigarettes and
+ * cigarette, torches and torch, berries and berry, knives and knife, axes
+ * and axe. Only equality between stems means anything.
+ */
+export function stemWord(word) {
+    let w = String(word || '').toLowerCase();
+    if (w.length <= 2) return w;
+    if (/ies$/.test(w)) w = w.slice(0, -3) + 'y';
+    else if (VES_RE.test(w)) w = w.slice(0, -3) + 'f';
+    else if (/(?:sh|ch|x|z|ss)es$/.test(w)) w = w.slice(0, -2);
+    else if (/[^s]s$/.test(w)) w = w.slice(0, -1);
+    return w.length >= 3 ? w.replace(/e$/, '') : w;
+}
+
+/** A name's words, fillers out, each stemmed: "pack of cigarettes" → ["pack", "cigarett"]. */
+export function stemWords(name) {
+    return itemKey(name).split(/[^\p{L}\p{N}'’]+/u).filter(w => w && !FILLER_WORDS.has(w)).map(stemWord);
+}
+
+/**
+ * Which stack of a list a change means. The exact name first (case and
+ * spacing aside), then the same words singular or plural ("cigarette" for
+ * "cigarettes"); loose, also a name whose words all appear in the other's
+ * ("cigarettes" against "pack of cigarettes", "silver" against "silver
+ * coins") and last one short word that starts a stack's word ("cig").
+ * One distinct stack is a match; several are ambiguous and none wins.
+ */
+export function matchStack(list, name, { loose = false } = {}) {
+    const items = Array.isArray(list) ? list : [];
+    const key = itemKey(name);
+    const exact = items.findIndex(i => itemKey(i.name) === key);
+    if (exact >= 0) return { idx: exact, candidates: [exact] };
+    const words = stemWords(name);
+    if (!words.length) return { idx: -1, candidates: [] };
+    const stems = items.map(i => stemWords(i.name));
+    const hits = (test) => stems.reduce((out, w, j) => (test(w) ? out.concat(j) : out), []);
+    const sameWords = (a, b) => a.length === b.length && a.every((x, k) => x === b[k]);
+    let found = hits(w => sameWords(w, words));
+    if (!found.length && loose) {
+        found = hits(w => words.every(x => w.includes(x)) || w.every(x => words.includes(x)));
+        if (!found.length && words.length === 1 && words[0].length >= 3) {
+            found = hits(w => w.some(x => x.startsWith(words[0])));
+        }
+    }
+    return { idx: found.length === 1 ? found[0] : -1, candidates: found };
+}
+
 /** How many kinds of item a container holds. */
 export function slotsUsed(state, container) {
     return (state?.[container] || []).length;
@@ -309,8 +363,8 @@ export function applyChanges(state, changes, cfg) {
         const ch = normalizeChange(raw);
         if (!ch) continue;
         const list = next[ch.container];
-        const key = itemKey(ch.name);
-        const idx = list.findIndex(i => itemKey(i.name) === key);
+        const found = matchStack(list, ch.name, { loose: ch.action !== 'add' });
+        const idx = found.idx;
         const before = idx >= 0 ? { ...list[idx] } : null;
         if (ch.action === 'add') {
             if (idx >= 0) {
@@ -325,10 +379,11 @@ export function applyChanges(state, changes, cfg) {
             }
             const at = idx >= 0 ? idx : list.length - 1;
             const after = { ...list[at] };
-            applied.push({ ...ch, index: at, before, after, delta: after.count - (before ? before.count : 0) });
+            applied.push({ ...ch, name: after.name, index: at, before, after, delta: after.count - (before ? before.count : 0) });
         } else {
             if (idx < 0) {
-                rejected.push({ change: ch, reason: 'missing' });
+                const candidates = found.candidates.map(j => list[j].name);
+                rejected.push({ change: ch, reason: candidates.length > 1 ? 'ambiguous' : 'missing', candidates });
                 continue;
             }
             const taken = Math.min(ch.count, list[idx].count);
@@ -336,7 +391,7 @@ export function applyChanges(state, changes, cfg) {
             let after = null;
             if (list[idx].count <= 0) list.splice(idx, 1);
             else after = { ...list[idx] };
-            applied.push({ ...ch, index: idx, count: taken, before, after, delta: -taken });
+            applied.push({ ...ch, name: before.name, index: idx, count: taken, before, after, delta: -taken });
         }
     }
     return { state: next, applied, rejected };
@@ -438,7 +493,10 @@ export const ITEM_TAG_RE = /\[\s*ITEMS?\s*:\s*([^\]]*?)\s*\]/gi;
 
 // Verbs a model may write instead of a sign. "takes" is picking up.
 const ADD_VERB_RE = /^(?:add|adds|added|gain|gains|gained|take|takes|took|get|gets|got|find|finds|found|buy|buys|bought|receive|receives|received|pick(?:s|ed)? up|keep|keeps|kept)\s+(\d+)?(?:\s*[x×](?=\s))?\s*/i;
-const REMOVE_VERB_RE = /^(?:remove|removes|removed|lose|loses|lost|use|uses|used|drop|drops|dropped|give|gives|gave|sell|sells|sold|spend|spends|spent|discard|discards|discarded|hand(?:s|ed)? over|throw(?:s)? away|threw away)\s+(\d+)?(?:\s*[x×](?=\s))?\s*/i;
+const REMOVE_VERB_RE = /^(?:remove|removes|removed|lose|loses|lost|use(?:s|d)?(?:\s+up)?|drop|drops|dropped|give|gives|gave|sell|sells|sold|spend|spends|spent|discard|discards|discarded|hand(?:s|ed)? over|throw(?:s)? away|threw away)\s+(\d+)?(?:\s*[x×](?=\s))?\s*/i;
+// Verbs of using something up. They double as names ("smoked ham", "burnt
+// offering"), so they count as a verb only before a number or an article.
+const CONSUME_VERB_RE = /^(?:smokes?|smoked|eats?|ate|eaten|drinks?|drank|drunk|consumes?|consumed|swallows?|swallowed|quaffs?|quaffed|burns?|burn(?:ed|t))\s+(?=\d|(?:an?|the|some|one|another)\s)(\d+)?(?:\s*[x×](?=\s))?\s*/i;
 // What a model writes when told about the tag but nothing changed hands: not an item.
 const NOTHING_RE = /^(?:none|nothing(?:\s+changed(?:\s+hands)?)?|no\s+(?:changes?|items?\b.*)|n\/?a|null|nil|[-–—]+)\.?$/i;
 
@@ -486,12 +544,12 @@ function parseTagEntry(piece) {
         let vm = p.match(ADD_VERB_RE);
         if (vm) {
             action = 'add';
-        } else if ((vm = p.match(REMOVE_VERB_RE))) {
+        } else if ((vm = p.match(REMOVE_VERB_RE)) || (vm = p.match(CONSUME_VERB_RE))) {
             action = 'remove';
         }
         if (vm) {
             if (vm[1]) count = clampInt(vm[1], 1, MAX_COUNT, 1);
-            p = p.slice(vm[0].length).trim();
+            p = p.slice(vm[0].length).trim().replace(/^(?:one|another)\s+/i, '');
         }
     }
     let note = '';
@@ -557,8 +615,8 @@ export function buildInventoryToolDefinition({ settings, userName = 'the player'
                         type: 'object',
                         properties: {
                             container: { type: 'string', enum: ['pack', 'pouch'], description: `pack: ${userName}'s own things (the default); pouch: the party's shared pouch.` },
-                            action: { type: 'string', enum: ['add', 'remove'], description: 'add: gained; remove: used up, dropped, sold or handed over.' },
-                            item: { type: 'string', description: 'The item, short and plain: "iron key", "torch", "silver coins".' },
+                            action: { type: 'string', enum: ['add', 'remove'], description: 'add: gained; remove: used up (a cigarette smoked, a ration eaten, a potion drunk), dropped, sold or handed over.' },
+                            item: { type: 'string', description: 'The item, short and plain, spelled as the INVENTORY line spells it: "iron key", "torch", "silver coins".' },
                             count: { type: 'integer', minimum: 1, description: 'How many; 1 when left out.' },
                             note: { type: 'string', description: 'A few words only when they matter later: where it came from, what it opens.' },
                         },
@@ -613,13 +671,13 @@ function fullness(state, cfg, userName) {
  */
 export function buildItemTagInstruction({ settings, userName = 'the player', state } = {}) {
     const cfg = inventoryConfig(settings);
-    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, record it with ONE line in exactly this form at the very end of your narration: [ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver coins]. One entry per kind of item, separated by |; + adds and - removes; a count before the name; a short note in parentheses only when it will matter later; start an entry with "pouch" for the shared pouch, otherwise it is ${userName}'s pack. Record only what the story showed; never list what is already carried, never invent gear, and most replies have no line at all: when nothing changed hands, write no line, never a placeholder like "[ITEM: none]".${fullness(state, cfg, userName)} The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual.]`;
+    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, record it with ONE line in exactly this form at the very end of your narration: [ITEM: +1 iron key (from the warden's desk) | -1 torch | pouch +3 silver coins]. Using one up counts, however small the moment: a cigarette smoked, a ration eaten, a potion drunk, an arrow loosed or a coin spent is "-1" of that stack in the same reply. One entry per kind of item, separated by |; + adds and - removes; a count before the name; name the item as the INVENTORY line spells it ("-1 cigarettes" when the pack says cigarettes); a short note in parentheses only when it will matter later; start an entry with "pouch" for the shared pouch, otherwise it is ${userName}'s pack. Record only what the story showed; never list what is already carried, never invent gear, and most replies have no line at all: when nothing changed hands or was used up, write no line, never a placeholder like "[ITEM: none]".${fullness(state, cfg, userName)} The line replaces nothing: anything else you are required to output (a tracker or data block, for instance) still follows as usual.]`;
 }
 
 /** What the game master is told when the inventory tool is available to it. */
 export function buildItemToolInstruction({ settings, userName = 'the player', state } = {}) {
     const cfg = inventoryConfig(settings);
-    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, call the ${INVENTORY_TOOL_NAME} tool once with every item that changed, after you know how the scene goes; its result confirms what was recorded. Record only what the story showed; never list what is already carried, never invent gear, and most replies need no call.${fullness(state, cfg, userName)} A tool call does not change the shape of your reply: the tracker data block and everything else you are required to output still follow as usual.]`;
+    return `[ITEMS: When something actually changes hands in this reply, ${userName} picks up, buys, is given, finds, uses up, drops, sells or hands over an item, or the party's shared pouch gains or loses something, call the ${INVENTORY_TOOL_NAME} tool once with every item that changed, after you know how the scene goes; its result confirms what was recorded. Using one up counts, however small the moment: a cigarette smoked, a ration eaten, a potion drunk, an arrow loosed or a coin spent is a remove of 1 from that stack in the same reply, the item spelled as the INVENTORY line spells it. Record only what the story showed; never list what is already carried, never invent gear, and most replies need no call.${fullness(state, cfg, userName)} A tool call does not change the shape of your reply: the tracker data block and everything else you are required to output still follow as usual.]`;
 }
 
 /** One line for a toast or the tool's answer: what went in, what came out, what would not fit. */
@@ -632,7 +690,9 @@ export function describeApplied(applied, rejected, { userName = 'the player' } =
     for (const r of rejected || []) {
         const ch = r.change || {};
         const where = ch.container === 'pouch' ? 'the party pouch' : `${userName}'s pack`;
-        parts.push(r.reason === 'full' ? `${where} is full: ${ch.name} not added` : `${ch.name} was not in ${where}: nothing removed`);
+        if (r.reason === 'full') parts.push(`${where} is full: ${ch.name} not added`);
+        else if (r.reason === 'ambiguous' && Array.isArray(r.candidates) && r.candidates.length > 1) parts.push(`${ch.name} could be ${r.candidates.join(' or ')} in ${where}: nothing removed`);
+        else parts.push(`${ch.name} was not in ${where}: nothing removed`);
     }
     return parts.length ? parts.join(' · ') : 'no change';
 }

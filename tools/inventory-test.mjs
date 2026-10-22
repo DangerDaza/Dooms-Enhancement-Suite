@@ -16,6 +16,7 @@ import {
     emptyState, normalizeState, findStack, slotsUsed, isFull,
     normalizeChange, applyChanges, revertApplied, setStack, moveStack,
     parseItemTags, stripItemTags,
+    stemWord, stemWords, matchStack,
     changesFromToolArgs, buildInventoryToolDefinition,
     buildInventoryLine, buildItemTagInstruction, buildItemToolInstruction, describeApplied,
 } from '../src/utils/inventory.js';
@@ -126,6 +127,36 @@ console.log('\n§5 applyChanges');
     check('removing more than there is takes what there is and frees the slot', names(r5.state, 'pack') === '' && r5.applied[0].count === 3 && r5.applied[0].delta === -3 && r5.applied[0].after === null && r5.applied[0].before.count === 3);
     const r6 = applyChanges(r5.state, [{ item: 'torch', action: 'remove' }], cfg);
     check('removing what is not there is rejected as missing', r6.applied.length === 0 && r6.rejected.length === 1 && r6.rejected[0].reason === 'missing' && r6.rejected[0].change.name === 'torch');
+}
+{
+    // The stack a change means (the owner's report: "I pull out a cig and smoke it" left the pack's cigarettes untouched).
+    const pairs = [['cigarettes', 'cigarette'], ['torches', 'torch'], ['berries', 'berry'], ['knives', 'knife'], ['axes', 'axe'], ['gloves', 'glove'], ['glasses', 'glass'], ['shoes', 'shoe'], ['potatoes', 'potato'], ['coins', 'coin'], ['keys', 'key']];
+    check('a plural and its singular share a stem', pairs.every(([a, b]) => stemWord(a) === stemWord(b)), pairs.map(([a, b]) => `${a}→${stemWord(a)} ${b}→${stemWord(b)}`).join(', '));
+    check('"glass" keeps its double s; short words stay', stemWord('glass') === 'glass' && stemWord('ax') === 'ax' && stemWord('of') === 'of');
+    check('stemWords drops fillers and stems each word', same(stemWords('a Pack of  Cigarettes'), ['pack', 'cigarett']) && same(stemWords('the silver coins'), ['silver', 'coin']));
+    const smokes = { v: 1, pack: [stack('cigarettes', 12), stack('iron key', 1), stack('brass key', 1), stack('gloves', 1)], pouch: [stack('silver coins', 3), stack('gold coins', 2)] };
+    const m = (name, loose = true, list = smokes.pack) => matchStack(list, name, { loose });
+    check('matchStack: the exact name', m('Cigarettes').idx === 0);
+    check('matchStack: the singular finds the plural stack, loose or not', m('cigarette', false).idx === 0 && m('cigarette').idx === 0);
+    check('matchStack: a word within the name only when loose', m('pack of cigarettes').idx === 0 && m('pack of cigarettes', false).idx === -1);
+    check('matchStack: a prefix of three letters or more only when loose', m('cig').idx === 0 && m('cigs').idx === 0 && m('ci').idx === -1 && m('cig', false).idx === -1);
+    check('matchStack: two stacks sharing the word are ambiguous', m('key').idx === -1 && same(m('key').candidates, [1, 2]));
+    check('matchStack: nothing like it', m('torch').idx === -1 && m('torch').candidates.length === 0);
+    const a = applyChanges(smokes, [{ item: 'cigarette', action: 'remove' }], cfg);
+    check('removing "cigarette" takes one cigarettes, recorded under the stack\'s own name', names(a.state, 'pack').startsWith('cigarettes:11') && a.applied[0].name === 'cigarettes' && a.applied[0].delta === -1, JSON.stringify(a.applied));
+    check('…and a swipe puts it back under that name', names(revertApplied(a.state, a.applied), 'pack') === names(smokes, 'pack'));
+    const b = applyChanges(smokes, [{ item: 'cig', action: 'remove', count: 2 }], cfg);
+    check('"cig" is the cigarettes', names(b.state, 'pack').startsWith('cigarettes:10') && b.applied[0].name === 'cigarettes');
+    const c = applyChanges(smokes, [{ item: 'pack of cigarettes', action: 'remove' }], cfg);
+    check('"pack of cigarettes" is the cigarettes', names(c.state, 'pack').startsWith('cigarettes:11'));
+    const d = applyChanges(smokes, [{ item: 'key', action: 'remove' }], cfg);
+    check('"key" with an iron key and a brass key is rejected as ambiguous, both named', d.applied.length === 0 && d.rejected[0].reason === 'ambiguous' && same(d.rejected[0].candidates, ['iron key', 'brass key']) && names(d.state, 'pack') === names(smokes, 'pack'));
+    check('…and the line says so', describeApplied(d.applied, d.rejected, { userName: 'Jordan' }) === 'key could be iron key or brass key in Jordan\'s pack: nothing removed', describeApplied(d.applied, d.rejected, { userName: 'Jordan' }));
+    const e = applyChanges(smokes, [{ container: 'pouch', item: 'silver', action: 'remove' }, { container: 'pouch', item: 'coins', action: 'remove' }], cfg);
+    check('"silver" is the silver coins; "coins" could be either', names(e.state, 'pouch') === 'silver coins:2,gold coins:2' && e.rejected[0].reason === 'ambiguous');
+    const f = applyChanges(smokes, [{ item: 'cigarette', count: 2 }, { item: 'key' }, { item: 'glove', action: 'remove' }], cfg);
+    check('an add merges by singular or plural only: +2 cigarette joins cigarettes, +1 key is its own stack', names(f.state, 'pack') === 'cigarettes:14,iron key:1,brass key:1,key:1' && f.applied[0].name === 'cigarettes' && f.applied[1].name === 'key', names(f.state, 'pack'));
+    check('"glove" takes the gloves', f.applied[2].name === 'gloves' && f.applied[2].after === null);
 }
 {
     const tiny = inventoryConfig(settingsOn({ packSlots: 1, pouchSlots: 1 }));
@@ -293,6 +324,17 @@ const grammar = [
     ['[ITEM: the party’s shared pouch +3 coins]', 'pouch', 'add', 'coins', 3],
     ['[ITEM: shared pouch: lockpicks]', 'pouch', 'add', 'lockpicks', 1],
     ['[ITEM: +1 nothing special]', 'pack', 'add', 'nothing special', 1],
+    ['[ITEM: smokes 1 cigarette]', 'pack', 'remove', 'cigarette', 1],
+    ['[ITEM: smoked a cigarette]', 'pack', 'remove', 'cigarette', 1],
+    ['[ITEM: smokes one cigarette]', 'pack', 'remove', 'cigarette', 1],
+    ['[ITEM: ate the ration]', 'pack', 'remove', 'ration', 1],
+    ['[ITEM: drank 2 potions]', 'pack', 'remove', 'potions', 2],
+    ['[ITEM: burns the letter]', 'pack', 'remove', 'letter', 1],
+    ['[ITEM: uses up 1 cigarette]', 'pack', 'remove', 'cigarette', 1],
+    ['[ITEM: used up the torch]', 'pack', 'remove', 'torch', 1],
+    ['[ITEM: smoked ham]', 'pack', 'add', 'smoked ham', 1],
+    ['[ITEM: burnt offering]', 'pack', 'add', 'burnt offering', 1],
+    ['[ITEM: +2 smoked fish]', 'pack', 'add', 'smoked fish', 2],
 ];
 for (const [text, container, action, name, count, note] of grammar) {
     const ch = one(text);
@@ -342,6 +384,7 @@ console.log('\n§12 the tool definition');
     const small = buildInventoryToolDefinition({ settings: settingsOn({ packSlots: 10, pouchSlots: 4 }) });
     check('custom slots reach the description; the default player name', small.description.includes('10 slots') && small.description.includes('pouch 4') && small.description.includes('the player'));
     check('serialisable', JSON.parse(JSON.stringify(t)).name === INVENTORY_TOOL_NAME);
+    check('the item is to be spelled as the INVENTORY line spells it; remove covers using one up', p.properties.changes.items.properties.item.description.includes('as the INVENTORY line spells it') && p.properties.changes.items.properties.action.description.includes('cigarette smoked'));
 }
 
 console.log('\n§13 what the game master reads');
@@ -363,6 +406,7 @@ console.log('\n§13 what the game master reads');
     const tag = buildItemTagInstruction({ settings: settingsOn(), userName: 'Jordan', state: s });
     check('the tag instruction shows the form and names the player', tag.startsWith('[ITEMS: ') && tag.includes('[ITEM: +1 iron key (from the warden\'s desk) | -1 torch | pouch +3 silver coins]') && tag.includes('Jordan picks up') && tag.includes('most replies have no line at all') && tag.includes('never a placeholder like "[ITEM: none]"') && tag.endsWith(']'));
     check('…and says the tracker block still follows', tag.includes('The line replaces nothing'));
+    check('using one up counts, the item spelled as the line spells it', tag.includes('Using one up counts, however small the moment: a cigarette smoked') && tag.includes('name the item as the INVENTORY line spells it ("-1 cigarettes" when the pack says cigarettes)') && tag.includes('when nothing changed hands or was used up, write no line'), tag);
     check('no fullness clause while there is room', !tag.includes('is full'));
     const fullPack = buildItemTagInstruction({ settings: settingsOn({ packSlots: 3 }), userName: 'Jordan', state: s });
     check('a full pack is said', fullPack.includes('Jordan\'s pack is full') && !fullPack.includes('pouch is full'));
@@ -371,6 +415,7 @@ console.log('\n§13 what the game master reads');
     const tool = buildItemToolInstruction({ settings: settingsOn(), userName: 'Jordan', state: s });
     check('the tool instruction names the tool and says most replies need no call', tool.includes(`call the ${INVENTORY_TOOL_NAME} tool once`) && tool.includes('most replies need no call') && tool.includes('tracker data block'));
     check('the tool instruction carries fullness too', buildItemToolInstruction({ settings: settingsOn({ pouchSlots: 1 }), state: s }).includes('the party pouch is full'));
+    check('the tool instruction says using one up counts, spelled as the line spells it', tool.includes('a cigarette smoked, a ration eaten') && tool.includes('spelled as the INVENTORY line spells it'));
     check('the instruction\'s example parses under the grammar', parseItemTags('[ITEM: +1 iron key (from the warden\'s desk) | -1 torch | pouch +3 silver coins]').length === 3);
 }
 {

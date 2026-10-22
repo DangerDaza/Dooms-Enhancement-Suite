@@ -1238,6 +1238,28 @@ inventory is on, so a default install's shelf is unchanged; the Quests
 page rides with it (open: whether Quests should stand on its own). Since
 D56 (§15) the control also shows while Live World is on, for its Map page.
 
+**D66** (2026-10-22; the owner's report: "I pull out a cig and smoke it"
+and the pack's cigarettes stood at the same count, no line, no tool call,
+no toast). The AI had been told that "most replies have no line at all",
+and it took a cigarette for flavour. Now the rule says in so many words
+that using one up counts however small the moment (a cigarette smoked, a
+ration eaten, a potion drunk, an arrow loosed, a coin spent is "-1" of that
+stack in the same reply) and that the item is to be spelled as the
+INVENTORY line spells it; the tool's definition says the same. Behind the
+rule, the code meets the line halfway: a removal finds its stack by the
+exact name, then by the same words singular or plural ("cigarette" for
+"cigarettes"), then by a name whose words all appear in the other's
+("pack of cigarettes", "silver" for "silver coins"), last by one short
+word that starts a stack's word ("cig"); one distinct stack is taken,
+under its own name, so the toast, the reply's 🎒 line and a swipe's put-back
+all say "cigarettes"; a name that could mean two stacks ("key" with an iron
+key and a brass key) is refused with both named, since a wrong removal is
+worse than a toast. An add merges by singular or plural only; a new kind
+keeps its own slot. The tag grammar also reads "uses up", and the verbs of
+using something up (smokes, ate, drank, consumed, burnt and their forms)
+before a number or an article, so "smoked ham" stays an item.
+`stemWord`, `stemWords`, `matchStack` in inventory.js, pure.
+
 ### 13.1 Data model
 
 `chat_metadata.dooms_inventory = { v: 1, pack: [stack], pouch: [stack] }`,
