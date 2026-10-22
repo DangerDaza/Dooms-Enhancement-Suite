@@ -30,6 +30,8 @@ import {
     attributesOn,
     attributeDefs,
     getSheet,
+    sheetNames,
+    resolveSheetName,
     getProficiencies,
     isProficient,
     isSaveProficient,
@@ -1114,7 +1116,15 @@ function resolveRoller(who) {
         || (persona && w.toLowerCase() === persona.toLowerCase())
         || /^(?:the )?(?:player|user|you)$/i.test(w);
     if (isPlayer) return { name: persona || 'The player', isUser: true };
-    return { name: w, isUser: false };
+    // The name as the sheet is stored (D59): "Mara", "the guard" or an alias
+    // finds "Mara Vane"'s sheet; the persona's full name finds theirs.
+    const name = resolveSheetName(w, {
+        names: [...(persona ? [persona] : []), ...sheetNames(extensionSettings, false)],
+        aliases: extensionSettings.characterAliases || {},
+        present: committedCharacterNames(),
+    });
+    if (persona && name.toLowerCase() === persona.toLowerCase()) return { name: persona, isUser: true };
+    return { name, isUser: false };
 }
 
 /**
