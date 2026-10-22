@@ -352,5 +352,20 @@ check('a bad face or nothing to set is refused', D.overrideRoll(base, { kept: 21
 check('the verdict of a set result reads like any other, and final', D.verdictText(set17, { userName: 'Jordan' }).includes('Strength check: d20 = 17, +2 (STR 15) = 19 vs DC 15. SUCCESS, clearly (by 4). This outcome is final'));
 check('the labels follow the set result', D.outcomeLabel(set17) === 'Success' && D.outcomeLabel(D.overrideRoll(base, { kept: 20 })) === 'Critical success');
 
+// ── 12. The name as the sheet is stored (D59) ──
+{
+    const names = ['Mara Vane', 'Guard', 'Élise Marchand'];
+    const aliases = { 'Mara Vane': ['the Captain', 'Captain Vane'] };
+    const r = (w, present = []) => D.resolveSheetName(w, { names, aliases, present });
+    check('exact wins, case and accents aside', r('mara vane') === 'Mara Vane' && r('elise marchand') === 'Élise Marchand' && r('GUARD') === 'Guard');
+    check('an alias finds the card', r('the captain') === 'Mara Vane' && r('Captain Vane') === 'Mara Vane');
+    check('a first or last name finds the full one; a title around it too', r('Mara') === 'Mara Vane' && r('Vane') === 'Mara Vane' && r('Captain Mara Vane') === 'Mara Vane');
+    check('"the guard" and "Guard (wounded)" find Guard', r('the guard') === 'Guard' && r('Guard (wounded)') === 'Guard');
+    check('nothing fitting stays as written, trimmed', r('  Ines Arden ') === 'Ines Arden' && r('') === '' && D.resolveSheetName('Mara', {}) === 'Mara');
+    const two = (w, present) => D.resolveSheetName(w, { names: ['Mara Vane', 'Mara Dale'], present });
+    check('two fitting: the one in the scene; both or neither in it: as written', two('Mara', ['Mara Dale']) === 'Mara Dale' && two('Mara', []) === 'Mara' && two('Mara', ['Mara Vane', 'Mara Dale']) === 'Mara');
+    check('sheetNames lists one kind, as stored', (() => { const s = { characterAttributes: { 'npc:Mara Vane': { dex: 16 }, 'user:Jordan': { str: 15 }, 'npc:': {} } }; return D.sheetNames(s, false).join() === 'Mara Vane' && D.sheetNames(s, true).join() === 'Jordan' && D.sheetNames({}, false).length === 0; })());
+}
+
 console.log(failures === 0 ? '\nAll d20 checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

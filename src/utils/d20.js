@@ -14,6 +14,8 @@
  *                                         { "user:Jordan": { str: 15 }, "npc:Mara": { dex: 16 } }
  *                                         Only scores other than 10 are stored;
  *                                         a missing attribute is 10 (+0).
+ *
+ * The one import is src/utils/nameSimilarity.js, pure as well.
  *   message.extra.dooms_roll              one roll, on the user message it
  *                                         rode with (src/systems/features/diceRolls.js)
  *
@@ -29,6 +31,7 @@
  * bonus + modifier, or against a difficulty word when the world is the
  * source. A roll carries `kind: 'check' | 'save'`.
  */
+import { normalizeName } from './nameSimilarity.js';
 
 /** The 5e skills under each ability. Constitution has none; a plain check is always offered. */
 export const SKILL_PRESETS = Object.freeze({
@@ -352,6 +355,58 @@ export function modifier(score) {
 export function formatModifier(m) {
     const n = Number.isFinite(m) ? m : 0;
     return n < 0 ? `-${Math.abs(n)}` : `+${n}`;
+}
+
+/** The names with a stored sheet of one kind, as the Workshop stored them. */
+export function sheetNames(settings, isUser) {
+    const store = settings?.characterAttributes;
+    if (!store || typeof store !== 'object') return [];
+    const prefix = isUser ? 'user:' : 'npc:';
+    return Object.keys(store).filter(k => k.startsWith(prefix)).map(k => k.slice(prefix.length).trim()).filter(Boolean);
+}
+
+/**
+ * The stored name a written name refers to (D59). The game master names a
+ * character as the scene does ("Mara", "the guard", "Captain Mara Vane")
+ * while the Workshop stored the sheet under the card's name ("Mara Vane");
+ * a sheet looked up by the written name alone is an empty one, all 10s.
+ * Exact (case, accents and a parenthetical aside) or an alias wins; else
+ * the one name sharing every word of the shorter of the two ("Mara" or
+ * "Vane" for "Mara Vane", "Captain Mara Vane" too); when several share,
+ * the one present in the scene; when that is still several, the written
+ * name as it is, since a wrong sheet is worse than an empty one.
+ * @param {string} written
+ * @param {{ names?: string[], aliases?: Record<string, string[]>, present?: string[] }} p
+ *   names: stored names; aliases: the Workshop's table, card name → its other names; present: names in the scene
+ * @returns {string} the stored (or alias's card) name, else `written` trimmed
+ */
+export function resolveSheetName(written, { names = [], aliases = {}, present = [] } = {}) {
+    const raw = String(written || '').trim();
+    const core = normalizeName(raw.replace(/\s*\([^)]*\)/g, '').replace(/^the\s+/i, ''));
+    if (!core) return raw;
+    const entries = [];
+    for (const n of names || []) { const key = normalizeName(n); if (key) entries.push({ key, canonical: String(n).trim() }); }
+    for (const [canonical, list] of Object.entries(aliases || {})) {
+        if (!Array.isArray(list)) continue;
+        for (const a of list) { const key = normalizeName(a); if (key) entries.push({ key, canonical: String(canonical).trim() }); }
+    }
+    const exact = entries.find(e => e.key === core);
+    if (exact) return exact.canonical;
+    const words = core.split(' ');
+    const loose = entries.filter(e => {
+        const theirs = e.key.split(' ');
+        const [small, large] = words.length <= theirs.length ? [words, theirs] : [theirs, words];
+        const set = new Set(large);
+        return small.every(w => set.has(w));
+    });
+    const distinct = (list) => new Set(list.map(e => e.canonical.toLowerCase()));
+    if (distinct(loose).size === 1) return loose[0].canonical;
+    if (loose.length) {
+        const here = new Set((present || []).map(normalizeName));
+        const inScene = loose.filter(e => here.has(normalizeName(e.canonical)));
+        if (distinct(inScene).size === 1) return inScene[0].canonical;
+    }
+    return raw;
 }
 
 /** The storage key for a character's sheet: "user:Name" or "npc:Name". */

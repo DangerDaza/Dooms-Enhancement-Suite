@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.1.5-beta.1] - 2026-10-22 — The right sheet
+
+### Fixed
+- **A check on an NPC now rolls on their Workshop sheet whatever the call names them.** The game master names a character as the scene does ("Mara", "the guard", "Captain Mara Vane") while the sheet is stored under the card's name ("Mara Vane"); the dice looked only for the exact name and rolled on an empty sheet, all 10s and no proficiency, so a character's attributes never counted. Now an exact name, a Workshop alias, a first or last name, or the name with a title around it finds the sheet; of several that fit, the one on the shelf; when that is still unclear the roll stays on the default sheet rather than a wrong one. The roll box and the verdict name the character as the card does. Saving throws and the dice tool resolve the same way, and the persona's full name finds the persona (D59). The version reads `3.1.5-beta.1`.
+
 ## [3.1.4-beta.1] - 2026-10-21 — Hidden means hidden
 
 ### Fixed
