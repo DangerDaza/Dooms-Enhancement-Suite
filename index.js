@@ -2211,7 +2211,7 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await illustrateNow({ reason: 'manual' });
-            if (!r.ok && r.reason !== 'error') toastr.info({ off: 'Doom\'s Enhancement Suite is off.', 'no-chat': 'Open a chat first.', running: 'A picture is already being made.', busy: 'The chat is busy; try again in a moment.', stale: 'The chat changed meanwhile.' }[r.reason] || `No picture: ${r.reason}`, 'Scene pictures', { timeOut: 4000 });
+            if (!r.ok && r.reason !== 'error') toastr.info({ off: 'Doom\'s Enhancement Suite is off.', disabled: 'Switch Scene pictures on first.', 'no-chat': 'Open a chat first.', running: 'A picture is already being made.', busy: 'The chat is busy; try again in a moment.', stale: 'The chat changed meanwhile.' }[r.reason] || `No picture: ${r.reason}`, 'Scene pictures', { timeOut: 4000 });
         } finally {
             $b.prop('disabled', false);
             renderSceneStatus();

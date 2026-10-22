@@ -46,7 +46,8 @@ let loadedMeta = null;      // the chat_metadata object the state was loaded fro
 let loadedChat = undefined; // the chat id it was loaded with
 let running = false;
 let armed = false;          // a run is due and waits for the generation to end
-let transport = null;       // tests: { caption(prompt) → text, studio(kind, url, body) → json | { blob } }
+let transport = null;       // tests: { caption(prompt) → text, studio(kind, url, body) → json | { blob } | { dataUrl } }
+let timing = { idleMaxMs: 120000, idleStepMs: 1500, pollMs: 2000 };
 
 const log = (message, data = null) => {
     const line = `[Dooms Tracker] Scene pictures: ${message}`;
@@ -137,15 +138,15 @@ export function onSceneGenerationEnded() {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /** Waits for the main generation and any other background request to be over, up to maxMs. */
-async function whenIdle(maxMs = 120000) {
+async function whenIdle(maxMs = timing.idleMaxMs) {
     const started = Date.now();
-    while (Date.now() - started < maxMs) {
+    for (;;) {
         const mainBusy = ST.is_send_press === true;
         const bgBusy = !!backgroundHolder();
         if (!mainBusy && !bgBusy) return true;
-        await sleep(1500);
+        if (Date.now() - started >= maxMs) return false;
+        await sleep(timing.idleStepMs);
     }
-    return false;
 }
 
 function presentNames() {
@@ -229,7 +230,7 @@ async function renderPicture(c, caption, stale) {
     const deadline = Date.now() + c.timeoutSec * 1000;
     let job = null;
     while (Date.now() < deadline) {
-        await sleep(2000);
+        await sleep(timing.pollMs);
         if (stale()) throw new Error('the chat changed while the studio rendered');
         job = readJobs(await studio('json', e.jobs), id);
         if (job.failed) throw new Error(`the studio reported the job failed${job.error ? `: ${job.error}` : ''}`);
@@ -238,13 +239,13 @@ async function renderPicture(c, caption, stale) {
     if (!job || !job.done) throw new Error(`the studio did not finish job ${id} within ${c.timeoutSec} s`);
     if (!job.images.length) throw new Error(`job ${id} finished with no image`);
     const file = job.images[0];
-    const { blob } = await studio('blob', e.image(file), null, { timeoutMs: 60000 });
-    const dataUrl = await new Promise((resolve, reject) => {
+    const got = await studio('blob', e.image(file), null, { timeoutMs: 60000 });
+    const dataUrl = got && typeof got.dataUrl === 'string' ? got.dataUrl : await new Promise((resolve, reject) => {
         try {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result || ''));
             reader.onerror = () => reject(new Error('the image could not be read'));
-            reader.readAsDataURL(blob);
+            reader.readAsDataURL(got.blob);
         } catch (err) { reject(err); }
     });
     return { file, dataUrl };
@@ -296,7 +297,7 @@ function notice(text, kind = 'info') {
 export async function illustrateNow({ reason = 'manual' } = {}) {
     if (!extensionSettings.enabled) return { ok: false, reason: 'off' };
     const c = cfg();
-    if (reason === 'count' && !c.enabled) return { ok: false, reason: 'off' };
+    if (!c.enabled) return { ok: false, reason: 'disabled' };
     if (!loadedMeta) return { ok: false, reason: 'no-chat' };
     if (running) return { ok: false, reason: 'running' };
     running = true;
@@ -338,7 +339,7 @@ function registerSceneCommands() {
             callback: async () => {
                 const r = await illustrateNow({ reason: 'command' });
                 if (r.ok) return 'A picture of the scene is in the chat.';
-                const why = { off: 'Doom\'s Enhancement Suite is off.', 'no-chat': 'No chat is open.', running: 'A picture is already being made.', busy: 'The chat is busy; it tries again after the next reply.', stale: 'The chat changed meanwhile.' };
+                const why = { off: 'Doom\'s Enhancement Suite is off.', disabled: 'Scene pictures are off (Settings → Scene pictures).', 'no-chat': 'No chat is open.', running: 'A picture is already being made.', busy: 'The chat is busy; it tries again after the next reply.', stale: 'The chat changed meanwhile.' };
                 return why[r.reason] || `No picture: ${r.error || r.reason}`;
             },
             helpString: 'Scene pictures: makes one picture of the recent scene now, through Moss Studio, and posts it as the narrator.',
@@ -354,5 +355,6 @@ export function initScenePictures() {
     registerSceneCommands();
 }
 
-/** Tests: the caption and the studio behind functions. */
+/** Tests: the caption and the studio behind functions, and the waits made short. */
 export function __setSceneTransport(fn) { transport = fn || null; }
+export function __setSceneTiming(t) { timing = { ...timing, ...(t || {}) }; }
