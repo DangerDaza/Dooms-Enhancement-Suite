@@ -200,6 +200,38 @@ export function buildCaptionPrompt({ recent = '', present = [], identity = '', g
     return { system, user };
 }
 
+/**
+ * The identity notes the caption writer gets: the chat's own notes first,
+ * then one "Name: look" line per character the notes do not already name,
+ * by the full name or by a first name of three letters or more as a whole
+ * word (the typed notes win over the cards). `looks` is [{ name, look }];
+ * empty looks are skipped; each look is cut to `max`.
+ */
+export function mergeIdentityNotes(chatNotes, looks, { max = 500 } = {}) {
+    const notes = String(chatNotes || '').trim();
+    const lowerNotes = notes.toLowerCase();
+    const named = (name) => {
+        const full = name.toLowerCase();
+        if (lowerNotes.includes(full)) return true;
+        const first = full.split(/\s+/)[0];
+        if (first.length < 3) return false;
+        return new RegExp(`(^|[^a-z0-9])${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(lowerNotes);
+    };
+    const lines = [];
+    const seen = new Set();
+    for (const item of Array.isArray(looks) ? looks : []) {
+        const name = item && typeof item.name === 'string' ? item.name.trim() : '';
+        let look = item && typeof item.look === 'string' ? item.look.replace(/\s+/g, ' ').trim() : '';
+        if (!name || !look) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key) || named(name)) continue;
+        seen.add(key);
+        if (look.length > max) look = `${look.slice(0, max - 1).trimEnd()}…`;
+        lines.push(`${name}: ${look}`);
+    }
+    return [notes, ...lines].filter(Boolean).join('\n');
+}
+
 /** The caption out of the model's answer: fences, labels and quotes off, one paragraph, '' when nothing usable. */
 export function parseCaptionReply(text) {
     let s = String(text || '').trim();

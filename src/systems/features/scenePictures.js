@@ -32,10 +32,11 @@ import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, parseC
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { buildRecentText } from '../../utils/liveWorld.js';
 import { resolvePersonaName } from './diceRolls.js';
+import { getCharacterAppearance } from './avatarGenerator.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
     normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, isEditorWorkflow, fillWorkflow, injectLoras,
-    comfyGenerateBody, readComfyResult, comfyWsUrl, newClientId, nodeKinds,
+    comfyGenerateBody, readComfyResult, comfyWsUrl, newClientId, nodeKinds, mergeIdentityNotes,
 } from '../../utils/scenePictures.js';
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -166,11 +167,62 @@ async function whenIdle(maxMs = timing.idleMaxMs) {
     }
 }
 
-function presentNames() {
+function presentEntries() {
     try {
         const entries = parseCharacterEntriesFromThoughts(committedTrackerData.characterThoughts || lastGeneratedData.characterThoughts);
-        return (Array.isArray(entries) ? entries : []).map(e => (e && typeof e.name === 'string' ? e.name.trim() : '')).filter(Boolean);
+        return (Array.isArray(entries) ? entries : []).filter(e => e && typeof e.name === 'string' && e.name.trim());
     } catch (e) { return []; }
+}
+
+function presentNames() {
+    return presentEntries().map(e => e.name.trim());
+}
+
+const LOOK_MAX = 500;
+
+/**
+ * How each character in the scene looks, for the caption (the image model
+ * knows no names): the persona first, then every character on the shelf.
+ * For each, the Workshop's Appearance line (the portrait prompt, the
+ * owner's own words) wins; else the tracker's appearance for them this
+ * scene; else, for the chat's character, the card's description, and for
+ * the persona, SillyTavern's persona description or the Workshop's user
+ * card. [{ name, look }], looks empty where nothing is known.
+ */
+function looksOfTheScene() {
+    const looks = [];
+    let ctx = null;
+    try { ctx = getContext(); } catch (e) { ctx = null; }
+    const persona = resolvePersonaName();
+    if (persona) {
+        let look = getCharacterAppearance(persona);
+        if (!look) {
+            const card = extensionSettings.userCharacters && extensionSettings.userCharacters[persona];
+            if (card && typeof card.appearance === 'string' && card.appearance.trim()) look = card.appearance.trim();
+            else if (card && card.injection && typeof card.injection.description === 'string' && card.injection.description.trim()) look = card.injection.description.trim();
+        }
+        if (!look && ctx) {
+            try {
+                const pu = ctx.powerUserSettings;
+                const d = pu && pu.persona_descriptions && ctx.userAvatar ? pu.persona_descriptions[ctx.userAvatar] : null;
+                if (d && typeof d.description === 'string') look = d.description.trim();
+            } catch (e) { /* no persona description */ }
+        }
+        looks.push({ name: persona, look: look || '' });
+    }
+    const mainChar = ctx && Array.isArray(ctx.characters) && ctx.characterId !== undefined ? ctx.characters[ctx.characterId] : null;
+    for (const e of presentEntries()) {
+        const name = e.name.trim();
+        if (persona && name.toLowerCase() === persona.toLowerCase()) continue;
+        let look = getCharacterAppearance(name);
+        if (!look) {
+            const fromTracker = e.details && typeof e.details.appearance === 'string' ? e.details.appearance : (typeof e.appearance === 'string' ? e.appearance : '');
+            if (fromTracker && fromTracker.trim()) look = fromTracker.trim();
+        }
+        if (!look && mainChar && typeof mainChar.name === 'string' && mainChar.name.trim().toLowerCase() === name.toLowerCase() && typeof mainChar.description === 'string') look = mainChar.description.trim();
+        looks.push({ name, look: look || '' });
+    }
+    return looks.map(l => ({ name: l.name, look: l.look.length > LOOK_MAX ? `${l.look.slice(0, LOOK_MAX - 1).trimEnd()}…` : l.look }));
 }
 
 function withTimeout(promise, ms, what) {
@@ -184,7 +236,8 @@ function withTimeout(promise, ms, what) {
 async function writeCaption(c) {
     const persona = resolvePersonaName() || 'Player';
     const recent = buildRecentText(chatArray(), { count: c.window, persona });
-    const prompt = buildCaptionPrompt({ recent, present: presentNames(), identity: state.identity, guide: c.guide, size: c.size });
+    const identity = mergeIdentityNotes(state.identity, looksOfTheScene());
+    const prompt = buildCaptionPrompt({ recent, present: presentNames(), identity, guide: c.guide, size: c.size });
     const external = extensionSettings.generationMode === 'external';
     const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
     const run = async () => {

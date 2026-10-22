@@ -100,6 +100,7 @@ extensionSettings.enabled = true;
 extensionSettings.generationMode = 'together';
 extensionSettings.connectionProfile = '';
 extensionSettings.userCharacters = {};
+extensionSettings.characterAppearance = { 'Mara Vane': 'silver fox ears, long white hair, grey wool coat' };
 extensionSettings.scenePictures = { enabled: true, every: 2, window: 6, size: 'landscape', notify: false, preamble: 'Anime-style digital illustration. ', timeoutSec: 20, workflow: 'DES Scene Moss.json', model: 'moss_image_sft_int8_convrot.safetensors', vae: 'flux2-vae_small.safetensors' };
 lastGeneratedData.characterThoughts = JSON.stringify([{ name: 'Mara Vane', thoughts: 'x' }]);
 committedTrackerData.characterThoughts = null;
@@ -175,6 +176,11 @@ check('the caption request saw the recent scene, who is present and the identity
 check('the count is back to zero and the last picture is kept', sp.getSceneState().sinceLast === 0 && sp.getSceneState().last.ok && sp.getSceneState().last.file === 'DES Scene Moss.json' && meta.dooms_scene.last.ok);
 check('the bar ends on done, with the client id ComfyUI was given', sp.getSceneProgress().stage === 'done' && typeof JSON.parse(gen.body.prompt).client_id === 'string' && JSON.parse(gen.body.prompt).client_id.length === 32);
 check('the same reply end does not run twice', (sp.onSceneGenerationEnded(), chat.length === before + 1));
+check('the chat\'s note on Mara wins over the Workshop\'s Appearance line for her', !seen.prompts[0].system.includes('silver fox ears'));
+sp.setSceneIdentity('');
+await sp.illustrateNow({ reason: 'manual' });
+check('with no chat notes, the Workshop\'s Appearance line is the look the caption gets', seen.prompts[1].system.includes('Mara Vane: silver fox ears, long white hair, grey wool coat'));
+sp.setSceneIdentity('Mara: red hair in a long braid, grey wool coat');
 
 console.log('\n§3 a failed run, then the retry');
 comfyMode = 'fail';

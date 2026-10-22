@@ -50,8 +50,17 @@ reads; 1.19 migrates it into `extra.media` on load.
    goes.
 3. The caption: `buildCaptionPrompt` from the last `window` messages
    (system notes and tool records skipped, each cut to length), the
-   characters present (the shelf), the chat's identity notes, the
-   preamble and the extra rules; one background request; `parseCaptionReply`.
+   characters present (the shelf), the identity notes, the preamble and
+   the extra rules; one background request; `parseCaptionReply`. The
+   identity notes are the chat's own notes followed by one "Name: look"
+   line per character in the scene whose name the notes do not mention
+   (`mergeIdentityNotes`): the persona (the Workshop's Appearance line,
+   else the user card's appearance or description, else SillyTavern's
+   persona description) and each character on the shelf (the Workshop's
+   Appearance line, else the tracker's appearance this scene, else the
+   character card's description for the chat's character). The first
+   picture of the owner's test showed invented characters because the
+   notes were empty and nothing else reached the caption writer.
 4. The picture: the workflow's text from the store, `fillWorkflow` with
    `workflowValues`, `injectLoras` with this chat's list, `POST
    /api/sd/comfy/generate` (the server queues, waits and returns the image
