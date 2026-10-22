@@ -298,12 +298,33 @@ setVitals({ enabled: false });
 const baseline = pb.buildTrackerPromptBlock(CTX_NAME, true);
 check('vitals off: no stats array in the characters spec', !baseline.includes('"stats"'));
 check('vitals off: no player key, no guidance', !baseline.includes('"player"') && !baseline.includes('VITALS'));
-check('vitals off: the example is unchanged by the sheet', (() => {
-    committedTrackerData.characterThoughts = JSON.stringify({ characters: [{ name: 'Mara', stats: [{ name: 'Health', value: 72 }] }] });
+// Off must also mean the AI never sees stats a chat stored while vitals were
+// on (the owner's report: health tracked and injected with the switch off).
+// Three routes carry the previous tracker: the example, the <previous> JSON
+// and the text summary. Each drops the stats and keeps everything else.
+// (The array shape, which is what the parser stores; the text summary reads only that shape.)
+committedTrackerData.characterThoughts = JSON.stringify([
+    { name: 'Mara', emoji: '🗡️', stats: [{ name: 'Health', value: 72 }] },
+    { name: 'Old Tom', stats: { Health: 40, Energy: { value: 10, locked: true } } },
+]);
+committedTrackerData.player = JSON.stringify({ stats: [{ name: 'Health', value: 91 }] });
+{
     const ex = pb.generateTrackerExample();
-    committedTrackerData.characterThoughts = null;
-    return ex.includes('"value": 72') && !ex.includes('"locked"');
+    check('vitals off: stored stats are left out of the example, the characters stay', !ex.includes('stats') && !ex.includes('72') && ex.includes('"Mara"') && ex.includes('"Old Tom"') && ex.includes('🗡️'), ex);
+    check('vitals off: the player block is left out of the example', !ex.includes('"player"'));
+    check('vitals off: the example is still one JSON object', (() => { try { JSON.parse(ex); return true; } catch (e) { return false; } })(), ex);
+    const prev = pb.generateRPGPromptText();
+    check('vitals off: the <previous> JSON carries no stats', !prev.includes('"stats"') && !prev.includes('Health') && prev.includes('"Mara"'), prev);
+    const summary = pb.generateContextualSummary();
+    check('vitals off: the text summary has no Stats: line and no Vitals: line', !summary.includes('Stats:') && !summary.includes('Vitals:') && !summary.includes('Health') && summary.includes('Mara'), summary);
+}
+check('vitals off: the example without stored stats is untouched', (() => {
+    committedTrackerData.characterThoughts = JSON.stringify({ characters: [{ name: 'Mara', emoji: '🗡️' }] });
+    const ex = pb.generateTrackerExample();
+    return ex.includes('{"characters":[{"name":"Mara","emoji":"🗡️"}]}'.slice(0, 0)) && ex.includes('"Mara"') && !ex.includes('stats');
 })());
+committedTrackerData.characterThoughts = null;
+committedTrackerData.player = null;
 
 setVitals({ enabled: true, customStats: [
     { id: 'health', name: 'Health', enabled: true, ai: true },

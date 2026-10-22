@@ -220,6 +220,36 @@ export function markFixedVitals(data, defs) {
     return data;
 }
 
+/**
+ * The data without its vitals: what the prompt sends while vitals are off,
+ * so stats a chat stored while they were on are neither shown to the AI nor
+ * asked for again. Characters as an array or under `characters`, a single
+ * block (the player), either stats shape. Never mutates; hands the same
+ * reference back when there was nothing to strip.
+ */
+export function stripVitals(data) {
+    if (!data || typeof data !== 'object') return data;
+    if (Array.isArray(data)) {
+        let changed = false;
+        const out = data.map(c => {
+            if (!c || typeof c !== 'object' || c.stats === undefined) return c;
+            changed = true;
+            const { stats, ...rest } = c;
+            return rest;
+        });
+        return changed ? out : data;
+    }
+    if (Array.isArray(data.characters)) {
+        const bare = stripVitals(data.characters);
+        return bare === data.characters ? data : { ...data, characters: bare };
+    }
+    if (data.stats !== undefined) {
+        const { stats, ...rest } = data;
+        return rest;
+    }
+    return data;
+}
+
 /** True when the stored list is the untouched pre-Short-Fuse default (Health + Arousal, no extra fields). */
 function isLegacyDefaultList(list) {
     if (!Array.isArray(list)) return false;

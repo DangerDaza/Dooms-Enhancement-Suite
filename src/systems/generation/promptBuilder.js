@@ -16,7 +16,7 @@ import {
     toFieldKey
 } from './jsonPromptHelpers.js';
 import { applyLocks } from './lockManager.js';
-import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
+import { vitalDefs, vitalsOn, playerVitalsOn, hasFixedVitals, markFixedVitals, stripVitals, readVitals, formatVitalsLine } from '../../utils/vitals.js';
 // Attributes (Phase 2): one read-only line, outside the tracker JSON.
 import { buildAttributesLineForPrompt } from '../features/diceRolls.js';
 // NOTE: InventoryV2 type import removed — inventory system removed (see git history)
@@ -138,7 +138,8 @@ export function generateTrackerExample() {
     }
     // Vitals: a fixed vital (ai: false) is shown to the AI as locked, so the
     // lock sentence already in the prompt covers it. DES enforces the value
-    // after parsing regardless (src/utils/vitals.js).
+    // after parsing regardless (src/utils/vitals.js). Off, stats a chat
+    // stored while they were on are left out, or the AI keeps tracking them.
     const vitalsActive = vitalsOn(extensionSettings);
     const defs = vitalsActive ? vitalDefs(extensionSettings) : [];
     const lockFixed = vitalsActive && hasFixedVitals(defs);
@@ -148,6 +149,10 @@ export function generateTrackerExample() {
             let lockedData = applyLocks(committedTrackerData.characterThoughts, 'characters');
             if (lockFixed) {
                 lockedData = JSON.stringify(markFixedVitals(JSON.parse(lockedData), defs), null, 2);
+            } else if (!vitalsActive) {
+                const parsed = JSON.parse(lockedData);
+                const bare = stripVitals(parsed);
+                if (bare !== parsed) lockedData = JSON.stringify(bare, null, 2);
             }
             parts.push(`  "characters": ${lockedData}`);
         } catch {
@@ -534,22 +539,12 @@ function formatTrackerDataForContext(jsonData, trackerType, userName) {
                         }
                         if (thoughtValue) formatted += `  Thoughts: ${thoughtValue}\n`;
                     }
-                    // Vitals, in either shape; legacy object-shaped stats when vitals are off
-                    if (char.stats && typeof char.stats === 'object') {
-                        if (vitalsOn(extensionSettings)) {
-                            const defs = vitalDefs(extensionSettings);
-                            const line = formatVitalsLine(readVitals(char.stats, defs), defs);
-                            if (line) formatted += `  Vitals: ${line}\n`;
-                        } else if (!Array.isArray(char.stats)) {
-                            const statsList = Object.entries(char.stats)
-                                .map(([name, val]) => {
-                                    const statValue = getValue(val);
-                                    return statValue ? `${name}: ${statValue}` : null;
-                                })
-                                .filter(s => s)
-                                .join(', ');
-                            if (statsList) formatted += `  Stats: ${statsList}\n`;
-                        }
+                    // Vitals, in either shape. Off means nothing: stats a chat stored
+                    // while vitals were on are not read back to the AI.
+                    if (char.stats && typeof char.stats === 'object' && vitalsOn(extensionSettings)) {
+                        const defs = vitalDefs(extensionSettings);
+                        const line = formatVitalsLine(readVitals(char.stats, defs), defs);
+                        if (line) formatted += `  Vitals: ${line}\n`;
                     }
                 }
             }
@@ -892,9 +887,13 @@ export function generateRPGPromptText() {
                 // Only include if there's actual character data (non-empty array or object with content)
                 if (parsed && ((Array.isArray(parsed) && parsed.length > 0) ||
                                (parsed.characters && Array.isArray(parsed.characters) && parsed.characters.length > 0))) {
-                    // Vitals: fixed ones are shown as locked
-                    const defs = vitalsOn(extensionSettings) ? vitalDefs(extensionSettings) : [];
-                    unifiedPrevious.characters = hasFixedVitals(defs) ? markFixedVitals(parsed, defs) : parsed;
+                    // Vitals: fixed ones are shown as locked; off, the stored stats are left out
+                    if (vitalsOn(extensionSettings)) {
+                        const defs = vitalDefs(extensionSettings);
+                        unifiedPrevious.characters = hasFixedVitals(defs) ? markFixedVitals(parsed, defs) : parsed;
+                    } else {
+                        unifiedPrevious.characters = stripVitals(parsed);
+                    }
                 }
             } catch (e) {
                 // Old text format - show it separately for backward compat

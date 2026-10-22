@@ -1,7 +1,11 @@
 {
-    "version": "3.1.5-beta.1",
+    "version": "3.1.5-beta.2",
     "title": "Stats (beta) and five hotfixes",
     "items": [
+        {
+            "title": "❤️ 3.1.5: vitals off means off",
+            "body": "If you tried Track vitals and switched it off again, the AI was still being shown your characters' Health and the rest from before, and kept updating them, costing tokens every reply with nothing on screen to show for it. The switch now covers what the AI is reminded of as well as what it is asked for: with vitals off, no stats reach the prompt. Nothing in your chats is deleted; switch vitals back on and they start fresh from their starting values."
+        },
         {
             "title": "🎲 3.1.5: an NPC's roll finds its sheet",
             "body": "You set a character's attributes in the Workshop, the game master called for a check on them, and the roll ignored the sheet: the call named them as the scene does (\"Mara\", \"the guard\") while the sheet was stored under the card's name (\"Mara Vane\"), and the dice looked only for the exact name. Now a first or last name, a title around the name, \"the guard\" for Guard, or any alias from the Workshop finds the sheet, and the roll box names the character as the card does. When two sheets could fit, the one on the shelf wins; when that is still unclear, the roll stays on the default sheet rather than a wrong one. The same goes for saving throws and the dice tool."
