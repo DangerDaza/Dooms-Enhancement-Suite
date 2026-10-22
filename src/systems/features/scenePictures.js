@@ -201,11 +201,13 @@ async function comfy(kind, body, { timeoutMs = 20000 } = {}) {
             if (e && e.name === 'AbortError') throw new Error(`${kind === 'generate' ? 'ComfyUI did not finish the picture' : `the ${kind} request did not answer`} within ${Math.round(timeoutMs / 1000)} s`);
             throw new Error(`SillyTavern's server could not be reached for ${kind}: ${e && e.message ? e.message : e}`);
         }
+        const text = await response.text().catch(() => '');
         if (!response.ok) {
-            const text = await response.text().catch(() => '');
             throw new Error(kind === 'ping' ? `ComfyUI at ${body && body.url} did not answer: is that card running?` : `${kind}: ${text || `SillyTavern answered ${response.status}`}`);
         }
-        return await response.json();
+        // ping and save-workflow answer with a bare "OK"; the rest with JSON.
+        if (!text) return null;
+        try { return JSON.parse(text); } catch (e) { return text; }
     } finally {
         if (timer) clearTimeout(timer);
     }
