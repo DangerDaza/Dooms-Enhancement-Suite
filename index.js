@@ -171,6 +171,8 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
+import { initScenePictures, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testStudio, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
+import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -372,6 +374,64 @@ function renderInventorySettings() {
     $('#rpg-inv-notify').prop('checked', cfg.notify);
 }
 
+/** The Scene pictures rules block in settings, made to exist. */
+function getSceneRules() {
+    if (!extensionSettings.scenePictures || typeof extensionSettings.scenePictures !== 'object') extensionSettings.scenePictures = defaultScenePicturesConfig();
+    return extensionSettings.scenePictures;
+}
+/** Settings → Scene pictures: the switches and fields, then this chat's part and the status. */
+function renderScenePicturesSettings() {
+    if (!$('#rpg-scene-enabled').length) return;
+    const cfg = scenePicturesConfig(extensionSettings);
+    $('#rpg-scene-enabled').prop('checked', cfg.enabled);
+    $('.rpg-scene-sub').toggleClass('is-off', !cfg.enabled);
+    $('#rpg-scene-url').val(cfg.studioUrl);
+    $('#rpg-scene-card').val(cfg.card);
+    $('#rpg-scene-every').val(cfg.every);
+    $('#rpg-scene-window').val(cfg.window);
+    $('#rpg-scene-notify').prop('checked', cfg.notify);
+    if (!$('#rpg-scene-size option').length) $('#rpg-scene-size').html(SCENE_SIZES.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join(''));
+    $('#rpg-scene-size').val(cfg.size);
+    $('#rpg-scene-steps').val(cfg.steps);
+    $('#rpg-scene-cfg').val(cfg.cfg);
+    $('#rpg-scene-sampler').val(cfg.sampler);
+    $('#rpg-scene-scheduler').val(cfg.scheduler);
+    $('#rpg-scene-slg').prop('checked', cfg.slg);
+    $('#rpg-scene-enhancer').prop('checked', cfg.enhancer);
+    $('#rpg-scene-unet').val(cfg.unet);
+    $('#rpg-scene-clip').val(cfg.clip);
+    $('#rpg-scene-vae').val(cfg.vae);
+    $('#rpg-scene-narrator').val(cfg.narrator);
+    $('#rpg-scene-toai').prop('checked', cfg.toAI);
+    $('#rpg-scene-preamble').val(cfg.preamble);
+    $('#rpg-scene-negative').val(cfg.negative);
+    $('#rpg-scene-guide').val(cfg.guide);
+    renderSceneChatFields();
+    renderSceneStatus();
+}
+/** This chat's LoRAs and identity notes; not touched while one of them has the focus. */
+function renderSceneChatFields() {
+    if (!$('#rpg-scene-loras').length) return;
+    const s = getSceneState();
+    if (!$('#rpg-scene-loras').is(':focus')) $('#rpg-scene-loras').val(formatLoraList(s.loras));
+    if (!$('#rpg-scene-identity').is(':focus')) $('#rpg-scene-identity').val(s.identity || '');
+}
+/** The status line alone: it follows every change without touching the fields the user may be editing. */
+function renderSceneStatus() {
+    if (!$('#rpg-scene-status').length) return;
+    const st = getSceneStatus();
+    let status;
+    if (!extensionSettings.enabled) status = 'Doom\'s Enhancement Suite is off; scene pictures are made only while it is on.';
+    else if (!st.enabled) status = 'Off. Nothing is read, written or sent.';
+    else if (!st.chatBound) status = 'Open a chat first.';
+    else {
+        const left = Math.max(0, st.every - st.sinceLast);
+        const when = st.running ? 'A picture is being made now.' : st.armed ? 'A picture is due; it is made once the reply is done.' : `${left} of your turn${left === 1 ? '' : 's'} to the next picture${st.retryNext ? ' (the last run failed; the next turn tries again)' : ''}.`;
+        const last = st.last ? (st.last.ok ? ` Last picture ${new Date(st.last.at).toLocaleTimeString()}.` : ` The last run failed: ${st.last.error}.`) : '';
+        status = `This chat: ${when}${last}`;
+    }
+    $('#rpg-scene-status').text(status);
+}
 /** The Live World rules block in settings, made to exist. */
 function getWorldRules() {
     if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = defaultLiveWorldConfig();
@@ -541,6 +601,7 @@ async function addExtensionSettings() {
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
     try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
+    try { initScenePictures(); } catch (e) { console.error('[Dooms Tracker] initScenePictures() FAILED:', e); }
     try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
@@ -2091,6 +2152,72 @@ function bindSettingsUI() {
         renderLiveWorldSettings();
     });
     window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldStatus(); } catch (e) { /* non-fatal */ } });
+    // ── Scene pictures ──
+    const _saveScene = () => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Scene pictures settings save failed', e); }
+        renderSceneStatus();
+    };
+    const _sceneNum = (v, lo, hi, d, round = true) => { const n = round ? Math.round(Number(v)) : Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+    $(document).on('change', '#rpg-scene-enabled', function () {
+        getSceneRules().enabled = $(this).prop('checked');
+        $('.rpg-scene-sub').toggleClass('is-off', !$(this).prop('checked'));
+        _saveScene();
+    });
+    $(document).on('change', '#rpg-scene-url', function () { getSceneRules().studioUrl = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).studioUrl); _saveScene(); });
+    $(document).on('change', '#rpg-scene-card', function () { getSceneRules().card = String($(this).val() || 'card2'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-every', function () { const r = getSceneRules(); r.every = _sceneNum($(this).val(), 1, 50, 5); $(this).val(r.every); _saveScene(); });
+    $(document).on('change', '#rpg-scene-window', function () { const r = getSceneRules(); r.window = _sceneNum($(this).val(), 2, 40, 12); $(this).val(r.window); _saveScene(); });
+    $(document).on('change', '#rpg-scene-notify', function () { getSceneRules().notify = $(this).prop('checked'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-size', function () { getSceneRules().size = String($(this).val() || 'portrait'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-steps', function () { const r = getSceneRules(); r.steps = _sceneNum($(this).val(), 1, 100, 25); $(this).val(r.steps); _saveScene(); });
+    $(document).on('change', '#rpg-scene-cfg', function () { const r = getSceneRules(); r.cfg = _sceneNum($(this).val(), 0, 20, 2.5, false); $(this).val(r.cfg); _saveScene(); });
+    $(document).on('change', '#rpg-scene-sampler', function () { getSceneRules().sampler = String($(this).val() || '').trim() || 'er_sde'; $(this).val(getSceneRules().sampler); _saveScene(); });
+    $(document).on('change', '#rpg-scene-scheduler', function () { getSceneRules().scheduler = String($(this).val() || '').trim() || 'simple'; $(this).val(getSceneRules().scheduler); _saveScene(); });
+    $(document).on('change', '#rpg-scene-slg', function () { getSceneRules().slg = $(this).prop('checked'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-enhancer', function () { getSceneRules().enhancer = $(this).prop('checked'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-unet', function () { getSceneRules().unet = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-clip', function () { getSceneRules().clip = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-vae', function () { getSceneRules().vae = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-narrator', function () { getSceneRules().narrator = String($(this).val() || '').trim() || 'Narrator'; $(this).val(getSceneRules().narrator); _saveScene(); });
+    $(document).on('change', '#rpg-scene-toai', function () { getSceneRules().toAI = $(this).prop('checked'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-preamble', function () { getSceneRules().preamble = String($(this).val() || ''); _saveScene(); });
+    $(document).on('change', '#rpg-scene-negative', function () { getSceneRules().negative = String($(this).val() || ''); _saveScene(); });
+    $(document).on('change', '#rpg-scene-guide', function () { getSceneRules().guide = String($(this).val() || ''); _saveScene(); });
+    // This chat's part (chat_metadata), saved with the chat.
+    $(document).on('change', '#rpg-scene-loras', function () { setSceneLoras(parseLoraList($(this).val())); $(this).val(formatLoraList(getSceneState().loras)); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
+    $(document).on('change', '#rpg-scene-identity', function () { setSceneIdentity(String($(this).val() || '')); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
+    $(document).on('click', '#rpg-scene-lora-add', function () {
+        const name = String($('#rpg-scene-lora-pick').val() || '').trim();
+        if (!name) { toastr.info('Pick a LoRA from the studio\'s list first (Test connection fills it).', 'Scene pictures', { timeOut: 3000 }); return; }
+        setSceneLoras([...getSceneState().loras, { name, strength: 1 }]);
+        $('#rpg-scene-loras').val(formatLoraList(getSceneState().loras));
+        try { saveChatDebounced(); } catch (e) { /* the next save carries it */ }
+    });
+    $(document).on('click', '#rpg-scene-test', async function () {
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await testStudio();
+            toastr.success(`${r.line} ${r.loras.length} LoRA${r.loras.length === 1 ? '' : 's'} listed.`, 'Scene pictures', { timeOut: 6000 });
+            $('#rpg-scene-lora-pick').html(['<option value="">From the studio…</option>', ...r.loras.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)].join(''));
+        } catch (e) {
+            toastr.error(`No answer: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 10000 });
+        } finally {
+            $b.prop('disabled', false);
+        }
+    });
+    $(document).on('click', '#rpg-scene-now', async function () {
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await illustrateNow({ reason: 'manual' });
+            if (!r.ok && r.reason !== 'error') toastr.info({ off: 'Doom\'s Enhancement Suite is off.', 'no-chat': 'Open a chat first.', running: 'A picture is already being made.', busy: 'The chat is busy; try again in a moment.', stale: 'The chat changed meanwhile.' }[r.reason] || `No picture: ${r.reason}`, 'Scene pictures', { timeOut: 4000 });
+        } finally {
+            $b.prop('disabled', false);
+            renderSceneStatus();
+        }
+    });
+    window.addEventListener(SCENE_CHANGED_EVENT, () => { try { renderSceneChatFields(); renderSceneStatus(); } catch (e) { /* non-fatal */ } });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
@@ -2901,6 +3028,7 @@ function bindSettingsUI() {
     try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
     try { renderInventorySettings(); } catch (e) { console.warn('[Dooms Tracker] Inventory settings failed to render', e); }
     try { renderLiveWorldSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings failed to render', e); }
+    try { renderScenePicturesSettings(); } catch (e) { console.warn('[Dooms Tracker] Scene pictures settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
@@ -4456,12 +4584,12 @@ jQuery(async () => {
                 // sets the verdict slot while SillyTavern is still awaiting this
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices],
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices, onSceneMessageSent],
                 [event_types.GENERATION_STARTED]: [onGenerationStarted, onWorldGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onMessageReceivedVoices],
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded],
-                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -4500,6 +4628,7 @@ jQuery(async () => {
         }
         if (getContext().chatId) {    // a chat with no greeting has no messages yet but still has a world
             onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
+            try { onSceneChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Scene pictures: the first chat did not load', err); }
         }
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();
