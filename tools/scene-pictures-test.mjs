@@ -93,6 +93,15 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
     const body = S.comfyGenerateBody('http://127.0.0.1:8189/', g);
     check('comfyGenerateBody: the address and {"prompt": graph} as text', body.url === 'http://127.0.0.1:8189' && JSON.parse(body.prompt).prompt.des_lora_1.inputs.lora_name === 'BunnySlop_MOSS.safetensors');
     check('readComfyResult', S.readComfyResult({ format: 'png', data: 'AAAA' }) === 'data:image/png;base64,AAAA' && S.readComfyResult({ format: 'JPG', data: 'B' }) === 'data:image/jpeg;base64,B' && S.readComfyResult({}) === '' && S.readComfyResult(null) === '');
+    check('a client id rides in the body; the ws address follows the http one', JSON.parse(S.comfyGenerateBody('http://127.0.0.1:8189', g, 'abc').prompt).client_id === 'abc' && !('client_id' in JSON.parse(S.comfyGenerateBody('http://x', g).prompt)) && S.comfyWsUrl('http://127.0.0.1:8189/', 'a b') === 'ws://127.0.0.1:8189/ws?clientId=a%20b' && S.comfyWsUrl('https://host:1/', 'x') === 'wss://host:1/ws?clientId=x' && S.comfyWsUrl('nope', 'x') === '');
+    check('newClientId: 32 letters and digits, different each time', /^[a-z0-9]{32}$/.test(S.newClientId()) && S.newClientId() !== S.newClientId());
+    check('nodeKinds + nodeStageWord', S.nodeKinds(graph)['3'] === 'KSampler' && S.nodeStageWord('KSampler') === 'rendering' && S.nodeStageWord('UNETLoader') === 'loading the model' && S.nodeStageWord('VAEDecode') === 'decoding' && S.nodeStageWord('SaveImage') === 'saving' && S.nodeStageWord('') === '');
+    check('progressLabel: steps as a percent, stages as words with the seconds, idle as nothing', (() => {
+        const r = S.progressLabel({ stage: 'rendering', value: 12, max: 25, node: 'KSampler', startedAt: 1000, now: 31000 });
+        const q = S.progressLabel({ stage: 'queued', queue: 2, startedAt: 1000, now: 3000 });
+        const c = S.progressLabel({ stage: 'caption', startedAt: 1000, now: 1000 });
+        return r.text === 'Scene picture: rendering 12/25 · 30s' && r.percent === 48 && q.text === 'Scene picture: waiting in ComfyUI\'s queue (2 ahead) · 2s' && q.percent === null && c.text === 'Scene picture: writing the caption · 0s' && S.progressLabel({ stage: 'idle' }).text === '' && S.progressLabel({ stage: 'done' }).percent === 100 && S.progressLabel({ stage: 'failed', error: 'x' }).text === 'Scene picture: failed — x' && S.progressLabel({ stage: 'rendering', node: 'VAEDecode' }).text === 'Scene picture: decoding';
+    })());
 }
 
 console.log(failures === 0 ? '\nAll scene pictures checks pass' : `\n${failures} FAILURE(S)`);

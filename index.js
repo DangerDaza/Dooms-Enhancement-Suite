@@ -172,7 +172,8 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initScenePictures, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
-import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
+import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
+import { initSceneProgress } from './src/systems/ui/sceneProgress.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -434,7 +435,7 @@ function renderSceneStatus() {
     else if (!st.chatBound) status = 'Open a chat first.';
     else {
         const left = Math.max(0, st.every - st.sinceLast);
-        const when = st.running ? 'A picture is being made now.' : st.armed ? 'A picture is due; it is made once the reply is done.' : `${left} of your turn${left === 1 ? '' : 's'} to the next picture${st.retryNext ? ' (the last run failed; the next turn tries again)' : ''}.`;
+        const when = st.running ? `A picture is being made now${(() => { const l = sceneProgressLabel({ ...st.progress, now: Date.now() }).text; return l ? ` (${l.replace(/^Scene picture: /, '')})` : ''; })()}.` : st.armed ? 'A picture is due; it is made once the reply is done.' : `${left} of your turn${left === 1 ? '' : 's'} to the next picture${st.retryNext ? ' (the last run failed; the next turn tries again)' : ''}.`;
         const last = st.last ? (st.last.ok ? ` Last picture ${new Date(st.last.at).toLocaleTimeString()}.` : ` The last run failed: ${st.last.error}.`) : '';
         status = `This chat: ${when}${last}`;
     }
@@ -610,6 +611,7 @@ async function addExtensionSettings() {
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
     try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
     try { initScenePictures(); } catch (e) { console.error('[Dooms Tracker] initScenePictures() FAILED:', e); }
+    try { initSceneProgress(); } catch (e) { console.error('[Dooms Tracker] initSceneProgress() FAILED:', e); }
     try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }

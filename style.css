@@ -13850,6 +13850,28 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 }
 
 .dooms-roll-card.is-success { border-left-color: #2fbf71; }
+
+/* Scene pictures: the bar at the foot of the chat while a picture is made (sceneProgress.js). */
+.dooms-scene-progress {
+    margin: 6px 12px 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.35));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+    color: var(--SmartThemeBodyColor, #eaeaea);
+    font-size: 0.85em;
+    opacity: 0.92;
+}
+.dooms-scene-progress-label { display: block; margin-bottom: 6px; }
+.dooms-scene-progress-bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.dooms-scene-progress-fill { height: 100%; width: 0; border-radius: 3px; background: var(--SmartThemeQuoteColor, #e94560); transition: width 0.3s ease; }
+.dooms-scene-progress.is-indeterminate .dooms-scene-progress-fill { position: absolute; left: -30%; width: 30%; animation: dooms-scene-slide 1.4s linear infinite; transition: none; }
+@keyframes dooms-scene-slide { to { left: 100%; } }
+.dooms-scene-progress.is-done .dooms-scene-progress-fill { background: #2fbf71; }
+.dooms-scene-progress.is-failed .dooms-scene-progress-fill { background: #c0392b; width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+    .dooms-scene-progress.is-indeterminate .dooms-scene-progress-fill { position: static; width: 100%; opacity: 0.4; animation: none; }
+}
 .dooms-roll-card.is-failure { border-left-color: #e5484d; }
 .dooms-roll-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 

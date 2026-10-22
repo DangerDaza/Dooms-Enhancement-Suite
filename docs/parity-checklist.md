@@ -281,5 +281,6 @@ re-enable → feature fully functional without page reload; repeat twice
 - [ ] Captions reach the AI on: the next picture's message is a narrator message and the caption's first line is in the prompt
 - [ ] `/scene` with the feature off answers that it is off; on, with a chat open, makes one picture at once; while one is being made, says so
 - [ ] A wrong LoRA name: a toast "No picture this time: … Value not in list: lora_name …", nothing posted, the status says the last run failed and the next turn tries again; the name fixed, the next turn posts the picture
-- [ ] A chat switch while ComfyUI renders: nothing lands in either chat
+- [ ] The bar: from the second turn's reply ending, a pill at the foot of the chat reads "Scene picture: writing the caption · Ns", then "waiting in ComfyUI's queue", then "rendering 7/25" with the fill growing (loading the model and decoding named on their nodes), then "saving", green "done" for a second and a half, gone; a failed run shows red with the reason for eight seconds; the pill is never saved with the chat (reload: none)
+- [ ] A chat switch while ComfyUI renders: nothing lands in either chat, and the bar is gone
 - [ ] The caption, in the message's title: natural language, one paragraph, no character names, the identity notes' looks, the frame named for the chosen size

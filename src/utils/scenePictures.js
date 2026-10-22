@@ -361,9 +361,88 @@ export function injectLoras(graph, loras) {
     return { graph: copy, inserted: list.length, loader };
 }
 
-/** The body SillyTavern's /api/sd/comfy/generate takes: the ComfyUI address and the graph as the text it posts to /prompt. */
-export function comfyGenerateBody(comfyUrl, graph) {
-    return { url: String(comfyUrl || '').replace(/\/+$/, ''), prompt: JSON.stringify({ prompt: graph }) };
+/**
+ * The body SillyTavern's /api/sd/comfy/generate takes: the ComfyUI address
+ * and the graph as the text it posts to /prompt. With a client id, ComfyUI
+ * sends that client the render's progress over its WebSocket.
+ */
+export function comfyGenerateBody(comfyUrl, graph, clientId = '') {
+    const body = { prompt: graph };
+    if (clientId) body.client_id = String(clientId);
+    return { url: String(comfyUrl || '').replace(/\/+$/, ''), prompt: JSON.stringify(body) };
+}
+
+/** ComfyUI's WebSocket for a client: ws(s)://host/ws?clientId=…, from its http(s) address. */
+export function comfyWsUrl(comfyUrl, clientId) {
+    const base = String(comfyUrl || '').trim().replace(/\/+$/, '');
+    const m = base.match(/^(https?):\/\/(.+)$/i);
+    if (!m) return '';
+    return `${m[1].toLowerCase() === 'https' ? 'wss' : 'ws'}://${m[2]}/ws?clientId=${encodeURIComponent(String(clientId || ''))}`;
+}
+
+/** A client id for one render: letters and digits, 32 long. */
+export function newClientId(rng = Math.random) {
+    let s = '';
+    while (s.length < 32) s += Math.floor(rng() * 36).toString(36);
+    return s.slice(0, 32);
+}
+
+/** Each node's class type by id, for naming the stage a render is in. */
+export function nodeKinds(graph) {
+    const out = {};
+    for (const [id, node] of Object.entries(graph && typeof graph === 'object' ? graph : {})) {
+        if (node && typeof node === 'object' && typeof node.class_type === 'string') out[id] = node.class_type;
+    }
+    return out;
+}
+
+const STAGE_WORDS = Object.freeze({
+    idle: '', waiting: 'waiting for the chat to be free', caption: 'writing the caption', queued: 'waiting in ComfyUI\'s queue',
+    rendering: 'rendering', saving: 'saving the picture', done: 'done', failed: 'failed',
+});
+
+/** What a node's class type means to a reader of the bar. */
+export function nodeStageWord(classType) {
+    const t = String(classType || '');
+    if (/Loader/.test(t)) return 'loading the model';
+    if (/CLIPTextEncode|TextEncode/.test(t)) return 'reading the caption';
+    if (/TextGenerate/.test(t)) return 'the enhancer is writing';
+    if (/Sampler/.test(t)) return 'rendering';
+    if (/VAEDecode/.test(t)) return 'decoding';
+    if (/SaveImage|PreviewImage/.test(t)) return 'saving';
+    if (/Guidance/.test(t)) return 'preparing guidance';
+    return t ? 'working' : '';
+}
+
+/**
+ * The bar's text and fill for a progress state { stage, value, max, node
+ * (class type), queue, startedAt, now }: a percent while ComfyUI counts
+ * steps, else the stage with the seconds elapsed, no fill (the bar shows
+ * it as indeterminate).
+ */
+export function progressLabel(p) {
+    const s = p && typeof p === 'object' ? p : {};
+    const stage = STAGE_WORDS[s.stage] !== undefined ? s.stage : 'idle';
+    if (stage === 'idle') return { text: '', percent: null };
+    const elapsed = Number.isFinite(s.startedAt) && Number.isFinite(s.now) && s.now >= s.startedAt ? Math.round((s.now - s.startedAt) / 1000) : null;
+    const secs = elapsed !== null ? ` · ${elapsed}s` : '';
+    if (stage === 'rendering') {
+        const word = nodeStageWord(s.node) || 'rendering';
+        const max = Number(s.max);
+        const value = Number(s.value);
+        if (Number.isFinite(max) && max > 0 && Number.isFinite(value) && value >= 0) {
+            const percent = Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+            return { text: `Scene picture: ${word} ${Math.min(value, max)}/${max}${secs}`, percent };
+        }
+        return { text: `Scene picture: ${word}${secs}`, percent: null };
+    }
+    if (stage === 'queued') {
+        const q = Number(s.queue);
+        return { text: `Scene picture: ${STAGE_WORDS.queued}${Number.isFinite(q) && q > 0 ? ` (${q} ahead)` : ''}${secs}`, percent: null };
+    }
+    if (stage === 'done') return { text: 'Scene picture: done', percent: 100 };
+    if (stage === 'failed') return { text: `Scene picture: failed${s.error ? ` — ${s.error}` : ''}`, percent: null };
+    return { text: `Scene picture: ${STAGE_WORDS[stage]}${secs}`, percent: null };
 }
 
 /** The data URL out of the server's answer ({ format, data } in base64), '' when there is none. */

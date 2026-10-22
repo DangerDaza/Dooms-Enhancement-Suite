@@ -35,7 +35,7 @@ import { resolvePersonaName } from './diceRolls.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
     normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, isEditorWorkflow, fillWorkflow, injectLoras,
-    comfyGenerateBody, readComfyResult,
+    comfyGenerateBody, readComfyResult, comfyWsUrl, newClientId, nodeKinds,
 } from '../../utils/scenePictures.js';
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -50,6 +50,20 @@ let running = false;
 let armed = false;          // a run is due and waits for the generation to end
 let transport = null;       // tests: { caption(prompt) → text, comfy(kind, body) → json }
 let timing = { idleMaxMs: 120000, idleStepMs: 1500 };
+
+// The run in progress, for the bar at the foot of the chat (sceneProgress.js):
+// the stage, ComfyUI's step count while it renders, the node it is on, the
+// queue ahead, when the run started. 'idle' between runs.
+const IDLE_PROGRESS = Object.freeze({ stage: 'idle', value: 0, max: 0, node: '', queue: 0, startedAt: 0, error: '' });
+let progress = { ...IDLE_PROGRESS };
+
+function setProgress(patch) {
+    progress = { ...progress, ...patch };
+    announce();
+}
+
+/** The run in progress, a copy; stage 'idle' when none. */
+export function getSceneProgress() { return { ...progress }; }
 
 const log = (message, data = null) => {
     const line = `[Dooms Tracker] Scene pictures: ${message}`;
@@ -91,6 +105,7 @@ export function onSceneChatChanged() {
     loadedChat = chatId();
     armed = false;
     state = sceneStateOf(loadedMeta ? loadedMeta[SCENE_META_KEY] : null);
+    progress = { ...IDLE_PROGRESS };
     announce();
 }
 
@@ -102,7 +117,7 @@ export function setSceneIdentity(text) { commit({ ...state, identity: String(tex
 
 export function getSceneStatus() {
     const c = cfg();
-    return { enabled: c.enabled, every: c.every, sinceLast: state.sinceLast, retryNext: state.retryNext, running, armed, last: state.last, chatBound: !!loadedMeta };
+    return { enabled: c.enabled, every: c.every, sinceLast: state.sinceLast, retryNext: state.retryNext, running, armed, last: state.last, chatBound: !!loadedMeta, progress: { ...progress } };
 }
 
 /** A message's key for counting: its id when SillyTavern gives one, else its send date and text. */
@@ -272,6 +287,49 @@ export async function testComfy() {
     return { line, ok, workflows, ping };
 }
 
+/**
+ * ComfyUI's progress for one render, over its WebSocket (a browser may open
+ * one to it directly): the queue ahead, the node it is on, the step count.
+ * The client id in the prompt makes ComfyUI send this client its own
+ * render's events. No WebSocket, or none that opens: the bar stays
+ * indeterminate, nothing else changes. Returns { ready, close }.
+ */
+function watchComfy(comfyUrl, clientId, kinds) {
+    const none = { ready: Promise.resolve(false), close() {} };
+    const url = comfyWsUrl(comfyUrl, clientId);
+    if (!url || typeof WebSocket !== 'function') return none;
+    let ws;
+    try { ws = new WebSocket(url); } catch (e) { return none; }
+    try { ws.binaryType = 'arraybuffer'; } catch (e) { /* previews come as binary; they are skipped either way */ }
+    const ready = new Promise((resolve) => {
+        const t = setTimeout(() => resolve(false), 1500);
+        ws.onopen = () => { clearTimeout(t); resolve(true); };
+        ws.onerror = () => { clearTimeout(t); resolve(false); };
+    });
+    ws.onmessage = (ev) => {
+        if (typeof ev.data !== 'string') return;
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        const d = msg && msg.data && typeof msg.data === 'object' ? msg.data : {};
+        switch (msg && msg.type) {
+            case 'status': {
+                const q = d.status && d.status.exec_info ? Number(d.status.exec_info.queue_remaining) : NaN;
+                if (progress.stage === 'queued' && Number.isFinite(q)) setProgress({ queue: Math.max(0, q - 1) });
+                break;
+            }
+            case 'execution_start': setProgress({ stage: 'rendering', value: 0, max: 0, node: '' }); break;
+            case 'executing':
+                if (d.node === null || d.node === undefined) { if (progress.stage === 'rendering') setProgress({ stage: 'saving' }); }
+                else setProgress({ stage: 'rendering', node: kinds[String(d.node)] || '', value: 0, max: 0 });
+                break;
+            case 'progress': setProgress({ stage: 'rendering', value: Number(d.value) || 0, max: Number(d.max) || 0, node: d.node !== undefined && kinds[String(d.node)] ? kinds[String(d.node)] : progress.node }); break;
+            case 'execution_error': setProgress({ error: String(d.exception_message || 'ComfyUI reported an error') }); break;
+            default: break;
+        }
+    };
+    return { ready, close() { try { ws.close(); } catch (e) { /* closed already */ } } };
+}
+
 /** The picture: the workflow filled and spliced, posted through the server; { file, dataUrl }. */
 async function renderPicture(c, caption) {
     if (!c.workflow) throw new Error('no workflow is chosen (Settings → Scene pictures)');
@@ -286,7 +344,17 @@ async function renderPicture(c, caption) {
     const spliced = injectLoras(graph, state.loras);
     if (state.loras.length && !spliced.inserted) log('no model loader found in the workflow: the LoRAs were not applied');
     log('generate', { workflow: c.workflow, loras: spliced.inserted, placeholders: workflowPlaceholders(text).length });
-    const result = await comfy('generate', comfyGenerateBody(c.comfyUrl, spliced.graph), { timeoutMs: c.timeoutSec * 1000 });
+    const clientId = newClientId();
+    const watcher = watchComfy(c.comfyUrl, clientId, nodeKinds(spliced.graph));
+    await watcher.ready;    // open before the prompt is queued, so no event is missed; a second and a half at most
+    setProgress({ stage: 'queued', queue: 0 });
+    let result;
+    try {
+        result = await comfy('generate', comfyGenerateBody(c.comfyUrl, spliced.graph, clientId), { timeoutMs: c.timeoutSec * 1000 });
+    } finally {
+        watcher.close();
+    }
+    setProgress({ stage: 'saving' });
     const dataUrl = readComfyResult(result);
     if (!dataUrl) throw new Error('ComfyUI returned no image');
     return { file: c.workflow, dataUrl };
@@ -344,25 +412,30 @@ export async function illustrateNow({ reason = 'manual' } = {}) {
     running = true;
     const token = loadToken;
     const stale = () => token !== loadToken || chat_metadata !== loadedMeta || (chatId() !== undefined && chatId() !== loadedChat);
+    progress = { ...IDLE_PROGRESS, stage: 'waiting', startedAt: Date.now() };
+    announce();
     try {
-        if (!(await whenIdle())) { commit(afterFailure(state, { at: Date.now(), error: 'the chat stayed busy' })); return { ok: false, reason: 'busy' }; }
-        if (stale()) return { ok: false, reason: 'stale' };
+        if (!(await whenIdle())) { commit(afterFailure(state, { at: Date.now(), error: 'the chat stayed busy' })); setProgress({ stage: 'failed', error: 'the chat stayed busy' }); return { ok: false, reason: 'busy' }; }
+        if (stale()) { setProgress({ stage: 'idle' }); return { ok: false, reason: 'stale' }; }
         log(`run (${reason})`);
+        setProgress({ stage: 'caption' });
         const caption = await writeCaption(c);
-        if (stale()) return { ok: false, reason: 'stale' };
-        if (caption === BACKGROUND_BUSY) { commit({ ...state, retryNext: true }); log('waits: another background request holds the flag'); return { ok: false, reason: 'busy' }; }
+        if (stale()) { setProgress({ stage: 'idle' }); return { ok: false, reason: 'stale' }; }
+        if (caption === BACKGROUND_BUSY) { commit({ ...state, retryNext: true }); setProgress({ stage: 'idle' }); log('waits: another background request holds the flag'); return { ok: false, reason: 'busy' }; }
         if (!caption) throw new Error('the caption request gave nothing usable');
         log('caption', caption);
         const picture = await renderPicture(c, caption);
-        if (stale()) return { ok: false, reason: 'stale' };
+        if (stale()) { setProgress({ stage: 'idle' }); return { ok: false, reason: 'stale' }; }
         const posted = await postPicture(c, { caption, file: picture.file, dataUrl: picture.dataUrl, loras: state.loras });
         commit(afterPicture(state, { at: Date.now(), caption, file: picture.file, url: posted.url }));
+        setProgress({ stage: 'done', value: progress.max || 1, max: progress.max || 1 });
         notice('A picture of the scene is in the chat.', 'success');
         return { ok: true, url: posted.url, caption };
     } catch (e) {
         const error = e && e.message ? e.message : String(e);
         log(`failed: ${error}`);
         if (!stale()) commit(afterFailure(state, { at: Date.now(), error }));
+        setProgress({ stage: 'failed', error });
         notice(`No picture this time: ${error}`, 'error');
         return { ok: false, reason: 'error', error };
     } finally {

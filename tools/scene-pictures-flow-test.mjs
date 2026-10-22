@@ -173,6 +173,7 @@ check('ComfyUI got the workflow filled: the preamble and the caption, the size, 
 check('…with this chat\'s LoRA spliced after the loader, feeding the guidance node', graph.des_lora_1 && graph.des_lora_1.inputs.lora_name === 'BunnySlop_MOSS.safetensors' && graph.des_lora_1.inputs.strength_model === 0.8 && graph.des_lora_1.inputs.model.join() === '1,0' && graph['9'].inputs.model.join() === 'des_lora_1,0');
 check('the caption request saw the recent scene, who is present and the identity notes', seen.prompts.length === 1 && seen.prompts[0].user.includes('Jordan: I wave.') && seen.prompts[0].user.includes('Characters present: Mara Vane.') && seen.prompts[0].system.includes('red hair in a long braid') && seen.prompts[0].system.includes('a wide landscape frame'));
 check('the count is back to zero and the last picture is kept', sp.getSceneState().sinceLast === 0 && sp.getSceneState().last.ok && sp.getSceneState().last.file === 'DES Scene Moss.json' && meta.dooms_scene.last.ok);
+check('the bar ends on done, with the client id ComfyUI was given', sp.getSceneProgress().stage === 'done' && typeof JSON.parse(gen.body.prompt).client_id === 'string' && JSON.parse(gen.body.prompt).client_id.length === 32);
 check('the same reply end does not run twice', (sp.onSceneGenerationEnded(), chat.length === before + 1));
 
 console.log('\n§3 a failed run, then the retry');
@@ -185,6 +186,7 @@ chat.push(ai('She leads.'));
 const before3 = chat.length;
 sp.onSceneGenerationEnded();
 await wait(150);
+check('the bar ends on failed with the reason', sp.getSceneProgress().stage === 'failed' && sp.getSceneProgress().error.includes('Value not in list'));
 check('a failed render posts nothing, keeps ComfyUI\'s reason and arms a retry', chat.length === before3 && sp.getSceneState().retryNext && !sp.getSceneState().last.ok && sp.getSceneState().last.error.includes('Value not in list: lora_name') && sp.getSceneState().last.file === 'DES Scene Moss.json');
 comfyMode = 'ok';
 chat.push(user('I keep up.'));
@@ -232,7 +234,7 @@ comfyMode = 'ok';
 check('a run whose chat changed is discarded whole', !r.ok && r.reason === 'stale' && chat.length === lenBefore);
 globalThis.__DES_CTX__.chatId = 'test-chat';
 sp.onSceneChatChanged();
-check('the state after the switch is the other chat\'s, fresh', sp.getSceneState().sinceLast === 0 && !sp.getSceneState().retryNext);
+check('the state after the switch is the other chat\'s, fresh, and the bar idle', sp.getSceneState().sinceLast === 0 && !sp.getSceneState().retryNext && sp.getSceneProgress().stage === 'idle');
 
 console.log(failures === 0 ? '\nAll scene pictures flow checks pass' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

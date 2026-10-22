@@ -59,6 +59,14 @@ reads; 1.19 migrates it into `extra.media` on load.
 5. The message, the state (`afterPicture`), a toast when "Notify" is on.
    A run whose chat changed meanwhile is discarded whole (the token and
    metadata checks Live World uses).
+6. The bar: a pill at the foot of the chat (`sceneProgress.js`, a DOM
+   element, never a message) follows the run: waiting, writing the caption,
+   ComfyUI's queue (how many ahead), the step count while it renders (the
+   node named: loading the model, rendering, decoding), saving, done. The
+   steps come over ComfyUI's WebSocket, opened by the page to the ComfyUI
+   address with the client id the prompt carries, so ComfyUI sends this
+   page its own render's events; without a WebSocket the bar stays
+   indeterminate with the seconds elapsed.
 
 ## 4. The workflow and SillyTavern's ComfyUI endpoints
 
