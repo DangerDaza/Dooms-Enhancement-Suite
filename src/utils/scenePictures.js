@@ -232,15 +232,27 @@ export function captionLine(caption, max = 160) {
 /** A 1×1 transparent PNG, what the image extension puts in %user_avatar% and %char_avatar% when there is none. */
 export const PNG_PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-/** The placeholders a workflow text carries, as "%name%" string values, lower-cased, each once. */
+/**
+ * The placeholders a workflow text carries, lower-cased, each once: a whole
+ * quoted value ("%prompt%") or a token inside a longer string ("Anime
+ * illustration, %prompt%"), both as the owner's workflows write them.
+ */
 export function workflowPlaceholders(text) {
     const out = [];
     const seen = new Set();
-    for (const m of String(text || '').matchAll(/"%([A-Za-z_][A-Za-z0-9_]*)%"/g)) {
+    for (const m of String(text || '').matchAll(/%([A-Za-z_][A-Za-z0-9_]*)%/g)) {
         const k = m[1].toLowerCase();
         if (!seen.has(k)) { seen.add(k); out.push(k); }
     }
     return out;
+}
+
+/** True when the text is the ComfyUI editor's save format (nodes and links), not the API graph DES can fill. */
+export function isEditorWorkflow(text) {
+    try {
+        const j = JSON.parse(String(text || ''));
+        return !!(j && typeof j === 'object' && Array.isArray(j.nodes) && Array.isArray(j.links));
+    } catch (e) { return false; }
 }
 
 /**
@@ -273,8 +285,9 @@ export function workflowValues(cfg, { caption = '', seed = -1 } = {}) {
 
 /**
  * The workflow text with its placeholders filled the way the image extension
- * fills them: the quoted token "%name%" becomes the JSON of the value, so a
- * number stays a number. Placeholders with no value are left and listed.
+ * fills them: a whole quoted token "%name%" becomes the JSON of the value, so
+ * a number stays a number; a token inside a longer string becomes the value
+ * escaped for that string. Placeholders with no value are left and listed.
  */
 export function fillWorkflow(text, values) {
     let out = String(text || '');
@@ -286,6 +299,7 @@ export function fillWorkflow(text, values) {
         const v = lower[name];
         if (v === undefined || v === null || v === '') { missing.push(name); continue; }
         out = out.replace(new RegExp(`"%${name}%"`, 'gi'), () => JSON.stringify(v));
+        out = out.replace(new RegExp(`%${name}%`, 'gi'), () => JSON.stringify(String(v)).slice(1, -1));
     }
     return { text: out, missing };
 }

@@ -34,7 +34,7 @@ import { buildRecentText } from '../../utils/liveWorld.js';
 import { resolvePersonaName } from './diceRolls.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
-    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, fillWorkflow, injectLoras,
+    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, isEditorWorkflow, fillWorkflow, injectLoras,
     comfyGenerateBody, readComfyResult,
 } from '../../utils/scenePictures.js';
 
@@ -228,6 +228,7 @@ export async function loadWorkflow(name) {
 /** A pasted workflow saved into the store under a name, so it can be picked. */
 export async function saveWorkflow(name, text) {
     JSON.parse(text);    // not JSON: throws, and the page says so
+    if (isEditorWorkflow(text)) throw new Error('this is the ComfyUI editor\'s save format (nodes and links); DES needs the API graph: in ComfyUI, Workflow → Export (API), and paste that');
     await comfy('save-workflow', { file_name: name, workflow: text });
     return name;
 }
@@ -259,7 +260,8 @@ export async function testComfy() {
             const text = await loadWorkflow(c.workflow);
             const found = workflowPlaceholders(text);
             const { missing } = fillWorkflow(text, workflowValues(c, { caption: 'test', seed: 1 }));
-            if (!found.includes('prompt')) { line += ` The workflow "${c.workflow}" has no %prompt%: the caption would go nowhere.`; ok = false; }
+            if (isEditorWorkflow(text)) { line += ` The workflow "${c.workflow}" is the ComfyUI editor's save format (nodes and links). DES needs the API graph: in ComfyUI, Workflow → Export (API), and paste that.`; ok = false; }
+            else if (!found.includes('prompt')) { line += ` The workflow "${c.workflow}" has no %prompt%${found.length ? ` (it has ${found.map(f => `%${f}%`).join(', ')})` : ' and no placeholder at all'}: the caption would go nowhere. Put %prompt% where the positive text goes.`; ok = false; }
             else if (missing.length) { line += ` The workflow needs ${missing.map(m => `%${m}%`).join(', ')} and nothing fills ${missing.length === 1 ? 'it' : 'them'}: set the models below.`; ok = false; }
             else line += ` The workflow "${c.workflow}" is ready (${found.length} placeholders filled).`;
         } catch (e) {
@@ -275,6 +277,8 @@ async function renderPicture(c, caption) {
     if (!c.workflow) throw new Error('no workflow is chosen (Settings → Scene pictures)');
     const text = await loadWorkflow(c.workflow);
     if (!text) throw new Error(`the workflow "${c.workflow}" is empty or missing from SillyTavern's store`);
+    if (isEditorWorkflow(text)) throw new Error(`the workflow "${c.workflow}" is the editor's save format; DES needs the API graph (Workflow → Export (API))`);
+    if (!workflowPlaceholders(text).includes('prompt')) throw new Error(`the workflow "${c.workflow}" has no %prompt%: the caption would go nowhere`);
     const filled = fillWorkflow(text, workflowValues(c, { caption }));
     if (filled.missing.length) throw new Error(`the workflow needs ${filled.missing.map(m => `%${m}%`).join(', ')} and nothing fills ${filled.missing.length === 1 ? 'it' : 'them'}`);
     let graph;

@@ -76,6 +76,11 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
     const bare = S.fillWorkflow(WF, S.workflowValues(S.scenePicturesConfig({}), { caption: 'x', seed: 1 }));
     check('placeholders with no value are left and named', bare.missing.join() === 'model,vae' && bare.text.includes('"%model%"'));
     check('a quote inside the caption survives as JSON', JSON.parse(S.fillWorkflow('{"a": {"inputs": {"text": "%prompt%"}}}', { prompt: 'she said "go"' }).text).a.inputs.text === 'she said "go"');
+    const embedded = S.fillWorkflow('{"6": {"inputs": {"text": "Anime-style digital illustration, 1girl, %prompt%"}}, "7": {"inputs": {"text": "nsfw, %negative_prompt%"}}, "3": {"inputs": {"steps": "%steps%"}}}', { prompt: 'a woman who said "go"', negative_prompt: 'blurry', steps: 8 });
+    const eg = JSON.parse(embedded.text);
+    check('a placeholder inside a longer string is filled as an escaped fragment; a whole-value one stays typed', embedded.missing.length === 0 && eg['6'].inputs.text === 'Anime-style digital illustration, 1girl, a woman who said "go"' && eg['7'].inputs.text === 'nsfw, blurry' && eg['3'].inputs.steps === 8);
+    check('workflowPlaceholders sees embedded tokens too', S.workflowPlaceholders('{"t": "prefix, %prompt%", "n": "%Negative_Prompt%"}').join() === 'prompt,negative_prompt');
+    check('isEditorWorkflow: nodes and links is the editor\'s format, an API graph is not', S.isEditorWorkflow('{"nodes": [], "links": [], "version": 0.4}') && !S.isEditorWorkflow(WF) && !S.isEditorWorkflow('nope'));
     check('ensureLoraFile', S.ensureLoraFile('BunnySlop_MOSS') === 'BunnySlop_MOSS.safetensors' && S.ensureLoraFile('x/y.safetensors') === 'x/y.safetensors' && S.ensureLoraFile(' a.pt ') === 'a.pt' && S.ensureLoraFile('') === '');
     check('findModelLoader walks back from the sampler', S.findModelLoader(graph) === '1' && S.findModelLoader({ a: { class_type: 'KSampler', inputs: {} }, b: { class_type: 'CheckpointLoaderSimple', inputs: {} } }) === 'b' && S.findModelLoader({}) === null);
     const spliced = S.injectLoras(graph, [{ name: 'BunnySlop_MOSS', strength: 0.8 }, { name: 'Flat_Anime_Moss-Image-', strength: 1 }]);
