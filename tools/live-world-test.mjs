@@ -17,7 +17,7 @@ import {
     recentChanges, publicEffects, LOG_PER_CHARACTER, LOG_TOTAL, COUNTED_KEEP, WORLD_SLOT,
     defaultLiveWorldConfig, liveWorldConfig, buildRecentText, stripSceneNoise, reconcileWithChat,
     groupChangesByDate, characterTimeline, canonicalName, clampClocksToPack, uncountMessage,
-} from '../src/utils/liveWorld.js';
+ placeFromText, seenInScene } from '../src/utils/liveWorld.js';
 
 let failures = 0;
 function check(name, ok, detail = '') {
@@ -341,6 +341,25 @@ console.log('\n§12 the feed and the timelines');
     check("a character's timeline: oldest first, labelled places, dates and reasons, where they stand now", t.name === 'Old Marit' && t.steps.length === 2 && t.steps[0].from === 'The Anchor, a tavern, The old town' && t.steps[0].to === "The Anchor's back room, The Anchor, a tavern" && t.steps[0].gameDate === 'Monday' && t.steps[0].gameTime === 'dusk' && t.steps[0].reason === 'hiding' && t.steps[1].to === 'The hill, Harbourside' && t.now === 'The hill, Harbourside', JSON.stringify(t));
     check('a character who never moved: no steps, their place as now; an unknown name: nothing', characterTimeline(seeded, pack, 'Captain Reyes').steps.length === 0 && characterTimeline(seeded, pack, 'Captain Reyes').now === 'The customs house, The docks' && characterTimeline(seeded, pack, 'Nobody').now === '' && characterTimeline(seeded, pack, 'Nobody').steps.length === 0);
     check('clock entries never enter a timeline', !JSON.stringify(characterTimeline(s, pack, 'Old Marit')).includes('blockade'));
+}
+
+console.log('\n§13 the scene places people (D70)');
+{
+    check('placeFromText: the deepest label in the text wins', placeFromText(pack, "The Anchor's back room, the old town, Harbourside") === 'back-room' && placeFromText(pack, 'somewhere in Harbourside') === 'harbourside');
+    check('placeFromText: a label without its leading "the", an id with its dashes as spaces, whole words only', placeFromText(pack, 'at the Anchor tonight') === 'the-anchor' && placeFromText(pack, 'the customs house steps') === 'customs-house' && placeFromText(pack, 'anchorage') === '');
+    check('placeFromText: no place, no text, no pack', placeFromText(pack, 'the quay') === '' && placeFromText(pack, '') === '' && placeFromText(null, 'Harbourside') === '');
+    const s0 = seedWorldState(pack);
+    const r1 = seenInScene(s0, pack, { names: ['Old Marit', 'Wanderer'], place: 'the-anchor', msgId: 'm9', gameDate: 'Tuesday', gameTime: 'dusk' });
+    check('the characters in the scene are known; one already there is left alone, a newcomer is placed and logged "in the scene"', r1.state.known.Wanderer === 'known' && r1.named === 1 && r1.placed === 1 && r1.state.where.Wanderer === 'harbourside/old-town/the-anchor' && r1.state.where['Old Marit'] === s0.where['Old Marit'] && r1.state.log.length === 1 && r1.state.log[0].reason === 'in the scene' && r1.state.log[0].msgId === 'm9' && r1.state.log[0].gameDate === 'Tuesday', JSON.stringify(r1));
+    check('the input is untouched', s0.known.Wanderer === undefined && s0.log.length === 0);
+    const r2 = seenInScene(r1.state, pack, { names: ['Old Marit', 'Wanderer'], place: 'the-anchor' });
+    check('the same scene again changes nothing and hands the same state back', r2.state === r1.state && r2.placed === 0 && r2.named === 0);
+    const r3 = seenInScene(r1.state, pack, { names: ['Old Marit', 'Wanderer', 'Scribe'], place: '' });
+    check('a location the pack does not name makes the newcomer known but places no one', r3.state.known.Scribe === 'known' && r3.state.where.Scribe === undefined && r3.placed === 0 && r3.named === 1);
+    const r4 = seenInScene(r1.state, pack, { names: ['Old Marit'], place: 'governors-house', msgId: 'm10' });
+    check('a new scene elsewhere moves whoever is in it, with where they came from', r4.state.where['Old Marit'] === 'harbourside/the-hill/governors-house' && r4.state.log.at(-1).from === s0.where['Old Marit'] && r4.state.log.at(-1).who === 'Old Marit');
+    check('a heard-of name in the scene becomes known', seenInScene(markHeard(s0, ['Maeve']), pack, { names: ['Maeve'], place: '' }).state.known.Maeve === 'known');
+    check('the narrator line follows: a placed newcomer is last seen there', buildWorldLines(r1.state, pack).includes('Wanderer: The Anchor, a tavern, The old town (Tuesday)'), buildWorldLines(r1.state, pack));
 }
 
 console.log(`\n${failures === 0 ? 'All Live World checks pass' : `${failures} FAILURE(S)`}`);

@@ -73,9 +73,10 @@ export function tokenHtml(name, url, { button = false } = {}) {
  * portrait cards with the place under the name and the date of their last
  * move, the heard-of names in one box). The top of the window.
  */
-export function worldGlanceHtml({ state, pack, cfg, portraits = () => '' } = {}) {
+export function worldGlanceHtml({ state, pack, cfg, portraits = () => '', present = [], sceneText = '' } = {}) {
     const effects = publicEffects(state, pack);
     const faces = facesOfTheWorld(pack, state);
+    const inScene = (name) => (present || []).some(n => String(n).toLowerCase() === String(name).toLowerCase());
     const cards = faces.known.map(f => {
         const url = portraits(f.name);
         const n = escapeHtml(f.name);
@@ -85,7 +86,9 @@ export function worldGlanceHtml({ state, pack, cfg, portraits = () => '' } = {})
         const when = f.gameDate ? `<span class="dooms-world-when" title="Last moved ${escapeHtml(f.gameDate)}${f.gameTime ? `, ${escapeHtml(f.gameTime)}` : ''}">${escapeHtml(f.gameDate)}</span>` : '';
         const place = f.place
             ? `<span class="dooms-world-place" title="${escapeHtml(f.place)}">📍 ${escapeHtml(f.place)}</span>`
-            : '<span class="dooms-world-place">nowhere yet</span>';
+            : inScene(f.name)
+                ? `<span class="dooms-world-place" title="${sceneText ? `In the scene: ${escapeHtml(sceneText)} (not a place the pack names)` : 'In the scene'}">📍 in the scene</span>`
+                : '<span class="dooms-world-place">nowhere yet</span>';
         return `<button type="button" class="dooms-portrait-card dooms-world-card" data-name="${n}" title="${n}: where they have been">${face}${when}<div class="dooms-portrait-card-name">${n}${place}</div></button>`;
     }).join('');
     const heard = faces.heard.length
@@ -112,7 +115,7 @@ export function worldGlanceHtml({ state, pack, cfg, portraits = () => '' } = {})
  * The Live World window's body: a line with the pack, the tracker's date,
  * when the world moved and when it runs next; the glance; the board.
  */
-export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', root = '', feed = FEED_LIMITS[0] } = {}) {
+export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', root = '', feed = FEED_LIMITS[0], present = [] } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return `<div class="dooms-world-window">${empty}</div>`;
     const date = [facts.date, facts.time].filter(Boolean).join(', ');
@@ -123,8 +126,8 @@ export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () =
             <span class="dooms-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</span>
             <span class="dooms-world-status">${statusText(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}</span>
         </div>
-        ${worldGlanceHtml({ state, pack, cfg, portraits })}
-        ${boardHtml({ state, pack, cfg, root, portraits, masterOn, packError, feed })}
+        ${worldGlanceHtml({ state, pack, cfg, portraits, present, sceneText: facts.location || '' })}
+        ${boardHtml({ state, pack, cfg, root, portraits, masterOn, packError, feed, present })}
     </div>`;
 }
 
@@ -154,7 +157,7 @@ export function faceTrailHtml({ state, pack, name, portraits = () => '' } = {}) 
  * it, the people on it as tokens), whoever stands at the place itself,
  * the names elsewhere or not yet placed, and "Lately" with its filter.
  */
-export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', masterOn = true, packError = '', feed = FEED_LIMITS[0] } = {}) {
+export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', masterOn = true, packError = '', feed = FEED_LIMITS[0], present = [] } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return `<div class="dooms-board">${empty}</div>`;
     const limit = FEED_LIMITS.includes(Number(feed)) ? Number(feed) : FEED_LIMITS[0];
@@ -180,8 +183,12 @@ export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', m
         ? `<p class="dooms-board-here"><span class="dooms-inv-label">Here:</span> ${b.here.map(n => `${tokenHtml(n, portraits(n), { button: true })}<span class="dooms-board-here-name">${escapeHtml(n)}</span>`).join(' ')}</p>`
         : '';
     const asides = [];
+    const inScene = (name) => (present || []).some(n => String(n).toLowerCase() === String(name).toLowerCase());
     if (b.elsewhere.length) asides.push(`Elsewhere: ${b.elsewhere.map(escapeHtml).join(', ')}`);
-    if (b.nowhere.length) asides.push(`Not yet placed: ${b.nowhere.map(escapeHtml).join(', ')}`);
+    const sceneOnly = b.nowhere.filter(inScene);
+    const unplaced = b.nowhere.filter(n => !inScene(n));
+    if (sceneOnly.length) asides.push(`In the scene, nowhere the pack names: ${sceneOnly.map(escapeHtml).join(', ')}`);
+    if (unplaced.length) asides.push(`Not yet placed: ${unplaced.map(escapeHtml).join(', ')}`);
     const aside = asides.length ? `<p class="dooms-board-aside">${asides.join(' · ')}</p>` : '';
     const groups = groupChangesByDate(b.lately);
     const options = FEED_LIMITS.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n ? `Latest ${n}` : 'Everything'}</option>`).join('');

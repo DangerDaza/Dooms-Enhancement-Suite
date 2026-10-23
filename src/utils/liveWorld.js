@@ -388,6 +388,66 @@ export function markHeard(state, names) {
     return next;
 }
 
+/**
+ * The pack place a scene's location text names, or '' (D70). The tracker
+ * writes the place as prose ("The Gilded Hand's archive, Gilead"); the
+ * deepest place whose label, or its label without a leading "the", stands
+ * in the text as whole words wins, so "the Gilded Hand, Gilead" is the
+ * Gilded Hand and not the city. Labels under three letters never match.
+ */
+export function placeFromText(pack, text) {
+    const t = ` ${String(text || '').normalize('NFC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')} `;
+    if (t.trim().length < 3) return '';
+    let best = null;
+    let bestDepth = -1;
+    let bestLen = 0;
+    for (const p of (pack && pack.places) || []) {
+        const labels = [p.label || '', p.id.replace(/-/g, ' ')].map(l => l.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim()).filter(Boolean);
+        for (const l of labels.slice()) if (/^the /.test(l) && l.length > 7) labels.push(l.slice(4));
+        for (const l of labels) {
+            if (l.length < 3 || !t.includes(` ${l} `)) continue;
+            const depth = placeChain(pack, p.id).length;
+            if (depth > bestDepth || (depth === bestDepth && l.length > bestLen)) { best = p.id; bestDepth = depth; bestLen = l.length; }
+        }
+    }
+    return best || '';
+}
+
+/**
+ * What the scene itself shows (D70): the characters in it are known, and
+ * when the scene's location names a pack place they are there, logged as
+ * a move "in the scene" when the place changed. Never mutates the input;
+ * hands the same state back when nothing changed.
+ * @returns {{ state: object, placed: number, named: number }}
+ */
+export function seenInScene(state, pack, { names = [], place = '', msgId = null, gameDate = '', gameTime = '' } = {}) {
+    const next = cloneState(state);
+    let changed = false;
+    let placed = 0;
+    let named = 0;
+    const to = place ? placePath(pack, resolvePlace(pack, place)) : '';
+    for (const raw of names || []) {
+        const who = canonicalName(next, raw);
+        if (!who) continue;
+        if (next.known[who] !== 'known') { next.known[who] = 'known'; named++; changed = true; }
+        if (!to) continue;
+        const from = next.where[who] || '';
+        if (from === to) continue;
+        next.where[who] = to;
+        next.log.push({ kind: 'move', who, from, to, msgId, gameDate, gameTime, reason: 'in the scene' });
+        const mine = next.log.filter(e => e.who === who);
+        if (mine.length > LOG_PER_CHARACTER) {
+            const oldest = mine[0];
+            next.log.splice(next.log.indexOf(oldest), 1);
+            next.trimmed = true;
+        }
+        placed++;
+        changed = true;
+    }
+    if (next.log.length > LOG_TOTAL) { next.log.splice(0, next.log.length - LOG_TOTAL); next.trimmed = true; }
+    return { state: changed ? next : state, placed, named };
+}
+
 /** Names actually present or speaking: known. */
 export function markKnown(state, names) {
     const next = cloneState(state);

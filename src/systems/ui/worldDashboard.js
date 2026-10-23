@@ -16,7 +16,7 @@ import { resolvePortrait } from './portraitBar.js';
 import { liveWorldConfig } from '../../utils/liveWorld.js';
 import { boardRootFor } from '../../utils/worldBoard.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
-import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 import { worldWindowHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 
@@ -56,7 +56,7 @@ function render() {
     if (!$body.length) return;
     const state = getWorldState();
     const cfg = liveWorldConfig(extensionSettings);
-    $body.html(worldWindowHtml({ state, pack: getActivePack(), cfg, facts: sceneFacts(), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled, root, feed: feedLimit }));
+    $body.html(worldWindowHtml({ state, pack: getActivePack(), cfg, facts: sceneFacts(), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled, root, feed: feedLimit, present: presentNamesFromTracker() }));
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .dooms-world-result`).text(lastResult);
 }

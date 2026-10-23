@@ -58,6 +58,11 @@ One data file per world, e.g. `worldpacks/skyreach.json`. It holds:
 
 ## Part A — Plot advancer
 
+> **D70 (2026-10-23):** the advancer is no longer the only source of
+> last-seen places. On every reply the tracker's present characters are
+> known, and when the tracker's location names a pack place they stand
+> there (a move "in the scene" on the reply's id). See `docs/stats-plan.md`.
+
 Clone of the Doom Counter pattern (`src/systems/generation/doomCounter.js`, called from `onMessageReceived` in `src/systems/integration/sillytavern.js` ~l.348/414 behind `isAwaitingNewMessage`). Its output is a state write, not a twist picker.
 
 - **Trigger:** every **N new message IDs** (N configurable), plus `/advance` and a dashboard button. Never while generating (respect `isGenerating`).

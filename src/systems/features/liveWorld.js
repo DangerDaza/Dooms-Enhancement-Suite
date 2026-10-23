@@ -36,7 +36,8 @@ import {
     normalizeWorldState,
     countMessage,
     advanceDue,
-    markKnown,
+    placeFromText,
+    seenInScene,
     reconcileWithChat,
     clampClocksToPack,
     buildWorldLines,
@@ -352,6 +353,28 @@ function playerNames() {
     return names;
 }
 
+/** The names the tracker lists for the scene (the player apart): who is present now. */
+export function presentNamesFromTracker() {
+    return knownNamesFromTracker();
+}
+
+/**
+ * The scene places people (D70): whoever the tracker lists is known, and
+ * when the tracker's location names a pack place they stand there, logged
+ * as a move "in the scene" on the reply's id (so a deleted reply takes it
+ * back). The advancer still moves people between scenes; this is what the
+ * scene itself shows.
+ */
+function placeFromScene(from, m) {
+    const names = knownNamesFromTracker();
+    if (!names.length) return from;
+    const facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
+    const place = placeFromText(activePack, facts.location);
+    const r = seenInScene(from, activePack, { names, place, msgId: m ? messageKey(m) : null, gameDate: facts.date || '', gameTime: facts.time || '' });
+    if (r.placed) log(`the scene placed ${r.placed} at ${place}`);
+    return r.state;
+}
+
 function knownNamesFromTracker() {
     try {
         const entries = parseCharacterEntriesFromThoughts(lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts);
@@ -387,9 +410,7 @@ export function onWorldMessageReceived(messageId, type) {
     if (!reply) return;
     if (trackerRequestExpected()) trackerToken = loadToken;    // the tracker's request for this reply is this chat's
     const r = countMessage(state, messageKey(m));
-    let next = r.state;
-    const names = knownNamesFromTracker();
-    if (names.length) next = markKnown(next, names);
+    let next = placeFromScene(r.state, m);
     if (!r.counted && next === state) return;
     commit(next, { source: 'count', counted: r.counted });
     if (r.counted && advanceDue(next, cfg().every)) {
@@ -467,16 +488,15 @@ export function onWorldMessageDeleted() {
     reconcile({ at: 'delete' });
 }
 
-/** After the tracker request (separate mode): names it brought become known, and an advance that waited runs. */
+/** After the tracker request (separate mode): the scene it brought places people (D70), and an advance that waited runs. */
 export function onWorldTrackerUpdateComplete() {
     if (!ready()) return;
     if (trackerToken !== loadToken) return;    // a request this chat's replies did not ask for (another chat's, in flight across the switch): not its names, not its wait
     trackerToken = 0;
-    const names = knownNamesFromTracker();
-    if (names.length) {
-        const next = markKnown(state, names);
-        if (JSON.stringify(next.known) !== JSON.stringify(state.known)) commit(next, { source: 'known' });
-    }
+    const list = chatArray();
+    const m = list && list.length ? list[list.length - 1] : null;
+    const next = placeFromScene(state, m && !m.is_user && !m.is_system && !isToolRecord(m) ? m : null);
+    if (next !== state) commit(next, { source: 'scene' });
     flushPending('tracker');
 }
 
