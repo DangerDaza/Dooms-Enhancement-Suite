@@ -2126,9 +2126,7 @@
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Captions reach the AI</span>
-                            <span class="rpg-setting-hint">Off, the picture's message is a system message: the AI never sees the
-                                caption, the story is not steered by it and it costs no tokens. On, the caption's first line
-                                goes into the chat as a narrator line.</span>
+                            <span class="rpg-setting-hint">The picture itself never reaches the AI, whatever SillyTavern's "Send inline media" says: its message is hidden from the prompt, so a chat full of pictures costs nothing. Off, the caption stays yours too. On, the latest caption's first line rides every generation as one fixed line (not shown in the Context Inspector), so the story can keep what the picture showed.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-scene-toai" />

@@ -171,7 +171,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
-import { initScenePictures, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
+import { initScenePictures, refreshSceneCaptionSlot, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
 import { initSceneProgress } from './src/systems/ui/sceneProgress.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
@@ -2206,7 +2206,7 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-scene-clip', function () { getSceneRules().clip = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-vae', function () { getSceneRules().vae = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-narrator', function () { getSceneRules().narrator = String($(this).val() || '').trim() || 'Narrator'; $(this).val(getSceneRules().narrator); _saveScene(); });
-    $(document).on('change', '#rpg-scene-toai', function () { getSceneRules().toAI = $(this).prop('checked'); _saveScene(); });
+    $(document).on('change', '#rpg-scene-toai', function () { getSceneRules().toAI = $(this).prop('checked'); _saveScene(); try { refreshSceneCaptionSlot(); } catch (e) { /* no chat */ } });
     $(document).on('change', '#rpg-scene-preamble', function () { getSceneRules().preamble = String($(this).val() || ''); _saveScene(); });
     $(document).on('change', '#rpg-scene-negative', function () { getSceneRules().negative = String($(this).val() || ''); _saveScene(); });
     $(document).on('change', '#rpg-scene-guide', function () { getSceneRules().guide = String($(this).val() || ''); _saveScene(); });
