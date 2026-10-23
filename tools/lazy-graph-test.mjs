@@ -36,9 +36,10 @@ const MUST_BE_LAZY = [
     'src/systems/ui/voicesSettingsUI.js',
     // The shelf's Inventory and Quests pages load on the first flip.
     'src/systems/ui/shelfPages.js',
-    // The Live World dashboard loads on first open.
+    // Live World's board loads on first open; its views and the face popover with the shelf's pages or the board.
     'src/systems/ui/worldDashboard.js',
-    'src/systems/ui/worldMap.js',
+    'src/systems/ui/worldViews.js',
+    'src/systems/ui/worldFace.js',
 ];
 
 // Static imports only: `import x from '…'`, `import {…} from '…'`,

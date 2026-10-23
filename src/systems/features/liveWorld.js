@@ -673,10 +673,10 @@ function registerWorldCommands() {
                     m.openWorldDashboard();
                     return '';
                 } catch (e) {
-                    return `The dashboard could not open: ${e && e.message ? e.message : e}`;
+                    return `The board could not open: ${e && e.message ? e.message : e}`;
                 }
             },
-            helpString: 'Live World: opens the dashboard (clocks as what people say, who was last seen where, recent changes).',
+            helpString: 'Live World: opens the board (the places as tiles, who stands where, what people say about each, lately).',
             returns: 'nothing',
         }));
     } catch (e) {

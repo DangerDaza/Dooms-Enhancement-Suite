@@ -533,7 +533,7 @@ export function initPortraitBar() {
         $('#dooms-pb-open-roster').hide();
     }
 
-    // ── Pages (Phase 5, Phase 6): Characters | Inventory | Quests | Map ──
+    // ── Pages (Phase 5, D69): Characters | Inventory | Quests | World ──
     $('#dooms-portrait-bar').on('click', '.dooms-pb-page-btn', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -579,7 +579,7 @@ export function updatePortraitBar() {
 // ─────────────────────────────────────────────
 //
 // With the inventory on, the shelf flips between Characters (the cards),
-// Inventory and Quests; with Live World on, Map joins them (Phase 6, D56).
+// Inventory and Quests; with Live World on, World joins them (D69).
 // The control sits in the header; the pages render into #dooms-pb-page
 // (shelfPages.js, loaded on first use) while the card strip hides, so the
 // cards' reconciler is never disturbed. The page is remembered on this
@@ -590,10 +590,11 @@ const SHELF_PAGES = {
     characters: { label: 'Characters', title: 'Present Characters', icon: 'fa-users' },
     inventory: { label: 'Inventory', title: 'Inventory', icon: 'fa-box-open' },
     quests: { label: 'Quests', title: 'Quests', icon: 'fa-scroll' },
-    map: { label: 'Map', title: 'World map', icon: 'fa-map' },
+    world: { label: 'World', title: 'Live World', icon: 'fa-globe' },
 };
 let shelfPage = 'characters';
 try { shelfPage = localStorage.getItem(SHELF_PAGE_KEY) || 'characters'; } catch (e) { /* no storage */ }
+if (shelfPage === 'map') shelfPage = 'world';    // the Map page became the World page (D69)
 let shelfPagesModule = null;
 
 function availableShelfPages() {
@@ -602,7 +603,7 @@ function availableShelfPages() {
         pages.push('inventory');
         if (extensionSettings.showQuests !== false) pages.push('quests');
     }
-    if (isLiveWorldOn()) pages.push('map');
+    if (isLiveWorldOn()) pages.push('world');
     return pages;
 }
 

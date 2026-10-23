@@ -219,70 +219,62 @@ extensionSettings.liveWorld.enabled = true;
 await lw.onWorldChatChanged();
 check('the master switch off drops the world and clears the line without a generation; on brings it back', (slots['dooms-world-state'].value = 'stale', extensionSettings.enabled = false, await lw.onWorldChatChanged(), lw.getWorldState() === null && slots['dooms-world-state'].value === '') && (extensionSettings.enabled = true, await lw.onWorldChatChanged(), lw.getWorldState() !== null && lw.getWorldState().clocks.blockade === 1));
 
-console.log('\n§6 the dashboard\'s reading');
+console.log('\n§6 the views\' reading (D69: the World page, a face, the board)');
 {
     const M = await import(`${DES}/src/utils/liveWorld.js`);
-    const dash = await import(`${DES}/src/systems/ui/worldDashboard.js`);
+    const V = await import(`${DES}/src/systems/ui/worldViews.js`);
     const pack = lw.getActivePack();
     const cfg = M.liveWorldConfig(extensionSettings);
     let st = lw.getWorldState();
     const v = M.validateAdvance({ elapsed: 'a day', clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }], blurb: 'The quay is quiet.', heard: ['Maeve'] }, pack, st);
     st = M.applyAdvance(st, v.clean, pack, { msgId: 'm1', gameDate: 'Thursday', gameTime: 'dawn', ranAt: 1 });
-    const html = dash.renderWorldDashboardHtml({ state: st, pack, cfg, facts: { date: 'Thursday', time: 'dawn', location: 'the quay' }, portraits: () => '' });
-    check('the head: the pack, the date from the tracker, the blurb, when it advanced and when it runs next', html.includes('<h4>Harbourside</h4>') && html.includes('Thursday, dawn · at the quay') && html.includes('The quay is quiet.') && html.includes('Last advanced on Thursday (a day passed)') && html.includes('next run in 3 replies'), html);
-    check('what people say: the effect text with the clock\'s name, never the number', html.includes('<b>The blockade:</b> Cargo is searched on the quay') && !html.includes('2/6'));
-    check('known characters with where they were last seen and before', html.includes('Old Marit') && html.includes("Last seen: The Anchor&#39;s back room, The Anchor, a tavern") && html.includes('Before that: The Anchor, a tavern, The old town') && html.includes('Seen Thursday, dawn') && html.includes('Captain Reyes'));
-    check('heard-of names as dimmed chips, not cards', html.includes('rpg-world-chip" title="Heard of, not met">Maeve') && !html.includes('Last seen: nowhere yet</div></div></div><div class="rpg-world-card">' + 'Maeve'));
-    check('changes under their date', html.includes('<div class="rpg-world-feed-date">Thursday</div><ul class="rpg-world-changes"><li class="is-move">Old Marit: The Anchor, a tavern, The old town → The Anchor&#39;s back room, The Anchor, a tavern (hiding)</li>'), html);
-    check('a portrait when the store has one, an emoji otherwise', dash.renderWorldDashboardHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img class="rpg-world-portrait" src="data:image/png;base64,x"') && html.includes('>👤</div>'));
-    const spoilerFree = dash.renderWorldDashboardHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } });
-    check('spoiler-free: effects without the clock names, and said so', !spoilerFree.includes('<b>The blockade:</b>') && spoilerFree.includes('Cargo is searched') && spoilerFree.includes('Spoiler-free: common knowledge only.'));
-    check('off, a pack problem, no world: each says so', dash.renderWorldDashboardHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && dash.renderWorldDashboardHtml({ cfg, packError: 'No pack named "x".' }).includes('This chat has no world: No pack named') && dash.renderWorldDashboardHtml({ cfg, state: null, pack: null }).includes('no world yet'));
+    const tileOf = (html, id) => { const i = html.indexOf(`data-place="${id}"`); if (i < 0) return ''; const rest = html.slice(i + 1); const j = rest.indexOf('class="dooms-board-tile'); return j < 0 ? rest : rest.slice(0, j); };
+    // the World page
+    const page = V.worldPageHtml({ state: st, pack, cfg, facts: { date: 'Thursday', time: 'dawn', location: 'the quay' }, portraits: () => '' });
+    check('the page: the pack, the tracker\'s date, the blurb, when it moved and when it runs next, the two buttons', page.includes('Harbourside') && page.includes('Thursday, dawn · at the quay') && page.includes('The quay is quiet.') && page.includes('Last advanced on Thursday') && page.includes('next run in') && page.includes('data-act="board"') && page.includes('data-act="advance"'), page.slice(0, 400));
+    check('word on the street: the effect text, never the number, the clock\'s name only as a title', page.includes('Cargo is searched on the quay') && !page.includes('2/6') && page.includes('title="The blockade"'));
+    check('faces: a card per known character with the place under the name and the date of the last move', page.includes('class="dooms-portrait-card dooms-world-card" data-name="Old Marit"') && page.includes("The Anchor&#39;s back room, The Anchor, a tavern") && page.includes('class="dooms-world-when" title="Last moved Thursday, dawn">Thursday'), page);
+    check('heard-of names in the dashed box, not as cards', page.includes('dooms-world-heard') && page.includes('Maeve') && !page.includes('data-name="Maeve"'));
+    check('a portrait when the store has one, initials otherwise', V.worldPageHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img src="data:image/png;base64,x" alt="" />') && page.includes('>OM</div>'));
+    check('spoiler-free: the clock names go and the head says so', (() => { const sf = V.worldPageHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } }); return !sf.includes('title="The blockade"') && sf.includes('Spoiler-free.'); })());
+    check('off, a pack problem, no world, the master switch: each says so', V.worldPageHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.worldPageHtml({ cfg, packError: 'No pack named "x".' }).includes('No pack named') && V.worldPageHtml({ cfg }).includes('no world yet') && V.worldPageHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
     const failed = M.failAdvance(st, { error: 'The clock "blockade" moved by 3, more than 1.' });
-    check('a discarded attempt and the retry are shown', dash.renderWorldDashboardHtml({ state: failed, pack, cfg }).includes('Last attempt discarded: The clock') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg }).includes('runs again on the next reply'));
-    check('model-written text is escaped', dash.renderWorldDashboardHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
-    check("the master switch off says so, not 're-seed'", dash.renderWorldDashboardHtml({ state: st, pack, cfg, masterOn: false }).includes("Enhancement Suite is off") && !dash.renderWorldDashboardHtml({ state: st, pack, cfg, masterOn: false }).includes('re-seed'));
-    check('a clock change sits in recent changes as its public face', html.includes('The blockade: Cargo is searched on the quay') && dash.renderWorldDashboardHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } }).includes('<li>Cargo is searched on the quay'));
-    // the map view (C1)
-    const wm = await import(`${DES}/src/systems/ui/worldMap.js`);
-    const map = wm.renderWorldMapHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' });
-    check('the map: the root and its districts as cards, a line to each district', map.includes('class="rpg-wmap-node is-root has-children"') && (map.match(/class="rpg-wmap-node/g) || []).length === 4 && (map.match(/<path /g) || []).length === 3 && map.includes('data-zoom="harbourside" title="Harbourside · 3 within, open to look inside">Harbourside <span class="rpg-wmap-more" aria-hidden="true">›</span></button>') && map.includes('>The old town <span class="rpg-wmap-more"') && map.includes('role="group" aria-label="Harbourside: the province"') && !map.includes('role="img"') && map.includes('left:clamp(var(--wmap-hx),'), map);
-    check('known characters as tokens on the deepest drawn place: a portrait when there is one, initials otherwise, heard-of names absent', map.includes('<img class="rpg-wmap-token" src="data:image/png;base64,x" alt="Old Marit" title="Old Marit · The Anchor&#39;s back room, The Anchor, a tavern"') && map.includes('aria-label="Captain Reyes" data-name="Captain Reyes" role="button" tabindex="0">CR</span>') && !map.includes('Maeve') && !map.includes('The governor'));
-    check('a count on each card that holds someone, none on an empty one', map.includes('<span class="rpg-wmap-count" title="1 known character here, 1 somewhere within">1</span>') && (map.match(/rpg-wmap-count/g) || []).length === 2);
-    const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', parent: 'h', image: 'https://x/y.png' }] }).pack;
-    const hostile = wm.renderWorldMapHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg });
-    check('labels are escaped, a scripted image is dropped and a plain one wears the card', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('url(&quot;https://x/y.png&quot;)') && hostile.includes('has-image'), hostile);
-    check('the map says the same as the overview when there is nothing to draw', wm.renderWorldMapHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && wm.renderWorldMapHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off') && wm.renderWorldMapHtml({ cfg, packError: 'x' }).includes('no world: x'));
-    const loner = M.markKnown(M.seedWorldState(pack), ['Wanderer']);
-    check('a known name with no place is listed under the map', wm.renderWorldMapHtml({ state: loner, pack, cfg }).includes('Somewhere, not yet placed: Wanderer.'));
-    // D2, D3: the feed, the timelines, the links between the views
-    check('the feed sits under its dates with a filter that remembers its choice', html.includes('<div class="rpg-world-feed-date">Thursday</div>') && html.includes('<option value="12" selected>Latest 12</option>') && html.includes('<option value="0">Everything</option>') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, feed: 0 }).includes('<option value="0" selected>Everything</option>') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, feed: 7 }).includes('<option value="12" selected>'));
-    let busy = st;
-    for (let i = 0; i < 25; i++) busy = M.applyAdvance(busy, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }, { who: 'Captain Reyes', to: i % 2 ? 'the-docks' : 'the-hill' }, { who: 'The governor', to: i % 2 ? 'old-town' : 'the-docks' }], heard: [], blurb: '' }, pack, { msgId: `m${i}`, gameDate: `Day ${i}` });
-    check('the filter bounds the feed: twelve, fifty, everything', busy.log.length > 50 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg }).match(/<li class="is-/g) || []).length === 12 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg, feed: 50 }).match(/<li class="is-/g) || []).length === 50 && (dash.renderWorldDashboardHtml({ state: busy, pack, cfg, feed: 0 }).match(/<li class="is-/g) || []).length === busy.log.length, String(busy.log.length));
-    const undated = M.applyAdvance(st, { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' });
-    check('entries with no date get their own heading when dated ones exist', dash.renderWorldDashboardHtml({ state: undated, pack, cfg }).includes('<div class="rpg-world-feed-date">No date</div><ul class="rpg-world-changes"><li class="is-move">Captain Reyes:') && !dash.renderWorldDashboardHtml({ state: M.applyAdvance(M.seedWorldState(pack), { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' }), pack, cfg }).includes('rpg-world-feed-date">No date</div>'));
-    check('spoiler-free keeps the rule a reply broke out of the dashboard', !dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('blockade') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('Last attempt discarded: the reply broke a rule') && lw.describeAdvanceResult({ ok: false, reason: 'invalid', errors: ['The clock "blockade" moved by 3, more than 1.'] }, { spoilerFree: true }) === 'The advance was discarded: the reply broke a rule (the System Log has the detail).' && lw.describeAdvanceResult({ ok: false, reason: 'invalid', errors: ['x'] }).includes('x'));
+    check('a discarded attempt is said, the rule kept out when spoiler-free', V.worldPageHtml({ state: failed, pack, cfg }).includes('Last attempt discarded: The clock') && !V.worldPageHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('blockade'));
+    const broken = M.failAdvance(st, { error: 'network down', kind: 'error' });
+    check('a request that failed says so, spoiler-free or not, and that it runs again', V.worldPageHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true } }).includes('The last advance failed: network down') && V.worldPageHtml({ state: broken, pack, cfg }).includes('runs again on the next reply'));
+    check('model-written text is escaped on the page', V.worldPageHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
+    // a face
+    const face = V.faceTrailHtml({ state: st, pack, name: 'Old Marit', portraits: () => '' });
+    check('the face: the name, where now, the move with its date and reason, where the story found them', face.includes('class="dooms-face-name">Old Marit<') && face.includes("Now at The Anchor&#39;s back room") && face.includes('Thursday, dawn · hiding') && face.includes('Where the story found them') && face.includes('1 move on record'), face);
     let ring = st;
     for (let i = 0; i < 25; i++) ring = M.applyAdvance(ring, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }], heard: [], blurb: '' }, pack, { msgId: `t${i}`, gameDate: `Day ${i}` });
-    check('a timeline the ring has trimmed says "Earlier at", not "Started at"', dash.renderWorldDashboardHtml({ state: ring, pack, cfg, timeline: 'Old Marit' }).includes('<li class="is-start">Earlier at ') && dash.renderWorldDashboardHtml({ state: ring, pack, cfg, timeline: 'Old Marit' }).includes('older moves are no longer in the log') && dash.renderWorldDashboardHtml({ state: st, pack, cfg, timeline: 'Old Marit' }).includes('<li class="is-start">Started at The Anchor, a tavern, The old town</li>'));
-    const open = dash.renderWorldDashboardHtml({ state: st, pack, cfg, timeline: 'Old Marit' });
-    check("a card opens the character's timeline: started where, each move with its date, the link to the map", open.includes('class="rpg-world-card is-open" data-name="Old Marit"') && open.includes('aria-expanded="true"') && open.includes('<li class="is-start">Started at The Anchor, a tavern, The old town</li>') && open.includes('<time>Thursday, dawn</time>The Anchor&#39;s back room, The Anchor, a tavern <span class="is-muted">(hiding)</span>') && open.includes('class="rpg-world-card-map" data-place="back-room"') && !html.includes('rpg-world-timeline'));
-    check('a token on the map carries the name and the map picks a place out when asked', map.includes('data-name="Old Marit" role="button"') && wm.renderWorldMapHtml({ state: st, pack, cfg, focus: 'back-room' }).includes('class="rpg-wmap-node is-focus has-children" style') && !wm.renderWorldMapHtml({ state: st, pack, cfg }).includes('is-focus'));
-    const zoomed = wm.renderWorldMapHtml({ state: st, pack, cfg, root: 'old-town' });
-    check('zoomed in: the trail, the place at the centre with what is inside, the rest elsewhere', zoomed.includes('<nav class="rpg-wmap-crumbs"') && zoomed.includes('class="rpg-wmap-crumb is-here" data-root="old-town">The old town</button>') && zoomed.includes('data-root="">Harbourside</button>') && (zoomed.match(/class="rpg-wmap-node/g) || []).length === 2 && zoomed.includes('Elsewhere in Harbourside: Captain Reyes.') && zoomed.includes('aria-label="Harbourside: The old town"'));
-    check('a card\'s label is the button that opens it, tokens stay its siblings, the place looked into has none', map.includes('<button type="button" class="rpg-wmap-label rpg-wmap-zoom" data-zoom="old-town"') && !zoomed.includes('data-zoom="old-town"') && zoomed.includes('data-zoom="the-anchor"') && !/<button[^>]*>(?:(?!<\/button>)[\s\S])*<(?:img|span) class="rpg-wmap-token"/.test(map) && !map.includes('rpg-wmap-node is-root has-children" style="left:clamp(var(--wmap-hx),50.00%') === false);
-    check('a backdrop image is dimmed under the label and the text stays light; a name opening with an emoji keeps it whole', hostile.includes('background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.6)),url(&quot;https://x/y.png&quot;)') && wm.renderWorldMapHtml({ state: (() => { const st2 = M.markKnown(M.seedWorldState(pack), ['🦊 Fox']); st2.where['🦊 Fox'] = 'harbourside/the-hill'; return st2; })(), pack, cfg }).includes('>🦊F</span>') && wm.renderWorldMapHtml({ state: M.markKnown(M.seedWorldState(pack), ['🦊 Fox']), pack, cfg }).isWellFormed());
-    check('a crowded pack gets the dense canvas and a taller one', wm.renderWorldMapHtml({ state: M.seedWorldState(M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack), pack: M.normalizePack({ id: 'c', places: [{ id: 'r' }, ...Array.from({ length: 12 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack, cfg }).includes('class="rpg-wmap is-dense" role="group"') && map.includes('style="min-height:280px"'));
-    check("a timeline's text is escaped", dash.renderWorldDashboardHtml({ state: { ...st, log: [...st.log, { kind: 'move', who: 'Old Marit', from: '', to: 'the-hill', reason: '<script>x</script>', gameDate: 'Fri' }] }, pack, cfg, timeline: 'Old Marit' }).includes('(&lt;script&gt;x&lt;/script&gt;)'));
-    // the third pass: a failed request told apart from a broken rule; initials by grapheme; the canvas's own measure
-    const broken = M.failAdvance(st, { error: 'network down', kind: 'error' });
-    check('a request that failed says so, spoiler-free or not, and that it runs again; a run not due says so', dash.renderWorldDashboardHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true } }).includes('The last advance failed: network down; it runs again on the next reply.') && dash.renderWorldDashboardHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('the reply broke a rule') && lw.describeAdvanceResult({ ok: false, reason: 'error', error: 'network down' }, { spoilerFree: true }) === 'The advance failed: network down; it runs again on the next reply.' && lw.describeAdvanceResult({ ok: false, reason: 'not-due' }) === 'Nothing to do: the world is not due an advance.');
-    const flags = (() => { const s2 = M.markKnown(M.seedWorldState(pack), ['🇬🇧 Bill', '👨‍👩‍👧 Fam', 'ßen Low']); s2.where['🇬🇧 Bill'] = 'harbourside/the-hill'; s2.where['👨‍👩‍👧 Fam'] = 'harbourside/old-town'; s2.where['ßen Low'] = 'harbourside/the-docks'; return s2; })();
-    const flagMap = wm.renderWorldMapHtml({ state: flags, pack, cfg });
-    check('a flag, a joined emoji or a letter with no single upper case opens a name as one initial', flagMap.includes('>🇬🇧B</span>') && flagMap.includes('>👨‍👩‍👧F</span>') && flagMap.includes('>ßL</span>'), (flagMap.match(/is-initials[^>]*>[^<]*</g) || []).join(' '));
-    const big = M.normalizePack({ id: 'big', places: [{ id: 'r' }, ...Array.from({ length: 30 }, (_, i) => ({ id: `k${i}`, parent: 'r' }))] }).pack;
-    check('a canvas too small for its places says so under the map; Harbourside on a phone does not', wm.renderWorldMapHtml({ state: M.seedWorldState(big), pack: big, cfg, canvasWidth: 360, narrow: true }).includes('More places here than the canvas can keep apart') && !wm.renderWorldMapHtml({ state: st, pack, cfg, canvasWidth: 360, narrow: true }).includes('More places here'));
+    check('a trail the ring has trimmed says "Earlier at", newest first', (() => { const h = V.faceTrailHtml({ state: ring, pack, name: 'Old Marit' }); return h.includes('Earlier at') && !h.includes('Where the story found them') && h.indexOf('Day 24') < h.indexOf('Day 23'); })());
+    check('a face with no moves says where they stand, or nowhere', V.faceTrailHtml({ state: M.seedWorldState(pack), pack, name: 'Captain Reyes' }).includes('From the start, or before the log') && V.faceTrailHtml({ state: M.markKnown(M.seedWorldState(pack), ['Wanderer']), pack, name: 'Wanderer' }).includes('Nowhere yet'));
+    check("a face's text is escaped", V.faceTrailHtml({ state: { ...st, log: [...st.log, { kind: 'move', who: 'Old Marit', from: '', to: 'the-hill', reason: '<script>x</script>', gameDate: '' }] }, pack, name: 'Old Marit' }).includes('&lt;script&gt;'));
+    // the board
+    const board = V.boardHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' });
+    check('the province: the trail starts at the pack, one tile for Harbourside with three places inside, a city glyph', board.includes('class="dooms-board-trail"') && board.includes('class="dooms-board-crumb is-here" data-root=""') && board.includes('class="dooms-board-step" data-root="harbourside"') && board.includes('3 inside') && board.includes('fa-city'), board.slice(0, 500));
+    check('tokens on the tile: a portrait when there is one, initials otherwise, heard-of names absent', board.includes('<img class="dooms-world-token" src="data:image/png;base64,x" alt="Old Marit"') && board.includes('>CR</span>') && !board.includes('Maeve'));
+    const inside = V.boardHtml({ state: st, pack, cfg, root: 'harbourside' });
+    check('inside Harbourside: the three districts, the clock on the docks, Marit on Old Town, no one on the Hill', inside.includes('data-root="the-docks"') && inside.includes('data-root="old-town"') && tileOf(inside, 'the-docks').includes('Cargo is searched on the quay') && tileOf(inside, 'old-town').includes('Old Marit') && !tileOf(inside, 'the-hill').includes('dooms-board-people'), inside);
+    check('the trail says where you are and leads back out; the glyph deepens', inside.includes('class="dooms-board-crumb is-here" data-root="harbourside" aria-current="location"') && inside.includes('class="dooms-board-crumb" data-root=""') && inside.includes('fa-landmark'));
+    const leaf = V.boardHtml({ state: st, pack, cfg, root: 'back-room' });
+    check('a leaf: nothing inside, whoever stands there is here', leaf.includes('Nothing lies inside') && leaf.includes('Here:') && leaf.includes('Old Marit'), leaf);
+    const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', parent: 'h', image: 'https://x/y.png' }] }).pack;
+    const hostile = V.boardHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg }) + V.boardHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg, root: 'h' });
+    check('labels are escaped, a scripted image is dropped and a plain one wears the tile', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('url(&quot;https://x/y.png&quot;)') && hostile.includes('dooms-board-tile has-image'));
+    check('the board says the same as the page when there is nothing to draw', V.boardHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.boardHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
+    const loner = M.markKnown(M.seedWorldState(pack), ['Wanderer']);
+    check('a known name with no place is listed under the tiles; the names off this board as elsewhere', V.boardHtml({ state: loner, pack, cfg }).includes('Not yet placed: Wanderer') && V.boardHtml({ state: st, pack, cfg, root: 'the-hill' }).includes('Elsewhere: Captain Reyes, Old Marit'));
+    check('lately: the move and the step under their date, the filter remembering its choice', board.includes('class="dooms-board-feed-date">Thursday') && board.includes('<option value="12" selected>Latest 12</option>') && board.includes('<li class="is-clock">The blockade: Cargo is searched on the quay') && board.includes('<li class="is-move">Old Marit:'));
+    let busy = st;
+    // three movers: the log keeps twenty moves per character, so two could never pass fifty
+    for (let i = 0; i < 25; i++) busy = M.applyAdvance(busy, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }, { who: 'Captain Reyes', to: i % 2 ? 'the-docks' : 'the-hill' }, { who: 'The governor', to: i % 2 ? 'old-town' : 'the-docks' }], heard: [], blurb: '' }, pack, { msgId: `b${i}` });
+    check('the filter bounds lately: twelve, fifty, everything', busy.log.length > 50 && (V.boardHtml({ state: busy, pack, cfg }).match(/<li class="is-/g) || []).length === 12 && (V.boardHtml({ state: busy, pack, cfg, feed: 50 }).match(/<li class="is-/g) || []).length === 50 && (V.boardHtml({ state: busy, pack, cfg, feed: 0 }).match(/<li class="is-/g) || []).length === busy.log.length);
+    check('entries with no date get their own heading when dated ones exist', V.boardHtml({ state: M.applyAdvance(st, { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' }), pack, cfg }).includes('class="dooms-board-feed-date">No date'));
+    const flags = (() => { const s2 = M.markKnown(M.seedWorldState(pack), ['🇬🇧 Bill', 'ßen Low']); s2.where['🇬🇧 Bill'] = 'harbourside/the-hill'; s2.where['ßen Low'] = 'harbourside'; return s2; })();
+    const flagBoard = V.boardHtml({ state: flags, pack, cfg, root: 'harbourside' });
+    check('a flag or a letter with no single upper case opens a name as one initial; whoever stands at the place itself is here', flagBoard.includes('>🇬🇧B</span>') && flagBoard.includes('Here:') && flagBoard.includes('>ßL</span>'), flagBoard);
 }
 
 console.log('\n§7 an advance that outlives its chat');
@@ -494,7 +486,7 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     check('re-seeding with no chat open is refused with a reason', (globalThis.__DES_CTX__.chatId = undefined, true) && (await lw.reseedWorld()).error === 'No chat is open.' && (globalThis.__DES_CTX__.chatId = 'chat-h', true));
 }
 
-console.log('\n§10 the shelf\'s Map page (D56)');
+console.log('\n§10 the shelf\'s World page (D69)');
 {
     const pages = await import(`${DES}/src/systems/ui/shelfPages.js`);
     const pb = await import(`${DES}/src/systems/ui/portraitBar.js`);
@@ -503,21 +495,17 @@ console.log('\n§10 the shelf\'s Map page (D56)');
     extensionSettings.liveWorld.enabled = true;
     extensionSettings.liveWorld.pack = 'harbourside';
     await lw.onWorldChatChanged();
-    const wm = await import(`${DES}/src/systems/ui/worldMap.js`);
-    const page = pages.mapPageHtml();
-    check("the page is the dashboard's map and nothing else: the trail and the canvas, no legend, no notes, no button", page.includes('class="dooms-map-page"') && page.includes('class="rpg-wmap') && page.includes('data-root="">Harbourside</button>') && (page.match(/class="rpg-wmap-node/g) || []).length === 4 && !page.includes('rpg-wmap-legend') && !page.includes('dooms-map-dashboard') && !page.includes('Known characters only'), page.slice(0, 400));
-    check('the dashboard keeps the legend the shelf leaves out', wm.renderWorldMapHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: extensionSettings.liveWorld }).includes('class="rpg-wmap-legend"'));
-    check('known characters stand on it as tokens, heard-of names do not', page.includes('data-name="Captain Reyes"') && page.includes('data-name="Old Marit"') && !page.includes('The governor'));
-    const zoomed = pages.mapPageHtml({ root: 'old-town' });
-    check('zoomed into a place: the trail above, what is inside drawn', zoomed.includes('class="rpg-wmap-crumb is-here" data-root="old-town">The old town</button>') && zoomed.includes('data-zoom="the-anchor"') && (zoomed.match(/class="rpg-wmap-node/g) || []).length === 2);
-    pb.setShelfPage('map');
-    check('the shelf offers Map while Live World is on', pb.getShelfPage() === 'map');
+    const page = pages.worldPageHtml();
+    check('the page: the pack, word on the street, the faces, Open the board and Advance', page.includes('class="dooms-pb-page-inner dooms-pb-page-world"') && page.includes('Harbourside') && page.includes('Word on the street') && page.includes('Last seen') && page.includes('data-act="board"') && page.includes('data-act="advance"'), page.slice(0, 300));
+    check('known characters as cards, the heard-of apart', page.includes('data-name="Captain Reyes"') && page.includes('data-name="Old Marit"') && !page.includes('data-name="The governor"') && page.includes('The governor'));
+    pb.setShelfPage('world');
+    check('the shelf offers World while Live World is on', pb.getShelfPage() === 'world');
     extensionSettings.liveWorld.enabled = false;
     await lw.onWorldChatChanged();
-    check('off: the shelf falls back to Characters and the page says so', pb.getShelfPage() === 'characters' && pages.mapPageHtml().includes('Live World is off'));
+    check('off: the shelf falls back to Characters and the page says so', pb.getShelfPage() === 'characters' && pages.worldPageHtml().includes('Live World is off'));
     extensionSettings.liveWorld.enabled = true;
     await lw.onWorldChatChanged();
-    check('on again: Map is back, the choice remembered', pb.getShelfPage() === 'map' && pages.mapPageHtml().includes('class="rpg-wmap'));
+    check('on again: World is back, the choice remembered', pb.getShelfPage() === 'world' && pages.worldPageHtml().includes('dooms-world-cards'));
     pb.setShelfPage('characters');
 }
 

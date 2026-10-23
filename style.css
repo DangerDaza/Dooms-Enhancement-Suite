@@ -9746,85 +9746,87 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
-/* ── Live World's map (docs/live-world-spec.md Part C; C1 the province, C2
-   nesting and zoom): the canvas, the cards, the tokens, the trail. Drawn in
-   the dashboard popup (styles/modals.css styles the rest of it) and on the
-   shelf's Map page below; the rules live here, in the eager sheet, because
-   the shelf draws the map at page load, before the deferred Settings UI
-   has brought modals.css in. ── */
-.rpg-wmap {
-    --wmap-hx: 86px; --wmap-hy: 44px;    /* half a card at its widest, plus the count badge's overhang: a card's centre never comes closer to an edge */
-    position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 280px; border-radius: 12px; overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background:
-        radial-gradient(ellipse at 28% 22%, rgba(255, 255, 255, 0.07), transparent 55%),
-        radial-gradient(ellipse at 76% 78%, rgba(233, 69, 96, 0.10), transparent 52%),
-        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.18'/></svg>"),
-        linear-gradient(160deg, #1d1b24 0%, #13121a 60%, #0f0e14 100%);
-    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
-}
-.rpg-wmap-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
-.rpg-wmap-lines path { fill: none; stroke: rgba(255, 255, 255, 0.22); stroke-width: 1.6; stroke-dasharray: 3 4; stroke-linecap: round; }
-.rpg-wmap-node {
-    position: absolute; transform: translate(-50%, -50%); min-width: 96px; max-width: 170px; padding: 7px 9px 8px; border-radius: 11px;
-    background: rgba(22, 21, 29, 0.84); background-size: cover; background-position: center;
-    border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    text-align: center; color: #e8e6ef; font-size: 0.85em; line-height: 1.25;
-    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-}
-.rpg-wmap-node.is-root { min-width: 120px; font-size: 0.95em; border-color: var(--rpg-highlight, #e94560); box-shadow: 0 0 0 1px rgba(233, 69, 96, 0.25), 0 10px 26px rgba(0, 0, 0, 0.45); }
-.rpg-wmap-node.has-image, .rpg-wmap-node.has-image .rpg-wmap-label, .rpg-wmap-node.has-image .rpg-wmap-more { color: #fff; }
-.rpg-wmap-node.has-image .rpg-wmap-label { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.7); }
-.rpg-wmap-label { font-weight: 600; overflow-wrap: anywhere; }
-.rpg-wmap-zoom { display: block; width: 100%; background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 600; text-align: center; cursor: pointer; border-radius: 6px; }
-.rpg-wmap-zoom:hover, .rpg-wmap-zoom:focus-visible { text-decoration: underline; outline: none; }
-.rpg-wmap-node:has(.rpg-wmap-zoom:focus-visible) { outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 2px; }
-.rpg-wmap.is-dense .rpg-wmap-node { min-width: 76px; max-width: 130px; font-size: 0.74em; padding: 5px 6px 6px; }
-.rpg-wmap.is-dense .rpg-wmap-node.is-root { min-width: 92px; }
-.rpg-wmap.is-dense .rpg-wmap-token { width: 22px; height: 22px; }
-.rpg-wmap.is-dense { --wmap-hx: 66px; --wmap-hy: 36px; }
-.rpg-wmap-tokens { display: flex; justify-content: center; margin-top: 6px; }
-.rpg-wmap-token {
-    width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: center top; flex: 0 0 auto;
-    border: 2px solid rgba(22, 21, 29, 0.95); margin-left: -7px; background: #2a2834;
-    display: inline-flex; align-items: center; justify-content: center; font-size: 0.7em; font-weight: 700; color: #ddd;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.rpg-wmap-token:first-child { margin-left: 0; }
-.rpg-wmap-token.is-more { font-size: 0.65em; }
-.rpg-wmap-count {
-    position: absolute; top: -8px; right: -8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
-    background: var(--rpg-highlight, #e94560); color: #fff; font-size: 0.72em; font-weight: 700;
-    display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.rpg-wmap-legend { margin-top: 8px; font-size: 0.8em; color: #888; }
-.rpg-wmap-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 8px; font-size: 0.82em; }
-.rpg-wmap-crumb { background: none; border: 0; padding: 2px 6px; border-radius: 6px; color: #aaa; font: inherit; cursor: pointer; }
-.rpg-wmap-crumb:hover, .rpg-wmap-crumb:focus-visible { color: inherit; background: rgba(255, 255, 255, 0.08); outline: none; }
-.rpg-wmap-crumb.is-here { color: inherit; font-weight: 600; cursor: default; }
-.rpg-wmap-crumb-sep { color: #666; }
-.rpg-wmap-node.has-children:hover { border-color: rgba(255, 255, 255, 0.4); }
-.rpg-wmap-more { color: #999; font-weight: 400; }
-.rpg-wmap-token[data-name] { cursor: pointer; }
-.rpg-wmap-token[data-name]:hover, .rpg-wmap-token[data-name]:focus-visible { transform: translateY(-2px); outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 1px; z-index: 1; }
-.rpg-wmap-node.is-focus { animation: rpg-wmap-pulse 1.6s ease-out 2; border-color: var(--rpg-highlight, #e94560); }
-@keyframes rpg-wmap-pulse { 0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.55), 0 8px 22px rgba(0, 0, 0, 0.4); } 100% { box-shadow: 0 0 0 16px rgba(233, 69, 96, 0), 0 8px 22px rgba(0, 0, 0, 0.4); } }
-
+/* ── Live World on the shelf and the board (docs/stats-plan.md D69): the
+   World page (the glance), the face popover (a character's trail, on the
+   inventory editor's shell) and the board (the places as tiles, in the
+   settings popup's shell). Eager: the shelf draws the page at load and the
+   board opens from it before styles/modals.css has loaded. ── */
+.dooms-pb-page-world { display: flex; flex-direction: column; gap: 8px; }
+.dooms-world-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px; }
+.dooms-world-head .dooms-inv-label { font-size: 0.72em; }
+.dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
+.dooms-world-spacer { flex: 1 1 auto; }
+.dooms-world-cols { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; }
+@media (max-width: 720px) { .dooms-world-cols { grid-template-columns: minmax(0, 1fr); } }
+.dooms-world-blurb { margin: 0 2px 6px; font-style: italic; font-size: 0.98em; line-height: 1.35; color: #f1f1f6; }
+.dooms-world-effects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 0.8em; line-height: 1.4; color: #d6d6e0; }
+.dooms-world-effects li { position: relative; padding-left: 14px; }
+.dooms-world-effects li::before { content: ''; position: absolute; left: 2px; top: 0.55em; width: 6px; height: 6px; border-radius: 50%; background: var(--rpg-highlight, #e94560); }
+.dooms-world-error { margin: 6px 2px 0; font-size: 0.74em; color: #e5a84d; }
+.dooms-world-empty { margin: 6px 2px; font-size: 0.85em; color: #8d8d9a; }
+.dooms-world-empty.is-error { color: #e5a84d; }
+.dooms-world-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.dooms-world-card { appearance: none; padding: 0; margin: 0; font: inherit; text-align: center; color: inherit; }
+.dooms-world-card .dooms-portrait-card-emoji { font-size: 1.7em; font-weight: 700; color: #cfcbe6; letter-spacing: 0.02em; }
+.dooms-world-when { position: absolute; top: 5px; right: 5px; max-width: 78%; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #eee; font-size: 0.6em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dooms-world-place { display: block; font-size: 0.85em; color: #c9c9d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dooms-world-heard { box-sizing: border-box; min-width: 120px; max-width: 170px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: var(--dooms-pb-card-radius, 8px); padding: 10px 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px; font-size: 0.78em; line-height: 1.4; color: #c9c9d6; }
+.dooms-world-token { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #1b1b2c; background: #2a2834; color: #ddd; font-size: 0.62em; font-weight: 700; object-fit: cover; object-position: center top; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); vertical-align: middle; }
+.dooms-world-token-btn { appearance: none; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
+.dooms-world-token-btn + .dooms-world-token-btn { margin-left: -8px; }
+.dooms-world-token-btn:hover .dooms-world-token, .dooms-world-token-btn:focus-visible .dooms-world-token { border-color: var(--rpg-highlight, #e94560); }
+/* The face popover */
+.dooms-face-pop { width: 320px; }
+.dooms-face-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.dooms-face-head .dooms-world-token { width: 40px; height: 40px; font-size: 0.85em; flex: 0 0 auto; }
+.dooms-face-name { font-size: 1.05em; font-weight: 600; color: #fff; }
+.dooms-face-trail { list-style: none; margin: 8px 0 4px 4px; padding: 0 0 0 16px; border-left: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.dooms-face-trail li { position: relative; display: flex; flex-direction: column; gap: 1px; }
+.dooms-face-trail li::before { content: ''; position: absolute; left: -19.5px; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: #6d6d80; }
+.dooms-face-trail li.is-now::before { background: var(--rpg-highlight, #e94560); }
+.dooms-face-trail li.is-now .dooms-face-place { color: #fff; font-weight: 600; }
+.dooms-face-place { font-size: 0.95em; color: #eaeaea; }
+.dooms-face-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; }
+/* The board */
+.dooms-board { display: flex; flex-direction: column; gap: 10px; }
+.dooms-board-trail { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 0.95em; }
+.dooms-board-crumb { appearance: none; background: none; border: 0; padding: 2px 6px; border-radius: 6px; color: #a9a9b8; font: inherit; cursor: pointer; }
+.dooms-board-crumb:hover, .dooms-board-crumb:focus-visible { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.dooms-board-crumb.is-here { color: #fff; font-weight: 600; cursor: default; }
+.dooms-board-sep { color: #6d6d80; }
+.dooms-board-note, .dooms-board-here { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.10); background: rgba(255, 255, 255, 0.03); font-size: 0.85em; line-height: 1.4; color: #d6d6e0; }
+.dooms-board-here { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.dooms-board-here-name { margin-right: 6px; }
+.dooms-board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.dooms-board-tile { position: relative; display: flex; flex-direction: column; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); overflow: hidden; min-width: 0; transition: border-color 0.2s, box-shadow 0.2s; }
+.dooms-board-tile:hover, .dooms-board-tile:has(.dooms-board-step:focus-visible) { border-color: rgba(233, 69, 96, 0.6); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
+.dooms-board-tile.has-caption { border-color: rgba(233, 69, 96, 0.35); }
+.dooms-board-step { appearance: none; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; width: 100%; }
+.dooms-board-art { position: relative; height: 92px; width: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: #2d2b40; background-size: cover; background-position: center; color: #b9b4d6; font-size: 2.1em; }
+.dooms-board-tile.has-image .dooms-board-art i { display: none; }
+.dooms-board-tile.has-image .dooms-board-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.35)); }
+.dooms-board-inside { position: absolute; top: 8px; left: 8px; z-index: 1; font-size: 0.42em; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #eaeaea; }
+.dooms-board-text { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px 6px; min-width: 0; width: 100%; box-sizing: border-box; }
+.dooms-board-name { font-size: 0.95em; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dooms-board-caption { font-size: 0.78em; color: #a9a9b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dooms-board-people { display: flex; align-items: center; padding: 0 10px 9px; }
+.dooms-board-leaf, .dooms-board-aside { margin: 0; font-size: 0.82em; color: #a9a9b8; }
+.dooms-board-leaf { padding: 14px; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; text-align: center; }
+.dooms-board-lately { margin-top: 4px; }
+.dooms-board-feed-label { margin-left: auto; font-size: 0.72em; color: #8d8d9a; display: inline-flex; align-items: center; gap: 6px; }
+.dooms-board-feed { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); color: #eaeaea; border-radius: 6px; padding: 2px 6px; font: inherit; font-size: 1em; }
+.dooms-board-feed-date { margin: 6px 2px 2px; font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; }
+.dooms-board-changes { list-style: none; margin: 0; padding: 0; font-size: 0.82em; line-height: 1.4; color: #d6d6e0; }
+.dooms-board-changes li { position: relative; padding: 3px 0 3px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.dooms-board-changes li::before { content: ''; position: absolute; left: 2px; top: 0.85em; width: 6px; height: 6px; border-radius: 50%; background: #6d6d80; }
+.dooms-board-changes li.is-clock::before { background: var(--rpg-highlight, #e94560); }
+#rpg-world-popup .rpg-settings-popup-body { padding: 12px 16px 14px; }
+.rpg-world-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dooms-world-result { font-size: 0.8em; color: #8d8d9a; margin-left: auto; }
 @media (max-width: 600px) {
-    .rpg-wmap { aspect-ratio: 1 / 1; min-height: 300px; --wmap-hx: 66px; --wmap-hy: 36px; }
-    .rpg-wmap-node { min-width: 76px; max-width: 130px; font-size: 0.74em; padding: 5px 6px 6px; }
-    .rpg-wmap-node.is-root { min-width: 92px; }
-    .rpg-wmap-token { width: 22px; height: 22px; }
+    .dooms-board-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .dooms-board-art { height: 70px; }
 }
-
-/* The Map page (Phase 6, D56): the dashboard's map on the strip, and
-   nothing else: the trail and the canvas, no legend, no notes, no button.
-   The popup's 16:10 canvas is too tall for the strip: here the canvas is
-   as tall as the renderer's inline min-height says (its floor, more when
-   dense), and shelfPages.js tells the layout a width to match. */
-.dooms-map-page { position: relative; padding-top: 2px; }
-.dooms-map-page .rpg-wmap { aspect-ratio: auto; }
-.dooms-map-page .rpg-wmap-crumbs { min-height: 22px; }
 
 /* The quest menu: the shelf's menu look, its own items */
 .dooms-quest-menu-item {
