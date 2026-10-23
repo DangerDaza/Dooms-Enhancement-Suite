@@ -223,7 +223,10 @@ export function normalizePack(raw) {
                 effects[n] = clean(v, 240);
             }
         }
-        clocks.push({ id: cid, label: clean(c.label || c.id, 80), start, max, step: isInt(c.step) && c.step > 0 ? c.step : null, effects, hidden: c.hidden === true });
+        // The place the clock concerns (optional): the board shows its public effect on that place's tile.
+        const cplace = c.place ? resolvePlaceIn(places, c.place) : '';
+        if (c.place && !cplace) errors.push(`The clock "${cid}" names a place "${c.place}" that does not exist.`);
+        clocks.push({ id: cid, label: clean(c.label || c.id, 80), start, max, step: isInt(c.step) && c.step > 0 ? c.step : null, effects, hidden: c.hidden === true, place: cplace });
     }
     const cast = [];
     const castNames = new Set();
