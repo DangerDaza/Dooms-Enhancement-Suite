@@ -9,6 +9,7 @@
  * World and /liveworld. Loaded on first open.
  */
 import { extensionSettings } from '../../core/state.js';
+import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { liveWorldConfig } from '../../utils/liveWorld.js';
 import { boardRootFor } from '../../utils/worldBoard.js';
@@ -136,7 +137,10 @@ function build() {
  * open. `root` opens it inside a place; `name` opens it where that
  * character stands (the shelf's cards and the face popover ask for that).
  */
-export function openWorldDashboard({ root: wanted = '', name = '' } = {}) {
+export async function openWorldDashboard({ root: wanted = '', name = '' } = {}) {
+    // The window is the settings popup's shell, styled by styles/modals.css, which loads with the
+    // deferred settings UI: opened from the shelf first, the board waits for the sheet.
+    try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the board still opens */ }
     build();
     isOpen = true;
     lastResult = '';
