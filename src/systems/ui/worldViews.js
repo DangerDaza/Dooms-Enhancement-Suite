@@ -1,9 +1,9 @@
 /**
- * Live World's views (docs/stats-plan.md D69): the shelf's World page (the
- * glance: word on the street and the faces last seen), a face's trail (the
- * popover) and the board (the places as tiles), as HTML. Pure apart from
- * `portraits`, so tests render them without the portrait store; the modules
- * that mount them (shelfPages.js, worldFace.js, worldDashboard.js) own the
+ * Live World's views (docs/stats-plan.md D69): the Live World window (the
+ * glance: word on the street and the faces last seen; then the board, the
+ * places as tiles) and a face's trail (the popover), as HTML. Pure apart
+ * from `portraits`, so tests render them without the portrait store; the
+ * modules that mount them (worldDashboard.js, worldFace.js) own the
  * events. Never a clock's number: the effect text is all anyone sees.
  */
 import { escapeHtml } from '../../utils/html.js';
@@ -67,17 +67,13 @@ export function tokenHtml(name, url, { button = false } = {}) {
 }
 
 /**
- * The shelf's World page: the pack and the tracker's date, when the world
- * moved and when it runs next, Open the board and Advance; "Word on the
- * street" (the blurb, each clock's public effect); "Last seen" (the known
- * characters as the shelf's own portrait cards with the place under the
- * name and the date of their last move, the heard-of names in one box).
+ * The glance: "Word on the street" (the blurb, each clock's public effect
+ * as a sentence; the clock's name only as a title, and not that when
+ * spoiler-free) and "Last seen" (the known characters as the shelf's own
+ * portrait cards with the place under the name and the date of their last
+ * move, the heard-of names in one box). The top of the window.
  */
-export function worldPageHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '' } = {}) {
-    const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
-    if (empty) return `<div class="dooms-pb-page-inner dooms-pb-page-world">${empty}</div>`;
-    const date = [facts.date, facts.time].filter(Boolean).join(', ');
-    const where = facts.location ? ` · at ${escapeHtml(facts.location)}` : '';
+export function worldGlanceHtml({ state, pack, cfg, portraits = () => '' } = {}) {
     const effects = publicEffects(state, pack);
     const faces = facesOfTheWorld(pack, state);
     const cards = faces.known.map(f => {
@@ -98,27 +94,37 @@ export function worldPageHtml({ state, pack, cfg, facts = {}, portraits = () => 
     const street = effects.length
         ? `<ul class="dooms-world-effects">${effects.map(e => `<li${cfg.spoilerFree ? '' : ` title="${escapeHtml(e.label)}"`}>${escapeHtml(e.text)}</li>`).join('')}</ul>`
         : '<p class="dooms-world-muted">Nothing yet.</p>';
-    return `<div class="dooms-pb-page-inner dooms-pb-page-world">
-        <div class="dooms-world-head">
+    return `<div class="dooms-world-glance">
+        <section class="dooms-world-street">
+            <div class="dooms-inv-head"><span class="dooms-inv-label">💬 Word on the street</span></div>
+            ${state.blurb ? `<p class="dooms-world-blurb">“${escapeHtml(state.blurb)}”</p>` : ''}
+            ${street}
+            ${state.lastError ? `<p class="dooms-world-error">${errorLine(state.lastError, cfg)}</p>` : ''}
+        </section>
+        <section class="dooms-world-seen">
+            <div class="dooms-inv-head"><span class="dooms-inv-label">👁 Last seen</span><span class="dooms-inv-fill" title="Known characters">${faces.known.length}</span></div>
+            <div class="dooms-world-cards">${cards || '<p class="dooms-world-muted">No one known yet.</p>'}${heard}</div>
+        </section>
+    </div>`;
+}
+
+/**
+ * The Live World window's body: a line with the pack, the tracker's date,
+ * when the world moved and when it runs next; the glance; the board.
+ */
+export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', root = '', feed = FEED_LIMITS[0] } = {}) {
+    const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
+    if (empty) return `<div class="dooms-world-window">${empty}</div>`;
+    const date = [facts.date, facts.time].filter(Boolean).join(', ');
+    const where = facts.location ? ` · at ${escapeHtml(facts.location)}` : '';
+    return `<div class="dooms-world-window">
+        <div class="dooms-world-sub">
             <span class="dooms-inv-label">🌍 ${escapeHtml(pack.name)}</span>
             <span class="dooms-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</span>
             <span class="dooms-world-status">${statusText(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}</span>
-            <span class="dooms-world-spacer"></span>
-            <button type="button" class="dooms-inv-btn" data-act="board" title="The places as tiles, who stands where (the same as /liveworld)">Open the board</button>
-            <button type="button" class="dooms-inv-btn is-primary" data-act="advance" title="Run the plot advancer now (the same as /advance)">Advance</button>
         </div>
-        <div class="dooms-world-cols">
-            <section class="dooms-world-street">
-                <div class="dooms-inv-head"><span class="dooms-inv-label">💬 Word on the street</span></div>
-                ${state.blurb ? `<p class="dooms-world-blurb">“${escapeHtml(state.blurb)}”</p>` : ''}
-                ${street}
-                ${state.lastError ? `<p class="dooms-world-error">${errorLine(state.lastError, cfg)}</p>` : ''}
-            </section>
-            <section class="dooms-world-seen">
-                <div class="dooms-inv-head"><span class="dooms-inv-label">👁 Last seen</span><span class="dooms-inv-fill" title="Known characters">${faces.known.length}</span></div>
-                <div class="dooms-world-cards">${cards || '<p class="dooms-world-muted">No one known yet.</p>'}${heard}</div>
-            </section>
-        </div>
+        ${worldGlanceHtml({ state, pack, cfg, portraits })}
+        ${boardHtml({ state, pack, cfg, root, portraits, masterOn, packError, feed })}
     </div>`;
 }
 

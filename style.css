@@ -9746,18 +9746,18 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
-/* ── Live World on the shelf and the board (docs/stats-plan.md D69): the
-   World page (the glance), the face popover (a character's trail, on the
-   inventory editor's shell) and the board (the places as tiles, in the
-   settings popup's shell). Eager: the shelf draws the page at load and the
-   board opens from it before styles/modals.css has loaded. ── */
-.dooms-pb-page-world { display: flex; flex-direction: column; gap: 8px; }
-.dooms-world-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px; }
-.dooms-world-head .dooms-inv-label { font-size: 0.72em; }
+/* ── The Live World window (docs/stats-plan.md D69): the glance (word on
+   the street, the faces last seen), the board (the places as tiles) and the
+   face popover (a character's trail, on the inventory editor's shell), the
+   window on the settings popup's shell, sized like the Workshop. Eager so
+   the window and the popover are styled wherever they open from. ── */
+#rpg-world-popup .rpg-settings-popup-content { max-width: min(95vw, 900px); max-height: min(90vh, 720px); }
+.dooms-world-window { display: flex; flex-direction: column; gap: 14px; }
+.dooms-world-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px; }
+.dooms-world-sub .dooms-inv-label { font-size: 0.72em; }
 .dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
-.dooms-world-spacer { flex: 1 1 auto; }
-.dooms-world-cols { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; }
-@media (max-width: 720px) { .dooms-world-cols { grid-template-columns: minmax(0, 1fr); } }
+.dooms-world-glance { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+@media (max-width: 720px) { .dooms-world-glance { grid-template-columns: minmax(0, 1fr); } }
 .dooms-world-blurb { margin: 0 2px 6px; font-style: italic; font-size: 0.98em; line-height: 1.35; color: #f1f1f6; }
 .dooms-world-effects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 0.8em; line-height: 1.4; color: #d6d6e0; }
 .dooms-world-effects li { position: relative; padding-left: 14px; }

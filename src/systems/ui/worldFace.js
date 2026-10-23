@@ -1,6 +1,6 @@
 /**
  * Live World's face popover (docs/stats-plan.md D69): a character's trail,
- * opened from a card on the shelf's World page or a token on the board.
+ * opened from a card in the window's glance or a token on its board.
  * The shelf's own small dialog (the inventory editor's shell, so the looks
  * restyle it): the name and where they stand now, their moves newest
  * first, "Show on the board". Closes on a click outside, Escape, or when
@@ -47,7 +47,7 @@ export function closeFacePopover() {
 
 /**
  * Opens the trail of `name` by `anchor`. `onBoard(name)` is what "Show on
- * the board" does; left out, the board opens where the character stands.
+ * the board" does; left out, the window opens where the character stands.
  */
 export function openFacePopover(anchor, name, { onBoard } = {}) {
     closeFacePopover();

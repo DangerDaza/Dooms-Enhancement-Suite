@@ -7,7 +7,7 @@ audited_against: local DES (branch Project-Short-Fuse, ffde8d1 + local settings-
 
 # Live World — DES module build spec
 
-A new DES module: background plot clocks, last-seen character locations, a board of places and the shelf's World page (D69; Parts C and D below record what was first built and why it went). Built for Skyreach first. Every Skyreach detail lives in a **world pack**, so generalizing to other users later adds an editor; it does not rewrite the engine.
+A new DES module: background plot clocks, last-seen character locations, one window with the glance and a board of places (D69; Parts C and D below record what was first built and why it went). Built for Skyreach first. Every Skyreach detail lives in a **world pack**, so generalizing to other users later adds an editor; it does not rewrite the engine.
 
 Design source: voice sessions with Dazia, 2026-10-16. Grounded in a read-only audit of the installed DES the same day (findings in §0).
 
@@ -91,15 +91,17 @@ only; no model calls. `src/utils/worldBoard.js` (pure),
 
 ## Part D — Overview dashboard
 
-**Superseded by D69.** There is no dashboard. The glance is the shelf's
-**World** page: word on the street (the blurb, each clock's public effect
-as a sentence) and the faces last seen (the shelf's own portrait cards
-with the place under the name and the date of the last move). A card
-opens the character's trail in a small popover (their moves newest first,
-where the story found them, Show on the board). "Lately" with its time
-filter lives under the board's tiles. Advance now sits on the page and in
-the board's foot, the same path as `/advance`. Spoiler-free governs the
-effects, the captions, the feed and the blurb as before.
+**Superseded by D69.** There is no dashboard. The **Live World window**
+(sized like the Workshop; World in the D menu, Settings → Live World,
+`/liveworld`) opens on the glance: word on the street (the blurb, each
+clock's public effect as a sentence) and the faces last seen (the shelf's
+own portrait cards with the place under the name and the date of the last
+move); the board sits below it in the same scroll. A card or a token opens
+the character's trail in a small popover (their moves newest first, where
+the story found them, Show on the board). "Lately" with its time filter
+lives under the board's tiles. Advance now sits in the window's foot, the
+same path as `/advance`. Spoiler-free governs the effects, the captions,
+the feed and the blurb as before.
 
 ---
 

@@ -2137,7 +2137,7 @@ function bindSettingsUI() {
         _saveWorld({ reload: mine });    // another chat's pack: nothing in this chat refers to it, and a reload would discard an advance in flight
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
-        import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World dashboard failed to load:', err));
+        import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
     });
     $(document).on('click', '#rpg-world-advance', async function () {
         const $b = $(this);
@@ -3731,6 +3731,19 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
+            // Live World (D69): the window, only while Live World is on.
+            if (isLiveWorldOn()) {
+                items.push({
+                    id: 'live-world',
+                    label: 'World',
+                    iconClass: 'fa-solid fa-globe',
+                    action: () => {
+                        import('./src/systems/ui/worldDashboard.js')
+                            .then(m => m.openWorldDashboard())
+                            .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
+                    },
+                });
+            }
             // Dice (Phase 2): only while attributes are on.
             if (attributesOn(extensionSettings)) {
                 items.push({

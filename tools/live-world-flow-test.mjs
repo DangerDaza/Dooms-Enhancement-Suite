@@ -219,7 +219,7 @@ extensionSettings.liveWorld.enabled = true;
 await lw.onWorldChatChanged();
 check('the master switch off drops the world and clears the line without a generation; on brings it back', (slots['dooms-world-state'].value = 'stale', extensionSettings.enabled = false, await lw.onWorldChatChanged(), lw.getWorldState() === null && slots['dooms-world-state'].value === '') && (extensionSettings.enabled = true, await lw.onWorldChatChanged(), lw.getWorldState() !== null && lw.getWorldState().clocks.blockade === 1));
 
-console.log('\n§6 the views\' reading (D69: the World page, a face, the board)');
+console.log('\n§6 the views\' reading (D69: the window\'s glance, a face, the board)');
 {
     const M = await import(`${DES}/src/utils/liveWorld.js`);
     const V = await import(`${DES}/src/systems/ui/worldViews.js`);
@@ -229,20 +229,20 @@ console.log('\n§6 the views\' reading (D69: the World page, a face, the board)'
     const v = M.validateAdvance({ elapsed: 'a day', clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'back-room', reason: 'hiding' }], blurb: 'The quay is quiet.', heard: ['Maeve'] }, pack, st);
     st = M.applyAdvance(st, v.clean, pack, { msgId: 'm1', gameDate: 'Thursday', gameTime: 'dawn', ranAt: 1 });
     const tileOf = (html, id) => { const i = html.indexOf(`data-place="${id}"`); if (i < 0) return ''; const rest = html.slice(i + 1); const j = rest.indexOf('class="dooms-board-tile'); return j < 0 ? rest : rest.slice(0, j); };
-    // the World page
-    const page = V.worldPageHtml({ state: st, pack, cfg, facts: { date: 'Thursday', time: 'dawn', location: 'the quay' }, portraits: () => '' });
-    check('the page: the pack, the tracker\'s date, the blurb, when it moved and when it runs next, the two buttons', page.includes('Harbourside') && page.includes('Thursday, dawn · at the quay') && page.includes('The quay is quiet.') && page.includes('Last advanced on Thursday') && page.includes('next run in') && page.includes('data-act="board"') && page.includes('data-act="advance"'), page.slice(0, 400));
+    // the window: its first line, the glance, then the board below
+    const page = V.worldWindowHtml({ state: st, pack, cfg, facts: { date: 'Thursday', time: 'dawn', location: 'the quay' }, portraits: () => '' });
+    check('the window: the pack, the tracker\'s date, the blurb, when it moved and when it runs next, the glance above the board', page.includes('class="dooms-world-window"') && page.includes('Harbourside') && page.includes('Thursday, dawn · at the quay') && page.includes('The quay is quiet.') && page.includes('Last advanced on Thursday') && page.includes('next run in') && page.indexOf('dooms-world-glance') < page.indexOf('dooms-board-trail'), page.slice(0, 400));
     check('word on the street: the effect text, never the number, the clock\'s name only as a title', page.includes('Cargo is searched on the quay') && !page.includes('2/6') && page.includes('title="The blockade"'));
     check('faces: a card per known character with the place under the name and the date of the last move', page.includes('class="dooms-portrait-card dooms-world-card" data-name="Old Marit"') && page.includes("The Anchor&#39;s back room, The Anchor, a tavern") && page.includes('class="dooms-world-when" title="Last moved Thursday, dawn">Thursday'), page);
     check('heard-of names in the dashed box, not as cards', page.includes('dooms-world-heard') && page.includes('Maeve') && !page.includes('data-name="Maeve"'));
-    check('a portrait when the store has one, initials otherwise', V.worldPageHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img src="data:image/png;base64,x" alt="" />') && page.includes('>OM</div>'));
-    check('spoiler-free: the clock names go and the head says so', (() => { const sf = V.worldPageHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } }); return !sf.includes('title="The blockade"') && sf.includes('Spoiler-free.'); })());
-    check('off, a pack problem, no world, the master switch: each says so', V.worldPageHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.worldPageHtml({ cfg, packError: 'No pack named "x".' }).includes('No pack named') && V.worldPageHtml({ cfg }).includes('no world yet') && V.worldPageHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
+    check('a portrait when the store has one, initials otherwise', V.worldWindowHtml({ state: st, pack, cfg, portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img src="data:image/png;base64,x" alt="" />') && page.includes('>OM</div>'));
+    check('spoiler-free: the clock names go and the head says so', (() => { const sf = V.worldWindowHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true } }); return !sf.includes('title="The blockade"') && sf.includes('Spoiler-free.'); })());
+    check('off, a pack problem, no world, the master switch: each says so', V.worldWindowHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.worldWindowHtml({ cfg, packError: 'No pack named "x".' }).includes('No pack named') && V.worldWindowHtml({ cfg }).includes('no world yet') && V.worldWindowHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
     const failed = M.failAdvance(st, { error: 'The clock "blockade" moved by 3, more than 1.' });
-    check('a discarded attempt is said, the rule kept out when spoiler-free', V.worldPageHtml({ state: failed, pack, cfg }).includes('Last attempt discarded: The clock') && !V.worldPageHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('blockade'));
+    check('a discarded attempt is said, the rule kept out when spoiler-free', V.worldWindowHtml({ state: failed, pack, cfg }).includes('Last attempt discarded: The clock') && !V.worldWindowHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true } }).includes('blockade'));
     const broken = M.failAdvance(st, { error: 'network down', kind: 'error' });
-    check('a request that failed says so, spoiler-free or not, and that it runs again', V.worldPageHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true } }).includes('The last advance failed: network down') && V.worldPageHtml({ state: broken, pack, cfg }).includes('runs again on the next reply'));
-    check('model-written text is escaped on the page', V.worldPageHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
+    check('a request that failed says so, spoiler-free or not, and that it runs again', V.worldWindowHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true } }).includes('The last advance failed: network down') && V.worldWindowHtml({ state: broken, pack, cfg }).includes('runs again on the next reply'));
+    check('model-written text is escaped in the window', V.worldWindowHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg }).includes('&lt;img src=x onerror=alert(1)&gt;'));
     // a face
     const face = V.faceTrailHtml({ state: st, pack, name: 'Old Marit', portraits: () => '' });
     check('the face: the name, where now, the move with its date and reason, where the story found them', face.includes('class="dooms-face-name">Old Marit<') && face.includes("Now at The Anchor&#39;s back room") && face.includes('Thursday, dawn · hiding') && face.includes('Where the story found them') && face.includes('1 move on record'), face);
@@ -263,7 +263,7 @@ console.log('\n§6 the views\' reading (D69: the World page, a face, the board)'
     const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', parent: 'h', image: 'https://x/y.png' }] }).pack;
     const hostile = V.boardHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg }) + V.boardHtml({ state: M.seedWorldState(hostilePack), pack: hostilePack, cfg, root: 'h' });
     check('labels are escaped, a scripted image is dropped and a plain one wears the tile', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('url(&quot;https://x/y.png&quot;)') && hostile.includes('dooms-board-tile has-image'));
-    check('the board says the same as the page when there is nothing to draw', V.boardHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.boardHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
+    check('the board says the same as the window when there is nothing to draw', V.boardHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.boardHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
     const loner = M.markKnown(M.seedWorldState(pack), ['Wanderer']);
     check('a known name with no place is listed under the tiles; the names off this board as elsewhere', V.boardHtml({ state: loner, pack, cfg }).includes('Not yet placed: Wanderer') && V.boardHtml({ state: st, pack, cfg, root: 'the-hill' }).includes('Elsewhere: Captain Reyes, Old Marit'));
     check('lately: the move and the step under their date, the filter remembering its choice', board.includes('class="dooms-board-feed-date">Thursday') && board.includes('<option value="12" selected>Latest 12</option>') && board.includes('<li class="is-clock">The blockade: Cargo is searched on the quay') && board.includes('<li class="is-move">Old Marit:'));
@@ -486,26 +486,25 @@ console.log('\n§9 the tracker first, the main generation, a second advance');
     check('re-seeding with no chat open is refused with a reason', (globalThis.__DES_CTX__.chatId = undefined, true) && (await lw.reseedWorld()).error === 'No chat is open.' && (globalThis.__DES_CTX__.chatId = 'chat-h', true));
 }
 
-console.log('\n§10 the shelf\'s World page (D69)');
+console.log('\n§10 the window and the shelf (D69)');
 {
-    const pages = await import(`${DES}/src/systems/ui/shelfPages.js`);
+    const V = await import(`${DES}/src/systems/ui/worldViews.js`);
     const pb = await import(`${DES}/src/systems/ui/portraitBar.js`);
+    const M = await import(`${DES}/src/utils/liveWorld.js`);
     lw.__setWorldTransport(async () => '{"clocks":{}}');
     resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-shelf';
     extensionSettings.liveWorld.enabled = true;
     extensionSettings.liveWorld.pack = 'harbourside';
     await lw.onWorldChatChanged();
-    const page = pages.worldPageHtml();
-    check('the page: the pack, word on the street, the faces, Open the board and Advance', page.includes('class="dooms-pb-page-inner dooms-pb-page-world"') && page.includes('Harbourside') && page.includes('Word on the street') && page.includes('Last seen') && page.includes('data-act="board"') && page.includes('data-act="advance"'), page.slice(0, 300));
-    check('known characters as cards, the heard-of apart', page.includes('data-name="Captain Reyes"') && page.includes('data-name="Old Marit"') && !page.includes('data-name="The governor"') && page.includes('The governor'));
+    const win = V.worldWindowHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings) });
+    check('the window renders the live chat\'s world: the glance with the faces, then the board', win.includes('Word on the street') && win.includes('data-name="Captain Reyes"') && win.includes('data-name="Old Marit"') && !win.includes('data-name="The governor"') && win.includes('The governor') && win.includes('class="dooms-board-trail"'), win.slice(0, 300));
     pb.setShelfPage('world');
-    check('the shelf offers World while Live World is on', pb.getShelfPage() === 'world');
+    check('the shelf no longer offers World (nor Map): it stays on Characters', pb.getShelfPage() === 'characters');
     extensionSettings.liveWorld.enabled = false;
     await lw.onWorldChatChanged();
-    check('off: the shelf falls back to Characters and the page says so', pb.getShelfPage() === 'characters' && pages.worldPageHtml().includes('Live World is off'));
+    check('off: the window says so', V.worldWindowHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings) }).includes('Live World is off'));
     extensionSettings.liveWorld.enabled = true;
     await lw.onWorldChatChanged();
-    check('on again: World is back, the choice remembered', pb.getShelfPage() === 'world' && pages.worldPageHtml().includes('dooms-world-cards'));
     pb.setShelfPage('characters');
 }
 

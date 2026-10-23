@@ -3,17 +3,16 @@
  *
  * With the inventory on, the Present Characters shelf flips between
  * Characters (the cards, rendered by portraitBar.js as always), Inventory
- * and Quests; with Live World on, Map joins them (Phase 6, D56). This
+ * and Quests. This
  * module renders the pages other than Characters into the shelf's page
  * container. Inventory and Quests are boxes: square slots for the pack and
  * the party pouch (icon, count badge, name beneath, dashed empties), and
  * quest boxes edited in place. A slot opens a small editor (name, count,
- * note, icon, move, remove); an empty slot adds. World (D69) is the glance
- * at Live World: word on the street and the faces last seen; a card opens
- * that character's trail, Open the board opens the board. Loaded the first
- * time a page other than Characters shows.
+ * note, icon, move, remove); an empty slot adds. (Live World's World page
+ * lived here for a day; D69 moved it into the Live World window.) Loaded
+ * the first time a page other than Characters shows.
  */
-import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
+import { extensionSettings } from '../../core/state.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { escapeHtml } from '../../utils/html.js';
 import { MAX_COUNT, MAX_NAME, MAX_NOTE, findStack, iconFor, slotsFor } from '../../utils/inventory.js';
@@ -23,13 +22,8 @@ import { renderQuests, syncQuestsToCommittedData } from '../rendering/quests.js'
 import { openEmojiPicker, closeEmojiPicker } from './emojiPicker.js';
 import { updatePortraitBar, resolvePortrait } from './portraitBar.js';
 // Cut to a quest (Phase 5b): the menu on a quest box
-import { questText, promoteQuest, sceneFactsFrom } from '../../utils/questCut.js';
+import { questText, promoteQuest } from '../../utils/questCut.js';
 import { startQuestCut } from '../features/questCut.js';
-// The World page (D69): Live World's glance on the shelf
-import { liveWorldConfig } from '../../utils/liveWorld.js';
-import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing } from '../features/liveWorld.js';
-import { worldPageHtml as worldPageView } from './worldViews.js';
-import { openFacePopover } from './worldFace.js';
 
 const PAGE_ID = 'dooms-pb-page';
 const EDITOR_ID = 'dooms-inv-editor';
@@ -517,59 +511,6 @@ function openWhenDialog(box, field, index, expected) {
 
 // ─── Wiring and render ──────────────────────────────────────────────────────
 
-// ───────────────────────────────────────
-//  The World page (D69)
-// ───────────────────────────────────────
-//
-// Live World's glance (worldViews.js): the pack and the tracker's date,
-// when the world moved and when it runs next, "Word on the street" (the
-// blurb and each clock's public effect) and "Last seen" (the known
-// characters as the shelf's own portrait cards, the place under the name,
-// the heard-of names in one box). A card opens the character's trail by
-// it (worldFace.js); Open the board opens the board (worldDashboard.js).
-//
-// The strip's canvas is the renderer's floor height (280px, more when
-// dense; style.css lets the inline min-height rule) rather than the
-// popup's 16:10, so the layout is told a canvas no wider than the width
-// at which its 16:10 canvas is that tall; the wider strip only spreads
-// the cards.
-
-function portraitOf(name) {
-    try { return resolvePortrait(name) || ''; } catch (e) { return ''; }
-}
-
-function openDashboard(opts) {
-    import('./worldDashboard.js')
-        .then(m => m.openWorldDashboard(opts))
-        .catch(err => console.error('[Dooms Portrait Bar] Live World: the board failed to load:', err));
-}
-
-/** The tracker's date, time and place, for the page's head. */
-function sceneFacts() {
-    try { return sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox) || {}; } catch (e) { return {}; }
-}
-
-/** The World page as HTML (D69): word on the street, the faces last seen, Open the board, Advance. */
-export function worldPageHtml() {
-    return worldPageView({
-        state: getWorldState(), pack: getActivePack(), cfg: liveWorldConfig(extensionSettings), packError: getPackError(),
-        facts: sceneFacts(), portraits: portraitOf, masterOn: !!extensionSettings.enabled,
-    });
-}
-
-/** Advance from the page's button: the same path as /advance, the outcome as a toast. */
-async function runAdvance(btn) {
-    if (isAdvancing()) return;
-    btn.disabled = true;
-    try {
-        const r = await advanceNow({ reason: 'shelf' });
-        toast(r && r.ok ? 'success' : 'info', describeAdvanceResult(r, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }));
-    } catch (e) {
-        toast('warning', `Failed: ${e && e.message ? e.message : e}`);
-    }
-    btn.disabled = false;
-}
-
 let bound = false;
 
 function inPage(target) {
@@ -602,24 +543,6 @@ function bindOnce() {
             e.preventDefault();
             e.stopPropagation();
             startNewQuest(add);
-            return;
-        }
-        // The World page (D69): a face opens that character's trail by the
-        // card; Open the board and Advance in the head. The cards and the
-        // buttons are real buttons, so the keyboard needs nothing more.
-        const face = e.target.closest('.dooms-world-card[data-name]');
-        if (face) {
-            e.preventDefault();
-            e.stopPropagation();
-            openFacePopover(face, face.getAttribute('data-name') || '', { onBoard: (name) => openDashboard({ name }) });
-            return;
-        }
-        const act = e.target.closest('.dooms-world-head [data-act]');
-        if (act) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (act.dataset.act === 'board') openDashboard({});
-            else if (act.dataset.act === 'advance') runAdvance(act).catch(() => {});
             return;
         }
     });
@@ -682,13 +605,13 @@ function bindOnce() {
 /**
  * Renders a page into the shelf's page container. Skips the DOM when the
  * markup is unchanged, and never pulls a box out from under an edit.
- * @param {'inventory'|'quests'|'world'} page
+ * @param {'inventory'|'quests'} page
  * @param {HTMLElement} container - #dooms-pb-page
  */
 export function renderShelfPage(page, container) {
     if (!container) return;
     bindOnce();
-    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : page === 'world' ? worldPageHtml() : '';
+    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : '';
     if (container.dataset.html === html) return;
     const active = document.activeElement;
     if (active && container.contains(active) && (active.isContentEditable || active.tagName === 'INPUT')) return;
