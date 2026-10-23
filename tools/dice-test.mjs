@@ -26,7 +26,8 @@ globalThis.__DES_CHAT_METADATA__ = {};
 const scriptStub = `${SANDBOX}/script.js`;
 writeFileSync(scriptStub, readFileSync(scriptStub, 'utf8')
     .replace('export const chat_metadata = anything;', 'export const chat_metadata = globalThis.__DES_CHAT_METADATA__;')
-    .replace('export const chat = anything;', 'export const chat = globalThis.__DES_CHAT__;'));
+    .replace('export const chat = anything;', 'export const chat = globalThis.__DES_CHAT__;')
+    .replace('export const deleteLastMessage = anything;', 'export const deleteLastMessage = async () => { globalThis.__DES_CHAT__.pop(); globalThis.__DES_DELETED__ = (globalThis.__DES_DELETED__ || 0) + 1; };'));
 const extStub = `${SANDBOX}/scripts/extensions.js`;
 writeFileSync(extStub, readFileSync(extStub, 'utf8')
     .replace('export const getContext = anything;', 'export const getContext = () => globalThis.__DES_CTX__;'));
@@ -467,6 +468,34 @@ check('a repeated call for the same check answers with the changed roll', dice.d
 check('the arrows step a tool roll too, 20 wrapping to 1; a slot with no roll is refused', dice.stepRollResult(toolIdx, 1, 0).kept === 1 && bridgeInv[0].result.includes('d20 = 1,') && dice.stepRollResult(toolIdx, -1, 0).kept === 20 && dice.stepRollResult(toolIdx, 1, 1) === null && dice.setRollResult(toolIdx, { kept: 5 }) === null);
 extensionSettings.attributes.allowOverride = false;
 check('with the switch off a tool roll cannot be changed', dice.setRollResult(toolIdx, { kept: 5, slot: 0 }) === null && bridgeInv[0].dooms_roll.kept === 20);
+
+// Regenerate after a set result (the owner's report): SillyTavern's Regenerate replaces only the chat's
+// last message. A scene picture that landed after the reply is taken down first; anything else blocks.
+// The chat here: [ai, user, tool calls, reply]; the roll rides the tool line (index 2), the reply is 3.
+extensionSettings.attributes.allowOverride = true;
+const picture = () => ({ is_user: false, name: 'Painter', mes: '*a picture*', extra: { dooms_scene: { caption: 'x', at: 1 } } });
+check('afterTheReply: nothing after the reply', dice.afterTheReply(chat, 3).ok && dice.afterTheReply(chat, 3).pictures === 0);
+check('afterTheReply: the roll line itself sees the reply as a blocker (Regenerate must be asked about the reply)', !dice.afterTheReply(chat, 2).ok && dice.afterTheReply(chat, 2).blocker === chat[3]);
+check('the reply shows Regenerate while it is last, asked from the tool line or the reply', dice.rollCardHtml(toolSet, { editable: true, index: toolIdx, slot: 0, canRegenerate: true }).includes('dooms-roll-regen'));
+chat.push(picture());
+check('a scene picture after the reply does not block', dice.afterTheReply(chat, 3).ok && dice.afterTheReply(chat, 3).pictures === 1);
+globalThis.__DES_DELETED__ = 0;
+const regen1 = await dice.regenerateLastReply(toolIdx);
+check('regenerating takes the picture down first, then asks SillyTavern', regen1 === true && globalThis.__DES_DELETED__ === 1 && chat.length === 4 && !chat[3].extra.dooms_scene, `${regen1} ${globalThis.__DES_DELETED__} ${chat.length}`);
+chat.push(picture()); chat.push(picture());
+const regen2 = await dice.regenerateLastReply(3);
+check('two pictures, asked from the reply itself: both come down', regen2 === true && globalThis.__DES_DELETED__ === 3 && chat.length === 4);
+chat.push({ is_user: false, is_system: true, name: 'System', mes: 'a note' });
+check('a system note after the reply blocks', !dice.afterTheReply(chat, 3).ok && dice.afterTheReply(chat, 3).blocker === chat[4]);
+globalThis.__DES_DELETED__ = 0;
+const regen3 = await dice.regenerateLastReply(toolIdx);
+check('…and Regenerate is refused with the chat untouched', regen3 === false && globalThis.__DES_DELETED__ === 0 && chat.length === 5);
+chat.pop();
+chat.push(picture()); chat.push(user('I wait.'));
+check('a message of the player\'s after the reply blocks, pictures or not', !dice.afterTheReply(chat, 3).ok && (await dice.regenerateLastReply(toolIdx)) === false && chat.length === 6);
+chat.length = 4;
+check('with no index, the last reply past any pictures is the one asked about', (await dice.regenerateLastReply()) === true);
+extensionSettings.attributes.allowOverride = false;
 
 const settle = await Promise.resolve();
 console.log(failures === 0 ? '\nAll dice checks pass' : `\n${failures} FAILURE(S)`);
