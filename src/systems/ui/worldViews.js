@@ -1,13 +1,13 @@
 /**
- * Live World's views (docs/stats-plan.md D69): the Live World window (the
- * glance: word on the street and the faces last seen; then the board, the
- * places as tiles) and a face's trail (the popover), as HTML. Pure apart
+ * Live World's views (docs/stats-plan.md D69): the Live World window (three
+ * tabs: Locations, the places as tiles; People, the faces last seen; Word
+ * on the street, with Lately) and a face's trail (the popover), as HTML. Pure apart
  * from `portraits`, so tests render them without the portrait store; the
  * modules that mount them (worldDashboard.js, worldFace.js) own the
  * events. Never a clock's number: the effect text is all anyone sees.
  */
 import { escapeHtml } from '../../utils/html.js';
-import { publicEffects, groupChangesByDate, characterTimeline } from '../../utils/liveWorld.js';
+import { publicEffects, recentChanges, groupChangesByDate, characterTimeline } from '../../utils/liveWorld.js';
 import { buildBoard, facesOfTheWorld } from '../../utils/worldBoard.js';
 
 export const FEED_LIMITS = Object.freeze([12, 50, 0]);    // 0: everything the log holds
@@ -66,15 +66,20 @@ export function tokenHtml(name, url, { button = false } = {}) {
     return button ? `<button type="button" class="dooms-world-token-btn" data-name="${n}" title="${n}: where they have been">${inner}</button>` : inner;
 }
 
+/** The window's tabs, in order; the first is the one it opens on. */
+export const WORLD_TABS = Object.freeze([
+    { id: 'places', label: 'Locations', icon: 'fa-map-location-dot' },
+    { id: 'people', label: 'People', icon: 'fa-users' },
+    { id: 'street', label: 'Word on the street', icon: 'fa-comments' },
+]);
+
 /**
- * The glance: "Word on the street" (the blurb, each clock's public effect
- * as a sentence; the clock's name only as a title, and not that when
- * spoiler-free) and "Last seen" (the known characters as the shelf's own
- * portrait cards with the place under the name and the date of their last
- * move, the heard-of names in one box). The top of the window.
+ * People: the known characters as the shelf's own portrait cards with the
+ * place under the name and the date of their last move (or "in the scene"
+ * when the scene is somewhere the pack does not name), the heard-of names
+ * in one box.
  */
-export function worldGlanceHtml({ state, pack, cfg, portraits = () => '', present = [], sceneText = '' } = {}) {
-    const effects = publicEffects(state, pack);
+export function peopleHtml({ state, pack, portraits = () => '', present = [], sceneText = '' } = {}) {
     const faces = facesOfTheWorld(pack, state);
     const inScene = (name) => (present || []).some(n => String(n).toLowerCase() === String(name).toLowerCase());
     const cards = faces.known.map(f => {
@@ -94,40 +99,66 @@ export function worldGlanceHtml({ state, pack, cfg, portraits = () => '', presen
     const heard = faces.heard.length
         ? `<div class="dooms-world-heard"><span class="dooms-inv-label">Heard of</span><span>${faces.heard.map(escapeHtml).join('<br>')}</span><span class="dooms-world-muted">Not met yet</span></div>`
         : '';
+    return `<section class="dooms-world-seen">
+        <div class="dooms-inv-head"><span class="dooms-inv-label">👁 Last seen</span><span class="dooms-inv-fill" title="Known characters">${faces.known.length}</span></div>
+        <div class="dooms-world-cards">${cards || '<p class="dooms-world-muted">No one known yet.</p>'}${heard}</div>
+    </section>`;
+}
+
+/** Lately: the changes under their dates, with the filter. */
+export function latelyHtml({ state, pack, cfg, feed = FEED_LIMITS[0] } = {}) {
+    const limit = FEED_LIMITS.includes(Number(feed)) ? Number(feed) : FEED_LIMITS[0];
+    const changes = recentChanges(state, pack, { limit: limit || Number.MAX_SAFE_INTEGER, spoilerFree: !!cfg.spoilerFree });
+    const groups = groupChangesByDate(changes);
+    const options = FEED_LIMITS.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n ? `Latest ${n}` : 'Everything'}</option>`).join('');
+    const feedHtml = groups.length
+        ? groups.map(g => `${g.date || groups.length > 1 ? `<div class="dooms-board-feed-date">${g.date ? escapeHtml(g.date) : 'No date'}</div>` : ''}<ul class="dooms-board-changes">${g.items.map(c => `<li class="is-${c.kind}">${escapeHtml(c.text)}</li>`).join('')}</ul>`).join('')
+        : '<p class="dooms-world-muted">No changes yet.</p>';
+    return `<section class="dooms-board-lately"><div class="dooms-inv-head"><span class="dooms-inv-label">🕯 Lately</span><label class="dooms-board-feed-label">Show <select class="dooms-board-feed" aria-label="How far back the changes reach">${options}</select></label></div>${feedHtml}</section>`;
+}
+
+/**
+ * Word on the street: the blurb, each clock's public effect as a sentence
+ * (the clock's name only as a title, and not that when spoiler-free), the
+ * last failed attempt when there was one, and Lately.
+ */
+export function streetHtml({ state, pack, cfg, feed = FEED_LIMITS[0] } = {}) {
+    const effects = publicEffects(state, pack);
     const street = effects.length
         ? `<ul class="dooms-world-effects">${effects.map(e => `<li${cfg.spoilerFree ? '' : ` title="${escapeHtml(e.label)}"`}>${escapeHtml(e.text)}</li>`).join('')}</ul>`
         : '<p class="dooms-world-muted">Nothing yet.</p>';
-    return `<div class="dooms-world-glance">
-        <section class="dooms-world-street">
-            <div class="dooms-inv-head"><span class="dooms-inv-label">💬 Word on the street</span></div>
-            ${state.blurb ? `<p class="dooms-world-blurb">“${escapeHtml(state.blurb)}”</p>` : ''}
-            ${street}
-            ${state.lastError ? `<p class="dooms-world-error">${errorLine(state.lastError, cfg)}</p>` : ''}
-        </section>
-        <section class="dooms-world-seen">
-            <div class="dooms-inv-head"><span class="dooms-inv-label">👁 Last seen</span><span class="dooms-inv-fill" title="Known characters">${faces.known.length}</span></div>
-            <div class="dooms-world-cards">${cards || '<p class="dooms-world-muted">No one known yet.</p>'}${heard}</div>
-        </section>
-    </div>`;
+    return `<section class="dooms-world-street">
+        <div class="dooms-inv-head"><span class="dooms-inv-label">💬 Word on the street</span></div>
+        ${state.blurb ? `<p class="dooms-world-blurb">“${escapeHtml(state.blurb)}”</p>` : ''}
+        ${street}
+        ${state.lastError ? `<p class="dooms-world-error">${errorLine(state.lastError, cfg)}</p>` : ''}
+    </section>${latelyHtml({ state, pack, cfg, feed })}`;
 }
 
 /**
  * The Live World window's body: a line with the pack, the tracker's date,
- * when the world moved and when it runs next; the glance; the board.
+ * when the world moved and when it runs next; the tabs; the tab shown.
+ * It opens on Locations.
  */
-export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', root = '', feed = FEED_LIMITS[0], present = [] } = {}) {
+export function worldWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', root = '', feed = FEED_LIMITS[0], present = [], tab = WORLD_TABS[0].id } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return `<div class="dooms-world-window">${empty}</div>`;
     const date = [facts.date, facts.time].filter(Boolean).join(', ');
     const where = facts.location ? ` · at ${escapeHtml(facts.location)}` : '';
-    return `<div class="dooms-world-window">
+    const active = WORLD_TABS.some(t => t.id === tab) ? tab : WORLD_TABS[0].id;
+    const tabs = `<div class="rpg-cs-tabs dooms-world-tabs" role="tablist" aria-label="Live World">${WORLD_TABS.map(t => `<button type="button" class="rpg-cs-tab${t.id === active ? ' active' : ''}" role="tab" data-tab="${t.id}" aria-selected="${t.id === active ? 'true' : 'false'}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i> ${t.label}</button>`).join('')}</div>`;
+    let panel = '';
+    if (active === 'people') panel = peopleHtml({ state, pack, portraits, present, sceneText: facts.location || '' });
+    else if (active === 'street') panel = streetHtml({ state, pack, cfg, feed });
+    else panel = boardHtml({ state, pack, cfg, root, portraits, masterOn, packError, feed, present, withLately: false });
+    return `<div class="dooms-world-window" data-tab="${active}">
         <div class="dooms-world-sub">
             <span class="dooms-inv-label">🌍 ${escapeHtml(pack.name)}</span>
             <span class="dooms-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</span>
             <span class="dooms-world-status">${statusText(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}</span>
         </div>
-        ${worldGlanceHtml({ state, pack, cfg, portraits, present, sceneText: facts.location || '' })}
-        ${boardHtml({ state, pack, cfg, root, portraits, masterOn, packError, feed, present })}
+        ${tabs}
+        <div class="dooms-world-panel" role="tabpanel" data-tab="${active}">${panel}</div>
     </div>`;
 }
 
@@ -157,7 +188,7 @@ export function faceTrailHtml({ state, pack, name, portraits = () => '' } = {}) 
  * it, the people on it as tokens), whoever stands at the place itself,
  * the names elsewhere or not yet placed, and "Lately" with its filter.
  */
-export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', masterOn = true, packError = '', feed = FEED_LIMITS[0], present = [] } = {}) {
+export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', masterOn = true, packError = '', feed = FEED_LIMITS[0], present = [], withLately = true } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return `<div class="dooms-board">${empty}</div>`;
     const limit = FEED_LIMITS.includes(Number(feed)) ? Number(feed) : FEED_LIMITS[0];
@@ -190,11 +221,6 @@ export function boardHtml({ state, pack, cfg, root = '', portraits = () => '', m
     if (sceneOnly.length) asides.push(`In the scene, nowhere the pack names: ${sceneOnly.map(escapeHtml).join(', ')}`);
     if (unplaced.length) asides.push(`Not yet placed: ${unplaced.map(escapeHtml).join(', ')}`);
     const aside = asides.length ? `<p class="dooms-board-aside">${asides.join(' · ')}</p>` : '';
-    const groups = groupChangesByDate(b.lately);
-    const options = FEED_LIMITS.map(n => `<option value="${n}"${n === limit ? ' selected' : ''}>${n ? `Latest ${n}` : 'Everything'}</option>`).join('');
-    const feedHtml = groups.length
-        ? groups.map(g => `${g.date || groups.length > 1 ? `<div class="dooms-board-feed-date">${g.date ? escapeHtml(g.date) : 'No date'}</div>` : ''}<ul class="dooms-board-changes">${g.items.map(c => `<li class="is-${c.kind}">${escapeHtml(c.text)}</li>`).join('')}</ul>`).join('')
-        : '<p class="dooms-world-muted">No changes yet.</p>';
-    const lately = `<section class="dooms-board-lately"><div class="dooms-inv-head"><span class="dooms-inv-label">🕯 Lately</span><label class="dooms-board-feed-label">Show <select class="dooms-board-feed" aria-label="How far back the changes reach">${options}</select></label></div>${feedHtml}</section>`;
+    const lately = withLately ? latelyHtml({ state, pack, cfg, feed }) : '';
     return `<div class="dooms-board">${trail}${note}${grid}${here}${aside}${lately}</div>`;
 }

@@ -9752,12 +9752,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    window on the settings popup's shell, sized like the Workshop. Eager so
    the window and the popover are styled wherever they open from. ── */
 #rpg-world-popup .rpg-settings-popup-content { max-width: min(95vw, 900px); max-height: min(90vh, 720px); }
-.dooms-world-window { display: flex; flex-direction: column; gap: 14px; }
+.dooms-world-window { display: flex; flex-direction: column; gap: 12px; }
+.dooms-world-tabs { display: flex; gap: 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.10); margin: 0 -2px; }
+.dooms-world-tabs .rpg-cs-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; font: inherit; font-size: 0.88em; color: #999; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.dooms-world-tabs .rpg-cs-tab:hover { color: #ddd; }
+.dooms-world-tabs .rpg-cs-tab.active { color: var(--rpg-highlight, #e94560); border-bottom-color: var(--rpg-highlight, #e94560); }
+.dooms-world-panel { display: flex; flex-direction: column; gap: 10px; }
 .dooms-world-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px; }
 .dooms-world-sub .dooms-inv-label { font-size: 0.72em; }
 .dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
-.dooms-world-glance { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-@media (max-width: 720px) { .dooms-world-glance { grid-template-columns: minmax(0, 1fr); } }
 .dooms-world-blurb { margin: 0 2px 6px; font-style: italic; font-size: 0.98em; line-height: 1.35; color: #f1f1f6; }
 .dooms-world-effects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 0.8em; line-height: 1.4; color: #d6d6e0; }
 .dooms-world-effects li { position: relative; padding-left: 14px; }

@@ -2393,6 +2393,9 @@ body[data-dooms-ui="inked"] .dooms-quest-menu-item:hover { background: var(--ov-
 /* ── Live World under the looks (D69): the World page, the face popover, the board ── */
 body[data-dooms-ui] .dooms-world-date, body[data-dooms-ui] .dooms-world-status, body[data-dooms-ui] .dooms-world-muted, body[data-dooms-ui] .dooms-world-empty, body[data-dooms-ui] .dooms-world-result,
 body[data-dooms-ui] .dooms-board-aside, body[data-dooms-ui] .dooms-board-feed-date, body[data-dooms-ui] .dooms-board-feed-label, body[data-dooms-ui] .dooms-board-sep, body[data-dooms-ui] .dooms-board-leaf { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-world-tabs { border-bottom-color: var(--ov-line); }
+body[data-dooms-ui] .dooms-world-tabs .rpg-cs-tab { color: var(--ov-muted); font-family: var(--ov-display); }
+body[data-dooms-ui] .dooms-world-tabs .rpg-cs-tab.active { color: var(--ov-accent); border-bottom-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-world-blurb { color: var(--ov-text); font-family: var(--ov-display); }
 body[data-dooms-ui] .dooms-world-effects, body[data-dooms-ui] .dooms-board-changes, body[data-dooms-ui] .dooms-board-note, body[data-dooms-ui] .dooms-board-here { color: var(--ov-text); font-family: var(--ov-body); }
 body[data-dooms-ui] .dooms-world-effects li::before, body[data-dooms-ui] .dooms-board-changes li.is-clock::before { background: var(--ov-accent); }

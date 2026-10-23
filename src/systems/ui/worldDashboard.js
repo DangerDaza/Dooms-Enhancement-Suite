@@ -1,10 +1,10 @@
 /**
- * The Live World window (docs/stats-plan.md D69), sized like the Workshop:
- * the glance at the top (word on the street, the faces last seen), the
- * board below (the places as tiles at the level being looked at, a trail
- * back out, who stands where as tokens, what a clock says about a place on
- * its tile, "Lately" with its filter), Advance now in the foot (the same
- * path as /advance). A card or a token opens the face popover; Show on the
+ * The Live World window (docs/stats-plan.md D69), sized like the Workshop,
+ * three tabs: Locations (the places as tiles at the level being looked at,
+ * a trail back out, who stands where as tokens, what a clock says about a
+ * place on its tile), People (the faces last seen), Word on the street
+ * (the blurb, the effects, "Lately" with its filter); it opens on
+ * Locations. Advance now in the foot (the same path as /advance). A card or a token opens the face popover; Show on the
  * board there steps the board to where that character stands. Read-only
  * state and no model calls; the pure rendering is worldViews.js. Opened
  * from the D menu's World, Settings → Live World and /liveworld. Loaded on
@@ -17,7 +17,7 @@ import { liveWorldConfig } from '../../utils/liveWorld.js';
 import { boardRootFor } from '../../utils/worldBoard.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
-import { worldWindowHtml, FEED_LIMITS } from './worldViews.js';
+import { worldWindowHtml, FEED_LIMITS, WORLD_TABS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 
 const POPUP_ID = 'rpg-world-popup';
@@ -26,6 +26,7 @@ let built = false;
 let isOpen = false;
 let lastResult = '';
 let root = '';             // the place stepped into ('' is the province)
+let tab = WORLD_TABS[0].id;    // the tab shown; the window opens on Locations
 let feedLimit = readFeedLimit();
 
 function readFeedLimit() {
@@ -56,13 +57,14 @@ function render() {
     if (!$body.length) return;
     const state = getWorldState();
     const cfg = liveWorldConfig(extensionSettings);
-    $body.html(worldWindowHtml({ state, pack: getActivePack(), cfg, facts: sceneFacts(), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled, root, feed: feedLimit, present: presentNamesFromTracker() }));
+    $body.html(worldWindowHtml({ state, pack: getActivePack(), cfg, facts: sceneFacts(), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled, root, feed: feedLimit, present: presentNamesFromTracker(), tab }));
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .dooms-world-result`).text(lastResult);
 }
 
-/** After Show on the board: the board's trail into view. */
+/** After Show on the board: the Locations tab, its trail into view. */
 function showBoard() {
+    if (tab !== 'places') { tab = 'places'; render(); }
     try {
         const trail = document.querySelector(`#${POPUP_ID} .dooms-board-trail`);
         if (trail && typeof trail.scrollIntoView === 'function') trail.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -118,6 +120,13 @@ function build() {
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
     $(document).on('change', `#${POPUP_ID} .dooms-board-feed`, function () { setFeedLimit($(this).val()); render(); });
+    $(document).on('click', `#${POPUP_ID} .dooms-world-tabs .rpg-cs-tab[data-tab]`, function () {
+        closeFacePopover();
+        const next = String($(this).attr('data-tab') || '');
+        if (!WORLD_TABS.some(t => t.id === next) || next === tab) return;
+        tab = next;
+        render();
+    });
     // A tile steps inside its place; the trail leads back out. Attributes are read as written (.attr):
     // jQuery's .data() would turn a place called "0", "null" or "true" into a number or a boolean.
     $(document).on('click', `#${POPUP_ID} .dooms-board-step[data-root], #${POPUP_ID} .dooms-board-crumb[data-root]`, function () {
@@ -130,7 +139,7 @@ function build() {
     // Show on the board there steps the board to where they stand and brings it into view.
     $(document).on('click', `#${POPUP_ID} .dooms-world-token-btn[data-name], #${POPUP_ID} .dooms-world-card[data-name]`, function () {
         const name = String($(this).attr('data-name') || '');
-        openFacePopover(this, name, { onBoard: (who) => { root = boardRootFor(getActivePack(), getWorldState(), who); render(); showBoard(); focusTrail(); } });
+        openFacePopover(this, name, { onBoard: (who) => { root = boardRootFor(getActivePack(), getWorldState(), who); tab = 'places'; render(); showBoard(); focusTrail(); } });
     });
     $(document).on('click', '#rpg-world-advance-now', async function () {
         // advanceNow takes the running flag before its first await, so the
@@ -161,11 +170,12 @@ export async function openWorldDashboard({ root: wanted = '', name = '' } = {}) 
     build();
     isOpen = true;
     lastResult = '';
+    tab = WORLD_TABS[0].id;    // always Locations first
     if (name) root = boardRootFor(getActivePack(), getWorldState(), name);
     else if (typeof wanted === 'string') root = wanted;
     render();
     $(`#${POPUP_ID}`).css('display', 'flex');
-    if (name || wanted) { showBoard(); focusTrail(); }
+    focusTrail();
 }
 
 export function closeWorldDashboard() {
