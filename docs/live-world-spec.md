@@ -7,7 +7,7 @@ audited_against: local DES (branch Project-Short-Fuse, ffde8d1 + local settings-
 
 # Live World — DES module build spec
 
-A new DES module: background plot clocks, last-seen character locations, a node map and an overview dashboard. Built for Skyreach first. Every Skyreach detail lives in a **world pack**, so generalizing to other users later adds an editor; it does not rewrite the engine.
+A new DES module: background plot clocks, last-seen character locations, a board of places and the shelf's World page (D69; Parts C and D below record what was first built and why it went). Built for Skyreach first. Every Skyreach detail lives in a **world pack**, so generalizing to other users later adds an editor; it does not rewrite the engine.
 
 Design source: voice sessions with Dazia, 2026-10-16. Grounded in a read-only audit of the installed DES the same day (findings in §0).
 
@@ -76,33 +76,30 @@ Clone of the Doom Counter pattern (`src/systems/generation/doomCounter.js`, call
 
 ## Part C — Map
 
-- **Default is a designed node view that needs no custom art:**
-  - place cards with labels;
-  - soft connecting lines along the place tree;
-  - portraits as tokens;
-  - a textured background.
-  It should look good on its own; it isn't a placeholder.
-- **Drawn art is optional per place** (an image reference in the pack). Leaflet (BSD-2) in flat-image mode when images exist.
-- **Nesting and zoom:** the province shows Gilead with a count; zooming in shows districts, then the building, then a room or table token. A character's single `where` path resolves to the deepest place drawn at the current zoom.
-- **Reads state only; no model calls.** Shows only **known** characters and places; heard-of names stay off the map.
-- **Phases:**
-  - **C1:** province node view.
-  - **C2:** city and district nesting.
-  - **C3:** room grids and tokens, reusing Silly-Map's AGPL `pathfinding.js` and token/portrait code. Credit "Silly Map by Nero (Jeka201216)"; DES is AGPL-3.0, so it's compatible.
+**Superseded by D69 (`docs/stats-plan.md`, 2026-10-23).** The node view
+built from this section (C1 the province, C2 nesting and zoom) was taken
+down after the owner's review of its look. What stands: a **board** of
+tiles, one per place at the level being looked at; the province shows the
+root places, stepping inside a place shows the places within it, a trail
+leads back out. Each tile: a glyph by depth or the pack's art, how many
+places inside, the name, the caption a clock gives it (a clock's optional
+`place`), the known characters on it as portrait tokens (initials when
+there is no portrait). Heard-of names stay off the board. Reads state
+only; no model calls. `src/utils/worldBoard.js` (pure),
+`src/systems/ui/worldViews.js` (the HTML), `src/systems/ui/worldDashboard.js`
+(the window). C3 (room grids, Silly-Map's pathfinding) is not planned.
 
 ## Part D — Overview dashboard
 
-- **Entry point:** a DES rail button, opening a shared DES modal (`src/systems/ui/modals.js` pattern). Plain HTML.
-- **Header:**
-  - pack name, current in-game date, `blurb`;
-  - "last advanced at message N";
-  - the **Advance now** button (same path as `/advance`).
-- **Known characters:** portrait, last-seen place, previous place, "seen N days ago". Heard-of names appear dimmed below. Tap a name for their last-seen timeline.
-- **Recent changes:** latest moves, plus clock changes shown as **public effects only** ("the Skar crossings are closed"), never numbers. Spoiler-Free mode also governs this list.
-- **Phases:**
-  - **D1:** characters, last-seen and blurb. Ships with Part A, since it's how you see the advancer behaving.
-  - **D2:** feed and time filter.
-  - **D3:** timelines and map links.
+**Superseded by D69.** There is no dashboard. The glance is the shelf's
+**World** page: word on the street (the blurb, each clock's public effect
+as a sentence) and the faces last seen (the shelf's own portrait cards
+with the place under the name and the date of the last move). A card
+opens the character's trail in a small popover (their moves newest first,
+where the story found them, Show on the board). "Lately" with its time
+filter lives under the board's tiles. Advance now sits on the page and in
+the board's foot, the same path as `/advance`. Spoiler-free governs the
+effects, the captions, the feed and the blurb as before.
 
 ---
 
