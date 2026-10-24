@@ -114,7 +114,20 @@ export function replyLacksTracker(message) {
  * @returns {any|null}
  */
 export function lastReply(chat) {
-    if (!Array.isArray(chat)) return null;
+    const at = lastReplyIndex(chat);
+    return at >= 0 ? chat[at] : null;
+}
+
+/**
+ * The index of the chat's last finished reply by the same rule as lastReply,
+ * for callers that address the message on screen (#chat .mes[mesid]): the
+ * in-chat thoughts go on this message, never on a system message after it
+ * (SillyTavern's "Tool calls" record, a DES scene picture). -1 when none.
+ * @param {any[]} chat
+ * @returns {number}
+ */
+export function lastReplyIndex(chat) {
+    if (!Array.isArray(chat)) return -1;
     for (let i = chat.length - 1; i >= 0; i--) {
         const m = chat[i];
         if (!m || typeof m !== 'object') continue;
@@ -122,9 +135,9 @@ export function lastReply(chat) {
         if (Array.isArray(m.extra?.tool_invocations)) continue;
         const next = chat[i + 1];
         if (next && Array.isArray(next.extra?.tool_invocations)) continue;
-        return m;
+        return i;
     }
-    return null;
+    return -1;
 }
 
 /**

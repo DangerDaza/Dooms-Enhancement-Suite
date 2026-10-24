@@ -37,6 +37,7 @@ import { keyedReconcile } from '../../utils/domDiff.js';
 import { escapeHtml, escapeAttr } from '../../utils/html.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
+import { lastReplyIndex } from '../generation/trackerRecovery.js';
 import { vitalsOn, vitalDefs, vitalsConfig, findVitalDef, clampVital, readVitals, toStatsArray, resolveVitals, vitalColor } from '../../utils/vitals.js';
 
 /**
@@ -1517,14 +1518,30 @@ export function updateChatThoughts() {
         if (_debug) console.log('[Dooms Tracker] No thoughts parsed, returning');
         return;
     }
-    // Find the most recent non-user message
-    const $messages = $('#chat .mes');
+    // The chat's last reply, not its last non-user message: a system message
+    // after the reply (SillyTavern's "Tool calls" record, a DES scene picture)
+    // used to become the target as soon as it rendered, and the thoughts moved
+    // off the reply into it, where nobody looked (field report: "thoughts
+    // disappearing", a chat with a picture after every reply). The chat array
+    // decides; the screen is only addressed by mesid.
     let $targetMessage = null;
-    for (let i = $messages.length - 1; i >= 0; i--) {
-        const $message = $messages.eq(i);
-        if ($message.attr('is_user') !== 'true') {
-            $targetMessage = $message;
-            break;
+    try {
+        const at = lastReplyIndex(getContext().chat);
+        if (at >= 0) {
+            const $byId = $(`#chat .mes[mesid="${at}"]`);
+            if ($byId.length) $targetMessage = $byId;
+        }
+    } catch (e) { $targetMessage = null; }
+    if (!$targetMessage) {
+        // No chat to ask (or the message is not on screen): the last message
+        // on screen that is neither the player's nor a system message.
+        const $messages = $('#chat .mes');
+        for (let i = $messages.length - 1; i >= 0; i--) {
+            const $message = $messages.eq(i);
+            if ($message.attr('is_user') !== 'true' && $message.attr('is_system') !== 'true') {
+                $targetMessage = $message;
+                break;
+            }
         }
     }
     if (!$targetMessage) {
