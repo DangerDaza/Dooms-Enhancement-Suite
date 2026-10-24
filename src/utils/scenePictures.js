@@ -41,7 +41,6 @@ export const CONFIG_DEFAULTS = Object.freeze({
     clip: '',
     vae: '',
     narrator: 'Narrator',                 // the name on the message
-    toAI: false,                          // the message stays a system message: the AI never sees the caption
     preamble: 'Anime-style digital illustration. ',
     negative: 'nsfw, worst quality, bad anatomy, watermark, jpeg artifact',
     guide: '',                            // extra caption rules, the owner's
@@ -77,7 +76,6 @@ export function scenePicturesConfig(settings) {
         clip: str(c.clip, '').trim(),
         vae: str(c.vae, '').trim(),
         narrator: str(c.narrator, '').trim() || CONFIG_DEFAULTS.narrator,
-        toAI: c.toAI === true,
         preamble: str(c.preamble, CONFIG_DEFAULTS.preamble),
         negative: str(c.negative, CONFIG_DEFAULTS.negative),
         guide: str(c.guide, ''),

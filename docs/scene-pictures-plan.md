@@ -11,13 +11,13 @@ note of 2026-10-22); its JSON API is what DES talks to.
 
 | # | Question | Decision |
 |---|---|---|
-| D60 | Where the picture lands | **In the chat, as a message from the narrator** (a name, default "Narrator", SillyTavern's default avatar). The message is always a system message, hidden from the prompt (D71: the pixels never ride a request); "Captions reach the AI" sends the latest caption's first line as one fixed line instead. The caption rides on the message (`extra.title`) and a line of it is the message text. |
+| D60 | Where the picture lands | **In the chat, as a message from the narrator** (a name, default "Narrator", SillyTavern's default avatar). The message is always a system message, hidden from the prompt (D71: neither the picture nor its caption reaches the AI). The caption rides on the message (`extra.title`) and a line of it is the message text. |
 | D61 | Who writes the caption | **DES's own background request**, on the tracker's connection profile through `withBackgroundProfile` (external mode respected), exactly as the tracker and Live World do. It sees the recent chat, which the studio's own prompt writer cannot. |
 | D62 | How the picture is made | **The owner's Moss workflow on ComfyUI, through SillyTavern's own ComfyUI endpoints** (`/api/sd/comfy/workflow`, `/generate`), the way its image extension renders: the workflow from SillyTavern's store with its placeholders filled, this chat's LoRA chain spliced in after the model loader, posted as `{"prompt": graph}`; the server queues it, waits on the history and returns the image, which DES saves into SillyTavern. Nothing but ComfyUI has to run and no header is needed. (Revised 2026-10-22: the first cut called Moss Studio's API from the browser, which needs a CORS header the owner would rather not add and waits on the studio's single-threaded server; the studio stays the owner's manual tool.) |
 | D63 | LoRAs | **Per chat**: a list of `{name, strength}` in `chat_metadata.dooms_scene.loras`, picked from the studio's `/api/loras` or typed. Per character (a field on the Workshop card, the studio's identity blocks by character id) comes later. |
 | D64 | When | **Every N of the player's turns** (default 5), counted on MESSAGE_SENT; the run starts after the reply that follows the Nth turn has finished generating, never inside a generation; a failed run tries again after the next turn; `/scene` runs one now. A chat's state is its own (`chat_metadata.dooms_scene`), like Live World's. |
 | D65 | The caption's grammar | Natural language, 150–300 words, medium and framing first, then the finished picture; no character names (the image model knows none), the chat's identity notes carried into each character's look; one paragraph. A style preamble (the positive prefix) and a negative prompt live in settings with the handover's defaults. |
-| D71 | The picture never rides a request (2026-10-23; the owner: "it started telling me that the size is over 64 MB and it won't accept it") | **The picture's message is always hidden from the prompt** (`is_system: true`), whatever "Captions reach the AI" says. SillyTavern's "Send inline media" inlines every image in `extra.media` of every message it sends, so with captions reaching the AI each Moss picture (a megabyte or more as base64) rode every request, and a chat with twenty pictures passed the provider's size limit. Now the pixels never leave the chat; with captions on, the latest caption's first line rides every generation as one fixed line at depth 1 through `setExtensionPrompt` (not in the Context Inspector), overwritten with each picture, cleared when the switch goes off or the chat changes. Chats from before are repaired on load: a picture message that was a narrator message is hidden and the chat saved. D60 amended. |
+| D71 | Nothing of a picture reaches the AI (2026-10-23; the owner: "it started telling me that the size is over 64 MB and it won't accept it"; 2026-10-24: "I dont see a reason to send pictures or captions at all") | **The picture's message is always hidden from the prompt** (`is_system: true`). SillyTavern's "Send inline media" inlines every image in `extra.media` of every message it sends, so while "Captions reach the AI" made the message a narrator message each Moss picture (a megabyte or more as base64) rode every request, and a chat with a few dozen pictures passed the provider's size limit. Now the pixels never leave the chat. The first cut kept the switch and sent the latest caption's first line as one fixed line in its place; the owner saw no reason to send the caption either, so **the switch and the line are gone**: the AI gets nothing of a picture. Chats from before are repaired on load: a picture message that was a narrator message is hidden and the chat saved. D60 amended. |
 
 ## 2. Shapes
 
@@ -26,14 +26,14 @@ note of 2026-10-22); its JSON API is what DES talks to.
 name in SillyTavern's store), `every`, `window` (messages read), `size`
 (`portrait` 864×1536 | `square` 1024×1024 | `landscape` 1536×864), `steps`,
 `cfg`, `sampler`, `scheduler`, `model`/`clip`/`vae` (what fills those
-placeholders when the workflow has them), `narrator`, `toAI`, `preamble`,
+placeholders when the workflow has them), `narrator`, `preamble`,
 `negative`, `guide` (extra caption rules), `timeoutSec`, `notify`, `debug`.
 
 **Per chat** (`chat_metadata.dooms_scene`): `{ v: 1, sinceLast, retryNext,
 lastKey, loras: [{ name, strength }], identity: '', last: { at, ok,
 caption, file, url, error } | null }`.
 
-**The message**: `{ name: narrator, is_user: false, is_system: !toAI,
+**The message**: `{ name: narrator, is_user: false, is_system: true,
 send_date, mes: a line of the caption, force_avatar: SillyTavern's default
 avatar, extra: { image, title: caption, inline_image: false, dooms_scene:
 { caption, file, loras, at } } }`, pushed, MESSAGE_RECEIVED, rendered,
@@ -106,7 +106,7 @@ list: lora_name" names a wrong one), and the ComfyUI address (card 2 on 8189).
 The switch; the ComfyUI address; the workflow (picked from the store, or
 pasted and saved); every N turns; messages read; size; steps, CFG, sampler,
 scheduler; the models for `%model%`, `%clip%`, `%vae%`; narrator name;
-captions reach the AI; style preamble; negative prompt; extra caption rules.
+style preamble; negative prompt; extra caption rules.
 For this chat: LoRAs (one per line, `name:strength`) and identity notes. A
 status line (this chat's count, the last picture, the last error), Test
 connection and Picture now.

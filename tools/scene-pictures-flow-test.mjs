@@ -37,8 +37,7 @@ writeFileSync(scriptStub, readFileSync(scriptStub, 'utf8')
     .replace('export const addOneMessage = anything;', 'export const addOneMessage = (m) => { globalThis.__DES_RENDERED__.push(m); };')
     .replace('export const default_avatar = anything;', 'export const default_avatar = "img/ai4.png";')
     .replace('export const setExtensionPrompt = anything;', 'export const setExtensionPrompt = (key, value, position, depth, scan, role) => { globalThis.__DES_SLOTS__[key] = { value, position, depth, scan, role }; };')
-    .replace('export const extension_prompt_roles = anything;', 'export const extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };')
-    .replace('export const extension_prompt_types = anything;', 'export const extension_prompt_types = { IN_PROMPT: 0, IN_CHAT: 1 };')
+
     + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n');
 const extStub = `${SANDBOX}/scripts/extensions.js`;
 writeFileSync(extStub, readFileSync(extStub, 'utf8')
@@ -227,20 +226,10 @@ r = await sp.illustrateNow({ reason: 'command' });
 check('/scene with the feature off says so', !r.ok && r.reason === 'disabled');
 extensionSettings.scenePictures.enabled = true;
 
-console.log('\n§5 captions reach the AI, and a chat switch mid-run');
-const slot = () => globalThis.__DES_SLOTS__['dooms-scene-picture'] || { value: '' };
-check('with captions kept from the AI, no line rides the prompt', slot().value === '');
-extensionSettings.scenePictures.toAI = true;
+console.log('\n§5 nothing of a picture reaches the AI, and a chat switch mid-run');
 r = await sp.illustrateNow({ reason: 'manual' });
-check('with captions reaching the AI the message is still hidden from the prompt (D71: the pixels never ride a request)', r.ok && chat[chat.length - 1].is_system === true && chat[chat.length - 1].name === 'Narrator' && chat[chat.length - 1].extra.image);
-check('…and the latest caption\'s first line rides as one fixed line at depth 1, as the system', slot().value.startsWith('\n[The latest illustration of the scene showed: Anime-style digital illustration of a red-haired woman') && slot().depth === 1 && slot().position === 1 && slot().role === 0, JSON.stringify(slot()));
-extensionSettings.scenePictures.toAI = false;
-sp.refreshSceneCaptionSlot();
-check('switching captions off clears the line at once', slot().value === '');
-extensionSettings.scenePictures.toAI = true;
-sp.refreshSceneCaptionSlot();
-check('…and on brings it back from the last picture', slot().value.includes('red-haired woman'));
-extensionSettings.scenePictures.toAI = false;
+check('a picture message is hidden from the prompt (D71: the pixels never ride a request)', r.ok && chat[chat.length - 1].is_system === true && chat[chat.length - 1].name === 'Narrator' && chat[chat.length - 1].extra.image);
+check('…and no line about it is set on the prompt either: the AI gets neither the picture nor the caption', Object.keys(globalThis.__DES_SLOTS__).length === 0, JSON.stringify(globalThis.__DES_SLOTS__));
 // a chat from before D71: picture messages that were narrator messages are hidden on load
 chat.push({ name: 'Narrator', is_user: false, is_system: false, mes: '*old*', extra: { image: '/user/images/x.png', dooms_scene: { caption: 'old', at: 1 } } });
 chat.push({ name: 'Narrator', is_user: false, is_system: false, mes: 'a real narrator line', extra: {} });

@@ -18,11 +18,10 @@
  *     the picture through /api/sd/comfy (the workflow from SillyTavern's
  *     store, filled and spliced), saved into SillyTavern, posted the way
  *     SillyTavern's own image extension posts, always hidden from the
- *     prompt (D71: the pixels never ride a request; the caption's first
- *     line does, as one fixed line, when asked);
+ *     prompt (D71: neither the picture nor its caption reaches the AI);
  *   - /scene runs one now; the settings page reads getSceneStatus().
  */
-import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../../../script.js';
+import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
@@ -110,18 +109,17 @@ export function onSceneChatChanged() {
     state = sceneStateOf(loadedMeta ? loadedMeta[SCENE_META_KEY] : null);
     progress = { ...IDLE_PROGRESS };
     hidePicturesFromThePrompt();
-    refreshSceneCaptionSlot();
     announce();
 }
-
-const SCENE_SLOT = 'dooms-scene-picture';
 
 /**
  * D71: a picture's message is always hidden from the prompt (is_system),
  * so SillyTavern's "Send inline media" never inlines the pixels; chats
- * from before carried them as narrator messages when captions reached
- * the AI, every picture then riding every request, and a provider's size
- * limit ended the chat. Flipped once on load, saved with the chat.
+ * from before carried them as narrator messages when the old "Captions
+ * reach the AI" switch was on, every picture then riding every request,
+ * and a provider's size limit ended the chat. Flipped once on load, saved
+ * with the chat. Nothing of a picture reaches the AI: not the pixels, not
+ * the caption (the owner: no reason to send either).
  */
 function hidePicturesFromThePrompt() {
     const list = chatArray() || chat;
@@ -135,22 +133,6 @@ function hidePicturesFromThePrompt() {
         try { Promise.resolve(saveChatConditional()).catch(() => {}); } catch (e) { /* the next save carries it */ }
     }
     return flipped;
-}
-
-/**
- * D71: with "Captions reach the AI" on, the latest caption's first line
- * rides every generation as one fixed line at depth 1, overwritten with
- * each picture, through SillyTavern's own setExtensionPrompt (so the
- * Context Inspector does not record it); off, or no picture yet, nothing.
- */
-export function refreshSceneCaptionSlot() {
-    let text = '';
-    try {
-        const c = cfg();
-        const line = c.enabled && c.toAI && state && state.last && state.last.ok ? captionLine(state.last.caption || '') : '';
-        if (line) text = `\n[The latest illustration of the scene showed: ${line}]\n`;
-    } catch (e) { text = ''; }
-    try { setExtensionPrompt(SCENE_SLOT, text, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM); } catch (e) { /* no SillyTavern (tests) */ }
 }
 
 export function getSceneState() { return state; }
@@ -468,7 +450,7 @@ async function postPicture(c, { caption, file, dataUrl, loras }) {
     const message = {
         name: c.narrator,
         is_user: false,
-        is_system: true,    // D71: never in the prompt, so the pixels are never inlined; the caption reaches the AI through its own line
+        is_system: true,    // D71: never in the prompt; the AI gets neither the picture nor the caption
         send_date: getMessageTimeStamp(),
         mes: captionLine(caption) ? `*${captionLine(caption)}*` : '',
         force_avatar: default_avatar,
@@ -524,7 +506,6 @@ export async function illustrateNow({ reason = 'manual' } = {}) {
         if (stale()) { setProgress({ stage: 'idle' }); return { ok: false, reason: 'stale' }; }
         const posted = await postPicture(c, { caption, file: picture.file, dataUrl: picture.dataUrl, loras: state.loras });
         commit(afterPicture(state, { at: Date.now(), caption, file: picture.file, url: posted.url }));
-        refreshSceneCaptionSlot();
         setProgress({ stage: 'done', value: progress.max || 1, max: progress.max || 1 });
         notice('A picture of the scene is in the chat.', 'success');
         return { ok: true, url: posted.url, caption };

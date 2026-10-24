@@ -9,7 +9,8 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
 // ── 1. Config ──
 {
     const d = S.scenePicturesConfig({});
-    check('defaults: off, ComfyUI on 8189, no workflow, every 5, 12 messages, portrait', !d.enabled && d.comfyUrl === 'http://127.0.0.1:8189' && d.workflow === '' && d.every === 5 && d.window === 12 && d.size === 'portrait' && !d.toAI && d.narrator === 'Narrator');
+    check('no "captions reach the AI" switch any more (D71): the key is not in the config', !('toAI' in S.scenePicturesConfig({ scenePictures: { toAI: true } })));
+    check('defaults: off, ComfyUI on 8189, no workflow, every 5, 12 messages, portrait', !d.enabled && d.comfyUrl === 'http://127.0.0.1:8189' && d.workflow === '' && d.every === 5 && d.window === 12 && d.size === 'portrait' && d.narrator === 'Narrator');
     const c = S.scenePicturesConfig({ scenePictures: { enabled: true, comfyUrl: ' http://localhost:9000/// ', workflow: ' Moss.json ', every: '0', window: 99, size: 'tall', steps: 8, cfg: '1', narrator: '  ', timeoutSec: 5, model: ' kromoss ' } });
     check('normalised: url trimmed of slashes, workflow trimmed, every clamps to 1, window to 40, a bad size falls back, narrator back to default, timeout to 20, model trimmed', c.enabled && c.comfyUrl === 'http://localhost:9000' && c.workflow === 'Moss.json' && c.every === 1 && c.window === 40 && c.size === 'portrait' && c.steps === 8 && c.cfg === 1 && c.narrator === 'Narrator' && c.timeoutSec === 20 && c.model === 'kromoss');
     check('sizeOf', S.sizeOf({ size: 'landscape' }).width === 1536 && S.sizeOf({ size: 'nope' }).id === 'portrait');
