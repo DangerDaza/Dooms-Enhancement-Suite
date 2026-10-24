@@ -11,8 +11,7 @@
  */
 import {
     hasTrackerData, swipeEntryOf, wasRecovered, markRecovered, isReplyMessage,
-    replyLacksTracker, lastReply, earlierPartsOfTurn, adoptBlockFromTurn, shouldRecoverTracker,
-} from '../src/systems/generation/trackerRecovery.js';
+    replyLacksTracker, lastReply, earlierPartsOfTurn, adoptBlockFromTurn, shouldRecoverTracker, lastReplyIndex } from '../src/systems/generation/trackerRecovery.js';
 
 let failures = 0;
 function check(name, ok, detail = '') {
@@ -75,6 +74,11 @@ check('a half-written reply that a tool record follows is not finished: the prev
 check('two tool calls in progress: still the previous turn\'s reply', lastReply([withData('prev'), user(), reply('a'), toolRecord(), reply('b'), toolRecord()]).mes === 'prev');
 check('the continuation after the half is the finished one', lastReply([withData('prev'), user(), reply('half'), toolRecord(), reply('cont')]).mes === 'cont');
 check('a chat of user messages has none', lastReply([user(), user()]) === null);
+const picture = () => ({ is_user: false, is_system: true, name: 'Painter', mes: '*a picture*', extra: { image: '/x.png', dooms_scene: { caption: 'x', at: 1 } } });
+check('lastReplyIndex: the reply, not the picture after it (the in-chat thoughts stay on the reply)', lastReplyIndex([user(), withData('a'), picture()]) === 1);
+check('lastReplyIndex: nor the tool record, nor a system note', lastReplyIndex([withData('a'), user(), toolRecord(), note()]) === 0 && lastReplyIndex([user(), toolRecord(), reply('cont'), note()]) === 2);
+check('lastReplyIndex: -1 for nothing, an empty chat, and only the player', lastReplyIndex(undefined) === -1 && lastReplyIndex([]) === -1 && lastReplyIndex([user(), picture()]) === -1);
+check('lastReply and lastReplyIndex agree', lastReply([withData('prev'), user(), reply('half'), toolRecord(), reply('cont'), picture()]).mes === 'cont' && lastReplyIndex([withData('prev'), user(), reply('half'), toolRecord(), reply('cont'), picture()]) === 4);
 
 console.log('\n§5 earlierPartsOfTurn');
 {
