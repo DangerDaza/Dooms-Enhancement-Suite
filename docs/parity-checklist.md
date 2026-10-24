@@ -162,6 +162,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Bubble TTS buttons work
 
 ## Thoughts
+- [ ] In-chat thoughts after a tool call or any system message: with Show thoughts in chat on, make the game master call a tool (a dice check): the Thoughts block sits on the reply that follows, not on the "Tool calls" record; in a chat that has scene-picture messages after replies (Short Fuse), the block stays on the reply when the picture lands and after a reload
 - [ ] Thoughts panel renders per character; cards flip
 - [ ] Inline thought bubbles render in messages
 - [ ] Editable fields (appearance/demeanor/stats) save on blur; locks work
