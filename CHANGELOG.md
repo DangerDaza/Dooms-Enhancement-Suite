@@ -10,6 +10,7 @@
 
 ### Fixed
 - **Regenerate after a changed die, with a scene picture after the reply.** SillyTavern's Regenerate replaces only the chat's last message. When a scene picture had landed after the reply whose die you changed, Regenerate took the picture down and wrote a new reply after the old one, so the story simply carried on. DES now takes its own picture down first and then regenerates the reply; when something else follows the reply (a message of yours, a system note), it says so instead of regenerating the wrong thing.
+- **SillyTavern's own Regenerate, with a scene picture after the reply.** Regenerate replaces the chat's last message, and when that was a scene picture it was the picture that went: the old reply stayed and the new one landed under it. Now a regenerate takes the pictures after the reply down first, with a toast, and the reply is what gets replaced. Nothing else after a reply is touched.
 
 ## [3.1.5-beta.2] - 2026-10-22 — The right sheet, and vitals off means off
 

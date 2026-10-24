@@ -30,6 +30,7 @@ const scriptStub = `${SANDBOX}/script.js`;
 writeFileSync(scriptStub, readFileSync(scriptStub, 'utf8')
     .replace('export const chat_metadata = anything;', 'export const chat_metadata = globalThis.__DES_CHAT_METADATA__;')
     .replace('export const chat = anything;', 'export const chat = globalThis.__DES_CHAT__;')
+    .replace('export const deleteLastMessage = anything;', 'export const deleteLastMessage = async () => { globalThis.__DES_CHAT__.pop(); globalThis.__DES_DELETED__ = (globalThis.__DES_DELETED__ || 0) + 1; };')
     .replace('export const saveChatDebounced = anything;', 'export const saveChatDebounced = () => { globalThis.__DES_SAVES__.debounced++; };')
     .replace('export const saveChatConditional = anything;', 'export const saveChatConditional = async () => { globalThis.__DES_SAVES__.immediate++; };')
     .replace('export const eventSource = anything;', 'export const eventSource = { emit: async (name, ...args) => { globalThis.__DES_EVENTS__.push([name, ...args]); }, on: () => {}, off: () => {} };')
@@ -237,6 +238,25 @@ const savesBefore = globalThis.__DES_SAVES__.immediate;
 sp.onSceneChatChanged();
 check('a picture message from before is hidden from the prompt on load and the chat saved; an ordinary narrator message is left alone', chat[chat.length - 2].is_system === true && chat[chat.length - 1].is_system === false && globalThis.__DES_SAVES__.immediate === savesBefore + 1);
 chat.pop(); chat.pop();
+
+console.log('\n§5b SillyTavern\'s own Regenerate with a picture after the reply (D72)');
+globalThis.__DES_DELETED__ = 0;
+const isPic = (m) => !!(m && m.extra && m.extra.dooms_scene);
+let trailing = 0;
+while (trailing < chat.length && isPic(chat[chat.length - 1 - trailing])) trailing++;
+const replyBefore = chat[chat.length - 1 - trailing];
+check('the chat ends with picture(s) after a reply', trailing >= 1 && replyBefore && !isPic(replyBefore) && !replyBefore.is_user, JSON.stringify({ trailing }));
+await sp.onSceneGenerationStarted('normal', {}, false);
+check('an ordinary generation takes nothing down', globalThis.__DES_DELETED__ === 0 && isPic(chat[chat.length - 1]));
+await sp.onSceneGenerationStarted('regenerate', {}, true);
+check('a dry run takes nothing down', globalThis.__DES_DELETED__ === 0);
+chat.push({ name: 'Narrator', is_user: false, is_system: true, mes: '*one more picture*', extra: { image: '/user/images/y.png', dooms_scene: { caption: 'more', at: 2 } } });
+const savesBeforeRegen = globalThis.__DES_SAVES__.immediate;
+const took = await sp.onSceneGenerationStarted('regenerate', {}, false);
+check('a regenerate takes every trailing picture down, so SillyTavern\'s own deletion hits the reply', took === trailing + 1 && globalThis.__DES_DELETED__ === trailing + 1 && chat[chat.length - 1] === replyBefore, JSON.stringify({ took, trailing, deleted: globalThis.__DES_DELETED__, last: chat[chat.length - 1].mes }));
+check('…and the chat is saved', globalThis.__DES_SAVES__.immediate === savesBeforeRegen + 1);
+const tookAgain = await sp.onSceneGenerationStarted('regenerate', {}, false);
+check('with no picture at the end a regenerate touches nothing', tookAgain === 0 && globalThis.__DES_DELETED__ === trailing + 1 && chat[chat.length - 1] === replyBefore);
 comfyMode = 'slow';
 const lenBefore = chat.length;
 const running = sp.illustrateNow({ reason: 'manual' });

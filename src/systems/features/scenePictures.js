@@ -21,7 +21,7 @@
  *     prompt (D71: neither the picture nor its caption reaches the AI);
  *   - /scene runs one now; the settings page reads getSceneStatus().
  */
-import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders } from '../../../../../../../script.js';
+import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders, deleteLastMessage } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
@@ -174,6 +174,57 @@ export function onSceneGenerationEnded() {
     if (!ready() || !armed || running) return;
     armed = false;
     illustrateNow({ reason: 'count' }).catch(e => log(`run failed: ${e && e.message ? e.message : e}`));
+}
+
+/**
+ * D72: SillyTavern's Regenerate replaces the chat's LAST message (unless it
+ * is the player's), and it decides which message that is after this event.
+ * A scene picture after the reply was the one replaced: the picture went,
+ * the old reply stayed, the new one landed under it. So a regenerate takes
+ * DES's own trailing pictures down first, and SillyTavern's deletion then
+ * hits the reply. Only the pictures: anything else after the reply is the
+ * player's or SillyTavern's and stays. SillyTavern awaits this event, so
+ * every MESSAGE_DELETED is heard before it goes on.
+ * @returns {Promise<number>} pictures taken down
+ */
+export async function onSceneGenerationStarted(type, params, dryRun) {
+    if (type !== 'regenerate' || dryRun) return 0;
+    const { taken, done } = takeDownTrailingPictures();
+    await done;
+    if (taken) notice(`The scene picture${taken === 1 ? '' : 's'} after the reply came down so the reply could be regenerated.`);
+    return taken;
+}
+
+/** A message DES's scene pictures posted: the one thing DES takes down on its own. */
+function isPictureMessage(m) {
+    return !!(m && !m.is_user && m.extra && m.extra.dooms_scene && typeof m.extra.dooms_scene === 'object');
+}
+
+/**
+ * Takes DES's scene pictures off the end of the chat. The chat and the
+ * screen change synchronously (SillyTavern's deleteLastMessage pops the
+ * message and its element before it awaits MESSAGE_DELETED), so a caller
+ * that cannot wait still sees them gone; `done` settles when every
+ * MESSAGE_DELETED has been heard.
+ * @returns {{ taken: number, done: Promise<unknown> }}
+ */
+function takeDownTrailingPictures() {
+    const list = chatArray() || chat;
+    const waits = [];
+    let taken = 0;
+    try {
+        while (Array.isArray(list) && list.length && isPictureMessage(list[list.length - 1])) {
+            const before = list.length;
+            waits.push(Promise.resolve(deleteLastMessage()).catch(() => {}));
+            if (list.length >= before) break;    // nothing moved: do not spin
+            taken++;
+        }
+    } catch (e) { log(`a trailing picture could not be taken down: ${e && e.message ? e.message : e}`); }
+    if (taken) {
+        log(`${taken} trailing picture${taken === 1 ? '' : 's'} taken down for a regenerate`);
+        try { Promise.resolve(saveChatConditional()).catch(() => {}); } catch (e) { /* the next save carries it */ }
+    }
+    return { taken, done: Promise.all(waits) };
 }
 
 // ─── The run ────────────────────────────────────────────────────────────────
@@ -545,6 +596,23 @@ function registerSceneCommands() {
 /** Registers /scene. The events are wired by index.js. */
 export function initScenePictures() {
     registerSceneCommands();
+    // D72, group chats: SillyTavern's group Regenerate stops at a system
+    // message, so a trailing picture would stay and the new reply land under
+    // it, and GENERATION_STARTED comes too late there (per member, as a
+    // normal generation). The Regenerate menu entry's click is caught first
+    // instead, in the capture phase. (The keyboard shortcut's synthetic
+    // click runs SillyTavern's handler before ours and is not covered.)
+    try {
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            if (!t || typeof t.closest !== 'function' || !t.closest('#option_regenerate')) return;
+            let inGroup = false;
+            try { inGroup = !!getContext().groupId; } catch (err) { inGroup = false; }
+            if (!inGroup || ST.is_send_press) return;
+            const { taken } = takeDownTrailingPictures();
+            if (taken) notice(`The scene picture${taken === 1 ? '' : 's'} after the reply came down so the reply could be regenerated.`);
+        }, true);
+    } catch (e) { /* no document (tests) */ }
 }
 
 /** Tests: the caption and SillyTavern's ComfyUI endpoints behind functions, and the waits made short. */
