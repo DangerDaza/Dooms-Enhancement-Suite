@@ -9641,9 +9641,6 @@ body.dooms-perf-mode #character-workshop-popup .cw-version-add {
 .rpg-vitals-sub.is-off,
 .rpg-attr-sub.is-off,
 .rpg-inv-sub.is-off,
-.rpg-world-sub.is-off { opacity: 0.45; }
-.rpg-world-inject-sub { padding-left: 14px; }
-.rpg-world-inject-sub.is-off { opacity: 0.45; }
 
 .rpg-attr-dcs {
     display: flex;

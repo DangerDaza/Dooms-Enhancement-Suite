@@ -9746,91 +9746,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
 
-/* ── The Live World window (docs/stats-plan.md D69): the glance (word on
-   the street, the faces last seen), the board (the places as tiles) and the
-   face popover (a character's trail, on the inventory editor's shell), the
-   window on the settings popup's shell, sized like the Workshop. Eager so
-   the window and the popover are styled wherever they open from. ── */
-#rpg-world-popup .rpg-settings-popup-content { max-width: min(95vw, 900px); max-height: min(90vh, 720px); }
-.dooms-world-window { display: flex; flex-direction: column; gap: 12px; }
-.dooms-world-tabs { display: flex; gap: 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.10); margin: 0 -2px; }
-.dooms-world-tabs .rpg-cs-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; font: inherit; font-size: 0.88em; color: #999; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.dooms-world-tabs .rpg-cs-tab:hover { color: #ddd; }
-.dooms-world-tabs .rpg-cs-tab.active { color: var(--rpg-highlight, #e94560); border-bottom-color: var(--rpg-highlight, #e94560); }
-.dooms-world-panel { display: flex; flex-direction: column; gap: 10px; }
-.dooms-world-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px; }
-.dooms-world-sub .dooms-inv-label { font-size: 0.72em; }
-.dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
-.dooms-world-blurb { margin: 0 2px 6px; font-style: italic; font-size: 0.98em; line-height: 1.35; color: #f1f1f6; }
-.dooms-world-effects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 0.8em; line-height: 1.4; color: #d6d6e0; }
-.dooms-world-effects li { position: relative; padding-left: 14px; }
-.dooms-world-effects li::before { content: ''; position: absolute; left: 2px; top: 0.55em; width: 6px; height: 6px; border-radius: 50%; background: var(--rpg-highlight, #e94560); }
-.dooms-world-error { margin: 6px 2px 0; font-size: 0.74em; color: #e5a84d; }
-.dooms-world-empty { margin: 6px 2px; font-size: 0.85em; color: #8d8d9a; }
-.dooms-world-empty.is-error { color: #e5a84d; }
-.dooms-world-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
-.dooms-world-card { appearance: none; padding: 0; margin: 0; font: inherit; text-align: center; color: inherit; }
-.dooms-world-card .dooms-portrait-card-emoji { font-size: 1.7em; font-weight: 700; color: #cfcbe6; letter-spacing: 0.02em; }
-.dooms-world-when { position: absolute; top: 5px; right: 5px; max-width: 78%; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #eee; font-size: 0.6em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dooms-world-place { display: block; font-size: 0.85em; color: #c9c9d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dooms-world-heard { box-sizing: border-box; min-width: 120px; max-width: 170px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: var(--dooms-pb-card-radius, 8px); padding: 10px 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px; font-size: 0.78em; line-height: 1.4; color: #c9c9d6; }
-.dooms-world-token { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #1b1b2c; background: #2a2834; color: #ddd; font-size: 0.62em; font-weight: 700; object-fit: cover; object-position: center top; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); vertical-align: middle; }
-.dooms-world-token-btn { appearance: none; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
-.dooms-world-token-btn + .dooms-world-token-btn { margin-left: -8px; }
-.dooms-world-token-btn:hover .dooms-world-token, .dooms-world-token-btn:focus-visible .dooms-world-token { border-color: var(--rpg-highlight, #e94560); }
-/* The face popover */
-.dooms-face-pop { width: 320px; }
-.dooms-face-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
-.dooms-face-head .dooms-world-token { width: 40px; height: 40px; font-size: 0.85em; flex: 0 0 auto; }
-.dooms-face-name { font-size: 1.05em; font-weight: 600; color: #fff; }
-.dooms-face-trail { list-style: none; margin: 8px 0 4px 4px; padding: 0 0 0 16px; border-left: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
-.dooms-face-trail li { position: relative; display: flex; flex-direction: column; gap: 1px; }
-.dooms-face-trail li::before { content: ''; position: absolute; left: -19.5px; top: 6px; width: 6px; height: 6px; border-radius: 50%; background: #6d6d80; }
-.dooms-face-trail li.is-now::before { background: var(--rpg-highlight, #e94560); }
-.dooms-face-trail li.is-now .dooms-face-place { color: #fff; font-weight: 600; }
-.dooms-face-place { font-size: 0.95em; color: #eaeaea; }
-.dooms-face-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; }
-/* The board */
-.dooms-board { display: flex; flex-direction: column; gap: 10px; }
-.dooms-board-trail { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 0.95em; }
-.dooms-board-crumb { appearance: none; background: none; border: 0; padding: 2px 6px; border-radius: 6px; color: #a9a9b8; font: inherit; cursor: pointer; }
-.dooms-board-crumb:hover, .dooms-board-crumb:focus-visible { color: #fff; background: rgba(255, 255, 255, 0.06); }
-.dooms-board-crumb.is-here { color: #fff; font-weight: 600; cursor: default; }
-.dooms-board-sep { color: #6d6d80; }
-.dooms-board-note, .dooms-board-here { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.10); background: rgba(255, 255, 255, 0.03); font-size: 0.85em; line-height: 1.4; color: #d6d6e0; }
-.dooms-board-here { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.dooms-board-here-name { margin-right: 6px; }
-.dooms-board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.dooms-board-tile { position: relative; display: flex; flex-direction: column; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); overflow: hidden; min-width: 0; transition: border-color 0.2s, box-shadow 0.2s; }
-.dooms-board-tile:hover, .dooms-board-tile:has(.dooms-board-step:focus-visible) { border-color: rgba(233, 69, 96, 0.6); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
-.dooms-board-tile.has-caption { border-color: rgba(233, 69, 96, 0.35); }
-.dooms-board-step { appearance: none; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; width: 100%; }
-.dooms-board-art { position: relative; height: 92px; width: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: #2d2b40; background-size: cover; background-position: center; color: #b9b4d6; font-size: 2.1em; }
-.dooms-board-tile.has-image .dooms-board-art i { display: none; }
-.dooms-board-tile.has-image .dooms-board-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.35)); }
-.dooms-board-inside { position: absolute; top: 8px; left: 8px; z-index: 1; font-size: 0.42em; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #eaeaea; }
-.dooms-board-text { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px 6px; min-width: 0; width: 100%; box-sizing: border-box; }
-.dooms-board-name { font-size: 0.95em; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dooms-board-caption { font-size: 0.78em; color: #a9a9b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dooms-board-people { display: flex; align-items: center; padding: 0 10px 9px; }
-.dooms-board-leaf, .dooms-board-aside { margin: 0; font-size: 0.82em; color: #a9a9b8; }
-.dooms-board-leaf { padding: 14px; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; text-align: center; }
-.dooms-board-lately { margin-top: 4px; }
-.dooms-board-feed-label { margin-left: auto; font-size: 0.72em; color: #8d8d9a; display: inline-flex; align-items: center; gap: 6px; }
-.dooms-board-feed { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); color: #eaeaea; border-radius: 6px; padding: 2px 6px; font: inherit; font-size: 1em; }
-.dooms-board-feed-date { margin: 6px 2px 2px; font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; }
-.dooms-board-changes { list-style: none; margin: 0; padding: 0; font-size: 0.82em; line-height: 1.4; color: #d6d6e0; }
-.dooms-board-changes li { position: relative; padding: 3px 0 3px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-.dooms-board-changes li::before { content: ''; position: absolute; left: 2px; top: 0.85em; width: 6px; height: 6px; border-radius: 50%; background: #6d6d80; }
-.dooms-board-changes li.is-clock::before { background: var(--rpg-highlight, #e94560); }
-#rpg-world-popup .rpg-settings-popup-body { padding: 12px 16px 14px; }
-.rpg-world-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.dooms-world-result { font-size: 0.8em; color: #8d8d9a; margin-left: auto; }
-@media (max-width: 600px) {
-    .dooms-board-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .dooms-board-art { height: 70px; }
-}
-
 /* The quest menu: the shelf's menu look, its own items */
 .dooms-quest-menu-item {
     display: flex;
@@ -13856,27 +13771,6 @@ body[data-dooms-ui="inked"] .dooms-card[style*="--cb-fill"] .dooms-card-text {
 
 .dooms-roll-card.is-success { border-left-color: #2fbf71; }
 
-/* Scene pictures: the bar at the foot of the chat while a picture is made (sceneProgress.js). */
-.dooms-scene-progress {
-    margin: 6px 12px 10px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.35));
-    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
-    color: var(--SmartThemeBodyColor, #eaeaea);
-    font-size: 0.85em;
-    opacity: 0.92;
-}
-.dooms-scene-progress-label { display: block; margin-bottom: 6px; }
-.dooms-scene-progress-bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.dooms-scene-progress-fill { height: 100%; width: 0; border-radius: 3px; background: var(--SmartThemeQuoteColor, #e94560); transition: width 0.3s ease; }
-.dooms-scene-progress.is-indeterminate .dooms-scene-progress-fill { position: absolute; left: -30%; width: 30%; animation: dooms-scene-slide 1.4s linear infinite; transition: none; }
-@keyframes dooms-scene-slide { to { left: 100%; } }
-.dooms-scene-progress.is-done .dooms-scene-progress-fill { background: #2fbf71; }
-.dooms-scene-progress.is-failed .dooms-scene-progress-fill { background: #c0392b; width: 100%; }
-@media (prefers-reduced-motion: reduce) {
-    .dooms-scene-progress.is-indeterminate .dooms-scene-progress-fill { position: static; width: 100%; opacity: 0.4; animation: none; }
-}
 .dooms-roll-card.is-failure { border-left-color: #e5484d; }
 .dooms-roll-card.is-crit { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 

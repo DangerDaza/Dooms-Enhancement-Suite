@@ -168,12 +168,6 @@ import { initInventory, onInventoryChatChanged, onInventoryReplyRendered, onInve
 import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MAX_SLOTS as INV_MAX_SLOTS } from './src/utils/inventory.js';
 // Cut to a quest (Phase 5b): the player's next message ends an armed cut
 import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
-// Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
-import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
-import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
-import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
-import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
-import { initSceneProgress } from './src/systems/ui/sceneProgress.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
 import {
@@ -375,125 +369,6 @@ function renderInventorySettings() {
     $('#rpg-inv-notify').prop('checked', cfg.notify);
 }
 
-/** The Scene pictures rules block in settings, made to exist. */
-function getSceneRules() {
-    if (!extensionSettings.scenePictures || typeof extensionSettings.scenePictures !== 'object') extensionSettings.scenePictures = defaultScenePicturesConfig();
-    return extensionSettings.scenePictures;
-}
-/** Settings → Scene pictures: the switches and fields, then this chat's part and the status. */
-function renderScenePicturesSettings() {
-    if (!$('#rpg-scene-enabled').length) return;
-    const cfg = scenePicturesConfig(extensionSettings);
-    $('#rpg-scene-enabled').prop('checked', cfg.enabled);
-    $('.rpg-scene-sub').toggleClass('is-off', !cfg.enabled);
-    $('#rpg-scene-url').val(cfg.comfyUrl);
-    renderSceneWorkflowPick(cfg.workflow);
-    $('#rpg-scene-every').val(cfg.every);
-    $('#rpg-scene-window').val(cfg.window);
-    $('#rpg-scene-notify').prop('checked', cfg.notify);
-    if (!$('#rpg-scene-size option').length) $('#rpg-scene-size').html(SCENE_SIZES.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join(''));
-    $('#rpg-scene-size').val(cfg.size);
-    $('#rpg-scene-steps').val(cfg.steps);
-    $('#rpg-scene-cfg').val(cfg.cfg);
-    $('#rpg-scene-sampler').val(cfg.sampler);
-    $('#rpg-scene-scheduler').val(cfg.scheduler);
-    $('#rpg-scene-model').val(cfg.model);
-    $('#rpg-scene-clip').val(cfg.clip);
-    $('#rpg-scene-vae').val(cfg.vae);
-    $('#rpg-scene-narrator').val(cfg.narrator);
-    $('#rpg-scene-preamble').val(cfg.preamble);
-    $('#rpg-scene-negative').val(cfg.negative);
-    $('#rpg-scene-guide').val(cfg.guide);
-    renderSceneChatFields();
-    renderSceneStatus();
-}
-/** The workflow select: the chosen name always an option, the store's names once fetched (Test connection or the refresh button). */
-function renderSceneWorkflowPick(chosen, names = null) {
-    const $sel = $('#rpg-scene-workflow');
-    if (!$sel.length) return;
-    const list = Array.isArray(names) ? names : ($sel.data('names') || []);
-    if (Array.isArray(names)) $sel.data('names', names);
-    const all = [...new Set([...(chosen ? [chosen] : []), ...list])];
-    $sel.html(['<option value="">(none chosen)</option>', ...all.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)].join(''));
-    $sel.val(chosen || '');
-}
-/** This chat's LoRAs and identity notes; not touched while one of them has the focus. */
-function renderSceneChatFields() {
-    if (!$('#rpg-scene-loras').length) return;
-    const s = getSceneState();
-    if (!$('#rpg-scene-loras').is(':focus')) $('#rpg-scene-loras').val(formatLoraList(s.loras));
-    if (!$('#rpg-scene-identity').is(':focus')) $('#rpg-scene-identity').val(s.identity || '');
-}
-/** The status line alone: it follows every change without touching the fields the user may be editing. */
-function renderSceneStatus() {
-    if (!$('#rpg-scene-status').length) return;
-    const st = getSceneStatus();
-    let status;
-    if (!extensionSettings.enabled) status = 'Doom\'s Enhancement Suite is off; scene pictures are made only while it is on.';
-    else if (!st.enabled) status = 'Off. Nothing is read, written or sent.';
-    else if (!st.chatBound) status = 'Open a chat first.';
-    else {
-        const left = Math.max(0, st.every - st.sinceLast);
-        const when = st.running ? `A picture is being made now${(() => { const l = sceneProgressLabel({ ...st.progress, now: Date.now() }).text; return l ? ` (${l.replace(/^Scene picture: /, '')})` : ''; })()}.` : st.armed ? 'A picture is due; it is made once the reply is done.' : `${left} of your turn${left === 1 ? '' : 's'} to the next picture${st.retryNext ? ' (the last run failed; the next turn tries again)' : ''}.`;
-        const last = st.last ? (st.last.ok ? ` Last picture ${new Date(st.last.at).toLocaleTimeString()}.` : ` The last run failed: ${st.last.error}.`) : '';
-        status = `This chat: ${when}${last}`;
-    }
-    $('#rpg-scene-status').text(status);
-}
-/** The Live World rules block in settings, made to exist. */
-function getWorldRules() {
-    if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = defaultLiveWorldConfig();
-    if (!extensionSettings.liveWorld.customPacks || typeof extensionSettings.liveWorld.customPacks !== 'object') extensionSettings.liveWorld.customPacks = {};
-    return extensionSettings.liveWorld;
-}
-
-/** Settings → Live World: the switches, the pack list and this chat's status. */
-function renderLiveWorldSettings() {
-    if (!$('#rpg-world-enabled').length) return;
-    const cfg = liveWorldConfig(extensionSettings);
-    $('#rpg-world-enabled').prop('checked', cfg.enabled);
-    $('.rpg-world-sub').toggleClass('is-off', !cfg.enabled);
-    $('#rpg-world-every').val(cfg.every);
-    $('#rpg-world-step').val(cfg.maxStep);
-    $('#rpg-world-recent').val(cfg.recentMessages);
-    $('#rpg-world-spoiler').prop('checked', cfg.spoilerFree);
-    $('#rpg-world-inject').prop('checked', cfg.inject);
-    $('.rpg-world-inject-sub').toggleClass('is-off', !cfg.inject);
-    $('#rpg-world-depth').val(cfg.depth);
-    $('#rpg-world-role').val(cfg.role);
-    $('#rpg-world-debug').prop('checked', cfg.debug);
-    const ids = listPackIds();
-    const custom = new Set(Object.keys(cfg.customPacks));
-    $('#rpg-world-pack').html(ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}${custom.has(id) ? ' (pasted)' : ''}</option>`).join('')).val(ids.includes(cfg.pack) ? cfg.pack : ids[0]);
-    // The names arrive once the packs load; the ids stand until then.
-    ids.forEach(id => loadPack(id).then(r => {
-        if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? ' (pasted)' : ''}${r.pack.id !== r.pack.name.toLowerCase() ? ` · ${id}` : ''}`);
-    }).catch(() => {}));
-    renderLiveWorldStatus();
-}
-
-/** The status line alone: it follows every world change without touching the fields the user may be editing. */
-function renderLiveWorldStatus() {
-    if (!$('#rpg-world-status').length) return;
-    const cfg = liveWorldConfig(extensionSettings);
-    const s = getWorldState();
-    const pack = getActivePack();
-    let status;
-    if (!extensionSettings.enabled) status = 'Doom\'s Enhancement Suite is off; Live World runs only while it is on.';
-    else if (!cfg.enabled) status = 'Off. Nothing is read, written or sent.';
-    else if (getPackError()) status = `This chat has no world: ${getPackError()}`;
-    else if (!s || !pack) status = 'This chat has no world yet (open a chat, or re-seed).';
-    else {
-        const known = Object.values(s.known).filter(t => t === 'known').length;
-        const last = s.last && s.last.ok ? `last advanced ${s.last.gameDate ? `on ${s.last.gameDate}` : 'once'}${s.last.elapsed ? ` (${s.last.elapsed} passed)` : ''}` : 'not advanced yet';
-        const next = Math.max(0, cfg.every - s.sinceLast);
-        const err = s.lastError;
-        const errText = !err ? '' : err.kind === 'error' ? ` The last advance failed: ${err.error || 'the request did not complete'}; it runs again on the next reply.` : ` Last attempt discarded: ${cfg.spoilerFree ? 'the reply broke a rule (the System Log has the detail)' : err.error}`;
-        status = `This chat: ${pack.name}, ${pack.clocks.length} clock${pack.clocks.length === 1 ? '' : 's'}, ${known} known character${known === 1 ? '' : 's'}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${errText}`;
-    }
-    $('#rpg-world-status').text(status);
-}
-
 function renderAttributesSettings() {
     const $list = $('#rpg-attr-list');
     if (!$list.length) return;
@@ -608,9 +483,6 @@ async function addExtensionSettings() {
     try { initInspector(); } catch (e) { console.error('[Dooms Tracker] initInspector() FAILED:', e); }
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
-    try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
-    try { initScenePictures(); } catch (e) { console.error('[Dooms Tracker] initScenePictures() FAILED:', e); }
-    try { initSceneProgress(); } catch (e) { console.error('[Dooms Tracker] initSceneProgress() FAILED:', e); }
     try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
     try { initNotificationLog(); } catch (e) { console.error('[Dooms Tracker] initNotificationLog() FAILED:', e); }
     try { initMobileQuickJump(); } catch (e) { console.error('[Dooms Tracker] initMobileQuickJump() FAILED:', e); }
@@ -634,7 +506,6 @@ async function addExtensionSettings() {
             clearExpressionSyncCache();
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
             refreshGlintWords(); // unwraps every glint while DES is off
-            onWorldChatChanged().catch(() => {}); // Live World: the world and its line go with the switch
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
@@ -646,7 +517,6 @@ async function addExtensionSettings() {
                 initExpressionSync();
                 syncExpressionFromLatestMessage();
             }
-            onWorldChatChanged().catch(() => {}); // Live World: the chat's world comes back with the switch
         }
     });
     // Set up "Open Settings" button in the extension dropdown
@@ -2076,166 +1946,6 @@ function bindSettingsUI() {
         getInventoryRules().notify = $(this).prop('checked');
         _saveInv();
     });
-    // ── Live World ──
-    const _saveWorld = ({ reload = false } = {}) => {
-        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings save failed', e); }
-        if (reload) onWorldChatChanged().catch(e => console.warn('[Dooms Tracker] Live World reload failed', e)).then(() => renderLiveWorldSettings());
-        else renderLiveWorldSettings();
-    };
-    const _clampWorld = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
-    $(document).on('change', '#rpg-world-enabled', function () {
-        getWorldRules().enabled = $(this).prop('checked');
-        $('.rpg-world-sub').toggleClass('is-off', !$(this).prop('checked'));
-        _saveWorld({ reload: true });
-        try { updatePortraitBar(); } catch (e) { /* the shelf's Map page (D56) follows the switch */ }
-    });
-    $(document).on('change', '#rpg-world-pack', function () {
-        getWorldRules().pack = String($(this).val() || '');
-        _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-every', function () {
-        const w = getWorldRules(); w.every = _clampWorld($(this).val(), 1, 50, 6); $(this).val(w.every); _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-step', function () {
-        const w = getWorldRules(); w.maxStep = _clampWorld($(this).val(), 1, 6, 1); $(this).val(w.maxStep); _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-recent', function () {
-        const w = getWorldRules(); w.recentMessages = _clampWorld($(this).val(), 2, 40, 12); $(this).val(w.recentMessages); _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-spoiler', function () { getWorldRules().spoilerFree = $(this).prop('checked'); _saveWorld(); });
-    $(document).on('change', '#rpg-world-inject', function () {
-        getWorldRules().inject = $(this).prop('checked');
-        $('.rpg-world-inject-sub').toggleClass('is-off', !$(this).prop('checked'));
-        _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-depth', function () {
-        const w = getWorldRules(); w.depth = _clampWorld($(this).val(), 0, 20, 2); $(this).val(w.depth); _saveWorld();
-    });
-    $(document).on('change', '#rpg-world-role', function () { getWorldRules().role = String($(this).val() || 'system'); _saveWorld(); });
-    $(document).on('change', '#rpg-world-debug', function () { getWorldRules().debug = $(this).prop('checked'); _saveWorld(); });
-    $(document).on('click', '#rpg-world-add-pack', function () {
-        const r = addCustomPack(String($('#rpg-world-paste').val() || ''));
-        if (!r.ok) { toastr.warning(r.errors.slice(0, 3).join(' '), 'Live World', { timeOut: 7000 }); return; }
-        getWorldRules().pack = r.pack.id;
-        $('#rpg-world-paste').val('');
-        toastr.success(`Pack "${r.pack.name}" added and chosen for new chats.`, 'Live World', { timeOut: 4000 });
-        const active = getActivePack();
-        // This chat waits on a pack it could not load, or was seeded from the one pasted again: it takes the new text now.
-        _saveWorld({ reload: !!getPackError() || !!(active && active.id === r.pack.id) });
-    });
-    $(document).on('click', '#rpg-world-remove-pack', async function () {
-        const id = String($('#rpg-world-pack').val() || '');
-        if (!(id in (getWorldRules().customPacks || {}))) { toastr.info('Only a pasted pack can be removed; the built-in ones stay.', 'Live World', { timeOut: 4000 }); return; }
-        const active = getActivePack();
-        const mine = !!(active && active.id === id);
-        const confirmed = await callGenericPopup(`Remove the pasted pack "${id}"? Its JSON is gone from Settings (keep a copy of the file).${mine ? ' This chat was seeded from it and will have no world until it is pasted again or re-seeded from another pack.' : ''}`, POPUP_TYPE.CONFIRM);
-        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
-        if (!removeCustomPack(id)) return;
-        const w = getWorldRules();
-        if (w.pack === id) w.pack = 'skyreach';
-        _saveWorld({ reload: mine });    // another chat's pack: nothing in this chat refers to it, and a reload would discard an advance in flight
-    });
-    $(document).on('click', '#rpg-world-dashboard', function () {
-        import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
-    });
-    $(document).on('click', '#rpg-world-advance', async function () {
-        const $b = $(this);
-        $b.prop('disabled', true);
-        try {
-            const r = await advanceNow({ reason: 'settings' });
-            const text = describeAdvanceResult(r, { spoilerFree: liveWorldConfig(extensionSettings).spoilerFree });
-            if (r.ok) toastr.success(text, 'Live World', { timeOut: 3000 });
-            else toastr.warning(text, 'Live World', { timeOut: 7000 });
-        } finally {
-            $b.prop('disabled', false);
-            renderLiveWorldStatus();    // not the full render: a value being typed in a field would be reset
-        }
-    });
-    $(document).on('click', '#rpg-world-reseed', async function () {
-        if (!isLiveWorldOn()) { toastr.info('Switch Live World on first.', 'Live World', { timeOut: 3000 }); return; }
-        if (!getContext().chatId) { toastr.info('Open a chat first.', 'Live World', { timeOut: 3000 }); return; }
-        const confirmed = await callGenericPopup('Throw this chat\'s world away and seed it again from the chosen pack? The clocks, the last-seen places and the log of this chat are lost.', POPUP_TYPE.CONFIRM);
-        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
-        const r = await reseedWorld();
-        if (!r.ok) toastr.warning(`The world was kept: ${r.error || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });
-        renderLiveWorldSettings();
-    });
-    window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldStatus(); } catch (e) { /* non-fatal */ } });
-    // ── Scene pictures ──
-    const _saveScene = () => {
-        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Scene pictures settings save failed', e); }
-        renderSceneStatus();
-    };
-    const _sceneNum = (v, lo, hi, d, round = true) => { const n = round ? Math.round(Number(v)) : Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
-    $(document).on('change', '#rpg-scene-enabled', function () {
-        getSceneRules().enabled = $(this).prop('checked');
-        $('.rpg-scene-sub').toggleClass('is-off', !$(this).prop('checked'));
-        _saveScene();
-    });
-    $(document).on('change', '#rpg-scene-url', function () { getSceneRules().comfyUrl = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).comfyUrl); _saveScene(); });
-    $(document).on('change', '#rpg-scene-workflow', function () { getSceneRules().workflow = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('click', '#rpg-scene-workflow-refresh', async function () {
-        try { renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, await listWorkflows()); }
-        catch (e) { toastr.error(`The workflow list did not come: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 6000 }); }
-    });
-    $(document).on('click', '#rpg-scene-workflow-save', async function () {
-        const text = String($('#rpg-scene-workflow-paste').val() || '').trim();
-        const name = String($('#rpg-scene-workflow-name').val() || '').trim().replace(/[^\w .-]+/g, '') || 'DES Scene Moss';
-        if (!text) { toastr.info('Paste the workflow JSON first.', 'Scene pictures', { timeOut: 3000 }); return; }
-        try {
-            const file = await saveWorkflow(name.endsWith('.json') ? name : `${name}.json`, text);
-            getSceneRules().workflow = file;
-            $('#rpg-scene-workflow-paste').val('');
-            renderSceneWorkflowPick(file, await listWorkflows().catch(() => null));
-            _saveScene();
-            toastr.success(`Saved as "${file}" and chosen.`, 'Scene pictures', { timeOut: 4000 });
-        } catch (e) {
-            toastr.error(`Not saved: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 8000 });
-        }
-    });
-    $(document).on('change', '#rpg-scene-every', function () { const r = getSceneRules(); r.every = _sceneNum($(this).val(), 1, 50, 5); $(this).val(r.every); _saveScene(); });
-    $(document).on('change', '#rpg-scene-window', function () { const r = getSceneRules(); r.window = _sceneNum($(this).val(), 2, 40, 12); $(this).val(r.window); _saveScene(); });
-    $(document).on('change', '#rpg-scene-notify', function () { getSceneRules().notify = $(this).prop('checked'); _saveScene(); });
-    $(document).on('change', '#rpg-scene-size', function () { getSceneRules().size = String($(this).val() || 'portrait'); _saveScene(); });
-    $(document).on('change', '#rpg-scene-steps', function () { const r = getSceneRules(); r.steps = _sceneNum($(this).val(), 1, 100, 25); $(this).val(r.steps); _saveScene(); });
-    $(document).on('change', '#rpg-scene-cfg', function () { const r = getSceneRules(); r.cfg = _sceneNum($(this).val(), 0, 20, 2.5, false); $(this).val(r.cfg); _saveScene(); });
-    $(document).on('change', '#rpg-scene-sampler', function () { getSceneRules().sampler = String($(this).val() || '').trim() || 'er_sde'; $(this).val(getSceneRules().sampler); _saveScene(); });
-    $(document).on('change', '#rpg-scene-scheduler', function () { getSceneRules().scheduler = String($(this).val() || '').trim() || 'simple'; $(this).val(getSceneRules().scheduler); _saveScene(); });
-    $(document).on('change', '#rpg-scene-model', function () { getSceneRules().model = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('change', '#rpg-scene-clip', function () { getSceneRules().clip = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('change', '#rpg-scene-vae', function () { getSceneRules().vae = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('change', '#rpg-scene-narrator', function () { getSceneRules().narrator = String($(this).val() || '').trim() || 'Narrator'; $(this).val(getSceneRules().narrator); _saveScene(); });
-    $(document).on('change', '#rpg-scene-preamble', function () { getSceneRules().preamble = String($(this).val() || ''); _saveScene(); });
-    $(document).on('change', '#rpg-scene-negative', function () { getSceneRules().negative = String($(this).val() || ''); _saveScene(); });
-    $(document).on('change', '#rpg-scene-guide', function () { getSceneRules().guide = String($(this).val() || ''); _saveScene(); });
-    // This chat's part (chat_metadata), saved with the chat.
-    $(document).on('change', '#rpg-scene-loras', function () { setSceneLoras(parseLoraList($(this).val())); $(this).val(formatLoraList(getSceneState().loras)); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
-    $(document).on('change', '#rpg-scene-identity', function () { setSceneIdentity(String($(this).val() || '')); try { saveChatDebounced(); } catch (e) { /* the next save carries it */ } });
-    $(document).on('click', '#rpg-scene-test', async function () {
-        const $b = $(this);
-        $b.prop('disabled', true);
-        try {
-            const r = await testComfy();
-            renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, r.workflows);
-            toastr[r.ok ? 'success' : 'warning'](r.line, 'Scene pictures', { timeOut: 10000 });
-        } catch (e) {
-            toastr.error(`No answer: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 10000 });
-        } finally {
-            $b.prop('disabled', false);
-        }
-    });
-    $(document).on('click', '#rpg-scene-now', async function () {
-        const $b = $(this);
-        $b.prop('disabled', true);
-        try {
-            const r = await illustrateNow({ reason: 'manual' });
-            if (!r.ok && r.reason !== 'error') toastr.info({ off: 'Doom\'s Enhancement Suite is off.', disabled: 'Switch Scene pictures on first.', 'no-chat': 'Open a chat first.', running: 'A picture is already being made.', busy: 'The chat is busy; try again in a moment.', stale: 'The chat changed meanwhile.' }[r.reason] || `No picture: ${r.reason}`, 'Scene pictures', { timeOut: 4000 });
-        } finally {
-            $b.prop('disabled', false);
-            renderSceneStatus();
-        }
-    });
-    window.addEventListener(SCENE_CHANGED_EVENT, () => { try { renderSceneChatFields(); renderSceneStatus(); } catch (e) { /* non-fatal */ } });
     $(document).on('change', '#rpg-attr-notify', function () {
         getAttributesRules().notify = $(this).prop('checked');
         _saveAttrs({ rerender: false });
@@ -3045,8 +2755,6 @@ function bindSettingsUI() {
     try { renderVitalsSettings(); } catch (e) { console.warn('[Dooms Tracker] Vitals settings failed to render', e); }
     try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
     try { renderInventorySettings(); } catch (e) { console.warn('[Dooms Tracker] Inventory settings failed to render', e); }
-    try { renderLiveWorldSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings failed to render', e); }
-    try { renderScenePicturesSettings(); } catch (e) { console.warn('[Dooms Tracker] Scene pictures settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
     $('#rpg-toggle-auto-update').prop('checked', extensionSettings.autoUpdate);
@@ -3729,19 +3437,6 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
-            // Live World (D69): the window, only while Live World is on.
-            if (isLiveWorldOn()) {
-                items.push({
-                    id: 'live-world',
-                    label: 'World',
-                    iconClass: 'fa-solid fa-globe',
-                    action: () => {
-                        import('./src/systems/ui/worldDashboard.js')
-                            .then(m => m.openWorldDashboard())
-                            .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
-                    },
-                });
-            }
             // Dice (Phase 2): only while attributes are on.
             if (attributesOn(extensionSettings)) {
                 items.push({
@@ -4615,15 +4310,12 @@ jQuery(async () => {
                 // sets the verdict slot while SillyTavern is still awaiting this
                 // event, before it builds the prompt (GENERATION_STARTED already
                 // fired, before the sent message existed).
-                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onWorldMessageSent, onMessageSentVoices, onSceneMessageSent],
-                // onSceneGenerationStarted first: a regenerate takes DES's scene
-                // pictures off the end of the chat before anything here looks at
-                // the last message, and before SillyTavern picks what it replaces.
-                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
-                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onMessageReceivedVoices],
-                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
-                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.MESSAGE_SENT]: [onDiceMessageSent, onQuestCutMessageSent, refreshDiceInjection, onMessageSent, onMessageSentVoices],
+                [event_types.GENERATION_STARTED]: [onGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onMessageReceivedVoices],
+                [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded],
+                [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -4636,7 +4328,7 @@ jQuery(async () => {
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
@@ -4659,10 +4351,6 @@ jQuery(async () => {
         // initial render never happened. Trigger it now as a safety net.
         if (chat && chat.length > 0) {
             onCharacterChanged();
-        }
-        if (getContext().chatId) {    // a chat with no greeting has no messages yet but still has a world
-            onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
-            try { onSceneChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Scene pictures: the first chat did not load', err); }
         }
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();

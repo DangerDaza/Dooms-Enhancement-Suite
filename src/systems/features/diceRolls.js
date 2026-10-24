@@ -20,7 +20,7 @@
  * shelf listen for DICE_CHANGED_EVENT instead.
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, saveChatDebounced, deleteLastMessage } from '../../../../../../../script.js';
+import { chat, saveChatDebounced } from '../../../../../../../script.js';
 import { callGenericPopup, POPUP_TYPE, POPUP_RESULT } from '../../../../../../popup.js';
 import { extensionSettings, committedTrackerData, lastGeneratedData } from '../../core/state.js';
 import { parseTrackerJson } from '../../utils/trackerParse.js';
@@ -871,39 +871,28 @@ export function stepRollResult(index, delta, slot = -1) {
     return setRollResult(index, { kept: next, slot, quiet: true });
 }
 
-/** A message DES's scene pictures posted (src/systems/features/scenePictures.js): the one thing DES may take down on its own. */
-function isScenePicture(m) {
-    return !!(m && !m.is_user && m.extra && m.extra.dooms_scene && typeof m.extra.dooms_scene === 'object');
-}
-
 /**
  * What stands between the message at `index` and the end of the chat.
  * SillyTavern's Regenerate replaces only the chat's last message, so the
- * reply that answers a roll can be regenerated only when nothing follows it
- * but DES's own scene pictures, which are taken down first. Anything else
- * after it (a message of the player's, a system note, another reply) blocks.
- * Pure: `list` is the chat.
+ * reply that answers a roll can be regenerated only while it is the last.
+ * Anything after it (a message of the player's, a system note, another
+ * reply) blocks. Pure: `list` is the chat.
  * @returns {{ ok: boolean, pictures: number, blocker: object|null }}
  */
 export function afterTheReply(list, index) {
     if (!Array.isArray(list) || !Number.isFinite(index) || index < 0 || index >= list.length) return { ok: false, pictures: 0, blocker: null };
-    let pictures = 0;
-    for (let i = index + 1; i < list.length; i++) {
-        const m = list[i];
-        if (isScenePicture(m)) { pictures++; continue; }
-        return { ok: false, pictures, blocker: m || null };
-    }
-    return { ok: true, pictures, blocker: null };
+    if (index === list.length - 1) return { ok: true, pictures: 0, blocker: null };
+    return { ok: false, pictures: 0, blocker: list[index + 1] || null };
 }
 
-/** Whether the reply that answers the roll on the message at `index` can be regenerated: nothing after it but scene pictures. */
+/** Whether the reply that answers the roll on the message at `index` can be regenerated: nothing after it. */
 function canRegenerateAfter(index) {
     const list = chatArray();
     if (!list || !list.length || !Number.isFinite(index)) return false;
     for (let i = index; i < list.length; i++) {
         const m = list[i];
         // The roll rides the player's message or SillyTavern's "Tool calls" line; the reply that answers it comes after.
-        if (!m || m.is_user || m.is_system || isScenePicture(m)) continue;
+        if (!m || m.is_user || m.is_system) continue;
         return afterTheReply(list, i).ok;
     }
     return false;
@@ -929,9 +918,7 @@ async function offerRegenerate(index, slot, startedAt) {
 /**
  * Plays a set result out through SillyTavern's own Regenerate (its
  * options-menu entry works with the menu closed). Regenerate replaces only
- * the chat's last message, so a scene picture that landed after the reply
- * is taken down first (SillyTavern's deleteLastMessage: the chat, the
- * screen, MESSAGE_DELETED); anything else after the reply stops it with a
+ * the chat's last message, so anything after the reply stops it with a
  * notice rather than letting Regenerate replace the wrong message.
  * `index`: the message that carries the roll (the reply, or the player's
  * message the reply answers).
@@ -940,23 +927,10 @@ export async function regenerateLastReply(index = NaN) {
     const list = chatArray();
     if (list && list.length) {
         let at = Number.isFinite(index) ? index : -1;
-        if (at < 0) { at = list.length - 1; while (at > 0 && isScenePicture(list[at])) at--; }
+        if (at < 0) at = list.length - 1;
         if (!canRegenerateAfter(at)) {
             diceNotice('Regenerate replaces only the last message of the chat, and something else follows this reply: delete what follows it first.', { kind: 'warning' });
             return false;
-        }
-        let taken = 0;
-        try {
-            while (list.length > at + 1 && isScenePicture(list[list.length - 1])) {
-                await deleteLastMessage();
-                taken++;
-            }
-        } catch (e) {
-            console.warn('[Dooms Tracker] Dice: a scene picture after the reply could not be taken down', e);
-        }
-        if (taken) {
-            try { saveChatDebounced(); } catch (e) { /* no save */ }
-            diceNotice(`The scene picture${taken === 1 ? '' : 's'} after the reply came down so the reply could be regenerated.`);
         }
     }
     try {

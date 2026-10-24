@@ -1,7 +1,15 @@
 {
-    "version": "3.1.5-beta.2",
-    "title": "Stats (beta) and five hotfixes",
+    "version": "3.2.0-beta.1",
+    "title": "Inventory and quests (beta)",
     "items": [
+        {
+            "title": "🎒 3.2: Inventory (beta)",
+            "body": "Settings → Stats → Inventory: a pack for your character and one pouch the party shares, kept per chat. The AI keeps them up to date from a short tag at the end of each reply: what was picked up, handed over, spent or used up (a cigarette smoked, a ration eaten, an arrow loosed counts). A toast says what changed; swiping a reply puts its changes back. The Present Characters panel gets an Inventory page beside Characters, with an editor for anything the AI got wrong, and a Quests page."
+        },
+        {
+            "title": "🗺️ 3.2: Cut to a quest",
+            "body": "Right-click a quest on the panel's Quests page (hold it on a phone) and Cut to it: the story jumps to that quest where the scene stands, with the facts of now carried along."
+        },
         {
             "title": "❤️ 3.1.5: vitals off means off",
             "body": "If you tried Track vitals and switched it off again, the AI was still being shown your characters' Health and the rest from before, and kept updating them, costing tokens every reply with nothing on screen to show for it. The switch now covers what the AI is reminded of as well as what it is asked for: with vitals off, no stats reach the prompt. Nothing in your chats is deleted; switch vitals back on and they start fresh from their starting values."

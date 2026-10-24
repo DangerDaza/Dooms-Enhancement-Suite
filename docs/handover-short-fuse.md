@@ -1,5 +1,9 @@
 # Handover — Project Short Fuse (Stats), 2026-10-10
 
+> **On `release/3.2`:** Live World and scene pictures are not built on this
+> branch; they stay on `Project-Short-Fuse`. Passages below that mention
+> them (Phase 6, the Map, D40–D50, D56) describe that branch.
+
 For a local Claude Code session picking this up in a clone of
 `DangerDaza/Dooms-Enhancement-Suite`, and for Jordan. Everything below is
 what the cloud session knew when it stopped. The local session is already
@@ -74,9 +78,6 @@ state and the next moves.
    timeout 120 node tools/inventory-flow-test.mjs
    node tools/quest-cut-test.mjs
    timeout 120 node tools/quest-cut-flow-test.mjs
-   node tools/live-world-test.mjs
-   node tools/world-map-test.mjs
-   timeout 120 node tools/live-world-flow-test.mjs
    ```
    Each sandbox test builds its own sandbox (§1), so these lines may also
    run in parallel.

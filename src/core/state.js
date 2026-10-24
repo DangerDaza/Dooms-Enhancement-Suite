@@ -6,8 +6,6 @@ import { defaultVoiceSettings } from '../systems/voices/voiceSettings.js';
 import { defaultVitalsConfig } from '../utils/vitals.js';
 import { defaultAttributesConfig } from '../utils/d20.js';
 import { defaultInventoryConfig } from '../utils/inventory.js';
-import { defaultLiveWorldConfig } from '../utils/liveWorld.js';
-import { defaultScenePicturesConfig } from '../utils/scenePictures.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -86,13 +84,6 @@ export let extensionSettings = {
     // rules. The items themselves live per chat in chat_metadata. Off until
     // Settings → Stats turns it on.
     inventory: defaultInventoryConfig(),
-    // Live World (docs/live-world-spec.md; src/utils/liveWorld.js): the rules.
-    // The world itself lives per chat in chat_metadata.dooms_world. Off until
-    // Settings → Live World turns it on.
-    liveWorld: defaultLiveWorldConfig(),
-    // Scene pictures (docs/scene-pictures-plan.md; src/utils/scenePictures.js): the rules.
-    // This chat's count, LoRAs and notes live in chat_metadata.dooms_scene. Off until switched on.
-    scenePictures: defaultScenePicturesConfig(),
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature
