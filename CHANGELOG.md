@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.5-beta.3] - 2026-10-24 — The Workshop from a phone
+
+### Fixed
+- **The Present Characters panel reaches the Workshop from an iPhone.** Safari on an iPhone never turns a long press into a right-click, so the card menu ("Open in Workshop", "Character Sheet", the rest) could not open at all: a long press showed Apple's own image sheet. Now a long press on a portrait card (half a second, finger or pen held still) opens the same menu where the finger is; moving first, as when scrolling the shelf, or lifting early opens nothing, and the card does not flip when the finger lifts. The browser's image sheet, text selection and double-tap zoom are off on the cards.
+- **The roster button in the panel's header is finger-sized on touch screens.** It was a chip a few millimetres across, smaller still under the looks, and WebKit handed the tap to the header around it, which folded the shelf. On a touch screen it is now a real button (44 by 36 CSS pixels at least); with a mouse it is unchanged.
+- **A Workshop that fails to load says so.** The header button and the menu's Workshop and Character Sheet items swallowed any loading error in silence. Now a message names the error and the fix for the device (on an iPhone or iPad: clear this site's data, since Safari there has no hard reload).
+
 ## [3.1.5-beta.2] - 2026-10-22 — The right sheet, and vitals off means off
 
 ### Fixed

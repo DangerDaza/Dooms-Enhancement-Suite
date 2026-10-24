@@ -9526,6 +9526,15 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 
 /* Portrait cards */
+/* Touch screens: a long press opens the card menu (portraitBar.js), so the
+   browser's own long-press behaviours stay out of the way: no image sheet,
+   no text selection, no double-tap zoom. */
+.dooms-portrait-card,
+.dooms-portrait-card img,
+.dooms-portrait-card-name { -webkit-touch-callout: none; }
+.dooms-portrait-card img,
+.dooms-portrait-card-name { -webkit-user-select: none; user-select: none; }
+#dooms-portrait-bar .dooms-portrait-card { touch-action: manipulation; }
 .dooms-portrait-card {
     flex-shrink: 0;
     width: var(--dooms-pb-card-w, 110px);
@@ -12641,6 +12650,27 @@ body.dooms-hide-st-topbar .openDrawer {
     border-color: var(--rpg-highlight, #e94560);
     color: var(--rpg-highlight, #e94560);
     background: rgba(255, 255, 255, 0.04);
+}
+
+/* A finger needs a target it can hit. With a mouse the icon stays the small
+   chip it is; on a touch screen it becomes a real button, big enough that
+   WebKit does not hand the tap to the header around it (which folds the
+   shelf). Two ids outrank the looks' half-size restore-button rule. The
+   menu's rows grow for the same reason. */
+@media (pointer: coarse) {
+    #dooms-portrait-bar-wrapper #dooms-portrait-bar .dooms-pb-header .dooms-pb-roster-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 36px;
+        padding: 0 12px;
+        font-size: 1em;
+        line-height: 1;
+        touch-action: manipulation;
+    }
+    #dooms-portrait-bar-wrapper #dooms-portrait-bar .dooms-pb-header { min-height: 36px; }
+    .dooms-pb-context-menu .dooms-pb-ctx-item { padding-top: 10px; padding-bottom: 10px; }
 }
 
 

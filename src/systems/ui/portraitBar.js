@@ -24,12 +24,12 @@
  *   3. Local `portraits/` folder (e.g. portraits/Lyra.png)
  *   4. Character emoji fallback
  *
- * Right-clicking a portrait card opens a context menu with workshop /
+ * Right-clicking a portrait card (a long press on a touch screen) opens a context menu with workshop /
  * roster actions; portrait upload + dialogue color editing live in the
  * Workshop now.
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel, addDebugLog } from '../../core/state.js';
-import { extensionFolderPath } from '../../core/config.js';
+import { extensionFolderPath, staleScriptsAdvice } from '../../core/config.js';
 import { saveSettings, getActiveKnownCharacters, getActiveRemovedCharacters, getActiveCharacterColors, saveCharacterRosterChange } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
@@ -51,6 +51,10 @@ import { isOffScene } from '../../utils/offScene.js';
 // (a static edge would close a cycle).
 import { vitalsConfig, readVitals, vitalColor, clampVital } from '../../utils/vitals.js';
 import { attributesOn } from '../../utils/d20.js';
+
+/** A long press this long, moving no further than the slop, opens the card menu on a touch screen. */
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
 
 /** Logs to the debug panel only when debugMode is on — getCharacterList runs on every render. */
 function debugLog(message, data = null) {
@@ -411,67 +415,63 @@ export function initPortraitBar() {
     $(document).on('contextmenu', '.dooms-portrait-card', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        // Read from data-char (canonical name). The title attr can contain
-        // the tooltip decoration 'Name — expression' when the expression
-        // tooltip toggle is on, which would then flow through every
-        // action (open-folder, colors, etc.) as if the expression were
-        // part of the name.
-        const characterName = $(this).attr('data-char') || $(this).attr('title');
-        if (!characterName) return;
-        const isUser = $(this).attr('data-user') === '1';
-
-        const $menu = $('#dooms-pb-context-menu');
-        $menu.data('character', characterName);
-        $menu.data('isUser', isUser);
-
-        // "Character Sheet" is always shown — Bunny Mo integration is
-        // always on as of v1.11. Old gate retained as a no-op below in
-        // case any in-flight chats need a re-render.
-        $menu.find('[data-action="character-sheet"]').show();
-        // Show "Open in Workshop" unless explicitly disabled via feature flag.
-        // Workshop tracks the PCP toggle; if PCP is off the menu item
-        // wouldn't be reachable anyway, but keep the gate for defensiveness.
-        $menu.find('[data-action="open-workshop"]').toggle(extensionSettings.showPortraitBar !== false);
-        // 'Cancel Injection' only shows when this character is currently
-        // mid-inject (post-click, pre-AI-reply).
-        const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
-        $menu.find('[data-action="cancel-inject"]').toggle(isPending);
-        // 'Regenerate Portrait' is NPC-only — the generator writes to the
-        // npcAvatars store; user-character portraits are managed in the
-        // Workshop (upload / persona mirror). 'Restore' only shows when a
-        // replaced portrait is actually banked for this character.
-        $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
-        $menu.find('[data-action="restore-portrait"]').toggle(!isUser && getPortraitHistoryCount(characterName) > 0);
-        // 'Roll a check' is the persona's: checks are the player's attempts.
-        $menu.find('[data-action="roll-check"]').toggle(isUser && attributesOn(extensionSettings));
-
-        // Position near the cursor, clamped to viewport. Re-parent to
-        // <body> first so the menu escapes any ancestor stacking context
-        // the wrapper's parent might create (the side-mode wrapper has
-        // backdrop-filter: blur, which traps siblings inside it). The
-        // z-index bump on the .dooms-pb-context-menu rule keeps it above
-        // the cards even when the cursor lands inside the bar.
-        if ($menu.parent()[0] !== document.body) {
-            $menu.appendTo(document.body);
-        }
-        // Measure off-screen so we can clamp without a flash.
-        $menu.css({ display: 'block', top: '-9999px', left: '-9999px' });
-        const menuW = $menu.outerWidth();
-        const menuH = $menu.outerHeight();
-        const viewW = window.innerWidth;
-        const viewH = window.innerHeight;
-        const topPx = Math.max(0, Math.min(e.clientY, viewH - menuH));
-        const leftPx = Math.max(0, Math.min(e.clientX, viewW - menuW));
-        $menu.css({ top: topPx + 'px', left: leftPx + 'px' });
-
-        // Register a one-time click handler to dismiss the menu when clicking elsewhere
-        // Using setTimeout(0) so this click event doesn't immediately trigger dismissal
-        setTimeout(() => {
-            $(document).one('click.dooms-pb-ctx', function () {
-                hideContextMenu();
-            });
-        }, 0);
+        openCardMenu(this, e.clientX, e.clientY);
     });
+
+    // ── Long press on a portrait card opens the same menu (touch screens) ──
+    // Safari on an iPhone never turns a long press into a right-click, so a
+    // phone had no way to this menu: a long press showed Apple's own image
+    // sheet instead. A finger or pen held still for half a second opens the
+    // menu where it is; moving first (a scroll of the shelf) or lifting
+    // first opens nothing; the tap that follows the lift, however long the
+    // finger stays down, is swallowed so the card does not flip under the
+    // open menu.
+    let pressTimer = null;
+    let pressCard = null;
+    let pressX = 0;
+    let pressY = 0;
+    let swallowCardTapUntil = 0;
+    const cancelPress = () => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        pressCard = null;
+    };
+    const endPress = () => {
+        cancelPress();
+        if (swallowCardTapUntil === Infinity) swallowCardTapUntil = Date.now() + 500;
+    };
+    $(document).on('pointerdown', '#dooms-portrait-bar .dooms-portrait-card', function (e) {
+        const p = e.originalEvent || e;
+        if (p.pointerType !== 'touch' && p.pointerType !== 'pen') return;
+        if ($(e.target).closest('button, a, input').length) return;
+        cancelPress();
+        pressCard = this;
+        pressX = p.clientX;
+        pressY = p.clientY;
+        pressTimer = setTimeout(() => {
+            const card = pressCard;
+            pressTimer = null;
+            pressCard = null;
+            if (!card || !card.isConnected) return;
+            swallowCardTapUntil = Infinity;
+            openCardMenu(card, pressX, pressY);
+        }, LONG_PRESS_MS);
+    });
+    $(document).on('pointermove', '#dooms-portrait-bar .dooms-portrait-card', function (e) {
+        if (!pressTimer) return;
+        const p = e.originalEvent || e;
+        if (Math.abs(p.clientX - pressX) > LONG_PRESS_SLOP || Math.abs(p.clientY - pressY) > LONG_PRESS_SLOP) cancelPress();
+    });
+    $(document).on('pointerup pointercancel', endPress);
+    $('#dooms-pb-scroll').on('scroll', cancelPress);
+    document.addEventListener('click', (e) => {
+        if (Date.now() > swallowCardTapUntil) return;
+        const t = e.target;
+        if (!t || typeof t.closest !== 'function' || !t.closest('#dooms-portrait-bar .dooms-portrait-card')) return;
+        swallowCardTapUntil = 0;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+    }, true);
 
     // ── Context menu item clicks ──
     $(document).on('click', '.dooms-pb-ctx-item', function (e) {
@@ -489,12 +489,12 @@ export function initPortraitBar() {
             ensureSettingsUI().then(async () => {
                 const { openCharacterSheet } = await import('./characterSheet.js');
                 openCharacterSheet(characterName);
-            }).catch(() => {});
+            }).catch(workshopLoadFailed);
         } else if (action === 'open-workshop') {
             // Workshop listener registers when the deferred settings UI loads
             ensureSettingsUI().then(() => {
                 window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
-            }).catch(() => {});
+            }).catch(workshopLoadFailed);
         } else if (action === 'roll-check') {
             import('./dicePanel.js')
                 .then(m => m.openDicePanel())
@@ -520,7 +520,7 @@ export function initPortraitBar() {
         // Roster listener registers when the deferred settings UI loads
         ensureSettingsUI().then(() => {
             window.dispatchEvent(new CustomEvent('dooms:open-roster'));
-        }).catch(() => {});
+        }).catch(workshopLoadFailed);
     });
     // Hide the roster button when PCP is off (Workshop is part of PCP).
     if (extensionSettings.showPortraitBar === false) {
@@ -1338,6 +1338,83 @@ function removeCharacter(characterName) {
 // ─────────────────────────────────────────────
 //  Context menu helpers
 // ─────────────────────────────────────────────
+
+/**
+ * Opens the card menu for a portrait card at a point on the screen:
+ * a right-click's cursor, or the finger of a long press on a touch screen.
+ */
+function openCardMenu(cardEl, clientX, clientY) {
+    // Read from data-char (canonical name). The title attr can contain
+    // the tooltip decoration 'Name — expression' when the expression
+    // tooltip toggle is on, which would then flow through every
+    // action (open-folder, colors, etc.) as if the expression were
+    // part of the name.
+    const characterName = $(cardEl).attr('data-char') || $(cardEl).attr('title');
+    if (!characterName) return;
+    const isUser = $(cardEl).attr('data-user') === '1';
+
+    const $menu = $('#dooms-pb-context-menu');
+    $menu.data('character', characterName);
+    $menu.data('isUser', isUser);
+
+    // "Character Sheet" is always shown — Bunny Mo integration is
+    // always on as of v1.11. Old gate retained as a no-op below in
+    // case any in-flight chats need a re-render.
+    $menu.find('[data-action="character-sheet"]').show();
+    // Show "Open in Workshop" unless explicitly disabled via feature flag.
+    // Workshop tracks the PCP toggle; if PCP is off the menu item
+    // wouldn't be reachable anyway, but keep the gate for defensiveness.
+    $menu.find('[data-action="open-workshop"]').toggle(extensionSettings.showPortraitBar !== false);
+    // 'Cancel Injection' only shows when this character is currently
+    // mid-inject (post-click, pre-AI-reply).
+    const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
+    $menu.find('[data-action="cancel-inject"]').toggle(isPending);
+    // 'Regenerate Portrait' is NPC-only — the generator writes to the
+    // npcAvatars store; user-character portraits are managed in the
+    // Workshop (upload / persona mirror). 'Restore' only shows when a
+    // replaced portrait is actually banked for this character.
+    $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
+    $menu.find('[data-action="restore-portrait"]').toggle(!isUser && getPortraitHistoryCount(characterName) > 0);
+    // 'Roll a check' is the persona's: checks are the player's attempts.
+    $menu.find('[data-action="roll-check"]').toggle(isUser && attributesOn(extensionSettings));
+
+    // Position near the cursor, clamped to viewport. Re-parent to
+    // <body> first so the menu escapes any ancestor stacking context
+    // the wrapper's parent might create (the side-mode wrapper has
+    // backdrop-filter: blur, which traps siblings inside it). The
+    // z-index bump on the .dooms-pb-context-menu rule keeps it above
+    // the cards even when the cursor lands inside the bar.
+    if ($menu.parent()[0] !== document.body) {
+        $menu.appendTo(document.body);
+    }
+    // Measure off-screen so we can clamp without a flash.
+    $menu.css({ display: 'block', top: '-9999px', left: '-9999px' });
+    const menuW = $menu.outerWidth();
+    const menuH = $menu.outerHeight();
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+    const topPx = Math.max(0, Math.min(clientY, viewH - menuH));
+    const leftPx = Math.max(0, Math.min(clientX, viewW - menuW));
+    $menu.css({ top: topPx + 'px', left: leftPx + 'px' });
+
+    // Register a one-time click handler to dismiss the menu when clicking elsewhere
+    // Using setTimeout(0) so this click event doesn't immediately trigger dismissal
+    setTimeout(() => {
+        $(document).one('click.dooms-pb-ctx', function () {
+            hideContextMenu();
+        });
+    }, 0);
+}
+
+/**
+ * The Workshop's deferred UI failed to load. Until now the tap did nothing
+ * and said nothing; now it says what failed and how to fix it on this device.
+ */
+function workshopLoadFailed(err) {
+    console.error('[Dooms Tracker] The Character Workshop failed to load:', err);
+    const why = err && err.message ? err.message : String(err || 'unknown error');
+    try { toastr.error(`The Character Workshop failed to load (${why}). ${staleScriptsAdvice()}`, "Doom's Enhancement Suite", { timeOut: 15000 }); } catch (e) { /* no toastr */ }
+}
 
 function hideContextMenu() {
     $('#dooms-pb-context-menu').hide();
