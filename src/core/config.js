@@ -36,7 +36,7 @@ let _versionPromise = null;
  * older copy of the scripts after an update. Bumped with manifest.json and
  * whatsnew.json (tools/version-test.mjs keeps the three in step).
  */
-export const CODE_VERSION = '3.1.5-beta.2';
+export const CODE_VERSION = '3.1.5-beta.3';
 /**
  * Resolves to { loaded, server } when the scripts running in this browser
  * are not the version the server has, null when they match or the manifest

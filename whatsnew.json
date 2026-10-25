@@ -1,7 +1,11 @@
 {
-    "version": "3.1.5-beta.2",
-    "title": "Stats (beta) and five hotfixes",
+    "version": "3.1.5-beta.3",
+    "title": "Stats (beta) and six hotfixes",
     "items": [
+        {
+            "title": "📱 3.1.5: the Workshop from a phone",
+            "body": "On an iPhone the Present Characters panel had no way into the Workshop: a long press on a card showed Apple's image sheet instead of the menu, and the little roster button in the panel's header was too small for a finger, so the tap folded the shelf instead. Now a long press on a card (half a second, finger still) opens the card menu where your finger is, and on any touch screen the roster button is a proper button. With a mouse nothing changed. And if the Workshop ever fails to load, a message says so and how to fix it, instead of a tap that does nothing."
+        },
         {
             "title": "❤️ 3.1.5: vitals off means off",
             "body": "If you tried Track vitals and switched it off again, the AI was still being shown your characters' Health and the rest from before, and kept updating them, costing tokens every reply with nothing on screen to show for it. The switch now covers what the AI is reminded of as well as what it is asked for: with vitals off, no stats reach the prompt. Nothing in your chats is deleted; switch vitals back on and they start fresh from their starting values."

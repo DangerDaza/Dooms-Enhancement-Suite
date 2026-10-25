@@ -154,6 +154,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Cards render for present characters; absent grey-out option works
 - [ ] Speaking pulse animation on active speaker
 - [ ] Right-click menu: upload image, dialogue color, remove, character sheet
+- [ ] On an iPhone, or any touch screen (3.1.5-beta.3): a long press on a portrait card (about half a second, finger still) opens the same menu where the finger is, with no image sheet and no text selection; moving the finger (scrolling the shelf) or lifting early opens nothing; the card does not flip when the finger lifts after the menu opened; the roster button in the panel header is finger-sized and opens the Roster on the first tap without folding the shelf; with a mouse nothing changed (right-click menu, small chip, header click folds the shelf); if the Workshop fails to load, a toast names the error and the fix for the device
 - [ ] Custom avatar upload + crop; ST card auto-import; emoji fallback
 - [ ] Expression sync mirrors sprites when enabled; persists until next line
 - [ ] Auto-portrait prompt generation (workshop) works
