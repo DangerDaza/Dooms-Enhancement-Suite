@@ -3,6 +3,10 @@
     "title": "Inventory and quests (beta)",
     "items": [
         {
+            "title": "📱 3.2: the Workshop from a phone",
+            "body": "On an iPhone the Present Characters panel had no way into the Workshop: a long press on a card showed Apple's image sheet instead of the menu, and the little roster button in the panel's header was too small for a finger, so the tap folded the shelf instead. Now a long press on a card (half a second, finger still) opens the card menu where your finger is, and on any touch screen the roster button is a proper button. With a mouse nothing changed. And if the Workshop ever fails to load, a message says so and how to fix it, instead of a tap that does nothing."
+        },
+        {
             "title": "🎒 3.2: Inventory (beta)",
             "body": "Settings → Stats → Inventory: a pack for your character and one pouch the party shares, kept per chat. The AI keeps them up to date from a short tag at the end of each reply: what was picked up, handed over, spent or used up (a cigarette smoked, a ration eaten, an arrow loosed counts). A toast says what changed; swiping a reply puts its changes back. The Present Characters panel gets an Inventory page beside Characters, with an editor for anything the AI got wrong, and a Quests page."
         },
