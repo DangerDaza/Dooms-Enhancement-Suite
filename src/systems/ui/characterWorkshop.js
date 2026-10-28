@@ -2510,8 +2510,9 @@ function bindStaticListeners() {
         const startDraft = draft;
         try {
             const gen = await import('../features/avatarGenerator.js');
-            if (!gen.isSdAvailable()) {
-                if (window.toastr) window.toastr.warning('The Image Generation (Stable Diffusion) extension isn\'t enabled.', 'Character Workshop', { timeOut: 5000 });
+            const problem = gen.imageSourceProblem();
+            if (problem) {
+                if (window.toastr) window.toastr.warning(`Cannot draw: ${problem}.`, 'Character Workshop', { timeOut: 6000 });
                 return;
             }
             if (gen.isGenerating(name)) {
@@ -2540,7 +2541,7 @@ function bindStaticListeners() {
                 try { clearPortraitCache(); updatePortraitBar(); } catch (e) {}
                 if (window.toastr) window.toastr.success(`New portrait ready for ${name}.`, '', { timeOut: 3000 });
             } else if (window.toastr) {
-                window.toastr.warning(`Portrait generation failed for ${name} — the image backend reported an error. Check the Image Generation extension settings and your backend's console.`, '', { timeOut: 8000 });
+                window.toastr.warning(`Portrait generation failed for ${name} — the image source reported an error. Settings → Image Generation → Test, and the backend's own console.`, '', { timeOut: 8000 });
             }
         } catch (e) {
             console.error('[Dooms Tracker] Workshop: portrait render failed', e);

@@ -1,21 +1,28 @@
 /**
- * Avatar Generator Module
- * Handles automatic and manual avatar generation for NPC characters
+ * Portraits — the pictures on the Present Characters cards.
  *
- * Features:
- * - Batch generation with awaitable completion
- * - Batch prompt generation via LLM
- * - Individual image generation via /sd command
- * - Manual regeneration support
+ * Every portrait DES draws goes through the image service
+ * (src/systems/features/imageGen.js: Settings → Image Generation decides
+ * the source). Two ways in:
+ *
+ * - Automatic, after a fresh reply, under the one rule on the page
+ *   (Portraits: Off / Only missing / State changed / Every reply), the same
+ *   in every tracker mode and never from a recovery (docs/image-gen-plan.md
+ *   D75–D77; the rule itself is portraitPlan in src/utils/imageGen.js).
+ * - On request: the Workshop's Render portrait and the card menu's
+ *   Regenerate, whatever the mode says.
+ *
+ * The prompt is the character's own Portrait prompt line when one is kept,
+ * else written by the LLM from the tracker's entry; the page's portrait
+ * preamble, negative and size shape the picture.
  */
 import { characters, this_chid } from '../../../../../../../script.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
-import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
-import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
+import { renderImage, sourceProblem, imageCfg } from './imageGen.js';
+import { portraitPlan, portraitStateHash } from '../../utils/imageGen.js';
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { deletePortraitsIfUnreferenced, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
 import { BASE_VERSION, getActiveCampaignId, hasProfile, portraitRefCount, readVersion, writeVersion } from '../lorebook/campaignProfiles.js';
 import { generateAvatarPromptGenerationPrompt, generateAutoPortraitPromptGenerationPrompt, generateDescriptionPortraitPrompt } from '../generation/promptBuilder.js';
@@ -24,6 +31,8 @@ import { hasPendingAliasDecision } from './characterAliases.js';
 // Generation state - tracks characters currently being generated
 const pendingGenerations = new Set();
 const AUTO_PORTRAIT_SOURCE = 'des.autoPortrait';
+let saidSo = false;             // D77: the first automatic run in a session says so, once
+let warnedSource = false;       // the "cannot draw" warning, once a session
 
 /**
  * Flattens a portrait prompt to a single clean line before it goes into
@@ -50,9 +59,18 @@ export function sanitizePortraitPrompt(prompt) {
         .replace(/^[,\s]+|[,\s]+$/g, '');   // no leading/trailing commas
 }
 
-/** Is SillyTavern's Image Generation extension (the /sd command) loaded? */
+/**
+ * Can the chosen image source draw right now? (Settings → Image Generation:
+ * SillyTavern's extension loaded, or a ComfyUI workflow picked.) The name
+ * is the old one; the Workshop and the card menu read it.
+ */
 export function isSdAvailable() {
-    try { return !!SlashCommandParser.commands['sd']; } catch (e) { return false; }
+    return sourceProblem() === '';
+}
+
+/** Why it cannot, '' when it can: for the Workshop's and the card menu's messages. */
+export function imageSourceProblem() {
+    return sourceProblem();
 }
 
 /**
@@ -74,13 +92,9 @@ export function getCharacterAppearance(characterName) {
     return '';
 }
 
+/** Are automatic portraits on at all (the page's mode is not Off)? */
 export function isAutoPortraitModeEnabled() {
-    return Boolean(
-        extensionSettings.enabled &&
-        extensionSettings.syncExpressionsToPresentCharacters &&
-        extensionSettings.portraitEnhancementMode === 'autoPortraits' &&
-        (extensionSettings.autoPortraitMode || 'only_missing') !== 'off'
-    );
+    return Boolean(extensionSettings.enabled && imageCfg().portraits.mode !== 'off');
 }
 
 function getGeneratedPortraitMeta(characterName) {
@@ -140,28 +154,6 @@ function storeResultInStartingVersion(campaignAtStart, startVersionId, character
     return true;
 }
 
-function stableStringify(value) {
-    if (value === null || value === undefined) return '';
-    if (typeof value !== 'object') return String(value);
-    if (Array.isArray(value)) {
-        return `[${value.map(stableStringify).join(',')}]`;
-    }
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
-}
-
-function hashString(text) {
-    let hash = 5381;
-    const str = String(text || '');
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
-    }
-    return (hash >>> 0).toString(16);
-}
-
-function buildPortraitStateHash(characterData) {
-    return hashString(stableStringify(characterData));
-}
-
 function stripReasoning(text) {
     if (!text) return '';
     return String(text)
@@ -216,19 +208,23 @@ function namesMatch(cardName, aiName) {
     const wordBoundary = new RegExp(`\\b${escapedCardCore}\\b`);
     return wordBoundary.test(aiCore);
 }
+/** The portrait DES holds for a character ('' when none). */
+function portraitOf(characterName) {
+    const avatar = extensionSettings.npcAvatars ? extensionSettings.npcAvatars[characterName] : '';
+    return typeof avatar === 'string' ? avatar : '';
+}
+
 /**
  * Checks if a character already has an avatar (custom NPC avatar or from character card)
  * @param {string} characterName - Name of character to check
  * @returns {boolean} True if character has an avatar
  */
 export function hasExistingAvatar(characterName) {
-    // Check for custom NPC avatar first
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
-        const avatar = extensionSettings.npcAvatars[characterName];
-        if (typeof avatar === 'string' && avatar) {
-            return true;
-        }
-    }
+    return !!portraitOf(characterName) || hasCardAvatar(characterName);
+}
+
+/** Does a SillyTavern card (a group member, a character, the chat's own) already give this name a face? */
+export function hasCardAvatar(characterName) {
     // Check group members for avatar
     if (selected_group) {
         try {
@@ -264,13 +260,6 @@ export function hasExistingAvatar(characterName) {
     return false;
 }
 
-function hasProtectedAvatar(characterName) {
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
-        return !getGeneratedPortraitMeta(characterName);
-    }
-    return hasExistingAvatar(characterName);
-}
-
 function normalizeCharacterEntries(characterEntries) {
     if (!Array.isArray(characterEntries)) return [];
     return characterEntries
@@ -278,61 +267,84 @@ function normalizeCharacterEntries(characterEntries) {
         .filter(entry => entry && entry.name && String(entry.name).toLowerCase() !== 'unavailable');
 }
 
-function reserveAutoPortraitGeneration(characterData) {
-    const name = characterData.name;
-    const mode = extensionSettings.autoPortraitMode || 'only_missing';
-    const existing = extensionSettings.npcAvatars?.[name];
-    const meta = getGeneratedPortraitMeta(name);
-    const stateHash = buildPortraitStateHash(characterData);
-
-    if (pendingGenerations.has(name)) {
-        return { reserved: false, stateHash };
+/**
+ * A portrait DES made before 3.2 carries a hash of the whole tracker entry;
+ * the rule's hash (portraitStateHash) reads only what a portrait shows. The
+ * first look after the upgrade adopts the current state as that portrait's
+ * state, so "State changed" does not redraw every portrait once.
+ * @returns {boolean} whether any record changed (the caller saves)
+ */
+function adoptLegacyPortraitHashes(entries) {
+    let changed = false;
+    for (const entry of entries) {
+        const meta = getGeneratedPortraitMeta(entry.name);
+        if (!meta || (typeof meta.stateHash === 'string' && meta.stateHash.startsWith('v1:'))) continue;
+        meta.stateHash = portraitStateHash(entry);
+        changed = true;
     }
-    if (hasProtectedAvatar(name)) {
-        return { reserved: false, stateHash };
-    }
-
-    let eligible = false;
-    if (mode === 'only_missing') {
-        eligible = !existing;
-    } else if (mode === 'state_changed') {
-        eligible = !existing || !meta || meta.stateHash !== stateHash;
-    } else if (mode === 'every_reply') {
-        eligible = true;
-    }
-
-    if (!eligible) {
-        return { reserved: false, stateHash };
-    }
-
-    pendingGenerations.add(name);
-    return { reserved: true, stateHash };
+    return changed;
 }
 
-export async function generateAutoPortraitsForCharacters(characterEntries, messageText = '', onStarted = null) {
-    if (!isAutoPortraitModeEnabled()) {
-        return;
-    }
-    const entries = normalizeCharacterEntries(characterEntries);
-    const queue = [];
-    for (const characterData of entries) {
+/**
+ * The facts the rule asks about each name: the portrait held, the state a
+ * DES-made one was drawn from, whether one is being made, whether a card
+ * already gives the face.
+ */
+function portraitFacts() {
+    return {
+        existing: (name) => portraitOf(name),
+        generatedHash: (name) => { const meta = getGeneratedPortraitMeta(name); return meta ? (meta.stateHash || '') : null; },
+        pending: (name) => pendingGenerations.has(name),
+        cardAvatar: (name) => hasCardAvatar(name),
+    };
+}
+
+/**
+ * Which of these present characters would get a portrait now, and why not
+ * (for the diagnostics and the tests). Draws nothing.
+ * @param {Array} characterEntries - the tracker's entries
+ * @param {{ fresh?: boolean, recovery?: boolean }} [when]
+ */
+export function planAutoPortraits(characterEntries, when = {}) {
+    if (!extensionSettings.enabled) return { names: [], hashes: {}, reason: 'DES off' };
+    const entries = normalizeCharacterEntries(characterEntries).filter(e => !hasPendingAliasDecision(e.name));
+    return portraitPlan(imageCfg(), entries, portraitFacts(), when);
+}
+
+/**
+ * Portraits after a reply, under the page's rule (D75–D77).
+ * @param {Array} characterEntries - the tracker's present characters
+ * @param {string} [messageText] - the reply, for the LLM's prompt
+ * @param {Function|null} [onStarted] - called with the names once they are reserved (the cards show a spinner)
+ * @param {{ fresh?: boolean, recovery?: boolean }} [when] - fresh: a reply just arrived or Refresh was pressed; recovery: the repair request (never draws)
+ */
+export async function generateAutoPortraitsForCharacters(characterEntries, messageText = '', onStarted = null, when = {}) {
+    if (!isAutoPortraitModeEnabled()) return;
+    const entries = normalizeCharacterEntries(characterEntries)
         // Never spend a render on a name whose duplicate-decision popup is
         // still open — a Yes answer folds the card away and orphans the art.
         // If the name survives (No/Escape), the next message queues it.
-        if (hasPendingAliasDecision(characterData?.name)) continue;
-        const { reserved, stateHash } = reserveAutoPortraitGeneration(characterData);
-        if (reserved) {
-            queue.push({ characterData, stateHash });
+        .filter(e => !hasPendingAliasDecision(e.name));
+    if (adoptLegacyPortraitHashes(entries)) saveSettings();
+    const plan = portraitPlan(imageCfg(), entries, portraitFacts(), when);
+    if (!plan.names.length) return;
+    const problem = sourceProblem();
+    if (problem) {
+        if (!warnedSource) {
+            warnedSource = true;
+            console.warn(`[DES Portraits] not drawing: ${problem}`);
+            if (typeof toastr !== 'undefined') toastr.warning(`Portraits are on, but ${problem}.`, 'Image Generation', { timeOut: 8000 });
         }
-    }
-    if (queue.length === 0) {
         return;
     }
+    const queue = plan.names.map(name => ({ characterData: entries.find(e => String(e.name).trim() === name) || { name }, stateHash: plan.hashes[name] }));
+    for (const item of queue) pendingGenerations.add(item.characterData.name);
+    saySo(plan.names);
     if (onStarted) {
         try {
             onStarted(queue.map(item => item.characterData.name));
         } catch (e) {
-            console.error('[DES Auto Portraits] Error in onStarted callback:', e);
+            console.error('[DES Portraits] Error in onStarted callback:', e);
         }
     }
     for (let i = 0; i < queue.length; i++) {
@@ -342,7 +354,7 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
             const prompt = await generateAutoPortraitPrompt(characterData, messageText);
             await generateSingleAutoPortrait(name, prompt, stateHash);
         } catch (error) {
-            console.error(`[DES Auto Portraits] Failed for ${name}:`, error);
+            console.error(`[DES Portraits] Failed for ${name}:`, error);
         } finally {
             pendingGenerations.delete(name);
         }
@@ -350,6 +362,32 @@ export async function generateAutoPortraitsForCharacters(characterEntries, messa
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
+}
+
+/** D77: the first automatic run in a session names the characters, the source, and where the switch is. */
+function saySo(names) {
+    if (saidSo) return;
+    saidSo = true;
+    const g = imageCfg();
+    if (!g.portraits.notify) return;
+    const source = g.source === 'comfy' ? 'ComfyUI (direct)' : "SillyTavern's Image Generation";
+    const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
+    const mode = { only_missing: 'Only missing', state_changed: 'State changed', every_reply: 'Every reply' }[g.portraits.mode] || g.portraits.mode;
+    if (typeof toastr !== 'undefined') {
+        toastr.info(`Drawing portraits for ${list} with ${source} (Portraits: ${mode}). Settings → Image Generation → Portraits to change or switch off.`, 'Image Generation', { timeOut: 10000 });
+    }
+    console.log(`[DES Portraits] drawing ${names.join(', ')} with ${source} (${g.portraits.mode})`);
+}
+
+/**
+ * One portrait through the image service: the page's preamble, negative and
+ * size around the character's prompt. Returns the picture as the source
+ * gave it (a URL the extension saved, or ComfyUI's data URL), '' for none.
+ */
+async function renderPortrait(prompt) {
+    const p = imageCfg().portraits;
+    const out = await renderImage({ purpose: 'portrait', prompt: `${p.preamble || ''}${prompt}`.trim(), negative: p.negative || '', size: p.size });
+    return out.url || out.dataUrl || '';
 }
 
 async function generateAutoPortraitPrompt(characterData, messageText = '') {
@@ -398,25 +436,14 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
     if (!prompt) {
         prompt = buildAutoPortraitFallbackPrompt({ name: characterName });
     }
-    if (!SlashCommandParser.commands['sd']) {
-        console.warn(`[DES Auto Portraits] /sd command not available. Skipping portrait generation for ${characterName}.`);
-        if (typeof toastr !== 'undefined') {
-            toastr.warning('/sd command is not available. Enable SillyTavern image generation first.', 'DES Auto Portraits', { timeOut: 4000 });
-        }
-        return null;
-    }
     const previous = extensionSettings.npcAvatars?.[characterName];
     const campaignAtStart = getActiveCampaignId();
     const startVersionId = liveVersionIdFor(characterName);
     const previousMeta = getGeneratedPortraitMeta(characterName);
     try {
-        const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
-            { clearChatInput: false }
-        );
-        let imageUrl = extractImageUrl(result);
+        let imageUrl = await renderPortrait(prompt);
         if (!imageUrl) {
-            console.warn(`[DES Auto Portraits] Failed to extract image URL for ${characterName}:`, result);
+            console.warn(`[DES Portraits] the image source returned no picture for ${characterName}`);
             return null;
         }
         if (!extensionSettings.npcAvatars) {
@@ -444,72 +471,8 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
         }
         return imageUrl;
     } catch (error) {
-        console.error(`[DES Auto Portraits] /sd generation failed for ${characterName}:`, error);
+        console.error(`[DES Portraits] generation failed for ${characterName}:`, error);
         return null;
-    }
-}
-/**
- * Generates avatars for multiple characters and waits for all to complete.
- * This is the main entry point for auto-generation within a workflow.
- *
- * @param {string[]} characterNames - Array of character names to generate avatars for
- * @param {Function} onStarted - Optional callback when generation starts (to update UI)
- * @returns {Promise<void>} Resolves when all generations complete
- */
-export async function generateAvatarsForCharacters(characterNames, onStarted = null) {
-    if (!extensionSettings.autoGenerateAvatars) {
-        return;
-    }
-    // Filter to characters that need avatars
-    const needsGeneration = characterNames.filter(name => {
-        // Skip if already pending
-        if (pendingGenerations.has(name)) {
-            return false;
-        }
-        // Skip if has avatar
-        if (hasExistingAvatar(name)) {
-            return false;
-        }
-        return true;
-    });
-    if (needsGeneration.length === 0) {
-        return;
-    }
-    // Mark all as pending IMMEDIATELY (before any async work)
-    for (const name of needsGeneration) {
-        pendingGenerations.add(name);
-    }
-    // Trigger UI update to show loading spinners
-    if (onStarted) {
-        try {
-            onStarted([...needsGeneration]);
-        } catch (e) {
-            console.error('[RPG Avatar] Error in onStarted callback:', e);
-        }
-    }
-    try {
-        // Generate images one at a time, generating prompt on demand
-        for (const characterName of needsGeneration) {
-            // Skip if somehow already has avatar now
-            if (hasExistingAvatar(characterName)) {
-                pendingGenerations.delete(characterName);
-                continue;
-            }
-            // Generate LLM prompt for this character
-            const prompt = await generateAvatarPrompt(characterName);
-            // Generate the image using the prompt
-            await generateSingleAvatar(characterName, prompt);
-            pendingGenerations.delete(characterName);
-            // Small delay between generations to avoid overwhelming the API
-            if (needsGeneration.indexOf(characterName) < needsGeneration.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
-    } finally {
-        // Ensure all are removed from pending even if there's an error
-        for (const name of needsGeneration) {
-            pendingGenerations.delete(name);
-        }
     }
 }
 /**
@@ -659,7 +622,7 @@ function buildFallbackPrompt(characterName) {
     return `portrait of ${characterName}, character portrait, fantasy art style, detailed face, high quality`;
 }
 /**
- * Generates a single avatar using the /sd command
+ * Generates a single avatar through the image service (the Workshop's and the card menu's path)
  *
  * @param {string} characterName - Name of character to generate avatar for
  * @param {string|null} prompt - The prompt to use (optional, will fallback if null)
@@ -676,72 +639,38 @@ async function generateSingleAvatar(characterName, prompt = null) {
     const campaignAtStart = getActiveCampaignId();
     const startVersionId = liveVersionIdFor(characterName);
     try {
-        // Check if the /sd slash command is available (Stable Diffusion extension loaded)
-        if (!SlashCommandParser.commands['sd']) {
-            console.warn(`[RPG Avatar] /sd command not available — Stable Diffusion extension not loaded. Skipping avatar generation for ${characterName}.`);
+        const problem = sourceProblem();
+        if (problem) {
+            console.warn(`[RPG Avatar] not drawing ${characterName}: ${problem}`);
             return null;
         }
-        // Execute /sd command with quiet=true to suppress chat output
-        const result = await executeSlashCommandsOnChatInput(
-            `/sd quiet=true ${sanitizePortraitPrompt(prompt)}`,
-            { clearChatInput: false }
-        );
-        // Extract image URL from result
-        const imageUrl = extractImageUrl(result);
+        let imageUrl = await renderPortrait(prompt);
         if (imageUrl) {
             // Store the avatar — in the version it was generated for if the
-            // active campaign changed while /sd was running.
+            // active campaign changed while the picture was being made.
             if (!extensionSettings.npcAvatars) {
                 extensionSettings.npcAvatars = {};
+            }
+            if (isDataUrl(imageUrl)) {
+                // ComfyUI direct (and some of the extension's engines) hand
+                // back the bytes: to disk now, under des-portraits, like an
+                // automatic portrait. The previous portrait was banked to
+                // history by the caller, so no file is reused here.
+                imageUrl = await persistPortrait(null, characterName, imageUrl);
             }
             if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl)) {
                 extensionSettings.npcAvatars[characterName] = imageUrl;
             }
             saveSettings();
-            // Pass-2 perf: if the SD result is a data: URL (some providers
-            // return base64), migrate it to disk in the background. No-op
-            // when imageUrl is already an http(s)/relative URL.
-            Promise.resolve()
-                .then(() => migrateAvatarsToFiles(saveSettings))
-                .catch(() => {});
             return imageUrl;
         } else {
-            console.warn(`[RPG Avatar] Failed to extract image URL for ${characterName}:`, result);
+            console.warn(`[RPG Avatar] the image source returned no picture for ${characterName}`);
             return null;
         }
     } catch (error) {
         console.error(`[RPG Avatar] Generation failed for ${characterName}:`, error);
         return null;
     }
-}
-/**
- * Extracts image URL from /sd command result
- * Handles various result formats
- *
- * @param {any} result - Result from executeSlashCommandsOnChatInput
- * @returns {string|null} Image URL or null
- */
-function extractImageUrl(result) {
-    if (!result) return null;
-    // Handle string result
-    if (typeof result === 'string') {
-        // Validate it looks like a URL or data URI
-        if (result.startsWith('http') || result.startsWith('data:') || result.startsWith('/')) {
-            return result;
-        }
-        return null;
-    }
-    // Handle object result with various possible properties
-    if (typeof result === 'object') {
-        // Try common properties
-        const url = result.pipe || result.output || result.image || result.url || result.result;
-        if (url && typeof url === 'string') {
-            if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('/')) {
-                return url;
-            }
-        }
-    }
-    return null;
 }
 /**
  * Clears all pending generations and resets state

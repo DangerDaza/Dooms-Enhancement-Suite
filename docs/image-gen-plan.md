@@ -67,7 +67,8 @@ renderImage({ purpose: 'portrait' | 'scene', prompt, negative, size, loras, seed
   | { dataUrl } (ComfyUI: the caller saves it where it belongs)
 testSource() → { ok, line, workflows?, ping? }
 listWorkflows(), loadWorkflow(name), saveWorkflow(name, text)   (ComfyUI)
-getImageProgress(), IMAGE_PROGRESS_EVENT                          (the bar)
+renderImage(req, { onProgress, stageOf })                         (the caller's bar: scene pictures')
+sourceProblem() → '' | why the source cannot draw                  (the Workshop, the card menu, the rule)
 ```
 
 Portraits save a data URL through the existing `persistPortrait` path into
@@ -84,8 +85,13 @@ the character's folder, as before.
    the ComfyUI helpers in `src/utils/comfy.js`; scene pictures render
    through it; the scene config loses the connection keys; scene tests on
    the service's transport hook. **Done.**
-3. Portraits unified on the service under D75–D77; the recovery path no
-   longer draws; Workshop and card Regenerate through the service.
+3. Portraits unified on the service under D75–D77
+   (`generateAutoPortraitsForCharacters(entries, text, onStarted, { fresh,
+   recovery })` on `portraitPlan`; the Auto Avatars path and the
+   whole-entry hash gone, pre-3.2 records adopted without a redraw); the
+   recovery request never draws; Workshop and card Regenerate through the
+   service, with the page's preamble, negative and size;
+   `tools/portrait-flow-test.mjs`. **Done.**
 4. The page: template, renderers and binders, the old controls removed,
    styles.
 5. Docs, parity rows, CHANGELOG.

@@ -311,11 +311,13 @@ export async function onMessageReceived(data) {
                     .then(() => updatePortraitBar())
                     .catch(err => console.error('[DES] Expression classification failed:', err));
             }
+            // Portraits under the one rule (Settings → Image Generation →
+            // Portraits), after a fresh reply (D75).
             if (isAutoPortraitModeEnabled() && parsedData.characterThoughts && isAwaitingNewMessage) {
                 const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
-                generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage.mes)
+                generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage.mes, null, { fresh: true })
                     .then(() => updatePortraitBar())
-                    .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
+                    .catch(err => console.error('[DES] Portrait generation failed:', err));
             }
             // ── Active user character expression refresh ──
             // Without this, the user-character classifier only fires on

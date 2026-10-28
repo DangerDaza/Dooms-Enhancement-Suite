@@ -50,6 +50,17 @@ export function sdSourceName() {
     } catch (e) { return ''; }
 }
 
+/**
+ * Why the chosen source cannot draw right now, '' when it can: for
+ * SillyTavern's extension, its /sd command must exist; for ComfyUI direct,
+ * a workflow must be picked (the card itself is asked when a picture is).
+ */
+export function sourceProblem() {
+    const g = imageCfg();
+    if (g.source === 'comfy') return g.comfy.workflow ? '' : 'no ComfyUI workflow is chosen on Settings → Image Generation';
+    return isSdAvailable() ? '' : "SillyTavern's Image Generation extension is not enabled (Extensions → Image Generation), and Settings → Image Generation points at it";
+}
+
 /** The status line for Settings → Image Generation. */
 export function sourceStatus() {
     return describeSource(imageCfg(), { stAvailable: isSdAvailable(), stSourceName: sdSourceName() });

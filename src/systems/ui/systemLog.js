@@ -182,6 +182,9 @@ function buildDiagnosticHeader() {
         lines.push(`enableDialogueColoring: ${s.enableDialogueColoring}`);
         lines.push(`enableNarratorMode: ${s.enableNarratorMode}`);
         lines.push(`autoGenerateAvatars: ${s.autoGenerateAvatars}`);
+        lines.push(`imageGen.source: ${s.imageGen?.source || '(unset)'}`);
+        lines.push(`imageGen.comfy.workflow: ${s.imageGen?.comfy?.workflow || '(none)'}`);
+        lines.push(`imageGen.portraits.mode: ${s.imageGen?.portraits?.mode || '(unset)'}`);
         lines.push(`perChatCharacterTracking: ${s.perChatCharacterTracking}`);
         lines.push(`historyPersistence.enabled: ${s.historyPersistence?.enabled}`);
         lines.push(`historyPersistence.injectionPosition: ${s.historyPersistence?.injectionPosition || '(unset)'}`);

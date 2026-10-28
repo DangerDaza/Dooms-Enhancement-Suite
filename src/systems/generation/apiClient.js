@@ -36,7 +36,7 @@ import { renderQuests } from '../rendering/quests.js';
 import { i18n } from '../../core/i18n.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
 import { markRecovered } from './trackerRecovery.js';
-import { generateAvatarsForCharacters, generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
+import { generateAutoPortraitsForCharacters, isAutoPortraitModeEnabled } from '../features/avatarGenerator.js';
 // Store the original preset name to restore after tracker generation
 let originalPresetName = null;
 /**
@@ -517,28 +517,17 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
                 updateChatThoughts();
                 // Save to chat metadata (immediate: generation-end commit point)
                 saveChatData({ immediate: true });
-                if (isAutoPortraitModeEnabled()) {
+                // Portraits under the one rule (Settings → Image Generation →
+                // Portraits): a Refresh and a separate-mode reply are fresh;
+                // the recovery request is a repair and never draws (D75, D76).
+                if (isAutoPortraitModeEnabled() && !recovery) {
                     const charactersForPortraits = parseCharacterEntriesFromThoughts(parsedData.characterThoughts);
                     if (charactersForPortraits.length > 0) {
                         generateAutoPortraitsForCharacters(charactersForPortraits, lastMessage?.mes || '', () => {
                             renderThoughts();
-                        })
+                        }, { fresh: true, recovery })
                             .then(() => renderThoughts())
-                            .catch(err => console.error('[DES] Auto Portrait generation failed:', err));
-                    }
-                }
-                // Generate avatars if auto-generate is enabled (runs within this workflow)
-                // This uses the DES Trackers preset and keeps the button spinning
-                if (extensionSettings.autoGenerateAvatars && !isAutoPortraitModeEnabled()) {
-                    const charactersNeedingAvatars = parseCharactersFromThoughts(parsedData.characterThoughts);
-                    if (charactersNeedingAvatars.length > 0) {
-                        // Generate avatars - this awaits completion
-                        await generateAvatarsForCharacters(charactersNeedingAvatars, (names) => {
-                            // Callback when generation starts - re-render to show loading spinners
-                            renderThoughts();
-                        });
-                        // Re-render once all avatars are generated
-                        renderThoughts();
+                            .catch(err => console.error('[DES] Portrait generation failed:', err));
                     }
                 }
             }
@@ -598,6 +587,3 @@ export function parseCharacterEntriesFromThoughts(characterThoughtsData) {
     return characters;
 }
 
-function parseCharactersFromThoughts(characterThoughtsData) {
-    return parseCharacterEntriesFromThoughts(characterThoughtsData).map(char => char.name).filter(Boolean);
-}

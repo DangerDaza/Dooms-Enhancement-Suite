@@ -1343,13 +1343,13 @@ function clearCharacterColor(characterName) {
  * Re-runs AI portrait generation for a character from the context menu.
  * Confirms first (it spends an image-generation call), then delegates to
  * avatarGenerator.regenerateAvatar, which banks the current portrait in the
- * character's history, rebuilds the LLM prompt, and calls the Image
- * Generation extension's /sd.
+ * character's history, rebuilds the LLM prompt, and draws through the image
+ * service (Settings → Image Generation).
  */
 function regeneratePortraitFor(characterName) {
     const ok = window.confirm(
         `Regenerate ${characterName}'s portrait?\n\n` +
-        `A fresh portrait is generated with your Image Generation extension. ` +
+        `A fresh portrait is generated with your image source (Settings → Image Generation). ` +
         `The current one is kept — right-click → Restore Previous Portrait brings it back.`
     );
     if (!ok) return;
@@ -1370,12 +1370,13 @@ function regeneratePortraitFor(characterName) {
             if (window.toastr) toastr.success(`New portrait ready for ${characterName}.`, '', { timeOut: 3000 });
         } else if (window.toastr) {
             // Two very different failures deserve two different messages: the
-            // /sd command not existing (extension off) vs the image backend
-            // rejecting the request (its own console has the real reason).
-            if (gen.isSdAvailable()) {
-                toastr.warning(`Portrait generation failed for ${characterName} — the image backend reported an error. Check the Image Generation extension settings and your backend's console (for ComfyUI, the server log names the failing node/model).`, '', { timeOut: 8000 });
+            // source not set up vs the image backend rejecting the request
+            // (its own console has the real reason).
+            const problem = gen.imageSourceProblem();
+            if (!problem) {
+                toastr.warning(`Portrait generation failed for ${characterName} — the image source reported an error. Settings → Image Generation → Test, and the backend's own console (for ComfyUI, the server log names the failing node/model).`, '', { timeOut: 8000 });
             } else {
-                toastr.warning(`Portrait generation failed for ${characterName} — the Image Generation (Stable Diffusion) extension isn't enabled.`, '', { timeOut: 6000 });
+                toastr.warning(`Portrait generation failed for ${characterName} — ${problem}.`, '', { timeOut: 6000 });
             }
         }
     }).catch((err) => {
