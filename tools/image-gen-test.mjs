@@ -82,6 +82,14 @@ console.log('\n§4 the render values and the status line');
     check('status: ComfyUI names the address and the workflow', describeSource(cf).includes('8189') && describeSource(cf).includes('Moss.json') && describeSource(imageGenConfig({ imageGen: { source: 'comfy' } })).includes('no workflow'));
 }
 
+console.log('\n§4b the places group');
+{
+    const d = defaultImageGenConfig();
+    check('defaults: square, no preamble, no negative, not automatic', d.places.size === 'square' && d.places.preamble === '' && d.places.auto === false);
+    const c = imageGenConfig({ imageGen: { places: { size: 'tall', preamble: 'Matte painting, ', auto: 'yes' } } });
+    check('normalised: a bad size falls back, auto only when true', c.places.size === 'square' && c.places.preamble === 'Matte painting, ' && c.places.auto === false && imageGenConfig({ imageGen: { places: { auto: true, size: 'landscape' } } }).places.auto === true);
+}
+
 console.log('\n§5 a prompt on a slash command');
 check('pipes and newlines become separators, macros defused, quotes softened, runs collapsed', slashSafe('a | b {{char}}\n  c\t "d",, ') === 'a, b char, c \'d\'' && slashSafe('') === '' && slashSafe(null) === '');
 

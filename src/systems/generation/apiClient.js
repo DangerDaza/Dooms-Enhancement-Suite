@@ -549,7 +549,7 @@ export async function updateRPGData(renderInfoBox, renderThoughts, { force = fal
         setLastActionWasSwipe(false);
         // Emit event for other extensions to know DES has finished updating
         console.debug('[Dooms Tracker] Emitting DOOMS_TRACKER_UPDATE_COMPLETE event');
-        eventSource.emit(DOOMS_TRACKER_UPDATE_COMPLETE);
+        eventSource.emit(DOOMS_TRACKER_UPDATE_COMPLETE, { recovery, force });    // Live World reads whether this was the repair request (docs/map-window-plan.md D83)
     }
 }
 /**

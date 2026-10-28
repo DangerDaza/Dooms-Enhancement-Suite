@@ -23,7 +23,7 @@ import { openEmojiPicker, closeEmojiPicker } from './emojiPicker.js';
 import { updatePortraitBar, resolvePortrait } from './portraitBar.js';
 // Cut to a quest (Phase 5b): the menu on a quest box
 import { questText, promoteQuest } from '../../utils/questCut.js';
-import { startQuestCut } from '../features/questCut.js';
+import { startQuestCut, recordCompletedQuest } from '../features/questCut.js';
 
 const PAGE_ID = 'dooms-pb-page';
 const EDITOR_ID = 'dooms-inv-editor';
@@ -142,6 +142,9 @@ function forceRerender() {
 
 function removeQuest(field, index) {
     writeQuests(q => {
+        // Completed, so recorded for the Map window's Completed quests (docs/map-window-plan.md D86), then removed.
+        const text = field === 'main' ? questText(q.main) : (index !== undefined && index !== null && index !== '' ? questText(q.optional[Number(index)]) : '');
+        try { recordCompletedQuest(text); } catch (e) { /* the list is the shelf's; the record is a courtesy */ }
         if (field === 'main') q.main = 'None';
         else if (index !== undefined && index !== null && index !== '') q.optional.splice(Number(index), 1);
     });

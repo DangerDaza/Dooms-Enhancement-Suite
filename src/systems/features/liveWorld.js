@@ -12,12 +12,18 @@
  *   - blind injection (G4): the world lines through SillyTavern's own
  *     setExtensionPrompt, at a configurable depth and role, never through
  *     the Context Inspector's recorder; no toasts, the System Log only;
- *   - the /advance and /liveworld slash commands (G5).
+ *   - the /advance and /liveworld slash commands (G5);
+ *   - the places the story visits (docs/map-window-plan.md D82, D83): each
+ *     fresh reply's tracker location recorded on the state, a deleted reply
+ *     taking its visit back, a place's picture drawn through the image
+ *     service on request (drawPlace) or, with the switch on, the first time
+ *     the story reaches it.
  *
- * The pure parts are src/utils/liveWorld.js; the dashboard is
- * src/systems/ui/worldDashboard.js (lazy).
+ * The pure parts are src/utils/liveWorld.js and src/utils/worldMap.js; the
+ * window is src/systems/ui/worldDashboard.js (lazy).
  */
 import { getContext } from '../../../../../../extensions.js';
+import { saveBase64AsFile } from '../../../../../../utils.js';
 import { chat, chat_metadata, saveChatDebounced, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
@@ -28,6 +34,10 @@ import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { resolvePersonaName } from './diceRolls.js';
+import { renderImage, sourceProblem } from './imageGen.js';
+import { imageGenConfig } from '../../utils/imageGen.js';
+import { parseCaptionReply } from '../../utils/scenePictures.js';
+import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
 import {
     WORLD_SLOT,
     liveWorldConfig,
@@ -68,6 +78,11 @@ let pendingTimer = null;     // the fallback for a wait that nothing ends (the t
 let generationStartedAt = 0; // SillyTavern's GENERATION_STARTED without its end yet; automatic advances wait for it
 let inherit = null;          // a regenerate: { id, index } the reply replacing the deleted one takes over its id
 let transport = null;        // test hook: ({ system, user }) => Promise<string>
+let placeTransport = null;   // test hook: { describe({ system, user }) => Promise<string> }
+let drawing = '';            // the place being drawn, '' when none
+let newPlace = '';           // a place the latest scene reached for the first time (for the automatic draw)
+const DRAW_RETRY_MS = 3000;
+const DRAW_RETRIES = 5;
 const packCache = new Map();
 const PENDING_FALLBACK_MS = 20000;
 const GENERATION_START_STALE_MS = 15000;    // a start with no end (a slash command typed as a message) is forgotten after this
@@ -233,10 +248,13 @@ function presentReplyIds() {
 /** A state ahead of its chat (a branch, a checkpoint, deleted replies) is wound back to it. */
 function reconcile(detail) {
     if (!ready()) return false;
-    const r = reconcileWithChat(state, presentReplyIds(), { pack: activePack });
-    if (r.state === state) return false;
-    log(`the chat no longer holds ${r.undone} change(s) and ${r.pruned} counted repl${r.pruned === 1 ? 'y' : 'ies'}; the state follows it`);
-    commit(r.state, { source: 'rewind', ...detail }, { immediate: true });
+    const ids = presentReplyIds();
+    const r = reconcileWithChat(state, ids, { pack: activePack });
+    const v = reconcileVisited(r.state, ids);
+    if (v.state === state) return false;
+    if (r.state !== state) log(`the chat no longer holds ${r.undone} change(s) and ${r.pruned} counted repl${r.pruned === 1 ? 'y' : 'ies'}; the state follows it`);
+    if (v.pruned || v.dropped) log(`${v.pruned} visit(s) taken back; ${v.dropped} place(s) left the row`);
+    commit(v.state, { source: 'rewind', ...detail }, { immediate: true });
     return true;
 }
 
@@ -258,6 +276,7 @@ export async function onWorldChatChanged() {
     loadedMeta = null;
     loadedChat = undefined;
     if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+    newPlace = '';
     if (!isLiveWorldOn()) { clearWorldSlot(); notify({ source: 'chat' }); return; }
     const id = chatId();
     if (!id) { clearWorldSlot(); notify({ source: 'chat' }); return; }    // no chat open: nothing to seed or keep
@@ -366,13 +385,41 @@ export function presentNamesFromTracker() {
  * scene itself shows.
  */
 function placeFromScene(from, m) {
-    const names = knownNamesFromTracker();
-    if (!names.length) return from;
     const facts = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
-    const place = placeFromText(activePack, facts.location);
-    const r = seenInScene(from, activePack, { names, place, msgId: m ? messageKey(m) : null, gameDate: facts.date || '', gameTime: facts.time || '' });
-    if (r.placed) log(`the scene placed ${r.placed} at ${place}`);
-    return r.state;
+    const msgId = m ? messageKey(m) : null;
+    let next = from;
+    const names = knownNamesFromTracker();
+    if (names.length) {
+        const place = placeFromText(activePack, facts.location);
+        const r = seenInScene(next, activePack, { names, place, msgId, gameDate: facts.date || '', gameTime: facts.time || '' });
+        if (r.placed) log(`the scene placed ${r.placed} at ${place}`);
+        next = r.state;
+    }
+    // The party's own place (docs/map-window-plan.md D82): the tracker's location, a pack place or one of its own, newest first.
+    const v = visitPlace(next, activePack, { location: facts.location, msgId, gameDate: facts.date || '', gameTime: facts.time || '' });
+    if (v.changed) {
+        next = v.state;
+        if (v.added) { newPlace = v.id; log(`a new place: ${v.id}`); }
+    }
+    return next;
+}
+
+/** After a fresh reply recorded a place for the first time: the automatic draw, when the switch is on (D83). Never after a recovery. */
+function drawNewPlaceIfAsked({ recovery = false } = {}) {
+    const id = newPlace;
+    newPlace = '';
+    if (!id || recovery || !ready()) return;
+    if (!imageGenConfig(extensionSettings).places.auto) return;
+    scheduleDraw(id, 'auto', DRAW_RETRIES);
+}
+
+function scheduleDraw(id, reason, retries) {
+    const token = loadToken;
+    setTimeout(async () => {
+        if (token !== loadToken) return;    // the chat changed while the timer ran
+        const r = await drawPlace(id, { reason }).catch(err => ({ ok: false, reason: 'error', error: String(err && err.message || err) }));
+        if (!r.ok && (r.reason === 'busy' || r.reason === 'running') && retries > 0) scheduleDraw(id, reason, retries - 1);    // another request holds the flag: a little later
+    }, reason === 'auto' ? 400 : 0);
 }
 
 function knownNamesFromTracker() {
@@ -413,6 +460,7 @@ export function onWorldMessageReceived(messageId, type) {
     let next = placeFromScene(r.state, m);
     if (!r.counted && next === state) return;
     commit(next, { source: 'count', counted: r.counted });
+    drawNewPlaceIfAsked();
     if (r.counted && advanceDue(next, cfg().every)) {
         if (trackerRequestExpected()) waitFor('count', 'tracker');    // the tracker's own request first (D46), the advance after it
         else scheduleAdvance('count');
@@ -489,7 +537,7 @@ export function onWorldMessageDeleted() {
 }
 
 /** After the tracker request (separate mode): the scene it brought places people (D70), and an advance that waited runs. */
-export function onWorldTrackerUpdateComplete() {
+export function onWorldTrackerUpdateComplete(detail) {
     if (!ready()) return;
     if (trackerToken !== loadToken) return;    // a request this chat's replies did not ask for (another chat's, in flight across the switch): not its names, not its wait
     trackerToken = 0;
@@ -497,6 +545,7 @@ export function onWorldTrackerUpdateComplete() {
     const m = list && list.length ? list[list.length - 1] : null;
     const next = placeFromScene(state, m && !m.is_user && !m.is_system && !isToolRecord(m) ? m : null);
     if (next !== state) commit(next, { source: 'scene' });
+    drawNewPlaceIfAsked({ recovery: !!(detail && detail.recovery) });    // the repair request records the place but never draws (D83)
     flushPending('tracker');
 }
 
@@ -633,6 +682,122 @@ export function describeAdvanceResult(r, { spoilerFree = false } = {}) {
 
 export function isAdvancing() {
     return advancing;
+}
+
+// ─── Places and their pictures (docs/map-window-plan.md D82, D83) ───────────
+
+/** Test hook: the description request behind { describe({ system, user }) → Promise<string> }. */
+export function __setPlaceTransport(t) {
+    placeTransport = t && typeof t.describe === 'function' ? t : null;
+}
+
+/** The row of places for the window, newest first ([] while the world is off). */
+export function getPlacesRow() {
+    return ready() ? placesRow(state, activePack) : [];
+}
+
+/** The id of the place being drawn now, '' when none. */
+export function isDrawingPlace() {
+    return drawing;
+}
+
+/** The scenes at or near a place's last visit: the ten messages up to and just after it (the latest ten when the visit's reply is gone). */
+function recentTextNear(entry) {
+    const list = chatArray() || [];
+    const ids = new Set(Array.isArray(entry.visits) ? entry.visits : []);
+    let at = -1;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i] && ids.has(list[i].dooms_world_id)) { at = i; break; }
+    const end = at >= 0 ? Math.min(list.length, at + 3) : list.length;
+    return buildRecentText(list.slice(Math.max(0, end - 10), end), { count: 10, truncation: 500, persona: playerNames()[0] || 'Player' });
+}
+
+/** A place's picture, as bytes from the source, saved into the character's folder like a scene picture. */
+async function savePlaceFile(dataUrl, id) {
+    const comma = dataUrl.indexOf(',');
+    const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    const format = /^data:image\/(\w+)/.exec(dataUrl)?.[1] || 'png';
+    let folder = 'places';
+    try { folder = getContext().name2 || folder; } catch (e) { /* no context, the default folder */ }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = String(id).replace(/^loc:/, '').replace(/[^\w-]+/g, '-').slice(0, 40) || 'place';
+    return saveBase64AsFile(base64, folder, `des-place-${name}-${stamp}`, format);
+}
+
+/**
+ * Draws a place's picture: the AI describes the place from the scenes at
+ * or near its last visit (a background request on the tracker's profile),
+ * the image service renders it with the page's Places group, the file is
+ * saved and its URL kept on the visit. One at a time; nothing is written
+ * when the chat changes meanwhile.
+ * @returns {Promise<{ ok: boolean, reason?: string, error?: string, url?: string }>}
+ */
+export async function drawPlace(id, { reason = 'manual' } = {}) {
+    if (!ready()) return { ok: false, reason: 'off' };
+    if (drawing) return { ok: false, reason: 'running' };
+    const entry = (state.visited || []).find(e => e.id === id);
+    if (!entry) return { ok: false, reason: 'no-place' };
+    const problem = sourceProblem();
+    if (problem) return { ok: false, reason: 'source', error: problem };
+    drawing = id;
+    notify({ source: 'draw-start', id });
+    const token = loadToken;
+    const stale = () => token !== loadToken || chat_metadata !== loadedMeta || (chatId() !== undefined && chatId() !== loadedChat);
+    try {
+        const g = imageGenConfig(extensionSettings).places;
+        const row = placesRow(state, activePack).find(x => x.id === id) || { label: entry.label, parent: '' };
+        const prompt = buildPlacePrompt({ place: { label: row.label, parent: row.parent }, recent: recentTextNear(entry), world: activePack.name, size: g.size });
+        const external = extensionSettings.generationMode === 'external';
+        const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
+        const run = async () => {
+            if (placeTransport) return placeTransport.describe(prompt);
+            if (external) return generateWithExternalAPI(messages);
+            return safeGenerateRaw({ prompt: messages, quietToLoud: false });
+        };
+        if (reason === 'auto') {
+            try { if (typeof toastr !== 'undefined') toastr.info(`Drawing a picture of ${row.label} (Settings → Image Generation → Places to switch this off).`, 'Map', { timeOut: 6000 }); } catch (e) { /* no toastr */ }
+        }
+        log(`draw (${reason}) requested`, { place: id });
+        const result = await withBackgroundProfile(run, { external, label: 'place' });
+        if (stale()) return { ok: false, reason: 'stale' };
+        if (result === BACKGROUND_BUSY) return { ok: false, reason: 'busy' };
+        const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
+        const description = parseCaptionReply(text) || `A wide establishing view of ${row.label}${row.parent ? `, ${row.parent}` : ''}, in ${activePack.name}.`;
+        const picture = await renderImage({ purpose: 'place', prompt: `${g.preamble || ''}${description}`.trim(), negative: g.negative || '', size: g.size });
+        if (stale()) return { ok: false, reason: 'stale' };
+        let url = picture.url || '';
+        if (!url && picture.dataUrl) url = await savePlaceFile(picture.dataUrl, id);
+        if (!url) throw new Error('the image source returned no picture');
+        if (stale()) return { ok: false, reason: 'stale' };
+        const next = clone(state);
+        const e = (next.visited || []).find(x => x.id === id);
+        if (!e) return { ok: false, reason: 'no-place' };    // the place left the row while the picture was made
+        e.image = url;
+        e.prompt = description;
+        e.drawnAt = Date.now();
+        commit(next, { source: 'draw', id }, { immediate: true });
+        log(`drew ${id}`, { url });
+        return { ok: true, url };
+    } catch (e) {
+        const error = String(e && e.message || e);
+        log('draw failed', { place: id, error });
+        return { ok: false, reason: 'error', error };
+    } finally {
+        drawing = '';
+        notify({ source: 'draw-end', id });
+    }
+}
+
+/** One line for a result of drawPlace, for the window. */
+export function describeDrawResult(r, label = 'the place') {
+    if (!r) return 'Nothing happened.';
+    if (r.ok) return `A picture of ${label} is ready.`;
+    if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
+    if (r.reason === 'running') return 'A picture is already being made.';
+    if (r.reason === 'no-place') return 'That place is no longer in the row.';
+    if (r.reason === 'source') return `Cannot draw: ${r.error}.`;
+    if (r.reason === 'busy') return 'Another request is running; try again in a moment.';
+    if (r.reason === 'stale') return 'The chat changed while the picture was made; nothing was kept.';
+    return `The picture failed: ${r.error || 'the request did not complete'}.`;
 }
 
 // ─── Injection (G4) ─────────────────────────────────────────────────────────

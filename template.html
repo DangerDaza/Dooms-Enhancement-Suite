@@ -2099,6 +2099,40 @@
                             <span class="rpg-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="rpg-subsection-label">Places</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Draw new places automatically</span>
+                            <span class="rpg-setting-hint">The Map window (Live World) shows the places the story has been to as pictures.
+                                Draw on a place asks the AI for a short description of it from the scenes there and renders it
+                                with the source above; with this on, a place is drawn the first time the story reaches it, after
+                                the reply, with a toast. Off: only when you press Draw.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-img-place-auto" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Size</span>
+                            <span class="rpg-setting-hint">For ComfyUI direct; SillyTavern's extension uses its own.</span>
+                        </div>
+                        <select id="rpg-img-place-size" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Style preamble</span>
+                            <span class="rpg-setting-hint">Put in front of every place description: the medium, the house style.</span>
+                            <textarea id="rpg-img-place-preamble" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;" placeholder="Matte painting, wide establishing shot, "></textarea>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Negative prompt</span>
+                            <textarea id="rpg-img-place-negative" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;"></textarea>
+                        </div>
+                    </div>
                     <div class="rpg-subsection-label">Scene pictures</div>
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">

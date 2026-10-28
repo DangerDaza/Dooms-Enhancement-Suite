@@ -56,11 +56,18 @@ export const PORTRAIT_DEFAULTS = Object.freeze({
     notify: true,
 });
 
+export const PLACE_DEFAULTS = Object.freeze({
+    size: 'square',
+    preamble: '',
+    negative: '',
+    auto: false,        // draw a place the first time the story reaches it (docs/map-window-plan.md D83)
+});
+
 export const CONFIG_VERSION = 1;
 
 /** A fresh copy of the defaults, for settings files. */
 export function defaultImageGenConfig() {
-    return { v: CONFIG_VERSION, source: 'sillytavern', comfy: { ...COMFY_DEFAULTS }, portraits: { ...PORTRAIT_DEFAULTS } };
+    return { v: CONFIG_VERSION, source: 'sillytavern', comfy: { ...COMFY_DEFAULTS }, portraits: { ...PORTRAIT_DEFAULTS }, places: { ...PLACE_DEFAULTS } };
 }
 
 const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -77,6 +84,7 @@ export function imageGenConfig(settings) {
     const g = settings && settings.imageGen && typeof settings.imageGen === 'object' ? settings.imageGen : {};
     const c = g.comfy && typeof g.comfy === 'object' ? g.comfy : {};
     const p = g.portraits && typeof g.portraits === 'object' ? g.portraits : {};
+    const l = g.places && typeof g.places === 'object' ? g.places : {};
     const url = str(c.url, '').trim().replace(/\/+$/, '');
     return {
         v: int(g.v, 0, 99, 0),
@@ -99,6 +107,12 @@ export function imageGenConfig(settings) {
             preamble: str(p.preamble, PORTRAIT_DEFAULTS.preamble),
             negative: str(p.negative, PORTRAIT_DEFAULTS.negative),
             notify: p.notify !== false,
+        },
+        places: {
+            size: SIZE_PRESETS.some(s => s.id === l.size) ? l.size : PLACE_DEFAULTS.size,
+            preamble: str(l.preamble, PLACE_DEFAULTS.preamble),
+            negative: str(l.negative, PLACE_DEFAULTS.negative),
+            auto: l.auto === true,
         },
     };
 }
