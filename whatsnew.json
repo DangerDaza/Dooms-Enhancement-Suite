@@ -3,6 +3,10 @@
     "title": "Stats (beta) and six hotfixes",
     "items": [
         {
+            "title": "🖼️ Image Generation: one page for every picture",
+            "body": "Settings → Image Generation decides where every picture DES makes is drawn: SillyTavern's own Image Generation extension (whatever it is set to), or a ComfyUI card directly with a workflow of your own. Portraits on the Present Characters cards follow one rule there, Draw portraits: Off, Only missing, State changed or Every reply, the same in every tracker mode; a portrait you set yourself is never replaced, and the first time DES draws some by itself in a session a toast says so and points here. The Auto Avatars pill and the Portrait Source entry are gone (their settings were carried over), and Scene pictures live on this page too. This also ends the surprise of a chat that drew a portrait for everyone at once hundreds of messages in: that was the tracker's repair request, which never draws now."
+        },
+        {
             "title": "📱 3.1.5: the Workshop from a phone",
             "body": "On an iPhone the Present Characters panel had no way into the Workshop: a long press on a card showed Apple's image sheet instead of the menu, and the little roster button in the panel's header was too small for a finger, so the tap folded the shelf instead. Now a long press on a card (half a second, finger still) opens the card menu where your finger is, and on any touch screen the roster button is a proper button. With a mouse nothing changed. And if the Workshop ever fails to load, a message says so and how to fix it, instead of a tap that does nothing."
         },

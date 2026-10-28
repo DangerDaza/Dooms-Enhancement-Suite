@@ -23,12 +23,15 @@ note of 2026-10-22); its JSON API is what DES talks to.
 ## 2. Shapes
 
 **Settings** (`extensionSettings.scenePictures`, defaults in
-`src/utils/scenePictures.js`): `enabled` (off), `comfyUrl`, `workflow` (a
-name in SillyTavern's store), `every`, `window` (messages read), `size`
-(`portrait` 864×1536 | `square` 1024×1024 | `landscape` 1536×864), `steps`,
-`cfg`, `sampler`, `scheduler`, `model`/`clip`/`vae` (what fills those
-placeholders when the workflow has them), `narrator`, `preamble`,
-`negative`, `guide` (extra caption rules), `timeoutSec`, `notify`, `debug`.
+`src/utils/scenePictures.js`): `enabled` (off), `every`, `window` (messages
+read), `size` (`portrait` 864×1536 | `square` 1024×1024 | `landscape`
+1536×864), `narrator`, `preamble`, `negative`, `guide` (extra caption
+rules), `notify`, `debug`. The ComfyUI connection (`comfyUrl`, `workflow`,
+`steps`, `cfg`, `sampler`, `scheduler`, `model`/`clip`/`vae`, `timeoutSec`)
+was here until 2026-10-28; it is the image service's now
+(`extensionSettings.imageGen.comfy`, `docs/image-gen-plan.md` D73–D78) and
+the picture is rendered through `renderImage({ purpose: 'scene' })`, on
+whichever source the Image Generation page names.
 
 **Per chat** (`chat_metadata.dooms_scene`): `{ v: 1, sinceLast, retryNext,
 lastKey, loras: [{ name, strength }], identity: '', last: { at, ok,
@@ -83,8 +86,9 @@ reads; 1.19 migrates it into `extra.media` on load.
 
 The owner's `ST_Moss_FAST_workflow.json` (the studio's graph in
 SillyTavern's placeholder format) goes into SillyTavern's workflow store,
-pasted in Settings → Scene pictures (saved through `/api/sd/comfy/save-workflow`)
-or in Image Generation → ComfyUI. DES fills `%prompt%` (the preamble and the
+pasted on Settings → Image Generation, ComfyUI (direct) (saved through
+`/api/sd/comfy/save-workflow`) or in Extensions → Image Generation → ComfyUI.
+The filling and the splice live in `src/utils/comfy.js` since 2026-10-28. DES fills `%prompt%` (the preamble and the
 caption), `%negative_prompt%`, `%seed%`, `%steps%`, `%scale%`, `%sampler%`,
 `%scheduler%`, `%width%`, `%height%`, and `%model%`/`%clip%`/`%vae%` from
 the Models fields when the workflow has them, exactly as the image
@@ -102,22 +106,24 @@ naming the node and the input, which the toast and the status carry.
 names any DES cannot fill), the LoRA file names (ComfyUI's "Value not in
 list: lora_name" names a wrong one), and the ComfyUI address (card 2 on 8189).
 
-## 5. Settings → Scene pictures (Beta)
+## 5. Settings → Image Generation → Scene pictures (Beta)
 
-The switch; the ComfyUI address; the workflow (picked from the store, or
-pasted and saved); every N turns; messages read; size; steps, CFG, sampler,
-scheduler; the models for `%model%`, `%clip%`, `%vae%`; narrator name;
-style preamble; negative prompt; extra caption rules.
-For this chat: LoRAs (one per line, `name:strength`) and identity notes. A
-status line (this chat's count, the last picture, the last error), Test
-connection and Picture now.
+A group on the Image Generation page (D78): the switch; a status line (this
+chat's count, the last picture, the last error); Picture now; every N
+turns; messages read; a toast; size; narrator name; style preamble;
+negative prompt; extra caption rules. For this chat: LoRAs (one per line,
+`name:strength`) and identity notes. The ComfyUI address, the workflow
+(picked or pasted), steps, CFG, sampler, scheduler, the models and the
+timeout are the page's ComfyUI (direct) group, shared with portraits; Test
+is the page's.
 
 ## 6. Tests
 
 `tools/scene-pictures-test.mjs` (the model, pure: the placeholders, the
-LoRA splice, the result) and `tools/scene-pictures-flow-test.mjs` (the
-lifecycle in the sandbox with the caption and SillyTavern's ComfyUI
-endpoints behind injected transports).
+LoRA splice, the result, re-exported from `src/utils/comfy.js`) and
+`tools/scene-pictures-flow-test.mjs` (the lifecycle in the sandbox with the
+caption behind the module's hook and SillyTavern's ComfyUI endpoints behind
+the image service's).
 
 ## 7. Later
 

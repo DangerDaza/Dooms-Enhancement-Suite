@@ -255,6 +255,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   two further passes (`docs/stats-plan.md` §15.9).
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
+- **Image Generation** (`docs/image-gen-plan.md`, 2026-10-28): one image service with two sources (SillyTavern's extension, ComfyUI direct); portraits under one rule on Settings → Image Generation, never from a recovery; scene pictures render through it and their section is a group on that page; the Auto Avatars pill, Portrait Source and Auto Portrait Mode are gone, migrated once.
 
 ## 5. Map of the code
 
@@ -273,6 +274,10 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/integration/sillytavern.js` | `onMessageReceived` (together parse, adoption, recovery trigger), `recoverTrackerForReply`, `onMessageSent`, `onGenerationEnded` (empty) |
 | `src/systems/generation/apiClient.js` | `updateRPGData(renderInfoBox, renderThoughts, { force, recovery })`: the separate-mode request |
 | `src/systems/generation/promptBuilder.js` | `generateSeparateUpdatePrompt` (used by the recovery too), tracker instructions |
+| `src/utils/imageGen.js`, `src/utils/comfy.js` | Pure: the image config (`imageGenConfig`, sources, sizes, portrait modes), `migrateImageGenSettings`, the portrait rule (`portraitPlan`, `portraitStateHash`), `renderValues`, `slashSafe`, `describeSource`; the ComfyUI helpers (placeholders, `fillWorkflow`, `injectLoras`, the generate body, progress words, `readComfyResult`) |
+| `src/systems/features/imageGen.js` | The image service: `renderImage({ purpose, prompt, negative, size, loras })` on the chosen source (`/sd` quiet, or `/api/sd/comfy/*` with the WebSocket progress), `testSource`, `sourceProblem`, `sourceStatus`, the workflow store |
+| `src/systems/features/avatarGenerator.js` | Portraits: `generateAutoPortraitsForCharacters(entries, text, onStarted, { fresh, recovery })` under `portraitPlan`, the record behind a DES-made portrait, `regenerateAvatar` / `generateAvatarWithPrompt` (the Workshop, the card menu), all through `renderImage` |
+| `src/systems/features/scenePictures.js` | Scene pictures: the cadence, the caption, `renderImage({ purpose: 'scene' })`, the narrator message (hidden from the prompt), the take-down before a regenerate |
 | `src/systems/rendering/trackerJsonInline.js` | The 🗂️ Tracker Data dropdown (gated on `showTrackerJsonInChat`, reads swipe data) |
 | `src/systems/ui/dicePanel.js`, `attributesPane.js`, `characterWorkshop.js`, `characterRoster.js` | Popover and chip; Workshop sheets and proficiency ticks |
 | `src/systems/voices/delivery.js`, `voiceSettings.js`, `voiceEngine.js`, `src/systems/ui/voicesSettingsUI.js` | Never whisper |

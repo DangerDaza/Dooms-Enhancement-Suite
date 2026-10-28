@@ -446,13 +446,31 @@ a rail button for the dashboard.
 
 ## Phase 7 — Scene pictures (Moss Studio)
 
-Status: **being built** (2026-10-22). Every N of the player's turns a
+Status: **built** (2026-10-22 to 2026-10-24; D71 nothing reaches the AI,
+D72 regenerate under a picture). From 2026-10-28 the picture is rendered
+by the image service (Phase 8) and the section is a group on the Image
+Generation page. Every N of the player's turns a
 background request turns the recent messages into one caption, the owner's
 Moss workflow renders it on ComfyUI (through SillyTavern's own endpoints) with
 the chat's LoRAs spliced in,
 and the picture lands in the chat as a message from the narrator. The
 design, the decisions (D60–D65) and the studio's API contract are in
 `docs/scene-pictures-plan.md`.
+
+## Phase 8 — Image Generation
+
+Status: **built** (2026-10-28, `docs/image-gen-plan.md`). The owner, after
+a phone session drew a portrait for every character through his new Moss
+setup, 400 messages in: "I want to take all of DES's image gen and put it in
+a new settings page called Image Generation. I want the user to be able to
+set up whatever image generation type they want, and I want that to fuel
+all image generation in DES." One service (`src/systems/features/imageGen.js`)
+with two sources, SillyTavern's extension and ComfyUI direct; portraits under
+one rule (Off / Only missing / State changed / Every reply) in every tracker
+mode and never from a recovery, with a toast the first time; the page with
+the ComfyUI connection, Portraits and Scene pictures as groups; the Auto
+Avatars pill, Portrait Source and Auto Portrait Mode gone; a one-time
+migration. Tests: `tools/image-gen-test.mjs`, `tools/portrait-flow-test.mjs`.
 
 ## Phase 4 — if wanted (not started, not designed)
 

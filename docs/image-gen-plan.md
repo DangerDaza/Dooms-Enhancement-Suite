@@ -6,6 +6,11 @@ generation on one new settings page, "Image Generation", where the user
 sets up whatever image source they want, and that source fuels every
 picture DES makes.
 
+**Status (2026-10-28):** steps 1–5 built on `Project-Short-Fuse`, to ship in
+the next beta. `tools/image-gen-test.mjs` and `tools/portrait-flow-test.mjs`
+are in the gate; the parity rows are in `docs/parity-checklist.md` (Image
+Generation, Present Characters Panel, Scene pictures).
+
 ## 1. Why
 
 Two features made pictures, each its own way:
@@ -98,4 +103,6 @@ the character's folder, as before.
    binders in index.js; the Auto Avatars pill, Portrait Source and Auto
    Portrait Mode gone, Per-Character Expressions about sprites alone; the
    retired keys out of the defaults. **Done.**
-5. Docs, parity rows, CHANGELOG.
+5. Docs (this status, `docs/scene-pictures-plan.md` §2/§4/§5,
+   `docs/phases-short-fuse.md` Phase 8, the handover's map), parity rows,
+   CHANGELOG, What's new. **Done.**
