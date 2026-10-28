@@ -15,13 +15,13 @@
  *     that is due, once the main generation and any other background
  *     request are over;
  *   - the caption through withBackgroundProfile (external mode respected),
- *     the picture through /api/sd/comfy (the workflow from SillyTavern's
- *     store, filled and spliced), saved into SillyTavern, posted the way
+ *     the picture through the image service (Settings → Image Generation:
+ *     SillyTavern's own extension or ComfyUI direct), saved into SillyTavern, posted the way
  *     SillyTavern's own image extension posts, always hidden from the
  *     prompt (D71: neither the picture nor its caption reaches the AI);
  *   - /scene runs one now; the settings page reads getSceneStatus().
  */
-import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, getRequestHeaders, deleteLastMessage } from '../../../../../../../script.js';
+import { chat, chat_metadata, saveChatConditional, eventSource, event_types, addOneMessage, default_avatar, deleteLastMessage } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
@@ -36,9 +36,11 @@ import { resolvePersonaName } from './diceRolls.js';
 import { getCharacterAppearance } from './avatarGenerator.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
-    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, workflowValues, workflowPlaceholders, isEditorWorkflow, fillWorkflow, injectLoras,
-    comfyGenerateBody, readComfyResult, comfyWsUrl, newClientId, nodeKinds, mergeIdentityNotes,
+    normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, mergeIdentityNotes,
 } from '../../utils/scenePictures.js';
+import { renderImage, __setImageTransport } from './imageGen.js';
+// The store and the Test button, for the settings page, from the service that owns them now.
+export { listWorkflows, loadWorkflow, saveWorkflow, testSource as testComfy } from './imageGen.js';
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -50,7 +52,7 @@ let loadedMeta = null;      // the chat_metadata object the state was loaded fro
 let loadedChat = undefined; // the chat id it was loaded with
 let running = false;
 let armed = false;          // a run is due and waits for the generation to end
-let transport = null;       // tests: { caption(prompt) → text, comfy(kind, body) → json }
+let transport = null;       // tests: { caption(prompt) → text }; a comfy(kind, body) given here is handed to the image service
 let timing = { idleMaxMs: 120000, idleStepMs: 1500 };
 
 // The run in progress, for the bar at the foot of the chat (sceneProgress.js):
@@ -328,176 +330,30 @@ async function writeCaption(c) {
 }
 
 /**
- * One request to SillyTavern's ComfyUI endpoints (/api/sd/comfy/<kind>):
- * the server talks to ComfyUI, so no header and no second server. A
- * refused answer carries the server's text (ComfyUI's own error for a
- * generate, which names the node and the input that failed).
+ * The picture through the image service (Settings → Image Generation): the
+ * preamble and the caption as the prompt, the scene's negative and size,
+ * this chat's LoRAs. The service's progress lands in this run's bar.
+ * @returns {Promise<{ file: string, dataUrl?: string, url?: string }>}
  */
-async function comfy(kind, body, { timeoutMs = 20000 } = {}) {
-    if (transport && transport.comfy) return transport.comfy(kind, body);
-    const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    try {
-        let response;
-        try {
-            response = await fetch(`/api/sd/comfy/${kind}`, { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify(body || {}), signal: controller ? controller.signal : undefined });
-        } catch (e) {
-            if (e && e.name === 'AbortError') throw new Error(`${kind === 'generate' ? 'ComfyUI did not finish the picture' : `the ${kind} request did not answer`} within ${Math.round(timeoutMs / 1000)} s`);
-            throw new Error(`SillyTavern's server could not be reached for ${kind}: ${e && e.message ? e.message : e}`);
-        }
-        const text = await response.text().catch(() => '');
-        if (!response.ok) {
-            throw new Error(kind === 'ping' ? `ComfyUI at ${body && body.url} did not answer: is that card running?` : `${kind}: ${text || `SillyTavern answered ${response.status}`}`);
-        }
-        // ping and save-workflow answer with a bare "OK"; the rest with JSON.
-        if (!text) return null;
-        try { return JSON.parse(text); } catch (e) { return text; }
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
-
-/** The workflows in SillyTavern's own store (Image Generation → ComfyUI). */
-export async function listWorkflows() {
-    const list = await comfy('workflows', {});
-    return (Array.isArray(list) ? list : []).map(String);
-}
-
-/** One workflow's text from the store, '' for none. */
-export async function loadWorkflow(name) {
-    const text = await comfy('workflow', { file_name: name });
-    return typeof text === 'string' ? text : '';
-}
-
-/** A pasted workflow saved into the store under a name, so it can be picked. */
-export async function saveWorkflow(name, text) {
-    JSON.parse(text);    // not JSON: throws, and the page says so
-    if (isEditorWorkflow(text)) throw new Error('this is the ComfyUI editor\'s save format (nodes and links); DES needs the API graph: in ComfyUI, Workflow → Export (API), and paste that');
-    await comfy('save-workflow', { file_name: name, workflow: text });
-    return name;
-}
-
-/**
- * Settings → Test connection: ComfyUI answers at the address, the store's
- * workflows, and the chosen workflow read with its placeholders checked
- * against what DES fills. Throws only when ComfyUI cannot be reached.
- */
-export async function testComfy() {
-    const c = cfg();
-    // The ping goes through SillyTavern's server to ComfyUI's /system_stats; a
-    // card mid-render answers it slowly, so a slow ping is noted, not fatal:
-    // the workflow checks below need only SillyTavern, and the picture
-    // itself waits up to timeoutSec.
-    let ping = 'ok';
-    let pingError = '';
-    try { await comfy('ping', { url: c.comfyUrl }, { timeoutMs: 60000 }); }
-    catch (e) { pingError = e && e.message ? e.message : String(e); ping = /within \d+ s/.test(pingError) ? 'slow' : 'down'; }
-    let workflows = [];
-    try { workflows = await listWorkflows(); } catch (e) { /* the store is SillyTavern's; a miss here is its answer */ }
-    let line = ping === 'ok' ? `ComfyUI answers at ${c.comfyUrl}.`
-        : ping === 'slow' ? `ComfyUI at ${c.comfyUrl} did not answer within 60 s: a card mid-render answers slowly, and the picture itself waits up to ${c.timeoutSec} s. Try again when it is idle.`
-            : pingError;
-    let ok = ping === 'ok';
-    if (!c.workflow) { line += ' Pick a workflow.'; ok = false; }
-    else {
-        try {
-            const text = await loadWorkflow(c.workflow);
-            const found = workflowPlaceholders(text);
-            const { missing } = fillWorkflow(text, workflowValues(c, { caption: 'test', seed: 1 }));
-            if (isEditorWorkflow(text)) { line += ` The workflow "${c.workflow}" is the ComfyUI editor's save format (nodes and links). DES needs the API graph: in ComfyUI, Workflow → Export (API), and paste that.`; ok = false; }
-            else if (!found.includes('prompt')) { line += ` The workflow "${c.workflow}" has no %prompt%${found.length ? ` (it has ${found.map(f => `%${f}%`).join(', ')})` : ' and no placeholder at all'}: the caption would go nowhere. Put %prompt% where the positive text goes.`; ok = false; }
-            else if (missing.length) { line += ` The workflow needs ${missing.map(m => `%${m}%`).join(', ')} and nothing fills ${missing.length === 1 ? 'it' : 'them'}: set the models below.`; ok = false; }
-            else line += ` The workflow "${c.workflow}" is ready (${found.length} placeholders filled).`;
-        } catch (e) {
-            line += ` The workflow "${c.workflow}" could not be read: ${e && e.message ? e.message : e}`;
-            ok = false;
-        }
-    }
-    return { line, ok, workflows, ping };
-}
-
-/**
- * ComfyUI's progress for one render, over its WebSocket (a browser may open
- * one to it directly): the queue ahead, the node it is on, the step count.
- * The client id in the prompt makes ComfyUI send this client its own
- * render's events. No WebSocket, or none that opens: the bar stays
- * indeterminate, nothing else changes. Returns { ready, close }.
- */
-function watchComfy(comfyUrl, clientId, kinds) {
-    const none = { ready: Promise.resolve(false), close() {} };
-    const url = comfyWsUrl(comfyUrl, clientId);
-    if (!url || typeof WebSocket !== 'function') return none;
-    let ws;
-    try { ws = new WebSocket(url); } catch (e) { return none; }
-    try { ws.binaryType = 'arraybuffer'; } catch (e) { /* previews come as binary; they are skipped either way */ }
-    const ready = new Promise((resolve) => {
-        const t = setTimeout(() => resolve(false), 1500);
-        ws.onopen = () => { clearTimeout(t); resolve(true); };
-        ws.onerror = () => { clearTimeout(t); resolve(false); };
-    });
-    ws.onmessage = (ev) => {
-        if (typeof ev.data !== 'string') return;
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch (e) { return; }
-        const d = msg && msg.data && typeof msg.data === 'object' ? msg.data : {};
-        switch (msg && msg.type) {
-            case 'status': {
-                const q = d.status && d.status.exec_info ? Number(d.status.exec_info.queue_remaining) : NaN;
-                if (progress.stage === 'queued' && Number.isFinite(q)) setProgress({ queue: Math.max(0, q - 1) });
-                break;
-            }
-            case 'execution_start': setProgress({ stage: 'rendering', value: 0, max: 0, node: '' }); break;
-            case 'executing':
-                if (d.node === null || d.node === undefined) { if (progress.stage === 'rendering') setProgress({ stage: 'saving' }); }
-                else setProgress({ stage: 'rendering', node: kinds[String(d.node)] || '', value: 0, max: 0 });
-                break;
-            case 'progress': setProgress({ stage: 'rendering', value: Number(d.value) || 0, max: Number(d.max) || 0, node: d.node !== undefined && kinds[String(d.node)] ? kinds[String(d.node)] : progress.node }); break;
-            case 'execution_error': setProgress({ error: String(d.exception_message || 'ComfyUI reported an error') }); break;
-            default: break;
-        }
-    };
-    return { ready, close() { try { ws.close(); } catch (e) { /* closed already */ } } };
-}
-
-/** The picture: the workflow filled and spliced, posted through the server; { file, dataUrl }. */
 async function renderPicture(c, caption) {
-    if (!c.workflow) throw new Error('no workflow is chosen (Settings → Scene pictures)');
-    const text = await loadWorkflow(c.workflow);
-    if (!text) throw new Error(`the workflow "${c.workflow}" is empty or missing from SillyTavern's store`);
-    if (isEditorWorkflow(text)) throw new Error(`the workflow "${c.workflow}" is the editor's save format; DES needs the API graph (Workflow → Export (API))`);
-    if (!workflowPlaceholders(text).includes('prompt')) throw new Error(`the workflow "${c.workflow}" has no %prompt%: the caption would go nowhere`);
-    const filled = fillWorkflow(text, workflowValues(c, { caption }));
-    if (filled.missing.length) throw new Error(`the workflow needs ${filled.missing.map(m => `%${m}%`).join(', ')} and nothing fills ${filled.missing.length === 1 ? 'it' : 'them'}`);
-    let graph;
-    try { graph = JSON.parse(filled.text); } catch (e) { throw new Error(`the workflow "${c.workflow}" is not valid JSON once filled: ${e && e.message ? e.message : e}`); }
-    const spliced = injectLoras(graph, state.loras);
-    if (state.loras.length && !spliced.inserted) log('no model loader found in the workflow: the LoRAs were not applied');
-    log('generate', { workflow: c.workflow, loras: spliced.inserted, placeholders: workflowPlaceholders(text).length });
-    const clientId = newClientId();
-    const watcher = watchComfy(c.comfyUrl, clientId, nodeKinds(spliced.graph));
-    await watcher.ready;    // open before the prompt is queued, so no event is missed; a second and a half at most
-    setProgress({ stage: 'queued', queue: 0 });
-    let result;
-    try {
-        result = await comfy('generate', comfyGenerateBody(c.comfyUrl, spliced.graph, clientId), { timeoutMs: c.timeoutSec * 1000 });
-    } finally {
-        watcher.close();
-    }
-    setProgress({ stage: 'saving' });
-    const dataUrl = readComfyResult(result);
-    if (!dataUrl) throw new Error('ComfyUI returned no image');
-    return { file: c.workflow, dataUrl };
+    return renderImage(
+        { purpose: 'scene', prompt: `${c.preamble || ''}${caption}`.trim(), negative: c.negative || '', size: c.size, loras: state.loras },
+        { onProgress: (patch) => setProgress(patch), stageOf: () => progress.stage },
+    );
 }
 
 /** The picture saved into SillyTavern's own images and posted as the narrator's message (D60). */
-async function postPicture(c, { caption, file, dataUrl, loras }) {
-    const comma = dataUrl.indexOf(',');
-    const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
-    const format = /^data:image\/(\w+)/.exec(dataUrl)?.[1] || 'png';
-    let folder = 'scenes';
-    try { folder = getContext().name2 || folder; } catch (e) { /* no context, the default folder */ }
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const url = await saveBase64AsFile(base64, folder, `des-scene-${stamp}`, format);
+async function postPicture(c, { caption, file, dataUrl, url: givenUrl, loras }) {
+    let url = givenUrl || '';
+    if (!url) {
+        const comma = dataUrl.indexOf(',');
+        const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+        const format = /^data:image\/(\w+)/.exec(dataUrl)?.[1] || 'png';
+        let folder = 'scenes';
+        try { folder = getContext().name2 || folder; } catch (e) { /* no context, the default folder */ }
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        url = await saveBase64AsFile(base64, folder, `des-scene-${stamp}`, format);
+    }
     const message = {
         name: c.narrator,
         is_user: false,
@@ -555,7 +411,7 @@ export async function illustrateNow({ reason = 'manual' } = {}) {
         log('caption', caption);
         const picture = await renderPicture(c, caption);
         if (stale()) { setProgress({ stage: 'idle' }); return { ok: false, reason: 'stale' }; }
-        const posted = await postPicture(c, { caption, file: picture.file, dataUrl: picture.dataUrl, loras: state.loras });
+        const posted = await postPicture(c, { caption, file: picture.file, dataUrl: picture.dataUrl, url: picture.url, loras: state.loras });
         commit(afterPicture(state, { at: Date.now(), caption, file: picture.file, url: posted.url }));
         setProgress({ stage: 'done', value: progress.max || 1, max: progress.max || 1 });
         notice('A picture of the scene is in the chat.', 'success');
@@ -616,5 +472,8 @@ export function initScenePictures() {
 }
 
 /** Tests: the caption and SillyTavern's ComfyUI endpoints behind functions, and the waits made short. */
-export function __setSceneTransport(fn) { transport = fn || null; }
+export function __setSceneTransport(t) {
+    transport = t && t.caption ? { caption: t.caption } : null;
+    __setImageTransport(t && (t.comfy || t.sd) ? { comfy: t.comfy, sd: t.sd } : null);
+}
 export function __setSceneTiming(t) { timing = { ...timing, ...(t || {}) }; }

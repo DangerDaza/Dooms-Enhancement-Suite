@@ -248,3 +248,20 @@ export function describeSource(cfg, { stAvailable = false, stSourceName = '' } =
     if (!stAvailable) return "SillyTavern's Image Generation is not enabled: Extensions → Image Generation, switch it on and pick a source there.";
     return `SillyTavern's Image Generation${stSourceName ? ` (${stSourceName})` : ''}: its size and sampler settings apply.`;
 }
+
+/**
+ * A prompt as one line a slash command can carry (the portrait generator's
+ * long-standing rule): newlines and pipes become separators (a pipe would
+ * end the command), macro braces are defused, quotes become apostrophes,
+ * comma runs and spaces collapse.
+ */
+export function slashSafe(text) {
+    return String(text || '')
+        .replace(/\s*[\r\n]+\s*/g, ', ')
+        .replace(/\|/g, ', ')
+        .replace(/\{\{|\}\}/g, ' ')
+        .replace(/["“”]/g, '\'')
+        .replace(/(?:\s*,\s*)+/g, ', ')
+        .replace(/\s+/g, ' ')
+        .replace(/^[,\s]+|[,\s]+$/g, '');
+}

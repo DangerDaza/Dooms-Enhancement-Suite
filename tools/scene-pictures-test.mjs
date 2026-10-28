@@ -10,9 +10,9 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
 {
     const d = S.scenePicturesConfig({});
     check('no "captions reach the AI" switch any more (D71): the key is not in the config', !('toAI' in S.scenePicturesConfig({ scenePictures: { toAI: true } })));
-    check('defaults: off, ComfyUI on 8189, no workflow, every 5, 12 messages, portrait', !d.enabled && d.comfyUrl === 'http://127.0.0.1:8189' && d.workflow === '' && d.every === 5 && d.window === 12 && d.size === 'portrait' && d.narrator === 'Narrator');
+    check('defaults: off, every 5, 12 messages, portrait; the connection lives on the image service now', !d.enabled && !('comfyUrl' in d) && !('workflow' in d) && !('timeoutSec' in d) && d.every === 5 && d.window === 12 && d.size === 'portrait' && d.narrator === 'Narrator');
     const c = S.scenePicturesConfig({ scenePictures: { enabled: true, comfyUrl: ' http://localhost:9000/// ', workflow: ' Moss.json ', every: '0', window: 99, size: 'tall', steps: 8, cfg: '1', narrator: '  ', timeoutSec: 5, model: ' kromoss ' } });
-    check('normalised: url trimmed of slashes, workflow trimmed, every clamps to 1, window to 40, a bad size falls back, narrator back to default, timeout to 20, model trimmed', c.enabled && c.comfyUrl === 'http://localhost:9000' && c.workflow === 'Moss.json' && c.every === 1 && c.window === 40 && c.size === 'portrait' && c.steps === 8 && c.cfg === 1 && c.narrator === 'Narrator' && c.timeoutSec === 20 && c.model === 'kromoss');
+    check('normalised: every clamps to 1, window to 40, a bad size falls back, narrator back to default; the connection keys are not its', c.enabled && !('comfyUrl' in c) && c.every === 1 && c.window === 40 && c.size === 'portrait' && !('cfg' in c) && c.narrator === 'Narrator' && !('model' in c));
     check('sizeOf', S.sizeOf({ size: 'landscape' }).width === 1536 && S.sizeOf({ size: 'nope' }).id === 'portrait');
 }
 
@@ -73,13 +73,14 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
 }`;
     check('workflowPlaceholders: each once, lower-cased', S.workflowPlaceholders(WF).join() === 'model,vae,prompt,negative_prompt,width,height,seed,steps,scale,sampler,scheduler' && S.workflowPlaceholders('"%Prompt%" "%prompt%"').join() === 'prompt');
     const cfg = S.scenePicturesConfig({ scenePictures: { preamble: 'Anime-style digital illustration. ', size: 'landscape', model: 'moss_image_sft_int8_convrot.safetensors', vae: 'flux2-vae_small.safetensors' } });
-    const values = S.workflowValues(cfg, { caption: 'a woman on a quay', seed: 7 });
+    const comfy = { ...S.COMFY_DEFAULTS, model: 'moss_image_sft_int8_convrot.safetensors', vae: 'flux2-vae_small.safetensors' };
+    const values = S.workflowValues(cfg, { caption: 'a woman on a quay', seed: 7, comfy });
     check('workflowValues: the extension\'s names, the preamble in the prompt, the size, the models when set, avatars as the pixel', values.prompt === 'Anime-style digital illustration. a woman on a quay' && values.negative_prompt.startsWith('nsfw') && values.seed === 7 && values.steps === 25 && values.scale === 2.5 && values.sampler === 'er_sde' && values.width === 1536 && values.height === 864 && values.model === 'moss_image_sft_int8_convrot.safetensors' && values.user_avatar === S.PNG_PIXEL && !('clip' in values));
-    check('a random seed when none is given', (() => { const a = S.workflowValues(cfg, {}).seed; return Number.isInteger(a) && a >= 0; })());
+    check('a random seed when none is given', (() => { const a = S.workflowValues(cfg, { comfy }).seed; return Number.isInteger(a) && a >= 0; })());
     const filled = S.fillWorkflow(WF, values);
     const graph = JSON.parse(filled.text);
     check('fillWorkflow: numbers stay numbers, strings are quoted, nothing is missing', filled.missing.length === 0 && graph['3'].inputs.steps === 25 && graph['3'].inputs.cfg === 2.5 && graph['3'].inputs.seed === 7 && graph['6'].inputs.text === 'Anime-style digital illustration. a woman on a quay' && graph['8'].inputs.width === 1536 && graph['1'].inputs.unet_name === 'moss_image_sft_int8_convrot.safetensors');
-    const bare = S.fillWorkflow(WF, S.workflowValues(S.scenePicturesConfig({}), { caption: 'x', seed: 1 }));
+    const bare = S.fillWorkflow(WF, S.workflowValues(S.scenePicturesConfig({}), { caption: 'x', seed: 1, comfy: S.COMFY_DEFAULTS }));
     check('placeholders with no value are left and named', bare.missing.join() === 'model,vae' && bare.text.includes('"%model%"'));
     check('a quote inside the caption survives as JSON', JSON.parse(S.fillWorkflow('{"a": {"inputs": {"text": "%prompt%"}}}', { prompt: 'she said "go"' }).text).a.inputs.text === 'she said "go"');
     const embedded = S.fillWorkflow('{"6": {"inputs": {"text": "Anime-style digital illustration, 1girl, %prompt%"}}, "7": {"inputs": {"text": "nsfw, %negative_prompt%"}}, "3": {"inputs": {"steps": "%steps%"}}}', { prompt: 'a woman who said "go"', negative_prompt: 'blurry', steps: 8 });

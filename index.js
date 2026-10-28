@@ -173,6 +173,7 @@ import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessa
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, testComfy, listWorkflows, saveWorkflow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel, SIZE_PRESETS as SCENE_SIZES } from './src/utils/scenePictures.js';
+import { imageGenConfig, defaultImageGenConfig } from './src/utils/imageGen.js';
 import { initSceneProgress } from './src/systems/ui/sceneProgress.js';
 import { initMobileCompose, closeMobileCompose } from './src/systems/ui/mobileCompose.js';
 import { waitForAliasDecisions } from './src/systems/features/characterAliases.js';
@@ -375,6 +376,14 @@ function renderInventorySettings() {
     $('#rpg-inv-notify').prop('checked', cfg.notify);
 }
 
+/** The Image Generation rules block in settings, made to exist (docs/image-gen-plan.md). */
+function getImageGenRules() {
+    if (!extensionSettings.imageGen || typeof extensionSettings.imageGen !== 'object') extensionSettings.imageGen = defaultImageGenConfig();
+    const g = extensionSettings.imageGen;
+    if (!g.comfy || typeof g.comfy !== 'object') g.comfy = defaultImageGenConfig().comfy;
+    if (!g.portraits || typeof g.portraits !== 'object') g.portraits = defaultImageGenConfig().portraits;
+    return g;
+}
 /** The Scene pictures rules block in settings, made to exist. */
 function getSceneRules() {
     if (!extensionSettings.scenePictures || typeof extensionSettings.scenePictures !== 'object') extensionSettings.scenePictures = defaultScenePicturesConfig();
@@ -386,20 +395,21 @@ function renderScenePicturesSettings() {
     const cfg = scenePicturesConfig(extensionSettings);
     $('#rpg-scene-enabled').prop('checked', cfg.enabled);
     $('.rpg-scene-sub').toggleClass('is-off', !cfg.enabled);
-    $('#rpg-scene-url').val(cfg.comfyUrl);
-    renderSceneWorkflowPick(cfg.workflow);
+    const conn = imageGenConfig(extensionSettings).comfy;    // the connection is the image service's now
+    $('#rpg-scene-url').val(conn.url);
+    renderSceneWorkflowPick(conn.workflow);
     $('#rpg-scene-every').val(cfg.every);
     $('#rpg-scene-window').val(cfg.window);
     $('#rpg-scene-notify').prop('checked', cfg.notify);
     if (!$('#rpg-scene-size option').length) $('#rpg-scene-size').html(SCENE_SIZES.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join(''));
     $('#rpg-scene-size').val(cfg.size);
-    $('#rpg-scene-steps').val(cfg.steps);
-    $('#rpg-scene-cfg').val(cfg.cfg);
-    $('#rpg-scene-sampler').val(cfg.sampler);
-    $('#rpg-scene-scheduler').val(cfg.scheduler);
-    $('#rpg-scene-model').val(cfg.model);
-    $('#rpg-scene-clip').val(cfg.clip);
-    $('#rpg-scene-vae').val(cfg.vae);
+    $('#rpg-scene-steps').val(conn.steps);
+    $('#rpg-scene-cfg').val(conn.cfg);
+    $('#rpg-scene-sampler').val(conn.sampler);
+    $('#rpg-scene-scheduler').val(conn.scheduler);
+    $('#rpg-scene-model').val(conn.model);
+    $('#rpg-scene-clip').val(conn.clip);
+    $('#rpg-scene-vae').val(conn.vae);
     $('#rpg-scene-narrator').val(cfg.narrator);
     $('#rpg-scene-preamble').val(cfg.preamble);
     $('#rpg-scene-negative').val(cfg.negative);
@@ -2172,10 +2182,10 @@ function bindSettingsUI() {
         $('.rpg-scene-sub').toggleClass('is-off', !$(this).prop('checked'));
         _saveScene();
     });
-    $(document).on('change', '#rpg-scene-url', function () { getSceneRules().comfyUrl = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).comfyUrl); _saveScene(); });
-    $(document).on('change', '#rpg-scene-workflow', function () { getSceneRules().workflow = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-url', function () { getImageGenRules().comfy.url = String($(this).val() || '').trim().replace(/\/+$/, ''); $(this).val(scenePicturesConfig(extensionSettings).comfyUrl); _saveScene(); });
+    $(document).on('change', '#rpg-scene-workflow', function () { getImageGenRules().comfy.workflow = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('click', '#rpg-scene-workflow-refresh', async function () {
-        try { renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, await listWorkflows()); }
+        try { renderSceneWorkflowPick(imageGenConfig(extensionSettings).comfy.workflow, await listWorkflows()); }
         catch (e) { toastr.error(`The workflow list did not come: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 6000 }); }
     });
     $(document).on('click', '#rpg-scene-workflow-save', async function () {
@@ -2184,7 +2194,7 @@ function bindSettingsUI() {
         if (!text) { toastr.info('Paste the workflow JSON first.', 'Scene pictures', { timeOut: 3000 }); return; }
         try {
             const file = await saveWorkflow(name.endsWith('.json') ? name : `${name}.json`, text);
-            getSceneRules().workflow = file;
+            getImageGenRules().comfy.workflow = file;
             $('#rpg-scene-workflow-paste').val('');
             renderSceneWorkflowPick(file, await listWorkflows().catch(() => null));
             _saveScene();
@@ -2197,13 +2207,13 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-scene-window', function () { const r = getSceneRules(); r.window = _sceneNum($(this).val(), 2, 40, 12); $(this).val(r.window); _saveScene(); });
     $(document).on('change', '#rpg-scene-notify', function () { getSceneRules().notify = $(this).prop('checked'); _saveScene(); });
     $(document).on('change', '#rpg-scene-size', function () { getSceneRules().size = String($(this).val() || 'portrait'); _saveScene(); });
-    $(document).on('change', '#rpg-scene-steps', function () { const r = getSceneRules(); r.steps = _sceneNum($(this).val(), 1, 100, 25); $(this).val(r.steps); _saveScene(); });
-    $(document).on('change', '#rpg-scene-cfg', function () { const r = getSceneRules(); r.cfg = _sceneNum($(this).val(), 0, 20, 2.5, false); $(this).val(r.cfg); _saveScene(); });
-    $(document).on('change', '#rpg-scene-sampler', function () { getSceneRules().sampler = String($(this).val() || '').trim() || 'er_sde'; $(this).val(getSceneRules().sampler); _saveScene(); });
-    $(document).on('change', '#rpg-scene-scheduler', function () { getSceneRules().scheduler = String($(this).val() || '').trim() || 'simple'; $(this).val(getSceneRules().scheduler); _saveScene(); });
-    $(document).on('change', '#rpg-scene-model', function () { getSceneRules().model = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('change', '#rpg-scene-clip', function () { getSceneRules().clip = String($(this).val() || '').trim(); _saveScene(); });
-    $(document).on('change', '#rpg-scene-vae', function () { getSceneRules().vae = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-steps', function () { const r = getImageGenRules().comfy; r.steps = _sceneNum($(this).val(), 1, 100, 25); $(this).val(r.steps); _saveScene(); });
+    $(document).on('change', '#rpg-scene-cfg', function () { const r = getImageGenRules().comfy; r.cfg = _sceneNum($(this).val(), 0, 20, 2.5, false); $(this).val(r.cfg); _saveScene(); });
+    $(document).on('change', '#rpg-scene-sampler', function () { getImageGenRules().comfy.sampler = String($(this).val() || '').trim() || 'er_sde'; $(this).val(getSceneRules().sampler); _saveScene(); });
+    $(document).on('change', '#rpg-scene-scheduler', function () { getImageGenRules().comfy.scheduler = String($(this).val() || '').trim() || 'simple'; $(this).val(getSceneRules().scheduler); _saveScene(); });
+    $(document).on('change', '#rpg-scene-model', function () { getImageGenRules().comfy.model = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-clip', function () { getImageGenRules().comfy.clip = String($(this).val() || '').trim(); _saveScene(); });
+    $(document).on('change', '#rpg-scene-vae', function () { getImageGenRules().comfy.vae = String($(this).val() || '').trim(); _saveScene(); });
     $(document).on('change', '#rpg-scene-narrator', function () { getSceneRules().narrator = String($(this).val() || '').trim() || 'Narrator'; $(this).val(getSceneRules().narrator); _saveScene(); });
     $(document).on('change', '#rpg-scene-preamble', function () { getSceneRules().preamble = String($(this).val() || ''); _saveScene(); });
     $(document).on('change', '#rpg-scene-negative', function () { getSceneRules().negative = String($(this).val() || ''); _saveScene(); });
@@ -2216,7 +2226,7 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await testComfy();
-            renderSceneWorkflowPick(scenePicturesConfig(extensionSettings).workflow, r.workflows);
+            renderSceneWorkflowPick(imageGenConfig(extensionSettings).comfy.workflow, r.workflows);
             toastr[r.ok ? 'success' : 'warning'](r.line, 'Scene pictures', { timeOut: 10000 });
         } catch (e) {
             toastr.error(`No answer: ${e && e.message ? e.message : e}`, 'Scene pictures', { timeOut: 10000 });

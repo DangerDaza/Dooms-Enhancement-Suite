@@ -5,7 +5,7 @@
  * Usage:  node tools/image-gen-test.mjs     (from the repo root)
  * Exit:   0 = pass, 1 = failure
  */
-import { IMAGE_SOURCES, SIZE_PRESETS, PORTRAIT_MODES, defaultImageGenConfig, imageGenConfig, migrateImageGenSettings, portraitPlan, portraitStateHash, renderValues, describeSource, sizeById } from '../src/utils/imageGen.js';
+import { IMAGE_SOURCES, SIZE_PRESETS, PORTRAIT_MODES, defaultImageGenConfig, imageGenConfig, migrateImageGenSettings, portraitPlan, portraitStateHash, renderValues, describeSource, sizeById, slashSafe } from '../src/utils/imageGen.js';
 
 let failures = 0;
 function check(name, ok, extra = '') {
@@ -77,6 +77,9 @@ console.log('\n§4 the render values and the status line');
     const cf = imageGenConfig({ imageGen: { source: 'comfy', comfy: { workflow: 'Moss.json' } } });
     check('status: ComfyUI names the address and the workflow', describeSource(cf).includes('8189') && describeSource(cf).includes('Moss.json') && describeSource(imageGenConfig({ imageGen: { source: 'comfy' } })).includes('no workflow'));
 }
+
+console.log('\n§5 a prompt on a slash command');
+check('pipes and newlines become separators, macros defused, quotes softened, runs collapsed', slashSafe('a | b {{char}}\n  c\t "d",, ') === 'a, b char, c \'d\'' && slashSafe('') === '' && slashSafe(null) === '');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll image generation checks pass');
 process.exit(failures ? 1 : 0);

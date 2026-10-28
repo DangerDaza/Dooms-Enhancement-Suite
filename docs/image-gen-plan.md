@@ -80,9 +80,10 @@ the character's folder, as before.
    migration, `portraitPlan`, `renderValues`, `describeSource`);
    `tools/image-gen-test.mjs`; the state default; the migration hook in
    persistence. **Done.**
-2. The service with both sources; scene pictures render through it; the
-   scene config loses the connection keys; scene tests on the service's
-   transport hook.
+2. The service with both sources (`src/systems/features/imageGen.js`);
+   the ComfyUI helpers in `src/utils/comfy.js`; scene pictures render
+   through it; the scene config loses the connection keys; scene tests on
+   the service's transport hook. **Done.**
 3. Portraits unified on the service under D75–D77; the recovery path no
    longer draws; Workshop and card Regenerate through the service.
 4. The page: template, renderers and binders, the old controls removed,
