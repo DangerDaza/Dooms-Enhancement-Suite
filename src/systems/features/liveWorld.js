@@ -861,7 +861,7 @@ function registerWorldCommands() {
                     return `The window could not open: ${e && e.message ? e.message : e}`;
                 }
             },
-            helpString: 'Live World: opens the window (word on the street, who was last seen where, the places as tiles, lately).',
+            helpString: 'Live World: opens the Map window (the places the story has been to as pictures, Travel here, the news, rumours, people and completed quests).',
             returns: 'nothing',
         }));
     } catch (e) {

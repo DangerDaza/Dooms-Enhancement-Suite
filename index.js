@@ -3778,12 +3778,12 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
-            // Live World (D69): the window, only while Live World is on.
+            // Live World: the Map window (docs/map-window-plan.md), only while Live World is on.
             if (isLiveWorldOn()) {
                 items.push({
                     id: 'live-world',
-                    label: 'World',
-                    iconClass: 'fa-solid fa-globe',
+                    label: 'Map',
+                    iconClass: 'fa-solid fa-map',
                     action: () => {
                         import('./src/systems/ui/worldDashboard.js')
                             .then(m => m.openWorldDashboard())

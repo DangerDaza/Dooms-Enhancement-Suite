@@ -11,6 +11,8 @@
 import { readFileSync } from 'node:fs';
 import { normalizePack, seedWorldState, normalizeWorldState, applyAdvance, MAX_VISITED, VISITS_KEEP } from '../src/utils/liveWorld.js';
 import { placeKeyFor, visitPlace, reconcileVisited, currentPlace, placesRow, rowIdForCharacter, buildPlacePrompt, buildTravelInstruction, normalizeDone, addDone, MAX_DONE } from '../src/utils/worldMap.js';
+import { safeImageUrl, placeOf, facesOfTheWorld } from '../src/utils/worldBoard.js';
+import { markKnown } from '../src/utils/liveWorld.js';
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -121,6 +123,20 @@ console.log('\n§8 the world moves on without touching the row');
     let st = visitPlace(seedWorldState(harbour), harbour, { location: 'The docks', msgId: 'h1' }).state;
     const moved = applyAdvance(st, { clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'governors-house', reason: 'summoned' }], blurb: 'Talk of a search.' }, harbour, { msgId: 'h2', gameDate: 'Tuesday' });
     check('an advance keeps the visits as they were', ids(moved) === 'the-docks' && moved.visited[0].visits.join() === 'h1');
+}
+
+console.log('\n§9 the faces, a character\'s place, a safe picture URL (from the board test, D87)');
+{
+    check('a clock names its place (the pack)', sky.clocks.find(c => c.id === 'varrow_war').place === 'skar-crossings' && harbour.clocks.every(c => c.place === 'the-docks'));
+    let st = markKnown(seedWorldState(harbour), ['The governor']);
+    const moved = applyAdvance(st, { clocks: { blockade: 2 }, moved: [{ who: 'Old Marit', to: 'governors-house', reason: 'summoned' }], blurb: 'Talk of a search.' }, harbour, { msgId: 7, gameDate: 'Tuesday', gameTime: 'dusk' });
+    const faces = facesOfTheWorld(harbour, moved);
+    check('faces: each known character with where (the governor known once heard of with a seat), the heard-of apart', faces.known.map(f => f.name).join() === 'Captain Reyes,Old Marit,The governor' && faces.heard.length === 0 && faces.known[1].place.toLowerCase().includes('governor'), JSON.stringify(faces.known));
+    check('…with the move\'s date, time, reason and the place before', faces.known[1].gameDate === 'Tuesday' && faces.known[1].gameTime === 'dusk' && faces.known[1].reason === 'summoned' && faces.known[1].before.includes('The Anchor') && faces.known[0].gameDate === '' && faces.known[0].before === '');
+    check('placeOf: the deepest id of a character\'s path, \'\' for none', placeOf(moved, 'Old Marit') === 'governors-house' && placeOf(moved, 'Nobody') === '');
+    const nowhere = markKnown(seedWorldState(sky), ['Maeve']);
+    check('a known character with no place is nowhere in the faces', facesOfTheWorld(sky, nowhere).known.find(f => f.name === 'Maeve').place === '');
+    check('safeImageUrl: http(s), data-image and relative pass; other schemes, protocol-relative and quoted strings do not', safeImageUrl('https://x/y.png') === 'https://x/y.png' && safeImageUrl('data:image/png;base64,AA') !== '' && safeImageUrl('img/gilead.png') === 'img/gilead.png' && safeImageUrl('javascript:alert(1)') === '' && safeImageUrl('//evil/x.png') === '' && safeImageUrl('a"b.png') === '');
 }
 
 console.log('');
