@@ -256,6 +256,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 - **Image Generation** (`docs/image-gen-plan.md`, 2026-10-28): one image service with two sources (SillyTavern's extension, ComfyUI direct); portraits under one rule on Settings → Image Generation, never from a recovery; scene pictures render through it and their section is a group on that page; the Auto Avatars pill, Portrait Source and Auto Portrait Mode are gone, migrated once.
+- **The Map window** (`docs/map-window-plan.md`, 2026-10-28): Live World's window replaced by the owner's sketch: the places the story has visited as a row of circles with pictures (drawn through Image Generation), Travel here as a cut, a bottom panel of News / Rumours / People / Completed quests. The board of tiles is gone.
 
 ## 5. Map of the code
 
@@ -278,6 +279,10 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/features/imageGen.js` | The image service: `renderImage({ purpose, prompt, negative, size, loras })` on the chosen source (`/sd` quiet, or `/api/sd/comfy/*` with the WebSocket progress), `testSource`, `sourceProblem`, `sourceStatus`, the workflow store |
 | `src/systems/features/avatarGenerator.js` | Portraits: `generateAutoPortraitsForCharacters(entries, text, onStarted, { fresh, recovery })` under `portraitPlan`, the record behind a DES-made portrait, `regenerateAvatar` / `generateAvatarWithPrompt` (the Workshop, the card menu), all through `renderImage` |
 | `src/systems/features/scenePictures.js` | Scene pictures: the cadence, the caption, `renderImage({ purpose: 'scene' })`, the narrator message (hidden from the prompt), the take-down before a regenerate |
+| `src/utils/worldMap.js`, `src/utils/worldBoard.js` | The Map window's pure model: `placeKeyFor`, `visitPlace`, `reconcileVisited`, `placesRow`, `rowIdForCharacter`, `buildPlacePrompt`, `buildTravelInstruction`, the completed quests; the faces last seen, a safe image URL |
+| `src/systems/features/liveWorld.js` (places) | The visit recorded in `placeFromScene`, the rewind's `reconcileVisited`, `drawPlace` / `getPlacesRow` / `isDrawingPlace`, the automatic draw after a fresh reply (never a recovery) |
+| `src/systems/features/questCut.js` (travel, done) | `startTravelCut`, the instruction by kind, `recordCompletedQuest` / `getCompletedQuests` |
+| `src/systems/ui/worldViews.js`, `worldDashboard.js`, `worldFace.js` | The Map window: `mapWindowHtml` (the head, the row, the strip, the panel), the window's events (scroll, selection, Travel here, Draw, the panel buttons), the face popover with Show the place |
 | `src/systems/rendering/trackerJsonInline.js` | The 🗂️ Tracker Data dropdown (gated on `showTrackerJsonInChat`, reads swipe data) |
 | `src/systems/ui/dicePanel.js`, `attributesPane.js`, `characterWorkshop.js`, `characterRoster.js` | Popover and chip; Workshop sheets and proficiency ticks |
 | `src/systems/voices/delivery.js`, `voiceSettings.js`, `voiceEngine.js`, `src/systems/ui/voicesSettingsUI.js` | Never whisper |

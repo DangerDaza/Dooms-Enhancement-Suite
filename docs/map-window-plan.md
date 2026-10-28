@@ -8,8 +8,13 @@ them; a place clicked and a button, Travel here, that montages the party
 getting there the way Cut to a quest montages the way to a quest. "This
 will be a new pop up window"; "this is a replacement of the live world."
 
-**Status (2026-10-28):** being built on `Project-Short-Fuse`, four
-commits: the model, the feature, the window, the docs.
+**Status (2026-10-28):** built on `Project-Short-Fuse` in four commits (the
+model, the feature, the window, the docs), to ship in the next beta. Tests:
+`tools/world-map-test.mjs` (pure) and `tools/map-flow-test.mjs` (the feature
+in the sandbox); the window's views are read by `tools/live-world-flow-test.mjs`
+§6 and §10. Parity rows: `docs/parity-checklist.md`, Live World. Not yet
+looked at in a browser: the row's scrolling, the strip and the panel's
+heights are the first things to check there.
 
 ## 1. Decisions
 

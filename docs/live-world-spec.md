@@ -81,32 +81,28 @@ Clone of the Doom Counter pattern (`src/systems/generation/doomCounter.js`, call
 
 ## Part C — Map
 
-**Superseded by D69 (`docs/stats-plan.md`, 2026-10-23).** The node view
-built from this section (C1 the province, C2 nesting and zoom) was taken
-down after the owner's review of its look. What stands: a **board** of
-tiles, one per place at the level being looked at; the province shows the
-root places, stepping inside a place shows the places within it, a trail
-leads back out. Each tile: a glyph by depth or the pack's art, how many
-places inside, the name, the caption a clock gives it (a clock's optional
-`place`), the known characters on it as portrait tokens (initials when
-there is no portrait). Heard-of names stay off the board. Reads state
-only; no model calls. `src/utils/worldBoard.js` (pure),
+**Superseded twice.** The node view (C1, C2) gave way to a board of tiles
+(D69, 2026-10-23), and the board to the **Map window** (D81–D88,
+2026-10-28, `docs/map-window-plan.md`): the places the story has visited as
+a row of circles, the most recent on the left, each the place's picture
+(drawn through Settings → Image Generation on request or, with a switch,
+as a place is first reached; a pack's `image` wears it before any draw),
+Travel here as a cut like the quest cut, You are here on the current
+place. The pack's tree still names and nests the places; what the row
+shows is where the story has been. `src/utils/worldMap.js` (pure),
 `src/systems/ui/worldViews.js` (the HTML), `src/systems/ui/worldDashboard.js`
 (the window). C3 (room grids, Silly-Map's pathfinding) is not planned.
 
 ## Part D — Overview dashboard
 
-**Superseded by D69.** There is no dashboard. The **Live World window**
-(sized like the Workshop; World in the D menu, Settings → Live World,
-`/liveworld`) opens on the glance: word on the street (the blurb, each
-clock's public effect as a sentence) and the faces last seen (the shelf's
-own portrait cards with the place under the name and the date of the last
-move); the board sits below it in the same scroll. A card or a token opens
-the character's trail in a small popover (their moves newest first, where
-the story found them, Show on the board). "Lately" with its time filter
-lives under the board's tiles. Advance now sits in the window's foot, the
-same path as `/advance`. Spoiler-free governs the effects, the captions,
-the feed and the blurb as before.
+**Superseded by D69, then D85.** The Map window's bottom panel swaps between
+**News** (the feed of moves and clock steps under their dates, with its
+filter), **Rumours** (the blurb and each clock's public effect as a
+sentence), **People** (the faces last seen as the shelf's own portrait
+cards; a card opens the face popover: their moves newest first, Show the
+place) and **Completed quests** (what the shelf's ✓ completed, newest
+first). Advance now sits in the window's foot, the same path as `/advance`.
+Spoiler-free governs the effects, the feed and the blurb as before.
 
 ---
 
