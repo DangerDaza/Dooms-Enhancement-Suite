@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased] — on `Project-Short-Fuse`
+## [3.2.0-beta.2] - 2026-10-28 — Image Generation
+
+On `Project-Short-Fuse`. Carries everything 3.2.0-beta.1 shipped (cut as `release/3.2` on 2026-10-24: Inventory, Cut to a quest, the iPhone and thoughts fixes) and what that cut left out: Live World, Scene pictures, and now Image Generation.
 
 ### Added
 - **Image Generation (beta).** Settings → Image Generation: one source for every picture DES makes, the portraits on the Present Characters cards and the scene pictures alike. SillyTavern's own Image Generation extension (its `/sd` command, quiet: whatever engine, size and sampler it is set to), or a ComfyUI card directly, reached through SillyTavern's server with a workflow from its store, picked or pasted, its placeholders filled and, for a scene picture, this chat's LoRAs spliced in. A status line says what the source is and whether it can draw; Test asks it. The page has three groups: the ComfyUI connection (address, workflow, steps, CFG, sampler, scheduler, the models for `%model%`, `%clip%`, `%vae%`, timeout), Portraits (below), and Scene pictures (moved here whole). A settings file from before is carried over once: the scene pictures' connection becomes the ComfyUI source when they were on with a workflow, SillyTavern's otherwise; the portrait rule follows what was set.
