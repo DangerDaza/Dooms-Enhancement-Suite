@@ -23,6 +23,9 @@ export const RUNS_KEEP = 50;        // the run records kept: what a rewind falls
 export const MAX_BLURB = 600;
 export const MAX_REASON = 160;
 export const MAX_NAME = 60;
+export const MAX_PLACE = 80;        // a visited place's label (docs/map-window-plan.md D82)
+export const MAX_VISITED = 60;      // places the row keeps, newest first
+export const VISITS_KEEP = 30;      // reply ids kept per place, for the rewind
 export const TIERS = Object.freeze(['heard', 'known']);
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -308,7 +311,39 @@ export function placeTreeText(pack) {
 
 /** Empty state for a pack id. */
 export function emptyWorldState(packId = '') {
-    return { v: 1, pack: packId, packVersion: 0, clocks: {}, where: {}, known: {}, log: [], runs: [], trimmed: false, last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false };
+    return { v: 1, pack: packId, packVersion: 0, clocks: {}, where: {}, known: {}, log: [], runs: [], trimmed: false, last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false, visited: [] };
+}
+
+/**
+ * The places the story has visited, newest first (docs/map-window-plan.md
+ * D82), made safe: one entry per id, the labels and dates trimmed, the
+ * reply ids of the last visits kept for the rewind, the drawn picture's
+ * URL and the description it was drawn from.
+ */
+export function normalizeVisited(raw) {
+    const out = [];
+    const seen = new Set();
+    for (const e of Array.isArray(raw) ? raw : []) {
+        if (!e || typeof e !== 'object') continue;
+        const id = clean(e.id, 120);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+            id,
+            label: clean(e.label, MAX_PLACE) || id,
+            packId: clean(e.packId, 60),
+            path: clean(e.path, 400),
+            visits: (Array.isArray(e.visits) ? e.visits : []).filter(x => (typeof x === 'string' && x) || isInt(x)).slice(-VISITS_KEEP),
+            firstDate: clean(e.firstDate, 80),
+            lastDate: clean(e.lastDate, 80),
+            lastTime: clean(e.lastTime, 80),
+            image: typeof e.image === 'string' ? e.image.trim().slice(0, 2000) : '',
+            prompt: clean(e.prompt, 2000),
+            drawnAt: isInt(e.drawnAt) ? e.drawnAt : 0,
+        });
+        if (out.length >= MAX_VISITED) break;
+    }
+    return out;
 }
 
 /** A new chat's state from the pack: starting clocks, starting places, the cast's tiers. */
@@ -350,6 +385,7 @@ export function normalizeWorldState(raw) {
     s.sinceLast = isInt(r.sinceLast) && r.sinceLast >= 0 ? r.sinceLast : 0;
     s.retryNext = r.retryNext === true;
     s.seeded = r.seeded === true;
+    s.visited = normalizeVisited(r.visited);
     return s;
 }
 
