@@ -36,7 +36,7 @@ Two features made pictures, each its own way:
 | D76 | Never from a recovery (2026-10-28) | The separate request that fetches a skipped tracker block is a repair, not a moment to draw. `portraitPlan` returns nothing when `recovery` is set, and the service is not called from that path. A manual Refresh counts as a fresh reply. |
 | D77 | A toast when portraits are made (2026-10-28) | Behind "Say so" on the page, on by default: the first run in a session names the characters and the source, and where the switch is. Never silent again. |
 | D78 | The scene section moves (2026-10-28, the owner) | Scene pictures' cadence, window, size, narrator, preamble, negative, guide, Picture now, and this chat's LoRAs and identity notes become a group on the Image Generation page. Their ComfyUI connection becomes the page's ComfyUI source. `settings.scenePictures` keeps the cadence and shape keys; the connection keys are read from `settings.imageGen.comfy`. |
-| D79 | Migration, once, additive (2026-10-28) | `migrateImageGenSettings` fills `settings.imageGen` from the keys it replaces: the source is ComfyUI when scene pictures were on with a workflow, SillyTavern's otherwise; the portrait mode is the Auto Portrait Mode when Per-Character Expressions ran with Auto-generated portraits, else Only missing when Auto Avatars was on, else Off. The old keys stay until nothing reads them, then go. |
+| D79 | Migration, once, additive (2026-10-28) | `migrateImageGenSettings` fills `settings.imageGen` from the keys it replaces: the source is ComfyUI when scene pictures were on with a workflow, SillyTavern's otherwise; the portrait mode is the Auto Portrait Mode when Per-Character Expressions ran with Auto-generated portraits, else Only missing when Auto Avatars was on, else Off. Nothing reads the old keys from 3.2 on (the migration is their last reader); they stay in older settings files, harmless. Per-Character Expressions set to auto portraits is switched off by the same migration: that switch is about sprites alone now, and the portrait mode it carried lives on the page. |
 | D80 | What a portrait never replaces (unchanged) | A portrait the user set (no DES-made record behind it) is never replaced; a SillyTavern card that already gives a face needs none; one being made is not asked for again. |
 
 ## 3. The settings page
@@ -92,6 +92,10 @@ the character's folder, as before.
    recovery request never draws; Workshop and card Regenerate through the
    service, with the page's preamble, negative and size;
    `tools/portrait-flow-test.mjs`. **Done.**
-4. The page: template, renderers and binders, the old controls removed,
-   styles.
+4. The page (`data-accordion="imagegen"`: Source, status and Test; the
+   ComfyUI (direct), Portraits and Scene pictures groups as rail tabs);
+   `renderImageGenSettings` / `renderImageStatus` and the `rpg-img-*`
+   binders in index.js; the Auto Avatars pill, Portrait Source and Auto
+   Portrait Mode gone, Per-Character Expressions about sprites alone; the
+   retired keys out of the defaults. **Done.**
 5. Docs, parity rows, CHANGELOG.

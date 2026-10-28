@@ -352,11 +352,6 @@
                             <span class="rpg-pill-indicator"></span>
                             <span>Dynamic Weather</span>
                         </label>
-                        <label class="rpg-feature-pill">
-                            <input type="checkbox" id="rpg-toggle-auto-avatars" class="rpg-pill-checkbox" />
-                            <span class="rpg-pill-indicator"></span>
-                            <span>Auto Avatars</span>
-                        </label>
                     </div>
                 </div>
             </div>
@@ -875,8 +870,8 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Per-Character Expressions</span>
-                            <span class="rpg-setting-hint">Enable dynamic portrait updates, using either expression
-                                sprites or auto-generated portraits</span>
+                            <span class="rpg-setting-hint">Classify each present character's emotion from the reply and show
+                                their expression sprite on the card. Portraits DES draws are set up on Settings → Image Generation.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-pb-sync-expressions" />
@@ -884,29 +879,6 @@
                         </label>
                     </div>
                     <div id="rpg-expression-options" style="display:none;">
-                        <div class="rpg-setting-row">
-                            <div class="rpg-setting-label-group">
-                                <span class="rpg-setting-label">Portrait Source</span>
-                                <span class="rpg-setting-hint">Use expression sprites or generate portraits through SillyTavern's native /sd command</span>
-                            </div>
-                            <select id="rpg-portrait-enhancement-mode" class="rpg-accordion-select">
-                                <option value="expressions">Expression sprites</option>
-                                <option value="autoPortraits">Auto-generated portraits</option>
-                            </select>
-                        </div>
-                        <div id="rpg-auto-portrait-options" style="display:none;">
-                            <div class="rpg-setting-row">
-                                <div class="rpg-setting-label-group">
-                                    <span class="rpg-setting-label">Auto Portrait Mode</span>
-                                    <span class="rpg-setting-hint">When DES should generate or refresh present-character portraits</span>
-                                </div>
-                                <select id="rpg-auto-portrait-mode" class="rpg-accordion-select">
-                                    <option value="only_missing">Only missing</option>
-                                    <option value="state_changed">State changed</option>
-                                    <option value="every_reply">Every reply</option>
-                                </select>
-                            </div>
-                        </div>
                         <div id="rpg-expression-sprite-options">
                         <div class="rpg-setting-row">
                             <div class="rpg-setting-label-group">
@@ -1980,25 +1952,161 @@
                 </div>
             </div>
 
-            <!-- ═══════ VOICES ═══════ -->
-            <!-- Per-character Gemini voices (docs/google-tts-voices-plan.md §6.2).
-                 Bound by src/systems/ui/voicesSettingsUI.js. -->
-            <!-- ═══════ SCENE PICTURES (Phase 7) ═══════ -->
-            <div class="rpg-accordion-section" data-accordion="scenepictures">
+            <!-- ═══════ IMAGE GENERATION (docs/image-gen-plan.md) ═══════
+                 One source for every picture DES makes: portraits and scene pictures.
+                 Bound in index.js (renderImageGenSettings and the rpg-img-* / rpg-scene-* binders). -->
+            <div class="rpg-accordion-section" data-accordion="imagegen">
                 <div class="rpg-accordion-header">
-                    <i class="fa-solid fa-image rpg-accordion-icon"></i>
-                    <span class="rpg-accordion-title">Scene pictures</span>
-                    <span class="rpg-accordion-badge rpg-beta-badge" title="Scene pictures are in beta: off until you switch them on.">Beta</span>
+                    <i class="fa-solid fa-palette rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Image Generation</span>
+                    <span class="rpg-accordion-badge rpg-beta-badge" title="The source choice is new in 3.2: portraits and scene pictures both draw through it.">Beta</span>
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Source</span>
+                            <span class="rpg-setting-hint">Where every picture DES makes is drawn: the portraits on the Present Characters
+                                cards and the scene pictures. SillyTavern's own Image Generation extension (whatever engine it is set
+                                to), or a ComfyUI card directly, with a workflow of your own.</span>
+                        </div>
+                        <select id="rpg-img-source" class="rpg-accordion-select"></select>
+                    </div>
+                    <p class="rpg-note-text" id="rpg-img-status" style="margin-top:4px;"></p>
+                    <p class="rpg-note-text" id="rpg-img-st-note" style="display:none; margin-top:4px;">Extensions → Image Generation decides the engine, the size and
+                        the sampler; DES passes the prompt and the negative. Nothing to set up here.</p>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Test</span>
+                            <span class="rpg-setting-hint">Asks the source for a sign of life: for ComfyUI, the card answers, the store's
+                                workflows are listed and the chosen one's placeholders are checked.</span>
+                        </div>
+                        <button id="rpg-img-test" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plug"></i> Test</button>
+                    </div>
+                    <div class="rpg-subsection-label">ComfyUI (direct)</div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">ComfyUI address</span>
+                            <span class="rpg-setting-hint">The ComfyUI card the workflow runs on. SillyTavern's server talks to it,
+                                the way its own Image Generation does, so nothing else has to run.</span>
+                        </div>
+                        <input type="text" id="rpg-img-url" class="rpg-accordion-input" placeholder="http://127.0.0.1:8189" style="width: 220px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Workflow</span>
+                            <span class="rpg-setting-hint">A ComfyUI workflow from SillyTavern's own store (Image Generation → ComfyUI),
+                                with <code>%prompt%</code>, <code>%negative_prompt%</code>, <code>%width%</code>, <code>%height%</code>,
+                                <code>%seed%</code>, <code>%steps%</code>, <code>%scale%</code>, <code>%sampler%</code>,
+                                <code>%scheduler%</code> and, if you like, <code>%model%</code>, <code>%clip%</code>, <code>%vae%</code>.
+                                For a scene picture, this chat's LoRAs are spliced in after the model loader.</span>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <select id="rpg-img-workflow" class="rpg-accordion-select" style="min-width: 200px;"><option value="">(none chosen)</option></select>
+                            <button id="rpg-img-workflow-refresh" class="rpg-accordion-action-btn" type="button" title="List the store's workflows"><i class="fa-solid fa-rotate"></i></button>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Or paste one</span>
+                            <span class="rpg-setting-hint">The workflow's JSON (ComfyUI → Workflow → Export (API)), saved into the store
+                                under the name and chosen above.</span>
+                            <textarea id="rpg-img-workflow-paste" class="rpg-accordion-input" rows="3" style="width:100%; margin-top:6px;" placeholder='{ "1": { "class_type": "UNETLoader", … } }'></textarea>
+                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+                                <input type="text" id="rpg-img-workflow-name" class="rpg-accordion-input" value="DES Scene Moss" style="width: 180px;" title="The name it is saved under" />
+                                <button id="rpg-img-workflow-save" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-floppy-disk"></i> Save and choose</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Steps and CFG</span>
+                            <span class="rpg-setting-hint">25 and 2.5 for the SFT model; 8 and 1 for Kromoss or the few-step LoRA.</span>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <input type="number" id="rpg-img-steps" class="rpg-accordion-input" min="1" max="100" value="25" style="width: 64px;" title="Steps" />
+                            <input type="number" id="rpg-img-cfg" class="rpg-accordion-input" min="0" max="20" step="0.1" value="2.5" style="width: 64px;" title="CFG" />
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Sampler and scheduler</span>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <input type="text" id="rpg-img-sampler" class="rpg-accordion-input" value="er_sde" style="width: 96px;" title="Sampler" />
+                            <input type="text" id="rpg-img-scheduler" class="rpg-accordion-input" value="simple" style="width: 96px;" title="Scheduler" />
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Models</span>
+                            <span class="rpg-setting-hint">What fills <code>%model%</code>, <code>%clip%</code> and <code>%vae%</code> when the
+                                workflow has them, as the files are named in ComfyUI (<code>moss_image_sft_int8_convrot.safetensors</code>…).
+                                A workflow with the names baked in needs nothing here.</span>
+                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                                <input type="text" id="rpg-img-model" class="rpg-accordion-input" placeholder="%model% (diffusion model)" style="width: 200px;" />
+                                <input type="text" id="rpg-img-clip" class="rpg-accordion-input" placeholder="%clip% (text encoder)" style="width: 180px;" />
+                                <input type="text" id="rpg-img-vae" class="rpg-accordion-input" placeholder="%vae%" style="width: 120px;" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-comfy">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Timeout</span>
+                            <span class="rpg-setting-hint">Seconds ComfyUI gets per picture.</span>
+                        </div>
+                        <input type="number" id="rpg-img-timeout" class="rpg-accordion-input" min="20" max="900" value="180" style="width: 72px;" />
+                    </div>
+                    <div class="rpg-subsection-label">Portraits</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Draw portraits</span>
+                            <span class="rpg-setting-hint">When DES draws a portrait for a present character after a reply, in every
+                                tracker mode: never; only for a character with no portrait yet; when a character's look changes;
+                                after every reply. A portrait you set yourself is never replaced, and a SillyTavern card that already
+                                has a face needs none. The Workshop's Render portrait and the card menu's Regenerate work whatever this says.</span>
+                        </div>
+                        <select id="rpg-img-portrait-mode" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-portraits">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Size</span>
+                            <span class="rpg-setting-hint">For ComfyUI direct; SillyTavern's extension uses its own.</span>
+                        </div>
+                        <select id="rpg-img-portrait-size" class="rpg-accordion-select"></select>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-portraits" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Style preamble</span>
+                            <span class="rpg-setting-hint">Put in front of every portrait prompt: the medium, the framing, the house style.</span>
+                            <textarea id="rpg-img-portrait-preamble" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;" placeholder="Painted character portrait, head and shoulders, "></textarea>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-portraits" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Negative prompt</span>
+                            <textarea id="rpg-img-portrait-negative" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;"></textarea>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-img-portraits">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Say so</span>
+                            <span class="rpg-setting-hint">The first time in a session DES draws portraits by itself, a toast names the
+                                characters, the source and this page.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-img-portrait-notify" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-subsection-label">Scene pictures</div>
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Scene pictures</span>
                             <span class="rpg-setting-hint">Every few of your turns, a quiet background request reads the
-                                recent messages and writes one caption; your Moss workflow renders it on ComfyUI with this
-                                chat's LoRAs; the picture lands in the chat as a message from the narrator.
-                                <code>/scene</code> makes one now. Needs ComfyUI running with the MOSS nodes.</span>
+                                recent messages and writes one caption; the source above renders it (ComfyUI direct adds this
+                                chat's LoRAs); the picture lands in the chat as a message from the narrator.
+                                <code>/scene</code> makes one now.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-scene-enabled" />
@@ -2006,51 +2114,12 @@
                         </label>
                     </div>
                     <p class="rpg-note-text rpg-scene-sub" id="rpg-scene-status" style="margin-top:4px;"></p>
-                    <div class="rpg-setting-divider rpg-scene-sub">ComfyUI and the workflow</div>
                     <div class="rpg-setting-row rpg-scene-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">ComfyUI address</span>
-                            <span class="rpg-setting-hint">The ComfyUI the Moss workflow runs on. SillyTavern's server talks to it,
-                                the way its own Image Generation does, so nothing else has to run.</span>
+                            <span class="rpg-setting-label">Picture now</span>
+                            <span class="rpg-setting-hint">One picture of the recent scene, now.</span>
                         </div>
-                        <input type="text" id="rpg-scene-url" class="rpg-accordion-input" placeholder="http://127.0.0.1:8189" style="width: 220px;" />
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Workflow</span>
-                            <span class="rpg-setting-hint">A ComfyUI workflow from SillyTavern's own store (Image Generation → ComfyUI),
-                                with <code>%prompt%</code>, <code>%negative_prompt%</code>, <code>%width%</code>, <code>%height%</code>,
-                                <code>%seed%</code>, <code>%steps%</code>, <code>%scale%</code>, <code>%sampler%</code>,
-                                <code>%scheduler%</code> and, if you like, <code>%model%</code>, <code>%clip%</code>, <code>%vae%</code>.
-                                This chat's LoRAs are spliced in after the model loader.</span>
-                        </div>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <select id="rpg-scene-workflow" class="rpg-accordion-select" style="min-width: 200px;"><option value="">(none chosen)</option></select>
-                            <button id="rpg-scene-workflow-refresh" class="rpg-accordion-action-btn" type="button" title="List the store's workflows"><i class="fa-solid fa-rotate"></i></button>
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub" style="align-items:flex-start;">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Or paste one</span>
-                            <span class="rpg-setting-hint">The workflow's JSON (your ST_Moss workflow file), saved into the store under
-                                the name and chosen above.</span>
-                            <textarea id="rpg-scene-workflow-paste" class="rpg-accordion-input" rows="3" style="width:100%; margin-top:6px;" placeholder='{ "1": { "class_type": "UNETLoader", … } }'></textarea>
-                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
-                                <input type="text" id="rpg-scene-workflow-name" class="rpg-accordion-input" value="DES Scene Moss" style="width: 180px;" title="The name it is saved under" />
-                                <button id="rpg-scene-workflow-save" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-floppy-disk"></i> Save and choose</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Try it</span>
-                            <span class="rpg-setting-hint">Test connection asks ComfyUI for a sign of life, lists the store's workflows
-                                and checks the chosen one's placeholders; Picture now makes one picture of the recent scene.</span>
-                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                                <button id="rpg-scene-test" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plug"></i> Test connection</button>
-                                <button id="rpg-scene-now" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-image"></i> Picture now</button>
-                            </div>
-                        </div>
+                        <button id="rpg-scene-now" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-image"></i> Picture now</button>
                     </div>
                     <div class="rpg-setting-divider rpg-scene-sub">When</div>
                     <div class="rpg-setting-row rpg-scene-sub">
@@ -2082,38 +2151,6 @@
                             <span class="rpg-setting-label">Size</span>
                         </div>
                         <select id="rpg-scene-size" class="rpg-accordion-select"></select>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Steps and CFG</span>
-                            <span class="rpg-setting-hint">25 and 2.5 for the SFT model; 8 and 1 for Kromoss or the few-step LoRA.</span>
-                        </div>
-                        <div style="display:flex; gap:6px;">
-                            <input type="number" id="rpg-scene-steps" class="rpg-accordion-input" min="1" max="100" value="25" style="width: 64px;" title="Steps" />
-                            <input type="number" id="rpg-scene-cfg" class="rpg-accordion-input" min="0" max="20" step="0.1" value="2.5" style="width: 64px;" title="CFG" />
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Sampler and scheduler</span>
-                        </div>
-                        <div style="display:flex; gap:6px;">
-                            <input type="text" id="rpg-scene-sampler" class="rpg-accordion-input" value="er_sde" style="width: 96px;" title="Sampler" />
-                            <input type="text" id="rpg-scene-scheduler" class="rpg-accordion-input" value="simple" style="width: 96px;" title="Scheduler" />
-                        </div>
-                    </div>
-                    <div class="rpg-setting-row rpg-scene-sub">
-                        <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Models</span>
-                            <span class="rpg-setting-hint">What fills <code>%model%</code>, <code>%clip%</code> and <code>%vae%</code> when the
-                                workflow has them, as the files are named in ComfyUI (<code>moss_image_sft_int8_convrot.safetensors</code>…).
-                                A workflow with the names baked in needs nothing here.</span>
-                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                                <input type="text" id="rpg-scene-model" class="rpg-accordion-input" placeholder="%model% (diffusion model)" style="width: 200px;" />
-                                <input type="text" id="rpg-scene-clip" class="rpg-accordion-input" placeholder="%clip% (text encoder)" style="width: 180px;" />
-                                <input type="text" id="rpg-scene-vae" class="rpg-accordion-input" placeholder="%vae%" style="width: 120px;" />
-                            </div>
-                        </div>
                     </div>
                     <div class="rpg-setting-divider rpg-scene-sub">The message</div>
                     <div class="rpg-setting-row rpg-scene-sub">
@@ -2169,6 +2206,9 @@
                 </div>
             </div>
 
+            <!-- ═══════ VOICES ═══════ -->
+            <!-- Per-character Gemini voices (docs/google-tts-voices-plan.md §6.2).
+                 Bound by src/systems/ui/voicesSettingsUI.js. -->
             <div class="rpg-accordion-section" data-accordion="voices">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-microphone-lines rpg-accordion-icon"></i>

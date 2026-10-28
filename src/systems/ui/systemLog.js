@@ -175,13 +175,10 @@ function buildDiagnosticHeader() {
         lines.push(`autoUpdate: ${s.autoUpdate}`);
         lines.push(`updateDepth: ${s.updateDepth}`);
         lines.push(`syncExpressionsToPresentCharacters: ${s.syncExpressionsToPresentCharacters}`);
-        lines.push(`portraitEnhancementMode: ${s.portraitEnhancementMode || 'expressions'}`);
-        lines.push(`autoPortraitMode: ${s.autoPortraitMode || 'only_missing'}`);
         lines.push(`hideDefaultExpressionDisplay: ${s.hideDefaultExpressionDisplay}`);
         lines.push(`enableHtmlPrompt: ${s.enableHtmlPrompt}`);
         lines.push(`enableDialogueColoring: ${s.enableDialogueColoring}`);
         lines.push(`enableNarratorMode: ${s.enableNarratorMode}`);
-        lines.push(`autoGenerateAvatars: ${s.autoGenerateAvatars}`);
         lines.push(`imageGen.source: ${s.imageGen?.source || '(unset)'}`);
         lines.push(`imageGen.comfy.workflow: ${s.imageGen?.comfy?.workflow || '(none)'}`);
         lines.push(`imageGen.portraits.mode: ${s.imageGen?.portraits?.mode || '(unset)'}`);

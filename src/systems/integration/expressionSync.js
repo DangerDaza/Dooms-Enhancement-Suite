@@ -43,12 +43,9 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 /** Hidden style element for hiding ST's native expression display */
 let hiddenExpressionStyleElement = null;
 
+/** Per-Character Expressions: the sprite classifier (portraits DES draws are the Image Generation page's). */
 export function isExpressionSpritesModeEnabled() {
-    return Boolean(
-        extensionSettings.enabled &&
-        extensionSettings.syncExpressionsToPresentCharacters &&
-        (extensionSettings.portraitEnhancementMode || 'expressions') === 'expressions'
-    );
+    return Boolean(extensionSettings.enabled && extensionSettings.syncExpressionsToPresentCharacters);
 }
 
 // ─────────────────────────────────────────────

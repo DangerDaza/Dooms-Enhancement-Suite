@@ -85,8 +85,6 @@ export const defaultSettings = {
     showLockIcons: false, // Disabled — lock UI not yet wired into scene tracker
     showThoughtsInChat: true,
     syncExpressionsToPresentCharacters: false,
-    portraitEnhancementMode: 'expressions',
-    autoPortraitMode: 'only_missing',
     generatedPortraits: {},
     hideDefaultExpressionDisplay: false,
     enableHtmlPrompt: false,

@@ -119,8 +119,23 @@ export function imageGenConfig(settings) {
 export function migrateImageGenSettings(settings) {
     const notes = [];
     if (!settings || typeof settings !== 'object') return { changed: false, notes };
+    // Per-Character Expressions with Portrait Source "Auto-generated
+    // portraits" ran the old per-reply generator and no sprite classifier.
+    // The source entry is gone: that switch is about sprites alone now, so it
+    // goes off for such a setup (the portrait mode is carried below), and the
+    // key is rewritten so this runs once. Independent of the block below.
+    const wasAutoPortraits = settings.syncExpressionsToPresentCharacters === true && settings.portraitEnhancementMode === 'autoPortraits';
+    let flipped = false;
+    if (settings.portraitEnhancementMode === 'autoPortraits') {
+        if (settings.syncExpressionsToPresentCharacters === true) {
+            settings.syncExpressionsToPresentCharacters = false;
+            notes.push('Per-Character Expressions switched off: it was set to auto-generated portraits, which the Image Generation page runs now; no sprite classifier was in use');
+        }
+        settings.portraitEnhancementMode = 'expressions';
+        flipped = true;
+    }
     const have = settings.imageGen && typeof settings.imageGen === 'object' ? settings.imageGen : null;
-    if (have && Number.isFinite(Number(have.v)) && Number(have.v) >= 1) return { changed: false, notes };
+    if (have && Number.isFinite(Number(have.v)) && Number(have.v) >= 1) return { changed: flipped, notes };
     const next = defaultImageGenConfig();
     const sp = settings.scenePictures && typeof settings.scenePictures === 'object' ? settings.scenePictures : null;
     if (sp) {
@@ -133,10 +148,8 @@ export function migrateImageGenSettings(settings) {
         }
     }
     if (next.source === 'sillytavern') notes.push("source: SillyTavern's Image Generation");
-    const sync = settings.syncExpressionsToPresentCharacters === true;
-    const srcMode = settings.portraitEnhancementMode;
     const autoMode = settings.autoPortraitMode;
-    if (sync && srcMode === 'autoPortraits' && PORTRAIT_MODES.some(m => m.id === autoMode) && autoMode !== 'off') {
+    if (wasAutoPortraits && PORTRAIT_MODES.some(m => m.id === autoMode) && autoMode !== 'off') {
         next.portraits.mode = autoMode;
         notes.push(`portraits: ${autoMode}, from Per-Character Expressions with Auto-generated portraits`);
     } else if (settings.autoGenerateAvatars === true) {
@@ -144,9 +157,6 @@ export function migrateImageGenSettings(settings) {
         notes.push('portraits: only missing, from Auto Avatars');
     } else {
         notes.push('portraits: off');
-    }
-    if (typeof settings.customAutoPortraitPrompt === 'string' && settings.customAutoPortraitPrompt.trim() === '' && sp && typeof sp.negative === 'string') {
-        // nothing to carry for the portrait prompt itself; the negative stays per purpose
     }
     settings.imageGen = next;
     return { changed: true, notes };
