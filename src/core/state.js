@@ -8,6 +8,7 @@ import { defaultAttributesConfig } from '../utils/d20.js';
 import { defaultInventoryConfig } from '../utils/inventory.js';
 import { defaultLiveWorldConfig } from '../utils/liveWorld.js';
 import { defaultScenePicturesConfig } from '../utils/scenePictures.js';
+import { defaultImageGenConfig } from '../utils/imageGen.js';
 /**
  * Extension settings - persisted to SillyTavern settings
  */
@@ -93,6 +94,9 @@ export let extensionSettings = {
     // Scene pictures (docs/scene-pictures-plan.md; src/utils/scenePictures.js): the rules.
     // This chat's count, LoRAs and notes live in chat_metadata.dooms_scene. Off until switched on.
     scenePictures: defaultScenePicturesConfig(),
+    // Image Generation (docs/image-gen-plan.md; src/utils/imageGen.js): the one
+    // source every picture DES makes goes through, and the portrait rule.
+    imageGen: defaultImageGenConfig(),
     // History persistence settings - inject selected tracker data into historical messages
     historyPersistence: {
         enabled: false, // Master toggle for history persistence feature

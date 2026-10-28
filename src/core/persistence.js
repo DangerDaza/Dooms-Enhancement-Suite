@@ -4,6 +4,7 @@
  */
 import { saveSettingsDebounced, chat_metadata, saveChatDebounced, saveChatConditional } from '../../../../../../script.js';
 import { getContext } from '../../../../../extensions.js';
+import { migrateImageGenSettings } from '../utils/imageGen.js';
 import {
     extensionSettings,
     lastGeneratedData,
@@ -472,6 +473,20 @@ export function loadSettings() {
             if (extensionSettings.customAutoPortraitPrompt === undefined) {
                 extensionSettings.customAutoPortraitPrompt = '';
                 settingsChanged = true;
+            }
+            // Image Generation (docs/image-gen-plan.md): one source for every
+            // picture DES makes, filled once from the keys it replaces (Auto
+            // Avatars, Portrait Source + Auto Portrait Mode, the scene
+            // pictures' ComfyUI connection). Those keys stay until nothing
+            // reads them.
+            try {
+                const moved = migrateImageGenSettings(extensionSettings);
+                if (moved.changed) {
+                    settingsChanged = true;
+                    console.log(`[Dooms Tracker] Image Generation settings filled from the old keys: ${moved.notes.join('; ')}`);
+                }
+            } catch (e) {
+                console.warn('[Dooms Tracker] Image Generation settings migration failed', e);
             }
             // Campaigns as a mode: campaignProfiles / campaignBaseShadow objects,
             // the lorebook.activeCampaignId / globalBooks / campaignActivated
