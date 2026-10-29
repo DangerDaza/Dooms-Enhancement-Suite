@@ -590,11 +590,33 @@ console.log('\n§11 the World Builder (docs/world-builder-plan.md D93–D97)');
     check('the blank id and a broken world are refused', !(await lw.saveWorld({ id: 'blank', name: 'x' })).ok && !(await lw.saveWorld({ name: 'Bad', places: [{ id: 'a', parent: 'zz' }] })).ok);
     const gone = await lw.deleteWorld('quayside');
     st = lw.getWorldState();
-    check('the chat\'s world deleted: the chat goes on in the blank world, its clocks kept, the missing world named (D97)', gone && lw.getActivePack().id === 'blank' && lw.getActivePack().name === 'Mara Vane' && lw.getMissingWorld() === 'quayside' && st.pack === 'quayside' && st.clocks.tide === 2 && st.visited[0].id === 'the-quay');
+    check('the chat\'s world deleted: the chat goes on in the blank world, its clocks kept, the missing world named (D97); the scene recorded under the blank world\'s key beside the world\'s entry', gone && lw.getActivePack().id === 'blank' && lw.getActivePack().name === 'Mara Vane' && lw.getMissingWorld() === 'quayside' && st.pack === 'quayside' && st.clocks.tide === 2 && st.visited[0].id === 'loc:the-quay' && st.visited.some(e => e.id === 'the-quay') && st.where['Old Marit'] === 'loc:the-quay', JSON.stringify(st.visited));
     const imported = await lw.importWorldJson(JSON.stringify(edit.raw));
-    check('imported back: the world restored whole', imported.ok && lw.getActivePack().id === 'quayside' && lw.getMissingWorld() === '' && lw.getWorldState().clocks.tide === 2 && lw.getActivePack().clocks.length === 1);
+    check('imported back: the world restored whole, the row re-keyed to its place with the visits joined, Old Marit back at it', imported.ok && lw.getActivePack().id === 'quayside' && lw.getMissingWorld() === '' && lw.getWorldState().clocks.tide === 2 && lw.getActivePack().clocks.length === 1 && lw.getWorldState().visited.length === 1 && lw.getWorldState().visited[0].id === 'the-quay' && lw.getWorldState().visited[0].visits.length === 2 && lw.getWorldState().where['Old Marit'] === 'the-quay', JSON.stringify(lw.getWorldState().visited));
     check('not JSON', !(await lw.importWorldJson('{nope')).ok);
     await lw.deleteWorld('harbour-two');
+}
+
+console.log('\n§12 the place the chat stands in, recorded at load (D82: a reply the row never saw)');
+{
+    resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-old'; globalThis.__DES_CTX__.name2 = 'Mara Vane';
+    extensionSettings.liveWorld.enabled = true; extensionSettings.liveWorld.pack = 'blank'; extensionSettings.liveWorld.every = 50;
+    await lw.onWorldChatChanged();
+    check('a chat with no reply yet: nothing to record', lw.getWorldState().visited.length === 0 && lw.recordCurrentScene() === false);
+    chat.push(user('I go to the chandlery.'));
+    chat.push(ai('The chandler nods.'));    // a reply that came while Live World was off: never counted, never stamped
+    lastGeneratedData.infoBox = '{"date":"Thursday","time":"dawn","location":"The chandlery"}';
+    lastGeneratedData.characterThoughts = JSON.stringify({ characters: [{ name: 'The chandler', thoughts: 'x' }] });
+    await lw.onWorldChatChanged();
+    let st = lw.getWorldState();
+    check('loaded again: the reply\'s place is the row, tied to that reply, the people in it placed, nothing counted', st.visited.length === 1 && st.visited[0].id === 'loc:the-chandlery' && st.visited[0].visits.length === 1 && chat[1].dooms_world_id === st.visited[0].visits[0] && st.where['The chandler'] === 'loc:the-chandlery' && st.sinceLast === 0, JSON.stringify(st.visited));
+    const before = JSON.stringify(lw.getWorldState());
+    await lw.onWorldChatChanged();
+    check('loading once more changes nothing', JSON.stringify(lw.getWorldState()) === before && lw.recordCurrentScene() === false);
+    chat.length = 0;
+    chat.push(user('Hello.'));
+    await lw.onWorldChatChanged();
+    check('the player\'s message alone is not a scene', lw.recordCurrentScene() === false);
 }
 
 console.log(`\n${failures === 0 ? 'All Live World flow checks pass' : `${failures} FAILURE(S)`}`);

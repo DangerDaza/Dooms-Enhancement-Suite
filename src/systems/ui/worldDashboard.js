@@ -17,7 +17,7 @@ import { resolvePortrait } from './portraitBar.js';
 import { liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { rowIdForCharacter } from '../../utils/worldMap.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
-import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHANGED_EVENT } from '../features/questCut.js';
 import { sourceProblem } from '../features/imageGen.js';
 import { mapWindowHtml, FEED_LIMITS, MAP_PANELS } from './worldViews.js';
@@ -271,6 +271,7 @@ export async function openWorldDashboard({ name = '', place = '' } = {}) {
     isOpen = true;
     lastResult = '';
     if (place) selected = String(place);
+    try { recordCurrentScene(); } catch (e) { /* the row stays as it is */ }    // the place the chat stands in, if the row never saw its reply
     render();
     $(`#${POPUP_ID}`).css('display', 'flex');
     if (name) showPlaceOf(name);

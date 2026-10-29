@@ -564,9 +564,12 @@ export async function onWorldChatChanged() {
         if (missingWorld) {
             state = stored;    // no clamp: the clocks and the places wait for their world to come back
         } else {
-            const clamped = clampClocksToPack(stored, activePack);
+            // A spell without its world (or Make this a world) keyed the row's places under the blank world: the
+            // world's own places take them back, visits and all; then the clocks are clamped to the world as it is.
+            const bound = rebindStateToPack(stored, activePack);
+            const clamped = clampClocksToPack(bound.state, activePack);
             state = clamped.state;
-            if (clamped.changed) commit(state, { source: 'clamp' }, { immediate: true });
+            if (clamped.changed || bound.rebound) commit(state, { source: 'clamp' }, { immediate: true });
         }
         reconcile({ at: 'load' });
     } else {
@@ -574,7 +577,35 @@ export async function onWorldChatChanged() {
         commit(state, { source: 'seed' }, { immediate: true });
         log(`seeded from "${activePack.name}"`);
     }
+    recordCurrentScene();    // a reply the row never saw (from before the window, or while the world was away): its place now
     notify({ source: 'chat' });
+}
+
+/**
+ * The scene the chat stands in, recorded when the newest reply is not in
+ * the row yet (D82): a chat from before the Map window, one that played
+ * while Live World was off, or one whose world was away. The last reply's
+ * tracker location becomes a visit tied to that reply (stamped now if it
+ * never was) and the people in it are placed as a fresh reply would place
+ * them. Nothing happens when the row already holds it. Never draws.
+ * @returns {boolean} whether anything was recorded
+ */
+export function recordCurrentScene() {
+    if (!ready()) return false;
+    const list = chatArray();
+    if (!list) return false;
+    let m = null;
+    for (let i = list.length - 1; i >= 0; i--) {
+        const x = list[i];
+        if (x && !x.is_user && !x.is_system && !isToolRecord(x)) { m = x; break; }
+    }
+    if (!m) return false;
+    const next = placeFromScene(state, m);
+    newPlace = '';    // not a fresh reply: the automatic draw is for those (D83)
+    if (next === state) return false;
+    commit(next, { source: 'scene' });
+    log('the scene the chat stands in recorded');
+    return true;
 }
 
 /**
