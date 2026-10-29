@@ -644,7 +644,8 @@ modifier, the DC and the outcome; a default sheet emits nothing.
 ### 7.7 UI
 
 - **Entry points.** The FAB fly-out gets "Roll a check" (hideable like the
-  other entries). Under the five setups the DES composer row gets a die
+  other entries; removed from the fly-out on 2026-10-29 at the owner's ask, the
+  card menu and the chip remain). Under the five setups the DES composer row gets a die
   button beside the tray button. The persona card's context menu gets "Roll
   a check". Under Classic the fly-out and the card menu are the ways in.
 - **The popover** (`src/systems/ui/dicePanel.js`, lazy like the other

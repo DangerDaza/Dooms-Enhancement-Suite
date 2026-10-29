@@ -173,7 +173,8 @@ export async function deletePortraitsIfUnreferenced(values) {
 //
 // When a portrait is regenerated, the old image file stays where it already
 // lives (the des-portraits folder for DES-managed files) and its URLs move
-// into extensionSettings.npcAvatarHistory[name] so it isn't an orphan.
+// into extensionSettings.npcAvatarHistory[name] so it isn't an orphan (the
+// player's card keeps them on its own entry, userCharacters[name].portraitHistory).
 // "Restore Previous Portrait" swaps the newest history entry back in. Only
 // two things ever delete history files from disk: trimming past the per-
 // character cap, and full character deletion (purgePortraitHistory).
@@ -182,8 +183,60 @@ export async function deletePortraitsIfUnreferenced(values) {
 const PORTRAIT_HISTORY_LIMIT = 5;
 
 /** How many replaced portraits are kept for this character. */
-export function getPortraitHistoryCount(name) {
-    const list = extensionSettings.npcAvatarHistory?.[name];
+/**
+ * Where a name's portrait and its history live. NPCs: the flat stores
+ * (npcAvatars / npcAvatarsFullRes / npcAvatarHistory[name]). The player's
+ * card (isUser): its own userCharacters entry (avatar / avatarFullRes /
+ * portraitHistory), so an NPC of the same name never shares them (D91).
+ * Nothing is created for an empty write.
+ */
+function portraitSlot(name, isUser) {
+    const str = (v) => (typeof v === 'string' ? v : '');
+    if (isUser) {
+        const entry = (create) => {
+            if (!extensionSettings.userCharacters) { if (!create) return null; extensionSettings.userCharacters = {}; }
+            const map = extensionSettings.userCharacters;
+            if (!map[name] || typeof map[name] !== 'object') { if (!create) return null; map[name] = {}; }
+            return map[name];
+        };
+        return {
+            history: () => entry(false)?.portraitHistory,
+            setHistory: (list) => {
+                const keep = Array.isArray(list) && list.length > 0;
+                const u = entry(keep);
+                if (!u) return;
+                if (keep) u.portraitHistory = list; else delete u.portraitHistory;
+            },
+            current: () => { const u = entry(false); return { avatar: str(u?.avatar), avatarFullRes: str(u?.avatarFullRes) }; },
+            setCurrent: ({ avatar, avatarFullRes }) => {
+                const u = entry(Boolean(avatar || avatarFullRes));
+                if (!u) return;
+                u.avatar = str(avatar);
+                u.avatarFullRes = str(avatarFullRes);
+            },
+        };
+    }
+    return {
+        history: () => extensionSettings.npcAvatarHistory?.[name],
+        setHistory: (list) => {
+            if (Array.isArray(list) && list.length) {
+                if (!extensionSettings.npcAvatarHistory) extensionSettings.npcAvatarHistory = {};
+                extensionSettings.npcAvatarHistory[name] = list;
+            } else if (extensionSettings.npcAvatarHistory) delete extensionSettings.npcAvatarHistory[name];
+        },
+        current: () => ({ avatar: str(extensionSettings.npcAvatars?.[name]), avatarFullRes: str(extensionSettings.npcAvatarsFullRes?.[name]) }),
+        setCurrent: ({ avatar, avatarFullRes }) => {
+            if (avatar) { if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {}; extensionSettings.npcAvatars[name] = avatar; }
+            else if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
+            if (avatarFullRes) { if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {}; extensionSettings.npcAvatarsFullRes[name] = avatarFullRes; }
+            else if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
+        },
+    };
+}
+
+/** @param {{ isUser?: boolean }} [opts] isUser: the player's card (its userCharacters entry), not the NPC stores */
+export function getPortraitHistoryCount(name, { isUser = false } = {}) {
+    const list = portraitSlot(name, isUser).history();
     return Array.isArray(list) ? list.length : 0;
 }
 
@@ -191,23 +244,22 @@ export function getPortraitHistoryCount(name) {
  * Moves the character's CURRENT portrait entries (low-res + full-res) into
  * their history instead of deleting them. Trims history beyond the cap,
  * deleting only the evicted files from disk. Caller persists via saveSettings.
+ * @param {{ isUser?: boolean }} [opts] isUser: the player's card
  * @returns {boolean} true if there was a current portrait to stash
  */
-export function stashCurrentPortraitToHistory(name) {
-    const avatar = extensionSettings.npcAvatars?.[name] || '';
-    const avatarFullRes = extensionSettings.npcAvatarsFullRes?.[name] || '';
+export function stashCurrentPortraitToHistory(name, { isUser = false } = {}) {
+    const slot = portraitSlot(name, isUser);
+    const { avatar, avatarFullRes } = slot.current();
     if (!avatar && !avatarFullRes) return false;
-    if (!extensionSettings.npcAvatarHistory) extensionSettings.npcAvatarHistory = {};
-    const store = extensionSettings.npcAvatarHistory;
-    if (!Array.isArray(store[name])) store[name] = [];
-    store[name].push({ avatar, avatarFullRes, replacedAt: new Date().toISOString() });
+    const list = Array.isArray(slot.history()) ? slot.history() : [];
+    list.push({ avatar, avatarFullRes, replacedAt: new Date().toISOString() });
     const evictedValues = [];
-    while (store[name].length > PORTRAIT_HISTORY_LIMIT) {
-        const evicted = store[name].shift();
+    while (list.length > PORTRAIT_HISTORY_LIMIT) {
+        const evicted = list.shift();
         evictedValues.push(evicted?.avatar, evicted?.avatarFullRes);
     }
-    if (extensionSettings.npcAvatars) delete extensionSettings.npcAvatars[name];
-    if (extensionSettings.npcAvatarsFullRes) delete extensionSettings.npcAvatarsFullRes[name];
+    slot.setHistory(list);
+    slot.setCurrent({ avatar: '', avatarFullRes: '' });
     // Evicted files go only if no other version of the character (or anyone
     // else) still references them.
     if (evictedValues.length) deletePortraitsIfUnreferenced(evictedValues).catch(() => {});
@@ -219,24 +271,20 @@ export function stashCurrentPortraitToHistory(name) {
  * currently live portrait (if any) takes its place in history, so repeated
  * restores toggle between the last two and nothing is ever lost.
  * Caller persists via saveSettings.
+ * @param {{ isUser?: boolean }} [opts] isUser: the player's card
  * @returns {boolean} true if a previous portrait existed and was restored
  */
-export function restorePreviousPortrait(name) {
-    const list = extensionSettings.npcAvatarHistory?.[name];
+export function restorePreviousPortrait(name, { isUser = false } = {}) {
+    const slot = portraitSlot(name, isUser);
+    const list = slot.history();
     if (!Array.isArray(list) || !list.length) return false;
     const prev = list.pop();
-    const currentAvatar = extensionSettings.npcAvatars?.[name] || '';
-    const currentFull = extensionSettings.npcAvatarsFullRes?.[name] || '';
+    const { avatar: currentAvatar, avatarFullRes: currentFull } = slot.current();
     if (currentAvatar || currentFull) {
         list.push({ avatar: currentAvatar, avatarFullRes: currentFull, replacedAt: new Date().toISOString() });
     }
-    if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
-    if (!extensionSettings.npcAvatarsFullRes) extensionSettings.npcAvatarsFullRes = {};
-    if (prev.avatar) extensionSettings.npcAvatars[name] = prev.avatar;
-    else delete extensionSettings.npcAvatars[name];
-    if (prev.avatarFullRes) extensionSettings.npcAvatarsFullRes[name] = prev.avatarFullRes;
-    else delete extensionSettings.npcAvatarsFullRes[name];
-    if (!list.length) delete extensionSettings.npcAvatarHistory[name];
+    slot.setCurrent({ avatar: prev?.avatar || '', avatarFullRes: prev?.avatarFullRes || '' });
+    slot.setHistory(list);
     return true;
 }
 
@@ -245,10 +293,12 @@ export function restorePreviousPortrait(name) {
  * values it held, WITHOUT touching disk. Full-deletion paths collect these
  * together with the current portrait values, remove every settings entry,
  * then hand the whole list to deletePortraitsIfUnreferenced.
+ * @param {{ isUser?: boolean }} [opts] isUser: the player's card
  * @returns {string[]}
  */
-export function takePortraitHistoryValues(name) {
-    const list = extensionSettings.npcAvatarHistory?.[name];
+export function takePortraitHistoryValues(name, { isUser = false } = {}) {
+    const slot = portraitSlot(name, isUser);
+    const list = slot.history();
     const values = [];
     if (Array.isArray(list)) {
         for (const entry of list) {
@@ -256,7 +306,7 @@ export function takePortraitHistoryValues(name) {
             else values.push(entry);
         }
     }
-    if (extensionSettings.npcAvatarHistory) delete extensionSettings.npcAvatarHistory[name];
+    slot.setHistory([]);
     return values.filter(v => typeof v === 'string' && v);
 }
 
@@ -265,8 +315,8 @@ export function takePortraitHistoryValues(name) {
  * references) and drops their history entry. Only for FULL character
  * deletion — regeneration never calls this.
  */
-export function purgePortraitHistory(name) {
-    const values = takePortraitHistoryValues(name);
+export function purgePortraitHistory(name, opts = {}) {
+    const values = takePortraitHistoryValues(name, opts);
     if (values.length) deletePortraitsIfUnreferenced(values).catch(() => {});
 }
 

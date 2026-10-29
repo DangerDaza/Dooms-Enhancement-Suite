@@ -507,9 +507,9 @@ export function initPortraitBar() {
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         } else if (action === 'regenerate-portrait') {
-            regeneratePortraitFor(characterName);
+            regeneratePortraitFor(characterName, isUser);
         } else if (action === 'restore-portrait') {
-            if (restorePreviousPortrait(characterName)) {
+            if (restorePreviousPortrait(characterName, { isUser })) {
                 saveSettings();
                 clearPortraitCache();
                 updatePortraitBar();
@@ -1346,7 +1346,7 @@ function clearCharacterColor(characterName) {
  * character's history, rebuilds the LLM prompt, and draws through the image
  * service (Settings → Image Generation).
  */
-function regeneratePortraitFor(characterName) {
+function regeneratePortraitFor(characterName, isUser = false) {
     const ok = window.confirm(
         `Regenerate ${characterName}'s portrait?\n\n` +
         `A fresh portrait is generated with your image source (Settings → Image Generation). ` +
@@ -1361,7 +1361,7 @@ function regeneratePortraitFor(characterName) {
             return;
         }
         if (window.toastr) toastr.info(`Generating a new portrait for ${characterName}…`, '', { timeOut: 4000 });
-        const url = await gen.regenerateAvatar(characterName);
+        const url = await gen.regenerateAvatar(characterName, { isUser });
         // The old portrait is gone either way — refresh so the card shows
         // the new image (success) or the initials placeholder (failure).
         clearPortraitCache();
@@ -1477,12 +1477,11 @@ function openCardMenu(cardEl, clientX, clientY) {
     // mid-inject (post-click, pre-AI-reply).
     const isPending = _injectingNames.has(String(characterName || '').toLowerCase());
     $menu.find('[data-action="cancel-inject"]').toggle(isPending);
-    // 'Regenerate Portrait' is NPC-only — the generator writes to the
-    // npcAvatars store; user-character portraits are managed in the
-    // Workshop (upload / persona mirror). 'Restore' only shows when a
-    // replaced portrait is actually banked for this character.
-    $menu.find('[data-action="regenerate-portrait"]').toggle(!isUser);
-    $menu.find('[data-action="restore-portrait"]').toggle(!isUser && getPortraitHistoryCount(characterName) > 0);
+    // 'Regenerate Portrait' draws for NPCs and for the player's card alike
+    // (the player's lands on their own user-card entry, D91). 'Restore'
+    // only shows when a replaced portrait is actually banked for this card.
+    $menu.find('[data-action="regenerate-portrait"]').show();
+    $menu.find('[data-action="restore-portrait"]').toggle(getPortraitHistoryCount(characterName, { isUser }) > 0);
     // 'Roll a check' is the persona's: checks are the player's attempts.
     $menu.find('[data-action="roll-check"]').toggle(isUser && attributesOn(extensionSettings));
 

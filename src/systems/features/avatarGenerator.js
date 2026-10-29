@@ -82,11 +82,19 @@ export function imageSourceProblem() {
  * generation uses THIS line verbatim instead of asking the LLM to write a
  * prompt — single-line tag-style appearance prompts outperform prose dumps
  * on SD-family backends, stay consistent between regenerations, and give
- * the user a knob instead of a mystery.
+ * the user a knob instead of a mystery. For the player's card (isUser) the
+ * line on their own user-card entry comes first (D91), then the NPC store's
+ * line for the name (a persona copied from an NPC keeps it).
+ * @param {{ isUser?: boolean }} [opts]
  */
-export function getCharacterAppearance(characterName) {
+export function getCharacterAppearance(characterName, { isUser = false } = {}) {
+    if (!characterName) return '';
+    if (isUser) {
+        const own = extensionSettings.userCharacters?.[characterName]?.appearance;
+        if (typeof own === 'string' && own.trim()) return own.trim();
+    }
     const store = extensionSettings.characterAppearance;
-    if (!store || !characterName) return '';
+    if (!store) return '';
     if (typeof store[characterName] === 'string') return store[characterName].trim();
     const lower = characterName.toLowerCase();
     for (const [key, value] of Object.entries(store)) {
@@ -99,10 +107,17 @@ export function getCharacterAppearance(characterName) {
  * The LoRAs kept for a character (Workshop → Appearance → "LoRAs for this
  * character", one per line, name:strength), as a list. Spliced into the
  * workflow ahead of the page's own list when the source is ComfyUI direct.
+ * The player's card (isUser): the list on their own entry first (D91).
+ * @param {{ isUser?: boolean }} [opts]
  */
-export function getCharacterLoras(characterName) {
+export function getCharacterLoras(characterName, { isUser = false } = {}) {
+    if (!characterName) return [];
+    if (isUser) {
+        const own = extensionSettings.userCharacters?.[characterName]?.loras;
+        if (typeof own === 'string' && own.trim()) return parseLoraList(own);
+    }
     const store = extensionSettings.characterLoras;
-    if (!store || !characterName) return [];
+    if (!store) return [];
     let text = '';
     if (typeof store[characterName] === 'string') text = store[characterName];
     else {
@@ -404,9 +419,9 @@ function saySo(names) {
  * size around the character's prompt. Returns the picture as the source
  * gave it (a URL the extension saved, or ComfyUI's data URL), '' for none.
  */
-async function renderPortrait(prompt, characterName = '') {
+async function renderPortrait(prompt, characterName = '', { isUser = false } = {}) {
     const p = imageCfg().portraits;
-    const loras = normalizeLoras([...getCharacterLoras(characterName), ...(p.loras || [])]);    // the character's own first; a name in both counts once
+    const loras = normalizeLoras([...getCharacterLoras(characterName, { isUser }), ...(p.loras || [])]);    // the character's own first; a name in both counts once
     const out = await renderImage({ purpose: 'portrait', prompt: `${p.preamble || ''}${prompt}`.trim(), negative: p.negative || '', size: p.size, loras });
     return out.url || out.dataUrl || '';
 }
@@ -502,9 +517,11 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
  * Handles preset switching if useSeparatePreset is enabled
  *
  * @param {string} characterName - Name of character to regenerate
+ * @param {{ isUser?: boolean }} [opts] isUser: the player's card — its own
+ *        entry is read and written, never the NPC stores (D91)
  * @returns {Promise<string|null>} New avatar URL or null if failed
  */
-export async function regenerateAvatar(characterName) {
+export async function regenerateAvatar(characterName, { isUser = false } = {}) {
     // Re-entry guard — a second call while one is in flight would delete the
     // half-written result and double-bill the image API.
     if (pendingGenerations.has(characterName)) return null;
@@ -515,7 +532,7 @@ export async function regenerateAvatar(characterName) {
     // into the character's portrait history instead of deleting it. The old
     // file stays in the des-portraits folder and "Restore Previous Portrait"
     // can bring it back.
-    stashCurrentPortraitToHistory(characterName);
+    stashCurrentPortraitToHistory(characterName, { isUser });
     saveSettings();
     // Clear existing prompt cache
     if (sessionAvatarPrompts[characterName]) {
@@ -523,9 +540,9 @@ export async function regenerateAvatar(characterName) {
     }
     try {
         // Generate new LLM prompt
-        const prompt = await generateAvatarPrompt(characterName);
+        const prompt = await generateAvatarPrompt(characterName, { isUser });
         // Generate the avatar
-        return await generateSingleAvatar(characterName, prompt);
+        return await generateSingleAvatar(characterName, prompt, { isUser });
     } finally {
         // Remove from pending when done
         pendingGenerations.delete(characterName);
@@ -567,16 +584,17 @@ export async function distillDescriptionPrompt(characterName, description) {
  *
  * @param {string} characterName
  * @param {string} prompt
+ * @param {{ isUser?: boolean }} [opts] isUser: the player's card (D91)
  * @returns {Promise<string|null>} Image URL, or null on failure /
  *          when a generation for this character is already in flight
  */
-export async function generateAvatarWithPrompt(characterName, prompt) {
+export async function generateAvatarWithPrompt(characterName, prompt, { isUser = false } = {}) {
     if (pendingGenerations.has(characterName)) return null;
     pendingGenerations.add(characterName);
     try {
-        stashCurrentPortraitToHistory(characterName);
+        stashCurrentPortraitToHistory(characterName, { isUser });
         saveSettings();
-        return await generateSingleAvatar(characterName, prompt);
+        return await generateSingleAvatar(characterName, prompt, { isUser });
     } finally {
         pendingGenerations.delete(characterName);
     }
@@ -588,11 +606,22 @@ export async function generateAvatarWithPrompt(characterName, prompt) {
  * @param {string} characterName - Name of character
  * @returns {Promise<string|null>} Generated prompt or null if failed
  */
-async function generateAvatarPrompt(characterName) {
+async function generateAvatarPrompt(characterName, { isUser = false } = {}) {
     // A user-maintained appearance line skips LLM prompt-writing entirely
     // (and bypasses the session cache — it's already deterministic).
-    const appearance = getCharacterAppearance(characterName);
+    const appearance = getCharacterAppearance(characterName, { isUser });
     if (appearance) return appearance;
+    // The player's card: the LLM prompt below is written from the chat's
+    // character card and the trackers, which describe everyone but the
+    // player. Their own description (the user card's, else SillyTavern's
+    // persona description) is distilled into tags instead when there is one.
+    if (isUser) {
+        const description = playerDescription(characterName);
+        if (description) {
+            const distilled = await distillDescriptionPrompt(characterName, description);
+            if (distilled) return distilled;
+        }
+    }
     // Check cache first if not forcing regeneration
     if (sessionAvatarPrompts[characterName]) {
         return sessionAvatarPrompts[characterName];
@@ -649,7 +678,30 @@ function buildFallbackPrompt(characterName) {
  * @param {string|null} prompt - The prompt to use (optional, will fallback if null)
  * @returns {Promise<string|null>} Avatar URL or null if failed
  */
-async function generateSingleAvatar(characterName, prompt = null) {
+/** The player's description: the user card's Injection description, else SillyTavern's description of the active persona. */
+function playerDescription(characterName) {
+    const u = extensionSettings.userCharacters?.[characterName];
+    const own = typeof u?.injection?.description === 'string' ? u.injection.description.trim() : '';
+    if (own) return own;
+    try {
+        const ctx = (typeof window !== 'undefined' && window.SillyTavern && window.SillyTavern.getContext) ? window.SillyTavern.getContext() : null;
+        const d = ctx?.powerUserSettings?.persona_descriptions?.[ctx.userAvatar];
+        if (d && typeof d.description === 'string') return d.description.trim();
+    } catch (e) { /* no persona description */ }
+    return '';
+}
+
+/** The player's card's own picture: both sizes point at the one file DES made (the sheet's hero art reads avatarFullRes). */
+function storePlayerPortrait(characterName, imageUrl) {
+    if (!extensionSettings.userCharacters) extensionSettings.userCharacters = {};
+    const u = extensionSettings.userCharacters[characterName];
+    const entry = u && typeof u === 'object' ? u : {};
+    entry.avatar = imageUrl;
+    entry.avatarFullRes = imageUrl;
+    extensionSettings.userCharacters[characterName] = entry;
+}
+
+async function generateSingleAvatar(characterName, prompt = null, { isUser = false } = {}) {
     // Use provided prompt, or check cache, or build fallback
     if (!prompt) {
         prompt = sessionAvatarPrompts[characterName];
@@ -665,13 +717,8 @@ async function generateSingleAvatar(characterName, prompt = null) {
             console.warn(`[RPG Avatar] not drawing ${characterName}: ${problem}`);
             return null;
         }
-        let imageUrl = await renderPortrait(prompt, characterName);
+        let imageUrl = await renderPortrait(prompt, characterName, { isUser });
         if (imageUrl) {
-            // Store the avatar — in the version it was generated for if the
-            // active campaign changed while the picture was being made.
-            if (!extensionSettings.npcAvatars) {
-                extensionSettings.npcAvatars = {};
-            }
             if (isDataUrl(imageUrl)) {
                 // ComfyUI direct (and some of the extension's engines) hand
                 // back the bytes: to disk now, under des-portraits, like an
@@ -679,8 +726,17 @@ async function generateSingleAvatar(characterName, prompt = null) {
                 // history by the caller, so no file is reused here.
                 imageUrl = await persistPortrait(null, characterName, imageUrl);
             }
-            if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl)) {
-                extensionSettings.npcAvatars[characterName] = imageUrl;
+            if (isUser) {
+                // The player's card (D91): on its own entry. Personas have no
+                // campaign versions, so no version bookkeeping.
+                storePlayerPortrait(characterName, imageUrl);
+            } else {
+                // Store the avatar — in the version it was generated for if the
+                // active campaign changed while the picture was being made.
+                if (!extensionSettings.npcAvatars) extensionSettings.npcAvatars = {};
+                if (!storeResultInStartingVersion(campaignAtStart, startVersionId, characterName, imageUrl)) {
+                    extensionSettings.npcAvatars[characterName] = imageUrl;
+                }
             }
             saveSettings();
             return imageUrl;

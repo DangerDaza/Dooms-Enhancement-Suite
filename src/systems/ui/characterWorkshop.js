@@ -1279,6 +1279,10 @@ function buildDraft(name, isUser = false, versionId = null) {
             avatarFullRes: typeof u.avatarFullRes === 'string' ? u.avatarFullRes : '',
             pronouns: typeof u.pronouns === 'string' ? u.pronouns : '',
             linkedPersona: typeof u.linkedPersona === 'string' ? u.linkedPersona : '',
+            // The Portrait prompt and the LoRAs of the player's card live on
+            // its entry (D91): the generator and scene pictures read them there.
+            appearance: typeof u.appearance === 'string' ? u.appearance : '',
+            loras: typeof u.loras === 'string' ? u.loras : '',
             // Reuse same field names as NPC draft so render code can be shared
             relationship: '',
             injection: {
@@ -1295,7 +1299,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             // Aliases are NPC-only (a persona's name is the player's own);
             // kept on the draft so shared render code can no-op safely.
             aliases: [],
-            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false, attributes: false },
+            dirty: { color: false, avatar: false, injection: false, relationship: false, pronouns: false, linkedPersona: false, knives: false, aliases: false, voice: false, attributes: false, appearance: false, loras: false },
         };
     }
     const version = versionId || defaultVersionFor(name);
@@ -2459,12 +2463,12 @@ function bindStaticListeners() {
     });
 
     $modal.on('input.cw change.cw', '#cw-appearance', function () {
-        if (!draft || draft.isUser) return;
+        if (!draft) return;
         draft.appearance = String($(this).val() || '');
         draft.dirty.appearance = true;
     });
     $modal.on('input.cw change.cw', '#cw-loras', function () {
-        if (!draft || draft.isUser) return;
+        if (!draft) return;
         draft.loras = String($(this).val() || '');
         draft.dirty.loras = true;
     });
@@ -2472,7 +2476,7 @@ function bindStaticListeners() {
     // Portrait prompt field only; NO image renders until the user has had a
     // chance to review/tweak and clicks Render portrait.
     $modal.on('click.cw', '#cw-appearance-from-desc', async function () {
-        if (!draft || draft.isUser) return;
+        if (!draft) return;
         const name = draft.name;
         const description = String(draft.injection?.description || '').trim();
         if (!description) {
@@ -2490,7 +2494,7 @@ function bindStaticListeners() {
                 if (window.toastr) window.toastr.error('The LLM did not return a prompt — check your connection settings and try again.', 'Character Workshop', { timeOut: 5000 });
                 return;
             }
-            if (draft === startDraft && !draft.isUser) {
+            if (draft === startDraft) {
                 draft.appearance = prompt;
                 draft.dirty.appearance = true;
                 $modal.find('#cw-appearance').val(prompt);
@@ -2506,7 +2510,7 @@ function bindStaticListeners() {
     // Step 2 — render a portrait with whatever the Portrait prompt field
     // says (empty field = the automatic LLM-written prompt).
     $modal.on('click.cw', '#cw-appearance-render', async function () {
-        if (!draft || draft.isUser) return;
+        if (!draft) return;
         if (!draft.isLive) {
             // The generator writes the live stores; see renderAppearance.
             try { if (window.toastr) window.toastr.info('Portraits render for the live version only. Make this campaign active in the Lore Library first.', 'Character Workshop', { timeOut: 5000 }); } catch (e) {}
@@ -2537,12 +2541,16 @@ function bindStaticListeners() {
             if (!ok) return;
             $btn.prop('disabled', true);
             if (window.toastr) window.toastr.info(`Generating a new portrait for ${name}…`, '', { timeOut: 4000 });
+            const isUser = !!draft.isUser;    // the player's card: its own entry, never the NPC stores (D91)
             const url = prompt
-                ? await gen.generateAvatarWithPrompt(name, prompt)
-                : await gen.regenerateAvatar(name);
+                ? await gen.generateAvatarWithPrompt(name, prompt, { isUser })
+                : await gen.regenerateAvatar(name, { isUser });
             if (url) {
                 if (draft === startDraft) {
+                    // Both sizes: Save writes avatarFullRes back, and a stale
+                    // one would put the old picture over the new in the sheet.
                     draft.avatar = url;
+                    draft.avatarFullRes = url;
                     renderAppearance();
                     renderVersionStrip();
                 }
@@ -2881,6 +2889,11 @@ function commitDraft() {
         };
         if (draft.voice) next.voice = { ...draft.voice };
         else delete next.voice;
+        // Portrait prompt and LoRAs (D91): kept when set, dropped when blank.
+        const appearance = String(draft.appearance || '').trim();
+        if (appearance) next.appearance = appearance; else delete next.appearance;
+        const loras = String(draft.loras || '').trim();
+        if (loras) next.loras = loras; else delete next.loras;
         extensionSettings.userCharacters[name] = next;
         if (draft.dirty.attributes) setSheet(extensionSettings, name, true, draft.attributes, null, draft.proficiencies || []);
         invalidateVoices();
@@ -3313,7 +3326,7 @@ function deleteCharacter(name) {
     // and clears activeUserCharacter if it was pointing at this entry.
     if (draft?.isUser) {
         const userEntry = extensionSettings.userCharacters?.[name];
-        const candidates = userEntry ? [userEntry.avatar, userEntry.avatarFullRes] : [];
+        const candidates = userEntry ? [userEntry.avatar, userEntry.avatarFullRes, ...takePortraitHistoryValues(name, { isUser: true })] : [];
         if (extensionSettings.userCharacters) delete extensionSettings.userCharacters[name];
         deleteSheet(extensionSettings, name, true);
         if (extensionSettings.activeUserCharacter === name) {

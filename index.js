@@ -194,7 +194,7 @@ import { initMobileQuickJump, refreshMobileQuickJump } from './src/systems/ui/mo
 import { escapeHtml } from './src/utils/html.js';
 // Vitals (Project Short Fuse): the Settings → Stats page edits the sheet
 import { vitalsConfig, defaultVitalsConfig, migrateVitalsConfig, normalizeVitalDef, vitalSlug, clampVital, isHexColor, VITAL_PRESETS, EXTRA_VITAL_COLORS, MAX_VITALS } from './src/utils/vitals.js';
-import { attributesOn, attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
+import { attributesConfig, migrateAttributesConfig, normalizeAttributeDef, normalizeSkills, pruneProficiencies, clampProficiency, attributeDefs, attributeSlug, ATTRIBUTE_PRESETS, DIFFICULTIES, MAX_ATTRIBUTES } from './src/utils/d20.js';
 // Context Inspector — see what DES is injecting into the prompt
 import { initInspector } from './src/systems/generation/inspector.js';
 // ============ DEBUG: Module loaded successfully ============
@@ -3780,32 +3780,21 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
-            // Live World: the Map window (docs/map-window-plan.md), only while Live World is on.
-            if (isLiveWorldOn()) {
-                items.push({
-                    id: 'live-world',
-                    label: 'Map',
-                    iconClass: 'fa-solid fa-map',
-                    action: () => {
-                        import('./src/systems/ui/worldDashboard.js')
-                            .then(m => m.openWorldDashboard())
-                            .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
-                    },
-                });
-            }
-            // Dice (Phase 2): only while attributes are on.
-            if (attributesOn(extensionSettings)) {
-                items.push({
-                    id: 'dice-check',
-                    label: 'Roll a check',
-                    iconClass: 'fa-solid fa-dice-d20',
-                    action: () => {
-                        import('./src/systems/ui/dicePanel.js')
-                            .then(m => m.openDicePanel())
-                            .catch(err => console.error('[Dooms Tracker] Dice panel failed to load:', err));
-                    },
-                });
-            }
+            // The Map window (docs/map-window-plan.md), listed whatever Live
+            // World's switch says: the window itself says when Live World is
+            // off, and the entry sits in the hide-toggles below like the rest.
+            // (Roll a check left the fly-out on 2026-10-29: the player's card
+            // menu and the chip by the message box keep it.)
+            items.push({
+                id: 'live-world',
+                label: 'Map',
+                iconClass: 'fa-solid fa-map',
+                action: () => {
+                    import('./src/systems/ui/worldDashboard.js')
+                        .then(m => m.openWorldDashboard())
+                        .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
+                },
+            });
             items.push({
                 id: 'des-settings',
                 label: "Doom's Settings",

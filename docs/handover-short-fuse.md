@@ -268,8 +268,8 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   two further passes (`docs/stats-plan.md` §15.9).
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
-- **Image Generation** (`docs/image-gen-plan.md`, 2026-10-28): one image service with two sources (SillyTavern's extension, ComfyUI direct); portraits under one rule on Settings → Image Generation, never from a recovery; scene pictures render through it and their section is a group on that page; the Auto Avatars pill, Portrait Source and Auto Portrait Mode are gone, migrated once.
-- **The Map window** (`docs/map-window-plan.md`, 2026-10-28): Live World's window replaced by the owner's sketch: the places the story has visited as a row of circles with pictures (drawn through Image Generation), Travel here as a cut, a bottom panel of News / Rumours / People / Completed quests. The board of tiles is gone.
+- **Image Generation** (`docs/image-gen-plan.md`, 2026-10-28): one image service with two sources (SillyTavern's extension, ComfyUI direct); portraits under one rule on Settings → Image Generation, never from a recovery; scene pictures render through it and their section is a group on that page; the Auto Avatars pill, Portrait Source and Auto Portrait Mode are gone, migrated once. The player's card draws too (D91, 2026-10-29): Regenerate and Restore on the YOU card, the Workshop's Portrait section in user mode, everything on the user card's own entry (`appearance`, `loras`, `portraitHistory`, `avatar`/`avatarFullRes`); the history helpers in `src/utils/avatars.js` take `{ isUser }`.
+- **The Map window** (`docs/map-window-plan.md`, 2026-10-28): Live World's window replaced by the owner's sketch: the places the story has visited as a row of circles with pictures (drawn through Image Generation), Travel here as a cut, a bottom panel of News / Rumours / People / Completed quests. The board of tiles is gone. Map sits in the D menu whatever Live World's switch says (2026-10-29), and Roll a check left that menu the same day (the player's card menu and the chip keep it).
 
 ## 5. Map of the code
 

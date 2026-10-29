@@ -273,11 +273,10 @@ function looksOfTheScene() {
     try { ctx = getContext(); } catch (e) { ctx = null; }
     const persona = resolvePersonaName();
     if (persona) {
-        let look = getCharacterAppearance(persona);
+        let look = getCharacterAppearance(persona, { isUser: true });    // the user card's Portrait prompt first (D91)
         if (!look) {
             const card = extensionSettings.userCharacters && extensionSettings.userCharacters[persona];
-            if (card && typeof card.appearance === 'string' && card.appearance.trim()) look = card.appearance.trim();
-            else if (card && card.injection && typeof card.injection.description === 'string' && card.injection.description.trim()) look = card.injection.description.trim();
+            if (card && card.injection && typeof card.injection.description === 'string' && card.injection.description.trim()) look = card.injection.description.trim();
         }
         if (!look && ctx) {
             try {
@@ -335,11 +334,10 @@ async function writeCaption(c) {
  * this chat's own list; a name in both once, the character's strength.
  */
 function sceneLoras() {
-    const names = [...presentNames()];
-    const persona = resolvePersonaName();
-    if (persona) names.push(persona);
     const own = [];
-    for (const n of names) own.push(...getCharacterLoras(n));
+    for (const n of presentNames()) own.push(...getCharacterLoras(n));
+    const persona = resolvePersonaName();
+    if (persona) own.push(...getCharacterLoras(persona, { isUser: true }));    // the user card's LoRAs first (D91)
     return normalizeLoras([...own, ...state.loras]);
 }
 

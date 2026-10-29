@@ -479,7 +479,13 @@ function forEachPortraitRef(visit) {
     const generated = extensionSettings.generatedPortraits;
     if (generated && typeof generated === 'object') for (const meta of Object.values(generated)) add(meta?.url);
     const users = extensionSettings.userCharacters;
-    if (users && typeof users === 'object') for (const u of Object.values(users)) { add(u?.avatar); add(u?.avatarFullRes); }
+    if (users && typeof users === 'object') {
+        for (const u of Object.values(users)) {
+            add(u?.avatar); add(u?.avatarFullRes);
+            // The player's replaced portraits (Restore Previous Portrait) live on the entry (D91).
+            if (Array.isArray(u?.portraitHistory)) for (const entry of u.portraitHistory) { add(entry?.avatar); add(entry?.avatarFullRes); }
+        }
+    }
     const active = getActiveCampaignId();
     const root = profilesRoot();
     const buckets = [shadowRoot(), ...Object.keys(root).filter(id => id !== active).map(id => root[id])];
