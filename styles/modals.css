@@ -1999,6 +1999,11 @@
 }
 
 
+/* A button that is a setting row's control, in its wrapper, sizes to its text: the full width
+   above is for a button standing alone in a card. Without this a wrapped button took the whole
+   row under the looks and squeezed the label beside it into a one-word column. */
+.rpg-setting-row > div:not(.rpg-setting-label-group) > .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
+
 .rpg-accordion-action-btn:hover {
     background: rgba(233, 69, 96, 0.1);
     border-color: rgba(233, 69, 96, 0.2);

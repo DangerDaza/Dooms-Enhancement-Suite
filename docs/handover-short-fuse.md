@@ -28,6 +28,16 @@ state and the next moves.
 - **Working style:** ask clarifying questions; say the plan before acting;
   one tested commit per step, pushed as you go; when you talk about removing
   something, Jordan likes "𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊" in that font.
+- **Render the UI before pushing it.** Nothing that touches `template.html`,
+  `style.css` or `styles/*.css` is pushed unseen: run
+  `node tools/settings-layout-test.mjs --shots` (headless Chromium renders
+  every settings page under the default look and the five looks, fails a row
+  whose label is squeezed or anything wider than the popup, and writes a PNG
+  per page and look to the folder it prints), then look at the PNGs of the
+  pages touched. A window built in JS (the Map window, the Workshop) gets a
+  render of its own the same way before it ships. The owner (2026-10-29):
+  "this is a very common issue with things you create"; the squeezed Test
+  row on the Image Generation page was the last one he had to screenshot.
 - **Never leave the installed clone dirty.** The extension folder under
   `SillyTavern/public/scripts/extensions/third-party/` is the working
   clone on Jordan's PC. Uncommitted edits there made a branch switch fail
