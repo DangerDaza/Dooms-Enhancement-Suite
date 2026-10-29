@@ -49,7 +49,9 @@ export function fillWorkflow(text, values) {
     const missing = [];
     for (const name of workflowPlaceholders(out)) {
         const v = lower[name];
-        if (v === undefined || v === null || v === '') { missing.push(name); continue; }
+        // A value that was not given is missing; an empty string given on purpose fills the placeholder with ""
+        // (a portrait with no negative prompt). The prompt itself is the one thing that must say something.
+        if (v === undefined || v === null || (v === '' && name === 'prompt')) { missing.push(name); continue; }
         out = out.replace(new RegExp(`"%${name}%"`, 'gi'), () => JSON.stringify(v));
         out = out.replace(new RegExp(`%${name}%`, 'gi'), () => JSON.stringify(String(v)).slice(1, -1));
     }

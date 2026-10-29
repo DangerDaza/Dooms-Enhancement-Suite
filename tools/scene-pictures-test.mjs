@@ -81,6 +81,8 @@ function check(name, ok) { console.log(`${ok ? 'pass' : 'FAIL'}  ${name}`); if (
     const graph = JSON.parse(filled.text);
     check('fillWorkflow: numbers stay numbers, strings are quoted, nothing is missing', filled.missing.length === 0 && graph['3'].inputs.steps === 25 && graph['3'].inputs.cfg === 2.5 && graph['3'].inputs.seed === 7 && graph['6'].inputs.text === 'Anime-style digital illustration. a woman on a quay' && graph['8'].inputs.width === 1536 && graph['1'].inputs.unet_name === 'moss_image_sft_int8_convrot.safetensors');
     const bare = S.fillWorkflow(WF, S.workflowValues(S.scenePicturesConfig({}), { caption: 'x', seed: 1, comfy: S.COMFY_DEFAULTS }));
+    const emptyNeg = S.fillWorkflow('{"n":"%negative_prompt%","p":"%prompt%"}', { negative_prompt: '', prompt: 'x' });
+    check('an empty negative prompt fills its placeholder with "" rather than counting as missing; an empty prompt still does', emptyNeg.missing.length === 0 && JSON.parse(emptyNeg.text).n === '' && S.fillWorkflow('{"p":"%prompt%"}', { prompt: '' }).missing.join() === 'prompt', JSON.stringify(emptyNeg));
     check('placeholders with no value are left and named', bare.missing.join() === 'model,vae' && bare.text.includes('"%model%"'));
     check('a quote inside the caption survives as JSON', JSON.parse(S.fillWorkflow('{"a": {"inputs": {"text": "%prompt%"}}}', { prompt: 'she said "go"' }).text).a.inputs.text === 'she said "go"');
     const embedded = S.fillWorkflow('{"6": {"inputs": {"text": "Anime-style digital illustration, 1girl, %prompt%"}}, "7": {"inputs": {"text": "nsfw, %negative_prompt%"}}, "3": {"inputs": {"steps": "%steps%"}}}', { prompt: 'a woman who said "go"', negative_prompt: 'blurry', steps: 8 });
