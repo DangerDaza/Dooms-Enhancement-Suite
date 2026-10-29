@@ -53,7 +53,7 @@ const panels = { news: {}, people: {}, done: {}, rumours: {} };
 const body = (panel, selected) => V.mapWindowHtml({ state: st, pack, cfg, facts, portraits: (n) => (n === 'Old Marit' ? art(200, 'OM') : ''), row, selected, drawing: '', panel, done, present: ['Old Marit'] });
 
 const css = ['styles/modals.css', 'style.css', 'styles/overhaul.css'].map(f => `<link rel="stylesheet" href="${pathToFileURL(join(repo, f)).href}">`).join('\n');
-const shell = (inner) => `<div id="rpg-world-popup" class="rpg-settings-popup" role="dialog" style="display: flex;"><div class="rpg-settings-popup-content"><header class="rpg-settings-popup-header"><h3 id="rpg-world-title"><i class="fa-solid fa-map"></i> <span>Map</span></h3><button class="rpg-popup-close" type="button">&times;</button></header><div class="rpg-settings-popup-body"><div class="dooms-world-body">${inner}</div></div><footer class="rpg-settings-popup-footer rpg-world-actions"><button class="rpg-accordion-action-btn" type="button">Advance now</button><button class="rpg-accordion-action-btn" type="button">Refresh</button><span class="dooms-world-result">The world moved.</span></footer></div></div>`;
+const shell = (inner) => `<div id="rpg-world-popup" class="rpg-settings-popup" role="dialog" style="display: flex;"><div class="rpg-settings-popup-content"><header class="rpg-settings-popup-header"><h3 id="rpg-world-title"><i class="fa-solid fa-map"></i> <span>Map</span></h3><button class="rpg-popup-close" type="button">&times;</button></header><div class="rpg-settings-popup-body"><div class="dooms-world-body">${inner}</div></div><footer class="rpg-settings-popup-footer rpg-world-actions"><button class="rpg-accordion-action-btn" type="button">Advance now</button><button class="rpg-accordion-action-btn" type="button">Refresh</button><button class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-earth-europe"></i> <span>Make this a world</span></button><span class="dooms-world-result">The world moved.</span></footer></div></div>`;
 const out = mkdtempSync(join(process.env.TMPDIR || tmpdir(), 'des-map-'));
 const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${css}<style>html, body { margin: 0; background: #111; }</style></head><body>${shell(body('news', 'the-docks'))}</body></html>`;
 writeFileSync(join(out, 'harness.html'), html);
@@ -107,7 +107,9 @@ for (const [label, viewport] of [['desktop', { width: 1200, height: 900 }], ['ph
                     }
                 }
                 const foot = content.querySelector('.rpg-world-actions');
-                if (foot && Array.from(foot.querySelectorAll('button')).some(b => b.getBoundingClientRect().width > foot.getBoundingClientRect().width * 0.6)) problems.push('a foot button takes most of the foot');
+                // A phone's foot is narrow: a long label there is not a stretched button; only one across most of it is.
+                const footShare = window.innerWidth < 700 ? 0.75 : 0.6;
+                if (foot && Array.from(foot.querySelectorAll('button')).some(b => b.getBoundingClientRect().width > foot.getBoundingClientRect().width * footShare)) problems.push('a foot button takes most of the foot');
                 const art = content.querySelector('.dooms-map-place.has-image .dooms-map-art');
                 if (art && !getComputedStyle(art).backgroundImage.includes('data:image')) problems.push('a drawn place shows no picture');
                 return { problems, count: content.querySelectorAll('.dooms-map *').length };

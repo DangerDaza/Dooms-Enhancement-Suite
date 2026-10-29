@@ -1841,23 +1841,23 @@
                     <div class="rpg-setting-divider rpg-world-sub">The world</div>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">World pack for new chats</span>
-                            <span class="rpg-setting-hint">A chat keeps the pack it started with; this one seeds the next
-                                new chat. Skyreach is a draft until its campaign notes fill it in; Example is a port town to
-                                copy.</span>
+                            <span class="rpg-setting-label">World for new chats</span>
+                            <span class="rpg-setting-hint">A chat keeps the world it starts in; this one seeds the next new
+                                chat. The blank world grows from play: the places the story names, the people who speak.
+                                A world of your own, or Harbourside (the example), brings clocks and a cast from the
+                                start.</span>
                         </div>
                         <select id="rpg-world-pack" class="rpg-accordion-select"></select>
                     </div>
-                    <div class="rpg-setting-row rpg-world-sub" style="align-items:flex-start;">
+                    <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Paste a pack</span>
-                            <span class="rpg-setting-hint">A pack's JSON (copy worldpacks/example.json from the extension
-                                folder and change everything). Add stores it under its id; Remove drops the pasted pack
-                                chosen above (it asks first; keep a copy of the file).</span>
-                            <textarea id="rpg-world-paste" class="rpg-accordion-input" rows="4" placeholder='{ "id": "my-world", "name": "…", "places": [ … ], "clocks": [ … ], "cast": [ … ] }' style="width:100%; margin-top:6px; font-family: ui-monospace, monospace; font-size: 0.8em;"></textarea>
-                            <div style="display:flex; gap:6px; margin-top:6px;">
-                                <button id="rpg-world-add-pack" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-plus"></i> Add pack</button>
-                                <button id="rpg-world-remove-pack" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-trash"></i> Remove pasted pack</button>
+                            <span class="rpg-setting-label">Your worlds</span>
+                            <span class="rpg-setting-hint">The World Builder makes and edits worlds: places as a tree, clocks
+                                with a public effect per step, a cast. Draft one from this chat, start from Harbourside,
+                                or import a file; Export writes one. In the Map window, Make this a world keeps what a
+                                chat's blank world grew.</span>
+                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                                <button id="rpg-world-builder" class="rpg-accordion-action-btn" type="button" title="Open the World Builder"><i class="fa-solid fa-earth-europe"></i> Open the World Builder</button>
                             </div>
                         </div>
                     </div>

@@ -14,7 +14,7 @@
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
-import { liveWorldConfig } from '../../utils/liveWorld.js';
+import { liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { rowIdForCharacter } from '../../utils/worldMap.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
@@ -94,6 +94,16 @@ function render() {
     if (whenTyped) $(`#${POPUP_ID} #dooms-map-when`).val(whenTyped);
     $(`#${POPUP_ID} #rpg-world-advance-now`).prop('disabled', isAdvancing());
     $(`#${POPUP_ID} .dooms-world-result`).text(lastResult);
+    // The foot's way to the World Builder (docs/world-builder-plan.md D98): a world of yours is edited; the blank
+    // world (or a missing one, which the chat plays as blank) is kept as a world of its own; the template is copied.
+    const $edit = $(`#${POPUP_ID} #rpg-world-edit`);
+    const pack = getActivePack();
+    const blank = !!pack && pack.id === BLANK_PACK_ID;
+    $edit.prop('disabled', !state || !pack);
+    $edit.find('span').text(blank ? 'Make this a world' : 'Edit this world');
+    $edit.attr('title', blank
+        ? 'Keep what this chat grew as a world of your own: its places and its people, named, kept and editable; the chat carries over to it'
+        : 'Open this chat\'s world in the World Builder');
 }
 
 /** The circle of a place brought into view (smoothly, when the browser can). */
@@ -149,6 +159,7 @@ function build() {
                 <footer class="rpg-settings-popup-footer rpg-world-actions">
                     <button id="rpg-world-advance-now" class="rpg-accordion-action-btn" type="button" title="Run the plot advancer now (the same as /advance)"><i class="fa-solid fa-forward"></i> Advance now</button>
                     <button id="rpg-world-refresh" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    <button id="rpg-world-edit" class="rpg-accordion-action-btn" type="button" title="Open this chat's world in the World Builder"><i class="fa-solid fa-earth-europe"></i> <span>Edit this world</span></button>
                     <span class="dooms-world-result"></span>
                 </footer>
             </div>
@@ -156,6 +167,15 @@ function build() {
     $(document).on('click', '#rpg-close-world', closeWorldDashboard);
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
+    $(document).on('click', '#rpg-world-edit', () => {
+        const s = getWorldState();
+        const pack = getActivePack();
+        if (!s || !pack) return;
+        const fromChat = pack.id === BLANK_PACK_ID;
+        import('./worldBuilder.js')
+            .then(m => m.openWorldBuilder(fromChat ? { fromChat: true } : { id: s.pack }))
+            .catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));
+    });
     $(document).on('change', `#${POPUP_ID} .dooms-map-feed`, function () { setFeedLimit($(this).val()); render(); });
     $(document).on('click', `#${POPUP_ID} .dooms-map-nav-btn[data-panel]`, function () {
         closeFacePopover();

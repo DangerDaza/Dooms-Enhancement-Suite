@@ -14079,3 +14079,82 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 }
 
 .dooms-dice-chip-x:hover { opacity: 1; }
+
+/* ── The World Builder (docs/world-builder-plan.md D94): your worlds and the ways
+   to a new one on the left, the world under its tabs (World, Places, Clocks,
+   Cast) on the right, the pack's errors and warnings under the pane, the foot.
+   In the eager sheet, as the Map window is. ── */
+#dooms-world-builder .rpg-settings-popup-content { max-width: min(96vw, 1120px); max-height: min(92vh, 820px); }
+#dooms-world-builder .rpg-settings-popup-body { padding: 12px 16px 14px; display: flex; flex-direction: column; }
+#dooms-world-builder .dooms-wb-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.dooms-wb { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; }
+.dooms-wb .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
+.dooms-wb-list { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.dooms-wb-new { display: flex; flex-direction: column; gap: 6px; }
+.dooms-wb-new .rpg-accordion-action-btn { width: 100%; justify-content: flex-start; text-align: left; }
+.dooms-wb-worlds { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+.dooms-wb-none { margin: 2px; font-size: 0.78em; line-height: 1.4; }
+.dooms-wb-world { appearance: none; font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); color: #ddd; }
+.dooms-wb-world:hover, .dooms-wb-world:focus-visible { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.dooms-wb-world.is-selected { border-color: var(--rpg-highlight, #e94560); box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.25); }
+.dooms-wb-world.is-broken { border-color: rgba(229, 168, 77, 0.6); }
+.dooms-wb-world-name { font-weight: 600; font-size: 0.95em; }
+.dooms-wb-world-sum { font-size: 0.74em; color: #8d8d9a; }
+.dooms-wb-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.dooms-wb-badge { font-size: 0.66em; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: #ccc; }
+.dooms-wb-badge.is-chat, .dooms-wb-badge.is-new { background: var(--rpg-highlight, #e94560); color: #fff; }
+.dooms-wb-badge.is-broken { background: rgba(229, 168, 77, 0.25); color: #e5a84d; }
+.dooms-wb-editor { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.dooms-wb-hint { margin: 0 0 8px; font-size: 0.8em; color: #9a9aa8; line-height: 1.4; }
+.dooms-wb-welcome p { margin: 0 0 10px; font-size: 1.05em; }
+.dooms-wb-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dooms-wb-name { font-size: 1.1em; font-weight: 600; color: #fff; }
+.dooms-wb-dirty { color: var(--rpg-highlight, #e94560); }
+.dooms-wb-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.dooms-wb-tab { appearance: none; font: inherit; font-size: 0.82em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; color: #bbb; padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px; }
+.dooms-wb-tab:hover, .dooms-wb-tab:focus-visible { color: #fff; }
+.dooms-wb-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
+.dooms-wb-count { font-size: 0.8em; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); }
+.dooms-wb-pane { flex: 1 1 auto; min-height: 120px; overflow-y: auto; overflow-x: hidden; padding: 4px 2px; }
+.dooms-wb-fields { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+.dooms-wb-field { display: flex; flex-direction: column; gap: 4px; }
+.dooms-wb-label { font-size: 0.82em; font-weight: 600; color: #ddd; }
+.dooms-wb-field .rpg-accordion-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.9em; }
+.dooms-wb-field textarea.rpg-accordion-input { resize: vertical; min-height: 2.4em; }
+.dooms-wb-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.dooms-wb-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.dooms-wb-place { padding-left: calc(var(--depth, 0) * 18px); }
+.dooms-wb-row .rpg-accordion-input, .dooms-wb-row .rpg-accordion-select { width: auto; min-width: 0; box-sizing: border-box; font: inherit; font-size: 0.85em; }
+.dooms-wb-grow { flex: 1 1 160px; }
+.dooms-wb-image { flex: 1 1 140px; }
+.dooms-wb-row .rpg-accordion-select { flex: 0 1 180px; }
+.dooms-wb-row .dooms-wb-tier { flex: 0 1 110px; }
+.dooms-wb-num { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78em; color: #bbb; }
+.dooms-wb-num .rpg-accordion-input { width: 58px; }
+.dooms-wb-check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78em; color: #bbb; }
+.dooms-wb-id { font-size: 0.7em; color: #777; font-family: monospace; }
+.dooms-wb-remove { appearance: none; font: inherit; cursor: pointer; width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); color: #ccc; flex: 0 0 auto; }
+.dooms-wb-remove:hover, .dooms-wb-remove:focus-visible { background: rgba(233, 69, 96, 0.3); color: #fff; }
+.dooms-wb-clock { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.03); display: flex; flex-direction: column; gap: 8px; }
+.dooms-wb-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.dooms-wb-step { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dooms-wb-step-n { flex: 0 0 22px; text-align: right; font-size: 0.78em; color: #999; font-family: monospace; }
+.dooms-wb-step .rpg-accordion-input { flex: 1 1 auto; width: auto; min-width: 0; }
+.dooms-wb-status { font-size: 0.8em; }
+.dooms-wb-note { margin: 4px 2px; color: #d4d4de; }
+.dooms-wb-errors, .dooms-wb-warnings { margin: 4px 2px; padding-left: 18px; }
+.dooms-wb-errors li { color: #e5a84d; }
+.dooms-wb-warnings li { color: #8d8d9a; }
+.dooms-wb-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.dooms-wb-foot .is-danger { margin-left: auto; }
+@media (max-width: 700px) {
+    .dooms-wb { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    .dooms-wb-list { max-height: 40vh; overflow-y: auto; }    /* a share of the screen, not of the grid row (a percentage there resolves to next to nothing) */
+    .dooms-wb-new { flex-direction: row; flex-wrap: wrap; }
+    .dooms-wb-new .rpg-accordion-action-btn { width: auto; }
+    /* the worlds as a row that scrolls sideways, as tall as its cards (the list above scrolls when the phone is short) */
+    .dooms-wb-worlds { flex: 0 0 auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+    .dooms-wb-world { flex: 0 0 auto; max-width: 200px; }
+    .dooms-wb-steps { grid-template-columns: minmax(0, 1fr); }
+    .dooms-wb-foot .is-danger { margin-left: 0; }
+}

@@ -169,7 +169,7 @@ import { defaultInventoryConfig, inventoryConfig, MIN_SLOTS as INV_MIN_SLOTS, MA
 // Cut to a quest (Phase 5b): the player's next message ends an armed cut
 import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
-import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, addCustomPack, removeCustomPack, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
+import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel } from './src/utils/scenePictures.js';
@@ -505,12 +505,14 @@ function renderLiveWorldSettings() {
     $('#rpg-world-depth').val(cfg.depth);
     $('#rpg-world-role').val(cfg.role);
     $('#rpg-world-debug').prop('checked', cfg.debug);
-    const ids = listPackIds();
+    // World for new chats: the blank world, your worlds, then the template (docs/world-builder-plan.md D98).
     const custom = new Set(Object.keys(cfg.customPacks));
-    $('#rpg-world-pack').html(ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}${custom.has(id) ? ' (pasted)' : ''}</option>`).join('')).val(ids.includes(cfg.pack) ? cfg.pack : ids[0]);
-    // The names arrive once the packs load; the ids stand until then.
-    ids.forEach(id => loadPack(id).then(r => {
-        if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? ' (pasted)' : ''}${r.pack.id !== r.pack.name.toLowerCase() ? ` · ${id}` : ''}`);
+    const ids = ['blank', ...Object.keys(cfg.customPacks), ...listPackIds().filter(id => id !== 'blank' && !custom.has(id))];
+    const label = (id) => (id === 'blank' ? 'The blank world (grows from play)' : (custom.has(id) ? id : `${id} (the example)`));
+    $('#rpg-world-pack').html(ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(label(id))}</option>`).join('')).val(ids.includes(cfg.pack) ? cfg.pack : 'blank');
+    // The names arrive once the worlds load; the ids stand until then.
+    ids.filter(id => id !== 'blank').forEach(id => loadPack(id).then(r => {
+        if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? '' : ' (the example)'}${r.pack.id !== r.pack.name.toLowerCase() && custom.has(id) ? ` · ${id}` : ''}`);
     }).catch(() => {}));
     renderLiveWorldStatus();
 }
@@ -2145,27 +2147,8 @@ function bindSettingsUI() {
     });
     $(document).on('change', '#rpg-world-role', function () { getWorldRules().role = String($(this).val() || 'system'); _saveWorld(); });
     $(document).on('change', '#rpg-world-debug', function () { getWorldRules().debug = $(this).prop('checked'); _saveWorld(); });
-    $(document).on('click', '#rpg-world-add-pack', function () {
-        const r = addCustomPack(String($('#rpg-world-paste').val() || ''));
-        if (!r.ok) { toastr.warning(r.errors.slice(0, 3).join(' '), 'Live World', { timeOut: 7000 }); return; }
-        getWorldRules().pack = r.pack.id;
-        $('#rpg-world-paste').val('');
-        toastr.success(`Pack "${r.pack.name}" added and chosen for new chats.`, 'Live World', { timeOut: 4000 });
-        const active = getActivePack();
-        // This chat waits on a pack it could not load, or was seeded from the one pasted again: it takes the new text now.
-        _saveWorld({ reload: !!getPackError() || !!(active && active.id === r.pack.id) });
-    });
-    $(document).on('click', '#rpg-world-remove-pack', async function () {
-        const id = String($('#rpg-world-pack').val() || '');
-        if (!(id in (getWorldRules().customPacks || {}))) { toastr.info('Only a pasted pack can be removed; the built-in ones stay.', 'Live World', { timeOut: 4000 }); return; }
-        const active = getActivePack();
-        const mine = !!(active && active.id === id);
-        const confirmed = await callGenericPopup(`Remove the pasted pack "${id}"? Its JSON is gone from Settings (keep a copy of the file).${mine ? ' This chat was seeded from it and will have no world until it is pasted again or re-seeded from another pack.' : ''}`, POPUP_TYPE.CONFIRM);
-        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
-        if (!removeCustomPack(id)) return;
-        const w = getWorldRules();
-        if (w.pack === id) w.pack = 'blank';    // the blank world (D93)
-        _saveWorld({ reload: mine });    // another chat's pack: nothing in this chat refers to it, and a reload would discard an advance in flight
+    $(document).on('click', '#rpg-world-builder', function () {
+        import('./src/systems/ui/worldBuilder.js').then(m => m.openWorldBuilder()).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
         import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
@@ -2192,7 +2175,12 @@ function bindSettingsUI() {
         if (!r.ok) toastr.warning(`The world was kept: ${r.error || 'the chosen pack could not be loaded.'}`, 'Live World', { timeOut: 7000 });
         renderLiveWorldSettings();
     });
-    window.addEventListener(WORLD_CHANGED_EVENT, () => { try { renderLiveWorldStatus(); } catch (e) { /* non-fatal */ } });
+    window.addEventListener(WORLD_CHANGED_EVENT, (ev) => {
+        try {
+            // a world saved, removed or chosen in the builder: the list of worlds; anything else: the status line alone
+            if (ev && ev.detail && ev.detail.source === 'world') renderLiveWorldSettings(); else renderLiveWorldStatus();
+        } catch (e) { /* non-fatal */ }
+    });
     // ── Image Generation (docs/image-gen-plan.md): the source, the ComfyUI connection, the portrait rule ──
     const _saveImage = () => {
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Image Generation settings save failed', e); }
