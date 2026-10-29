@@ -181,7 +181,7 @@ function newWorld() {
     dirty = true;
     adoptOnSave = false;
     tab = 'world';
-    note = 'Name it, then add places, clocks and people; Save keeps it.';
+    note = 'A world with nothing in it yet. Name it here, lay out its places, add the clocks that will move between scenes and the people who live there, then Save. Or leave the places empty: the story fills them in as it names them.';
     render();
 }
 
@@ -369,7 +369,7 @@ export async function openWorldBuilder({ id = '', fromChat = false } = {}) {
             dirty = true;
             adoptOnSave = true;
             tab = 'places';
-            note = 'This chat as it stands. Name it, add what you like, then Save: the chat carries over to it.';
+            note = 'This is your chat so far, turned into a world you can keep and edit: the places the story has visited and the people it has met, as they stand now. Name it, add clocks or more places if you like, then Save. The chat goes on in this world from here; nothing is reset.';
         } else note = 'This chat has no world yet.';
     } else if (id && id !== BLANK_PACK_ID) {
         await openWorld(id, { force: true });

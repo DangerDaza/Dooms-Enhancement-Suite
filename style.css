@@ -14141,8 +14141,10 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 .dooms-wb-step-n { flex: 0 0 22px; text-align: right; font-size: 0.78em; color: #999; font-family: monospace; }
 .dooms-wb-step .rpg-accordion-input { flex: 1 1 auto; width: auto; min-width: 0; }
 .dooms-wb-status { font-size: 0.8em; }
-.dooms-wb-note { margin: 4px 2px; color: #d4d4de; }
-.dooms-wb-errors, .dooms-wb-warnings { margin: 4px 2px; padding-left: 18px; }
+.dooms-wb-note { margin: 4px 2px 6px; color: #d4d4de; line-height: 1.4; }
+.dooms-wb-status-head { margin: 6px 2px 2px; font-weight: 600; color: #8d8d9a; }
+.dooms-wb-status-head.is-error { color: #e5a84d; }
+.dooms-wb-errors, .dooms-wb-warnings { margin: 2px 2px 6px; padding-left: 18px; line-height: 1.4; }
 .dooms-wb-errors li { color: #e5a84d; }
 .dooms-wb-warnings li { color: #8d8d9a; }
 .dooms-wb-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }

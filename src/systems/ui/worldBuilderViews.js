@@ -132,11 +132,20 @@ export function nameHtml(draft, dirty) {
     return `${e((draft && draft.name) || 'Unnamed world')}${dirty ? ' <span class="dooms-wb-dirty" title="Not saved yet">•</span>' : ''}`;
 }
 
-/** The result line, the pack's errors (amber) and the warnings (muted). */
+/**
+ * The status under the pane: what the builder is doing (the note), then
+ * what stops Save (the pack's errors, amber, each saying what to fix) and
+ * what the world plays without but would be the better for (the warnings,
+ * muted, each saying where to add it).
+ */
 export function statusHtml(errors = [], warnings = [], note = '') {
     const line = note ? `<p class="dooms-wb-note">${e(note)}</p>` : '';
-    const errs = errors.length ? `<ul class="dooms-wb-errors">${errors.map(x => `<li>${e(x)}</li>`).join('')}</ul>` : '';
-    const warns = warnings.length ? `<ul class="dooms-wb-warnings">${warnings.map(x => `<li>${e(x)}</li>`).join('')}</ul>` : '';
+    const errs = errors.length
+        ? `<p class="dooms-wb-status-head is-error">Fix before saving:</p><ul class="dooms-wb-errors">${errors.map(x => `<li>${e(x)}</li>`).join('')}</ul>`
+        : '';
+    const warns = warnings.length
+        ? `<p class="dooms-wb-status-head">Missing, but the world plays without it:</p><ul class="dooms-wb-warnings">${warnings.map(x => `<li>${e(x)}</li>`).join('')}</ul>`
+        : '';
     return `${line}${errs}${warns}`;
 }
 
@@ -145,12 +154,13 @@ function field(key, label, control, hint) {
 }
 
 function worldPane(d) {
-    return `<div class="dooms-wb-fields">
-        ${field('name', 'Name', `<input type="text" class="rpg-accordion-input" data-f="name" value="${attr(d.name)}" maxlength="80" placeholder="The world's name">`, 'The Map window\'s title, and the narrator\'s line: "World of …".')}
-        ${field('id', 'Id', `<input type="text" class="rpg-accordion-input" data-f="id" value="${attr(d.id)}" maxlength="60" placeholder="a-short-slug">`, 'Letters, digits and dashes; the file\'s name. Changing it on a saved world moves the world, and the chats in it follow.')}
-        ${field('description', 'Description', `<textarea class="rpg-accordion-input" data-f="description" rows="2" maxlength="400" placeholder="One or two sentences: what this world is.">${e(d.description || '')}</textarea>`, 'The advancer reads it with the clocks and the places.')}
-        ${field('blurb', 'Blurb', `<textarea class="rpg-accordion-input" data-f="blurb" rows="2" maxlength="600" placeholder="What the world talks about as the story opens.">${e(d.blurb || '')}</textarea>`, 'Rumours start with it; the advancer rewrites it as the world moves.')}
-        ${field('template', 'The narrator\'s line (optional)', `<textarea class="rpg-accordion-input" data-f="template" rows="2" placeholder="[WORLD OF {name}: clocks: {clocks}. Last seen: {where}.]">${e(d.template || '')}</textarea>`, 'What the narrator is told each turn, with {name}, {clocks} and {where} filled in. Empty: the standard line.')}
+    return `<p class="dooms-wb-hint">A world is what Live World keeps moving while you play: its <strong>places</strong> (the Places tab), its <strong>clocks</strong>, the pressures that build between scenes (Clocks), and the <strong>people</strong> who live there (Cast). Every few replies a quiet request, the plot advancer, reads what happened and moves the clocks and the people; each turn the narrator is told in one line where things stand. This tab is the world itself: what it is called, what it is, and how the narrator hears of it.</p>
+    <div class="dooms-wb-fields">
+        ${field('name', 'Name', `<input type="text" class="rpg-accordion-input" data-f="name" value="${attr(d.name)}" maxlength="80" placeholder="The world's name">`, 'Shown across the top of the Map window, and in the narrator\'s line as "World of …".')}
+        ${field('id', 'Id', `<input type="text" class="rpg-accordion-input" data-f="id" value="${attr(d.id)}" maxlength="60" placeholder="a-short-slug">`, 'A short handle in letters, digits and dashes: the name of the file when the world is exported, and how a chat remembers which world it plays in. Changing it on a saved world moves the world, and the chats in it follow.')}
+        ${field('description', 'Description', `<textarea class="rpg-accordion-input" data-f="description" rows="2" maxlength="400" placeholder="One or two sentences: what this world is.">${e(d.description || '')}</textarea>`, 'A sentence or two for the plot advancer: the kind of world this is, so what it moves fits. The narrator never sees this.')}
+        ${field('blurb', 'Blurb', `<textarea class="rpg-accordion-input" data-f="blurb" rows="2" maxlength="600" placeholder="What the world talks about as the story opens.">${e(d.blurb || '')}</textarea>`, 'What people are saying as the story opens. The Map window\'s Rumours panel shows it, and the plot advancer rewrites it as things change.')}
+        ${field('template', 'The narrator\'s line (optional)', `<textarea class="rpg-accordion-input" data-f="template" rows="2" placeholder="[WORLD OF {name}: clocks: {clocks}. Last seen: {where}.]">${e(d.template || '')}</textarea>`, 'Each turn the narrator gets one line on where the world stands: the clocks and where people were last seen. Leave this empty for the standard line, or write your own with {name}, {clocks} and {where} where those go.')}
     </div>`;
 }
 

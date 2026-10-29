@@ -57,15 +57,15 @@ export function packWarnings(pack) {
     const places = Array.isArray(pack.places) ? pack.places : [];
     const clocks = Array.isArray(pack.clocks) ? pack.clocks : [];
     const cast = Array.isArray(pack.cast) ? pack.cast : [];
-    if (!places.length) w.push('No places yet: the Map takes them from the story as it names them.');
-    if (!clocks.length) w.push('No clocks: nothing moves between scenes until one is added.');
+    if (!places.length) w.push('No places yet: the Map adds places as the story names them, so this is fine; the Places tab lets you lay the map out in advance instead.');
+    if (!clocks.length) w.push('No clocks: clocks are what makes a world move between scenes (a blockade tightening, a fever spreading, a feud nearing blows); add one on the Clocks tab, or play without and the Map still follows the places and the people.');
     for (const c of clocks) {
         const steps = Object.keys(c.effects || {}).length;
-        if (!steps) w.push(`The clock "${c.label}" has no step texts: the narrator is not told what each step means.`);
-        else if (steps < c.max + 1) w.push(`The clock "${c.label}" names ${steps} of its ${c.max + 1} steps.`);
+        if (!steps) w.push(`The clock "${c.label}" has no step texts: on the Clocks tab, write for each step what anyone in the world could see or hear, so the narrator can show it.`);
+        else if (steps < c.max + 1) w.push(`The clock "${c.label}" names ${steps} of its ${c.max + 1} steps: a step with no text passes without a word to the narrator.`);
     }
-    if (cast.length && !cast.some(m => m.place)) w.push('Nobody in the cast has a starting place.');
-    if (!clean(pack.blurb)) w.push('No blurb: Rumours start empty until the first advance.');
+    if (cast.length && !cast.some(m => m.place)) w.push('Nobody in the cast has a starting place: on the Cast tab, pick where each person is as the story opens, or leave it and the story places them when they appear.');
+    if (!clean(pack.blurb)) w.push('No blurb: the Map\'s Rumours panel starts empty until the first advance; a line on the World tab about what the world is talking about fills it from the start.');
     return w;
 }
 
