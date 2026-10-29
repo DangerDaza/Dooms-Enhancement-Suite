@@ -9764,6 +9764,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 #rpg-world-popup .rpg-settings-popup-body { padding: 12px 16px 14px; display: flex; flex-direction: column; }
 #rpg-world-popup .dooms-world-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .dooms-map { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+/* The head, the row and the strip keep their height; only the panel gives, and the window's body scrolls past that. */
+.dooms-map-head, .dooms-map-row-wrap, .dooms-map-strip { flex: 0 0 auto; }
 .dooms-map-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
 .dooms-map-title { font-size: 1.15em; font-weight: 600; color: #fff; margin-right: auto; }
 .dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
@@ -9778,7 +9780,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-map-row-wrap { display: flex; align-items: center; gap: 6px; min-height: 60px; }
 .dooms-map-row-wrap.is-empty { justify-content: center; }
 .dooms-map-empty { margin: 0; padding: 14px; font-size: 0.85em; color: #8d8d9a; text-align: center; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; }
-.dooms-map-row { flex: 1 1 auto; min-width: 0; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 10px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.dooms-map-row { flex: 1 1 auto; min-width: 0; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 14px; scroll-snap-type: x proximity; scrollbar-width: thin; }
 .dooms-map-place { flex: 0 0 auto; width: 150px; appearance: none; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: inherit; font: inherit; scroll-snap-align: center; text-align: center; }
 .dooms-map-art { position: relative; width: 150px; height: 150px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 2.4em; color: #6d6d80; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
 .dooms-map-place:hover .dooms-map-art, .dooms-map-place:focus-visible .dooms-map-art { border-color: rgba(255, 255, 255, 0.45); transform: translateY(-2px); }
@@ -9797,6 +9799,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-map-strip.is-idle { justify-content: center; }
 .dooms-map-strip-name { font-size: 0.92em; color: #eaeaea; min-width: 0; }
 .dooms-map-strip-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The strip's and the foot's buttons size to their text: the action button's full width is for one standing alone in a card. */
+.dooms-map-strip-actions .rpg-accordion-action-btn, .rpg-world-actions .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
 .dooms-map-strip-here { font-size: 0.85em; font-weight: 600; color: var(--rpg-highlight, #e94560); padding: 4px 8px; border-radius: 999px; background: rgba(233, 69, 96, 0.14); }
 .dooms-map-when { width: 190px; font-size: 0.82em; }
 /* The panel */

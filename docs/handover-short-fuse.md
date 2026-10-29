@@ -34,8 +34,11 @@ state and the next moves.
   every settings page under the default look and the five looks, fails a row
   whose label is squeezed or anything wider than the popup, and writes a PNG
   per page and look to the folder it prints), then look at the PNGs of the
-  pages touched. A window built in JS (the Map window, the Workshop) gets a
-  render of its own the same way before it ships. The owner (2026-10-29):
+  pages touched. The Map window has its own render the same way
+  (`node tools/map-window-layout-test.mjs --shots`: a fixture world under
+  every look at desktop and phone width; the strip holds its buttons, the
+  row shows its names whole, the foot's buttons keep their size); a window
+  built in JS gets one before it ships. The owner (2026-10-29):
   "this is a very common issue with things you create"; the squeezed Test
   row on the Image Generation page was the last one he had to screenshot.
 - **Never leave the installed clone dirty.** The extension folder under
