@@ -19,7 +19,7 @@ const check = (label, cond, extra = '') => {
     if (cond) console.log(`pass  ${label}`);
     else { console.error(`FAIL  ${label}${extra ? '\n      ' + extra : ''}`); failures++; }
 };
-const sky = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/skyreach.json', import.meta.url), 'utf8'))).pack;
+const sky = normalizePack(JSON.parse(readFileSync(new URL('../docs/support/skyreach-world.json', import.meta.url), 'utf8'))).pack;
 const harbour = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8'))).pack;
 const ids = (s) => s.visited.map(e => e.id).join(',');
 

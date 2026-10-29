@@ -41,8 +41,8 @@ check('the cast resolves its places and tiers', pack.cast[0].place === 'customs-
     const bad = normalizePack({ name: 'Bad', places: [{ id: 'a', parent: 'b' }, { id: 'b', parent: 'a' }, { id: 'a' }], clocks: [{ id: 'x', start: 9, max: 4 }, { id: 'x' }], cast: [{ name: 'Nobody', place: 'nowhere' }] });
     check('a broken pack lists what is wrong and is not ok', !bad.ok && bad.errors.some(e => e.includes('used twice')) && bad.errors.some(e => e.includes('loop')) && bad.errors.some(e => e.includes('outside 0..4')) && bad.errors.some(e => e.includes('clock id "x" is used twice')) && bad.errors.some(e => e.includes('Nobody')), bad.errors.join(' | '));
     check('...but is still returned, made safe: the loop broken, the clock clamped', bad.pack.id === 'bad' && bad.pack.places.length === 2 && bad.pack.places.some(p => p.parent === null) && placeChain(bad.pack, 'a').length <= 2 && placeChain(bad.pack, 'b').length <= 2 && bad.pack.clocks[0].start === 4);
-    check('nothing in, errors out', !normalizePack(null).ok && normalizePack(null).errors.length >= 2);
-    const skyreach = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/skyreach.json', import.meta.url), 'utf8')));
+    check('nothing in, errors out (a pack may have no places since D93: only the id is missing)', !normalizePack(null).ok && normalizePack(null).errors.length === 1 && normalizePack({ name: 'Nowhere' }).ok);
+    const skyreach = normalizePack(JSON.parse(readFileSync(new URL('../docs/support/skyreach-world.json', import.meta.url), 'utf8')));
     check('the Skyreach draft is sound', skyreach.ok, skyreach.errors.join(' | '));
     check('a cast member with no place is heard-of and unplaced', skyreach.pack.cast[1].tier === 'heard' && skyreach.pack.cast[1].place === '');
 }
@@ -190,7 +190,7 @@ console.log('\n§9 the dashboard\'s reading');
 console.log('\n§10 the rules and the recent scenes');
 {
     const d = defaultLiveWorldConfig();
-    check('defaults: off, Skyreach, every 6, step 1, inject at depth 2 as system, 12 recent, no spoilers clamp, no debug', same(d, { enabled: false, pack: 'skyreach', every: 6, maxStep: 1, spoilerFree: false, inject: true, depth: 2, role: 'system', recentMessages: 12, debug: false, customPacks: {} }), JSON.stringify(d));
+    check('defaults: off, the blank world (D93), every 6, step 1, inject at depth 2 as system, 12 recent, no spoilers clamp, no debug', same(d, { enabled: false, pack: 'blank', every: 6, maxStep: 1, spoilerFree: false, inject: true, depth: 2, role: 'system', recentMessages: 12, debug: false, customPacks: {} }), JSON.stringify(d));
     check('no settings → defaults', same(liveWorldConfig(null), d) && same(liveWorldConfig({ liveWorld: 'x' }), d));
     const c = liveWorldConfig({ liveWorld: { enabled: true, pack: ' harbourside ', every: 0, maxStep: 99, depth: -3, role: 'wizard', recentMessages: 1000, customPacks: { a: '{}' }, spoilerFree: 1, inject: false, debug: true } });
     check('clamps and fallbacks', c.enabled && c.pack === 'harbourside' && c.every === 1 && c.maxStep === 6 && c.depth === 0 && c.role === 'system' && c.recentMessages === 40 && same(c.customPacks, { a: '{}' }) && !c.spoilerFree && !c.inject && c.debug);

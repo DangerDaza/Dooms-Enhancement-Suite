@@ -27,11 +27,23 @@ export const MAX_PLACE = 80;        // a visited place's label (docs/map-window-
 export const MAX_VISITED = 60;      // places the row keeps, newest first
 export const VISITS_KEEP = 30;      // reply ids kept per place, for the rewind
 export const TIERS = Object.freeze(['heard', 'known']);
+export const BLANK_PACK_ID = 'blank';    // the world that grows from play (docs/world-builder-plan.md D93)
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const slug = (v) => clean(v, 60).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const isInt = (n) => Number.isInteger(n);
 export const sameName = (a, b) => clean(a, MAX_NAME).toLowerCase() === clean(b, MAX_NAME).toLowerCase();
+
+/** The id of a place the story names that no pack place matches (D93): "loc:" and a slug of the text, the key the Map window's row uses (D82); '' for nothing. */
+export function locPlaceId(text) {
+    const id = clean(text, MAX_PLACE).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+    return id ? `loc:${id}` : '';
+}
+export const isLocId = (id) => typeof id === 'string' && id.startsWith('loc:');
+/** A loc: id read back as words: "loc:the-quay" → "the quay". */
+export function locLabel(id) {
+    return isLocId(id) ? clean(id.slice(4).replace(/-+/g, ' '), MAX_PLACE) : '';
+}
 
 /** The spelling the state already uses for a name (case apart), else the name cleaned: one character, one key. */
 export function canonicalName(state, raw) {
@@ -100,7 +112,7 @@ export function stripSceneNoise(text) {
 
 const CONFIG_DEFAULTS = Object.freeze({
     enabled: false,
-    pack: 'skyreach',          // the pack a new chat is seeded with
+    pack: 'blank',             // the world a new chat is seeded with: the blank one grows from play (D93)
     every: 6,                  // the advancer runs every N new replies
     maxStep: 1,                // a clock moves by at most this per run (a clock's own step wins)
     spoilerFree: false,        // the blurb is street-level common knowledge only
@@ -191,7 +203,6 @@ export function normalizePack(raw) {
             y: Number.isFinite(p.y) ? p.y : null,
         });
     }
-    if (!places.length) errors.push('The pack has no places.');
     for (const p of places) {
         if (p.parent && !seen.has(p.parent)) { errors.push(`The place "${p.id}" names a parent "${p.parent}" that does not exist.`); p.parent = null; }
     }
@@ -253,6 +264,11 @@ export function normalizePack(raw) {
     return { ok: errors.length === 0, pack, errors };
 }
 
+/** The blank world (D93): no places, clocks or cast; the story fills it. The name is the chat's. */
+export function blankPack(name = 'The world') {
+    return normalizePack({ id: BLANK_PACK_ID, name: clean(name, 80) || 'The world', version: 1 }).pack;
+}
+
 function resolvePlaceIn(places, ref) {
     const s = String(ref ?? '').trim();
     if (!s) return '';
@@ -287,7 +303,7 @@ export function placePath(pack, id) {
 export function placeLabel(pack, idOrPath, { full = false } = {}) {
     const id = resolvePlace(pack, idOrPath);
     const chain = placeChain(pack, id);
-    if (!chain.length) return clean(idOrPath, 80);
+    if (!chain.length) return isLocId(idOrPath) ? locLabel(idOrPath) : clean(idOrPath, 80);
     const labels = chain.map(p => p.label).reverse();
     return (full ? labels : labels.slice(0, 2)).join(', ');
 }
@@ -311,7 +327,7 @@ export function placeTreeText(pack) {
 
 /** Empty state for a pack id. */
 export function emptyWorldState(packId = '') {
-    return { v: 1, pack: packId, packVersion: 0, clocks: {}, where: {}, known: {}, log: [], runs: [], trimmed: false, last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false, visited: [] };
+    return { v: 1, pack: packId, name: '', packVersion: 0, clocks: {}, where: {}, known: {}, log: [], runs: [], trimmed: false, last: null, lastError: null, blurb: '', counted: [], sinceLast: 0, retryNext: false, seeded: false, visited: [] };
 }
 
 /**
@@ -347,9 +363,10 @@ export function normalizeVisited(raw) {
 }
 
 /** A new chat's state from the pack: starting clocks, starting places, the cast's tiers. */
-export function seedWorldState(pack) {
+export function seedWorldState(pack, { name = '' } = {}) {
     const s = emptyWorldState(pack.id);
     s.packVersion = pack.version || 1;
+    s.name = clean(name, 80);    // the blank world's own name (D93); '' for a world named by its pack
     for (const c of pack.clocks) s.clocks[c.id] = c.start;
     for (const m of pack.cast) {
         s.known[m.name] = m.tier;
@@ -365,6 +382,7 @@ export function normalizeWorldState(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
     const s = emptyWorldState(clean(r.pack, 60));
     s.packVersion = isInt(r.packVersion) ? r.packVersion : 0;
+    s.name = clean(r.name, 80);
     if (r.clocks && typeof r.clocks === 'object') for (const [k, v] of Object.entries(r.clocks)) if (isInt(v)) s.clocks[k] = v;
     // One spelling per name (NFC, case apart): a state saved before the fold may hold twins; 'known' beats 'heard', and the log follows the surviving spelling.
     const spelling = {};
@@ -461,7 +479,7 @@ export function seenInScene(state, pack, { names = [], place = '', msgId = null,
     let changed = false;
     let placed = 0;
     let named = 0;
-    const to = place ? placePath(pack, resolvePlace(pack, place)) : '';
+    const to = place ? (placePath(pack, resolvePlace(pack, place)) || locPlaceId(place)) : '';    // a place the pack does not name is the row's own (D93)
     for (const raw of names || []) {
         const who = canonicalName(next, raw);
         if (!who) continue;
@@ -579,15 +597,15 @@ export function buildAdvancePrompt({ pack, state, recent = '', now = {}, maxStep
     const last = state.last ? `${state.last.gameDate || 'unknown date'}${state.last.gameTime ? `, ${state.last.gameTime}` : ''}` : 'the story\'s start';
     const nowText = `${now.date || 'unknown date'}${now.time ? `, ${now.time}` : ''}${now.location ? `, at ${now.location}` : ''}`;
     const system = `You are the clockwork of the world of ${pack.name}, running between scenes. You never write story. You read the recent scenes and the time that passed, and you answer with one JSON object and nothing else, in exactly this shape:
-{"elapsed": "<how much story time passed since the last run, in words>", "clocks": {"<clock id>": <new integer value>}, "moved": [{"who": "<character name>", "to": "<place id from the tree>", "reason": "<a few words>"}], "blurb": "<two or three sentences of what people in the streets would say is going on>", "heard": ["<names of people mentioned for the first time>"]}
+{"elapsed": "<how much story time passed since the last run, in words>", "clocks": {"<clock id>": <new integer value>}, "moved": [{"who": "<character name>", "to": "<place id from the places list>", "reason": "<a few words>"}], "blurb": "<two or three sentences of what people in the streets would say is going on>", "heard": ["<names of people mentioned for the first time>"]}
 Rules: clocks move with story time, not with how many messages were exchanged; a clock may move by at most the step given, up or down, and stays within its range; include a clock only when it moves; "to" must be a place id from the tree, the deepest that fits; move a character only when the scenes showed or plainly implied it; "moved" may be empty; names are strings exactly as the story spells them; no prose outside the JSON.${players.length ? ` The player is ${players[0]}${players.length > 1 ? ` (also written ${players.slice(1).join(', ')})` : ''}: never move them and never list them as heard of; the places are for everyone else.` : ''}${spoilerFree ? ' The blurb is common knowledge only: rumours, prices, news, weather; never a clock\'s value, name or mechanism, and nothing the player has not had a chance to learn.' : ''}`;
     const user = `World: ${pack.name}${pack.description ? ` — ${pack.description}` : ''}
 
 Clocks:
 ${clocks || '- none'}
 
-Places (id (label), nested):
-${placeTreeText(pack)}
+Places (id (label), nested; then the places the story itself has named):
+${advancerPlaces(pack, state)}
 
 Last seen:
 ${where}
@@ -601,6 +619,29 @@ Answer with the JSON object only.`;
     return { system, user };
 }
 
+/** The places the advancer may move people to: the pack's tree, then the places the story named that the pack does not (the row's loc: ids, D93). */
+function advancerPlaces(pack, state) {
+    const lines = [placeTreeText(pack)];
+    for (const e of (state && Array.isArray(state.visited) ? state.visited : []).slice(0, 40)) {
+        if (!e || !isLocId(e.id)) continue;
+        lines.push(`${e.id} (${e.label || locLabel(e.id)})`);
+    }
+    return lines.filter(Boolean).join('\n') || '- none yet: move no one until the story names a place';
+}
+
+/** A visited place (the row, D82) by its loc: id, its label or the text that would key it; '' when none. */
+export function resolveVisited(state, ref) {
+    const s = clean(ref, MAX_PLACE);
+    if (!s) return '';
+    const lower = s.toLowerCase();
+    const key = locPlaceId(s);
+    for (const e of (state && Array.isArray(state.visited) ? state.visited : [])) {
+        if (!e || !isLocId(e.id)) continue;
+        if (e.id === s || e.id === key || String(e.label || '').toLowerCase() === lower || locLabel(e.id) === lower) return e.id;
+    }
+    return '';
+}
+
 /** The player's names as given: one string or a list, cleaned, empty entries dropped. */
 function playerList(player) {
     return (Array.isArray(player) ? player : [player]).map(p => clean(p, MAX_NAME)).filter(Boolean);
@@ -608,8 +649,14 @@ function playerList(player) {
 
 /** The first JSON object in a reply, fences and prose around it ignored; null when none parses. */
 export function parseAdvanceReply(text) {
+    // Only an object shaped like an advance counts: a reply cut off mid-object must not pass as its inner clocks map.
+    return jsonObjectsIn(text).find(v => ADVANCE_KEYS.some(k => k in v)) || null;
+}
+
+/** Every JSON object a reply holds (fenced, bare, or the whole text), reasoning stripped, outer objects before inner; [] when none parses. */
+export function jsonObjectsIn(text) {
     const s = String(text || '').replace(THINK_RE, '').replace(THINK_OPEN_RE, '').trim();
-    if (!s) return null;
+    if (!s) return [];
     const candidates = [];
     for (const m of s.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1]);
     let from = 0;
@@ -629,8 +676,7 @@ export function parseAdvanceReply(text) {
             if (v && typeof v === 'object' && !Array.isArray(v)) parsed.push(v);
         } catch (e) { /* next */ }
     }
-    // Only an object shaped like an advance counts: a reply cut off mid-object must not pass as its inner clocks map.
-    return parsed.find(v => ADVANCE_KEYS.some(k => k in v)) || null;
+    return parsed;
 }
 
 const ADVANCE_KEYS = ['elapsed', 'clocks', 'moved', 'blurb', 'heard'];
@@ -674,7 +720,7 @@ export function validateAdvance(reply, pack, state, { maxStep = 1, player = '' }
                 if (!who) { errors.push('A move names nobody.'); continue; }
                 if (isPlayer(who)) continue;    // the player is not placed by the world
                 if (typeof m.to !== 'string') { errors.push(`A move's place is not a string (for ${who}).`); continue; }
-                const to = resolvePlace(pack, m.to);
+                const to = resolvePlace(pack, m.to) || resolveVisited(state, m.to);    // the pack's places, then the story's own (D93)
                 if (!to) { errors.push(`"${clean(m.to, 60)}" is not a place of this pack (for ${who}).`); continue; }
                 moved.push({ who, to, reason: typeof m.reason === 'string' ? clean(m.reason, MAX_REASON) : '' });
             }
@@ -706,7 +752,7 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
     }
     for (const m of clean.moved || []) {
         const who = canonicalName(next, m.who);
-        const to = placePath(pack, m.to);
+        const to = placePath(pack, m.to) || m.to;    // a story-named place is its own id
         const from = next.where[who] || '';
         if (from === to) continue;
         next.where[who] = to;

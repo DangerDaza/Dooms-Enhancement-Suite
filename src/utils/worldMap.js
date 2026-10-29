@@ -6,7 +6,7 @@
  * instruction; the completed quests. No SillyTavern, no DOM:
  * tools/world-map-test.mjs imports this directly.
  */
-import { placeChain, placePath, placeFromText, normalizeVisited, MAX_PLACE, VISITS_KEEP } from './liveWorld.js';
+import { placeChain, placePath, placeFromText, normalizeVisited, locPlaceId, isLocId, MAX_PLACE, VISITS_KEEP } from './liveWorld.js';
 import { safeImageUrl, placeOf } from './worldBoard.js';
 import { cleanWhen } from './questCut.js';
 
@@ -14,7 +14,6 @@ export const MAX_DONE = 100;
 export const PLACE_FRAMES = Object.freeze({ portrait: 'a tall frame', square: 'a square frame', landscape: 'a wide frame' });
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
-const slug = (v) => clean(v, MAX_PLACE).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const cloneState = (s) => JSON.parse(JSON.stringify(s));
 const hasId = (id) => id !== null && id !== undefined && id !== '';
 
@@ -39,9 +38,9 @@ export function placeKeyFor(pack, location) {
         const place = chain[chain.length - 1];
         return { id: packId, label: (place && place.label) || packId, packId, path: placePath(pack, packId), parent: parentLine(pack, packId) };
     }
-    const id = slug(text);
+    const id = locPlaceId(text);    // the key shared with the state's own placing (D93)
     if (!id) return null;
-    return { id: `loc:${id}`, label: text, packId: '', path: '', parent: '' };
+    return { id, label: text, packId: '', path: '', parent: '' };
 }
 
 /**
@@ -152,6 +151,7 @@ export function rowIdForCharacter(state, pack, name) {
     const id = placeOf(state, name);
     if (!id) return '';
     const ids = new Set(((state && state.visited) || []).map(e => e.id));
+    if (isLocId(id)) return ids.has(id) ? id : '';    // a place the pack does not name (D93): its own row entry
     for (const pid of placeChain(pack, id).map(p => p.id).reverse()) if (ids.has(pid)) return pid;
     return '';
 }

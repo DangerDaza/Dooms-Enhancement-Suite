@@ -40,6 +40,8 @@ import { parseCaptionReply } from '../../utils/scenePictures.js';
 import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
 import {
     WORLD_SLOT,
+    BLANK_PACK_ID,
+    blankPack,
     liveWorldConfig,
     normalizePack,
     seedWorldState,
@@ -61,7 +63,7 @@ import {
 } from '../../utils/liveWorld.js';
 
 export const WORLD_CHANGED_EVENT = 'dooms:world-changed';
-export const BUILTIN_PACKS = Object.freeze(['skyreach', 'example']);
+export const BUILTIN_PACKS = Object.freeze(['example']);    // Harbourside, the one template (docs/world-builder-plan.md D92); the blank world needs no file (D93)
 const META_KEY = 'dooms_world';
 
 let state = null;            // this chat's world state, or null while off or unseeded
@@ -148,7 +150,9 @@ export async function loadPack(id, { fresh = false } = {}) {
     if (!fresh && packCache.has(key)) return packCache.get(key);
     let raw = null;
     const custom = cfg().customPacks[key];
-    if (custom !== undefined) {
+    if (key === BLANK_PACK_ID && custom === undefined) {
+        raw = blankPack();    // D93: no file; the chat's own name goes on it when the state loads
+    } else if (custom !== undefined) {
         try { raw = typeof custom === 'string' ? JSON.parse(custom) : custom; } catch (e) { return { ok: false, pack: null, errors: [`The pasted pack "${key}" is not valid JSON: ${e.message}`] }; }
     } else {
         try {

@@ -2162,7 +2162,7 @@ function bindSettingsUI() {
         if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
         if (!removeCustomPack(id)) return;
         const w = getWorldRules();
-        if (w.pack === id) w.pack = 'skyreach';
+        if (w.pack === id) w.pack = 'blank';    // the blank world (D93)
         _saveWorld({ reload: mine });    // another chat's pack: nothing in this chat refers to it, and a reload would discard an advance in flight
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
