@@ -10,8 +10,12 @@ import { placeLabel, sameName } from './liveWorld.js';
 
 /** An image reference a pack may give a place, or '' when it is not a plain http(s), data-image or relative URL. */
 export function safeImageUrl(url) {
-    const s = String(url || '').trim();
-    if (!s || /[\s"'<>]/.test(s)) return '';
+    // A picture saved under the chat's character folder has that name in its path, spaces and all
+    // ("/user/images/Starclaw 2 - Narrator/des-place-….png"): kept, the spaces encoded for a CSS url()
+    // and an <img src>. Quotes, angle brackets and control characters are out; so is any scheme but
+    // http(s) and data:image.
+    const s = String(url || '').trim().replace(/[ \t]+/g, '%20');
+    if (!s || /[\s"'<>\x00-\x1f\x7f]/.test(s)) return '';
     if (/^https?:\/\//i.test(s) || /^data:image\//i.test(s)) return s;
     if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return '';    // any other scheme
     return s.startsWith('//') ? '' : s;

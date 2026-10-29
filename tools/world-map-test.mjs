@@ -30,6 +30,14 @@ const k2 = placeKeyFor(sky, 'The Rusty Anchor, back room');
 check('a place the pack does not name is its own, keyed by a slug under loc:', k2 && k2.id === 'loc:the-rusty-anchor-back-room' && k2.label === 'The Rusty Anchor, back room' && k2.packId === '' && k2.parent === '');
 check('nothing, and no pack', placeKeyFor(sky, '   ') === null && placeKeyFor(null, 'Somewhere').id === 'loc:somewhere');
 
+console.log('\n§1b a picture\'s URL as the row keeps it');
+{
+    const spaced = seedWorldState(harbour);
+    spaced.visited = [{ id: 'loc:the-kitchen', label: 'The kitchen', packId: '', path: '', visits: ['m1'], image: '/user/images/Starclaw 2 - Narrator/des-place-the-kitchen-2026.png' }, { id: 'loc:bad', label: 'Bad', packId: '', path: '', visits: ['m2'], image: 'javascript:alert(1)' }, { id: 'loc:quoted', label: 'Quoted', packId: '', path: '', visits: ['m3'], image: '/user/images/x/a".png' }];
+    const row = placesRow(spaced, harbour);
+    check('a file saved under a character folder with spaces in its name is kept, the spaces encoded; a scheme that is not a picture and a quote are not', row[0].image === '/user/images/Starclaw%202%20-%20Narrator/des-place-the-kitchen-2026.png' && row[0].drawn && row[1].image === '' && !row[1].drawn && row[2].image === '', JSON.stringify(row.map(r => r.image)));
+}
+
 console.log('\n§2 visits, newest first');
 let S = seedWorldState(sky);
 check('a seeded state has visited nothing', Array.isArray(S.visited) && S.visited.length === 0);
