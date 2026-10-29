@@ -5,7 +5,7 @@
  * own errors, and the file a world is exported as. No SillyTavern, no DOM:
  * tools/world-builder-test.mjs imports this directly.
  */
-import { normalizePack, placeChain, isLocId, locLabel, jsonObjectsIn, MAX_NAME, MAX_BLURB } from './liveWorld.js';
+import { normalizePack, placeChain, placePath, isLocId, locLabel, jsonObjectsIn, MAX_NAME, MAX_BLURB } from './liveWorld.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const cut = (v, max) => String(v ?? '').normalize('NFC').trim().slice(0, max);    // lines kept: lore and scenes read better unfolded
@@ -200,4 +200,53 @@ export function worldFileName(pack) {
 /** The file's text: the world made safe, in the file's shape, indented. */
 export function worldToJson(raw) {
     return JSON.stringify(worldToRaw(normalizePack(raw).pack), null, 2);
+}
+
+/**
+ * A chat's state carried over to a world made from it (D96): the places the
+ * story named on its own (the row's loc: entries) become the world's places
+ * where the world has them (the row entry re-keyed, its visits kept; a row
+ * entry the world already has takes the visits), and everyone standing at
+ * such a place stands at the world's place, the log following. Never
+ * mutates the input; the same state back when nothing changed.
+ * @returns {{ state: object, rebound: number }}
+ */
+export function rebindStateToPack(state, pack) {
+    const s = state && typeof state === 'object' ? state : null;
+    const places = new Map(((pack && Array.isArray(pack.places)) ? pack.places : []).map(p => [p.id, p]));
+    if (!s || !places.size) return { state: s, rebound: 0 };
+    const target = (id) => (isLocId(id) && places.has(id.slice(4)) ? id.slice(4) : '');
+    const parentLine = (pid) => placeChain(pack, pid).slice(0, -1).map(p => p.label).reverse().join(', ');
+    let rebound = 0;
+    const next = JSON.parse(JSON.stringify(s));
+    const visited = [];
+    const index = new Map();
+    for (const e of Array.isArray(next.visited) ? next.visited : []) {
+        if (!e || typeof e.id !== 'string') continue;
+        const pid = target(e.id);
+        const entry = pid ? { ...e, id: pid, packId: pid, path: placePath(pack, pid), parent: parentLine(pid) } : e;
+        if (pid) rebound++;
+        if (index.has(entry.id)) {
+            const at = index.get(entry.id);
+            const kept = visited[at];
+            const visits = [...new Set([...(Array.isArray(kept.visits) ? kept.visits : []), ...(Array.isArray(entry.visits) ? entry.visits : [])])];
+            visited[at] = { ...kept, visits, image: kept.image || entry.image || '', prompt: kept.prompt || entry.prompt || '' };
+            continue;
+        }
+        index.set(entry.id, visited.length);
+        visited.push(entry);
+    }
+    next.visited = visited;
+    for (const [who, path] of Object.entries(next.where && typeof next.where === 'object' ? next.where : {})) {
+        const pid = target(path);
+        if (pid) { next.where[who] = placePath(pack, pid); rebound++; }
+    }
+    for (const e of Array.isArray(next.log) ? next.log : []) {
+        if (!e || e.kind !== 'move') continue;
+        const f = target(e.from);
+        const t = target(e.to);
+        if (f) e.from = placePath(pack, f);
+        if (t) e.to = placePath(pack, t);
+    }
+    return { state: rebound ? next : s, rebound };
 }

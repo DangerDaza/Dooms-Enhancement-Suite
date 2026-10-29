@@ -479,7 +479,9 @@ export function seenInScene(state, pack, { names = [], place = '', msgId = null,
     let changed = false;
     let placed = 0;
     let named = 0;
-    const to = place ? (placePath(pack, resolvePlace(pack, place)) || locPlaceId(place)) : '';    // a place the pack does not name is the row's own (D93)
+    // A world with places of its own places people at those; elsewhere they are "in the scene" (D70). The blank
+    // world, with no places of its own, places them at the story's place under the row's key (D93).
+    const to = place ? (placePath(pack, resolvePlace(pack, place)) || (!(pack && Array.isArray(pack.places) && pack.places.length) ? locPlaceId(place) : '')) : '';
     for (const raw of names || []) {
         const who = canonicalName(next, raw);
         if (!who) continue;

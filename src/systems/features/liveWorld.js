@@ -30,6 +30,7 @@ import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/
 import { SlashCommand } from '../../../../../../../scripts/slash-commands/SlashCommand.js';
 import { extensionFolderPath } from '../../core/config.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog, setMainGenerationStartedAt } from '../../core/state.js';
+import { saveSettings } from '../../core/persistence.js';
 import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_TRACKER_UPDATE_COMPLETE, parseCharacterEntriesFromThoughts } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -38,6 +39,7 @@ import { renderImage, sourceProblem } from './imageGen.js';
 import { imageGenConfig } from '../../utils/imageGen.js';
 import { parseCaptionReply } from '../../utils/scenePictures.js';
 import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
+import { worldToRaw, worldSummary, worldFromState, buildWorldDraftPrompt, parseWorldDraft, rebindStateToPack, DRAFT_LIMITS } from '../../utils/worldBuilder.js';
 import {
     WORLD_SLOT,
     BLANK_PACK_ID,
@@ -83,6 +85,9 @@ let transport = null;        // test hook: ({ system, user }) => Promise<string>
 let placeTransport = null;   // test hook: { describe({ system, user }) => Promise<string> }
 let drawing = '';            // the place being drawn, '' when none
 let newPlace = '';           // a place the latest scene reached for the first time (for the automatic draw)
+let missingWorld = '';       // the id of a world this chat was seeded with that cannot be loaded (docs/world-builder-plan.md D97); '' when its world is here
+let drafting = false;        // a world being drafted from the chat (D95)
+let draftTransport = null;   // test hook: ({ system, user }) => Promise<string>
 const DRAW_RETRY_MS = 3000;
 const DRAW_RETRIES = 5;
 const packCache = new Map();
@@ -117,6 +122,15 @@ function chatArray() {
 
 function chatId() {
     try { return getContext().chatId; } catch (e) { return undefined; }
+}
+
+/** The chat's character, the blank world's name (D93). */
+function characterName() {
+    try { const n = String(getContext().name2 || '').trim(); return n || 'The world'; } catch (e) { return 'The world'; }
+}
+
+function persist() {
+    try { saveSettings(); } catch (e) { log('settings save failed', String(e && e.message || e)); }
 }
 
 function log(message, data = null) {
@@ -206,6 +220,249 @@ export function getActivePack() {
     return activePack;
 }
 
+/** The id of the world this chat was seeded with when it cannot be loaded (D97); '' when the chat's world is here. */
+export function getMissingWorld() {
+    return missingWorld;
+}
+
+// ─── Worlds (docs/world-builder-plan.md) ──────────────────────────────────
+
+/**
+ * The worlds on offer, your own first (D92): each with its name, its
+ * summary and, when it cannot be read, what is wrong with it.
+ * @returns {Promise<Array<{ id: string, name: string, custom: boolean, template: boolean, ok: boolean, errors: string[], summary: string, pack: object|null }>>}
+ */
+export async function listWorlds() {
+    const out = [];
+    const custom = cfg().customPacks;
+    const row = async (id, isCustom) => {
+        const r = await loadPack(id);
+        out.push({ id, name: r.ok ? r.pack.name : id, custom: isCustom, template: !isCustom, ok: r.ok, errors: r.errors, summary: r.ok ? worldSummary(r.pack) : '', pack: r.pack });
+    };
+    for (const id of Object.keys(custom)) await row(id, true);
+    for (const id of BUILTIN_PACKS) if (custom[id] === undefined) await row(id, false);
+    return out;
+}
+
+/**
+ * A world in the file's shape, for the builder: one of yours (made safe,
+ * its errors listed), the blank world as this chat names it, or the
+ * template.
+ * @returns {Promise<{ ok: boolean, raw: object|null, errors: string[], custom: boolean }>}
+ */
+export async function getWorldRaw(id) {
+    const key = String(id || '').trim();
+    const custom = cfg().customPacks[key];
+    if (key === BLANK_PACK_ID && custom === undefined) {
+        const base = activePack && activePack.id === BLANK_PACK_ID ? activePack : blankPack(characterName());
+        return { ok: true, raw: worldToRaw(base), errors: [], custom: false };
+    }
+    if (custom !== undefined) {
+        let parsed;
+        try { parsed = typeof custom === 'string' ? JSON.parse(custom) : custom; } catch (e) { return { ok: false, raw: null, errors: [`The world "${key}" is not valid JSON: ${e.message}`], custom: true }; }
+        const n = normalizePack(parsed);
+        return { ok: n.ok, raw: worldToRaw(n.pack), errors: n.errors, custom: true };
+    }
+    const r = await loadPack(key);
+    return { ok: r.ok, raw: r.ok ? worldToRaw(r.pack) : null, errors: r.errors, custom: false };
+}
+
+/**
+ * Stores a world under its id (D94): the file's shape, made safe. A world
+ * with errors is not stored. With `previousId` the world moves from its
+ * old id (a rename): the setting and the open chat follow. A chat using
+ * the world reloads it, so an edit reaches it at once (D97).
+ * @returns {Promise<{ ok: boolean, errors: string[], pack: object|null }>}
+ */
+export async function saveWorld(raw, { previousId = '' } = {}) {
+    const n = normalizePack(raw);
+    if (!n.ok) return { ok: false, errors: n.errors, pack: n.pack };
+    const id = n.pack.id;
+    if (id === BLANK_PACK_ID) return { ok: false, errors: ['"blank" is the blank world\'s own id; give this world another name.'], pack: n.pack };
+    if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = {};
+    if (!extensionSettings.liveWorld.customPacks || typeof extensionSettings.liveWorld.customPacks !== 'object') extensionSettings.liveWorld.customPacks = {};
+    const packs = extensionSettings.liveWorld.customPacks;
+    packs[id] = JSON.stringify(worldToRaw(n.pack));
+    forgetPack(id);
+    const old = String(previousId || '').trim();
+    const renamed = old && old !== id && old in packs;
+    if (renamed) {
+        delete packs[old];
+        forgetPack(old);
+        if (cfg().pack === old) extensionSettings.liveWorld.pack = id;
+    }
+    persist();
+    const mine = !!state && (state.pack === id || (renamed && state.pack === old));
+    if (mine) {
+        if (state.pack !== id) { state.pack = id; commit(state, { source: 'world' }, { immediate: true }); }
+        await onWorldChatChanged();    // the edit reaches this chat now: clocks clamped, a new clock at its start
+    } else notify({ source: 'world' });
+    log(`world "${id}" saved${renamed ? ` (was "${old}")` : ''}`);
+    return { ok: true, errors: [], pack: n.pack };
+}
+
+/** Removes one of your worlds. The setting falls back to the blank world; a chat using it goes on in the blank world (D97). */
+export async function deleteWorld(id) {
+    const key = String(id || '').trim();
+    if (!removeCustomPack(key)) return false;
+    if (cfg().pack === key) extensionSettings.liveWorld.pack = BLANK_PACK_ID;
+    persist();
+    if (state && state.pack === key) await onWorldChatChanged();
+    else notify({ source: 'world' });
+    log(`world "${key}" removed`);
+    return true;
+}
+
+/** A copy of a world (yours or the template) under a new name, stored (D92: "Start from Harbourside"). */
+export async function copyWorld(fromId, { id = '', name = '' } = {}) {
+    const r = await loadPack(fromId);
+    if (!r.ok) return { ok: false, errors: r.errors, pack: null };
+    const raw = worldToRaw(r.pack);
+    raw.name = String(name || '').trim() || `${raw.name} (copy)`;
+    raw.id = String(id || '').trim() || raw.name;
+    return saveWorld(raw);
+}
+
+/** A world's JSON (a file, or pasted) stored as one of yours (Import). */
+export async function importWorldJson(text) {
+    let raw;
+    try { raw = typeof text === 'string' ? JSON.parse(text) : text; } catch (e) { return { ok: false, errors: [`Not valid JSON: ${e.message}`], pack: null }; }
+    return saveWorld(raw);
+}
+
+/** This chat's world as it stands, in the file's shape (D96, "Make this a world"); null without a chat. */
+export function worldFromThisChat({ name = '' } = {}) {
+    if (!state || !activePack) return null;
+    return worldFromState(state, activePack, { name: name || state.name || activePack.name });
+}
+
+/**
+ * The open chat carries over to a world (D96): its pack id, the row's
+ * story-named places re-keyed to the world's, everyone at such a place
+ * standing at the world's place, the clocks clamped. Nothing re-seeded.
+ * @returns {Promise<{ ok: boolean, error?: string, rebound?: number }>}
+ */
+export async function adoptWorld(id) {
+    if (!ready()) return { ok: false, error: 'This chat has no world to carry over.' };
+    const r = await loadPack(id, { fresh: true });
+    if (!r.ok) return { ok: false, error: r.errors.join(' ') };
+    const bound = rebindStateToPack(state, r.pack);
+    const next = clampClocksToPack({ ...bound.state, pack: r.pack.id, packVersion: r.pack.version || 1 }, r.pack).state;
+    activePack = r.pack;
+    missingWorld = '';
+    commit(next, { source: 'world' }, { immediate: true });
+    log(`the chat carried over to the world "${r.pack.name}"`, { rebound: bound.rebound });
+    return { ok: true, rebound: bound.rebound };
+}
+
+export function __setDraftTransport(fn) {
+    draftTransport = typeof fn === 'function' ? fn : null;
+}
+
+export function isDrafting() {
+    return drafting;
+}
+
+/** The chat's character card(s): the one character, or every member of the group, each field under the member's name. */
+function cardOfTheChat() {
+    try {
+        const ctx = getContext();
+        const list = Array.isArray(ctx.characters) ? ctx.characters : [];
+        let cards = [];
+        let group = null;
+        if (typeof ctx.groupId === 'string' && ctx.groupId && Array.isArray(ctx.groups)) {
+            group = ctx.groups.find(g => g && g.id === ctx.groupId) || null;
+            const members = group && Array.isArray(group.members) ? group.members : [];
+            cards = members.map(av => list.find(c => c && c.avatar === av)).filter(Boolean);
+        } else if (Number.isInteger(Number(ctx.characterId)) && list[Number(ctx.characterId)]) cards = [list[Number(ctx.characterId)]];
+        const name = cards.length > 1 ? String((group && group.name) || ctx.name2 || '') : String((cards[0] && cards[0].name) || ctx.name2 || '');
+        if (!cards.length) return { name };
+        const join = (k) => cards.map(c => (typeof c[k] === 'string' && c[k].trim() ? (cards.length > 1 ? `${c.name}: ${c[k]}` : c[k]) : '')).filter(Boolean).join('\n');
+        return { name, description: join('description'), personality: join('personality'), scenario: join('scenario') };
+    } catch (e) { return {}; }
+}
+
+/** The lore the chat carries: the entries of the lorebooks active for it (the global ones, the character's own, the chat's), cut to length. '' when none can be read. */
+async function loreOfTheChat() {
+    let api = null;
+    try { api = await import('../lorebook/lorebookAPI.js'); } catch (e) { return ''; }
+    const names = new Set();
+    try { for (const n of api.getActiveWorldNames() || []) if (typeof n === 'string' && n) names.add(n); } catch (e) { /* none */ }
+    try {
+        const ctx = getContext();
+        const list = Array.isArray(ctx.characters) ? ctx.characters : [];
+        const c = Number.isInteger(Number(ctx.characterId)) ? list[Number(ctx.characterId)] : null;
+        const own = c && c.data && c.data.extensions ? c.data.extensions.world : '';
+        if (typeof own === 'string' && own) names.add(own);
+    } catch (e) { /* none */ }
+    try {
+        const chatBook = chat_metadata && typeof chat_metadata === 'object' ? chat_metadata.world_info : '';
+        if (typeof chatBook === 'string' && chatBook) names.add(chatBook);
+    } catch (e) { /* none */ }
+    const lines = [];
+    let total = 0;
+    for (const name of names) {
+        let entries = [];
+        try { entries = api.getEntriesSorted(await api.loadWorldData(name)); } catch (e) { entries = []; }
+        for (const { entry } of entries) {
+            if (!entry || entry.disable) continue;
+            const content = String(entry.content || '').trim();
+            if (!content) continue;
+            const title = String(entry.comment || (Array.isArray(entry.key) ? entry.key.join(', ') : '') || '').trim();
+            const line = `${title ? `${title}: ` : ''}${content}`;
+            if (total + line.length > DRAFT_LIMITS.lore) { lines.push(line.slice(0, Math.max(0, DRAFT_LIMITS.lore - total))); total = DRAFT_LIMITS.lore; break; }
+            lines.push(line);
+            total += line.length + 1;
+        }
+        if (total >= DRAFT_LIMITS.lore) break;
+    }
+    return lines.join('\n');
+}
+
+/**
+ * Drafts a world from the chat (D95): one background request (the
+ * tracker's profile) with the card, the lore, the names and the recent
+ * scenes; the reply read like the advancer's. Nothing is stored: the
+ * draft goes to the builder for the user to read first.
+ * @returns {Promise<{ ok: boolean, reason: string, errors: string[], raw: object|null, pack: object|null }>}
+ */
+export async function draftWorldFromChat({ name = '' } = {}) {
+    if (drafting) return { ok: false, reason: 'running', errors: ['A world is already being drafted.'], raw: null, pack: null };
+    if (mainGenerationBusy({ manual: true })) return { ok: false, reason: 'busy', errors: ['The chat is generating; try again when it is done.'], raw: null, pack: null };
+    drafting = true;
+    notify({ source: 'draft-start' });
+    try {
+        const players = playerNames();
+        const card = cardOfTheChat();
+        const lore = await loreOfTheChat();
+        const names = [...new Set([...knownNamesFromTracker(), ...Object.keys(state && state.known ? state.known : {})])];
+        const recent = buildRecentText(chatArray(), { count: 24, persona: players[0] || 'Player' });
+        const worldName = String(name || '').trim() || (state && state.name) || card.name || '';
+        const prompt = buildWorldDraftPrompt({ name: worldName, card, lore, characters: names, recent, player: players });
+        const external = extensionSettings.generationMode === 'external';
+        const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
+        const run = async () => {
+            if (draftTransport) return draftTransport(prompt);
+            if (external) return generateWithExternalAPI(messages);
+            return safeGenerateRaw({ prompt: messages, quietToLoud: false });
+        };
+        log('a world draft requested', { name: worldName, lore: lore.length, names: names.length });
+        const result = await withBackgroundProfile(run, { external, label: 'world-draft' });
+        if (result === BACKGROUND_BUSY) return { ok: false, reason: 'busy', errors: ['Another background request is running; try again in a moment.'], raw: null, pack: null };
+        const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
+        const d = parseWorldDraft(text, { name: worldName });
+        log(d.ok ? 'a world drafted' : 'the draft could not be used', d.ok ? worldSummary(d.pack) : { errors: d.errors, reply: text.slice(0, 400) });
+        return { ok: d.ok, reason: d.ok ? '' : 'invalid', errors: d.errors, raw: d.raw, pack: d.pack };
+    } catch (e) {
+        const error = String(e && e.message || e);
+        log('the draft failed', error);
+        return { ok: false, reason: 'error', errors: [error], raw: null, pack: null };
+    } finally {
+        drafting = false;
+        notify({ source: 'draft-end' });
+    }
+}
+
 export function getPackError() {
     return packError;
 }
@@ -292,20 +549,28 @@ export async function onWorldChatChanged() {
     if (token !== loadToken || chat_metadata !== meta) return;    // another chat opened meanwhile (or was swapped in, its CHAT_CHANGED to come)
     loadedMeta = meta;
     loadedChat = id;
-    if (!res.ok) {
-        packError = res.errors.join(' ');
-        log(`the pack "${packId}" cannot be used`, res.errors);
-        notify({ source: 'chat' });
-        return;
+    missingWorld = '';
+    let pack = res.ok ? res.pack : null;
+    if (!pack) {
+        // D97: the world is gone (removed, or Skyreach after D92). The chat goes on in the blank world with its
+        // state untouched, and the status line names the world that is missing.
+        missingWorld = packId;
+        log(`the world "${packId}" cannot be used; this chat goes on in the blank world`, res.errors);
+        pack = blankPack();
     }
-    activePack = res.pack;
+    if (pack.id === BLANK_PACK_ID) pack = { ...pack, name: (stored && stored.name) || characterName() };    // D93: named after the chat's character
+    activePack = pack;
     if (stored) {
-        const clamped = clampClocksToPack(stored, activePack);
-        state = clamped.state;
-        if (clamped.changed) commit(state, { source: 'clamp' }, { immediate: true });
+        if (missingWorld) {
+            state = stored;    // no clamp: the clocks and the places wait for their world to come back
+        } else {
+            const clamped = clampClocksToPack(stored, activePack);
+            state = clamped.state;
+            if (clamped.changed) commit(state, { source: 'clamp' }, { immediate: true });
+        }
         reconcile({ at: 'load' });
     } else {
-        state = seedWorldState(activePack);
+        state = seedWorldState(activePack, { name: activePack.id === BLANK_PACK_ID ? activePack.name : '' });
         commit(state, { source: 'seed' }, { immediate: true });
         log(`seeded from "${activePack.name}"`);
     }
@@ -394,7 +659,7 @@ function placeFromScene(from, m) {
     let next = from;
     const names = knownNamesFromTracker();
     if (names.length) {
-        const place = placeFromText(activePack, facts.location);
+        const place = placeFromText(activePack, facts.location) || facts.location;    // a place the pack does not name is the row's own (D93)
         const r = seenInScene(next, activePack, { names, place, msgId, gameDate: facts.date || '', gameTime: facts.time || '' });
         if (r.placed) log(`the scene placed ${r.placed} at ${place}`);
         next = r.state;

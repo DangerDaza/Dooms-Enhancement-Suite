@@ -17,7 +17,7 @@ import {
 import { visitPlace, rowIdForCharacter, placeKeyFor, placesRow } from '../src/utils/worldMap.js';
 import {
     emptyWorld, worldToRaw, worldSummary, packWarnings, worldFromState, buildWorldDraftPrompt, parseWorldDraft,
-    worldFileName, worldToJson,
+    worldFileName, worldToJson, rebindStateToPack,
 } from '../src/utils/worldBuilder.js';
 
 let failures = 0;
@@ -60,7 +60,7 @@ check('the narrator\'s line names the blank world by the chat\'s name', buildWor
     const seeded = seedWorldState(harbour);
     const a = seenInScene(seeded, harbour, { names: ['Wanderer'], place: 'The Anchor', msgId: 'h1' });
     const b = seenInScene(seeded, harbour, { names: ['Wanderer'], place: 'a nameless road', msgId: 'h2' });
-    check('a pack world still resolves its own places first, and keeps a story-named place as the row does', a.state.where.Wanderer === 'harbourside/old-town/the-anchor' && b.state.where.Wanderer === 'loc:a-nameless-road' && placeLabel(harbour, b.state.where.Wanderer) === 'a nameless road');
+    check('a world with places of its own keeps the old rule: at its places, else in the scene and unplaced (D70)', a.state.where.Wanderer === 'harbourside/old-town/the-anchor' && b.state.where.Wanderer === undefined && b.state.known.Wanderer === 'known' && placeLabel(harbour, 'loc:a-nameless-road') === 'a nameless road');
 }
 
 console.log('\n§3 a world from the chat as it stands (D96)');
@@ -79,9 +79,18 @@ console.log('\n§3 a world from the chat as it stands (D96)');
     const raw2 = worldFromState(hs, harbour, { name: 'Harbourside, played' });
     const byId = Object.fromEntries(raw2.places.map(p => [p.id, p]));
     check('a pack world: the visited places first with their ancestors and nesting, a story-named place with its picture, then the rest of the pack', raw2.places.slice(0, 4).map(p => p.id).join() === 'a-nameless-road,harbourside,old-town,the-anchor' && byId['the-anchor'].parent === 'old-town' && byId['a-nameless-road'].image === '/user/images/x/road.png' && raw2.places.length === 9);
-    check('the clocks at their values now, the cast where they are, the pack\'s own cast kept', raw2.clocks[0].start === 3 && raw2.clocks[0].effects[6].startsWith('The harbour is closed') && raw2.cast.find(m => m.name === 'Wanderer').place === 'a-nameless-road' && raw2.cast.find(m => m.name === 'Captain Reyes').place === 'customs-house' && raw2.cast.find(m => m.name === 'The governor').tier === 'heard');
+    check('the clocks at their values now, the cast where they are, the pack\'s own cast kept', raw2.clocks[0].start === 3 && raw2.clocks[0].effects[6].startsWith('The harbour is closed') && raw2.cast.find(m => m.name === 'Wanderer') && !raw2.cast.find(m => m.name === 'Wanderer').place && raw2.cast.find(m => m.name === 'Captain Reyes').place === 'customs-house' && raw2.cast.find(m => m.name === 'The governor').tier === 'heard');
     check('…sound, and the id from the name given', normalizePack(raw2).ok && raw2.id === 'harbourside-played' && raw2.name === 'Harbourside, played');
     check('an empty world', normalizePack(emptyWorld({ name: 'New world' })).ok && emptyWorld({ name: 'New world' }).id === 'new-world');
+}
+{
+    const made = normalizePack(worldFromState(after, blank)).pack;
+    const rb = rebindStateToPack(after, made);
+    check('the chat carried over to the world made from it: the row re-keyed with its visits, the people and the log at the world\'s places', rb.rebound === 3 && rb.state.visited.map(e => `${e.id}/${e.packId}/${e.path}`).join() === 'the-anchor-back-room/the-anchor-back-room/the-anchor-back-room,the-quay/the-quay/the-quay' && rb.state.visited[1].visits.join() === 'm1' && rb.state.where['Old Marit'] === 'the-quay' && rb.state.log.at(-1).to === 'the-quay' && rb.state.log.at(-1).from === 'the-anchor-back-room', JSON.stringify(rb.state.visited));
+    check('nothing to re-key: the same state back', rebindStateToPack(after, blank).state === after && rebindStateToPack(null, made).state === null);
+    const twice = { ...after, visited: [{ id: 'the-quay', label: 'The quay', packId: 'the-quay', path: 'the-quay', parent: '', visits: ['m7'], lastDate: 'Friday' }, ...after.visited] };
+    const rb2 = rebindStateToPack(twice, made);
+    check('a row entry the world already has takes the visits of the story-named one', rb2.state.visited.length === 2 && rb2.state.visited[0].id === 'the-quay' && rb2.state.visited[0].visits.join() === 'm7,m1' && rb2.state.visited[1].id === 'the-anchor-back-room');
 }
 
 console.log('\n§4 the draft (D95)');
