@@ -2235,7 +2235,7 @@
                             <span class="rpg-setting-label">LoRAs for this chat</span>
                             <span class="rpg-setting-hint">One per line, <code>name:strength</code> (a bare name is strength 1), the file's
                                 name in ComfyUI's loras folder (<code>.safetensors</code> is added when missing). Spliced in after the
-                                model loader, in this order. Kept with the chat.</span>
+                                model loader, in this order, after the LoRAs the characters in the scene carry in the Workshop. Kept with the chat.</span>
                             <textarea id="rpg-scene-loras" class="rpg-accordion-input" rows="3" style="width:100%; margin-top:6px;" placeholder="BunnySlop_MOSS:0.8"></textarea>
                         </div>
                     </div>
@@ -3851,8 +3851,8 @@
                             autocomplete="off">
                         <p class="helper" style="margin-top: 0.6rem;"><strong>LoRAs for this character</strong>: one per line,
                             <em>name:strength</em> (a bare name is strength 1), the file's name in ComfyUI's loras folder.
-                            Spliced into this character's portraits when Settings → Image Generation uses ComfyUI (direct),
-                            ahead of the LoRAs set there for every portrait.</p>
+                            Spliced into this character's portraits, and into every scene picture they are in, when
+                            Settings → Image Generation uses ComfyUI (direct), ahead of the lists set there.</p>
                         <textarea id="cw-loras" class="rpg-input" rows="2" maxlength="1000" spellcheck="false"
                             placeholder="BunnySlop_MOSS:0.8" autocomplete="off"></textarea>
                         <div class="stack" style="margin-top: 0.6rem; max-width: 480px; display: flex; gap: 0.5rem; flex-wrap: wrap;">

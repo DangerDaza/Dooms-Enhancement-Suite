@@ -33,7 +33,7 @@ import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, parseC
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { buildRecentText } from '../../utils/liveWorld.js';
 import { resolvePersonaName } from './diceRolls.js';
-import { getCharacterAppearance } from './avatarGenerator.js';
+import { getCharacterAppearance, getCharacterLoras } from './avatarGenerator.js';
 import {
     SCENE_META_KEY, scenePicturesConfig, freshSceneState, sceneStateOf, countTurn, pictureDue, afterPicture, afterFailure,
     normalizeLoras, buildCaptionPrompt, parseCaptionReply, captionLine, mergeIdentityNotes,
@@ -330,14 +330,29 @@ async function writeCaption(c) {
 }
 
 /**
+ * The LoRAs a scene picture carries (D90): the ones the characters in the
+ * scene keep in the Workshop (the persona's too, when one is kept), then
+ * this chat's own list; a name in both once, the character's strength.
+ */
+function sceneLoras() {
+    const names = [...presentNames()];
+    const persona = resolvePersonaName();
+    if (persona) names.push(persona);
+    const own = [];
+    for (const n of names) own.push(...getCharacterLoras(n));
+    return normalizeLoras([...own, ...state.loras]);
+}
+
+/**
  * The picture through the image service (Settings → Image Generation): the
  * preamble and the caption as the prompt, the scene's negative and size,
- * this chat's LoRAs. The service's progress lands in this run's bar.
+ * the characters' LoRAs and this chat's. The service's progress lands in
+ * this run's bar.
  * @returns {Promise<{ file: string, dataUrl?: string, url?: string }>}
  */
 async function renderPicture(c, caption) {
     return renderImage(
-        { purpose: 'scene', prompt: `${c.preamble || ''}${caption}`.trim(), negative: c.negative || '', size: c.size, loras: state.loras },
+        { purpose: 'scene', prompt: `${c.preamble || ''}${caption}`.trim(), negative: c.negative || '', size: c.size, loras: sceneLoras() },
         { onProgress: (patch) => setProgress(patch), stageOf: () => progress.stage },
     );
 }
