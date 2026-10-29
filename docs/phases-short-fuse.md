@@ -432,9 +432,10 @@ draws the province (place cards, soft lines along the tree, known
 characters as portrait tokens on the deepest place drawn) and opens any
 card to what is inside it, with a trail back up; linked both ways with
 the cards. The same map is the Present Characters shelf's fourth page,
-Map, while Live World is on (D56). Two packs ship:
-Harbourside (an example to copy) and a Skyreach draft that needs the
-campaign notes. Off by default; nothing changes until it is on.
+Map, while Live World is on (D56). One pack ships, Harbourside, the
+template; worlds are built in the World Builder (`docs/world-builder-plan.md`,
+2026-10-29) and the blank world is the default; the Skyreach draft moved to
+`docs/support/skyreach-world.json`. Off by default; nothing changes until it is on.
 
 **Prove it.** `node tools/live-world-test.mjs`, `node tools/world-map-test.mjs`
 and `timeout 120 node tools/live-world-flow-test.mjs` pass; then parity

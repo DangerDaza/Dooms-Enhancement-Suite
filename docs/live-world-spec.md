@@ -25,13 +25,13 @@ Design source: voice sessions with Dazia, 2026-10-16. Grounded in a read-only au
 
 ## 1. World pack (architecture rule)
 
-One data file per world, e.g. `worldpacks/skyreach.json`. It holds:
-- the **place tree** (id, parent, label, node position, optional image, zoom level);
-- the **starting clocks** (id, label, start value, max, public-effect text per step);
-- the **character list** (name, portrait source, starting place, which tier they begin at);
-- the narrator-facing **injection template**.
+One pack per world, the same shape as a file (`worldpacks/example.json` is the one shipped, Harbourside, the template). It holds:
+- the **place tree** (id, parent, label, optional image);
+- the **starting clocks** (id, label, start value, max, step, public-effect text per step, hidden);
+- the **character list** (name, starting place, which tier they begin at);
+- the narrator-facing **injection template** (optional).
 
-**No Skyreach detail goes in engine code.** A new chat with an active pack copies the starting clocks and locations into `dooms_world` (the seeding step). If seeding fails, log it and show it on the dashboard; never run the advancer on empty state.
+**No Skyreach detail goes in engine code**, and since 2026-10-29 no Skyreach file ships either (`docs/world-builder-plan.md` D92: it moved to `docs/support/skyreach-world.json`, for the owner to import as a world of his own). **Worlds are the user's**: made and edited in the World Builder (Settings → Live World, or the Map window's foot), drafted from a chat by the LLM, imported and exported as files, kept in `liveWorld.customPacks[id]`. A new chat with no world chosen seeds the **blank world** (D93): no places, clocks or cast, named after the chat's character; it grows from play, and Make this a world keeps what grew. A new chat with a world copies its starting clocks and locations into `dooms_world` (the seeding step). A world that cannot be loaded leaves the chat on the blank world with its state untouched and the status naming it (D97); the advancer never runs on empty state.
 
 ## Part B — Per-chat world state *(build first)*
 

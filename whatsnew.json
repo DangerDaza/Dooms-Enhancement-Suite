@@ -3,6 +3,10 @@
     "title": "Image Generation and the Map (beta)",
     "items": [
         {
+            "title": "🌍 Build your own world",
+            "body": "Live World is no longer tied to the worlds that ship with it. Settings → Live World → Open the World Builder makes a world of your own: places as a tree, clocks with what anyone sees at each step, a cast and where they start; Draft from this chat has the AI write one from the character card, the lore and the recent chat for you to read first; Start from Harbourside copies the example; files import and export. A new chat with no world chosen starts in the blank world, named after its character, and grows as the story names places and people speak; Make this a world in the Map window keeps what grew. Skyreach moved out to a file (docs/support/skyreach-world.json) to import if you played it."
+        },
+        {
             "title": "🗺️ The Map: where the story has been",
             "body": "Live World's window is a map now. The places the story has visited run across it as circles, the most recent on the left, each the picture of the place; click one and Travel here takes you there with a short montage of the road and an arrival that leaves the first move to you, or Draw gives the place a picture through your Image Generation source (switch on Draw new places automatically on that page and every new place gets one as the story reaches it). Below, a panel swaps between News, Rumours, People and Completed quests. Open it from Map in the D menu, there whether Live World is on or not (Roll a check has left that menu: the player's card and the chip by the message box keep it)."
         },

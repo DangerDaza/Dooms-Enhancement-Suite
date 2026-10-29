@@ -38,7 +38,9 @@ state and the next moves.
   (`node tools/map-window-layout-test.mjs --shots`: a fixture world under
   every look at desktop and phone width; the strip holds its buttons, the
   row shows its names whole, the foot's buttons keep their size); a window
-  built in JS gets one before it ships. The owner (2026-10-29):
+  built in JS gets one before it ships (the World Builder's is
+  `node tools/world-builder-layout-test.mjs --shots`: six scenes under every
+  look at desktop and phone width). The owner (2026-10-29):
   "this is a very common issue with things you create"; the squeezed Test
   row on the Image Generation page was the last one he had to screenshot.
 - **Never leave the installed clone dirty.** The extension folder under
@@ -266,6 +268,18 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
   two further passes (`docs/stats-plan.md` §15.9).
+- **The World Builder (2026-10-29, `docs/world-builder-plan.md` D92–D99):**
+  worlds are the user's. `src/utils/worldBuilder.js` (pure: a world from a
+  chat's play, the draft's prompt and its reading, warnings, the file),
+  the blank world and the loc: places in `src/utils/liveWorld.js`, the
+  worlds API in `src/systems/features/liveWorld.js` (`listWorlds`,
+  `saveWorld`, `deleteWorld`, `copyWorld`, `importWorldJson`,
+  `worldFromThisChat`, `adoptWorld`, `draftWorldFromChat`,
+  `getMissingWorld`), the window `src/systems/ui/worldBuilderViews.js`
+  (pure) and `worldBuilder.js` (lazy), Settings → Live World's rows and the
+  Map window's foot. Harbourside is the one shipped pack; Skyreach moved to
+  `docs/support/skyreach-world.json`. `tools/world-builder-test.mjs`,
+  `tools/live-world-flow-test.mjs` §11, `tools/world-builder-layout-test.mjs`.
 - **Voices:** "Never whisper" TTS switch (`neverWhisper`, Google API route).
 - **Tracker recovery** (§3).
 - **Image Generation** (`docs/image-gen-plan.md`, 2026-10-28): one image service with two sources (SillyTavern's extension, ComfyUI direct); portraits under one rule on Settings → Image Generation, never from a recovery; scene pictures render through it and their section is a group on that page; the Auto Avatars pill, Portrait Source and Auto Portrait Mode are gone, migrated once. The player's card draws too (D91, 2026-10-29): Regenerate and Restore on the YOU card, the Workshop's Portrait section in user mode, everything on the user card's own entry (`appearance`, `loras`, `portraitHistory`, `avatar`/`avatarFullRes`); the history helpers in `src/utils/avatars.js` take `{ isUser }`.
@@ -295,6 +309,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/utils/worldMap.js`, `src/utils/worldBoard.js` | The Map window's pure model: `placeKeyFor`, `visitPlace`, `reconcileVisited`, `placesRow`, `rowIdForCharacter`, `buildPlacePrompt`, `buildTravelInstruction`, the completed quests; the faces last seen, a safe image URL |
 | `src/systems/features/liveWorld.js` (places) | The visit recorded in `placeFromScene`, the rewind's `reconcileVisited`, `drawPlace` / `getPlacesRow` / `isDrawingPlace`, the automatic draw after a fresh reply (never a recovery) |
 | `src/systems/features/questCut.js` (travel, done) | `startTravelCut`, the instruction by kind, `recordCompletedQuest` / `getCompletedQuests` |
+| `src/utils/worldBuilder.js`, `src/systems/features/liveWorld.js` (worlds), `src/systems/ui/worldBuilderViews.js`, `src/systems/ui/worldBuilder.js` | The World Builder: `worldFromState` / `rebindStateToPack` (a chat kept as a world, carried over), `buildWorldDraftPrompt` / `parseWorldDraft`, `packWarnings`, `worldToRaw` / `worldToJson`; the worlds API and the blank world's name and the missing-world fallback in the feature; `builderHtml` and the window's events (a keystroke updates the status, leaving a field redraws, auto ids from labels) |
 | `src/systems/ui/worldViews.js`, `worldDashboard.js`, `worldFace.js` | The Map window: `mapWindowHtml` (the head, the row, the strip, the panel), the window's events (scroll, selection, Travel here, Draw, the panel buttons), the face popover with Show the place |
 | `src/systems/rendering/trackerJsonInline.js` | The 🗂️ Tracker Data dropdown (gated on `showTrackerJsonInChat`, reads swipe data) |
 | `src/systems/ui/dicePanel.js`, `attributesPane.js`, `characterWorkshop.js`, `characterRoster.js` | Popover and chip; Workshop sheets and proficiency ticks |

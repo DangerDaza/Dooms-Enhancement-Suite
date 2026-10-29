@@ -8,8 +8,8 @@ the example) or JSON pasted into Settings → Live World. The Map window
 already records the places the story visits without the pack naming them
 (D82); the clocks, the cast and the world's name still came from a file.
 
-**Status (2026-10-29):** being built on `Project-Short-Fuse` in four
-commits (the pure model, the feature, the window, the docs). Tests:
+**Status (2026-10-29):** built on `Project-Short-Fuse` in four commits
+(the pure model, the feature, the window, the docs), to ship in the next beta. Tests:
 `tools/world-builder-test.mjs` (pure), the World Builder sections of
 `tools/live-world-flow-test.mjs` (the feature in the sandbox),
 `tools/world-builder-layout-test.mjs` (the window rendered). Parity rows:
