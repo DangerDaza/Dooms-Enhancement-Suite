@@ -38,6 +38,7 @@ import { extensionSettings } from '../../core/state.js';
 export const PROFILE_FIELDS = Object.freeze([
     { field: 'injection',     store: 'characterInjection' },
     { field: 'appearance',    store: 'characterAppearance' },
+    { field: 'loras',         store: 'characterLoras' },
     { field: 'avatar',        store: 'npcAvatars' },
     { field: 'avatarFullRes', store: 'npcAvatarsFullRes' },
     { field: 'avatarHistory', store: 'npcAvatarHistory' },

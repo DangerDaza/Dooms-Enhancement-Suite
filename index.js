@@ -414,6 +414,7 @@ function renderImageGenSettings() {
     $('#rpg-img-portrait-preamble').val(g.portraits.preamble);
     $('#rpg-img-portrait-negative').val(g.portraits.negative);
     $('#rpg-img-portrait-notify').prop('checked', g.portraits.notify);
+    if (!$('#rpg-img-portrait-loras').is(':focus')) $('#rpg-img-portrait-loras').val(formatLoraList(g.portraits.loras));
     $('#rpg-img-place-auto').prop('checked', g.places.auto);
     if (!$('#rpg-img-place-size option').length) $('#rpg-img-place-size').html(IMAGE_SIZES.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join(''));
     $('#rpg-img-place-size').val(g.places.size);
@@ -2240,6 +2241,7 @@ function bindSettingsUI() {
     $(document).on('change', '#rpg-img-portrait-preamble', function () { getImageGenRules().portraits.preamble = String($(this).val() || ''); _saveImage(); });
     $(document).on('change', '#rpg-img-portrait-negative', function () { getImageGenRules().portraits.negative = String($(this).val() || ''); _saveImage(); });
     $(document).on('change', '#rpg-img-portrait-notify', function () { getImageGenRules().portraits.notify = $(this).prop('checked'); _saveImage(); });
+    $(document).on('change', '#rpg-img-portrait-loras', function () { const r = getImageGenRules().portraits; r.loras = parseLoraList($(this).val()); $(this).val(formatLoraList(r.loras)); _saveImage(); });
     $(document).on('change', '#rpg-img-place-auto', function () { getImageGenRules().places.auto = $(this).prop('checked'); _saveImage(); });
     $(document).on('change', '#rpg-img-place-size', function () { getImageGenRules().places.size = String($(this).val() || 'square'); _saveImage(); });
     $(document).on('change', '#rpg-img-place-preamble', function () { getImageGenRules().places.preamble = String($(this).val() || ''); _saveImage(); });

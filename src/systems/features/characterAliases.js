@@ -436,7 +436,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
         console.warn('[Dooms Tracker] Aliases: campaign profile merge failed', e);
     }
     for (const store of ['characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
-        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance', 'characterLoras',
         'generatedPortraits', 'characterVoices']) {
         transferIfMissing(extensionSettings[store]);
     }
@@ -464,7 +464,7 @@ export async function adoptVariantAsAlias(canonical, variant) {
         }
     }
     for (const store of ['knownCharacters', 'characterColors', 'bubbleFills', 'npcAvatars', 'npcAvatarsFullRes', 'npcAvatarHistory',
-        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance',
+        'characterInjection', 'characterRelationships', 'characterKnives', 'heroPositions', 'characterAppearance', 'characterLoras',
         'generatedPortraits', 'characterVoices']) {
         scrub(extensionSettings[store]);
     }

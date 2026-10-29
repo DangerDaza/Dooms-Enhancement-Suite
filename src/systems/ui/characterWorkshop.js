@@ -1326,7 +1326,7 @@ function buildDraft(name, isUser = false, versionId = null) {
         // Per name, like aliases: the same sheet whichever version is on the stage.
         attributes: getSheet(extensionSettings, name, false, attributeDefs(extensionSettings, { all: true })),
         proficiencies: getProficiencies(extensionSettings, name, false),
-        dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, voice: false, attributes: false },
+        dirty: { color: false, bubbleFill: false, avatar: false, injection: false, relationship: false, knives: false, aliases: false, appearance: false, loras: false, voice: false, attributes: false },
     };
     if (live) {
         const inj = extensionSettings?.characterInjection?.[name] || {};
@@ -1343,6 +1343,7 @@ function buildDraft(name, isUser = false, versionId = null) {
             },
             knives: Array.isArray(npcKnives) ? npcKnives.map(k => ({ ...k })) : [],
             appearance: typeof extensionSettings?.characterAppearance?.[name] === 'string' ? extensionSettings.characterAppearance[name] : '',
+            loras: typeof extensionSettings?.characterLoras?.[name] === 'string' ? extensionSettings.characterLoras[name] : '',
             voice: cloneVoice(extensionSettings?.characterVoices?.[name]),
         };
     }
@@ -1364,6 +1365,7 @@ function buildDraft(name, isUser = false, versionId = null) {
         },
         knives: Array.isArray(p.knives) ? p.knives.map(k => ({ ...k })) : [],
         appearance: typeof p.appearance === 'string' ? p.appearance : '',
+        loras: typeof p.loras === 'string' ? p.loras : '',
         voice: cloneVoice(p.voice),
     };
 }
@@ -1784,6 +1786,7 @@ function renderLinkedPersonaSelect() {
 function renderAppearance() {
     setStagePortrait(draft.avatar || '');
     $modal.find('#cw-appearance').val(draft.appearance || '');
+    $modal.find('#cw-loras').val(draft.loras || '');
     // Rendering writes the LIVE stores (the generator stashes the current
     // portrait to history and saves), so it is only offered on the version
     // the chat is using; a saved-copy version would silently repaint the
@@ -2460,6 +2463,11 @@ function bindStaticListeners() {
         draft.appearance = String($(this).val() || '');
         draft.dirty.appearance = true;
     });
+    $modal.on('input.cw change.cw', '#cw-loras', function () {
+        if (!draft || draft.isUser) return;
+        draft.loras = String($(this).val() || '');
+        draft.dirty.loras = true;
+    });
     // Step 1 — distill the Injection description into a tag prompt. Fills the
     // Portrait prompt field only; NO image renders until the user has had a
     // chance to review/tweak and clicks Render portrait.
@@ -3069,6 +3077,14 @@ function commitDraft() {
             changed = true;
         }
 
+        if (draft.dirty.loras) {
+            if (!extensionSettings.characterLoras) extensionSettings.characterLoras = {};
+            const loras = String(draft.loras || '').trim();
+            if (loras) extensionSettings.characterLoras[name] = loras;
+            else delete extensionSettings.characterLoras[name];
+            changed = true;
+        }
+
         if (draft.dirty.injection) {
             if (!extensionSettings.characterInjection) extensionSettings.characterInjection = {};
             const entry = buildInjectionEntry();
@@ -3086,7 +3102,7 @@ function commitDraft() {
             else delete extensionSettings.characterVoices[name];
             changed = true;
         }
-    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.knives || draft.dirty.appearance || draft.dirty.injection || draft.dirty.voice) {
+    } else if (draft.dirty.avatar || draft.dirty.relationship || draft.dirty.knives || draft.dirty.appearance || draft.dirty.loras || draft.dirty.injection || draft.dirty.voice) {
         // A saved copy (shadowed Base or an inactive campaign): merge the
         // dirty fields into the stored version and write it back whole.
         const profile = readVersion(draft.versionId, name) || {};
@@ -3112,6 +3128,11 @@ function commitDraft() {
             const appearance = String(draft.appearance || '').trim();
             if (appearance) profile.appearance = appearance;
             else delete profile.appearance;
+        }
+        if (draft.dirty.loras) {
+            const loras = String(draft.loras || '').trim();
+            if (loras) profile.loras = loras;
+            else delete profile.loras;
         }
         if (draft.dirty.injection) {
             const entry = buildInjectionEntry();

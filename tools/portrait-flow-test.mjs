@@ -95,8 +95,8 @@ let comfyMode = 'ok';
 svc.__setImageTransport({
     sd: async (prompt, negative) => { drawn.push({ prompt, negative }); return `/user/images/sd/p${++urlCount}.png`; },
     comfy: async (kind, body) => {
-        if (kind === 'workflow') return '{"6":{"class_type":"CLIPTextEncode","inputs":{"text":"%prompt%"}},"7":{"class_type":"CLIPTextEncode","inputs":{"text":"%negative_prompt%"}},"8":{"class_type":"EmptyLatentImage","inputs":{"width":"%width%","height":"%height%"}},"3":{"class_type":"KSampler","inputs":{"seed":"%seed%","steps":"%steps%","cfg":"%scale%","sampler_name":"%sampler%","scheduler":"%scheduler%"}}}';
-        if (kind === 'generate') { drawn.push({ prompt: JSON.parse(body.prompt).prompt['6'].inputs.text, negative: JSON.parse(body.prompt).prompt['7'].inputs.text, comfy: true }); return comfyMode === 'fail' ? (() => { throw new Error('generate: boom'); })() : { format: 'png', data: 'AAAA' }; }
+        if (kind === 'workflow') return '{"1":{"class_type":"UNETLoader","inputs":{"unet_name":"m.safetensors"}},"6":{"class_type":"CLIPTextEncode","inputs":{"text":"%prompt%"}},"7":{"class_type":"CLIPTextEncode","inputs":{"text":"%negative_prompt%"}},"8":{"class_type":"EmptyLatentImage","inputs":{"width":"%width%","height":"%height%"}},"3":{"class_type":"KSampler","inputs":{"model":["1",0],"seed":"%seed%","steps":"%steps%","cfg":"%scale%","sampler_name":"%sampler%","scheduler":"%scheduler%"}}}';
+        if (kind === 'generate') { const g = JSON.parse(body.prompt).prompt; const loras = Object.values(g).filter(n => n.class_type === 'LoraLoaderModelOnly').map(n => `${n.inputs.lora_name}@${n.inputs.strength_model}`); drawn.push({ prompt: g['6'].inputs.text, negative: g['7'].inputs.text, loras, samplerModel: g['3'].inputs.model, comfy: true }); return comfyMode === 'fail' ? (() => { throw new Error('generate: boom'); })() : { format: 'png', data: 'AAAA' }; }
         return {};
     },
 });
@@ -171,12 +171,15 @@ check('isSdAvailable / imageSourceProblem answer for the chosen source', gen.isS
 console.log('\n§6 ComfyUI direct');
 extensionSettings.imageGen.comfy = { url: 'http://127.0.0.1:8189', workflow: 'Portrait.json', steps: 20, cfg: 2, sampler: 'euler', scheduler: 'simple', model: '', clip: '', vae: '', timeoutSec: 20 };
 portraits().negative = '';    // the default: no negative prompt, which must not count as a missing placeholder
+portraits().loras = [{ name: 'PortraitStyle', strength: 0.6 }];
+extensionSettings.characterLoras = { 'tam': 'TamFace:0.8\nPortraitStyle:0.9' };    // the character's own, case-blind; a name in both counts once, the character's strength winning
 check('…and now it can', gen.isSdAvailable() === true && gen.imageSourceProblem() === '');
 fresh = since();
 await run([entry('Tam', 'lantern, moonlit')], { fresh: true });
 d = fresh();
 check('the picture comes back as bytes and lands under des-portraits', d.length === 1 && d[0].comfy && uploads.length === 1 && /^tam-[0-9a-f]{8}\.png$/i.test(uploads[0].filename) && /des-portraits/.test(extensionSettings.npcAvatars['Tam']), JSON.stringify({ d, uploads, url: extensionSettings.npcAvatars['Tam'] }));
 check('the preamble reaches the workflow\'s prompt; the empty negative fills its placeholder with nothing', d[0] && d[0].prompt === 'Painted portrait, a wiry boy with a lantern' && d[0].negative === '', JSON.stringify(d[0]));
+check('the character\'s LoRAs are spliced first, the page\'s after, a shared name once; the sampler reads the last', d[0] && d[0].loras.join('|') === 'TamFace.safetensors@0.8|PortraitStyle.safetensors@0.9' && Array.isArray(d[0].samplerModel) && d[0].samplerModel[0] !== '1', JSON.stringify(d[0]));
 comfyMode = 'fail';
 const tamBefore = extensionSettings.npcAvatars['Tam'];
 await run([entry('Tam', 'lantern, stormy')], { fresh: true });

@@ -17,6 +17,8 @@
  *     one picture, whatever its purpose.
  */
 
+import { normalizeLoras } from './comfy.js';
+
 export const IMAGE_SOURCES = Object.freeze([
     { id: 'sillytavern', label: "SillyTavern's Image Generation", hint: 'The /sd command: whatever Extensions → Image Generation is set to. Size and sampler follow its settings.' },
     { id: 'comfy', label: 'ComfyUI (direct)', hint: "A ComfyUI card reached through SillyTavern's server, with a workflow from SillyTavern's store: DES fills its placeholders and splices this chat's LoRAs." },
@@ -54,6 +56,7 @@ export const PORTRAIT_DEFAULTS = Object.freeze({
     preamble: '',
     negative: '',
     notify: true,
+    loras: Object.freeze([]),    // [{ name, strength }] spliced into every portrait (ComfyUI direct), after the character's own
 });
 
 export const PLACE_DEFAULTS = Object.freeze({
@@ -67,7 +70,7 @@ export const CONFIG_VERSION = 1;
 
 /** A fresh copy of the defaults, for settings files. */
 export function defaultImageGenConfig() {
-    return { v: CONFIG_VERSION, source: 'sillytavern', comfy: { ...COMFY_DEFAULTS }, portraits: { ...PORTRAIT_DEFAULTS }, places: { ...PLACE_DEFAULTS } };
+    return { v: CONFIG_VERSION, source: 'sillytavern', comfy: { ...COMFY_DEFAULTS }, portraits: { ...PORTRAIT_DEFAULTS, loras: [] }, places: { ...PLACE_DEFAULTS } };
 }
 
 const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -107,6 +110,7 @@ export function imageGenConfig(settings) {
             preamble: str(p.preamble, PORTRAIT_DEFAULTS.preamble),
             negative: str(p.negative, PORTRAIT_DEFAULTS.negative),
             notify: p.notify !== false,
+            loras: normalizeLoras(p.loras),
         },
         places: {
             size: SIZE_PRESETS.some(s => s.id === l.size) ? l.size : PLACE_DEFAULTS.size,

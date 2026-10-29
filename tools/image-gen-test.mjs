@@ -82,6 +82,13 @@ console.log('\n§4 the render values and the status line');
     check('status: ComfyUI names the address and the workflow', describeSource(cf).includes('8189') && describeSource(cf).includes('Moss.json') && describeSource(imageGenConfig({ imageGen: { source: 'comfy' } })).includes('no workflow'));
 }
 
+console.log('\n§4a the portrait LoRAs');
+{
+    check('defaults: none', defaultImageGenConfig().portraits.loras.length === 0 && Array.isArray(imageGenConfig({}).portraits.loras));
+    const c = imageGenConfig({ imageGen: { portraits: { loras: [{ name: ' Style_MOSS ', strength: 0.6 }, { name: 'Face', strength: 2 }, 'style_moss', '', null] } } });    // the page writes objects (parseLoraList); a bare name is strength 1
+    check('normalised: names trimmed, strengths kept, a name twice counts once', c.portraits.loras.map(l => `${l.name}:${l.strength}`).join('|') === 'Style_MOSS:0.6|Face:2', JSON.stringify(c.portraits.loras));
+}
+
 console.log('\n§4b the places group');
 {
     const d = defaultImageGenConfig();

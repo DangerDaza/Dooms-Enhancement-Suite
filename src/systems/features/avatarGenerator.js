@@ -14,13 +14,16 @@
  *
  * The prompt is the character's own Portrait prompt line when one is kept,
  * else written by the LLM from the tracker's entry; the page's portrait
- * preamble, negative and size shape the picture.
+ * preamble, negative and size shape the picture, and on ComfyUI direct the
+ * character's own LoRAs ride it ahead of the page's list.
  */
 import { characters, this_chid } from '../../../../../../../script.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import { renderImage, sourceProblem, imageCfg } from './imageGen.js';
 import { portraitPlan, portraitStateHash } from '../../utils/imageGen.js';
+import { parseLoraList } from '../../utils/scenePictures.js';
+import { normalizeLoras } from '../../utils/comfy.js';
 import { extensionSettings, sessionAvatarPrompts, setSessionAvatarPrompt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { deletePortraitsIfUnreferenced, isDataUrl, persistPortrait, stashCurrentPortraitToHistory } from '../../utils/avatars.js';
@@ -90,6 +93,23 @@ export function getCharacterAppearance(characterName) {
         if (key.toLowerCase() === lower && typeof value === 'string') return value.trim();
     }
     return '';
+}
+
+/**
+ * The LoRAs kept for a character (Workshop → Appearance → "LoRAs for this
+ * character", one per line, name:strength), as a list. Spliced into the
+ * workflow ahead of the page's own list when the source is ComfyUI direct.
+ */
+export function getCharacterLoras(characterName) {
+    const store = extensionSettings.characterLoras;
+    if (!store || !characterName) return [];
+    let text = '';
+    if (typeof store[characterName] === 'string') text = store[characterName];
+    else {
+        const lower = characterName.toLowerCase();
+        for (const [key, value] of Object.entries(store)) if (key.toLowerCase() === lower && typeof value === 'string') { text = value; break; }
+    }
+    return parseLoraList(text);
 }
 
 /** Are automatic portraits on at all (the page's mode is not Off)? */
@@ -384,9 +404,10 @@ function saySo(names) {
  * size around the character's prompt. Returns the picture as the source
  * gave it (a URL the extension saved, or ComfyUI's data URL), '' for none.
  */
-async function renderPortrait(prompt) {
+async function renderPortrait(prompt, characterName = '') {
     const p = imageCfg().portraits;
-    const out = await renderImage({ purpose: 'portrait', prompt: `${p.preamble || ''}${prompt}`.trim(), negative: p.negative || '', size: p.size });
+    const loras = normalizeLoras([...getCharacterLoras(characterName), ...(p.loras || [])]);    // the character's own first; a name in both counts once
+    const out = await renderImage({ purpose: 'portrait', prompt: `${p.preamble || ''}${prompt}`.trim(), negative: p.negative || '', size: p.size, loras });
     return out.url || out.dataUrl || '';
 }
 
@@ -441,7 +462,7 @@ async function generateSingleAutoPortrait(characterName, prompt, stateHash) {
     const startVersionId = liveVersionIdFor(characterName);
     const previousMeta = getGeneratedPortraitMeta(characterName);
     try {
-        let imageUrl = await renderPortrait(prompt);
+        let imageUrl = await renderPortrait(prompt, characterName);
         if (!imageUrl) {
             console.warn(`[DES Portraits] the image source returned no picture for ${characterName}`);
             return null;
@@ -644,7 +665,7 @@ async function generateSingleAvatar(characterName, prompt = null) {
             console.warn(`[RPG Avatar] not drawing ${characterName}: ${problem}`);
             return null;
         }
-        let imageUrl = await renderPortrait(prompt);
+        let imageUrl = await renderPortrait(prompt, characterName);
         if (imageUrl) {
             // Store the avatar — in the version it was generated for if the
             // active campaign changed while the picture was being made.

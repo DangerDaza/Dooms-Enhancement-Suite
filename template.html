@@ -2090,6 +2090,15 @@
                             <textarea id="rpg-img-portrait-negative" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;"></textarea>
                         </div>
                     </div>
+                    <div class="rpg-setting-row rpg-img-portraits" style="align-items:flex-start;">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">LoRAs for every portrait</span>
+                            <span class="rpg-setting-hint">One per line, <code>name:strength</code> (a bare name is strength 1), the file's name in
+                                ComfyUI's loras folder; spliced after the model loader when the source is ComfyUI (direct), after any
+                                LoRAs the character carries in the Workshop. A style LoRA goes here.</span>
+                            <textarea id="rpg-img-portrait-loras" class="rpg-accordion-input" rows="2" style="width:100%; margin-top:6px;" placeholder="PortraitStyle_MOSS:0.6"></textarea>
+                        </div>
+                    </div>
                     <div class="rpg-setting-row rpg-img-portraits">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Say so</span>
@@ -3840,6 +3849,12 @@
                         <input type="text" id="cw-appearance" class="rpg-input" maxlength="500"
                             placeholder="appearance tags (empty = automatic)"
                             autocomplete="off">
+                        <p class="helper" style="margin-top: 0.6rem;"><strong>LoRAs for this character</strong>: one per line,
+                            <em>name:strength</em> (a bare name is strength 1), the file's name in ComfyUI's loras folder.
+                            Spliced into this character's portraits when Settings → Image Generation uses ComfyUI (direct),
+                            ahead of the LoRAs set there for every portrait.</p>
+                        <textarea id="cw-loras" class="rpg-input" rows="2" maxlength="1000" spellcheck="false"
+                            placeholder="BunnySlop_MOSS:0.8" autocomplete="off"></textarea>
                         <div class="stack" style="margin-top: 0.6rem; max-width: 480px; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button type="button" class="rpg-btn" id="cw-appearance-from-desc"
                                 title="Step 1: the LLM turns the Injection section's description into appearance tags and fills the field above. No image yet — review and tweak first.">
