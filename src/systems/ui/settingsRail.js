@@ -2,20 +2,23 @@
  * Settings window — rail layout.
  *
  * The Settings window's markup is one stacked strip of accordion sections
- * (template.html). The rail layout keeps that markup and presents it the way
- * the Megumin Suite options menu does: an icon rail down the left, one
- * section shown at a time as a page with a hero heading, the rows grouped
- * into cards (styles/modals.css, "SETTINGS WINDOW — RAIL LAYOUT").
+ * (template.html). The rail layout keeps that markup and presents it as a
+ * settings screen: a labelled list of the sections down the left, one
+ * section shown at a time as a page, the page named by a title row, and
+ * the page's rows grouped under their headings as label-and-panel rows
+ * (styles/modals.css, "SETTINGS WINDOW — RAIL LAYOUT").
  *
- * A long page gets a sub-menu: its groups (each `.rpg-subsection-label`
- * heading or `details.rpg-subsection-collapse` card, plus whatever follows
- * it) become a strip of tabs under the hero heading, and one group shows
- * at a time. Rows before the first heading form a "General" tab. Headings
- * inside a wrapper the page shows and hides (the Doom Counter's options)
- * count too, as long as the wrapper is showing. A card meant to stay
- * folded at the foot of its page (data-rail-closed, like Advanced) is not
- * a group: it stays on the General tab, below everything else there. A page gets the strip with three or more groups, or two when
- * it has enough rows to be worth splitting; smaller pages stay as they are.
+ * A group is a heading (`.rpg-subsection-label` or a folding
+ * `details.rpg-subsection-collapse`) plus whatever follows it up to the
+ * next heading. The rows before the first heading are the page's lead
+ * panel, with no label. A showing wrapper that holds two or more headings
+ * (the Doom Counter's options) is opened up: its headings become groups of
+ * their own, built inside the wrapper so the wrapper can still be shown and
+ * hidden as one. A card meant to stay folded (data-rail-closed, like
+ * Advanced) is a group whose panel is the folded card.
+ *
+ * Grouping moves elements into wrappers and moves them back when the strip
+ * layout is chosen; every element keeps its id and its listeners.
  *
  * applySettingsLayout() runs every time the window opens and when the
  * layout setting changes, so sections that other code shows or hides
@@ -25,12 +28,9 @@ import { extensionSettings } from '../../core/state.js';
 import { escapeHtml } from '../../utils/html.js';
 
 const RAIL_ID = 'dooms-settings-rail';
-const MIN_GROUPS = 3;
-const MIN_GROUPS_IF_LONG = 2;
-const LONG_PAGE_ROWS = 8;
+/** sections that sit at the bottom of the nav, apart from the features */
+const UTILITY_SECTIONS = new Set(['tools']);
 let lastTab = null; // remembered for the session only
-/** section id → the label of the sub-tab that was open there (session only) */
-const lastGroup = new Map();
 
 /** @returns {boolean} true when the rail layout is selected (the default) */
 export function isRailLayout() {
@@ -74,15 +74,18 @@ export function applySettingsLayout() {
     popup.classList.toggle('dooms-rail', rail);
     if (!rail) {
         document.getElementById(RAIL_ID)?.remove();
+        popup.querySelector('.dooms-rail-toggle')?.remove();
+        popup.querySelector('.dooms-rail-here')?.remove();
+        popup.classList.remove('dooms-nav-open');
         popup.querySelectorAll('.dooms-rail-current').forEach(s => s.classList.remove('dooms-rail-current'));
-        popup.querySelectorAll('.rpg-accordion-section').forEach(clearSubrail);
+        popup.querySelectorAll('.rpg-accordion-section').forEach(clearPage);
         return;
     }
     buildRail(popup);
 }
 
 /**
- * (Re)builds the icon rail from the visible sections and shows one.
+ * (Re)builds the nav from the visible sections and shows one.
  * @param {HTMLElement} popup
  */
 function buildRail(popup) {
@@ -98,26 +101,29 @@ function buildRail(popup) {
         content.insertBefore(rail, body);
     }
     const sections = visibleSections(popup);
-    rail.innerHTML = sections.map(section => {
+    const item = (section) => {
         const id = section.dataset.accordion;
         const iconEl = section.querySelector('.rpg-accordion-icon');
         const icon = iconEl ? iconEl.className.replace('rpg-accordion-icon', '').trim() : 'fa-solid fa-circle';
         const title = section.querySelector('.rpg-accordion-title')?.textContent.trim() || id;
-        return `<button type="button" class="dooms-rail-btn" data-target="${escapeHtml(id)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+        const util = UTILITY_SECTIONS.has(id) ? ' dooms-rail-util' : '';
+        return `<button type="button" class="dooms-rail-btn${util}" data-target="${escapeHtml(id)}" title="${escapeHtml(title)}">
             <i class="${escapeHtml(icon)}" aria-hidden="true"></i><span>${escapeHtml(title)}</span>
         </button>`;
-    }).join('');
+    };
+    rail.innerHTML = sections.map(item).join('');
     rail.querySelectorAll('.dooms-rail-btn').forEach(btn => {
         btn.addEventListener('click', () => selectSection(popup, btn.dataset.target));
     });
+    ensureNavToggle(popup);
     // A toggle on the page can reveal or hide a wrapper full of headings
-    // (enabling the Doom Counter, say), so the sub-menu follows changes.
-    if (!body.dataset.doomsSubrailWatch) {
-        body.dataset.doomsSubrailWatch = '1';
+    // (enabling the Doom Counter, say), so the groups follow changes.
+    if (!body.dataset.doomsGroupWatch) {
+        body.dataset.doomsGroupWatch = '1';
         body.addEventListener('change', () => {
             requestAnimationFrame(() => {
                 const current = popup.querySelector('.rpg-settings-popup-body > .rpg-accordion-section.dooms-rail-current');
-                if (current && popup.classList.contains('dooms-rail')) buildSubrail(current, { fromChange: true });
+                if (current && popup.classList.contains('dooms-rail')) buildGroups(current, { fromChange: true });
             });
         });
     }
@@ -130,7 +136,32 @@ function buildRail(popup) {
 }
 
 /**
- * Shows one section as the page and marks its rail button.
+ * On a phone the nav folds behind a button in the window's header that
+ * names the page; the button opens the nav as a sheet over the page.
+ * @param {HTMLElement} popup
+ */
+function ensureNavToggle(popup) {
+    const actions = popup.querySelector('.rpg-settings-popup-header .rpg-header-actions');
+    if (!actions || popup.querySelector('.dooms-rail-toggle')) return;
+    const here = document.createElement('span');
+    here.className = 'dooms-rail-here';
+    here.setAttribute('aria-live', 'polite');
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'dooms-rail-toggle';
+    toggle.setAttribute('aria-controls', RAIL_ID);
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = 'Sections';
+    toggle.addEventListener('click', () => {
+        const open = !popup.classList.contains('dooms-nav-open');
+        popup.classList.toggle('dooms-nav-open', open);
+        toggle.setAttribute('aria-expanded', String(open));
+    });
+    actions.prepend(here, toggle);
+}
+
+/**
+ * Shows one section as the page and marks its nav item.
  * @param {HTMLElement} popup
  * @param {string} id - the section's data-accordion value
  */
@@ -140,35 +171,78 @@ export function selectSection(popup, id) {
         section.classList.toggle('dooms-rail-current', on);
         section.classList.toggle('rpg-accordion-open', on);
         if (on) {
-            // A page has room for its groups: show them open (the user can
-            // still fold any of them while the page is up). A card marked
+            // A page has room for its groups: show them open. A card marked
             // data-rail-closed (Advanced) stays folded until asked.
             section.querySelectorAll('details.rpg-subsection-collapse').forEach(d => {
                 if (!d.dataset.railClosed) d.open = true;
             });
-            buildSubrail(section);
+            buildPage(section);
         } else {
-            clearSubrail(section);
+            clearPage(section);
         }
     });
+    const title = popup.querySelector(`.rpg-accordion-section[data-accordion="${id}"] .rpg-accordion-title`)?.textContent.trim() || '';
     popup.querySelectorAll('.dooms-rail-btn').forEach(btn => {
-        btn.classList.toggle('is-active', btn.dataset.target === id);
+        const active = btn.dataset.target === id;
+        btn.classList.toggle('is-active', active);
+        if (active) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
     });
+    const here = popup.querySelector('.dooms-rail-here');
+    if (here) here.textContent = title;
+    popup.classList.remove('dooms-nav-open');
+    popup.querySelector('.dooms-rail-toggle')?.setAttribute('aria-expanded', 'false');
     popup.querySelector('.rpg-settings-popup-body')?.scrollTo({ top: 0 });
     lastTab = id;
 }
 
-/* ── Sub-menus ─────────────────────────────────────────────────────────── */
+/* ── The page: a title row and the groups ─────────────────────────────── */
+
+/**
+ * Gives a section its title row (the section's name as the page's heading,
+ * its state badge beside it) and groups its rows.
+ * @param {HTMLElement} section
+ */
+function buildPage(section) {
+    const header = section.querySelector(':scope > .rpg-accordion-header');
+    if (!header) return;
+    if (!section.querySelector(':scope > .dooms-page-head')) {
+        const head = document.createElement('div');
+        head.className = 'dooms-page-head';
+        const h1 = document.createElement('h1');
+        h1.className = 'dooms-page-title';
+        h1.textContent = header.querySelector('.rpg-accordion-title')?.textContent.trim() || section.dataset.accordion;
+        head.append(h1);
+        // The badge keeps its element (code updates it by id), so it moves.
+        header.querySelectorAll(':scope > .rpg-accordion-badge').forEach(b => head.append(b));
+        header.after(head);
+    }
+    buildGroups(section);
+}
+
+/**
+ * Removes a section's title row (the badge goes home) and its groups.
+ * @param {HTMLElement} section
+ */
+function clearPage(section) {
+    const head = section.querySelector(':scope > .dooms-page-head');
+    if (head) {
+        const header = section.querySelector(':scope > .rpg-accordion-header');
+        const chevron = header?.querySelector(':scope > .rpg-accordion-chevron') || null;
+        head.querySelectorAll('.rpg-accordion-badge').forEach(b => header?.insertBefore(b, chevron));
+        head.remove();
+    }
+    const body = section.querySelector(':scope > .rpg-accordion-body');
+    if (body) ungroup(body);
+}
 
 const HEAD_SELECTOR = '.rpg-subsection-label, details.rpg-subsection-collapse';
 
 /**
  * @param {Element} el
- * @returns {boolean} true for a heading that can start a group
+ * @returns {boolean} true for a heading that starts a group
  */
 function isHeading(el) {
     if (!(el instanceof HTMLElement) || el.style.display === 'none' || el.hidden) return false;
-    if (el.dataset.railClosed) return false;
     return el.matches(HEAD_SELECTOR);
 }
 
@@ -192,112 +266,117 @@ function headingText(el) {
 }
 
 /**
- * Removes a section's sub-menu and the group marks that drive it.
- * @param {HTMLElement} section
+ * A container's children as the markup has them, seeing through any group
+ * wrappers already built, so the grouping can be read off a grouped page.
+ * @param {HTMLElement} container
+ * @returns {HTMLElement[]}
  */
-function clearSubrail(section) {
-    section.querySelector(':scope > .dooms-subrail')?.remove();
-    section.classList.remove('dooms-subtabs-active');
-    section.querySelectorAll('[data-dooms-group], [data-dooms-group-wrap], .dooms-group-head').forEach(el => {
-        el.removeAttribute('data-dooms-group');
-        el.removeAttribute('data-dooms-group-wrap');
-        el.classList.remove('dooms-group-on', 'dooms-group-open', 'dooms-group-head');
-    });
+function logicalChildren(container) {
+    const out = [];
+    for (const child of Array.from(container.children)) {
+        if (!(child instanceof HTMLElement)) continue;
+        if (!child.classList.contains('dooms-group')) { out.push(child); continue; }
+        const label = child.querySelector(':scope > .dooms-group-label');
+        if (label && !label.dataset.generated && label.firstElementChild instanceof HTMLElement) out.push(label.firstElementChild);
+        const panel = child.querySelector(':scope > .dooms-group-panel');
+        if (panel) for (const el of Array.from(panel.children)) if (el instanceof HTMLElement) out.push(el);
+    }
+    return out;
 }
 
 /**
- * Splits a page's body into groups, one per heading, in document order.
- * @param {HTMLElement} body the section's .rpg-accordion-body
- * @returns {{ label: string, head: HTMLElement|null, els: HTMLElement[] }[]}
+ * Splits a container into groups, one per heading, in document order. A
+ * showing wrapper with two or more headings is walked into, so its groups
+ * are built inside it.
+ * @param {HTMLElement} container
+ * @returns {{ label: string, head: HTMLElement|null, els: HTMLElement[], parent: HTMLElement }[]}
  */
-function collectGroups(body) {
-    const groups = [{ label: 'General', head: null, els: [] }];
-    const walk = (container) => {
-        for (const child of Array.from(container.children)) {
-            if (!(child instanceof HTMLElement)) continue;
-            if (isHeading(child)) {
-                groups.push({ label: headingText(child) || 'Section', head: child, els: [child] });
-                continue;
-            }
-            if (child.dataset.railClosed) {
-                groups[0].els.push(child);
-                continue;
-            }
-            // A showing wrapper that holds two or more headings is opened up:
-            // its headings become groups of their own.
-            const inner = child.matches('details, .rpg-setting-row') ? [] : Array.from(child.children).filter(isHeading);
-            if (inner.length >= 2 && child.style.display !== 'none' && !child.hidden) {
-                child.dataset.doomsGroupWrap = '1';
-                walk(child);
-                continue;
-            }
-            groups[groups.length - 1].els.push(child);
-        }
+function groupsIn(container) {
+    const groups = [];
+    let current = null;
+    const open = (head) => {
+        current = { label: head ? (headingText(head) || 'Section') : '', head, els: head ? [head] : [], parent: container };
+        groups.push(current);
     };
-    walk(body);
+    for (const child of logicalChildren(container)) {
+        if (isHeading(child)) { open(child); continue; }
+        const inner = child.matches('details, .rpg-setting-row') ? [] : logicalChildren(child).filter(isHeading);
+        if (inner.length >= 2 && child.style.display !== 'none' && !child.hidden) {
+            groups.push(...groupsIn(child));
+            current = null; // what follows the wrapper starts afresh
+            continue;
+        }
+        if (!current) open(null);
+        current.els.push(child);
+    }
     return groups.filter(g => g.els.length > 0);
 }
 
 /**
- * Builds (or rebuilds) the sub-menu strip for a page, keeping the tab that
- * was open there if it still exists.
+ * Wraps each group of a page as a label beside a panel of its rows. On a
+ * change event the page is only regrouped when the set of groups moved (a
+ * wrapper of headings appeared or went); otherwise nothing moves under the
+ * control the user just touched.
  * @param {HTMLElement} section
  */
-function buildSubrail(section, { fromChange = false } = {}) {
+function buildGroups(section, { fromChange = false } = {}) {
     const body = section.querySelector(':scope > .rpg-accordion-body');
-    const header = section.querySelector(':scope > .rpg-accordion-header');
-    if (!body || !header) return;
-    const existing = section.querySelector(':scope > .dooms-subrail');
-    const previous = existing?.querySelector('.dooms-subrail-btn.is-active')?.dataset.label
-        || lastGroup.get(section.dataset.accordion);
-    const groups = collectGroups(body);
-    // A change on the page only matters to the strip if the set of groups
-    // changed (a wrapper of headings appeared or went); otherwise leave the
-    // page exactly as the user has it.
-    if (fromChange) {
-        const signature = groups.map(g => g.label).join('\u0001');
-        if ((existing?.dataset.signature || '') === signature) return;
-        if (!existing && groups.length < MIN_GROUPS && !(groups.length >= MIN_GROUPS_IF_LONG && body.querySelectorAll('.rpg-setting-row').length >= LONG_PAGE_ROWS)) return;
+    if (!body) return;
+    const sig = groupsIn(body).map(g => g.label).join('\u0001');
+    if (fromChange && body.dataset.doomsGrouped && body.dataset.doomsSignature === sig) return;
+    ungroup(body);
+    for (const g of groupsIn(body)) {
+        const wrap = document.createElement('div');
+        wrap.className = 'dooms-group';
+        const first = g.els[0];
+        first.parentNode.insertBefore(wrap, first);
+        if (g.head) {
+            const label = document.createElement('div');
+            label.className = 'dooms-group-label';
+            if (g.head.matches('details')) {
+                // The card stays whole in the panel (it folds); its name is
+                // written into the label column.
+                label.dataset.generated = '1';
+                label.innerHTML = `<div class="dooms-group-title" role="button" tabindex="0">${escapeHtml(g.label)}</div>`;
+                wrap.dataset.fold = g.head.open ? 'open' : 'closed';
+                // The label opens and closes the card (its own summary is hidden).
+                const details = g.head;
+                const flip = () => { details.open = !details.open; wrap.dataset.fold = details.open ? 'open' : 'closed'; };
+                label.addEventListener('click', flip);
+                label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+            } else {
+                label.append(g.head);
+            }
+            wrap.dataset.group = g.label;
+            wrap.append(label);
+        } else {
+            wrap.classList.add('dooms-group-lead');
+        }
+        const panel = document.createElement('div');
+        panel.className = 'dooms-group-panel';
+        for (const el of g.els) {
+            if (el === g.head && !g.head.matches('details')) continue;
+            panel.append(el);
+        }
+        wrap.append(panel);
     }
-    clearSubrail(section);
-    const rows = body.querySelectorAll('.rpg-setting-row').length;
-    const enough = groups.length >= MIN_GROUPS || (groups.length >= MIN_GROUPS_IF_LONG && rows >= LONG_PAGE_ROWS);
-    if (!enough) return;
-    groups.forEach((g, i) => {
-        g.els.forEach(el => { el.dataset.doomsGroup = String(i); });
-        if (g.head) g.head.classList.add('dooms-group-head');
-    });
-    const strip = document.createElement('div');
-    strip.className = 'dooms-subrail';
-    strip.setAttribute('role', 'tablist');
-    strip.dataset.signature = groups.map(g => g.label).join('\u0001');
-    strip.innerHTML = groups.map((g, i) =>
-        `<button type="button" class="dooms-subrail-btn" role="tab" data-group="${i}" data-label="${escapeHtml(g.label)}">${escapeHtml(g.label)}</button>`,
-    ).join('');
-    header.after(strip);
-    section.classList.add('dooms-subtabs-active');
-    const activate = (i, openCard = true) => {
-        section.querySelectorAll('[data-dooms-group]').forEach(el => {
-            el.classList.toggle('dooms-group-on', el.dataset.doomsGroup === String(i));
-        });
-        section.querySelectorAll('[data-dooms-group-wrap]').forEach(w => {
-            w.classList.toggle('dooms-group-open', !!w.querySelector('.dooms-group-on'));
-        });
-        strip.querySelectorAll('.dooms-subrail-btn').forEach(b => {
-            const on = b.dataset.group === String(i);
-            b.classList.toggle('is-active', on);
-            b.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        const head = groups[i].head;
-        if (openCard && head && head.matches('details')) head.open = true;
-        lastGroup.set(section.dataset.accordion, groups[i].label);
-    };
-    strip.querySelectorAll('.dooms-subrail-btn').forEach(b => {
-        b.addEventListener('click', () => {
-            activate(Number(b.dataset.group));
-            section.closest('.rpg-settings-popup-body')?.scrollTo({ top: 0 });
-        });
-    });
-    const keep = groups.findIndex(g => g.label === previous);
-    activate(keep >= 0 ? keep : 0, !fromChange);
+    body.dataset.doomsGrouped = '1';
+    body.dataset.doomsSignature = sig;
+}
+
+/**
+ * Moves every grouped element back where it was and drops the wrappers.
+ * @param {HTMLElement} body
+ */
+function ungroup(body) {
+    for (const wrap of Array.from(body.querySelectorAll('.dooms-group'))) {
+        const parent = wrap.parentNode;
+        const label = wrap.querySelector(':scope > .dooms-group-label');
+        const panel = wrap.querySelector(':scope > .dooms-group-panel');
+        if (label && !label.dataset.generated && label.firstElementChild) parent.insertBefore(label.firstElementChild, wrap);
+        while (panel && panel.firstChild) parent.insertBefore(panel.firstChild, wrap);
+        wrap.remove();
+    }
+    delete body.dataset.doomsGrouped;
+    delete body.dataset.doomsSignature;
 }

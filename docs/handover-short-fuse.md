@@ -384,6 +384,19 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 
 ## 7. Decisions on record
 
+- **The Settings window (2026-10-30):** redrawn as a settings screen in the
+  rail layout: a labelled list of the sections down the left, one page at a
+  time with its name as the title and its state badge beside it, the rows
+  before the first heading as the page's lead panel, every heading's rows as a
+  label beside a panel (settingsRail.js wraps them on open and unwraps for
+  the strip). The sub-menu strip is gone on purpose: a switch and its options
+  stay on one page. Tokens derive from the theme's five colours in
+  styles/modals.css ("SETTINGS WINDOW"); the setups add their own rules at
+  the end of styles/overhaul.css. Type follows SillyTavern's font size and a
+  narrow page stacks its groups (a container query in em). To render it with
+  the real rail script, serve the repo over http beside SillyTavern's
+  public/ and inline settingsRail.js with its two imports stubbed; file://
+  blocks module imports and the fonts.
 - **D12 (Jordan):** the popover is for picking only; the roll happens on
   send; the box sits at the top of the reply; once rolled it is final (no
   Roll now, no Keep/Discard after the roll, no remove button). Skills with

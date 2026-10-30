@@ -2428,3 +2428,75 @@ body[data-dooms-ui="inked"] .dooms-map-art { border: var(--ov-border-w) solid va
 body[data-dooms-ui="inked"] .dooms-map-head, body[data-dooms-ui="inked"] .dooms-map-strip, body[data-dooms-ui="inked"] .dooms-map-panel { border: var(--ov-border-w) solid var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); }
 body[data-dooms-ui="inked"] .dooms-map-name, body[data-dooms-ui="inked"] .dooms-map-title { color: var(--ov-ink); }
 body[data-dooms-ui="inked"] .dooms-world-heard { border-style: dashed; border-color: var(--ov-ink); }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The Settings window as redesigned (modals.css "SETTINGS WINDOW"): a setup
+   lends it its lines, shapes, faces and toggles. The window derives its own
+   surfaces from the theme; nothing here paints a colour of its own.
+   ──────────────────────────────────────────────────────────────────────────── */
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-header,
+body[data-dooms-ui] #character-workshop-popup .rpg-settings-popup-header,
+body[data-dooms-ui] #character-roster-popup .rpg-settings-popup-header {
+    background: var(--ov-panel2);
+    border-bottom: var(--ov-border-w) solid var(--ov-line);
+}
+body[data-dooms-ui] #rpg-settings-popup .dooms-rail-btn,
+body[data-dooms-ui] #character-workshop-popup.dooms-rail .workshop-nav button,
+body[data-dooms-ui] #character-roster-popup.dooms-rail .cr-mode-pill {
+    font-family: var(--ov-display);
+}
+body[data-dooms-ui] #rpg-settings-popup .dooms-group-title,
+body[data-dooms-ui] #rpg-settings-popup.dooms-rail .dooms-group-label .rpg-subsection-label,
+body[data-dooms-ui] #character-workshop-popup.dooms-rail .rpg-editor-section h4 {
+    font-family: var(--ov-display);
+    color: var(--ov-text);
+}
+body[data-dooms-ui="grimoire"] #rpg-settings-popup .dooms-group-title,
+body[data-dooms-ui="grimoire"] #rpg-settings-popup.dooms-rail .dooms-group-label .rpg-subsection-label,
+body[data-dooms-ui="grimoire"] #rpg-settings-popup .rpg-accordion-action-btn,
+body[data-dooms-ui="grimoire"] #character-workshop-popup.dooms-rail .rpg-editor-section h4 {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.93em;
+    font-weight: 700;
+}
+body[data-dooms-ui] #rpg-settings-popup .rpg-accordion-action-btn,
+body[data-dooms-ui] #rpg-settings-popup .rpg-accordion-mini-btn,
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content .menu_button,
+body[data-dooms-ui] #rpg-settings-popup.dooms-rail .dooms-rail-toggle {
+    border: var(--ov-border-w) solid var(--ov-line);
+    font-family: var(--ov-display);
+}
+body[data-dooms-ui] #rpg-settings-popup .rpg-accordion-select,
+body[data-dooms-ui] #rpg-settings-popup .rpg-accordion-input,
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content select,
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content textarea,
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content input[type="text"],
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content input[type="number"],
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content input[type="password"],
+body[data-dooms-ui] #rpg-settings-popup .rpg-settings-popup-content input[type="url"] {
+    background: var(--ov-ground);
+    border: var(--ov-border-w) solid var(--ov-line);
+}
+/* Toggles keep the setup's shape and its accent knob */
+body[data-dooms-ui] #rpg-settings-popup .rpg-toggle-slider {
+    background: var(--ov-ground);
+    border: 1px solid var(--ov-line);
+    border-radius: var(--ov-radius-sm);
+}
+body[data-dooms-ui] #rpg-settings-popup .rpg-toggle-slider::before {
+    background: var(--ov-muted);
+    border-radius: var(--ov-radius-sm);
+    top: 1px;
+    left: 1px;
+}
+body[data-dooms-ui] #rpg-settings-popup .rpg-toggle-switch input:checked + .rpg-toggle-slider {
+    background: var(--ov-ground);
+    border-color: var(--ov-accent);
+}
+body[data-dooms-ui] #rpg-settings-popup .rpg-toggle-switch input:checked + .rpg-toggle-slider::before {
+    background: var(--ov-accent);
+    left: 17px;
+}
+body[data-dooms-ui="lumen"] #rpg-settings-popup .rpg-toggle-slider,
+body[data-dooms-ui="lumen"] #rpg-settings-popup .rpg-toggle-slider::before { border-radius: 999px; }
