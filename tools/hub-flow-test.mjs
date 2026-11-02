@@ -41,6 +41,7 @@ const patched = before
     .replace('export const saveChatDebounced = anything;', 'export const saveChatDebounced = () => { globalThis.__DES_SAVES__.debounced++; };')
     .replace('export const saveChatConditional = anything;', 'export const saveChatConditional = async () => { globalThis.__DES_SAVES__.immediate++; if (globalThis.__DES_PERSIST__) globalThis.__DES_PERSIST__(); };')
     .replace('export const getRequestHeaders = anything;', 'export const getRequestHeaders = () => ({});')
+    .replace('export const user_avatar = anything;', "export const user_avatar = 'jordan.png';")
     + '\nexport let is_send_press = false;\nexport const __setSendPress = (v) => { is_send_press = v; };\n';
 if (patched === before || !patched.includes('getRequestHeaders = () => ({})')) { console.error('FAIL: the script stub was not patched (an import changed name?)'); process.exit(1); }
 writeFileSync(scriptStub, patched);
@@ -213,7 +214,7 @@ let firstFile = '';
     const saved = files.get(firstFile);
     check('committed: the file written under the card as "Scene 1 - A quiet corner", the record open, the chat opened', r.ok && r.file === 'Scene 1 - A quiet corner' && saved && saved.avatar === 'Mara Vane.png' && saved.chName === 'Mara Vane' && r.scene.id === 's1' && opens.includes('open:Scene 1 - A quiet corner') && !opens.some(o => o.startsWith('select')), JSON.stringify({ r, opens }));
     const h = saved.header.chat_metadata;
-    check('the header: a world state seeded from the pack and marked seeded; the mark with its file; tainted; the brief as the scenario; an integrity id; the two unused names', h.dooms_world && h.dooms_world.pack === 'harbourside' && h.dooms_world.seeded === true && h.dooms_hub.scene === 's1' && h.dooms_hub.world === 'harbourside' && h.dooms_hub.file === firstFile && h.tainted === true && h.scenario.startsWith('[SCENE BRIEF: Harbourside, scene 1.') && h.scenario.includes('Where: The Anchor, a tavern (') && h.scenario.includes('When: Day 1, dusk.') && h.scenario.includes('Who is here: Old Marit: Keeps the Anchor; a net-mender with debts.') && h.scenario.includes('Jordan wants: find the ring') && typeof h.integrity === 'string' && saved.header.user_name === 'unused', h.scenario);
+    check('the header: a world state seeded from the pack and marked seeded; the mark with its file and the brief; tainted; the persona locked; no scenario override; an integrity id; the two unused names', h.dooms_world && h.dooms_world.pack === 'harbourside' && h.dooms_world.seeded === true && h.dooms_hub.scene === 's1' && h.dooms_hub.world === 'harbourside' && h.dooms_hub.file === firstFile && h.tainted === true && h.persona === 'jordan.png' && !('scenario' in h) && h.dooms_hub.brief.startsWith('[SCENE BRIEF: Harbourside, scene 1.') && h.dooms_hub.brief.includes('Where: The Anchor, a tavern (') && h.dooms_hub.brief.includes('When: Day 1, dusk.') && h.dooms_hub.brief.includes('Who is here: Old Marit: Keeps the Anchor; a net-mender with debts.') && h.dooms_hub.brief.includes('Jordan wants: find the ring') && typeof h.integrity === 'string' && saved.header.user_name === 'unused', h.dooms_hub.brief);
     const t = h.dooms_tracker;
     const chars = JSON.parse(t.committedTrackerData.characterThoughts).characters;
     const box = JSON.parse(t.lastGeneratedData.infoBox);
@@ -230,9 +231,11 @@ let firstFile = '';
     hub.onHubGenerationStarted(undefined, {}, false);
     const ex = globalThis.__DES_SLOTS__['dooms-tracker-example'];
     check('the first send: the tracker\'s example block set by the hub at depth 1 as the assistant (the chat holds the opener alone)', !!ex && ex.value.includes('```json') && ex.value.includes('Old Marit') && ex.depth === 1 && ex.role === 2, JSON.stringify(ex).slice(0, 200));
+    const briefSlot = globalThis.__DES_SLOTS__['dooms-scene-brief'];
+    check('the brief rides the hub\'s own slot at depth 2 as system, raw', !!briefSlot && briefSlot.value.includes('[SCENE BRIEF: Harbourside, scene 1.') && briefSlot.depth === 2 && briefSlot.role === 0 && briefSlot.position === 1, JSON.stringify(briefSlot).slice(0, 160));
     delete globalThis.__DES_SLOTS__['dooms-tracker-example'];
     hub.onHubGenerationStarted('quiet', {}, false);
-    check('a quiet generation gets none', !globalThis.__DES_SLOTS__['dooms-tracker-example']);
+    check('a quiet generation gets none, and no brief', !globalThis.__DES_SLOTS__['dooms-tracker-example'] && globalThis.__DES_SLOTS__['dooms-scene-brief'].value === '');
     const again = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'the-quay' } });
     check('another Start while a scene is open is refused with the scene', !again.ok && again.reason === 'scene-open' && again.scene.id === 's1');
     check('the status line says so', (await hub.hubStatusLines())[0].line.includes('scene 1 open at The Anchor, a tavern since Day 1'));
@@ -284,7 +287,7 @@ let secondFile = '';
     const saved = files.get(secondFile);
     const h = saved.header.chat_metadata;
     check('committed: the world moved by the gap is written with the record: the clock and the place moved, the date from "now"', r.ok && hub.worldEntry('harbourside').memory.facts.date === 'Day 4' && hub.worldEntry('harbourside').memory.stores.dooms_world.clocks[clock.id] === clock.start + 1 && hub.worldEntry('harbourside').memory.stores.dooms_world.where['Old Marit'].endsWith('back-room'), JSON.stringify(hub.worldEntry('harbourside').memory.facts));
-    check('the second file: the ledger\'s lines, the quests, the done list, the inventory bound to the new chat, the hook store; the brief carries since last time and last time', r.ok && r.file === 'Scene 2 - The customs house' && h.dooms_canon.entries.length === 2 && h.dooms_tracker.quests.main === 'Find the governor\'s ring' && (!h.dooms_inventory || h.dooms_inventory.chat === 'Scene 2 - The customs house') && h.scenario.includes('Since last time:') && h.scenario.includes('Old Marit:') && h.scenario.includes('Last time: Jordan asked Old Marit about the ring') && h.scenario.includes('some days later since the last scene') && h.scenario.includes('When: Day 4, morning'), h.scenario);
+    check('the second file: the ledger\'s lines, the quests, the done list, the inventory bound to the new chat, the hook store; the brief carries since last time and last time', r.ok && r.file === 'Scene 2 - The customs house' && h.dooms_canon.entries.length === 2 && h.dooms_tracker.quests.main === 'Find the governor\'s ring' && (!h.dooms_inventory || h.dooms_inventory.chat === 'Scene 2 - The customs house') && h.dooms_hub.brief.includes('Since last time:') && h.dooms_hub.brief.includes('Old Marit:') && h.dooms_hub.brief.includes('Last time: Jordan asked Old Marit about the ring') && h.dooms_hub.brief.includes('some days later since the last scene') && h.dooms_hub.brief.includes('When: Day 4, morning'), h.dooms_hub.brief);
     check('opened: the loaders keep every line (the seal holds), the world\'s clocks as moved, the scene open', hub.currentScene().scene.id === 's2' && cn.getCanon().entries.length === 2 && cn.getCanon().entries[0].name === 'Old Marit' && lw.getWorldState().clocks[clock.id] === clock.start + 1 && lw.getWorldState().known['The governor'] === 'heard' && JSON.parse(state.committedTrackerData.characterThoughts).characters[0].name === 'Captain Reyes' && JSON.parse(state.lastGeneratedData.infoBox).location.value === 'The customs house');
     check('the block rides a generation in the scene chat from the first turn', (cn.onCanonGenerationStarted(undefined, {}, false), globalThis.__DES_SLOTS__['dooms-canon'].value.includes('Old Marit: Keeps the Anchor; says the ring sank')));
     check('the first scene is still ended, not aside', hub.worldEntry('harbourside').scenes[0].status === 'ended');
@@ -300,6 +303,15 @@ console.log('\n§5 aside, resume, reopen, gone, refreshed');
     check('open the first (ended) scene\'s chat: the record stays ended; the chat in front reads ended', open1.ok && hub.currentScene().ended === true && hub.currentScene().scene.status === 'ended');
     const re = await hub.reopenCurrentScene();
     check('reopen: open again and marked reopened, the mark\'s end cleared, the other open scene set aside', re.ok && hub.currentScene().scene.status === 'open' && hub.currentScene().scene.reopened === true && meta.dooms_hub.endedAt === 0 && hub.worldEntry('harbourside').scenes[1].status === 'aside');
+    // A rename in SillyTavern: the file renamed, the chat in front reloaded under the new name (its mark still naming the old), the event after.
+    await hub.openSceneChat('harbourside', 's2');
+    files.set('Scene 2 - Renamed', files.get(secondFile)); files.delete(secondFile);
+    ctxTarget.chatId = 'Scene 2 - Renamed'; ctxTarget.characters[0].chat = 'Scene 2 - Renamed';
+    hub.onHubChatChanged();
+    check('reloaded under the new name before the event: the old mark makes it look like a branch', !hub.isScene());
+    await hub.onHubChatRenamed({ avatarId: 'Mara Vane.png', groupId: null, oldFileName: `${secondFile}.jsonl`, newFileName: 'Scene 2 - Renamed.jsonl' });
+    check('the rename event: the record follows the file, the mark names the new file, the chat is the scene again', hub.worldEntry('harbourside').scenes[1].chat === 'Scene 2 - Renamed' && meta.dooms_hub.file === 'Scene 2 - Renamed' && hub.isScene() && hub.currentScene().scene.id === 's2', JSON.stringify(hub.worldEntry('harbourside').scenes[1].chat));
+    secondFile = 'Scene 2 - Renamed';
     hub.onHubChatDeleted(secondFile);
     check('a scene\'s chat deleted in SillyTavern: the record marked gone', hub.worldEntry('harbourside').scenes[1].gone === true && (await hub.resumeScene('harbourside', 's2')).reason === 'chat-gone');
     const rf = await hub.refreshScenes('harbourside');

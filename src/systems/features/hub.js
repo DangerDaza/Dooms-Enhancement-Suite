@@ -10,7 +10,7 @@
  * parts are src/utils/hub.js; the window is src/systems/ui/hub.js.
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, chat_metadata, getRequestHeaders, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../../../script.js';
+import { chat, chat_metadata, getRequestHeaders, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, user_avatar } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getMessageTimeStamp } from '../../../../../../RossAscends-mods.js';
 import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
@@ -34,8 +34,10 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
 } from '../../utils/hub.js';
+
+export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
 import { isLiveWorldOn, loadPack, getWorldState } from './liveWorld.js';
 import { isCanonOn, updateCanon } from './canon.js';
@@ -212,6 +214,7 @@ function defaultBridge() {
             return String(await res.text()).trim();
         },
         timestamp: () => { try { return getMessageTimeStamp(); } catch (e) { return new Date().toISOString(); } },
+        userAvatar: () => { try { return typeof user_avatar === 'string' ? user_avatar : ''; } catch (e) { return ''; } },
         uuid: () => { try { return crypto.randomUUID(); } catch (e) { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; } },
     };
 }
@@ -325,8 +328,39 @@ export function onHubChatChanged() {
     pending = null;
     const mark = extensionSettings.enabled ? readMark(meta()) : null;
     current = mark ? { worldId: mark.world, mark } : null;
+    if (!current) setBriefSlot('');
     mountStrip();
     notify({ source: 'chat' });
+}
+
+/**
+ * CHAT_RENAMED (SillyTavern's own event: the card's avatar, the old and the
+ * new file names with their extension): a scene's record follows its
+ * file, and the chat in front, reloaded under the new name with the old
+ * name in its mark, has its mark rewritten so it is still the scene.
+ */
+export async function onHubChatRenamed(ev) {
+    const e = ev && typeof ev === 'object' ? ev : {};
+    const strip = (v) => String(v || '').replace(/\.jsonl$/i, '');
+    const oldName = strip(e.oldFileName);
+    const newName = strip(e.newFileName);
+    if (!oldName || !newName) return;
+    const s = store();
+    let changed = false;
+    for (const [id, entry] of Object.entries(s.worlds)) {
+        if (e.avatarId && entry.card && entry.card !== e.avatarId) continue;
+        if (!sceneByChat(entry, oldName)) continue;
+        s.worlds[id] = renameSceneChat(entry, oldName, newName).entry;
+        changed = true;
+    }
+    if (changed) saveStore({ source: 'rename' });
+    const m = meta();
+    const mark = readMark(m);
+    if (mark && mark.file && strip(mark.file).toLowerCase() === oldName.toLowerCase() && strip(chatId()).toLowerCase() === newName.toLowerCase()) {
+        m[HUB_META_KEY] = { ...m[HUB_META_KEY], file: newName };
+        try { await bridge().saveChat(); } catch (err) { log('the renamed mark could not be saved', String(err && err.message || err)); }
+        onHubChatChanged();
+    }
 }
 
 /** CHAT_DELETED (SillyTavern's own event, the chat's name): a scene's chat gone marks its record. */
@@ -564,8 +598,9 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const now = Date.now();
     const seeded = seedStores(p.memory, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: p.seed && p.seed.kind === 'hook' ? p.seed.id : '', now });
     const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note });
-    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName });
-    const header = sceneHeader({ stores: seeded.stores, mark, scenario: brief, worldInfo: '', integrity: b.uuid() });
+    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
+    // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
+    const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
     const message = list.length ? openerMessage({ name: p.card.name, openers: list, chosen: 0, sendDate: b.timestamp(), tracker: seeded.tracker, title }) : null;
     try {
         await b.saveChatFile({ chName: p.card.name, avatar: p.card.avatar, fileName, header, messages: message ? [message] : [] });
@@ -809,11 +844,19 @@ export function onHubMessageDeleted() {
  * depth one or more, so the committed block (the seeded cast, place, date,
  * vitals) would not be shown; the hub sets the example slot itself.
  */
+function setBriefSlot(text) {
+    try { setExtensionPrompt(BRIEF_SLOT, text ? `\n${text}\n` : '', extension_prompt_types.IN_CHAT, 2, false, extension_prompt_roles.SYSTEM); } catch (e) { /* no ST */ }
+}
+
 export function onHubGenerationStarted(type, data, dryRun) {
-    if (dryRun || !extensionSettings.enabled || extensionSettings.generationMode !== 'together') return;
-    if (type === 'quiet' || type === 'impersonate' || (data && (data.quiet_prompt || data.quietImage || data.quiet_image))) return;
+    if (dryRun) return;
+    const quiet = type === 'quiet' || type === 'impersonate' || !!(data && (data.quiet_prompt || data.quietImage || data.quiet_image));
+    const cur = extensionSettings.enabled ? currentScene() : null;
+    // The brief (D120): the mark's, while the chat is a scene and the generation is a real one.
+    setBriefSlot(cur && !quiet && cur.mark.brief ? cur.mark.brief : '');
+    if (!cur || quiet || extensionSettings.generationMode !== 'together') return;
     const list = chatArray();
-    if (!list || list.length !== 1 || !OPENER(list[0]) || !currentScene()) return;
+    if (!list || list.length !== 1 || !OPENER(list[0])) return;
     let raw = '';
     try { raw = generateTrackerExample(); } catch (e) { raw = ''; }
     if (!raw) return;
@@ -960,14 +1003,11 @@ export function initHub() {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'hub',
             callback: async () => {
-                if (!isHubOn()) return 'The hub needs Live World on (Settings → Live World).';
-                const cur = currentScene();
+                try { const m = await import('../ui/hub.js'); await m.openHub(); return ''; } catch (e) { log('the hub window failed to load', String(e && e.message || e)); }
                 const lines = await hubStatusLines();
-                const mine = cur ? lines.find(l => l.id === cur.worldId) : null;
-                if (mine) return mine.line;
-                return lines.length ? lines.map(l => l.line).join('\n') : 'No world of your own yet: build one in the World Builder, then pick its narrator card in Settings → Live World → Hub.';
+                return lines.length ? lines.map(l => l.line).join('\n') : 'No world of your own yet: build one in the World Builder, then pick its narrator card in Settings → Live World → The Hub.';
             },
-            helpString: 'The Hub: the state of this chat\'s world, or of every world with a narrator card.',
+            helpString: 'The Hub: opens the world\'s window (Settings → Live World → The Hub).',
         }));
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'endscene',

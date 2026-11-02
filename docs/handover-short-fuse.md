@@ -271,14 +271,17 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
   two further passes (`docs/stats-plan.md` §15.9).
 - **The Hub, phase 1 (2026-11-02, `docs/hub-plan.md` D113–D133, on
-  `short-fuse/hub`, five commits: Hub 1 the pure model, Hub 2 the feature,
+  `short-fuse/hub`, six commits: Hub 1 the pure model, Hub 2 the feature,
   Hub 3 the window, Hub 4 the docs, Hub 5 the review's corrections: the
   file's `tainted` flag, the mark naming its file so a branch is not the
   scene, the gap held until the file is written, the stale rule at End,
   the world moved in the memory and never in the ended chat, the hub's
   handlers after the tracker's for the first-message event, a deleted
   opener and the first send's example block, a hook's quest, the recap in
-  passes):** a world played as many small chats.
+  passes; Hub 6 the adversarial pass: the brief on DES's own slot
+  `dooms-scene-brief` instead of the scenario override, the persona locked
+  in the header, a renamed scene told from a branch, `/hub` opening the
+  window):** a world played as many small chats.
   `src/utils/hub.js` (pure: the sealed snapshot taken and seeded, the
   brief, the openers' request and reader, the first message with its
   swipes, the header and the file name, the recap, the scene records);

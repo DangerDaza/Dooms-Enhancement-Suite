@@ -570,8 +570,8 @@ export function sceneTitle({ opener = null, seed = null, place = '' } = {}) {
 // ─── The file (D118) ────────────────────────────────────────────────────
 
 /** The hub's mark on a scene chat: what the strip, the Scenes panel and a rebuild from the card's chats read. */
-export function hubMark({ world = '', scene = '', title = '', seed = null, place = null, cast = [], gap = null, startedAt = 0, startDate = '', file = '' } = {}) {
-    return { v: 1, world: clean(world, 60), scene: clean(scene, 24), file: clean(file, 200), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), endedAt: 0, endDate: '', end: null };
+export function hubMark({ world = '', scene = '', title = '', seed = null, place = null, cast = [], gap = null, startedAt = 0, startDate = '', file = '', brief = '' } = {}) {
+    return { v: 1, world: clean(world, 60), scene: clean(scene, 24), file: clean(file, 200), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), brief: String(brief || '').slice(0, MAX_BRIEF + 200), endedAt: 0, endDate: '', end: null };
 }
 
 /** Whether a mark belongs to this chat file: a branch or a checkpoint of a scene carries the scene's mark under another name and is not the scene (D113). */
@@ -601,13 +601,14 @@ export function markEnded(mark, { endedAt = 0, endDate = '', end = undefined } =
  * names beside it. The stores, the mark, the brief as the scenario, the
  * world's book as the chat lorebook when there is one, an integrity id.
  */
-export function sceneHeader({ stores = {}, mark = null, scenario = '', worldInfo = '', integrity = '' } = {}) {
+export function sceneHeader({ stores = {}, mark = null, scenario = '', worldInfo = '', integrity = '', persona = '' } = {}) {
     const meta = {};
     for (const k of HUB_KEYS) if (stores[k] !== undefined && stores[k] !== null) meta[k] = copy(stores[k]);
     if (mark) meta[HUB_META_KEY] = copy(mark);
     if (scenario) meta.scenario = String(scenario);
     if (worldInfo) meta.world_info = clean(worldInfo, 200);
     if (integrity) meta.integrity = clean(integrity, 80);
+    if (persona) meta.persona = clean(persona, 200);    // SillyTavern's own per-chat persona lock: the scene opens under the persona it was started with
     meta.tainted = true;    // SillyTavern's own "this chat has been played" flag: without it message 0 is a pristine greeting (overswipe loops, a card save replaces it)
     return { chat_metadata: meta, user_name: 'unused', character_name: 'unused' };
 }
@@ -810,8 +811,14 @@ export function reconcileScenesWithChats(entry, chats, worldId) {
     for (const c of list) {
         const mark = readMark(c.meta);
         if (!mark || mark.world !== clean(worldId, 60)) continue;
-        if (!markIsOfFile(mark, c.file)) continue;    // a branch or a checkpoint of a scene: not the scene
         if (next.scenes.some(s => s.chat.toLowerCase() === c.file.toLowerCase())) continue;
+        if (!markIsOfFile(mark, c.file)) {
+            // The mark names another file. Its original still listed: a branch or a checkpoint, not the scene.
+            // Its original gone: the scene was renamed in SillyTavern; its record follows the file.
+            if (files.has(String(mark.file).replace(/\.jsonl$/i, '').toLowerCase())) continue;
+            const mine = next.scenes.find(s => s.id === mark.scene && (s.gone || !files.has(s.chat.toLowerCase())));
+            if (mine) { mine.chat = c.file; mine.gone = false; changed++; continue; }
+        }
         next.seq += 1;
         next.scenes.push(normalizeScene({ id: next.scenes.some(s => s.id === mark.scene) ? `s${next.seq}` : mark.scene, title: mark.title, seed: mark.seed, place: mark.place, cast: mark.cast, gap: mark.gap, chat: c.file, startedAt: mark.startedAt, startDate: mark.startDate, endedAt: mark.endedAt, endDate: mark.endDate, status: mark.endedAt ? 'ended' : 'aside' }, next.seq));
         changed++;

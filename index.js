@@ -173,7 +173,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
-import { initHub, onHubChatChanged, onHubChatDeleted, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
+import { initHub, onHubChatChanged, onHubChatDeleted, onHubChatRenamed, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
@@ -4870,6 +4870,9 @@ jQuery(async () => {
                 // A scene's chat deleted in SillyTavern marks its record (docs/hub-plan.md D128); older builds have no such event.
                 ...(event_types.CHAT_DELETED
                     ? { [event_types.CHAT_DELETED]: [onHubChatDeleted] }
+                    : {}),
+                ...(event_types.CHAT_RENAMED
+                    ? { [event_types.CHAT_RENAMED]: [onHubChatRenamed] }
                     : {}),
                 // The dice tool's rolls and the inventory tool's outcomes ride on SillyTavern's tool-call messages.
                 ...(event_types.TOOL_CALLS_PERFORMED

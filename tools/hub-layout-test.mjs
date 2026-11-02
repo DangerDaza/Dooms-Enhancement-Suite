@@ -117,6 +117,8 @@ for (const w of WIDTHS) {
                 };
                 if (content.scrollWidth > content.clientWidth + 1) faults.push(`the window scrolls sideways (${content.scrollWidth} > ${content.clientWidth})`);
                 if (phone && cb.width < vw - 2) faults.push(`the window is not the phone's full width (${Math.round(cb.width)} of ${vw})`);
+                if (phone && (cb.top > 1 || cb.bottom < window.innerHeight - 1)) faults.push(`the window does not span the phone's screen (${Math.round(cb.top)}..${Math.round(cb.bottom)} of ${window.innerHeight})`);
+                popup.querySelectorAll('.dooms-hub-sheet, .dooms-hub-main, .dooms-hub-head, .dooms-hub-foot').forEach(el => { if (el.scrollWidth > el.clientWidth + 1) faults.push(`"${el.className}" scrolls sideways (${el.scrollWidth} > ${el.clientWidth})`); });
                 if (!phone && cb.width < 1000) faults.push(`the window is only ${Math.round(cb.width)}px wide on the desktop`);
                 const title = popup.querySelector('.dooms-hub-title');
                 if (title && title.getBoundingClientRect().height === 0) faults.push('the world\'s name is not shown');
