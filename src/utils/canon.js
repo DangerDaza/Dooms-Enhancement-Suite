@@ -166,12 +166,12 @@ function sortForBlock(list) {
  * line each; a change to an entry is an add under the same kind and name.
  * @returns {{ system: string, user: string }}
  */
-export function buildCanonPrompt({ entries = [], recent = '', now = {}, player = '', names = [] } = {}) {
+export function buildCanonPrompt({ entries = [], recent = '', now = {}, player = '', names = [], adds = ADDS_PER_RUN, drops = DROPS_PER_RUN } = {}) {
     const players = (Array.isArray(player) ? player : [player]).map(p => clean(p, MAX_NAME)).filter(Boolean);
     const known = (Array.isArray(names) ? names : []).map(n => clean(n, MAX_NAME)).filter(Boolean).slice(0, 40);
     const system = `You keep the canon of a roleplay: the facts the story has established, as a ledger of one-line entries. You never write story and you never guess. From the ledger so far and the recent scenes, answer with ONE JSON object and nothing else:
 {"add":[{"kind":"person|place|thing|fact|promise|secret","name":"<who or what, as the story spells it>","text":"<one line, present tense: the fact as the scenes establish it now>"}],"drop":["<the name of an entry the scenes have made untrue>"]}
-Rules: only what the scenes establish outright, never what you infer; a person's line says who they are to the story now (their place in it, what they want, what they have done), not their looks; a place's line what it is and what happened there; a thing's line what it is and who holds it; a fact is anything else established; a promise is something owed or sworn, by whom to whom; a secret is something revealed to the player that others do not know; an entry that changed is an add under the same kind and name (it replaces the old line); at most ${ADDS_PER_RUN} adds and ${DROPS_PER_RUN} drops, the new and the changed first; nothing already in the ledger unless it changed; names as the story spells them${players.length ? `; the player (${players.join(' / ')}) is never an entry` : ''}; no commentary, no code fences.`;
+Rules: only what the scenes establish outright, never what you infer; a person's line says who they are to the story now (their place in it, what they want, what they have done), not their looks; a place's line what it is and what happened there; a thing's line what it is and who holds it; a fact is anything else established; a promise is something owed or sworn, by whom to whom; a secret is something revealed to the player that others do not know; an entry that changed is an add under the same kind and name (it replaces the old line); at most ${adds} adds and ${drops} drops, the new and the changed first; nothing already in the ledger unless it changed; names as the story spells them${players.length ? `; the player (${players.join(' / ')}) is never an entry` : ''}; no commentary, no code fences.`;
     const user = `The ledger so far:
 ${ledgerLines(entries) || '(empty)'}
 ${known.length ? `\nNames the story knows: ${known.join(', ')}\n` : ''}
@@ -195,7 +195,7 @@ export function parseCanonReply(text) {
  * a pinned entry is dropped (the user's line stands, D110).
  * @returns {{ ok: boolean, errors: string[], clean: { add: object[], drop: string[] } | null }}
  */
-export function validateCanon(reply, state) {
+export function validateCanon(reply, state, { adds = ADDS_PER_RUN, drops = DROPS_PER_RUN } = {}) {
     const errors = [];
     if (!reply || typeof reply !== 'object' || Array.isArray(reply)) return { ok: false, errors: ['The reply is not a JSON object.'], clean: null };
     if (!('add' in reply) && !('drop' in reply)) return { ok: false, errors: ['The reply carries neither add nor drop.'], clean: null };
@@ -217,7 +217,7 @@ export function validateCanon(reply, state) {
                 if (pinned.has(k)) { errors.push(`"${name}" is pinned; the ledger keeps its own line.`); continue; }
                 seen.add(k);
                 add.push({ kind, name, text });
-                if (add.length >= ADDS_PER_RUN) break;
+                if (add.length >= adds) break;
             }
         }
     }
@@ -228,7 +228,7 @@ export function validateCanon(reply, state) {
             const name = clean(typeof d === 'string' ? d : (d && typeof d === 'object' ? d.name : ''), MAX_NAME);
             if (!name) continue;
             drop.push(name);
-            if (drop.length >= DROPS_PER_RUN) break;
+            if (drop.length >= drops) break;
         }
     }
     if (errors.some(e => e.includes('is not a list') || e.includes('not a JSON'))) return { ok: false, errors, clean: null };

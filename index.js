@@ -173,6 +173,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
+import { initHub, onHubChatChanged, onHubChatDeleted } from './src/systems/features/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel } from './src/utils/scenePictures.js';
@@ -701,6 +702,7 @@ async function addExtensionSettings() {
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
     try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
     try { initCanon(); } catch (e) { console.error('[Dooms Tracker] initCanon() FAILED:', e); }
+    try { initHub(); } catch (e) { console.error('[Dooms Tracker] initHub() FAILED:', e); }
     try { initScenePictures(); } catch (e) { console.error('[Dooms Tracker] initScenePictures() FAILED:', e); }
     try { initSceneProgress(); } catch (e) { console.error('[Dooms Tracker] initSceneProgress() FAILED:', e); }
     try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
@@ -727,6 +729,7 @@ async function addExtensionSettings() {
             onHideDefaultExpressionDisplaySettingChanged(extensionSettings.hideDefaultExpressionDisplay);
             refreshGlintWords(); // unwraps every glint while DES is off
             onWorldChatChanged().catch(() => {}); // Live World: the world and its line go with the switch
+            try { onHubChatChanged(); } catch (e) { /* the hub forgets the chat in front */ }
         } else if (extensionSettings.enabled && !wasEnabled) {
             // Enabling extension - initialize UI
             await initUI();
@@ -739,6 +742,7 @@ async function addExtensionSettings() {
                 syncExpressionFromLatestMessage();
             }
             onWorldChatChanged().catch(() => {}); // Live World: the chat's world comes back with the switch
+            try { onHubChatChanged(); } catch (e) { /* the hub reads the chat in front */ }
         }
     });
     // Set up "Open Settings" button in the extension dropdown
@@ -4753,7 +4757,7 @@ jQuery(async () => {
                 [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -4775,6 +4779,10 @@ jQuery(async () => {
                 ...(event_types.MORE_MESSAGES_LOADED
                     ? { [event_types.MORE_MESSAGES_LOADED]: [onMoreMessagesLoadedFullsheet, updateRollCards] }
                     : {}),
+                // A scene's chat deleted in SillyTavern marks its record (docs/hub-plan.md D128); older builds have no such event.
+                ...(event_types.CHAT_DELETED
+                    ? { [event_types.CHAT_DELETED]: [onHubChatDeleted] }
+                    : {}),
                 // The dice tool's rolls and the inventory tool's outcomes ride on SillyTavern's tool-call messages.
                 ...(event_types.TOOL_CALLS_PERFORMED
                     ? { [event_types.TOOL_CALLS_PERFORMED]: [onDiceToolCallsPerformed, onInventoryToolCallsPerformed] }
@@ -4793,6 +4801,7 @@ jQuery(async () => {
         if (getContext().chatId) {    // a chat with no greeting has no messages yet but still has a world
             onWorldChatChanged().catch(err => console.warn('[Dooms Tracker] Live World: the first chat did not load', err));
             try { onSceneChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Scene pictures: the first chat did not load', err); }
+            try { onHubChatChanged(); } catch (err) { console.warn('[Dooms Tracker] Hub: the first chat did not load', err); }
         }
         // DES voices: pause SillyTavern's own auto-read if voices are on.
         syncVoicesState();

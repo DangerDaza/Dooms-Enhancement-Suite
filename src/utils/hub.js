@@ -308,7 +308,8 @@ export function takeSnapshot(chatMeta, { scene = '', takenAt = 0 } = {}) {
     const stores = {};
     for (const k of HUB_KEYS) if (meta[k] !== undefined && meta[k] !== null) stores[k] = meta[k];
     const tracker = isObj(meta.dooms_tracker) ? meta.dooms_tracker : {};
-    const data = isObj(tracker.committedTrackerData) && tracker.committedTrackerData.infoBox ? tracker.committedTrackerData : tracker.lastGeneratedData;
+    // The last generated data is the newest (the committed copy lags a reply behind it, Live World's own order).
+    const data = isObj(tracker.lastGeneratedData) && tracker.lastGeneratedData.infoBox ? tracker.lastGeneratedData : tracker.committedTrackerData;
     return { v: 1, takenAt, scene: clean(scene, 24), stores: sealStores(stores), facts: factsFrom(data) };
 }
 
@@ -396,6 +397,8 @@ export function seedStores(memory, { chatId = '', place = '', cast = [], player 
 
 // ─── The brief ──────────────────────────────────────────────────────────
 
+const noStop = (s) => String(s || '').replace(/[.;,\s]+$/, '');
+
 /** One line for a person in the brief: the Workshop's description cut short, else the pack's line, else the tier word. */
 export function personLine(name, { description = '', line = '', tier = '' } = {}) {
     const text = clean(description, MAX_LINE) || clean(line, MAX_LINE) || (tier === 'known' ? 'someone the player knows' : tier === 'heard' ? 'someone the player has heard of' : '');
@@ -416,9 +419,9 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
     if (weather) whereParts.push(`Weather: ${clean(weather, 120)}.`);
     const parts = {
         where: whereParts.join(' '),
-        who: cast.length ? `Who is here: ${cast.slice(0, MAX_CAST).map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('; ')}.` : '',
+        who: cast.length ? `Who is here: ${cast.slice(0, MAX_CAST).map(c => noStop(typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('; ')}.` : '',
         seed: seed ? `What brought us here: ${clean(seed, MAX_SEED)}` : '',
-        since: since.length ? `Since last time: ${since.map(s => clean(s, 160)).filter(Boolean).slice(0, 12).join('; ')}.` : '',
+        since: since.length ? `Since last time: ${since.map(s => noStop(clean(s, 160))).filter(Boolean).slice(0, 12).join('; ')}.` : '',
         last: lastRecap ? `Last time: ${clean(lastRecap, 1500)}` : '',
         before: beforeRecap ? `Before that: ${clean(beforeRecap, 1500)}` : '',
         note: note ? `${clean(player, 60) || 'The player'} wants: ${clean(note, MAX_NOTE)}` : '',

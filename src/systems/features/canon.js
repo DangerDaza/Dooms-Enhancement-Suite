@@ -18,6 +18,7 @@ import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { buildRecentText } from '../../utils/liveWorld.js';
+import { sceneTranscript, RECAP_BUDGET } from '../../utils/hub.js';
 import {
     CANON_SLOT, canonConfig, emptyCanon, normalizeCanon, countCanonReply, canonDue, buildCanonPrompt, parseCanonReply,
     validateCanon, applyCanon, failCanon, addCanonEntry, editCanonEntry, pinCanonEntry, removeCanonEntry, reconcileCanon,
@@ -217,7 +218,11 @@ export function __setCanonTransport(fn) {
  * changed meanwhile.
  * @returns {Promise<{ ok: boolean, reason?: string, added?: number, dropped?: number, errors?: string[], error?: string }>}
  */
-export async function updateCanon({ reason = 'manual' } = {}) {
+/** A run over a whole scene (docs/hub-plan.md D122): the scene's messages in place of the recent window, the caps doubled for the one run. */
+const SCENE_ADDS = 16;
+const SCENE_DROPS = 8;
+
+export async function updateCanon({ reason = 'manual', scope = 'recent' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
     if (updating) return { ok: false, reason: 'running' };
     if (reason !== 'manual' && mainGenerationBusy()) { scheduleRun(reason, BUSY_RETRY_MS); return { ok: false, reason: 'busy' }; }
@@ -229,8 +234,12 @@ export async function updateCanon({ reason = 'manual' } = {}) {
         const c = cfg();
         const players = playerNames();
         const now = sceneFactsFrom(lastGeneratedData.infoBox || committedTrackerData.infoBox);
-        const recent = buildRecentText(chatArray() || [], { count: c.recentMessages, persona: players[0] || 'Player' });
-        const prompt = buildCanonPrompt({ entries: state.entries, recent, now, player: players, names: knownNames() });
+        const scene = scope === 'scene';
+        const recent = scene
+            ? sceneTranscript(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' })
+            : buildRecentText(chatArray() || [], { count: c.recentMessages, persona: players[0] || 'Player' });
+        const caps = scene ? { adds: SCENE_ADDS, drops: SCENE_DROPS } : {};
+        const prompt = buildCanonPrompt({ entries: state.entries, recent, now, player: players, names: knownNames(), ...caps });
         const external = extensionSettings.generationMode === 'external';
         const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
         const run = async () => {
@@ -246,7 +255,7 @@ export async function updateCanon({ reason = 'manual' } = {}) {
             return { ok: false, reason: 'busy' };
         }
         const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
-        const v = validateCanon(parseCanonReply(text), state);
+        const v = validateCanon(parseCanonReply(text), state, caps);
         const list = chatArray();
         const last = list && list.length ? list[list.length - 1] : null;
         const msgId = isReply(last) ? stamp(last) : null;
@@ -340,6 +349,7 @@ async function lorebook() {
         createWorld: (name) => api.createNewWorld(name),
         load: (name) => api.loadWorldData(name, true),
         createEntry: (name, data) => api.createEntry(name, data),
+        deleteEntry: (data, uid) => api.deleteEntry(data, uid),
         save: (name, data) => api.saveWorldData(name, data),
     };
 }
@@ -358,11 +368,12 @@ export function canonBookName() {
  * is made when it is not there.
  * @returns {Promise<{ ok: boolean, book?: string, written?: number, error?: string }>}
  */
-export async function exportCanonToLorebook({ name = '' } = {}) {
-    if (!ready()) return { ok: false, error: 'Canon is off, or no chat is open.' };
+export async function exportCanonToLorebook({ name = '', mirror = false, ledger = null } = {}) {
+    const source = ledger && typeof ledger === 'object' ? normalizeCanon(ledger) : (ready() ? state : null);
+    if (!source) return { ok: false, error: 'Canon is off, or no chat is open.' };
     const book = String(name || '').trim() || canonBookName();
-    const lines = canonToLorebookEntries(state);
-    if (!lines.length) return { ok: false, error: 'The ledger is empty.' };
+    const lines = canonToLorebookEntries(source);
+    if (!lines.length && !mirror) return { ok: false, error: 'The ledger is empty.' };
     try {
         const lb = await lorebook();
         const names = lb.names() || [];
@@ -381,9 +392,19 @@ export async function exportCanonToLorebook({ name = '' } = {}) {
             if (entry.disable === undefined) entry.disable = false;
             written++;
         }
+        // A mirror (docs/hub-plan.md D126): the book holds the ledger and nothing the ledger dropped; only the entries Canon titled are touched.
+        let removed = 0;
+        if (mirror) {
+            const keep = new Set(lines.map(l => l.comment));
+            for (const [comment, entry] of byComment) {
+                if (!comment.startsWith('Canon · ') || keep.has(comment)) continue;
+                if (typeof lb.deleteEntry === 'function' && entry.uid !== undefined) { await lb.deleteEntry(data, entry.uid); removed++; }
+                else if (data.entries && entry.uid !== undefined) { delete data.entries[entry.uid]; removed++; }
+            }
+        }
         await lb.save(book, data);
-        log(`exported ${written} line(s) to the lorebook "${book}"`);
-        return { ok: true, book, written };
+        log(`exported ${written} line(s) to the lorebook "${book}"${removed ? `, ${removed} gone` : ''}`);
+        return { ok: true, book, written, removed };
     } catch (e) {
         const error = String(e && e.message || e);
         log('export failed', error);

@@ -780,6 +780,44 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
     return next;
 }
 
+/**
+ * The run between scenes (docs/hub-plan.md §5.3): the world moves by the
+ * gap with no chat behind it. The same clockwork as the advancer's, told
+ * the time that passes and the last scenes as the player remembers them,
+ * and asked for the new date and time too.
+ * @returns {{ system: string, user: string }}
+ */
+export function buildGapPrompt({ pack, state, facts = {}, gap = '', recaps = [], maxStep = 1, spoilerFree = false, player = '' } = {}) {
+    const base = buildAdvancePrompt({ pack, state, recent: '', now: facts, maxStep, spoilerFree, player });
+    const words = clean(gap, 80) || 'a little time';
+    const players = playerList(player);
+    const system = base.system
+        .replace('running between scenes. You never write story. You read the recent scenes and the time that passed,', `running between scenes while ${players[0] || 'the player'} is away from the story. You never write story. You read what happened last time and the time that now passes,`)
+        .replace('{"elapsed": "<how much story time passed since the last run, in words>",', '{"elapsed": "<how much story time passes, in words>", "now": {"date": "<the story\'s date after that time>", "time": "<the time of day>"},')
+        .replace('Rules: clocks move with story time,', `Rules: ${words} pass${/s$/.test(words) ? '' : 'es'} between the last scene and the next, and the world moves for that much time and no more; the player is away and nothing of theirs happens; clocks move with story time,`);
+    const user = base.user.replace(/Recent scenes:\n[\s\S]*?\n\nAnswer with the JSON object only\./, `Time passing now: ${words}.\n\nThe last scenes, as the player remembers them:\n${(Array.isArray(recaps) ? recaps : []).map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `- ${i ? 'Before that' : 'Last'}: ${r}`).join('\n') || '(none yet)'}\n\nAnswer with the JSON object only.`);
+    return { system, user };
+}
+
+/** The gap run's reply: the advancer's own checks, plus "now" taken whole or not at all. */
+export function validateGap(reply, pack, state, { maxStep = 1, player = '' } = {}) {
+    const v = validateAdvance(reply, pack, state, { maxStep, player });
+    if (!v.ok) return v;
+    let now = null;
+    if (reply && reply.now && typeof reply.now === 'object' && !Array.isArray(reply.now)) {
+        const date = clean(reply.now.date, 80);
+        const time = clean(reply.now.time, 80);
+        if (date && time) now = { date, time };
+    }
+    return { ok: true, errors: v.errors, clean: { ...v.clean, now } };
+}
+
+/** A gap run written: the advancer's own apply, on no reply (nothing to rewind), dated by the new "now" when the reply gave one. */
+export function applyGap(state, clean, pack, { facts = {}, ranAt = 0 } = {}) {
+    const now = clean && clean.now ? clean.now : { date: facts.date || '', time: facts.time || '' };
+    return applyAdvance(state, clean, pack, { msgId: null, gameDate: now.date || '', gameTime: now.time || '', ranAt });
+}
+
 /** A failed run: nothing written, the next new message runs it again. */
 export function failAdvance(state, { msgId = null, ranAt = 0, error = '', kind = 'invalid' } = {}) {
     const next = cloneState(state);
