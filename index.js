@@ -173,7 +173,7 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
-import { initHub, onHubChatChanged, onHubChatDeleted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
+import { initHub, onHubChatChanged, onHubChatDeleted, onHubMessageReceived, onHubMessageDeleted, onHubGenerationStarted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
 import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
@@ -4841,8 +4841,8 @@ jQuery(async () => {
                 // onSceneGenerationStarted first: a regenerate takes DES's scene
                 // pictures off the end of the chat before anything here looks at
                 // the last message, and before SillyTavern picks what it replaces.
-                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
-                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onMessageReceivedVoices],
+                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onHubGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onHubMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onHubChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
@@ -4858,7 +4858,7 @@ jQuery(async () => {
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, onHubMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,

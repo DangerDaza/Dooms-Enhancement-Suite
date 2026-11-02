@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, buildRecapPrompt, parseRecapReply,
+    sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     hubStatusLine, describeStartResult, describeEndResult,
 } from '../src/utils/hub.js';
@@ -123,7 +123,11 @@ console.log('\n§3 the stores seeded for a scene');
     check('the present characters are the cast: a known one keeps her emoji, her status and her vitals, a new one gets the plain card; the player is not among them; the thoughts are blank', chars.length === 2 && chars[0].name === 'Captain Reyes' && chars[0].emoji === '🙂' && chars[1].name === 'Old Marit' && chars[1].emoji === '🍺' && chars[1].relationship.status === 'wary' && chars[1].stats[0].value === 80 && chars.every(c => c.thoughts.content === '') && !chars.some(c => c.name === 'Jordan'), t.committedTrackerData.characterThoughts);
     check('both the last generated and the committed data are seeded alike; the player\'s vitals and the quests kept; the timestamp set', t.lastGeneratedData.characterThoughts === t.committedTrackerData.characterThoughts && t.committedTrackerData.player.includes('64') && t.quests.main === 'Find the ring' && t.timestamp === 500);
     check('the inventory bound to the new chat; the seeding hook moved to taken', s.stores.dooms_inventory.chat === 'Mara - Scene 5' && s.stores.dooms_hooks.proposed.length === 0 && s.stores.dooms_hooks.taken.length === 1 && s.stores.dooms_hooks.taken[0].title === 'Ask Marit');
-    check('the swipe entry for the opener carries the four fields', s.tracker.infoBox === t.lastGeneratedData.infoBox && s.tracker.characterThoughts === t.lastGeneratedData.characterThoughts && s.tracker.player && s.tracker.quests.includes('Find the ring'));
+    check('the swipe entry for the opener carries the four fields; the committed copy is the generated one', s.tracker.infoBox === t.lastGeneratedData.infoBox && s.tracker.characterThoughts === t.lastGeneratedData.characterThoughts && s.tracker.player && s.tracker.quests.includes('Find the ring') && t.committedTrackerData.infoBox === t.lastGeneratedData.infoBox);
+    check('a hook played from the hub is a quest too: in the quests, in both JSON copies and on the opener\'s swipe entry', s.hookQuest === 'Ask Marit about the governor.' && t.quests.optional.includes('Ask Marit about the governor.') && JSON.parse(t.lastGeneratedData.quests).optional.includes('Ask Marit about the governor.') && JSON.parse(t.committedTrackerData.quests).optional.includes('Ask Marit about the governor.') && s.tracker.quests.includes('Ask Marit about the governor.'), JSON.stringify(t.quests));
+    const other = seedStores({ ...memory, player: 'Jordan' }, { place: 'The quay', cast: ['Old Marit'], player: ['Someone Else'] });
+    const sameOne = seedStores({ ...memory, player: 'Jordan' }, { place: 'The quay', cast: ['Old Marit'], player: ['jordan'] });
+    check('the persona\'s vitals are the persona\'s: another persona starts fresh, the same one (case apart) keeps them', other.stores.dooms_tracker.lastGeneratedData.player === null && other.stores.dooms_tracker.committedTrackerData.player === null && sameOne.stores.dooms_tracker.lastGeneratedData.player.includes('64'));
     const bare = seedStores(null, { chatId: 'c', place: 'The quay', cast: ['Someone'], player: 'Jordan' });
     const bareBox = JSON.parse(bare.stores.dooms_tracker.lastGeneratedData.infoBox);
     check('no snapshot (the first scene): a tracker seeded from nothing with the place and the cast', bareBox.location.value === 'The quay' && JSON.parse(bare.stores.dooms_tracker.committedTrackerData.characterThoughts).characters[0].name === 'Someone' && bare.stores.dooms_tracker.quests.main === 'None' && !('dooms_world' in bare.stores));
@@ -171,7 +175,11 @@ console.log('\n§6 the file');
     const ended = markEnded(mark, { endedAt: 9, endDate: 'Day 13, noon' });
     check('the mark ended, and read back from a chat\'s metadata; a chat without one is not a scene', ended.endedAt === 9 && readMark({ [HUB_META_KEY]: ended }).endDate === 'Day 13, noon' && readMark({ [HUB_META_KEY]: { world: 'w' } }) === null && readMark({}) === null);
     const header = sceneHeader({ stores: seedStores(memory, { chatId: 'Mara - Scene 5', place: 'Customs house', cast: ['Captain Reyes'] }).stores, mark, scenario: '[SCENE BRIEF…]', worldInfo: 'Canon of Harbourside', integrity: 'abc-123' });
-    check('the header: SillyTavern\'s two unused names, the six stores, the mark, the brief as the scenario, the world\'s book, the integrity id', header.user_name === 'unused' && header.character_name === 'unused' && HUB_KEYS.every(k => k in header.chat_metadata) && header.chat_metadata[HUB_META_KEY].scene === 's5' && header.chat_metadata.scenario === '[SCENE BRIEF…]' && header.chat_metadata.world_info === 'Canon of Harbourside' && header.chat_metadata.integrity === 'abc-123', Object.keys(header.chat_metadata).join(','));
+    check('the header: SillyTavern\'s two unused names, the six stores, the mark, the brief as the scenario, the world\'s book, the integrity id, tainted', header.user_name === 'unused' && header.character_name === 'unused' && HUB_KEYS.every(k => k in header.chat_metadata) && header.chat_metadata[HUB_META_KEY].scene === 's5' && header.chat_metadata.scenario === '[SCENE BRIEF…]' && header.chat_metadata.world_info === 'Canon of Harbourside' && header.chat_metadata.integrity === 'abc-123' && header.chat_metadata.tainted === true, Object.keys(header.chat_metadata).join(','));
+    const marked = hubMark({ world: 'harbourside', scene: 's5', file: 'Scene 5 - The queue' });
+    check('the mark names its file; a mark under another file is a branch, not the scene; a mark from before the file was recorded is trusted', marked.file === 'Scene 5 - The queue' && markIsOfFile(marked, 'Scene 5 - The queue.jsonl') && !markIsOfFile(marked, 'Scene 5 - The queue (branch)') && markIsOfFile(hubMark({ world: 'w', scene: 's1' }), 'anything'));
+    const endedMark = markEnded(marked, { endedAt: 5, endDate: 'Day 6', end: { canonAt: 'r9' } });
+    check('the mark remembers the ledger\'s read; a reopen keeps it until the next End', readMark({ [HUB_META_KEY]: endedMark }).end.canonAt === 'r9' && markEnded(endedMark, { endedAt: 0, endDate: '' }).end.canonAt === 'r9' && markEnded(endedMark, { end: null }).end === null);
     check('no book, no key; the stores are copies', !('world_info' in sceneHeader({ stores: {}, mark }).chat_metadata) && header.chat_metadata.dooms_world !== memory.stores.dooms_world);
     check('the file name: safe, numbered, free among the card\'s chats', sceneFileName(5, 'The queue: "a" <test>/?') === 'Scene 5 - The queue a test' && sceneFileName(1, 'A', ['scene 1 - a.jsonl']) === 'Scene 1 - A (2)' && sceneFileName(1, 'A', ['Scene 1 - A', 'Scene 1 - A (2)']) === 'Scene 1 - A (3)' && sceneFileName(0, '') === 'Scene 1 - A scene');
 }
@@ -188,6 +196,11 @@ console.log('\n§7 the recap');
     check('the transcript: the system message and the noise out, the speakers named, the order kept', t === 'Mara: The customs house is busy.\nJordan: I ask Reyes about the ring.\nMara: Reyes denies everything.', t);
     const small = sceneTranscript(Array.from({ length: 50 }, (_, i) => ({ name: 'N', is_user: false, mes: `line ${i} ` + 'x'.repeat(1000) })), { budget: 3000 });
     check('the budget keeps the newest', small.split('\n').length <= 3 && small.includes('line 49'));
+    const pages = sceneTranscriptPages(Array.from({ length: 50 }, (_, i) => ({ name: 'N', is_user: false, mes: `line ${i} ` + 'x'.repeat(1000) })), { budget: 6000 });
+    check('a long scene in pages, oldest first, the oldest beyond four passes not read', pages.length === 4 && pages[0].includes('line 30 ') && !pages[0].includes('line 29 ') && pages[3].includes('line 49 ') && pages.every(p => p.length <= 6000), String(pages.length));
+    check('a short scene is one page', sceneTranscriptPages(chat, { persona: 'Jordan' }).length === 1 && sceneTranscriptPages(chat, { persona: 'Jordan' })[0] === t);
+    const pass = buildRecapPrompt({ transcript: 'later', brief: '', player: 'Jordan', maxChars: 600, soFar: 'Jordan arrived.', last: false });
+    check('a pass carries the record so far and says the scene continues', pass.system.includes('record so far') && pass.system.includes('not the end of the scene') && pass.user.includes('The record so far:\nJordan arrived.'));
     const p = buildRecapPrompt({ transcript: t, brief: '[SCENE BRIEF: W.]', player: 'Jordan', maxChars: 600 });
     check('the request: the JSON asked for, the length, the player by name, the brief and the scene', p.system.includes('{"recap"') && p.system.includes('600 characters') && p.system.includes('Jordan by name') && p.user.includes('[SCENE BRIEF: W.]') && p.user.includes('Reyes denies everything.'));
     check('the reply read: the JSON\'s recap, or prose, cut to the length; nothing is a failure', parseRecapReply('```json\n{"recap":"Jordan asked Reyes about the ring; he denied it."}\n```').recap === 'Jordan asked Reyes about the ring; he denied it.' && parseRecapReply('Jordan asked. Reyes denied.').recap === 'Jordan asked. Reyes denied.' && parseRecapReply('{"recap":"' + 'A sentence. '.repeat(100) + '"}', { maxChars: 100 }).recap.length <= 100 && !parseRecapReply('').ok && !parseRecapReply('{"other":1}').ok);
@@ -225,6 +238,10 @@ console.log('\n§8 the scene records');
     check('against the card\'s chats: a marked chat no record names comes back (ended when the mark says so); a plain chat and another world\'s chat do not', rec.changed === 1 && rec.entry.scenes.length === 2 && rec.entry.scenes[1].id === 's9' && rec.entry.scenes[1].status === 'ended' && rec.entry.scenes[1].title === 'Found' && rec.entry.scenes[1].chat === 'Scene 9 - Found' && rec.entry.seq === 9, JSON.stringify(rec.entry.scenes.map(s => [s.id, s.status, s.chat])));
     const gone = reconcileScenesWithChats(rec.entry, [{ file: 'Scene 9 - Found' }], 'harbourside');
     check('a record whose file is missing is marked gone; a file back again clears it', gone.entry.scenes.find(s => s.id === 's1').gone === true && reconcileScenesWithChats(gone.entry, [{ file: 'Scene 1 - Renamed' }, { file: 'Scene 9 - Found' }], 'harbourside').entry.scenes.find(s => s.id === 's1').gone === false);
+    const branch = reconcileScenesWithChats(rec.entry, [{ file: 'Scene 1 - Renamed' }, { file: 'Scene 9 - Found' }, { file: 'Scene 9 - Found (branch)', meta: { [HUB_META_KEY]: { ...markEnded(mark, { endedAt: 4 }), file: 'Scene 9 - Found' } } }], 'harbourside');
+    check('a branch of a scene (its mark naming another file) is not brought back as a scene', branch.changed === 0 && branch.entry.scenes.length === 2);
+    const mem = { takenAt: 100 };
+    check('a scene is stale when the memory was written after it began', isStaleScene({ startedAt: 50 }, mem) && !isStaleScene({ startedAt: 150 }, mem) && !isStaleScene({ startedAt: 50 }, null) && !isStaleScene({ startedAt: 0 }, mem));
 }
 
 console.log('\n§9 the lines');

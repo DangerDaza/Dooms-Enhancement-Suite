@@ -225,7 +225,8 @@ const SCENE_DROPS = 8;
 export async function updateCanon({ reason = 'manual', scope = 'recent' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
     if (updating) return { ok: false, reason: 'running' };
-    if (reason !== 'manual' && mainGenerationBusy()) { scheduleRun(reason, BUSY_RETRY_MS); return { ok: false, reason: 'busy' }; }
+    if (reason !== 'manual' && scope !== 'scene' && mainGenerationBusy()) { scheduleRun(reason, BUSY_RETRY_MS); return { ok: false, reason: 'busy' }; }
+    if (scope === 'scene' && mainGenerationBusy()) return { ok: false, reason: 'busy' };
     updating = true;
     notify({ source: 'run-start' });
     const token = loadToken;
@@ -251,7 +252,7 @@ export async function updateCanon({ reason = 'manual', scope = 'recent' } = {}) 
         const result = await withBackgroundProfile(run, { external, label: 'canon' });
         if (stale()) return { ok: false, reason: 'stale' };
         if (result === BACKGROUND_BUSY) {
-            if (reason !== 'manual') scheduleRun(reason, BUSY_RETRY_MS);
+            if (reason !== 'manual' && !scene) scheduleRun(reason, BUSY_RETRY_MS);    // a run over a whole scene is End's to retry, never parked
             return { ok: false, reason: 'busy' };
         }
         const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));

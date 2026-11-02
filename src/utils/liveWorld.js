@@ -787,15 +787,24 @@ export function applyAdvance(state, clean, pack, { msgId = null, gameDate = '', 
  * and asked for the new date and time too.
  * @returns {{ system: string, user: string }}
  */
-export function buildGapPrompt({ pack, state, facts = {}, gap = '', recaps = [], maxStep = 1, spoilerFree = false, player = '' } = {}) {
+export function buildGapPrompt({ pack, state, facts = {}, gap = '', recaps = [], maxStep = 1, spoilerFree = false, player = '', mode = 'between', from = '', to = '' } = {}) {
     const base = buildAdvancePrompt({ pack, state, recent: '', now: facts, maxStep, spoilerFree, player });
     const words = clean(gap, 80) || 'a little time';
     const players = playerList(player);
+    const after = mode === 'after';
+    const span = [clean(from, 80), clean(to, 80)].filter(Boolean).join(' to ');
     const system = base.system
-        .replace('running between scenes. You never write story. You read the recent scenes and the time that passed,', `running between scenes while ${players[0] || 'the player'} is away from the story. You never write story. You read what happened last time and the time that now passes,`)
+        .replace('running between scenes. You never write story. You read the recent scenes and the time that passed,', after
+            ? `running after a scene has ended. You never write story. You read the record of the scene and the time it took,`
+            : `running between scenes while ${players[0] || 'the player'} is away from the story. You never write story. You read what happened last time and the time that now passes,`)
         .replace('{"elapsed": "<how much story time passed since the last run, in words>",', '{"elapsed": "<how much story time passes, in words>", "now": {"date": "<the story\'s date after that time>", "time": "<the time of day>"},')
-        .replace('Rules: clocks move with story time,', `Rules: ${words} pass${/s$/.test(words) ? '' : 'es'} between the last scene and the next, and the world moves for that much time and no more; the player is away and nothing of theirs happens; clocks move with story time,`);
-    const user = base.user.replace(/Recent scenes:\n[\s\S]*?\n\nAnswer with the JSON object only\./, `Time passing now: ${words}.\n\nThe last scenes, as the player remembers them:\n${(Array.isArray(recaps) ? recaps : []).map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `- ${i ? 'Before that' : 'Last'}: ${r}`).join('\n') || '(none yet)'}\n\nAnswer with the JSON object only.`);
+        .replace('Rules: clocks move with story time,', after
+            ? `Rules: the scene took its own time${span ? ` (${span})` : ''}, and the world moves for that much time and for what the scene itself set in motion, no more; what the player did is in the record and is not undone; clocks move with story time,`
+            : `Rules: ${words} pass${/s$/.test(words) ? '' : 'es'} between the last scene and the next, and the world moves for that much time and no more; the player is away and nothing of theirs happens; clocks move with story time,`);
+    const list = (Array.isArray(recaps) ? recaps : []).map(r => clean(r, 700)).filter(Boolean).slice(0, 2);
+    const user = base.user.replace(/Recent scenes:\n[\s\S]*?\n\nAnswer with the JSON object only\./, after
+        ? `The scene just ended${span ? ` (${span})` : ''}; its record:\n${list.length ? `- ${list[0]}` : '(no record was kept)'}${list[1] ? `\n- Before that: ${list[1]}` : ''}\n\nAnswer with the JSON object only.`
+        : `Time passing now: ${words}.\n\nThe last scenes, as the player remembers them:\n${list.map((r, i) => `- ${i ? 'Before that' : 'Last'}: ${r}`).join('\n') || '(none yet)'}\n\nAnswer with the JSON object only.`);
     return { system, user };
 }
 

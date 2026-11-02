@@ -15,7 +15,7 @@
  */
 import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock } from './canon.js';
-import { normalizeHooks, takeHook as takeHookPure } from './questHooks.js';
+import { normalizeHooks, takeHook as takeHookPure, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
 
 export const HUB_META_KEY = 'dooms_hub';
@@ -147,6 +147,7 @@ export function normalizeMemory(raw) {
         v: 1,
         takenAt: Number.isFinite(raw.takenAt) ? raw.takenAt : 0,
         scene: clean(raw.scene, 24),
+        player: clean(raw.player, 60),
         stores: sealStores(stores),
         facts: { date: clean(f.date, 80), time: clean(f.time, 80), location: clean(f.location, 80), weather: clean(f.weather, 120) },
     };
@@ -303,14 +304,21 @@ function parseLoose(v) {
  * from the committed tracker data (the last generated when none is
  * committed), the scene that wrote it.
  */
-export function takeSnapshot(chatMeta, { scene = '', takenAt = 0 } = {}) {
+export function takeSnapshot(chatMeta, { scene = '', takenAt = 0, player = '' } = {}) {
     const meta = isObj(chatMeta) ? chatMeta : {};
     const stores = {};
     for (const k of HUB_KEYS) if (meta[k] !== undefined && meta[k] !== null) stores[k] = meta[k];
     const tracker = isObj(meta.dooms_tracker) ? meta.dooms_tracker : {};
     // The last generated data is the newest (the committed copy lags a reply behind it, Live World's own order).
     const data = isObj(tracker.lastGeneratedData) && tracker.lastGeneratedData.infoBox ? tracker.lastGeneratedData : tracker.committedTrackerData;
-    return { v: 1, takenAt, scene: clean(scene, 24), stores: sealStores(stores), facts: factsFrom(data) };
+    return { v: 1, takenAt, scene: clean(scene, 24), player: clean(player, 60), stores: sealStores(stores), facts: factsFrom(data) };
+}
+
+/** A scene is stale when the world's memory was written after it began: ending it would replace what a newer scene wrote (D123). */
+export function isStaleScene(scene, memory) {
+    if (!scene || !memory || !Number.isFinite(memory.takenAt) || !memory.takenAt) return false;
+    const began = Number.isFinite(scene.startedAt) ? scene.startedAt : 0;
+    return began > 0 && began < memory.takenAt;
 }
 
 /** The snapshot sealed again (an End stamps the opener too; the seal is cheap and idempotent). */
@@ -355,9 +363,18 @@ function readCharacters(json) {
  * the brief says.
  */
 export function seedStores(memory, { chatId = '', place = '', cast = [], player = [], weather = '', when = null, hookId = '', now = 0 } = {}) {
-    const mem = normalizeMemory(memory) || { stores: {}, facts: { date: '', time: '', location: '', weather: '' } };
+    const mem = normalizeMemory(memory) || { stores: {}, facts: { date: '', time: '', location: '', weather: '' }, player: '' };
     const stores = sealStores(mem.stores);
     const players = (Array.isArray(player) ? player : [player]).map(p => clean(p, 60)).filter(Boolean);
+    // A hook played from the hub is a quest too, as a hook taken in the Map window is (D102): the quest rides the seeded stores.
+    let hookQuest = '';
+    if (hookId && stores.dooms_hooks) {
+        const taken = takeHookPure(stores.dooms_hooks, hookId, { takenAt: now });
+        stores.dooms_hooks = taken.hooks;
+        if (taken.hook) hookQuest = questFromHook(taken.hook);
+    }
+    // The persona's vitals are the persona's: another persona starts fresh (the block carries no name, so the snapshot does).
+    const personaChanged = !!(mem.player && players[0] && !sameName(mem.player, players[0]));
     const isPlayer = (n) => players.some(p => sameName(p, n));
     const names = [];
     for (const n of Array.isArray(cast) ? cast : []) { const c = clean(n, 60); if (c && !isPlayer(c) && !names.some(x => sameName(x, c))) names.push(c); }
@@ -368,8 +385,13 @@ export function seedStores(memory, { chatId = '', place = '', cast = [], player 
         weather: clean(weather, 120) || mem.facts.weather,
     };
     const tracker = isObj(stores.dooms_tracker) ? stores.dooms_tracker : {};
+    if (!isObj(tracker.quests)) tracker.quests = { main: 'None', optional: [] };
+    if (hookQuest && !tracker.quests.optional.some(q => sameName(q, hookQuest))) tracker.quests = { ...tracker.quests, optional: [...tracker.quests.optional, hookQuest] };
+    const questsJson = JSON.stringify(tracker.quests);
     const adjust = (data) => {
         const d = isObj(data) ? { ...data } : { quests: null, infoBox: null, characterThoughts: null, player: null };
+        d.quests = questsJson;
+        if (personaChanged) d.player = null;
         const box = parseLoose(d.infoBox) || {};
         const shape = isObj(box.date) || isObj(box.location) || isObj(box.time) ? 'object' : (d.infoBox ? 'string' : 'object');
         setBoxField(box, 'date', facts.date, shape);
@@ -386,13 +408,12 @@ export function seedStores(memory, { chatId = '', place = '', cast = [], player 
         d.characterThoughts = JSON.stringify(wasArray ? next : { ...(outer || {}), characters: next });
         return d;
     };
-    const generated = adjust(tracker.lastGeneratedData || tracker.committedTrackerData);
-    const committed = adjust(tracker.committedTrackerData || tracker.lastGeneratedData);
+    // Both copies from the newest data (the committed copy lags a reply behind in a chat; a scene starts with one truth).
+    const generated = adjust(tracker.lastGeneratedData && tracker.lastGeneratedData.infoBox ? tracker.lastGeneratedData : (tracker.committedTrackerData || tracker.lastGeneratedData));
+    const committed = { ...generated };
     stores.dooms_tracker = { ...tracker, lastGeneratedData: generated, committedTrackerData: committed, syncedExpressionPortraits: {}, syncedExpressionLabels: {}, timestamp: now || tracker.timestamp || 0 };
-    if (!isObj(stores.dooms_tracker.quests)) stores.dooms_tracker.quests = { main: 'None', optional: [] };
     if (isObj(stores.dooms_inventory)) stores.dooms_inventory = { ...stores.dooms_inventory, chat: clean(chatId, 200) || null };
-    if (hookId && stores.dooms_hooks) stores.dooms_hooks = takeHookPure(stores.dooms_hooks, hookId, { takenAt: now }).hooks;
-    return { stores, facts, cast: names, tracker: { quests: stores.dooms_tracker.quests ? JSON.stringify(stores.dooms_tracker.quests) : null, infoBox: generated.infoBox || null, characterThoughts: generated.characterThoughts || null, player: generated.player || null } };
+    return { stores, facts, cast: names, hookQuest, tracker: { quests: questsJson, infoBox: generated.infoBox || null, characterThoughts: generated.characterThoughts || null, player: generated.player || null } };
 }
 
 // ─── The brief ──────────────────────────────────────────────────────────
@@ -549,20 +570,30 @@ export function sceneTitle({ opener = null, seed = null, place = '' } = {}) {
 // ─── The file (D118) ────────────────────────────────────────────────────
 
 /** The hub's mark on a scene chat: what the strip, the Scenes panel and a rebuild from the card's chats read. */
-export function hubMark({ world = '', scene = '', title = '', seed = null, place = null, cast = [], gap = null, startedAt = 0, startDate = '' } = {}) {
-    return { v: 1, world: clean(world, 60), scene: clean(scene, 24), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), endedAt: 0, endDate: '' };
+export function hubMark({ world = '', scene = '', title = '', seed = null, place = null, cast = [], gap = null, startedAt = 0, startDate = '', file = '' } = {}) {
+    return { v: 1, world: clean(world, 60), scene: clean(scene, 24), file: clean(file, 200), title: clean(title, MAX_TITLE), seed: cleanSeed(seed), place: cleanPlace(place), cast: cast.map(n => clean(n, 60)).filter(Boolean).slice(0, MAX_CAST), gap: cleanGap(gap), startedAt: Number.isFinite(startedAt) ? startedAt : 0, startDate: clean(startDate, 80), endedAt: 0, endDate: '', end: null };
+}
+
+/** Whether a mark belongs to this chat file: a branch or a checkpoint of a scene carries the scene's mark under another name and is not the scene (D113). */
+export function markIsOfFile(mark, file) {
+    if (!mark) return false;
+    if (!mark.file) return true;    // a mark from before the file was recorded: trusted
+    const a = String(mark.file).replace(/\.jsonl$/i, '').toLowerCase();
+    const b = String(file || '').replace(/\.jsonl$/i, '').toLowerCase();
+    return !b || a === b;
 }
 
 /** The mark read back from a chat's metadata; null when the chat is not a scene. */
 export function readMark(chatMeta) {
     const m = isObj(chatMeta) ? chatMeta[HUB_META_KEY] : null;
     if (!isObj(m) || !clean(m.world, 60) || !clean(m.scene, 24)) return null;
-    return { ...hubMark(m), endedAt: Number.isFinite(m.endedAt) ? m.endedAt : 0, endDate: clean(m.endDate, 80) };
+    const end = isObj(m.end) ? { canonAt: clean(m.end.canonAt, 60) } : null;
+    return { ...hubMark(m), endedAt: Number.isFinite(m.endedAt) ? m.endedAt : 0, endDate: clean(m.endDate, 80), end };
 }
 
 /** The mark after End (the date it ended) or after Reopen (the end cleared). */
-export function markEnded(mark, { endedAt = 0, endDate = '' } = {}) {
-    return { ...mark, endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80) };
+export function markEnded(mark, { endedAt = 0, endDate = '', end = undefined } = {}) {
+    return { ...mark, endedAt: Number.isFinite(endedAt) ? endedAt : 0, endDate: clean(endDate, 80), end: end === undefined ? (mark && mark.end ? mark.end : null) : end };
 }
 
 /**
@@ -577,6 +608,7 @@ export function sceneHeader({ stores = {}, mark = null, scenario = '', worldInfo
     if (scenario) meta.scenario = String(scenario);
     if (worldInfo) meta.world_info = clean(worldInfo, 200);
     if (integrity) meta.integrity = clean(integrity, 80);
+    meta.tainted = true;    // SillyTavern's own "this chat has been played" flag: without it message 0 is a pristine greeting (overswipe loops, a card save replaces it)
     return { chat_metadata: meta, user_name: 'unused', character_name: 'unused' };
 }
 
@@ -611,10 +643,38 @@ export function sceneTranscript(chat, { budget = RECAP_BUDGET, persona = 'Player
     return out.join('\n');
 }
 
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS } = {}) {
+/**
+ * The scene's text in pages, oldest first, each within the budget, for a
+ * recap written in passes when one page cannot hold the scene (§5.2). A
+ * scene within the budget is one page.
+ */
+export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'Player', truncation = 1200, maxPages = 4 } = {}) {
+    const list = Array.isArray(chat) ? chat : [];
+    const lines = [];
+    for (const m of list) {
+        if (!m || typeof m !== 'object' || m.is_system || typeof m.mes !== 'string') continue;
+        let text = m.mes.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<trackers?>[\s\S]*?<\/trackers?>/gi, '').replace(/```[\s\S]*?```/g, '').replace(/\[(ITEM|CHECK|SAVE)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+        if (text.length > truncation) text = `${text.slice(0, truncation - 1).trimEnd()}…`;
+        lines.push(`${m.is_user ? (m.name || persona) : (m.name || 'Narrator')}: ${text}`);
+    }
+    const pages = [];
+    let page = [];
+    let used = 0;
+    for (const line of lines) {
+        if (used + line.length > budget && page.length) { pages.push(page.join('\n')); page = []; used = 0; }
+        page.push(line);
+        used += line.length + 1;
+    }
+    if (page.length) pages.push(page.join('\n'));
+    if (pages.length > maxPages) return pages.slice(pages.length - maxPages);    // the oldest beyond the passes are not read
+    return pages;
+}
+
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true } = {}) {
     const who = clean(player, 60) || 'the player';
-    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: {"recap": "<what happened in this scene>"}. Rules: at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.`;
-    const user = `${brief ? `The scene's brief:\n${clean(brief, 2500)}\n\n` : ''}The scene:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
+    const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: {"recap": "<what happened in this scene>"}. Rules: at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
+    const user = `${brief ? `The scene's brief:\n${clean(brief, 2500)}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
     return { system, user };
 }
 
@@ -750,6 +810,7 @@ export function reconcileScenesWithChats(entry, chats, worldId) {
     for (const c of list) {
         const mark = readMark(c.meta);
         if (!mark || mark.world !== clean(worldId, 60)) continue;
+        if (!markIsOfFile(mark, c.file)) continue;    // a branch or a checkpoint of a scene: not the scene
         if (next.scenes.some(s => s.chat.toLowerCase() === c.file.toLowerCase())) continue;
         next.seq += 1;
         next.scenes.push(normalizeScene({ id: next.scenes.some(s => s.id === mark.scene) ? `s${next.seq}` : mark.scene, title: mark.title, seed: mark.seed, place: mark.place, cast: mark.cast, gap: mark.gap, chat: c.file, startedAt: mark.startedAt, startDate: mark.startDate, endedAt: mark.endedAt, endDate: mark.endDate, status: mark.endedAt ? 'ended' : 'aside' }, next.seq));

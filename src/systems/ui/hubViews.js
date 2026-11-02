@@ -211,7 +211,7 @@ export function endSheetHtml({ prep = null, busy = false, states = {}, result = 
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
     const running = Object.values(states).includes('running');
     const done = !!(result && result.ok);
-    const stateWord = { waiting: 'waiting', running: 'running…', ok: 'done', failed: 'failed', skipped: 'skipped', off: 'off' };
+    const stateWord = { waiting: 'waiting', running: 'running…', ok: 'done', failed: 'failed', skipped: 'skipped', off: 'off', kept: 'kept as it was' };
     const step = (key, label, hint, on, skipId) => {
         const st = states[key] || (on ? 'waiting' : 'off');
         return `<li class="dooms-hub-step is-${attr(st)}">
@@ -230,10 +230,11 @@ export function endSheetHtml({ prep = null, busy = false, states = {}, result = 
             <textarea id="dooms-hub-recap" class="rpg-accordion-input" rows="5" placeholder="${busy ? 'The narrator is writing the record of the scene…' : 'What happened in this scene, in a few lines; the next scene reads it'}"${done ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea>
             ${prep && prep.error ? `<p class="dooms-hub-note">The recap could not be written: ${e(prep.error)}. Write it yourself, or end without one.</p>` : ''}
         </div>
+        ${prep && prep.stale && !done ? `<div class="dooms-hub-stale"><p class="dooms-hub-note">This scene began before a later scene ended, so the world's memory is newer than it. Ending it keeps the world's memory as it is (the recap is kept, the ledger reads the scene, nothing of the newer scene is lost).</p><label class="dooms-hub-skip"><input type="checkbox" id="dooms-hub-replace"> Replace the world's memory with this scene's instead</label></div>` : ''}
         <ul class="dooms-hub-steps">
             ${step('recap', 'The recap', 'kept with the scene', true, '')}
-            ${step('canon', 'The ledger', canonOn ? 'Canon reads the whole scene' : 'Canon is off', canonOn, 'dooms-hub-skip-canon')}
-            ${step('world', 'The world', worldOn ? 'the clocks move by the scene\'s time, people move, news is written' : 'Live World has no world here', worldOn, 'dooms-hub-skip-world')}
+            ${step('canon', 'The ledger', canonOn ? (prep && prep.canonDone ? 'already read for this reply' : 'Canon reads the whole scene') : 'Canon is off', canonOn, 'dooms-hub-skip-canon')}
+            ${step('world', 'The world', worldOn ? 'the world\'s memory moves for the scene\'s time; the chat itself is not touched' : 'Live World has no world here', worldOn, 'dooms-hub-skip-world')}
             ${step('snapshot', 'The snapshot', 'everything the chat knows, kept for the next scene', true, '')}
         </ul>
         ${result && result.ok ? `<p class="dooms-hub-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered.</p>` : ''}

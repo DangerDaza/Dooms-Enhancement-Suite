@@ -10,12 +10,16 @@
  * parts are src/utils/hub.js; the window is src/systems/ui/hub.js.
  */
 import { getContext } from '../../../../../../extensions.js';
-import { chat, chat_metadata, getRequestHeaders, saveChatConditional } from '../../../../../../../script.js';
+import { chat, chat_metadata, getRequestHeaders, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../../../script.js';
 import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { getMessageTimeStamp } from '../../../../../../RossAscends-mods.js';
 import { SlashCommandParser } from '../../../../../../../scripts/slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../../../../../scripts/slash-commands/SlashCommand.js';
-import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog } from '../../core/state.js';
+import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog, setLastGeneratedData, setCommittedTrackerData } from '../../core/state.js';
+import { generateTrackerExample } from '../generation/promptBuilder.js';
+import { renderInfoBox } from '../rendering/infoBox.js';
+import { renderThoughts } from '../rendering/thoughts.js';
+import { renderQuests } from '../rendering/quests.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, waitForBackground, backgroundHolder } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
@@ -30,10 +34,10 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages,
 } from '../../utils/hub.js';
 import { ensureCss } from '../../core/cssLoader.js';
-import { isLiveWorldOn, loadPack, getWorldState, advanceNow } from './liveWorld.js';
+import { isLiveWorldOn, loadPack, getWorldState } from './liveWorld.js';
 import { isCanonOn, updateCanon } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
@@ -196,7 +200,8 @@ function defaultBridge() {
         listChats: async (avatar, { metadata = false } = {}) => {
             const res = await post('/api/characters/chats', { avatar_url: avatar, metadata, simple: !metadata });
             const data = await res.json();
-            return (Array.isArray(data) ? data : Object.values(data || {})).filter(c => c && typeof c === 'object');
+            if (!data || typeof data !== 'object' || data.error) return [];    // a card never opened has no chats folder: SillyTavern answers { error: true }
+            return (Array.isArray(data) ? data : Object.values(data)).filter(c => c && typeof c === 'object');
         },
         saveChatFile: async ({ chName, avatar, fileName, header, messages }) => {
             await post('/api/chats/save', { ch_name: chName, file_name: fileName, chat: [header, ...messages], avatar_url: avatar, force: true });
@@ -301,13 +306,14 @@ export async function makeNarratorCard(worldId) {
 
 /** Whether the chat in front is a scene (D113: the mark decides, nothing else). */
 export function isScene() {
-    return !!readMark(meta());
+    return !!currentScene();
 }
 
 /** The chat in front as a scene: its world, its mark and its record; null when it is not one. */
 export function currentScene() {
     const mark = readMark(meta());
     if (!mark) return null;
+    if (!markIsOfFile(mark, chatId())) return null;    // a branch or a checkpoint of a scene carries its mark under another name (D113)
     const entry = store().worlds[mark.world] || null;
     const file = chatId();
     const record = entry ? (sceneByChat(entry, file) || entry.scenes.find(s => s.id === mark.scene) || null) : null;
@@ -337,10 +343,34 @@ export function onHubChatDeleted(name) {
     if (changed) saveStore({ source: 'chat-gone' });
 }
 
+/**
+ * The chat in front flushed before a switch away from it: the tracker's
+ * stores rebuilt and written through the conditional save, and any
+ * background request landed. Debounced saves are lost on a chat switch.
+ */
+async function flushChat() {
+    if (chatId() === undefined) return true;
+    try { await saveChatData({ immediate: true }); } catch (e) { log('the flush failed', String(e && e.message || e)); return false; }
+    try { await waitForBackground(); } catch (e) { /* no holder */ }
+    return true;
+}
+
+/** The last reply's id (Live World's stamp, else Canon's), for the mark's record of what End ran. */
+function lastReplyId() {
+    const list = chatArray() || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+        const m = list[i];
+        if (!m || m.is_user || m.is_system) continue;
+        return String(m.dooms_world_id || m.dooms_canon_id || `${i}:${String(m.mes || '').length}`);
+    }
+    return '';
+}
+
 // ─── Start (D117, D118, D119) ───────────────────────────────────────────
 
 function guardStart(worldId) {
     if (!isHubOn()) return { ok: false, reason: 'off' };
+    if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
     const id = String(worldId || '').trim();
     if (!id) return { ok: false, reason: 'no-world' };
     const b = bridge();
@@ -395,12 +425,12 @@ function memoryFor(entry, pack, worldId) {
  * written when the reply breaks a rule, the request fails or the line is
  * busy; Start goes on either way.
  */
-async function moveWorldByGap(worldId, pack, memory, gap, recaps) {
+async function moveWorldByGap(worldId, pack, memory, gap, recaps, { mode = 'between', from = '', to = '' } = {}) {
     const state = normalizeWorldState(memory.stores.dooms_world);
     const lw = liveWorldConfig(extensionSettings);
     const players = playerNames();
-    const prompt = buildGapPrompt({ pack, state, facts: memory.facts, gap: gap.words, recaps, maxStep: lw.maxStep, spoilerFree: lw.spoilerFree, player: players });
-    log(`the world moves by "${gap.words}" before the scene`, { world: worldId });
+    const prompt = buildGapPrompt({ pack, state, facts: memory.facts, gap: gap.words, recaps, maxStep: lw.maxStep, spoilerFree: lw.spoilerFree, player: players, mode, from, to });
+    log(mode === 'after' ? 'the world moves for the scene just ended' : `the world moves by "${gap.words}" before the scene`, { world: worldId });
     try {
         const r = await request(prompt, { transport: gapTransport, label: 'gap' });
         if (r.busy) return { ok: false, reason: 'busy' };
@@ -434,13 +464,12 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     let memory = memoryFor(g.entry, pack, g.id);
     const recaps = lastRecaps(g.entry, 2);
     const notes = [];
+    let movedMemory = null;    // the gap run's result is held with the Start and written with the record (a Start backed out of moves nothing)
     if (gapMoves(theGap) && g.entry.memory) {
         const moved = await moveWorldByGap(g.id, pack, memory, theGap, recaps);
         if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
-        if (moved.ok) {
-            memory = moved.memory;
-            putEntry(g.id, { ...entryOf(g.id), memory }, { source: 'gap', world: g.id });
-        } else notes.push(`The world did not move for the gap (${moved.reason}${moved.errors ? `: ${moved.errors.join(' ')}` : moved.error ? `: ${moved.error}` : ''}).`);
+        if (moved.ok) { memory = moved.memory; movedMemory = moved.memory; }
+        else notes.push(`The world did not move for the gap (${moved.reason}${moved.errors ? `: ${moved.errors.join(' ')}` : moved.error ? `: ${moved.error}` : ''}).`);
     }
     const worldState = normalizeWorldState(memory.stores.dooms_world);
     const placeId = place && place.id ? resolvePlace(pack, place.id) || String(place.id) : '';
@@ -474,7 +503,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     const since = recentChanges(worldState, pack, { limit: 8, spoilerFree: liveWorldConfig(extensionSettings).spoilerFree }).map(c => `${c.gameDate ? `${c.gameDate}: ` : ''}${c.text}`);
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
-        weather, since, recaps, player: players, openers, when, errors, notes, prompt,
+        weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
     };
     return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes };
 }
@@ -525,6 +554,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     if (choice === 'own') { const text = String(ownText || '').trim(); if (text) list = [{ title: sceneTitle({ seed: p.seed, place: p.place.label }), text, who: p.cast.slice() }]; }
     else if (choice !== 'none' && p.openers.length) { const i = Math.min(p.openers.length - 1, Math.max(0, Number(choice) || 0)); list = [p.openers[i], ...p.openers.filter((_, k) => k !== i)]; }
     const b = bridge();
+    if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
     const entry = entryOf(p.worldId);
     const n = entry.seq + 1;
     const title = sceneTitle({ opener: list[0] || null, seed: p.seed, place: p.place.label });
@@ -534,7 +564,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     const now = Date.now();
     const seeded = seedStores(p.memory, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: p.seed && p.seed.kind === 'hook' ? p.seed.id : '', now });
     const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note });
-    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date });
+    const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName });
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: brief, worldInfo: '', integrity: b.uuid() });
     const message = list.length ? openerMessage({ name: p.card.name, openers: list, chosen: 0, sendDate: b.timestamp(), tracker: seeded.tracker, title }) : null;
     try {
@@ -545,12 +575,20 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
         return { ok: false, reason: 'file', error };
     }
     const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, chat: fileName, card: p.card.avatar, startedAt: now, startDate: seeded.facts.date });
-    putEntry(p.worldId, opened.entry, { source: 'start', world: p.worldId });
+    // The record and the world moved by the gap are written together, once the file exists (D117, §2.2).
+    putEntry(p.worldId, p.movedMemory ? { ...opened.entry, memory: p.movedMemory } : opened.entry, { source: 'start', world: p.worldId });
     pending = null;
     log(`scene ${n} written: "${fileName}"`);
+    if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');
     try {
         await b.unshallowCharacter(p.card.index);
-        if (String(b.characterId()) !== String(p.card.index) || b.groupId()) await b.selectCharacterById(p.card.index);
+        // The card's remembered chat is the scene first, so a select loads the scene and never a stray chat.
+        const cards = b.characters();
+        if (cards[p.card.index]) cards[p.card.index].chat = fileName;
+        if (String(b.characterId()) !== String(p.card.index) || b.groupId()) {
+            await b.selectCharacterById(p.card.index);
+            if (String(b.characterId()) !== String(p.card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
+        }
         await b.openCharacterChat(fileName);
     } catch (e) {
         const error = String(e && e.message || e);
@@ -592,19 +630,27 @@ export async function prepareEnd() {
     if (!idle) return { ok: false, reason: 'busy' };
     const token = { meta: meta(), id: chatId() };
     const players = playerNames();
-    const transcript = sceneTranscript(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     const brief = token.meta && typeof token.meta.scenario === 'string' ? token.meta.scenario : '';
-    const prompt = buildRecapPrompt({ transcript, brief, player: players[0] || '', maxChars: cfg().recapChars });
+    // A scene longer than one page is read in passes, oldest first, each pass carrying the record so far (§5.2).
+    const pages = sceneTranscriptPages(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     let recap = '';
     let error = '';
     try {
-        const r = await request(prompt, { transport: recapTransport, label: 'recap' });
-        if (r.busy) error = 'Another request holds the line.';
-        else { const p = parseRecapReply(r.text, { maxChars: cfg().recapChars }); if (p.ok) recap = p.recap; else error = p.errors.join(' '); }
+        for (let i = 0; i < Math.max(1, pages.length); i++) {
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1 });
+            const r = await request(prompt, { transport: recapTransport, label: 'recap' });
+            if (r.busy) { error = 'Another request holds the line.'; break; }
+            const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
+            if (!p.ok) { error = p.errors.join(' '); break; }
+            recap = p.recap;
+            error = '';
+        }
     } catch (e) { error = String(e && e.message || e); }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
     const facts = factsNow();
-    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, steps: { canon: isCanonOn(), world: isLiveWorldOn() && !!getWorldState() } };
+    const stale = isStaleScene(g.cur.scene, g.entry.memory);
+    const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
+    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length };
 }
 
 /**
@@ -613,7 +659,7 @@ export async function prepareEnd() {
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, onStep = null } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, replaceMemory = false, onStep = null } = {}) {
     const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
@@ -622,11 +668,15 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
     notify({ source: 'end-start' });
     const token = { meta: meta(), id: chatId() };
     const changed = () => meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id);
-    const out = { ok: false, recap: skipRecap || !String(recap || '').trim() ? 'skipped' : 'kept', canon: 'off', world: 'off', book: 'off' };
+    const out = { ok: false, recap: skipRecap || !String(recap || '').trim() ? 'skipped' : 'kept', canon: 'off', world: 'off', snapshot: 'waiting', book: 'off' };
     try {
         const idle = await whenIdle();
         if (!idle) return { ...out, reason: 'busy' };
-        if (isCanonOn() && !skipCanon) {
+        const m = token.meta;
+        const replyId = lastReplyId();
+        // Canon over the whole scene, into the chat: the scene's own knowledge, read once per last reply (End again skips a step already run).
+        const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === replyId);
+        if (isCanonOn() && !skipCanon && !canonDone) {
             step('canon', 'running');
             let r = await updateCanon({ reason: 'scene-end', scope: 'scene' });
             if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene' }); }
@@ -634,41 +684,48 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
             out.canonResult = r;
             step('canon', out.canon);
             if (changed()) return { ...out, reason: 'changed' };
-        } else if (isCanonOn()) out.canon = 'skipped';
-        if (isLiveWorldOn() && getWorldState() && !skipWorld) {
-            step('world', 'running');
-            await waitForBackground();
-            let r = await advanceNow({ reason: 'scene-end' });
-            if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await advanceNow({ reason: 'scene-end' }); }
-            out.world = r.ok ? 'ok' : 'failed';
-            out.worldResult = r;
-            step('world', out.world);
-            if (changed()) return { ...out, reason: 'changed' };
-        } else if (isLiveWorldOn() && getWorldState()) out.world = 'skipped';
-        // The flush: the tracker's stores rebuilt from memory and the chat written through the conditional save.
+            if (r.ok && m && m[HUB_META_KEY]) m[HUB_META_KEY] = { ...m[HUB_META_KEY], end: { canonAt: replyId } };
+        } else if (isCanonOn()) out.canon = canonDone ? 'ok' : 'skipped';
+        // The flush: the tracker's stores rebuilt from memory and the chat written through the conditional save; then the snapshot, sealed.
         step('snapshot', 'running');
         try { await saveChatData({ immediate: true }); } catch (e) { log('the flush failed', String(e && e.message || e)); return { ...out, reason: 'flush', error: String(e && e.message || e) }; }
         if (changed()) return { ...out, reason: 'changed' };
-        const m = meta();
         const facts = factsNow();
         const now = Date.now();
         const sceneId = g.cur.scene ? g.cur.scene.id : g.cur.mark.scene;
-        const memory = takeSnapshot(m, { scene: sceneId, takenAt: now });
-        const recapText = skipRecap ? '' : String(recap || '').trim();
+        const players = playerNames();
+        let memory = takeSnapshot(m, { scene: sceneId, takenAt: now, player: players[0] || '' });
         let entry = entryOf(g.cur.worldId);
-        if (!g.cur.scene) {
-            // A record the settings lost: remade from the mark before it is ended.
-            entry = reconcileScenesWithChats(entry, [{ file: token.id || '', meta: m }], g.cur.worldId).entry;
-        }
+        if (!g.cur.scene) entry = reconcileScenesWithChats(entry, [{ file: token.id || '', meta: m }], g.cur.worldId).entry;    // a record the settings lost: remade from the mark
+        const record = entry.scenes.find(x => x.id === sceneId) || null;
+        // A stale scene (begun before the memory was last written) keeps the world's memory unless told to replace it (D123).
+        const stale = isStaleScene(record, entry.memory);
+        const keep = stale && !replaceMemory;
+        // The world moves for the scene just ended: over the snapshot's own world state, into the memory, never into the chat (§5.3).
+        if (!keep && isLiveWorldOn() && !skipWorld && memory.stores.dooms_world) {
+            step('world', 'running');
+            const res = await loadPack(g.cur.worldId);
+            if (res.ok) {
+                const recapText = skipRecap ? '' : String(recap || '').trim();
+                const moved = await moveWorldByGap(g.cur.worldId, res.pack, memory, { id: 'scene', words: 'the scene just played' }, [recapText, ...lastRecaps(entry, 1)].filter(Boolean), { mode: 'after', from: g.cur.mark.startDate, to: facts.date });
+                if (moved.ok) memory = moved.memory;
+                out.world = moved.ok ? 'ok' : 'failed';
+                out.worldResult = moved;
+            } else out.world = 'failed';
+            step('world', out.world);
+            if (changed()) return { ...out, reason: 'changed' };
+        } else if (isLiveWorldOn() && memory.stores.dooms_world) out.world = keep ? 'kept' : 'skipped';
+        const recapText = skipRecap ? '' : String(recap || '').trim();
         const ended = endSceneRecord(entry, sceneId, { endedAt: now, endDate: facts.date, recap: recapText, noRecap: !recapText });
-        putEntry(g.cur.worldId, { ...ended.entry, memory }, { source: 'end', world: g.cur.worldId });
-        m[HUB_META_KEY] = markEnded(g.cur.mark, { endedAt: now, endDate: facts.date });
+        putEntry(g.cur.worldId, { ...ended.entry, memory: keep ? entry.memory : memory }, { source: 'end', world: g.cur.worldId });
+        out.snapshot = keep ? 'kept' : 'ok';
+        m[HUB_META_KEY] = markEnded(m[HUB_META_KEY] || g.cur.mark, { endedAt: now, endDate: facts.date });
         try { await bridge().saveChat(); } catch (e) { log('the mark could not be saved', String(e && e.message || e)); }
         current = { worldId: g.cur.worldId, mark: m[HUB_META_KEY] };
-        step('snapshot', 'ok');
+        step('snapshot', out.snapshot);
         mountStrip();
-        log(`scene ${sceneId} ended and remembered`, { canon: out.canon, world: out.world });
-        return { ...out, ok: true, scene: ended.scene, memory: { takenAt: memory.takenAt, facts: memory.facts } };
+        log(`scene ${sceneId} ended and remembered`, { canon: out.canon, world: out.world, snapshot: out.snapshot, stale });
+        return { ...out, ok: true, stale, scene: ended.scene, memory: { takenAt: memory.takenAt, facts: memory.facts } };
     } catch (e) {
         const error = String(e && e.message || e);
         log('End failed', error);
@@ -690,6 +747,79 @@ export function isEnding() {
     return ending;
 }
 
+// ─── The scene chat's own events ────────────────────────────────────────
+
+const OPENER = (m) => !!(m && !m.is_user && m.extra && m.extra[HUB_META_KEY] && m.extra[HUB_META_KEY].opener);
+
+/** The header's seeded tracker data, the four fields. */
+function seededTracker() {
+    const m = meta();
+    const t = m && m.dooms_tracker;
+    const d = t && (t.lastGeneratedData || t.committedTrackerData);
+    if (!d || typeof d !== 'object') return null;
+    return { quests: d.quests || null, infoBox: d.infoBox || null, characterThoughts: d.characterThoughts || null, player: d.player || null };
+}
+
+/**
+ * MESSAGE_RECEIVED, after the tracker's own handler: the first-message
+ * event runs the tracker's parse over the opener (no block, all four
+ * fields null) and overwrites its swipe entry; the seed is put back on
+ * every swipe, and the singletons hold it.
+ */
+export function onHubMessageReceived(messageId, type) {
+    if (!extensionSettings.enabled) return;
+    const list = chatArray();
+    const m = list && list.length ? list[list.length - 1] : null;
+    if (!OPENER(m) || (type !== 'first_message' && list.length > 1)) return;
+    if (!currentScene()) return;
+    const seed = seededTracker();
+    if (!seed) return;
+    const n = Array.isArray(m.swipes) && m.swipes.length ? m.swipes.length : 1;
+    if (!m.extra) m.extra = {};
+    m.extra.dooms_tracker_swipes = {};
+    for (let k = 0; k < n; k++) m.extra.dooms_tracker_swipes[k] = JSON.parse(JSON.stringify(seed));
+    if (Array.isArray(m.swipe_info)) m.swipe_info.forEach((si, k) => { if (si && typeof si === 'object') { si.extra = si.extra && typeof si.extra === 'object' ? si.extra : {}; si.extra.dooms_tracker_swipes = { [k]: JSON.parse(JSON.stringify(seed)) }; } });
+    setLastGeneratedData({ ...lastGeneratedData, ...seed });
+    setCommittedTrackerData({ ...committedTrackerData, ...seed });
+    try { saveChatData({ immediate: true }); } catch (e) { /* saved later */ }
+}
+
+/**
+ * MESSAGE_DELETED, after the tracker's own handler: a scene whose opener
+ * is deleted has no reply left, and the tracker nulled both stores; the
+ * header's seed comes back, so the first reply still knows the scene.
+ */
+export function onHubMessageDeleted() {
+    if (!extensionSettings.enabled || !currentScene()) return;
+    const list = chatArray() || [];
+    if (list.some(x => x && !x.is_user && !x.is_system)) return;
+    const seed = seededTracker();
+    if (!seed) return;
+    setLastGeneratedData({ ...lastGeneratedData, ...seed });
+    setCommittedTrackerData({ ...committedTrackerData, ...seed });
+    try { renderInfoBox(); } catch (e) { /* no DOM */ }
+    try { renderThoughts(); } catch (e) { /* no DOM */ }
+    try { renderQuests(); } catch (e) { /* no DOM */ }
+    try { saveChatData({ immediate: true }); } catch (e) { /* saved later */ }
+}
+
+/**
+ * GENERATION_STARTED, after the tracker's injector: at a scene's first
+ * send the chat holds the opener alone and the injector finds no reply at
+ * depth one or more, so the committed block (the seeded cast, place, date,
+ * vitals) would not be shown; the hub sets the example slot itself.
+ */
+export function onHubGenerationStarted(type, data, dryRun) {
+    if (dryRun || !extensionSettings.enabled || extensionSettings.generationMode !== 'together') return;
+    if (type === 'quiet' || type === 'impersonate' || (data && (data.quiet_prompt || data.quietImage || data.quiet_image))) return;
+    const list = chatArray();
+    if (!list || list.length !== 1 || !OPENER(list[0]) || !currentScene()) return;
+    let raw = '';
+    try { raw = generateTrackerExample(); } catch (e) { raw = ''; }
+    if (!raw) return;
+    try { setExtensionPrompt('dooms-tracker-example', `\`\`\`json\n${raw}\n\`\`\`\n`, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.ASSISTANT); } catch (e) { log('the first reply\'s example could not be set', String(e && e.message || e)); }
+}
+
 // ─── The records' moves (D123) ──────────────────────────────────────────
 
 export function setSceneAside(worldId, id) {
@@ -709,9 +839,16 @@ export async function openSceneChat(worldId, id) {
     const card = cardOf(worldId);
     if (!card) return { ok: false, reason: 'card-gone' };
     const b = bridge();
+    if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
+    if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');
     try {
         await b.unshallowCharacter(card.index);
-        if (String(b.characterId()) !== String(card.index) || b.groupId()) await b.selectCharacterById(card.index);
+        const cards = b.characters();
+        if (cards[card.index]) cards[card.index].chat = s.chat;
+        if (String(b.characterId()) !== String(card.index) || b.groupId()) {
+            await b.selectCharacterById(card.index);
+            if (String(b.characterId()) !== String(card.index) || b.groupId()) throw new Error('the narrator card could not be selected (a generation running?)');
+        }
         await b.openCharacterChat(s.chat);
         return { ok: true };
     } catch (e) {

@@ -168,14 +168,16 @@ async function endGo() {
     const recap = String($(`${root} #dooms-hub-recap`).val() || '').trim();
     const skipCanon = $(`${root} #dooms-hub-skip-canon`).prop('checked') === true;
     const skipWorld = $(`${root} #dooms-hub-skip-world`).prop('checked') === true;
-    const states = { recap: recap ? 'ok' : 'skipped', canon: sheet.prep.steps.canon ? (skipCanon ? 'skipped' : 'waiting') : 'off', world: sheet.prep.steps.world ? (skipWorld ? 'skipped' : 'waiting') : 'off', snapshot: 'waiting' };
+    const replaceMemory = $(`${root} #dooms-hub-replace`).prop('checked') === true;
+    const keep = !!sheet.prep.stale && !replaceMemory;
+    const states = { recap: recap ? 'ok' : 'skipped', canon: sheet.prep.steps.canon ? (skipCanon ? 'skipped' : 'waiting') : 'off', world: sheet.prep.steps.world ? (keep ? 'kept' : skipWorld ? 'skipped' : 'waiting') : 'off', snapshot: keep ? 'kept' : 'waiting' };
     sheet = { ...sheet, prep: { ...sheet.prep, recap }, states, error: '' };
     render();
     const onStep = (name, state) => { if (sheet && sheet.kind === 'end') { sheet = { ...sheet, states: { ...sheet.states, [name]: state } }; render(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, onStep });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep });
     if (!isOpen || !sheet || sheet.kind !== 'end') return;
     if (!r.ok) { sheet = { ...sheet, states: { ...sheet.states, snapshot: 'failed' }, error: describeEndResult(r) }; render(); return; }
-    sheet = { ...sheet, result: r, states: { ...sheet.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : sheet.states.canon, world: r.world === 'ok' ? 'ok' : r.world === 'failed' ? 'failed' : sheet.states.world, snapshot: 'ok' } };
+    sheet = { ...sheet, result: r, states: { ...sheet.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : sheet.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : sheet.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok' } };
     note = describeEndResult(r);
     render();
 }
