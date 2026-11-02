@@ -2500,3 +2500,26 @@ body[data-dooms-ui] #rpg-settings-popup .rpg-toggle-switch input:checked + .rpg-
 }
 body[data-dooms-ui="lumen"] #rpg-settings-popup .rpg-toggle-slider,
 body[data-dooms-ui="lumen"] #rpg-settings-popup .rpg-toggle-slider::before { border-radius: 999px; }
+
+/* ── The Hub under the looks (docs/hub-plan.md D116): the window, its sheets, the strip ── */
+body[data-dooms-ui] .dooms-hub-sub, body[data-dooms-ui] .dooms-hub-status, body[data-dooms-ui] .dooms-hub-hint, body[data-dooms-ui] .dooms-hub-panel-title, body[data-dooms-ui] .dooms-hub-scene-no, body[data-dooms-ui] .dooms-hub-scene-meta, body[data-dooms-ui] .dooms-hub-card-who, body[data-dooms-ui] .dooms-hub-step-state, body[data-dooms-ui] .dooms-hub-skip { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-hub-head, body[data-dooms-ui] .dooms-hub-scene, body[data-dooms-ui] .dooms-hub-card, body[data-dooms-ui] .dooms-hub-step, body[data-dooms-ui] .dooms-hub-empty, body[data-dooms-ui] #dooms-scene-strip { background: var(--ov-panel2); border-color: var(--ov-line); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-hub-foot { border-top-color: var(--ov-line); }
+body[data-dooms-ui] .dooms-hub-title, body[data-dooms-ui] .dooms-hub-sheet-title, body[data-dooms-ui] .dooms-hub-scene-title, body[data-dooms-ui] .dooms-hub-card-title { color: var(--ov-text); font-family: var(--ov-display); }
+body[data-dooms-ui] .dooms-hub-empty, body[data-dooms-ui] .dooms-hub-scene-recap, body[data-dooms-ui] .dooms-hub-card-text, body[data-dooms-ui] .dooms-hub-step, body[data-dooms-ui] .dooms-hub-field > label, body[data-dooms-ui] .dooms-hub-field-label, body[data-dooms-ui] #dooms-scene-strip { color: var(--ov-text); font-family: var(--ov-body); }
+body[data-dooms-ui] .dooms-hub-scene.is-open { border-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-hub-scene-tag { background: var(--ov-panel); color: var(--ov-muted); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-hub-scene.is-open .dooms-hub-scene-tag { background: color-mix(in srgb, var(--ov-accent) 18%, var(--ov-panel)); color: var(--ov-text); }
+body[data-dooms-ui] .dooms-hub-chip { background: var(--ov-panel); border-color: var(--ov-line); color: var(--ov-text); border-radius: var(--ov-radius-sm); }
+body[data-dooms-ui] .dooms-hub-chip.is-on { border-color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 14%, var(--ov-panel)); }
+body[data-dooms-ui] .dooms-hub-chip-here, body[data-dooms-ui] .dooms-hub-note { color: var(--ov-accent2); }
+body[data-dooms-ui] .dooms-hub-done, body[data-dooms-ui] .dooms-hub-step.is-ok .dooms-hub-step-state { color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-hub-step.is-running .dooms-hub-step-state { color: var(--ov-text); }
+body[data-dooms-ui="lumen"] .dooms-hub-head, body[data-dooms-ui="lumen"] .dooms-hub-scene, body[data-dooms-ui="lumen"] .dooms-hub-card, body[data-dooms-ui="lumen"] .dooms-hub-empty, body[data-dooms-ui="lumen"] #dooms-scene-strip { border-radius: 14px; }
+body[data-dooms-ui="lumen"] .dooms-hub-chip, body[data-dooms-ui="lumen"] .dooms-hub-scene-tag { border-radius: 999px; }
+body[data-dooms-ui="lumen"] #rpg-hub-popup .rpg-settings-popup-content { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body[data-dooms-ui="grimoire"] .dooms-hub-scene.is-open, body[data-dooms-ui="grimoire"] .dooms-hub-card { outline: 1px solid var(--ov-line2); outline-offset: 2px; }
+body[data-dooms-ui="inked"] .dooms-hub-head, body[data-dooms-ui="inked"] .dooms-hub-scene, body[data-dooms-ui="inked"] .dooms-hub-card, body[data-dooms-ui="inked"] .dooms-hub-step, body[data-dooms-ui="inked"] .dooms-hub-empty, body[data-dooms-ui="inked"] #dooms-scene-strip, body[data-dooms-ui="inked"] .dooms-hub-chip { border: var(--ov-border-w) solid var(--ov-ink); background: var(--ov-paper); color: var(--ov-ink); box-shadow: none; }
+body[data-dooms-ui="inked"] .dooms-hub-title, body[data-dooms-ui="inked"] .dooms-hub-sheet-title, body[data-dooms-ui="inked"] .dooms-hub-scene-title, body[data-dooms-ui="inked"] .dooms-hub-card-title, body[data-dooms-ui="inked"] .dooms-hub-card-text, body[data-dooms-ui="inked"] .dooms-hub-scene-recap, body[data-dooms-ui="inked"] .dooms-hub-step, body[data-dooms-ui="inked"] .dooms-hub-field > label, body[data-dooms-ui="inked"] .dooms-hub-field-label, body[data-dooms-ui="inked"] .dooms-hub-empty, body[data-dooms-ui="inked"] #dooms-scene-strip, body[data-dooms-ui="inked"] .dooms-hub-chip { color: var(--ov-ink); }
+body[data-dooms-ui="inked"] .dooms-hub-empty { border-style: dashed; }
+body[data-dooms-ui="inked"] .dooms-hub-scene.is-open, body[data-dooms-ui="inked"] .dooms-hub-chip.is-on { background: var(--ov-caption); }

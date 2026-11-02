@@ -40,6 +40,9 @@ const MUST_BE_LAZY = [
     'src/systems/ui/worldDashboard.js',
     'src/systems/ui/worldViews.js',
     'src/systems/ui/worldFace.js',
+    // The Hub's window and its views load on first open (the strip loads the views on the first scene chat).
+    'src/systems/ui/hub.js',
+    'src/systems/ui/hubViews.js',
 ];
 
 // Static imports only: `import x from '…'`, `import {…} from '…'`,

@@ -173,7 +173,8 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
 import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
-import { initHub, onHubChatChanged, onHubChatDeleted } from './src/systems/features/hub.js';
+import { initHub, onHubChatChanged, onHubChatDeleted, hubWorldIds, cardOf, bindCard, unbindCard, makeNarratorCard, worldEntry, worldOfCard } from './src/systems/features/hub.js';
+import { hubConfig, hubStatusLine } from './src/utils/hub.js';
 import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel } from './src/utils/scenePictures.js';
@@ -519,6 +520,7 @@ function renderLiveWorldSettings() {
         if (r.ok) $(`#rpg-world-pack option[value="${id.replace(/"/g, '\\"')}"]`).text(`${r.pack.name}${custom.has(id) ? '' : ' (the example)'}${r.pack.id !== r.pack.name.toLowerCase() && custom.has(id) ? ` · ${id}` : ''}`);
     }).catch(() => {}));
     renderLiveWorldStatus();
+    try { renderHubSettings(); } catch (e) { console.warn('[Dooms Tracker] Hub settings failed to render', e); }
 }
 
 /** The status line alone: it follows every world change without touching the fields the user may be editing. */
@@ -543,6 +545,35 @@ function renderLiveWorldStatus() {
     const missing = getMissingWorld();
     if (missing && s && pack) status = `The world "${missing}" is not here (removed, or not imported yet): this chat goes on in the blank world, its clocks kept for the world's return. ${status}`;
     $('#rpg-world-status').text(status);
+}
+
+/** Settings → Live World → The Hub: the world, its narrator card, the status, the switch (docs/hub-plan.md D127). */
+function renderHubSettings() {
+    if (!$('#rpg-hub-world').length) return;
+    const ids = hubWorldIds();
+    const $world = $('#rpg-hub-world');
+    const chosen = String($world.attr('data-world') || $world.val() || '');
+    const worldId = ids.includes(chosen) ? chosen : (ids[0] || '');
+    $world.html(ids.length ? ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('') : '<option value="">No world of your own yet (the World Builder makes one)</option>').val(worldId).attr('data-world', worldId);
+    ids.forEach(id => loadPack(id).then(r => { if (r.ok) $(`#rpg-hub-world option[value="${id.replace(/"/g, '\\"')}"]`).text(r.pack.name); }).catch(() => {}));
+    const $card = $('#rpg-hub-card');
+    let chars = [];
+    try { chars = (getContext().characters || []).map((c, i) => ({ i, name: String(c && c.name || ''), avatar: String(c && c.avatar || '') })).filter(c => c.avatar); } catch (e) { chars = []; }
+    const bound = worldId ? (cardOf(worldId) || null) : null;
+    $card.html([`<option value="">${worldId ? '— no narrator card —' : '—'}</option>`, ...chars.map(c => { const other = worldOfCard(c.avatar); const taken = other && other !== worldId; return `<option value="${escapeHtml(c.avatar)}"${taken ? ' disabled' : ''}>${escapeHtml(c.name)}${taken ? ` (narrates ${escapeHtml(other)})` : ''}</option>`; })].join('')).val(bound ? bound.avatar : '');
+    $('#rpg-hub-make, #rpg-hub-open, #rpg-hub-start').prop('disabled', !worldId);
+    $('#rpg-hub-start').prop('disabled', !worldId || !bound);
+    $('#rpg-hub-close').prop('checked', hubConfig(extensionSettings).closeOnStart);
+    renderHubStatus();
+}
+
+function renderHubStatus() {
+    if (!$('#rpg-hub-status').length) return;
+    const worldId = String($('#rpg-hub-world').val() || '');
+    if (!worldId) { $('#rpg-hub-status').text('Build a world of your own in the World Builder, then pick its narrator card here.'); return; }
+    const card = cardOf(worldId);
+    const name = String($('#rpg-hub-world option:selected').text() || worldId);
+    $('#rpg-hub-status').text(hubStatusLine({ worldName: name, entry: worldEntry(worldId), cardName: card ? card.name : '' }));
 }
 
 /** The Canon rules block in settings, made to exist. */
@@ -2198,6 +2229,41 @@ function bindSettingsUI() {
     });
     $(document).on('change', '#rpg-world-role', function () { getWorldRules().role = String($(this).val() || 'system'); _saveWorld(); });
     $(document).on('change', '#rpg-world-debug', function () { getWorldRules().debug = $(this).prop('checked'); _saveWorld(); });
+    // ── The Hub (docs/hub-plan.md D127) ──
+    const _hubRules = () => { if (!extensionSettings.hub || typeof extensionSettings.hub !== 'object') extensionSettings.hub = {}; return extensionSettings.hub; };
+    $(document).on('change', '#rpg-hub-world', function () { $(this).attr('data-world', String($(this).val() || '')); renderHubSettings(); });
+    $(document).on('change', '#rpg-hub-card', function () {
+        const worldId = String($('#rpg-hub-world').val() || '');
+        const avatar = String($(this).val() || '');
+        if (!worldId) return;
+        const r = avatar ? bindCard(worldId, avatar) : { ok: unbindCard(worldId) || true };
+        if (!r.ok) toastr.warning(r.reason === 'bound-elsewhere' ? `That card already narrates "${r.world}".` : `The card could not be bound (${r.reason}).`, 'The Hub', { timeOut: 5000 });
+        renderHubSettings();
+    });
+    $(document).on('click', '#rpg-hub-make', async function () {
+        const worldId = String($('#rpg-hub-world').val() || '');
+        if (!worldId) return;
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await makeNarratorCard(worldId);
+            if (r.ok) toastr.success(`"${r.name}" narrates this world now.`, 'The Hub', { timeOut: 4000 });
+            else toastr.warning(`The card could not be made: ${r.error || r.reason}`, 'The Hub', { timeOut: 7000 });
+        } finally {
+            $b.prop('disabled', false);
+            renderHubSettings();
+        }
+    });
+    $(document).on('click', '#rpg-hub-open', function () {
+        const worldId = String($('#rpg-hub-world').val() || '');
+        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+    });
+    $(document).on('click', '#rpg-hub-start', function () {
+        const worldId = String($('#rpg-hub-world').val() || '');
+        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId, start: true })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+    });
+    $(document).on('change', '#rpg-hub-close', function () { _hubRules().closeOnStart = $(this).prop('checked'); saveSettings(); });
+    window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
     $(document).on('click', '#rpg-world-builder', function () {
         import('./src/systems/ui/worldBuilder.js').then(m => m.openWorldBuilder()).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));
     });
@@ -3887,6 +3953,28 @@ async function initUI() {
                     import('./src/systems/ui/worldDashboard.js')
                         .then(m => m.openWorldDashboard())
                         .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
+                },
+            });
+            // The Hub (docs/hub-plan.md D127): the world's window, and End scene for the scene in front; listed
+            // whatever Live World's switch says, like Map (the window itself says when the hub is off).
+            items.push({
+                id: 'hub',
+                label: 'Hub',
+                iconClass: 'fa-solid fa-compass',
+                action: () => {
+                    import('./src/systems/ui/hub.js')
+                        .then(m => m.openHub())
+                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+                },
+            });
+            items.push({
+                id: 'end-scene',
+                label: 'End scene',
+                iconClass: 'fa-solid fa-flag-checkered',
+                action: () => {
+                    import('./src/systems/ui/hub.js')
+                        .then(m => m.openEndSheet())
+                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
                 },
             });
             items.push({

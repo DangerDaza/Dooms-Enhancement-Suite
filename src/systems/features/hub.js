@@ -30,8 +30,9 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure,
 } from '../../utils/hub.js';
+import { ensureCss } from '../../core/cssLoader.js';
 import { isLiveWorldOn, loadPack, getWorldState, advanceNow } from './liveWorld.js';
 import { isCanonOn, updateCanon } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
@@ -318,6 +319,7 @@ export function onHubChatChanged() {
     pending = null;
     const mark = extensionSettings.enabled ? readMark(meta()) : null;
     current = mark ? { worldId: mark.world, mark } : null;
+    mountStrip();
     notify({ source: 'chat' });
 }
 
@@ -611,7 +613,8 @@ export async function prepareEnd() {
  * Each step says how it went; a chat that changes under End stops it
  * before anything of the world is touched.
  */
-export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false } = {}) {
+export async function commitEnd({ recap = '', skipRecap = false, skipCanon = false, skipWorld = false, onStep = null } = {}) {
+    const step = (name, state) => { if (typeof onStep === 'function') { try { onStep(name, state); } catch (e) { /* the sheet's own */ } } };
     if (ending) return { ok: false, reason: 'running' };
     const g = guardEnd();
     if (!g.ok) return g;
@@ -624,21 +627,26 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         const idle = await whenIdle();
         if (!idle) return { ...out, reason: 'busy' };
         if (isCanonOn() && !skipCanon) {
+            step('canon', 'running');
             let r = await updateCanon({ reason: 'scene-end', scope: 'scene' });
             if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await updateCanon({ reason: 'scene-end', scope: 'scene' }); }
             out.canon = r.ok ? 'ok' : 'failed';
             out.canonResult = r;
+            step('canon', out.canon);
             if (changed()) return { ...out, reason: 'changed' };
         } else if (isCanonOn()) out.canon = 'skipped';
         if (isLiveWorldOn() && getWorldState() && !skipWorld) {
+            step('world', 'running');
             await waitForBackground();
             let r = await advanceNow({ reason: 'scene-end' });
             if (!r.ok && (r.reason === 'busy' || r.reason === 'running')) { await waitForBackground(); await sleep(timing.idleStepMs); r = await advanceNow({ reason: 'scene-end' }); }
             out.world = r.ok ? 'ok' : 'failed';
             out.worldResult = r;
+            step('world', out.world);
             if (changed()) return { ...out, reason: 'changed' };
         } else if (isLiveWorldOn() && getWorldState()) out.world = 'skipped';
         // The flush: the tracker's stores rebuilt from memory and the chat written through the conditional save.
+        step('snapshot', 'running');
         try { await saveChatData({ immediate: true }); } catch (e) { log('the flush failed', String(e && e.message || e)); return { ...out, reason: 'flush', error: String(e && e.message || e) }; }
         if (changed()) return { ...out, reason: 'changed' };
         const m = meta();
@@ -657,6 +665,8 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         m[HUB_META_KEY] = markEnded(g.cur.mark, { endedAt: now, endDate: facts.date });
         try { await bridge().saveChat(); } catch (e) { log('the mark could not be saved', String(e && e.message || e)); }
         current = { worldId: g.cur.worldId, mark: m[HUB_META_KEY] };
+        step('snapshot', 'ok');
+        mountStrip();
         log(`scene ${sceneId} ended and remembered`, { canon: out.canon, world: out.world });
         return { ...out, ok: true, scene: ended.scene, memory: { takenAt: memory.takenAt, facts: memory.facts } };
     } catch (e) {
@@ -730,9 +740,53 @@ export async function reopenCurrentScene() {
     const m = meta();
     if (m) { m[HUB_META_KEY] = markEnded(cur.mark, { endedAt: 0, endDate: '' }); try { await bridge().saveChat(); } catch (err) { /* saved later */ } }
     current = { worldId: cur.worldId, mark: m ? m[HUB_META_KEY] : cur.mark };
+    mountStrip();
     notify({ source: 'reopen' });
     return { ok: true, scene: r.scene };
 }
+
+/** A record whose chat is gone, removed (nothing else leaves the list). */
+export function removeGoneScene(worldId, id) {
+    const e = store().worlds[String(worldId || '')];
+    if (!e) return false;
+    const r = removeGonePure(e, id);
+    if (!r.removed) return false;
+    putEntry(String(worldId), r.entry, { source: 'remove', world: String(worldId) });
+    return true;
+}
+
+// ─── The strip (D121) ───────────────────────────────────────────────────
+
+/**
+ * The strip across the top of the chat column while the chat in front is
+ * a scene: mounted before #chat, its view loaded with the window's views
+ * on first need (the plain chat pays nothing). Nothing is mounted where
+ * there is no chat column.
+ */
+function mountStrip() {
+    let chatEl = null;
+    try { chatEl = typeof document !== 'undefined' && document && typeof document.getElementById === 'function' ? document.getElementById('chat') : null; } catch (e) { chatEl = null; }
+    if (!chatEl || typeof chatEl.insertAdjacentHTML !== 'function') return;
+    const cur = extensionSettings.enabled ? currentScene() : null;
+    const existing = document.getElementById(STRIP_DOM_ID);
+    if (!cur) { if (existing && typeof existing.remove === 'function') existing.remove(); return; }
+    const token = ++stripToken;
+    Promise.all([ensureCss('modals').catch(() => {}), import('../ui/hubViews.js')]).then(([, v]) => {
+        if (token !== stripToken) return;
+        const again = currentScene();
+        if (!again) return;
+        const html = v.stripHtml({ mark: again.mark, scene: again.scene, ended: again.ended });
+        let el = document.getElementById(STRIP_DOM_ID);
+        if (!el) {
+            chatEl.insertAdjacentHTML('beforebegin', `<div id="${STRIP_DOM_ID}" class="dooms-scene-strip" role="region" aria-label="This scene"></div>`);
+            el = document.getElementById(STRIP_DOM_ID);
+        }
+        if (el) el.innerHTML = html;
+    }).catch(e => log('the strip could not be shown', String(e && e.message || e)));
+}
+
+const STRIP_DOM_ID = 'dooms-scene-strip';
+let stripToken = 0;
 
 /** The records against the card's chats (D128): gone files marked, marked chats the list lost brought back. */
 export async function refreshScenes(worldId) {
@@ -786,4 +840,15 @@ export function initHub() {
     } catch (e) {
         log('the hub commands could not be registered', String(e && e.message || e));
     }
+    // The strip's buttons: the window, the End sheet, Reopen (the window's module loads on first use).
+    try {
+        $(document).on('click', `#${STRIP_DOM_ID} [data-act]`, async function (ev) {
+            const act = this.getAttribute('data-act');
+            ev.preventDefault();
+            if (act === 'reopen') { const r = await reopenCurrentScene(); if (!r.ok) log('reopen refused', r.reason); return; }
+            const m = await import('../ui/hub.js');
+            if (act === 'end') await m.openEndSheet();
+            else await m.openHub();
+        });
+    } catch (e) { /* no jQuery (tests) */ }
 }
