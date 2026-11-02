@@ -14160,3 +14160,17 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     .dooms-wb-steps { grid-template-columns: minmax(0, 1fr); }
     .dooms-wb-foot .is-danger { margin-left: 0; }
 }
+
+/* ── The Map window's Hooks panel (docs/hooks-canon-plan.md D104): the round on offer as cards with their three buttons, the ask button, the taken folded. ── */
+.dooms-map-hook-hint { margin: 0 0 8px; font-size: 0.78em; line-height: 1.4; }
+.dooms-map-hook-list { display: flex; flex-direction: column; gap: 8px; }
+.dooms-map-hook { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.03); min-width: 0; }
+.dooms-map-hook-title { font-weight: 600; color: #eaeaea; font-size: 0.95em; }
+.dooms-map-hook-text { margin: 4px 0; font-size: 0.88em; line-height: 1.4; color: #d4d4de; }
+.dooms-map-hook-from { font-size: 0.72em; }
+.dooms-map-hook-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.dooms-map-hook-actions .rpg-accordion-action-btn, .dooms-map-hook-foot .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
+.dooms-map-hook-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.dooms-map-hook-taken { margin-top: 10px; font-size: 0.86em; }
+.dooms-map-hook-taken summary { cursor: pointer; color: #bbb; }
+.dooms-map-hook-taken .dooms-map-done-list { margin-top: 6px; }

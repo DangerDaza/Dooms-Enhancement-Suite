@@ -19,6 +19,8 @@ import { rowIdForCharacter } from '../../utils/worldMap.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
 import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHANGED_EVENT } from '../features/questCut.js';
+import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
+import { describeHooksResult } from '../../utils/questHooks.js';
 import { sourceProblem } from '../features/imageGen.js';
 import { mapWindowHtml, FEED_LIMITS, MAP_PANELS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
@@ -86,7 +88,7 @@ function render() {
     try { drawProblem = sourceProblem(); } catch (e) { drawProblem = ''; }
     $body.html(mapWindowHtml({
         state, pack: getActivePack(), cfg, facts: sceneFacts(), packError: getPackError(), portraits: portraitOf, masterOn: !!extensionSettings.enabled,
-        row, selected, drawing: isDrawingPlace(), panel, feed: feedLimit, present: presentNamesFromTracker(), done: getCompletedQuests(),
+        row, selected, drawing: isDrawingPlace(), panel, feed: feedLimit, present: presentNamesFromTracker(), done: getCompletedQuests(), hooks: getHooks(), hooksBusy: isProposing(),
         travelling: travelling || !!(getPendingQuestCut() && getPendingQuestCut().kind === 'travel'), canDraw: !drawProblem, drawProblem,
     }));
     const el = rowEl();
@@ -256,6 +258,29 @@ function build() {
     $(document).on('keydown', (e) => { if (e.key === 'Escape' && isOpen && !isFacePopoverOpen()) closeWorldDashboard(); });
     window.addEventListener(WORLD_CHANGED_EVENT, onChanged);
     window.addEventListener(QUESTS_DONE_CHANGED_EVENT, () => { if (isOpen) render(); });
+    // The Hooks panel (docs/hooks-canon-plan.md D104): a round asked for; a hook taken (a quest on the shelf), taken
+    // with a cut (the window closes and the next reply montages the way, as Travel here does), or set aside.
+    window.addEventListener(HOOKS_CHANGED_EVENT, () => { if (isOpen) render(); });
+    $(document).on('click', `#${POPUP_ID} [data-act="hooks-propose"]`, async function () {
+        lastResult = 'Asking the world for hooks…';
+        render();
+        try { lastResult = describeHooksResult(await proposeHooks({ reason: 'map' })); } catch (e) { lastResult = `Failed: ${e && e.message ? e.message : e}`; }
+        render();
+    });
+    $(document).on('click', `#${POPUP_ID} [data-act="hook-take"], #${POPUP_ID} [data-act="hook-cut"]`, async function () {
+        const id = this.getAttribute('data-hook');
+        const cut = this.getAttribute('data-act') === 'hook-cut';
+        const r = await takeHook(id, { cut });
+        if (!r.ok) { lastResult = r.reason === 'no-hook' ? 'That hook is no longer on offer.' : `Failed: ${r.error || r.reason}`; render(); return; }
+        if (cut && r.cut) { closeWorldDashboard(); return; }
+        lastResult = cut ? `"${r.quest}" is on the shelf's Quests page; the cut could not be asked for.` : `Taken: "${r.quest}" is on the shelf's Quests page.`;
+        render();
+    });
+    $(document).on('click', `#${POPUP_ID} [data-act="hook-aside"]`, function () {
+        setHookAside(this.getAttribute('data-hook'));
+        lastResult = 'Set aside; it will not be offered again.';
+        render();
+    });
 }
 
 /**

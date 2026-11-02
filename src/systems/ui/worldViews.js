@@ -18,6 +18,7 @@ export const FEED_LIMITS = Object.freeze([12, 50, 0]);    // 0: everything the l
 export const MAP_PANELS = Object.freeze([
     { id: 'news', label: 'News', icon: 'fa-newspaper', title: 'What moved lately: people and clocks, under their dates' },
     { id: 'rumours', label: 'Rumours', icon: 'fa-comments', title: 'Word on the street: what people say' },
+    { id: 'hooks', label: 'Hooks', icon: 'fa-signs-post', title: 'What the world offers to do next; take one and it is a quest' },
     { id: 'people', label: 'People', icon: 'fa-users', title: 'The faces last seen, and where' },
     { id: 'done', label: 'Completed quests', icon: 'fa-check-double', title: 'The quests completed in this chat' },
 ]);
@@ -137,6 +138,39 @@ export function rumoursHtml({ state, pack, cfg } = {}) {
     </section>`;
 }
 
+/**
+ * Hooks (docs/hooks-canon-plan.md D104): the round on offer as cards, each
+ * with Take, Take and cut to it and Not this one; the button that asks for
+ * a round (or another); the last failure; the hooks taken, folded.
+ */
+export function hooksHtml({ hooks = null, busy = false } = {}) {
+    const h = hooks && typeof hooks === 'object' ? hooks : { proposed: [], taken: [], aside: [], last: null };
+    const proposed = Array.isArray(h.proposed) ? h.proposed : [];
+    const takenAll = Array.isArray(h.taken) ? h.taken : [];
+    const cards = proposed.map(x => `<article class="dooms-map-hook" data-hook="${escapeHtml(x.id)}">
+        <div class="dooms-map-hook-title">${escapeHtml(x.title)}</div>
+        <p class="dooms-map-hook-text">${escapeHtml(x.text)}</p>
+        ${x.grounds ? `<div class="dooms-world-muted dooms-map-hook-from">From: ${escapeHtml(x.grounds)}</div>` : ''}
+        <div class="dooms-map-hook-actions">
+            <button type="button" class="rpg-accordion-action-btn" data-act="hook-take" data-hook="${escapeHtml(x.id)}" title="A quest on the shelf's Quests page"><i class="fa-solid fa-scroll" aria-hidden="true"></i> Take</button>
+            <button type="button" class="rpg-accordion-action-btn" data-act="hook-cut" data-hook="${escapeHtml(x.id)}" title="A quest, and the next reply cuts to it with a short montage"><i class="fa-solid fa-scissors" aria-hidden="true"></i> Take and cut to it</button>
+            <button type="button" class="rpg-accordion-action-btn" data-act="hook-aside" data-hook="${escapeHtml(x.id)}" title="Set aside: not offered again"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Not this one</button>
+        </div>
+    </article>`).join('');
+    const taken = takenAll.slice().reverse().slice(0, 10);
+    const failed = h.last && !h.last.ok && h.last.error ? `<p class="dooms-world-error">The last round failed: ${escapeHtml(h.last.error)}</p>` : '';
+    return `<section class="dooms-map-hooks">
+        <div class="dooms-inv-head"><span class="dooms-inv-label">🪝 Hooks</span><span class="dooms-inv-fill" title="Hooks taken in this chat">${takenAll.length}</span></div>
+        <p class="dooms-world-muted dooms-map-hook-hint">What the world offers to do next, from its clocks, its rumours and who was last seen where. Take one and it is a quest on the shelf; Take and cut to it starts it with a short montage; Not this one sets it aside for good.</p>
+        <div class="dooms-map-hook-list">${cards || `<p class="dooms-world-muted">${busy ? 'Asking the world…' : 'No hooks on offer yet.'}</p>`}</div>
+        <div class="dooms-map-hook-foot">
+            <button type="button" class="rpg-accordion-action-btn" data-act="hooks-propose"${busy ? ' disabled' : ''}><i class="fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-signs-post'}" aria-hidden="true"></i> ${busy ? 'Asking…' : (cards ? 'Offer others' : 'Offer hooks')}</button>
+            ${failed}
+        </div>
+        ${taken.length ? `<details class="dooms-map-hook-taken"><summary>Taken${takenAll.length > taken.length ? `, the last ${taken.length}` : ''}</summary><ul class="dooms-map-done-list">${taken.map(t => `<li><span class="dooms-map-done-text">${escapeHtml(t.title)}</span>${t.gameDate ? `<span class="dooms-world-muted">${escapeHtml(t.gameDate)}</span>` : ''}</li>`).join('')}</ul></details>` : ''}
+    </section>`;
+}
+
 /** Completed quests: the chat's list, newest first, with the tracker's date. */
 export function doneHtml({ done = [] } = {}) {
     const items = (Array.isArray(done) ? done : []).map(q => `<li><span class="dooms-map-done-text">${escapeHtml(q.text)}</span>${q.gameDate ? `<span class="dooms-world-muted">${escapeHtml(q.gameDate)}</span>` : ''}</li>`).join('');
@@ -197,7 +231,7 @@ export function placeStripHtml({ place = null, drawing = '', travelling = false,
  * The Map window's body: the world's name with the tracker's date and the
  * run status; the row; the strip; the panel with its buttons.
  */
-export function mapWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', row = [], selected = '', drawing = '', panel = MAP_PANELS[0].id, feed = FEED_LIMITS[0], present = [], done = [], travelling = false, canDraw = true, drawProblem = '' } = {}) {
+export function mapWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', row = [], selected = '', drawing = '', panel = MAP_PANELS[0].id, feed = FEED_LIMITS[0], present = [], done = [], hooks = null, hooksBusy = false, travelling = false, canDraw = true, drawProblem = '' } = {}) {
     const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
     if (empty) return `<div class="dooms-map">${empty}</div>`;
     const date = [facts.date, facts.time].filter(Boolean).join(', ');
@@ -208,6 +242,7 @@ export function mapWindowHtml({ state, pack, cfg, facts = {}, portraits = () => 
     if (active === 'people') body = peopleHtml({ state, pack, portraits, present, sceneText: facts.location || '' });
     else if (active === 'rumours') body = rumoursHtml({ state, pack, cfg });
     else if (active === 'done') body = doneHtml({ done });
+    else if (active === 'hooks') body = hooksHtml({ hooks, busy: hooksBusy });
     else body = newsHtml({ state, pack, cfg, feed });
     const nav = MAP_PANELS.map(p => `<button type="button" class="dooms-map-nav-btn${p.id === active ? ' is-active' : ''}" data-panel="${p.id}" role="tab" aria-selected="${p.id === active ? 'true' : 'false'}" title="${escapeHtml(p.title)}"><i class="fa-solid ${p.icon}" aria-hidden="true"></i><span>${escapeHtml(p.label)}</span></button>`).join('');
     return `<div class="dooms-map" data-panel="${active}">

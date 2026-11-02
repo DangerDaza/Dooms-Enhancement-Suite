@@ -196,6 +196,41 @@ check('nothing yet', qc.getCompletedQuests().length === 0);
 check('a quest completed is recorded with the tracker\'s date, newest first', qc.recordCompletedQuest('Find the warden') && qc.recordCompletedQuest('Feed the cat') && qc.getCompletedQuests().map(x => x.text).join('|') === 'Feed the cat|Find the warden' && qc.getCompletedQuests()[1].gameDate === 'Thursday' && Array.isArray(meta.dooms_quests_done));
 check('None and nothing are not quests', !qc.recordCompletedQuest('None') && !qc.recordCompletedQuest('') && qc.getCompletedQuests().length === 2);
 
+console.log('\n§7 Hooks (docs/hooks-canon-plan.md D100–D104)');
+{
+    const hk = await import(`${DES}/src/systems/features/questHooks.js`);
+    extensionSettings.quests = { main: 'Find out who sank the Kestrel', optional: ['Pay the harbourmaster'] };
+    let seenPrompt = null;
+    hk.__setHooksTransport(async (prompt) => { seenPrompt = prompt; return '```json\n{"hooks":[{"title":"Carry a paper to the quay","text":"Carry a stamped paper to the quay before the tide; the customs house is the place to ask.","grounds":"the blockade","kind":"clock"},{"title":"Pay the harbourmaster","text":"Settle up at the docks.","kind":"quest"},{"title":"Call on Old Marit","text":"Learn why the governor sent for her.","grounds":"Old Marit","kind":"person"}]}\n```'; });
+    const r = await hk.proposeHooks({ reason: 'test' });
+    let h = hk.getHooks();
+    check('a round asked for: the request carried the quests and the world; two hooks stand (the open quest dropped) and are written to the chat', r.ok && r.hooks.length === 2 && seenPrompt && seenPrompt.user.includes('- Find out who sank the Kestrel (the main quest)') && seenPrompt.user.includes('What the street sees now') && h.proposed.length === 2 && h.proposed[0].id === 'h1' && meta.dooms_hooks && meta.dooms_hooks.proposed.length === 2, JSON.stringify(r));
+    const t = await hk.takeHook('h1');
+    h = hk.getHooks();
+    check('Take: the hook is a quest on the shelf, once, and off the round', t.ok && t.quest === 'Carry a stamped paper to the quay before the tide; the customs house is the place to ask.' && extensionSettings.quests.optional.includes(t.quest) && h.proposed.length === 1 && h.taken.length === 1 && h.taken[0].title === 'Carry a paper to the quay');
+    const again = await hk.takeHook('h1');
+    check('a hook no longer on offer', !again.ok && again.reason === 'no-hook');
+    const c = await hk.takeHook('h2', { cut: true, when: 'by dusk' });
+    const pending = qc.getPendingQuestCut();
+    check('Take and cut to it: the quest on the shelf and the cut armed with it', c.ok && c.cut === true && extensionSettings.quests.optional.includes(c.quest) && pending && pending.kind !== 'travel' && pending.quest === c.quest && pending.when === 'by dusk', JSON.stringify(pending));
+    qc.cancelQuestCut();
+    hk.__setHooksTransport(async () => '{"hooks":[{"title":"Ask after the fever","text":"The infirmary is full.","kind":"place"},{"title":"Call on Old Marit","text":"Again.","kind":"person"}]}');
+    const r2 = await hk.proposeHooks();
+    h = hk.getHooks();
+    check('another round: a hook already taken is not offered again; the round is replaced, the ids go on', r2.ok && r2.hooks.length === 1 && h.proposed.length === 1 && h.proposed[0].title === 'Ask after the fever' && h.proposed[0].id === 'h3' && h.taken.length === 2, JSON.stringify(h.proposed));
+    const id2 = h.proposed[0] && h.proposed[0].id;
+    check('Not this one: off the round, remembered', hk.setHookAside(id2) && hk.getHooks().proposed.length === 0 && hk.getHooks().aside.join() === 'Ask after the fever' && hk.setHookAside(id2) === false);
+    hk.__setHooksTransport(async () => '{"hooks":[{"title":"Ask after the fever","text":"The infirmary is full.","kind":"place"}]}');
+    const r3 = await hk.proposeHooks();
+    check('a round of nothing new fails and says so; nothing on offer, the failure noted', !r3.ok && r3.reason === 'invalid' && hk.getHooks().proposed.length === 0 && hk.getHooks().last && !hk.getHooks().last.ok && hk.getHooks().last.error.includes('set aside'));
+    hk.__setHooksTransport(async () => { throw new Error('network down'); });
+    const r4 = await hk.proposeHooks();
+    check('a request that fails: the error kept, nothing thrown', !r4.ok && r4.reason === 'error' && r4.error === 'network down' && hk.getHooks().last.error === 'network down');
+    extensionSettings.liveWorld.enabled = false;
+    check('Live World off: no hooks', (await hk.proposeHooks()).reason === 'off');
+    extensionSettings.liveWorld.enabled = true;
+}
+
 console.log('');
 if (failures) { console.error(`${failures} FAILURE(S)`); process.exit(1); }
 console.log('All map flow checks pass');

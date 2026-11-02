@@ -133,6 +133,15 @@ function writeQuests(mutate) {
     forceRerender();
 }
 
+/** A quest added from outside the page (a hook taken in the Map window, docs/hooks-canon-plan.md D102): onto the optional list, once. */
+export function addOptionalQuest(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t || t === 'None') return false;
+    let added = false;
+    writeQuests(q => { if (!q.optional.some(x => questText(x) === t)) { q.optional.push(t); added = true; } });
+    return added;
+}
+
 /** Drops the page's render cache so the next shelf render rebuilds it. */
 function forceRerender() {
     const el = document.getElementById(PAGE_ID);

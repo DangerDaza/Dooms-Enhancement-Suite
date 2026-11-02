@@ -49,8 +49,13 @@ const cfg = M.liveWorldConfig({ liveWorld: { enabled: true, every: 6 } });
 const row = W.placesRow(st, pack);
 const facts = { date: 'Day 10', time: 'dusk', location: 'the fever ward' };
 const done = [{ text: 'Find the warden', at: 1, gameDate: 'Day 3' }, { text: 'Feed the cat of the Anchor', at: 2, gameDate: 'Day 7' }];
-const panels = { news: {}, people: {}, done: {}, rumours: {} };
-const body = (panel, selected) => V.mapWindowHtml({ state: st, pack, cfg, facts, portraits: (n) => (n === 'Old Marit' ? art(200, 'OM') : ''), row, selected, drawing: '', panel, done, present: ['Old Marit'] });
+const panels = { news: {}, people: {}, done: {}, rumours: {}, hooks: {} };
+const hooks = { proposed: [
+    { id: 'h1', title: 'Carry a paper to the quay', text: 'Captain Reyes needs a stamped paper carried to the quay before the next tide, and the customs house is the place to ask for it; the cutter at the harbour mouth is turning ships back.', grounds: 'the blockade', kind: 'clock', gameDate: 'Day 10' },
+    { id: 'h2', title: 'Call on Old Marit at the governor\'s house', text: 'Old Marit was summoned up the hill; someone should learn why the governor wants her.', grounds: 'Old Marit, last seen at the governor\'s house', kind: 'person', gameDate: 'Day 10' },
+    { id: 'h3', title: 'Ask after the fever', text: 'The infirmary is full and the priests burn herbs on the quay; the Anchor\'s back room hears everything.', grounds: 'the dock fever', kind: 'place', gameDate: 'Day 10' },
+], taken: [{ id: 'h0', title: 'Find the warden', text: 'x', gameDate: 'Day 3' }], aside: [], last: { ok: false, error: 'the reply held no usable hook', ranAt: 1 } };
+const body = (panel, selected) => V.mapWindowHtml({ state: st, pack, cfg, facts, portraits: (n) => (n === 'Old Marit' ? art(200, 'OM') : ''), row, selected, drawing: '', panel, done, present: ['Old Marit'], hooks, hooksBusy: false });
 
 const css = ['styles/modals.css', 'style.css', 'styles/overhaul.css'].map(f => `<link rel="stylesheet" href="${pathToFileURL(join(repo, f)).href}">`).join('\n');
 const shell = (inner) => `<div id="rpg-world-popup" class="rpg-settings-popup" role="dialog" style="display: flex;"><div class="rpg-settings-popup-content"><header class="rpg-settings-popup-header"><h3 id="rpg-world-title"><i class="fa-solid fa-map"></i> <span>Map</span></h3><button class="rpg-popup-close" type="button">&times;</button></header><div class="rpg-settings-popup-body"><div class="dooms-world-body">${inner}</div></div><footer class="rpg-settings-popup-footer rpg-world-actions"><button class="rpg-accordion-action-btn" type="button">Advance now</button><button class="rpg-accordion-action-btn" type="button">Refresh</button><button class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-earth-europe"></i> <span>Make this a world</span></button><span class="dooms-world-result">The world moved.</span></footer></div></div>`;
