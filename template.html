@@ -1956,6 +1956,119 @@
             <!-- ═══════ IMAGE GENERATION (docs/image-gen-plan.md) ═══════
                  One source for every picture DES makes: portraits and scene pictures.
                  Bound in index.js (renderImageGenSettings and the rpg-img-* / rpg-scene-* binders). -->
+            <!-- ═══════ CANON (docs/hooks-canon-plan.md D105–D112) ═══════
+                 The ledger of what the story has established, kept per chat
+                 (chat_metadata.dooms_canon), brought up to date by a quiet
+                 background request every N replies, told to the narrator as
+                 one block. Bound in index.js (#rpg-canon-*); the feature is
+                 src/systems/features/canon.js; the page is the shelf's. -->
+            <div class="rpg-accordion-section" data-accordion="canon">
+                <div class="rpg-accordion-header">
+                    <i class="fa-solid fa-book-bookmark rpg-accordion-icon"></i>
+                    <span class="rpg-accordion-title">Canon</span>
+                    <span class="rpg-accordion-badge rpg-beta-badge" title="Canon is in beta: off until you switch it on.">Beta</span>
+                    <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
+                </div>
+                <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Canon</span>
+                            <span class="rpg-setting-hint">A memory that keeps its shape. Every few replies a quiet background
+                                request reads the recent scenes and keeps a ledger of what the story has established:
+                                people in one line each, places, things, facts, promises, secrets. One compact block
+                                tells the narrator what stands, every turn, however long the chat. Nothing is written
+                                into the chat. The ledger is the shelf's Canon page; a line you write or pin there is
+                                never rewritten.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-canon-enabled" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p class="rpg-note-text rpg-canon-sub" id="rpg-canon-status" style="margin-top:4px;"></p>
+                    <div class="rpg-setting-divider rpg-canon-sub">The ledger</div>
+                    <div class="rpg-setting-row rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Every N replies</span>
+                            <span class="rpg-setting-hint">How many new replies between runs. A swipe or a regenerate is not a
+                                new reply. A run whose answer fails its checks is retried on the very next reply.</span>
+                        </div>
+                        <input type="number" id="rpg-canon-every" class="rpg-accordion-input" min="1" max="50" value="8" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Recent messages each run reads</span>
+                            <span class="rpg-setting-hint">The window of the chat that goes with each run. Wider sees more;
+                                narrower costs less.</span>
+                        </div>
+                        <input type="number" id="rpg-canon-recent" class="rpg-accordion-input" min="4" max="60" value="16" style="width: 64px;" />
+                    </div>
+                    <div class="rpg-setting-row rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">This chat</span>
+                            <span class="rpg-setting-hint">Open the page shows the ledger on the shelf, where lines are added,
+                                edited, pinned and removed. Update now runs a pass at once (the same as /canon). To a
+                                lorebook writes the ledger into a lorebook named "Canon of …", one entry per line,
+                                rewriting its own entries on a later export. Clear empties this chat's ledger.</span>
+                            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                                <button id="rpg-canon-open" class="rpg-accordion-action-btn" type="button" title="The shelf's Canon page"><i class="fa-solid fa-book-open"></i> Open the page</button>
+                                <button id="rpg-canon-update" class="rpg-accordion-action-btn" type="button" title="A run now (the same as /canon)"><i class="fa-solid fa-forward"></i> Update now</button>
+                                <button id="rpg-canon-export" class="rpg-accordion-action-btn" type="button" title="The ledger as a lorebook, one entry per line"><i class="fa-solid fa-book-atlas"></i> To a lorebook</button>
+                                <button id="rpg-canon-clear" class="rpg-accordion-action-btn" type="button" title="Empty this chat's ledger (it asks first)"><i class="fa-solid fa-trash"></i> Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-divider rpg-canon-sub">What the narrator is told</div>
+                    <div class="rpg-setting-row rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Tell the narrator what stands</span>
+                            <span class="rpg-setting-hint">One block with every generation: the ledger by kind, your pinned lines
+                                first. Fixed in size, overwritten, never appended. Not shown in the Context
+                                Inspector.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-canon-inject" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rpg-setting-row rpg-canon-inject-sub rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">&hellip;at depth, as</span>
+                            <span class="rpg-setting-hint">How many messages from the end the block sits, and whose voice it
+                                takes. Deeper keeps the prompt cache steadier.</span>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <input type="number" id="rpg-canon-depth" class="rpg-accordion-input" min="0" max="20" value="3" style="width: 64px;" />
+                            <select id="rpg-canon-role" class="rpg-accordion-select">
+                                <option value="system">System</option>
+                                <option value="user">User</option>
+                                <option value="assistant">Assistant</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rpg-setting-row rpg-canon-inject-sub rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Most the block may be</span>
+                            <span class="rpg-setting-hint">In characters. The newest lines go first when the ledger outgrows it;
+                                the ledger itself keeps up to 40 lines of a kind and 160 in all.</span>
+                        </div>
+                        <input type="number" id="rpg-canon-max" class="rpg-accordion-input" min="300" max="6000" step="100" value="1500" style="width: 80px;" />
+                    </div>
+                    <div class="rpg-setting-divider rpg-canon-sub">Debugging</div>
+                    <div class="rpg-setting-row rpg-canon-sub">
+                        <div class="rpg-setting-label-group">
+                            <span class="rpg-setting-label">Console lines</span>
+                            <span class="rpg-setting-hint">Every run, its result and every discard are written to the System
+                                Log always; with this on, to the browser console as well.</span>
+                        </div>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-canon-debug" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <div class="rpg-accordion-section" data-accordion="imagegen">
                 <div class="rpg-accordion-header">
                     <i class="fa-solid fa-palette rpg-accordion-icon"></i>

@@ -3,6 +3,10 @@
     "title": "Image Generation and the Map (beta)",
     "items": [
         {
+            "title": "🪝 Hooks and 📖 Canon",
+            "body": "Two new ways to keep a long story moving. Hooks, a fifth panel in the Map window: Offer hooks asks the world for up to three things you could do next, each grounded in its clocks, its rumours and who was last seen where; Take makes one a quest on the shelf, Take and cut to it starts it with a short montage, Not this one sets it aside for good. Canon (Settings → Canon, beta): a quiet request every few replies keeps a ledger of what the story has established, people, places, things, facts, promises and secrets in one line each, and tells the narrator what stands every turn, however long the chat. The shelf's Canon page lets you edit, pin, add and remove lines; a line of yours is never rewritten; To a lorebook writes it out as a lorebook."
+        },
+        {
             "title": "🌍 Build your own world",
             "body": "Live World is no longer tied to the worlds that ship with it. Settings → Live World → Open the World Builder makes a world of your own: places as a tree, clocks with what anyone sees at each step, a cast and where they start; Draft from this chat has the AI write one from the character card, the lore and the recent chat for you to read first; Start from Harbourside copies the example; files import and export. A new chat with no world chosen starts in the blank world, named after its character, and grows as the story names places and people speak; Make this a world in the Map window keeps what grew. Skyreach moved out to a file (docs/support/skyreach-world.json) to import if you played it."
         },

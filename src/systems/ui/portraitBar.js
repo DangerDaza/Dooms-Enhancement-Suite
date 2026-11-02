@@ -35,6 +35,7 @@ import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
 import { this_chid, characters, chat_metadata, getRequestHeaders } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
+import { canonConfig } from '../../utils/canon.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait, deletePortraitsIfUnreferenced, getPortraitHistoryCount, restorePreviousPortrait } from '../../utils/avatars.js';
 import { DIALOGUE_COLORS } from '../../utils/dialogueColors.js';
 import { hasPendingAliasDecision } from '../features/characterAliases.js';
@@ -588,6 +589,7 @@ const SHELF_PAGES = {
     characters: { label: 'Characters', title: 'Present Characters', icon: 'fa-users' },
     inventory: { label: 'Inventory', title: 'Inventory', icon: 'fa-box-open' },
     quests: { label: 'Quests', title: 'Quests', icon: 'fa-scroll' },
+    canon: { label: 'Canon', title: 'Canon', icon: 'fa-book-bookmark' },    // docs/hooks-canon-plan.md D110
 };
 let shelfPage = 'characters';
 try { shelfPage = localStorage.getItem(SHELF_PAGE_KEY) || 'characters'; } catch (e) { /* no storage */ }
@@ -600,6 +602,7 @@ function availableShelfPages() {
         pages.push('inventory');
         if (extensionSettings.showQuests !== false) pages.push('quests');
     }
+    if (canonConfig(extensionSettings).enabled) pages.push('canon');
     return pages;
 }
 

@@ -14174,3 +14174,27 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 .dooms-map-hook-taken { margin-top: 10px; font-size: 0.86em; }
 .dooms-map-hook-taken summary { cursor: pointer; color: #bbb; }
 .dooms-map-hook-taken .dooms-map-done-list { margin-top: 6px; }
+
+/* ── The shelf's Canon page (docs/hooks-canon-plan.md D110): the ledger by kind, each line a row (name, text, tools), a row to add one under each kind. ── */
+.dooms-pb-page-canon { display: flex; flex-direction: column; gap: 10px; }
+.dooms-canon-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dooms-canon-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.dooms-canon-actions .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
+.dooms-canon-hint { margin: 0; font-size: 0.78em; line-height: 1.4; }
+.dooms-canon-section { display: flex; flex-direction: column; gap: 4px; }
+.dooms-canon-line { display: grid; grid-template-columns: minmax(100px, 170px) minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.03); font-size: 0.88em; line-height: 1.4; }
+.dooms-canon-line.is-pinned { border-left: 3px solid var(--rpg-highlight, #e94560); }
+.dooms-canon-line.is-new { border-style: dashed; background: transparent; }
+.dooms-canon-name { font-weight: 600; color: #eaeaea; min-width: 0; overflow-wrap: anywhere; outline: none; }
+.dooms-canon-text { color: #d4d4de; min-width: 0; overflow-wrap: anywhere; outline: none; }
+.dooms-canon-name:focus, .dooms-canon-text:focus { background: rgba(255, 255, 255, 0.07); border-radius: 4px; }
+.dooms-canon-line [data-placeholder]:empty::before { content: attr(data-placeholder); color: #666; font-weight: 400; }
+.dooms-canon-tools { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.dooms-canon-when { font-size: 0.78em; color: #8d8d9a; margin-right: 4px; }
+.dooms-canon-btn { appearance: none; font: inherit; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); color: #bbb; font-size: 0.8em; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.dooms-canon-btn:hover, .dooms-canon-btn:focus-visible { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.dooms-canon-btn.is-on { color: var(--rpg-highlight, #e94560); border-color: var(--rpg-highlight, #e94560); }
+@media (max-width: 600px) {
+    .dooms-canon-line { grid-template-columns: minmax(0, 1fr) auto; }
+    .dooms-canon-text { grid-column: 1 / -1; }
+}

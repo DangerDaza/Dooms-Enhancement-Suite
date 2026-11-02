@@ -24,6 +24,9 @@ import { updatePortraitBar, resolvePortrait } from './portraitBar.js';
 // Cut to a quest (Phase 5b): the menu on a quest box
 import { questText, promoteQuest } from '../../utils/questCut.js';
 import { startQuestCut, recordCompletedQuest } from '../features/questCut.js';
+// Canon (docs/hooks-canon-plan.md D110): the ledger as a page
+import { CANON_KINDS, KIND_LABELS, canonConfig } from '../../utils/canon.js';
+import { getCanon, addCanonLine, editCanonLine, pinCanonLine, removeCanonLine, updateCanon, isUpdating, exportCanonToLorebook, canonMarkdownNow, canonBookName, CANON_CHANGED_EVENT } from '../features/canon.js';
 
 const PAGE_ID = 'dooms-pb-page';
 const EDITOR_ID = 'dooms-inv-editor';
@@ -99,6 +102,117 @@ function questBox(field, index, text, main) {
     return `<div class="dooms-quest-box${main ? ' is-main' : ''}" data-field="${field}"${idx} title="Right-click or hold for Cut to it">
         <div class="dooms-quest-text" contenteditable="true" spellcheck="false" data-field="${field}"${idx} title="Click to edit">${escapeHtml(text)}</div>
         <button type="button" class="dooms-quest-done" data-field="${field}"${idx} title="Complete and remove"><i class="fa-solid fa-check"></i></button>
+    </div>`;
+}
+
+const CANON_ICONS = Object.freeze({ person: '👤', place: '📍', thing: '🎒', fact: '📜', promise: '🤝', secret: '🤫' });
+const CANON_HINTS = Object.freeze({
+    person: ['Who', 'who they are to the story now'],
+    place: ['Where', 'what it is, what happened there'],
+    thing: ['What', 'what it is, who holds it'],
+    fact: ['What', 'what the story has established'],
+    promise: ['What was sworn', 'by whom, to whom, by when'],
+    secret: ['What was revealed', 'to the player, and who else knows'],
+});
+
+function canonLine(e) {
+    const id = escapeHtml(e.id);
+    return `<div class="dooms-canon-line${e.pinned ? ' is-pinned' : ''}${e.by === 'you' ? ' is-yours' : ''}" data-id="${id}">
+        <span class="dooms-canon-name" contenteditable="true" spellcheck="false" data-canon-field="name" data-id="${id}" title="Click to edit (an edit pins the line)">${escapeHtml(e.name)}</span>
+        <span class="dooms-canon-text" contenteditable="true" spellcheck="false" data-canon-field="text" data-id="${id}" title="Click to edit (an edit pins the line)">${escapeHtml(e.text)}</span>
+        <span class="dooms-canon-tools">${e.gameDate ? `<span class="dooms-canon-when" title="When the story established it">${escapeHtml(e.gameDate)}</span>` : ''}<button type="button" class="dooms-canon-btn${e.pinned ? ' is-on' : ''}" data-canon-act="pin" data-id="${id}" title="${e.pinned ? 'Pinned: no run rewrites or drops this line. Click to unpin.' : 'Pin: keep this line as it is, whatever the runs say.'}"><i class="fa-solid fa-thumbtack"></i></button><button type="button" class="dooms-canon-btn" data-canon-act="remove" data-id="${id}" title="Remove this line"><i class="fa-solid fa-xmark"></i></button></span>
+    </div>`;
+}
+
+function finishCanonEdit(el) {
+    const field = el.dataset.canonField === 'name' ? 'name' : 'text';
+    const id = el.dataset.id;
+    const value = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+    const s = getCanon();
+    const cur = s && s.entries.find(e => e.id === id);
+    if (!cur) { forceRerender(); return; }
+    if (!value || cur[field] === value) { forceRerender(); return; }
+    if (!editCanonLine(id, { [field]: value })) toast('warning', 'The line was not changed.');
+    forceRerender();
+}
+
+function canonAction(btn) {
+    const act = btn.dataset.canonAct;
+    const id = btn.dataset.id;
+    if (act === 'pin') {
+        const s = getCanon();
+        const cur = s && s.entries.find(e => e.id === id);
+        if (cur) pinCanonLine(id, !cur.pinned);
+        forceRerender();
+    } else if (act === 'remove') {
+        removeCanonLine(id);
+        forceRerender();
+    } else if (act === 'add') {
+        const kind = btn.dataset.kind;
+        const row = btn.closest('.dooms-canon-line');
+        const name = String(row?.querySelector('[data-canon-new="name"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+        const text = String(row?.querySelector('[data-canon-new="text"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || !text) { toast('info', 'A line needs a name and a text.'); return; }
+        if (!addCanonLine({ kind, name, text })) { toast('warning', 'The line was not added.'); return; }
+        forceRerender();
+    } else if (act === 'update') {
+        btn.disabled = true;
+        forceRerender();
+        updateCanon({ reason: 'manual' }).then(async (r) => {
+            const { describeCanonResult } = await import('../../utils/canon.js');
+            toast(r.ok ? 'success' : 'warning', describeCanonResult(r));
+        }).catch(e => toast('error', `Failed: ${e && e.message ? e.message : e}`)).finally(() => forceRerender());
+    } else if (act === 'export') {
+        btn.disabled = true;
+        exportCanonToLorebook().then(r => {
+            toast(r.ok ? 'success' : 'warning', r.ok ? `${r.written} line${r.written === 1 ? '' : 's'} written to the lorebook "${r.book}".` : `Not exported: ${r.error}`);
+        }).finally(() => { btn.disabled = false; });
+    } else if (act === 'markdown') {
+        const md = canonMarkdownNow();
+        if (!md) { toast('info', 'Nothing to download yet.'); return; }
+        const blob = new Blob([md], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${canonBookName().replace(/[^\w.-]+/g, '_')}.md`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+    }
+}
+
+/** The Canon page (D110): the ledger by kind, each line editable in place, pinnable, removable; a line of your own under each kind; the runs. */
+export function canonPageHtml() {
+    const s = getCanon();
+    if (!s) return '<div class="dooms-pb-page-inner dooms-pb-page-canon"><p class="dooms-world-muted">Canon is off, or no chat is open. Settings → Canon switches it on.</p></div>';
+    const cfg = canonConfig(extensionSettings);
+    const next = Math.max(0, cfg.every - s.sinceLast);
+    const last = s.last && s.last.ok ? `Last run ${s.last.gameDate ? `on ${escapeHtml(s.last.gameDate)}` : 'once'}: ${s.last.added} added or changed, ${s.last.dropped} dropped.` : 'Not run yet.';
+    const err = s.lastError ? `<span class="dooms-world-error">${s.lastError.kind === 'error' ? `The last run failed: ${escapeHtml(s.lastError.error || 'the request did not complete')}.` : `Last attempt discarded: ${escapeHtml(s.lastError.error)}.`}</span>` : '';
+    const sections = CANON_KINDS.map(kind => {
+        const mine = s.entries.filter(e => e.kind === kind).sort((a, b) => (b.pinned - a.pinned) || ((b.at || 0) - (a.at || 0)));
+        const [ph1, ph2] = CANON_HINTS[kind];
+        return `<section class="dooms-canon-section" data-kind="${kind}">
+            <div class="dooms-inv-head"><span class="dooms-inv-label">${CANON_ICONS[kind]} ${KIND_LABELS[kind]}</span><span class="dooms-inv-fill" title="Lines of this kind">${mine.length}</span></div>
+            ${mine.map(canonLine).join('')}
+            <div class="dooms-canon-line is-new" data-kind="${kind}">
+                <span class="dooms-canon-name" contenteditable="true" spellcheck="false" data-canon-new="name" data-kind="${kind}" data-placeholder="${ph1}"></span>
+                <span class="dooms-canon-text" contenteditable="true" spellcheck="false" data-canon-new="text" data-kind="${kind}" data-placeholder="${ph2}"></span>
+                <span class="dooms-canon-tools"><button type="button" class="dooms-canon-btn" data-canon-act="add" data-kind="${kind}" title="Add this line (yours: pinned, never rewritten)"><i class="fa-solid fa-plus"></i></button></span>
+            </div>
+        </section>`;
+    }).join('');
+    return `<div class="dooms-pb-page-inner dooms-pb-page-canon">
+        <div class="dooms-canon-head">
+            <span class="dooms-world-muted">${s.entries.length} line${s.entries.length === 1 ? '' : 's'}. ${last} Next run in ${s.retryNext ? 'the next reply' : `${next} repl${next === 1 ? 'y' : 'ies'}`}. ${err}</span>
+            <div class="dooms-canon-actions">
+                <button type="button" class="rpg-accordion-action-btn" data-canon-act="update"${isUpdating() ? ' disabled' : ''} title="A run now (the same as /canon)"><i class="fa-solid ${isUpdating() ? 'fa-spinner fa-spin' : 'fa-forward'}"></i> ${isUpdating() ? 'Running…' : 'Update now'}</button>
+                <button type="button" class="rpg-accordion-action-btn" data-canon-act="export" title="The ledger as the lorebook &quot;${escapeHtml(canonBookName())}&quot;, one entry per line"><i class="fa-solid fa-book-atlas"></i> To a lorebook</button>
+                <button type="button" class="rpg-accordion-action-btn" data-canon-act="markdown" title="The ledger as a Markdown file"><i class="fa-solid fa-download"></i> Download</button>
+            </div>
+        </div>
+        <p class="dooms-world-muted dooms-canon-hint">What the story has established, one line each, kept by a quiet request every ${cfg.every} repl${cfg.every === 1 ? 'y' : 'ies'} and told to the narrator each turn. Click a line to change it; a line you write or change is pinned (📌) and no run rewrites or drops it.</p>
+        ${sections}
     </div>`;
 }
 
@@ -534,6 +648,13 @@ function bindOnce() {
     bound = true;
     document.addEventListener('click', (e) => {
         if (!inPage(e.target)) return;
+        const canonAct = e.target.closest('[data-canon-act]');
+        if (canonAct) {
+            e.preventDefault();
+            e.stopPropagation();
+            canonAction(canonAct);
+            return;
+        }
         const slot = e.target.closest('.dooms-inv-slot');
         if (slot) {
             e.preventDefault();
@@ -560,8 +681,18 @@ function bindOnce() {
     });
     document.addEventListener('focusout', (e) => {
         const t = e.target;
-        if (!t || !t.classList || !t.classList.contains('dooms-quest-text') || !inPage(t)) return;
+        if (!t || !t.classList || !inPage(t)) return;
+        if (t.dataset && t.dataset.canonField) { finishCanonEdit(t); return; }
+        if (!t.classList.contains('dooms-quest-text')) return;
         finishQuestEdit(t);
+    });
+    window.addEventListener(CANON_CHANGED_EVENT, () => {
+        // the page follows the ledger, unless a line is being typed (the rebuild then waits for the blur)
+        const c = document.getElementById(PAGE_ID);
+        if (!c || c.hidden) return;
+        const active = document.activeElement;
+        if (active && c.contains(active) && active.isContentEditable) { delete c.dataset.html; return; }
+        forceRerender();
     });
     // The quest menu: right-click, or a long press on a phone.
     const questBoxOf = (target) => {
@@ -623,7 +754,7 @@ function bindOnce() {
 export function renderShelfPage(page, container) {
     if (!container) return;
     bindOnce();
-    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : '';
+    const html = page === 'inventory' ? inventoryPageHtml() : page === 'quests' ? questsPageHtml() : page === 'canon' ? canonPageHtml() : '';
     if (container.dataset.html === html) return;
     const active = document.activeElement;
     if (active && container.contains(active) && (active.isContentEditable || active.tagName === 'INPUT')) return;

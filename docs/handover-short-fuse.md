@@ -268,6 +268,17 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
   two further passes (`docs/stats-plan.md` §15.9).
+- **Hooks and Canon (2026-11-02, `docs/hooks-canon-plan.md` D100–D112, on
+  `short-fuse/hooks-and-canon`):** Hooks, the Map window's fifth panel
+  (`src/utils/questHooks.js`, `src/systems/features/questHooks.js`,
+  `hooksHtml` in `worldViews.js`, `addOptionalQuest` on the shelf's page);
+  Canon, structured memory (`src/utils/canon.js`,
+  `src/systems/features/canon.js`, the Settings section and binder, the
+  shelf's Canon page in `shelfPages.js`). Both off the main path: hooks on
+  request only, Canon off until switched on. The same commit renamed the
+  Lore Library's + tab to "campaign" and gave the Workshop a no-campaign
+  note. `tools/quest-hooks-test.mjs`, `tools/canon-test.mjs`,
+  `tools/canon-flow-test.mjs`, `tools/map-flow-test.mjs` §7.
 - **The World Builder (2026-10-29, `docs/world-builder-plan.md` D92–D99):**
   worlds are the user's. `src/utils/worldBuilder.js` (pure: a world from a
   chat's play, the draft's prompt and its reading, warnings, the file),
@@ -309,6 +320,8 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/utils/worldMap.js`, `src/utils/worldBoard.js` | The Map window's pure model: `placeKeyFor`, `visitPlace`, `reconcileVisited`, `placesRow`, `rowIdForCharacter`, `buildPlacePrompt`, `buildTravelInstruction`, the completed quests; the faces last seen, a safe image URL |
 | `src/systems/features/liveWorld.js` (places) | The visit recorded in `placeFromScene`, the rewind's `reconcileVisited`, `drawPlace` / `getPlacesRow` / `isDrawingPlace`, the automatic draw after a fresh reply (never a recovery) |
 | `src/systems/features/questCut.js` (travel, done) | `startTravelCut`, the instruction by kind, `recordCompletedQuest` / `getCompletedQuests` |
+| `src/utils/questHooks.js`, `src/systems/features/questHooks.js` | Hooks: `buildHooksPrompt` / `parseHooksReply` / `validateHooks`, `proposeRound` / `takeHook` / `setAside` / `questFromHook`; the feature's `proposeHooks` (the background request), `takeHook` (the shelf's `addOptionalQuest`, `startQuestCut` on request), `setHookAside`; `chat_metadata.dooms_hooks` |
+| `src/utils/canon.js`, `src/systems/features/canon.js` | Canon: `canonConfig`, the ledger (`normalizeCanon`, `applyCanon`, `reconcileCanon`, the caps), `buildCanonPrompt` / `parseCanonReply` / `validateCanon`, `buildCanonBlock`, `canonToLorebookEntries` / `canonToMarkdown`; the feature's count with its own stamp, `updateCanon`, the raw slot `dooms-canon`, `/canon`, `exportCanonToLorebook` (a lazy lorebookAPI, or the test sink); `chat_metadata.dooms_canon` |
 | `src/utils/worldBuilder.js`, `src/systems/features/liveWorld.js` (worlds), `src/systems/ui/worldBuilderViews.js`, `src/systems/ui/worldBuilder.js` | The World Builder: `worldFromState` / `rebindStateToPack` (a chat kept as a world, carried over), `buildWorldDraftPrompt` / `parseWorldDraft`, `packWarnings`, `worldToRaw` / `worldToJson`; the worlds API and the blank world's name and the missing-world fallback in the feature; `builderHtml` and the window's events (a keystroke updates the status, leaving a field redraws, auto ids from labels) |
 | `src/systems/ui/worldViews.js`, `worldDashboard.js`, `worldFace.js` | The Map window: `mapWindowHtml` (the head, the row, the strip, the panel), the window's events (scroll, selection, Travel here, Draw, the panel buttons), the face popover with Show the place |
 | `src/systems/rendering/trackerJsonInline.js` | The 🗂️ Tracker Data dropdown (gated on `showTrackerJsonInChat`, reads swipe data) |

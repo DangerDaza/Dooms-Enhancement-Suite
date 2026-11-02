@@ -93,7 +93,8 @@ import {
     repositionPortraitBar,
     clearPortraitCache,
     applyPortraitBarSettings,
-    applySideModeStyling
+    applySideModeStyling,
+    setShelfPage,
 } from './src/systems/ui/portraitBar.js';
 import {
     initWeatherEffects,
@@ -171,6 +172,8 @@ import { onQuestCutMessageSent } from './src/systems/features/questCut.js';
 // Live World (docs/live-world-spec.md): per-chat clocks and last-seen places, the advancer, the narrator's line
 import { initLiveWorld, onWorldChatChanged, onWorldMessageReceived, onWorldMessageSent, onWorldMessageDeleted, onWorldGenerationStarted, onWorldGenerationEnded, advanceNow, describeAdvanceResult, reseedWorld, loadPack, listPackIds, getWorldState, getActivePack, getPackError, getMissingWorld, isLiveWorldOn, WORLD_CHANGED_EVENT } from './src/systems/features/liveWorld.js';
 import { defaultLiveWorldConfig, liveWorldConfig } from './src/utils/liveWorld.js';
+import { initCanon, onCanonChatChanged, onCanonMessageReceived, onCanonMessageDeleted, onCanonGenerationStarted, updateCanon, clearCanon, exportCanonToLorebook, canonBookName, getCanon, isCanonOn, CANON_CHANGED_EVENT } from './src/systems/features/canon.js';
+import { canonConfig, defaultCanonConfig, describeCanonResult, CANON_KINDS, KIND_LABELS } from './src/utils/canon.js';
 import { initScenePictures, onSceneGenerationStarted, onSceneChatChanged, onSceneMessageSent, onSceneGenerationEnded, getSceneState, getSceneStatus, setSceneLoras, setSceneIdentity, illustrateNow, SCENE_CHANGED_EVENT } from './src/systems/features/scenePictures.js';
 import { defaultScenePicturesConfig, scenePicturesConfig, formatLoraList, parseLoraList, progressLabel as sceneProgressLabel } from './src/utils/scenePictures.js';
 import { imageGenConfig, defaultImageGenConfig, IMAGE_SOURCES, PORTRAIT_MODES, SIZE_PRESETS as IMAGE_SIZES } from './src/utils/imageGen.js';
@@ -541,6 +544,49 @@ function renderLiveWorldStatus() {
     $('#rpg-world-status').text(status);
 }
 
+/** The Canon rules block in settings, made to exist. */
+function getCanonRules() {
+    if (!extensionSettings.canon || typeof extensionSettings.canon !== 'object') extensionSettings.canon = defaultCanonConfig();
+    return extensionSettings.canon;
+}
+
+/** Settings → Canon: the switch, the cadence, the block, this chat's status. */
+function renderCanonSettings() {
+    if (!$('#rpg-canon-enabled').length) return;
+    const cfg = canonConfig(extensionSettings);
+    $('#rpg-canon-enabled').prop('checked', cfg.enabled);
+    $('.rpg-canon-sub').toggleClass('is-off', !cfg.enabled);
+    $('#rpg-canon-every').val(cfg.every);
+    $('#rpg-canon-recent').val(cfg.recentMessages);
+    $('#rpg-canon-inject').prop('checked', cfg.inject);
+    $('.rpg-canon-inject-sub').toggleClass('is-off', !cfg.enabled || !cfg.inject);
+    $('#rpg-canon-depth').val(cfg.depth);
+    $('#rpg-canon-role').val(cfg.role);
+    $('#rpg-canon-max').val(cfg.maxChars);
+    $('#rpg-canon-debug').prop('checked', cfg.debug);
+    renderCanonStatus();
+}
+
+/** The status line alone: it follows every ledger change without touching the fields the user may be editing. */
+function renderCanonStatus() {
+    if (!$('#rpg-canon-status').length) return;
+    const cfg = canonConfig(extensionSettings);
+    const s = getCanon();
+    let status;
+    if (!extensionSettings.enabled) status = 'Doom\'s Enhancement Suite is off; Canon runs only while it is on.';
+    else if (!cfg.enabled) status = 'Off. Nothing is read, written or sent.';
+    else if (!s) status = 'This chat has no ledger yet (open a chat).';
+    else {
+        const counts = CANON_KINDS.map(k => ({ k, n: s.entries.filter(e => e.kind === k).length })).filter(x => x.n).map(x => `${x.n} ${KIND_LABELS[x.k].toLowerCase()}`);
+        const pinned = s.entries.filter(e => e.pinned).length;
+        const last = s.last && s.last.ok ? `last run ${s.last.gameDate ? `on ${s.last.gameDate}` : 'once'} (${s.last.added} added or changed, ${s.last.dropped} dropped)` : 'not run yet';
+        const next = Math.max(0, cfg.every - s.sinceLast);
+        const err = s.lastError ? (s.lastError.kind === 'error' ? ` The last run failed: ${s.lastError.error || 'the request did not complete'}; it runs again on the next reply.` : ` Last attempt discarded: ${s.lastError.error}; it runs again on the next reply.`) : '';
+        status = `This chat: ${s.entries.length} line${s.entries.length === 1 ? '' : 's'}${counts.length ? ` (${counts.join(', ')})` : ''}${pinned ? `, ${pinned} pinned` : ''}; ${last}; next run in ${s.retryNext ? 'the next reply (retry)' : `${next} repl${next === 1 ? 'y' : 'ies'}`}.${err}`;
+    }
+    $('#rpg-canon-status').text(status);
+}
+
 function renderAttributesSettings() {
     const $list = $('#rpg-attr-list');
     if (!$list.length) return;
@@ -654,6 +700,7 @@ async function addExtensionSettings() {
     try { initDiceRolls(); } catch (e) { console.error('[Dooms Tracker] initDiceRolls() FAILED:', e); }
     try { initInventory(); } catch (e) { console.error('[Dooms Tracker] initInventory() FAILED:', e); }
     try { initLiveWorld(); } catch (e) { console.error('[Dooms Tracker] initLiveWorld() FAILED:', e); }
+    try { initCanon(); } catch (e) { console.error('[Dooms Tracker] initCanon() FAILED:', e); }
     try { initScenePictures(); } catch (e) { console.error('[Dooms Tracker] initScenePictures() FAILED:', e); }
     try { initSceneProgress(); } catch (e) { console.error('[Dooms Tracker] initSceneProgress() FAILED:', e); }
     try { registerDesCommands(); } catch (e) { console.error('[Dooms Tracker] registerDesCommands() FAILED:', e); }
@@ -2181,6 +2228,58 @@ function bindSettingsUI() {
             if (ev && ev.detail && ev.detail.source === 'world') renderLiveWorldSettings(); else renderLiveWorldStatus();
         } catch (e) { /* non-fatal */ }
     });
+    // ── Canon (docs/hooks-canon-plan.md D105–D112): the ledger's cadence and the block ──
+    const _saveCanon = ({ reload = false } = {}) => {
+        try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Canon settings save failed', e); }
+        if (reload) { try { onCanonChatChanged(); } catch (e) { console.warn('[Dooms Tracker] Canon reload failed', e); } }
+        renderCanonSettings();
+    };
+    $(document).on('change', '#rpg-canon-enabled', function () {
+        getCanonRules().enabled = $(this).prop('checked');
+        _saveCanon({ reload: true });
+        try { updatePortraitBar(); } catch (e) { /* the shelf's Canon page follows the switch */ }
+    });
+    $(document).on('change', '#rpg-canon-every', function () { const c = getCanonRules(); c.every = _clampWorld($(this).val(), 1, 50, 8); $(this).val(c.every); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-recent', function () { const c = getCanonRules(); c.recentMessages = _clampWorld($(this).val(), 4, 60, 16); $(this).val(c.recentMessages); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-inject', function () { getCanonRules().inject = $(this).prop('checked'); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-depth', function () { const c = getCanonRules(); c.depth = _clampWorld($(this).val(), 0, 20, 3); $(this).val(c.depth); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-role', function () { getCanonRules().role = String($(this).val() || 'system'); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-max', function () { const c = getCanonRules(); c.maxChars = _clampWorld($(this).val(), 300, 6000, 1500); $(this).val(c.maxChars); _saveCanon(); });
+    $(document).on('change', '#rpg-canon-debug', function () { getCanonRules().debug = $(this).prop('checked'); _saveCanon(); });
+    $(document).on('click', '#rpg-canon-open', function () {
+        if (!isCanonOn()) { toastr.info('Switch Canon on first.', 'Canon', { timeOut: 3000 }); return; }
+        try { setShelfPage('canon'); } catch (e) { console.warn('[Dooms Tracker] the shelf could not open the Canon page', e); }
+    });
+    $(document).on('click', '#rpg-canon-update', async function () {
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await updateCanon({ reason: 'manual' });
+            const text = describeCanonResult(r);
+            if (r.ok) toastr.success(text, 'Canon', { timeOut: 3000 }); else toastr.warning(text, 'Canon', { timeOut: 7000 });
+        } finally {
+            $b.prop('disabled', false);
+            renderCanonStatus();
+        }
+    });
+    $(document).on('click', '#rpg-canon-export', async function () {
+        if (!isCanonOn()) { toastr.info('Switch Canon on first.', 'Canon', { timeOut: 3000 }); return; }
+        const $b = $(this);
+        $b.prop('disabled', true);
+        try {
+            const r = await exportCanonToLorebook();
+            if (r.ok) toastr.success(`${r.written} line${r.written === 1 ? '' : 's'} written to the lorebook "${r.book}".`, 'Canon', { timeOut: 5000 });
+            else toastr.warning(`Not exported: ${r.error}`, 'Canon', { timeOut: 7000 });
+        } finally { $b.prop('disabled', false); }
+    });
+    $(document).on('click', '#rpg-canon-clear', async function () {
+        if (!isCanonOn()) { toastr.info('Switch Canon on first.', 'Canon', { timeOut: 3000 }); return; }
+        const confirmed = await callGenericPopup('Empty this chat\'s canon? Every line goes, yours included; the lorebook, if you exported one, is not touched.', POPUP_TYPE.CONFIRM);
+        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
+        if (clearCanon()) toastr.info('The ledger is empty.', 'Canon', { timeOut: 3000 });
+        renderCanonStatus();
+    });
+    window.addEventListener(CANON_CHANGED_EVENT, () => { try { renderCanonStatus(); } catch (e) { /* non-fatal */ } });
     // ── Image Generation (docs/image-gen-plan.md): the source, the ComfyUI connection, the portrait rule ──
     const _saveImage = () => {
         try { saveSettings(); } catch (e) { console.warn('[Dooms Tracker] Image Generation settings save failed', e); }
@@ -3090,6 +3189,7 @@ function bindSettingsUI() {
     try { renderAttributesSettings(); } catch (e) { console.warn('[Dooms Tracker] Attributes settings failed to render', e); }
     try { renderInventorySettings(); } catch (e) { console.warn('[Dooms Tracker] Inventory settings failed to render', e); }
     try { renderLiveWorldSettings(); } catch (e) { console.warn('[Dooms Tracker] Live World settings failed to render', e); }
+    try { renderCanonSettings(); } catch (e) { console.warn('[Dooms Tracker] Canon settings failed to render', e); }
     try { renderImageGenSettings(); } catch (e) { console.warn('[Dooms Tracker] Image Generation settings failed to render', e); }
     // Generation
     $('#rpg-generation-mode').val(extensionSettings.generationMode || 'together');
@@ -4649,11 +4749,11 @@ jQuery(async () => {
                 // onSceneGenerationStarted first: a regenerate takes DES's scene
                 // pictures off the end of the chat before anything here looks at
                 // the last message, and before SillyTavern picks what it replaces.
-                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
-                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onMessageReceivedVoices],
+                [event_types.GENERATION_STARTED]: [onSceneGenerationStarted, onGenerationStarted, onWorldGenerationStarted, onCanonGenerationStarted, onGenerationStartedContinueRevert, onGenerationStartedVoices, onGlintGenerationStarted],
+                [event_types.MESSAGE_RECEIVED]: [onMessageReceived, onWorldMessageReceived, onCanonMessageReceived, onMessageReceivedVoices],
                 [event_types.GENERATION_STOPPED]: [onGenerationEnded, onGenerationStoppedBubbleSafetyNet, onGenerationStoppedVoices, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
                 [event_types.GENERATION_ENDED]: [onGenerationEnded, onGlintGenerationEnded, onWorldGenerationEnded, onSceneGenerationEnded],
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
+                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar, clearSessionAvatarPrompts, clearPortraitCache, clearExpressionSyncCache, clearStatsCache, onChatChangedTtsCleanup, onChatChangedDecorations, onDiceChatChanged, onInventoryChatChanged, onWorldChatChanged, onCanonChatChanged, onSceneChatChanged, refreshMobileQuickJump, onChatChangedVoices, onGlintChatChanged],
                 [event_types.MESSAGE_SWIPED]: [onMessageSwiped, onMessageSwipedBubbles, injectFullSheetButtonForMessage, syncTrackerJsonForMessage, onMessageChangedVoices, onDiceReplyRendered, onInventoryReplyRendered, syncRollCardForMessage],
                 [event_types.USER_MESSAGE_RENDERED]: [updatePersonaAvatar, onUserMessageRenderedDecorations, onUserMessageRenderedVoices, onGlintUserMessageRendered],
                 [event_types.SETTINGS_UPDATED]: updatePersonaAvatar,
@@ -4666,7 +4766,7 @@ jQuery(async () => {
                 // set the slots, so the inventory it put back must be re-injected
                 // here, before the prompt is built (wrapped: the event's argument
                 // is a number, not the options object).
-                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, () => refreshDiceInjection()],
+                [event_types.MESSAGE_DELETED]: [onMessageDeletedDecorations, onMessageChangedVoices, updateRollCards, onInventoryMessageDeleted, onWorldMessageDeleted, onCanonMessageDeleted, () => refreshDiceInjection()],
                 [event_types.CONNECTION_PROFILE_CREATED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_DELETED]: onConnectionProfilesChanged,
                 [event_types.CONNECTION_PROFILE_UPDATED]: onConnectionProfilesChanged,
