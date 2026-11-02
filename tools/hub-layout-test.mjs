@@ -42,7 +42,7 @@ const M = await import(pathToFileURL(join(repo, 'src/utils/liveWorld.js')).href)
 const H = await import(pathToFileURL(join(repo, 'src/utils/hub.js')).href);
 const V = await import(pathToFileURL(join(repo, 'src/systems/ui/hubViews.js')).href);
 
-const pack = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/example.json'), 'utf8'))).pack;
+const pack = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/harbourside.json'), 'utf8'))).pack;
 const recap = 'Jordan asked Old Marit about the governor\'s ring; she said it sank with the Kestrel and would not say more. Captain Reyes stamped the papers and watched the door. By night the cutter had moved to the harbour mouth and the quay was empty.';
 const entry = H.normalizeWorldEntry({
     card: 'Mara Vane.png',

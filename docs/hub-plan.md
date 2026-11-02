@@ -674,12 +674,15 @@ land.
 - **Scene pictures' LoRAs and notes** as the world's (§3.1).
 - **The picture with pins** (D124, phase 6).
 - **The world exported with its story** (phase 4).
-- **A found bug, not the hub's:** the built-in template is listed as
-  `example` but its file carries the id `harbourside`, so a chat seeded
-  from it stores a pack id the next load cannot fetch and reports a missing
-  world (feature `BUILTIN_PACKS` against `worldpacks/example.json`; found
-  by reading, not run). To check in play and fix on `Project-Short-Fuse`
-  before the hub binds worlds; the hub itself binds only the user's worlds.
+- **A bug found by reading, not the hub's, fixed on `short-fuse/hub`
+  (2026-11-02):** the built-in template was chosen as `example`, its
+  file's name, while its pack id is `harbourside`, so a chat seeded from it
+  stored an id the next load could not fetch and reported a missing world.
+  The file is named after its id now (`worldpacks/harbourside.json`,
+  `BUILTIN_PACKS`), `example` reads as `harbourside` wherever a pack is
+  chosen (`packKey`), and `tools/live-world-flow-test.mjs` §13 seeds from
+  the file and loads the chat again. The hub itself binds only the user's
+  worlds.
 - **A doc drift, not the hub's:** `docs/world-builder-plan.md` D94 names
   the builder's popup `#world-builder-popup`; the code's id is
   `dooms-world-builder`.

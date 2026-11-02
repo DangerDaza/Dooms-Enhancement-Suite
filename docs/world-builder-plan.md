@@ -55,7 +55,11 @@ shared `locPlaceId`; `rowIdForCharacter` finds a loc place's own row entry.
 
 ## 3. The feature (commit 2)
 
-`src/systems/features/liveWorld.js`: `BUILTIN_PACKS = ['example']`,
+`src/systems/features/liveWorld.js`: `BUILTIN_PACKS = ['harbourside']`
+(the template's file is named after its id since 2026-11-02: it was
+`example.json`, so a chat seeded from it stored `harbourside` and found no
+file by that name on its next load; `example` still reads as `harbourside`
+wherever a pack is chosen, `packKey` in `src/utils/liveWorld.js`),
 `loadPack('blank')` needs no file; the blank world takes the chat's
 character name when the state loads (and keeps it in `state.name`); a
 missing world falls back to the blank world (D97); `listWorlds`,

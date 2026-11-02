@@ -38,7 +38,7 @@ const W = await import(pathToFileURL(join(repo, 'src/utils/worldMap.js')).href);
 const V = await import(pathToFileURL(join(repo, 'src/systems/ui/worldViews.js')).href);
 
 // A world with places visited, some drawn, people moved, a clock stepped, quests done.
-const pack = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/example.json'), 'utf8'))).pack;
+const pack = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/harbourside.json'), 'utf8'))).pack;
 const art = (hue, text) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},60%,45%)"/><stop offset="1" stop-color="hsl(${hue + 40},50%,20%)"/></linearGradient></defs><rect width="300" height="300" fill="url(#g)"/><text x="150" y="160" font-size="28" fill="#fff" text-anchor="middle" font-family="sans-serif">${text}</text></svg>`)}`;
 let st = M.seedWorldState(pack);
 const places = ['The Anchor, the old town', 'the quay', 'The docks', 'Old Town', 'The Hill', 'the archive', 'A nameless road', 'the governor\'s house', 'the chandlery', 'the fever ward'];

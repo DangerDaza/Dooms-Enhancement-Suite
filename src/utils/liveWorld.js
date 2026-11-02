@@ -123,6 +123,23 @@ const CONFIG_DEFAULTS = Object.freeze({
     debug: false,              // console lines as well as the System Log
 });
 
+/**
+ * Ids a pack was once chosen by. The template was chosen as `example`, its
+ * file's old name, while the pack's own id is `harbourside`: a chat seeded
+ * from it stored the id, and the next load found no file by that name and
+ * called the world missing. The file is named after its id now, and the
+ * old key reads as the id wherever a pack is chosen (the setting, the
+ * loader and its cache), unless a world of the user's own holds that key.
+ */
+export const PACK_ALIASES = Object.freeze({ example: 'harbourside' });
+
+/** A pack id as the loader keys it: trimmed, an old key read as the id it stands for. */
+export function packKey(id, customPacks = null) {
+    const key = String(id || '').trim();
+    const own = customPacks && typeof customPacks === 'object' && Object.prototype.hasOwnProperty.call(customPacks, key);
+    return !own && Object.prototype.hasOwnProperty.call(PACK_ALIASES, key) ? PACK_ALIASES[key] : key;
+}
+
 /** A fresh copy of the defaults, for settings files. */
 export function defaultLiveWorldConfig() {
     return { ...CONFIG_DEFAULTS, customPacks: {} };
@@ -135,9 +152,10 @@ export function liveWorldConfig(settings) {
         const n = Math.round(Number(v));
         return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
     };
+    const customPacks = c.customPacks && typeof c.customPacks === 'object' && !Array.isArray(c.customPacks) ? c.customPacks : {};
     return {
         enabled: c.enabled === true,
-        pack: typeof c.pack === 'string' && c.pack.trim() ? c.pack.trim() : CONFIG_DEFAULTS.pack,
+        pack: typeof c.pack === 'string' && c.pack.trim() ? packKey(c.pack, customPacks) : CONFIG_DEFAULTS.pack,
         every: int(c.every, 1, 50, CONFIG_DEFAULTS.every),
         maxStep: int(c.maxStep, 1, 6, CONFIG_DEFAULTS.maxStep),
         spoilerFree: c.spoilerFree === true,
@@ -146,7 +164,7 @@ export function liveWorldConfig(settings) {
         role: c.role === 'user' || c.role === 'assistant' ? c.role : 'system',
         recentMessages: int(c.recentMessages, 2, 40, CONFIG_DEFAULTS.recentMessages),
         debug: c.debug === true,
-        customPacks: c.customPacks && typeof c.customPacks === 'object' && !Array.isArray(c.customPacks) ? c.customPacks : {},
+        customPacks,
     };
 }
 

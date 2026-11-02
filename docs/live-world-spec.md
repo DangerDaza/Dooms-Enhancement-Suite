@@ -25,7 +25,7 @@ Design source: voice sessions with Dazia, 2026-10-16. Grounded in a read-only au
 
 ## 1. World pack (architecture rule)
 
-One pack per world, the same shape as a file (`worldpacks/example.json` is the one shipped, Harbourside, the template). It holds:
+One pack per world, the same shape as a file (`worldpacks/harbourside.json` is the one shipped, Harbourside, the template; the file is named after the pack's id). It holds:
 - the **place tree** (id, parent, label, optional image);
 - the **starting clocks** (id, label, start value, max, step, public-effect text per step, hidden);
 - the **character list** (name, starting place, which tier they begin at);

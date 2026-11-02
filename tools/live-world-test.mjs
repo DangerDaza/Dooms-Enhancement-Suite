@@ -15,7 +15,7 @@ import {
     emptyWorldState, seedWorldState, normalizeWorldState, countMessage, advanceDue, markHeard, markKnown,
     buildWorldLines, buildAdvancePrompt, parseAdvanceReply, validateAdvance, applyAdvance, failAdvance,
     recentChanges, publicEffects, LOG_PER_CHARACTER, LOG_TOTAL, COUNTED_KEEP, WORLD_SLOT,
-    defaultLiveWorldConfig, liveWorldConfig, buildRecentText, stripSceneNoise, reconcileWithChat,
+    defaultLiveWorldConfig, liveWorldConfig, packKey, buildRecentText, stripSceneNoise, reconcileWithChat,
     groupChangesByDate, characterTimeline, canonicalName, clampClocksToPack, uncountMessage,
  placeFromText, seenInScene } from '../src/utils/liveWorld.js';
 
@@ -30,7 +30,7 @@ function check(name, ok, detail = '') {
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const raw = JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8'));
+const raw = JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'));
 const { ok: packOk, pack, errors: packErrors } = normalizePack(raw);
 
 console.log('\n§1 the pack');
@@ -194,6 +194,7 @@ console.log('\n§10 the rules and the recent scenes');
     check('no settings → defaults', same(liveWorldConfig(null), d) && same(liveWorldConfig({ liveWorld: 'x' }), d));
     const c = liveWorldConfig({ liveWorld: { enabled: true, pack: ' harbourside ', every: 0, maxStep: 99, depth: -3, role: 'wizard', recentMessages: 1000, customPacks: { a: '{}' }, spoilerFree: 1, inject: false, debug: true } });
     check('clamps and fallbacks', c.enabled && c.pack === 'harbourside' && c.every === 1 && c.maxStep === 6 && c.depth === 0 && c.role === 'system' && c.recentMessages === 40 && same(c.customPacks, { a: '{}' }) && !c.spoilerFree && !c.inject && c.debug);
+    check('the template\'s old key ("example", its file\'s old name) reads as its id, unless a world of your own holds the key', liveWorldConfig({ liveWorld: { pack: 'example' } }).pack === 'harbourside' && liveWorldConfig({ liveWorld: { pack: 'example', customPacks: { example: '{}' } } }).pack === 'example' && packKey(' example ') === 'harbourside' && packKey('example', { example: '{}' }) === 'example' && packKey('mine') === 'mine' && packKey('') === '' && packKey(null) === '');
     const chat = [
         { is_user: true, name: 'Jordan', mes: 'I run for the Anchor.' },
         { is_system: true, mes: 'hidden' },

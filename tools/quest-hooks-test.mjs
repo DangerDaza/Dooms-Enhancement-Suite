@@ -20,7 +20,7 @@ const check = (label, cond, extra = '') => {
     if (cond) console.log(`pass  ${label}`);
     else { console.error(`FAIL  ${label}${extra ? '\n      ' + extra : ''}`); failures++; }
 };
-const pack = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8'))).pack;
+const pack = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'))).pack;
 let st = seedWorldState(pack);
 st = visitPlace(st, pack, { location: 'The Anchor, the old town', msgId: 'm1', gameDate: 'Monday' }).state;
 st = visitPlace(st, pack, { location: 'the quay', msgId: 'm2', gameDate: 'Tuesday' }).state;

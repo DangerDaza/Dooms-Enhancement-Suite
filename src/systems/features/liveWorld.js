@@ -62,10 +62,12 @@ import {
     applyAdvance,
     failAdvance,
     sameName,
+    packKey,
 } from '../../utils/liveWorld.js';
 
 export const WORLD_CHANGED_EVENT = 'dooms:world-changed';
-export const BUILTIN_PACKS = Object.freeze(['example']);    // Harbourside, the one template (docs/world-builder-plan.md D92); the blank world needs no file (D93)
+export const TEMPLATE_PACK_ID = 'harbourside';    // Harbourside, the one template (docs/world-builder-plan.md D92): its file is named after its id, so a chat seeded from it finds its world again
+export const BUILTIN_PACKS = Object.freeze([TEMPLATE_PACK_ID]);    // the blank world needs no file (D93)
 const META_KEY = 'dooms_world';
 
 let state = null;            // this chat's world state, or null while off or unseeded
@@ -159,7 +161,7 @@ function clone(v) {
  * @returns {Promise<{ ok: boolean, pack: object|null, errors: string[] }>}
  */
 export async function loadPack(id, { fresh = false } = {}) {
-    const key = String(id || '').trim();
+    const key = packKey(id, cfg().customPacks);    // the old key "example" reads as the template's id
     if (!key) return { ok: false, pack: null, errors: ['No pack chosen.'] };
     if (!fresh && packCache.has(key)) return packCache.get(key);
     let raw = null;
@@ -185,7 +187,7 @@ export async function loadPack(id, { fresh = false } = {}) {
 
 /** Forgets a cached pack (after a paste or an edit). */
 export function forgetPack(id) {
-    packCache.delete(String(id || '').trim());
+    packCache.delete(packKey(id, cfg().customPacks));
 }
 
 /** The packs on offer: the built-in ones and the pasted ones. */
@@ -251,7 +253,7 @@ export async function listWorlds() {
  * @returns {Promise<{ ok: boolean, raw: object|null, errors: string[], custom: boolean }>}
  */
 export async function getWorldRaw(id) {
-    const key = String(id || '').trim();
+    const key = packKey(id, cfg().customPacks);
     const custom = cfg().customPacks[key];
     if (key === BLANK_PACK_ID && custom === undefined) {
         const base = activePack && activePack.id === BLANK_PACK_ID ? activePack : blankPack(characterName());

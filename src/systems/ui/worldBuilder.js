@@ -11,7 +11,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { normalizePack, liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
-    listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
+    TEMPLATE_PACK_ID, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
     isDrafting, getWorldState, WORLD_CHANGED_EVENT,
 } from '../features/liveWorld.js';
 import { builderShellHtml, builderHtml, statusHtml, nameHtml, POPUP_ID, WB_TABS } from './worldBuilderViews.js';
@@ -313,7 +313,7 @@ function build() {
         const act = this.getAttribute('data-act');
         if (act === 'open') { await openWorld(this.getAttribute('data-id') || ''); return; }
         if (act === 'new') { newWorld(); return; }
-        if (act === 'template') { if (discardOk()) await openWorld('example', { force: true }); return; }
+        if (act === 'template') { if (discardOk()) await openWorld(TEMPLATE_PACK_ID, { force: true }); return; }
         if (act === 'draft') { await draftFromChat(); return; }
         if (act === 'import') { importFile(); return; }
         if (act === 'save') { await save(); return; }

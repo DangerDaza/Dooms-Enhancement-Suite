@@ -40,7 +40,7 @@ const M = await import(pathToFileURL(join(repo, 'src/utils/liveWorld.js')).href)
 const B = await import(pathToFileURL(join(repo, 'src/utils/worldBuilder.js')).href);
 const V = await import(pathToFileURL(join(repo, 'src/systems/ui/worldBuilderViews.js')).href);
 
-const harbour = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/example.json'), 'utf8'))).pack;
+const harbour = M.normalizePack(JSON.parse(readFileSync(join(repo, 'worldpacks/harbourside.json'), 'utf8'))).pack;
 const draft = B.worldToRaw(harbour);
 draft.places.push({ id: 'the-long-stair', label: 'The long stair down to the water, past the chandlery and the rope-walk', parent: 'the-hill' });
 draft.cast.push({ name: 'A nameless courier with a very long name indeed', tier: 'heard' });
@@ -48,15 +48,15 @@ const broken = B.worldToRaw(harbour);
 broken.places[1].parent = 'nowhere';
 broken.clocks[0].max = 0;
 const worlds = [
-    { id: 'harbourside', name: 'Harbourside', custom: true, template: false, ok: true, errors: [], summary: B.worldSummary(harbour) },
+    { id: 'harbourside-played', name: 'Harbourside, played', custom: true, template: false, ok: true, errors: [], summary: B.worldSummary(harbour) },
     { id: 'skyreach', name: 'Skyreach, the long campaign of the northern crossings', custom: true, template: false, ok: true, errors: [], summary: '6 places · 2 clocks · 2 people' },
     { id: 'broken', name: 'broken', custom: true, template: false, ok: false, errors: ['A place has no id.'], summary: '' },
-    { id: 'example', name: 'Harbourside', custom: false, template: true, ok: true, errors: [], summary: B.worldSummary(harbour) },
+    { id: 'harbourside', name: 'Harbourside', custom: false, template: true, ok: true, errors: [], summary: B.worldSummary(harbour) },
 ];
-const where = { pack: 'harbourside', chatPack: 'skyreach', chatOpen: true };
+const where = { pack: 'harbourside-played', chatPack: 'skyreach', chatOpen: true };
 const scenes = [
     { name: 'empty', html: V.builderHtml({ worlds, selectedId: '', draft: null, where }) },
-    ...V.WB_TABS.map(t => ({ name: t.id, html: V.builderHtml({ worlds, selectedId: 'harbourside', draft, dirty: true, tab: t.id, note: 'Saved.', where }) })),
+    ...V.WB_TABS.map(t => ({ name: t.id, html: V.builderHtml({ worlds, selectedId: 'harbourside-played', draft, dirty: true, tab: t.id, note: 'Saved.', where }) })),
     { name: 'errors', html: V.builderHtml({ worlds, selectedId: 'new', draft: broken, dirty: true, tab: 'places', note: 'Drafted, with problems listed below.', adoptOnSave: true, where }) },
 ];
 
