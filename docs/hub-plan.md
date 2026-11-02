@@ -1,0 +1,611 @@
+# The Hub (Live World, fourth pass: many small chats)
+
+The owner (2026-11-02): "I am thinking of a feature that the map can become.
+We are throwing the long chat style out and going to many small chats. I
+want a hub panel that takes up most of the screen. It has a map and every
+character's location. It shows news, rumours and weather patterns. The user
+can click on an element of the map (location, person, news, rumour) and
+start an RP there. The AI will start a new chat with 3 starting prompts and
+the user can RP that scene. Once the scene is done they can end it and DES
+will commit it to memory so that the next chat has it in its context. And
+the user can jump from event to event or person or group of people. Always
+have a fresh chat, keep your lore and relationships current." And then:
+"give me the plan doc with long chat still available. And I need it all to
+look good, I need all our buttons buttoned and bows bowed."
+
+**Status (2026-11-02):** designed, not built; the plan alone, for the
+owner's reading, on `short-fuse/hub`, a branch off `Project-Short-Fuse`
+(which carries Hooks and Canon, `docs/hooks-canon-plan.md`, since
+`17b8d4f`). The owner answered four questions before this was written:
+where a world's memory lives (D115), which card narrates (D114), where the
+hub lives (D116), which branch (this line); those four are his, marked
+"(the owner)"; every other decision is recommended and standing, and any
+of them is his to change. The SillyTavern calls the plan rests on were
+checked against SillyTavern's own source, release 1.19.0, on the day (§12).
+Phase 1 lands as "Hub 1: the pure model and its test", the way the other
+plans did.
+
+## 1. Decisions
+
+A world is played as many small chats instead of one long one. The hub is
+the world's window: its places with every character on them, the news, the
+rumours, the weather, the hooks, the people, the scenes played so far. From
+any of those the player starts a scene: a fresh chat on the world's
+narrator card, opened with a brief (where, who, when, what brought us here,
+what happened last time) and three openers the narrator wrote for that
+spot, one of which is the first message. The scene is played like any chat
+today, because it is a chat: the tracker, the dice, the inventory, the
+quests, Live World's clocks, Canon's ledger all work as they do now. When
+the player ends the scene, DES remembers it: a recap is written, Canon
+reads the whole scene, the world moves by the time the scene took, and the
+world keeps a sealed snapshot of everything the chat knew. The next scene
+is seeded from that snapshot, so it starts knowing what the last one
+established; starting it "days later" moves the world first, so the hub's
+news is the news since the player last played. The long chat stays a mode:
+a chat the hub did not start plays exactly as today.
+
+```
+             +---------------- the hub (the world) -----------------+
+             |  the board: places, people, weather   |  news        |
+             |  the scenes so far, the date          |  rumours     |
+             |  the narrator card                    |  hooks       |
+             |                                       |  people      |
+             |                                       |  scenes      |
+             +-------------+-------------------------+----^---------+
+        Start a scene      |                              |  End the scene
+   (seed, cast, gap)       |                              |  (recap, Canon over the scene,
+   the world moves on      |                              |   the world moves, the snapshot)
+   the file written        v                              |
+             +---------------- a fresh chat ------------------------+
+             |  on the narrator card; the brief is its scenario;    |
+             |  the first message is one of three openers;          |
+             |  played as any chat today                            |
+             +------------------------------------------------------+
+```
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D113 | The long chat stays (the owner) | A chat is a scene only when the hub wrote it: `chat_metadata.dooms_hub` names its world and scene. Every hub behaviour keys off that mark. A chat without it, on any card, the narrator card included, plays exactly as today: no copy in, no copy out, no brief, no strip, nothing new in its prompt, every default unchanged, `tools/tracker-prompt-test.mjs` still pinning the prompt. The Map window stays the chat's window (D116). The whole existing suite, run unchanged, is the proof, plus one new section that opens a plain chat on a bound card and checks the hub touched nothing. |
+| D114 | A world is narrated by a card of the user's choice (the owner) | A chat belongs to a card in SillyTavern, so a world played from the hub is bound to one character card, its narrator, and the people of a scene are data (the tracker's present characters, the Workshop's cast), never cards. The user picks any card (Settings → Live World → Hub); "Make a narrator card" builds one from the world for people who have none: name "Narrator of <world>", description from the world's description and the narrator's template, no greeting (SillyTavern then starts its chats empty, §12), the default avatar, made through SillyTavern's create endpoint with the same body its own `/char-create` sends. One card narrates one world; a card bound elsewhere is shown greyed with that world's name. The card is remembered by its avatar file name, SillyTavern's stable id (indices move), so a rename in SillyTavern changes nothing and a deleted card makes the hub ask for another. Group chats are not scenes and a group cannot be the narrator (D39). |
+| D115 | Memory: a sealed snapshot now, a world state later (the owner) | Between scenes the world keeps a snapshot of the chat's own stores, keyed exactly as the chat keeps them (`dooms_tracker`, `dooms_inventory`, `dooms_quests_done`, `dooms_world`, `dooms_canon`, `dooms_hooks`; §3). It is sealed: every reply id inside it is stripped (Live World's log, runs and visits; Canon's lines and count; the inventory's chat binding), because each of those stores winds back on load whatever is tied to a reply the chat does not hold (§3.2). Start writes the snapshot into the new chat's file; End reads the chat's stores back and replaces the snapshot. Nothing moves: every per-chat mechanism (the rewind on a deleted reply, swipes, the cadences) works inside a scene untouched, a long chat is untouched by construction, and a scene that is never ended commits nothing. The owner's word: this now, and "in the future we will be looking at" a world state; the snapshot is shaped so that step is a move of where the stores are read, not of their shape (§3.5). A world with no snapshot seeds its first scene as a new chat seeds today; Continue in the hub makes a long chat's stores the first snapshot (D131). |
+| D116 | The hub is a window of its own (the owner) | `#rpg-hub-popup`, built in JS like the Map window on the settings popup's shell, sized for most of the screen (the Map window is capped at 760px tall; the hub has its own rules) and full screen on a phone the way the Workshop is. The panels reuse the Map window's pure renderers over the snapshot's world state; the Map window itself stays the chat's window and gains only a Hub button in its foot when the chat is a scene. The window's module is lazy (`tools/lazy-graph-test.mjs`), its CSS lives in `style.css` with a block for the five looks in `styles/overhaul.css` (the Map's precedent; the World Builder has none and shows it). |
+| D117 | Start a scene | From a place, a person or several, a rumour, a news item, a hook, a past scene ("Continue from here") or "Anywhere". The Start sheet: Where (the place, pre-filled, any place of the world or a new name), Who (the people there pre-ticked, any known person addable; the player always and never listed), When (the gap since the world's date: Right after, Later that day, The next day, Days later, Weeks later, When… as free text, Cut to a quest's own idea), What (the seed's text and an optional line of the player's own). Start then, in the hub: a gap longer than Right after moves the world first (§5.3) and the news shows; the openers are asked (D119) and picked; the scene file is written and opened (D118); the hub closes (a setting keeps it) and the chat is in front with the strip across its top. §2.3 says what each failure does. |
+| D118 | The scene file is written first, then opened | SillyTavern keeps a chat's metadata on the first line of its file and reads it on load (§12), so Start does not make an empty chat and write into it; it writes the whole file and opens it: the header holds the sealed snapshot's stores, the mark `dooms_hub`, the brief as `scenario` (D120), the world's book as the chat's lorebook (D126) and an integrity id; the first message is the chosen opener with the other two as its swipes (D119); the file is posted to SillyTavern's chat save endpoint by the bridge itself, under the narrator card, named "Scene <n> - <title>" (a free name checked against the card's chat list), then the card is selected if another is in front and the chat opened by name. (SillyTavern's own `saveChat` is not used for this: it merges the open chat's metadata into the header it writes and saves under the card in front, §12.) The chat-changed handlers then find every store where they always look, no loader is re-run and no seed fires; the first-message event is the one every counter already ignores. Start without an opener writes no message, and a card with a greeting of its own then shows it. |
+| D119 | Three openers, the first message's swipes | One background request on the tracker's profile, like Hooks (D100), run from the hub before the file exists: the world's name and blurb, the place and its region, the weather there, the people chosen with the tier word and one line each, the seed, the gap, the ledger's block built from the snapshot, the last two recaps, the open quests, the player's name and line, the narrator's template. The reply is strict JSON (`{"when":{"date","time"},"openers":[{"title","text","who"}]}`, up to three), read like the advancer's and checked: a title and a text each, the text within length, `who` cut to the cast and the known, `when` taken whole or not at all. The picker in the hub shows the three as cards; the one chosen is the first message and the other two its swipes, so they are a swipe away and a further swipe is SillyTavern's own regenerate. Write my own (a text that is the first message), Ask again (three more; the old three stay until the new land) and Start without one are on the picker too. |
+| D120 | The brief is the chat's scenario | The brief goes into the chat's scenario override (`chat_metadata.scenario`, read in place of the card's scenario when it is not empty, shown in SillyTavern's own dialog and in the Context Inspector, §12). It holds: the world and the scene's number; where (the place and its region), the date, the time, the weather; who is here, one line each (the Workshop's description cut to 200 characters, else the pack's line, else the tier word: nothing standing injects descriptions today, so the brief must); what brought us here (the seed); since last time (the news since the last scene); last time (the previous recap) and before that (the one before, cut); the player's line. At most 2,500 characters, the older parts cut first. Everything else the scene knows comes by the copied stores and their existing injections: the world line, the ledger's block, the committed tracker data, the inventory's line, the attributes line. |
+| D121 | A scene plays as a chat does today | Nothing new reaches the prompt but the brief. The tracker's present characters are seeded from the cast (with their vitals from the snapshot when known), both the last generated and the committed data, so the shelf shows them from the first reply and the first prompt lists them; the opener as the first assistant message is what makes the tracker's example block appear. Live World's cadence, Canon's cadence, Hooks, the dice, the inventory, Cut to a quest, Travel here, scene pictures and the Map window run per chat as now; what they change lands in the chat's stores and so in the snapshot at End. A slim strip at the top of the chat column names the scene (number, place, date) with Hub and End scene; `/hub` and `/endscene` do the same; the D menu gains Hub, and End scene in a scene. |
+| D122 | End a scene, on purpose | The End sheet (from the strip, the D menu, `/endscene`, the hub's Scenes panel): What happened (a recap written by a background request when the sheet opens, editable), the scene's time (its first date to the tracker's date now), what End will do, End scene, Keep playing. End runs in order, one background request at a time (§5): the recap (kept with the scene, 600 characters at most); Canon over the whole scene when Canon is on (its own run with the scene's messages in place of its recent window and wider caps for the one run); the advancer after the scene when Live World is on (the chat's own run, so the clocks move by the scene's time, people move, news is written); then the chat flushed to disk, the snapshot taken and sealed (the chat's stores, the facts from the tracker: date, time, place, weather), the ledger mirrored to the world's book (D126), the scene marked ended in the record and in the chat's mark. Each step shows on the sheet; a failed request offers Try again and Skip; the snapshot never fails. The chat stays as it is, a record. A message sent in an ended scene offers Reopen; a reopened scene's End replaces its recap and the snapshot. |
+| D123 | One open scene per world | Starting while a scene is open offers End it now, Set it aside, Cancel. A scene set aside keeps its chat and its record under "set aside" in the Scenes panel, with Resume and End. Resuming it while another scene is open sets that one aside: one open scene at a time, always. The snapshot is a line, written by the last End: ending a set-aside scene that began before a newer one ended replaces what the newer one wrote, and the End sheet says so before it does it. Merging two scenes' stores is not attempted (§11). |
+| D124 | The board now; a picture with pins later | The board shows the world's places as the World Builder's tree: regions as groups, each place a circle with its drawn picture or its glyph (the Map window's circle), the people last seen there as small faces on its rim (four, then "+n"), the player's marker on their place, the region's weather on the group, places never visited dimmed, places the story named under their region or under "Elsewhere". A place clicked opens its sheet: the picture (or Draw it), who is here, the rumours that name it, the scenes played there, Start a scene here. A picture with pins (a map image per world, drawn or uploaded in the builder, each place placed on it by hand) is a later phase the owner decides on when the board stands (§8). |
+| D125 | Weather by region | The world keeps a weather line per region (a top-level place): an emoji, a few words, the date it set in, kept in the snapshot's world state (`weather`, a new field, §3.3). Seeded from the tracker's weather at the first End (the scene's place names the region) or typed in the builder's Places tab; moved by the advancer, whose JSON gains a `weather` list checked like its other fields (a region id, one emoji, a line under 80 characters; a bad entry drops, not the run); shown on the board and in the News panel as dated lines ("Rain over the Harbour since Day 13"); said in the brief; seeded into the scene's tracker weather at Start so the first reply and the weather effects match; and at End the tracker's weather becomes the region's. |
+| D126 | The world's book | Canon's ledger is kept as a lorebook the world owns as well as a block: at End the ledger is mirrored into "Canon of <world>" (made when missing; every entry written as Canon's export writes them, D111, and entries the ledger no longer has removed, which D111's export does not do), and the book is bound to every scene chat as its chat lorebook from the file's header (`chat_metadata.world_info`, §12), so SillyTavern's own keyword triggers carry the lore into the prompt beside the block. Off when Canon is off. The book is the user's to edit; the next End rewrites only the entries it owns (titled "Canon · kind: name"). |
+| D127 | Ways in | The D menu gains Hub (the chat's world when the chat is a scene; else the list of worlds with a narrator card; else Settings) beside Map, with a stable id, listed whatever Live World's switch says as Map is, and End scene in a scene. Settings → Live World gains a Hub group: the world, its narrator card, Make a narrator card, Open the hub, Continue in the hub (D131), and what End remembers (Recap always; the ledger and the book when Canon is on; the world when Live World is on). The World Builder's list gains "Play from the hub" on a world. The Map window's foot gains Hub in a scene. The strip has Hub and End scene. `/hub`, `/endscene` (`/scene` is scene pictures'). The hub needs Live World on: it is Live World's. |
+| D128 | The store and its caps | `extensionSettings.hub = { v, gap, recapChars, closeOnStart, worlds: { [worldId]: { card, memory, scenes, seq } } }`, normalised by a pure `hubConfig`/`normalizeHub`, additive migration, nothing happening for a world until a card is bound. A scene record: id, title, seed, place, cast, gap, the chat's file name, the card, started and ended (wall clock and story date), status (open, aside, ended), recap, reopened. Two hundred scenes a world; the recaps of all but the last twenty cut to 200 characters; the snapshot's stores keep their own caps (Canon 160 lines, the world's log 300, the inventory's). The chat's mark `dooms_hub` carries the scene's id, title, place, cast, gap and, after End, the date it ended; the Scenes panel can rebuild its list from the card's chats (SillyTavern lists a card's chats with their metadata, §12) if the settings are ever lost, and marks a record "chat gone" when its file is. |
+| D129 | Rendered before pushed | `tools/hub-layout-test.mjs --shots` renders, under the default look and the five looks at 1200×900 and 390×844: the hub with a fixture world (two regions, seven places, three with pictures, five people, weather, eight news lines, three rumours, two hooks, four scenes with one open), the place sheet, the Start sheet, the opener picker, the End sheet in its three states, the scene strip over a chat column; it fails anything past the window, a squeezed label, a circle over its label, a button short of its size or wider than its share, a tab out of reach on phone, a picker card cut. The views are pure (`hubViews.js` exports the shell and the id the test builds from, the World Builder's way). The Settings group is covered by `tools/settings-layout-test.mjs`. The PNGs are looked at before every push (handover §1), and the owner looks at it on his install and his phone before the branch merges: "buttons buttoned and bows bowed" is the bar. |
+| D130 | Tests | `tools/hub-test.mjs` (pure): the snapshot taken and sealed from fixture metadata, seeded with the facts adjusted, the brief and its cuts, the gap words, the openers' prompt and reader, the recap's, the weather checks and the advancer's new field, the scene records (one open, set aside, reopened, chat gone), the file name, the header. `tools/hub-flow-test.mjs` (the sandbox): bind a card; Start from a place with the chat bridge stubbed (the file recorded, the open recorded); the stores found by the loaders on the simulated chat change; the brief in the header; the openers as swipes; two replies played; End's steps through injected transports and timing hooks; a second Start reading the memory and carrying last time; set aside and resume; reopen; the chat changed mid-End aborting; Continue in the hub; a plain chat on the bound card untouched. The existing suite runs unchanged as the long chat's guard. |
+| D131 | Continue in the hub | From a long chat (Settings → Live World → Hub, or the Map window's foot when the chat's world has a narrator card): the chat's stores as they stand become the world's snapshot, sealed, a recap of its last forty messages is written and kept as scene 0 ("Before the hub"), and the hub opens. The long chat is not changed and can go on being played; the next Continue replaces the snapshot and says so. This is how an existing campaign moves into the hub without losing a line. |
+| D132 | Bonds, later | Relationships are the hub's People view, written at End: a line per pair among the player and the known people (a stance, a strength, why, since), updated by one more request reading the recap and the ledger, shown on a person's sheet, said in the brief, editable and pinnable like Canon's lines. Phase 5 (§8); its decisions get numbers when it starts. |
+| D133 | Phases, in order | 1 the memory and the lifecycle without a window; 2 the hub window and its render check; 3 the world's book and weather; 4 Continue in the hub and the world exported with its story; 5 Bonds; 6 the picture with pins, if wanted. Each phase is its own commits, tested and rendered before pushed, on `short-fuse/hub`; `Project-Short-Fuse` takes the branch when the owner says so. New decisions inside a phase take numbers from D134 on. |
+
+## 2. The scene lifecycle
+
+### 2.1 The states
+
+A scene is `open` from Start, `aside` when set aside (D123), `ended` after
+End (D122). Reopen puts an ended scene back to `open` (its record keeps
+`reopened: true`). A record never leaves the list by itself; the Scenes
+panel can remove a record whose chat is gone, nothing else.
+
+```
+ Start --> open ----End----> ended
+            |  ^               |
+  Set aside |  | Resume        | Reopen (a message sent in it, or the panel)
+            v  |               v
+           aside ---End----> ended
+```
+
+### 2.2 Start, step by step
+
+1. **Guard.** Live World on, the world has a narrator card, the card exists
+   (and is loaded whole: SillyTavern keeps cards shallow until used, §12),
+   no temporary chat in front; another scene open, D123's three buttons.
+2. **The gap.** Right after skips this. Anything longer runs the advancer
+   over the snapshot's world state with no chat behind it (§5.3): the
+   state, the last two recaps, the gap as story time, "the player is not
+   in the story". The result (clocks, moves, news, weather, the new date)
+   is written into the snapshot; a failed run leaves the world as it was,
+   the hub says so, and the gap is said in the brief in words.
+3. **The openers** (D119, §5.1), picked in the hub.
+4. **The seed into the stores.** The snapshot copied, then adjusted: the
+   tracker's location is the place, its present characters the cast (the
+   player never among them; vitals from the snapshot when known), its
+   weather the region's, its date and time the openers' `when` (else the
+   snapshot's); the inventory's chat binding rewritten; the hook that
+   seeded the scene moved to taken; `dooms_hub` written.
+5. **The file.** The header: the stores, `scenario` (the brief), the
+   world's book as the chat lorebook, an integrity id; the first message:
+   the opener as the card, with the other two as swipes, and the seeded
+   tracker data as its swipe entry so the Tracker Data view, the scene
+   headers and history persistence see the state on it. Saved under the
+   card as "Scene <n> - <title>" (checked free against the card's chat
+   list; a counter when not). The file is never opened by ST before it is
+   whole.
+6. **The open.** The card selected if another is in front; the chat opened
+   by name. The chat-changed handlers load every store from the header;
+   the strip appears.
+7. **The record** (status open, the file name, the title) saved; the hub
+   closes unless the setting keeps it.
+
+### 2.3 End, step by step
+
+1. **Guard.** The chat in front is the scene's (End from the panel for a
+   scene that is not open opens it first); no generation running (End
+   waits for the send to finish, as the advancer's manual run does).
+2. **The recap** (§5.2) written as the sheet opens; the user may edit it.
+3. **End scene** pressed: Canon over the scene (when on), then the advancer
+   after the scene (when on), each awaited, each behind the shared busy
+   flag with the existing wait (`waitForBackground`), each with Try again
+   and Skip on failure; the sheet shows the step running.
+4. **The flush.** The chat saved through the conditional save (debounced
+   saves are lost on a chat switch), then the snapshot taken from the live
+   metadata and sealed, the facts read from the committed tracker data,
+   the record and the chat's mark updated (status ended, the recap, the
+   end date), one immediate save of the chat for the mark.
+5. **The book** (D126) mirrored when Canon is on.
+6. **The hub opens** on the world, showing the news and the scene under
+   Scenes.
+
+### 2.4 When a step fails
+
+| Step | On failure |
+| --- | --- |
+| The gap's advance | The snapshot is unchanged; the brief says the gap in words ("three days later"); the hub's status line names the failure; Start goes on. |
+| The openers | The picker offers Write my own, Ask again and Start without one; nothing is written until one is chosen or Start without one is pressed. |
+| The file | Nothing is written anywhere else; a toast says SillyTavern refused the save; the hub stays open with the picker's choice kept. |
+| The open | The file exists; the record is kept as open; the hub says "the chat is written; open it from Scenes"; Resume opens it. |
+| End's recap | Try again, or End without a recap (the record says "no recap"). |
+| End's Canon run | Try again, or Skip (the ledger stays as the scene's cadence left it). |
+| End's advance | Try again, or Skip (the clocks did not move for the scene's time; the next Start's gap can move them). |
+| End's flush | The conditional save failed: End stops, the scene stays open, the sheet says so; nothing in the world is touched. |
+| The book | The lorebook write failed: the record notes it; the next End mirrors again. |
+| The chat changed mid-End | End stops before the flush and says "the chat changed; end it again from the Scenes panel"; the scene stays open; a run that lands late is discarded as stale, as the advancer's are. |
+
+### 2.5 The edge cases, each decided
+
+- **A scene left open** for days: it stays open; the hub's foot shows it
+  with Resume and End; Start offers to end or set it aside (D123).
+- **Two scenes at once:** never open together (D123). A set-aside scene
+  ended after a newer one replaces the snapshot, and the sheet warns.
+- **The chat is deleted in SillyTavern:** the record is marked "chat gone"
+  (on the delete event, and when the Scenes panel checks the card's chat
+  list); End is impossible; the panel offers to remove the record.
+- **The chat is renamed in SillyTavern:** the record follows the rename
+  event; the Scenes panel's check also finds a renamed file by the mark in
+  its metadata.
+- **The narrator card is deleted:** the hub says so and asks for another;
+  the memory and the scenes stay under the world; old records keep the
+  old card's name.
+- **The narrator card is renamed:** nothing changes (the avatar file is the
+  id).
+- **The settings are lost or restored from an older copy:** Rebuild from
+  the card's chats reads every chat's mark from the chat list and remakes
+  the records; the snapshot is remade by ending the newest scene again.
+- **The world is deleted in the builder:** `hub.worlds[id]` stays until the
+  user removes it from the Hub group; the hub lists it as "world missing"
+  with its scenes readable.
+- **The world is edited while a scene is open:** the scene's chat clamps
+  the pack on its next load as any chat does (D97); the snapshot's world
+  state is clamped the same way at the next Start.
+- **Live World turned off mid-scene:** the scene plays as a plain chat;
+  End skips the advance; the snapshot still copies everything.
+- **Canon off:** End has no ledger step and no book; the recap carries the
+  memory; the Hub group says "Turn Canon on to keep a ledger".
+- **DES off:** nothing of this runs (every handler checks, as all do).
+- **SillyTavern restarted mid-End:** the scene is still open; End again.
+- **The opener is swiped:** the other openers are the swipes; a swipe past
+  them is SillyTavern's regenerate.
+- **The opener is deleted:** the chat starts from nothing; the brief and
+  the stores stand; the tracker's data is re-seeded from the metadata on
+  the next load (the deleted message's swipe entry is gone, the header's
+  copy is not).
+- **The narrator card has a greeting of its own:** unused in a scene (the
+  opener is the first message); shown in a plain chat on the card, and in
+  a scene started without an opener.
+- **A plain New chat on the narrator card** in SillyTavern: a long chat,
+  not a scene (D113); adopting it as a scene is a later item (§11).
+- **The persona changes between scenes:** the player's name is resolved per
+  chat as today; the snapshot's player vitals follow the persona's name,
+  and a new persona starts fresh vitals.
+- **The tracker's preset:** SillyTavern-side presets follow the card, so
+  every scene of a world shares the narrator card's preset; a preset
+  switched between scenes may ask for other fields than the seeded data
+  carries, which the tracker already tolerates.
+- **A name close to a known one** in the cast ("Mara" beside "Mara Vane")
+  raises the alias question as it would in any chat; the Start sheet's
+  Who list offers only names as they are known, so the question is rare.
+- **Lorebooks named like known people** switch on for the scene chat as
+  they do in any chat whose roster names them; the snapshot's roster is
+  the long chat's rule applied to a short one.
+- **A phone:** the hub is full screen with tabs; the sheets are full
+  screen; the strip wraps to two lines.
+- **Two SillyTavern tabs:** unsupported, as today.
+- **A group chat in front** at Start: the card is selected first, leaving
+  the group; a group can never be the narrator (D114).
+- **The settings grow:** the caps in D128; a world's memory is tens of
+  kilobytes at most; `settings.json` is already where DES keeps worlds.
+
+## 3. The world's memory
+
+### 3.1 What is per chat today
+
+| Store | Key | What it holds | In the snapshot |
+| --- | --- | --- | --- |
+| The tracker | `chat_metadata.dooms_tracker` | quests; the last generated and the committed data (the info box with date, time, location, weather; the present characters with their vitals; the player's vitals), as JSON strings; the character sheets; the doom counter; knives; the roster of the chat (known, removed, banned, colours, fills) since per-chat tracking is always on | Yes, whole, then adjusted at Start (§2.2 step 4); the doom counter keeps its total and resets its countdown; the synced expression portraits are left out (they are rebuilt on every load) |
+| Inventory | `chat_metadata.dooms_inventory` | the pack, the party pouch, stored items, and the chat it belongs to | Yes; the chat binding rewritten to the new chat at Start |
+| Completed quests | `chat_metadata.dooms_quests_done` | the quests completed | Yes |
+| Live World | `chat_metadata.dooms_world` | the pack id, `seeded`, the clocks, who is known and where, the places visited with their visits and pictures, the log, the runs, the count, the blurb, the name | Yes, sealed (§3.2) |
+| Canon | `chat_metadata.dooms_canon` | the ledger, the count, the last run | Yes, sealed |
+| Hooks | `chat_metadata.dooms_hooks` | the round, the taken, the set aside | Yes (its ids are harmless; the seeding hook moved to taken) |
+| Cut to a quest | `chat_metadata.dooms_quest_cut` | an armed cut | No: transient |
+| Scene pictures | `chat_metadata.dooms_scene` | the chat's count, LoRAs, notes | No (later: the LoRAs and notes as the world's) |
+| Per message | `message.extra.*`, the reply stamps | swipe data, roll cards, pictures, the ids the stores are tied to | No: a fresh chat has no messages; the opener gets a swipe entry of its own |
+
+The live copy of the quests is a global (`extensionSettings.quests`) that
+every chat load overwrites from `dooms_tracker.quests`; the snapshot reads
+the metadata, never the global. The tracker's save rebuilds `dooms_tracker`
+from a fixed list on every save, so the hub keeps nothing under it: its
+mark is its own key, `dooms_hub`.
+
+### 3.2 Sealed
+
+Each store binds itself to its chat by the ids of the replies that changed
+it, and on load winds back what the chat does not hold: Live World pops
+every log entry and run whose id is missing (clocks and places back to
+before), Canon keeps only lines that are pinned or unstamped, the inventory
+treats a store bound to another chat as inherited from a branch. A
+snapshot copied as it stands would be emptied on the first load. Sealing
+strips the ids: Live World's log, runs, last and lastError get `msgId:
+null`, `counted` is emptied and `sinceLast` zeroed, every visited place's
+visits are emptied (an entry with no visits stands where it is, its
+picture kept); Canon's lines and its last run get `msgId: null` and
+`counted` is emptied; the inventory's chat binding is rewritten at Start.
+A sealed store reads as one that was never tied to a reply, which the
+loaders already accept. The snapshot is sealed when it is taken, and again
+when it is seeded (a scene's End stamps the opener too). `takeSnapshot` and
+`sealSnapshot` are pure, in `src/utils/hub.js`, tested on fixtures taken
+from the flow tests' chats.
+
+### 3.3 The snapshot
+
+```
+hub.worlds[worldId].memory = {
+  v: 1, takenAt, scene,                 // which End wrote it
+  stores: { dooms_tracker, dooms_inventory, dooms_quests_done,
+            dooms_world, dooms_canon, dooms_hooks },     // sealed deep copies, the chat's own keys
+  facts: { date, time, location, weather },              // the tracker's at End
+}
+```
+
+`dooms_world` gains one field for the hub, `weather: { [regionId]: {
+emoji, text, since } }` (D125), read and written by Live World's own
+normaliser so a long chat may carry it too (empty there).
+
+### 3.4 Seeding a scene
+
+`seedStores(memory, { chatId, place, cast, weather, when })` returns the
+header's stores: the snapshot sealed again; the tracker's last generated
+and committed data both set (the first generation copies one into the
+other, and a seeded present list in only one of them is missed on a count
+edge the injector keeps); the info box's location, weather, date and time
+replaced; the present characters replaced by the cast in the shape the
+shelf writes for a person it marks present (name, emoji, an empty thought,
+a relationship status), each with the vitals the snapshot holds for that
+name; the player's vitals kept; the inventory's `chat` set to the new chat
+id; the hook moved. The opener's swipe entry carries the same four fields
+(quests, info box, characters, player) so the view of the tracker's data
+on the message matches the header.
+
+### 3.5 Later: the world state
+
+When the stores move to the world (the owner's "option 2"), `memory.stores`
+is already the world's copy. The step is: each feature reads and writes
+the world's copy while the chat is a scene (a resolver in front of each
+store's load and save, `chat_metadata` when the chat is not a scene), the
+chat's copy becomes a cache, and the rewind on a deleted reply becomes a
+rewind within the open scene only. The snapshot's shape, the sealing, the
+scene records, the hub window, the openers, the brief and the End sheet
+are unchanged by it; `seedStores`/`takeSnapshot` stop being the path. It is
+honest to say the resolver is not small: each of the six stores loads and
+saves in its own module and would need the one indirection; the shape
+makes it a bounded change rather than a redesign.
+
+## 4. The window
+
+### 4.1 Desktop
+
+```
++ Harbourside . Day 14, morning . Rain over the Harbour     [Narrator: Mara] [Start anywhere] [World Builder] [x] +
+| +------------------ the board -------------------+ +- News | Rumours | Hooks | People | Scenes -------------+ |
+| | THE HARBOUR  (rain)                            | | Day 14 . The cutter moved to the harbour mouth        | |
+| |  (The Anchor)   (Customs house)   (The quay)   | | Day 13 . Rain over the Harbour                         | |
+| |   Marit, you      Reyes                        | | Day 12 . Captain Reyes seen at the customs house       | |
+| | THE OLD TOWN  (clear)                          | | ...                                                    | |
+| |  (The chandlery)  (The governor's house)       | |                                                        | |
+| | ELSEWHERE                                      | |                                                        | |
+| |  (The sunken Kestrel)                          | |                                                        | |
+| +------------------------------------------------+ +--------------------------------------------------------+ |
+| Scene 4 open at The Anchor since Day 12 . [Resume] [End scene]                                                 |
++----------------------------------------------------------------------------------------------------------------+
+```
+
+The window: `width: min(96vw, 1400px); height: min(94vh, 900px)`, the
+board the left two thirds, the panels the right third, the foot the state
+line. The panels reuse the Map window's renderers over the snapshot's
+world state (news, rumours, hooks, people) plus the Scenes panel (this
+file's own). Every line of every panel is a way in: a news line, a rumour,
+a hook ("Play this": taken and started), a person, a scene ("Continue from
+here", "Open the chat") opens the Start sheet with that seed. A place's
+sheet opens over the board. The remembered panel goes to `localStorage`
+under a `dooms-` key, guarded, as the Map's does.
+
+### 4.2 Phone
+
+Full screen, the Workshop's rule (`100dvh`, a solid backdrop): the tabs
+across the top (Map, News, Rumours, Hooks, People, Scenes), the board
+scrolling under Map with the regions as rows, the foot pinned at the
+bottom with the open scene. The Start sheet, the picker and the End sheet
+take the whole screen with Back in their head. Touch targets 44px; long
+press where the desktop has a right click.
+
+### 4.3 The sheets
+
+- **The place sheet:** the picture (or Draw it), the region, who is here
+  (faces), the rumours that name it, the scenes played there (titles,
+  dates), Start a scene here.
+- **The Start sheet:** Where (a select of the world's places plus "a new
+  place…"), Who (chips: the people here ticked, others addable), When (the
+  six gap words, When… a text), What (the seed's text, editable; the
+  player's line), Start, Cancel. On a seed from a person the place is
+  theirs; on a seed from a hook or rumour the place is the one it names
+  when it names one.
+- **The opener picker:** three cards (title, text, the faces named), Use
+  this on each; Write my own; Ask again; Start without one; Back. Shown in
+  the hub, before the file exists.
+- **The End sheet:** the recap (editable, written when the sheet opens),
+  the scene's time, the steps with their state (waiting, running, done,
+  failed with Try again and Skip), End scene, Keep playing.
+- **The strip:** `#dooms-scene-strip` at the top of the chat column:
+  "Scene 4 · The Anchor · Day 12, evening" with Hub and End scene; on an
+  ended scene "Scene 4 · ended" with Hub and Reopen. It is DES's element,
+  placed where the chat column begins, shown only in a scene chat.
+
+### 4.4 Rules the Map window taught
+
+Attributes read with `.attr()`, never `.data()`; ids with a colon
+(`loc:the-quay`) escaped in selectors; every picture through
+`safeImageUrl`; the body re-rendered from a pure view with scroll and
+typed values kept by hand; one topmost-window guard so Escape closes the
+sheet on top and not the hub under it (the Map and the Builder both close
+on one Escape today); the backdrop click on the popup element itself;
+popovers above the window's z-index, closed on a capture-phase press
+outside. Under Lumen the window content is opaque (pictures), under Inked
+the hub's own ink rules apply (the Inked list of popup ids does not know
+JS-built windows). Nothing is themed by hand twice: the board's circles
+are the row's circles, the panels are the Map window's panels.
+
+## 5. The requests
+
+All on the tracker's profile through `withBackgroundProfile`, one at a
+time behind the shared busy flag, read with the advancer's reader (fenced,
+bare or whole; reasoning stripped), strictly checked, never written into
+the chat as a message. Each failure is a result the UI can say
+(`describe…` functions, as the others have). The hub's labels: `openers`,
+`recap`, `gap`.
+
+### 5.1 The openers (D119)
+
+Inputs: the world's name and blurb; the place and its region; the weather
+there; the people chosen, each with the tier word and the one line the
+brief gives them; the seed; the gap; the ledger's block built from the
+snapshot by Canon's own builder, cut to 1,200 characters; the last two
+recaps; the open quests; the player's name and line; the narrator's
+template. Output:
+`{"when":{"date":"…","time":"…"},"openers":[{"title":"…","text":"…","who":["…"]}]}`.
+Rules in the prompt: the place as the player finds it, who is there, the
+first thing that happens, and it stops with the first move still the
+player's (Travel here's own rule); the three differ in what happens, not
+in wording; nothing resolved; nobody the player has not met is named as a
+friend; plain prose, no markup. Checks: one to three openers; a title under
+60 and a text under 1,500 characters; `who` cut to the cast and the known;
+`when` taken only whole. None usable: a failure the picker says.
+
+### 5.2 The recap, and Canon over the scene (D122)
+
+The recap: the scene's messages through the shared recent-text builder
+with a count past the chat's length and the per-message cut raised, the
+newest kept within a budget of 24,000 characters; the brief; "write what
+happened in this scene in at most 600 characters, past tense, the player
+by name, nothing that did not happen"; output `{"recap":"…"}`; checked for
+length and emptiness. Canon over the scene is Canon's own `updateCanon`
+with a new `scope: 'scene'`: the same budget in place of its recent window,
+its adds and drops per run doubled for that one run (16 and 8), its pinned
+lines untouched, its checks unchanged.
+
+### 5.3 The advancer, between scenes and after one
+
+After a scene: the chat's own run (`advanceNow` with a new reason,
+`scene-end`), which reads the recent scenes and the tracker's facts as it
+does on its cadence; End waits for it through the existing background
+wait. Between scenes: a new pure prompt over the snapshot's world state,
+`buildGapPrompt(state, pack, { facts, gap, recaps })`: the state as the
+advancer sees it, the last two recaps in place of recent scenes, the gap as
+story time ("three days pass; the player is not in the story"), and the
+reply is the advancer's own JSON plus `"now": {"date","time"}` and the
+`weather` list; checked by the advancer's own rules (clocks by at most
+their step, moves to known places, news lines) plus the new fields (a bad
+weather entry drops; `now` is taken whole or the facts stand). The result
+is applied by the advancer's own apply with `msgId: null` and the news
+dated by `now`.
+
+## 6. The pure model, the feature, the bridge
+
+`src/utils/hub.js` (pure): `defaultHubConfig`, `hubConfig`, `normalizeHub`,
+`takeSnapshot`, `sealSnapshot`, `seedStores`, `GAPS` and `gapWords`,
+`buildBrief`, `buildOpenersPrompt`, `parseOpenersReply`,
+`validateOpeners`, `openerMessage` (the first message with its swipes and
+its swipe entry), `sceneHeader`, `sceneFileName`, `buildRecapPrompt`,
+`parseRecapReply`, `sceneRecord`, `openScene`, `setAside`, `endScene`,
+`reopenScene`, `markChatGone`, `recordsFromChatList`,
+`describeStartResult`, `describeEndResult`, `hubStatusLine`.
+
+`src/systems/features/hub.js` (live): the store under `extensionSettings.hub`;
+`bindCard`, `makeNarratorCard`, `startScene`, `endScene`, `setSceneAside`,
+`resumeScene`, `reopenScene`, `continueInHub`, `isScene`, `currentScene`,
+`onHubChatChanged` (the strip, the mark read), `onHubChatDeleted` and
+`onHubChatRenamed` (SillyTavern's own events), the transports
+(`__setOpenersTransport`, `__setRecapTransport`, `__setGapTransport`),
+`__setHubTiming`, `__setChatBridge`, `/hub`, `/endscene`,
+`HUB_CHANGED_EVENT`.
+
+The chat bridge is one object behind which every SillyTavern call sits,
+read from `getContext()` at call time (the house pattern for optional
+exports: a static import of a name an older build lacks kills the whole
+extension at link time): the characters and the current one, the chat id,
+select a character, open a chat by name, the current chat's name, rename,
+reload, the conditional save, refresh the character list, load a shallow
+card, the chat list of a card (with or without metadata), save a chat file,
+read a chat file, create a card. A member missing on the running build
+makes the hub say "this SillyTavern is too old for the hub" and do
+nothing. In the sandbox the test puts real functions on the context's
+target, so the bridge needs no stub rewrites of `script.js`.
+
+`src/systems/ui/hub.js` and `hubViews.js`: the window, the board, the
+sheets, the picker, the strip; `worldViews.js` lends its panels. Both lazy,
+both listed in `tools/lazy-graph-test.mjs`; the views import nothing but
+`src/utils/*`.
+
+`src/utils/liveWorld.js` gains `weather` on the state and in the
+advancer's validation, `buildGapPrompt`, `applyGap`; `src/systems/features/liveWorld.js`
+gains `advanceGap(worldId)` (a run with no chat behind it) and the reason
+`scene-end`. `src/systems/features/canon.js` gains the scene scope and the
+mirror export. The settings section in `template.html` (a Hub heading on
+the Live World page so the rail groups it), the binder in `index.js`, the
+D menu items, the strip's styles, the event map entries (`CHAT_CHANGED`
+after the stores' own handlers; `CHAT_DELETED` and `CHAT_RENAMED`, which
+DES does not wire today), a line in the startup safety net, a line in the
+enable/disable teardown.
+
+## 7. Files and tests
+
+| File | What |
+| --- | --- |
+| `src/utils/hub.js` | the pure model (§6) |
+| `src/systems/features/hub.js` | the feature and the bridge (§6) |
+| `src/systems/ui/hub.js`, `src/systems/ui/hubViews.js` | the window, the sheets, the strip |
+| `src/utils/liveWorld.js`, `src/systems/features/liveWorld.js` | weather on the state; the gap run; the scene-end reason |
+| `src/systems/features/canon.js`, `src/utils/canon.js` | the scene scope; the mirror export |
+| `template.html`, `index.js`, `style.css`, `styles/overhaul.css`, `styles/modals.css` | the Hub group, the binder, the D menu, the window's rules, the looks, the strip |
+| `tools/hub-test.mjs`, `tools/hub-flow-test.mjs`, `tools/hub-layout-test.mjs` | D130, D129 |
+| `tools/lazy-graph-test.mjs` | the two UI modules listed |
+| `docs/parity-checklist.md`, `CHANGELOG.md`, `whatsnew.json`, `docs/phases-short-fuse.md`, `docs/handover-short-fuse.md` | §10 |
+
+## 8. Phases
+
+| Phase | What | Proves | Size |
+| --- | --- | --- | --- |
+| 1 | The memory and the lifecycle without a window: the pure model and its test (Hub 1), the feature and the bridge, the Hub group in Settings with a plain Start a scene (a select of places, the gap, Start), the picker as a plain sheet, the strip, End, `/hub` (opens the group), `/endscene`, the flow test | A scene starts fresh, plays, ends, and the next one knows; a long chat is untouched | Large |
+| 2 | The hub window: the board, the panels, the Scenes panel, the sheets from a click, the D menu, the Map window's Hub button, the render check | The owner's sketch on screen, at desktop and phone, under every look | Large |
+| 3 | The world's book (D126) and weather (D125): the state, the advancer's field, the board, the brief, the tracker's seed, the mirror | Lore reaches the prompt two ways; weather moves between scenes and matches in play | Small |
+| 4 | Continue in the hub (D131); the world exported with its story (the builder's Export gains the memory and the scenes; Import takes them back) | An existing campaign moves into the hub; a world travels whole | Medium |
+| 5 | Bonds (D132) | Relationships kept and said | Medium |
+| 6 | The picture with pins, if the owner wants it after seeing the board | | Medium |
+
+Order: 1, 2, 3, 4, 5, 6. Each phase is tested (the gate: every
+`tools/*-test.mjs` and `tools/load-check.mjs`) and rendered (D129) before
+it is pushed. Phase 1 is shippable on its own: a world can be played from
+Settings before it has a window.
+
+## 9. Parity rows (to add when built)
+
+Under a new block "## The Hub (docs/hub-plan.md)" in `docs/parity-checklist.md`:
+
+- The long chat: a chat on any card the hub did not start: no strip, no
+  brief, nothing new in the Context Inspector, the whole suite green
+- Bind a card: Settings → Live World → Hub names the world and the card;
+  Make a narrator card makes one named "Narrator of <world>" with no
+  greeting; a card bound elsewhere is greyed
+- Start from a place: the Start sheet pre-filled; Start writes a chat named
+  "Scene 1 - <title>" on the card, the scenario override holds the brief,
+  the first message is an opener with two swipes, the strip reads "Scene 1
+  · <place> · <date>", the shelf shows the cast from the first reply
+- Play: the tracker, the dice, the inventory, Live World's line, Canon's
+  block and the Map window behave as in any chat
+- End: the sheet writes a recap, the steps run in order, the hub shows the
+  news and the scene under Scenes; the world's book holds the ledger
+- The next scene: Start "days later": the hub shows new news first; the
+  brief says since last time and last time; the openers know the recap
+- Set aside, resume, reopen, the chat deleted, the card deleted, the
+  settings rebuilt from the card's chats: §2.5
+- Weather: the board's regions show it; a scene's first reply matches it
+- Continue in the hub from a long chat: scene 0 with its recap; the long
+  chat unchanged
+- The render check and the PNGs looked at; the owner's look on his install
+  and his phone
+
+## 10. Docs (the last commit of each phase)
+
+`CHANGELOG.md` (the open beta section: Added, "The Hub"), `whatsnew.json`
+(one item at the top, emoji-led, second person), `docs/parity-checklist.md`
+(§9), `docs/handover-short-fuse.md` (§1 the render rule names
+`tools/hub-layout-test.mjs --shots`; §4 a bullet headed "The Hub
+(date, `docs/hub-plan.md` D113–D133, on `short-fuse/hub`)" after the Hooks
+and Canon bullet; §5 the files), `docs/phases-short-fuse.md` ("## Phase 10
+— The Hub" in its neighbours' shape, and the At a glance row this plan adds
+now as "designed"), this file's Status line edited in place as the commits
+land.
+
+## 11. Later and open items
+
+- **Adopt a plain chat as a scene** (a New chat made in SillyTavern on the
+  narrator card).
+- **Merge two scenes' stores** instead of replacing (D123).
+- **Scene pictures' LoRAs and notes** as the world's (§3.1).
+- **The picture with pins** (D124, phase 6).
+- **The world exported with its story** (phase 4).
+- **A found bug, not the hub's:** the built-in template is listed as
+  `example` but its file carries the id `harbourside`, so a chat seeded
+  from it stores a pack id the next load cannot fetch and reports a missing
+  world (feature `BUILTIN_PACKS` against `worldpacks/example.json`; found
+  by reading, not run). To check in play and fix on `Project-Short-Fuse`
+  before the hub binds worlds; the hub itself binds only the user's worlds.
+- **A doc drift, not the hub's:** `docs/world-builder-plan.md` D94 names
+  the builder's popup `#world-builder-popup`; the code's id is
+  `dooms-world-builder`.
+- **Verify again on the owner's build** before phase 1: the items of §12,
+  on the SillyTavern version he runs.
+
+## 12. What was checked in SillyTavern's source (release 1.19.0)
+
+Fetched from the `release` branch on 2026-11-02 and read, not run; file
+and line as of that day.
+
+| The plan relies on | SillyTavern |
+| --- | --- |
+| A chat's metadata lives on the first line of its file and is read on load | `saveChat` writes `[{ chat_metadata, user_name, character_name }, ...messages]` (`public/script.js:7427-7446`); `getChat` reads the header back (`:7655-7657`) and adds an `integrity` id when missing (`:7664-7666`); the server checks that id on later saves and rejects a mismatch unless forced (`src/endpoints/chats.js:532-566`) |
+| Saving a chat file by name, under a card | POST `/api/chats/save` with `ch_name`, `file_name` (no extension), `chat`, `avatar_url`, `force` (`public/script.js:7438-7446`; the server, `src/endpoints/chats.js:548-557`); the folder is the avatar file name without `.png` under the user's data directory (`:594-595`). The exported `saveChat({ chatName, withMetadata, chatData, force })` (`:7395`) builds its header as `{ ...chat_metadata, ...withMetadata }` of the chat in front and names the card in front, so the bridge posts the file itself with a clean header |
+| Opening a chat by name on the current card | `openCharacterChat(file_name)` (`public/script.js:7742-7750`), exported and on the context; the name is without `.jsonl` |
+| Listing a card's chats, with their metadata | `getPastCharacterChats(characterId)` (`:8506-8526`); POST `/api/characters/chats` with `metadata: true` returns each header's `chat_metadata` (`src/endpoints/characters.js:1521-1523`); `file_name` there carries `.jsonl` |
+| Reading a chat's messages without opening it | POST `/api/chats/get` with `ch_name`, `file_name`, `avatar_url` (`public/script.js:7638-7646`) |
+| Selecting a card; the card's stable id | `selectCharacterById(id)` (`:875`), on the context; `characters[i].avatar` is the key everywhere (`:1237`, `:1317`, `:6038`); indices move when the list reloads |
+| Shallow cards | `unshallowCharacter(chid)` before reading a card not in front (`:7636`, `:911`), on the context |
+| A new chat starts empty when the card has no greeting | `getFirstMessage` (`:7710-7738`): no message is pushed when `first_mes` is empty and there are no alternate greetings; there is no default greeting (no `default_ch_mes` in 1.19.0) |
+| The first-message event | a one-message chat emits `MESSAGE_RECEIVED` with `first_message` from `getChatResult` (`:7700-7707`), which DES's counters already ignore |
+| The scenario override | `chat_metadata.scenario`, used when not empty in place of the card's (`getCharacterCardFieldsLazy`, `:3442-3446`); set in the UI by `setCharacterSettingsOverrides` (`:8996`), saved by `saveMetadata` (`:9408`) |
+| The chat lorebook | `chat_metadata.world_info` (`METADATA_KEY`, `public/scripts/world-info.js:94`); on every chat change the module takes it when a book of that name exists (`:1013-1014`), so a header naming a book made at the last End binds it, and a missing book is ignored |
+| Renaming a chat | `renameChat(oldName, newName)` (`:10731-10739`) and `/renamechat` (`slash-commands.js:438`); the server endpoint `/api/chats/rename` |
+| The chat events | `CHAT_CHANGED`, `CHAT_CREATED`, `CHAT_DELETED`, `CHAT_RENAMED` exist (`public/scripts/events.js:19-53`); DES wires only the first today |
+| Making a card from code | POST `/api/characters/create` with the JSON body `/char-create` sends (`slash-commands.js:5199-5274`); no avatar means the default one (`src/endpoints/characters.js:1037-1039`); `getCharacters()` then refreshes the list (`public/script.js:1294`) |
+| A message as the card, with swipes | the shape `getFirstMessage` builds (`:7714-7738`): `name`, `is_user: false`, `is_system: false`, `send_date`, `mes`, `extra`, and `swipes`, `swipe_id`, `swipe_info` when there are alternates |
+| The context's members | `public/scripts/st-context.js:115-160`: `characters`, `characterId`, `chatId`, `chatMetadata`, `name2`, `selectCharacterById`, `openCharacterChat`, `getCurrentChatId`, `renameChat`, `reloadCurrentChat`, `saveChat` (the conditional save), `saveMetadata`, `getCharacters`, `unshallowCharacter`, `addOneMessage`, `executeSlashCommandsWithOptions` |
+| Temporary chats | `name2` is the neutral name and the save is a no-op (`:7408-7411`); the hub refuses to start from one |
+| Not relied on, noted | `doNewChat({ deleteCurrentChat })` (`:10618`) names the file `<name> - <timestamp>` and would need the loaders re-run after the write; `writeExtensionField` (`extensions.js:2070`) could hold a world on its card and is not used; there is no `/newchat` command |
