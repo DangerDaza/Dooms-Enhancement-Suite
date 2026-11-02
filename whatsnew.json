@@ -3,6 +3,10 @@
     "title": "Image Generation and the Map (beta)",
     "items": [
         {
+            "title": "🧭 The Hub: a world played as many small chats",
+            "body": "Instead of one long chat, play a world one scene at a time. Settings → Live World → The Hub: pick a world of your own and the card that narrates it (or make one). Open the hub, Start a scene: say where, who is there, how much time has passed and what brought you; the narrator writes three openers and the one you pick opens a fresh chat with a brief of where things stand. Play it as any chat. End scene writes a recap, has Canon read the whole scene, moves the world by the time it took, and keeps everything the chat knew for the next scene: quests, inventory, vitals, the ledger, the world. Nothing changes for your long chats. The board with the places and the people comes next."
+        },
+        {
             "title": "🪝 Hooks and 📖 Canon",
             "body": "Two new ways to keep a long story moving. Hooks, a fifth panel in the Map window: Offer hooks asks the world for up to three things you could do next, each grounded in its clocks, its rumours and who was last seen where; Take makes one a quest on the shelf, Take and cut to it starts it with a short montage, Not this one sets it aside for good. Canon (Settings → Canon, beta): a quiet request every few replies keeps a ledger of what the story has established, people, places, things, facts, promises and secrets in one line each, and tells the narrator what stands every turn, however long the chat. The shelf's Canon page lets you edit, pin, add and remove lines; a line of yours is never rewritten; To a lorebook writes it out as a lorebook."
         },

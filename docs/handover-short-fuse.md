@@ -40,7 +40,9 @@ state and the next moves.
   row shows its names whole, the foot's buttons keep their size); a window
   built in JS gets one before it ships (the World Builder's is
   `node tools/world-builder-layout-test.mjs --shots`: six scenes under every
-  look at desktop and phone width). The owner (2026-10-29):
+  look at desktop and phone width; the Hub's is
+  `node tools/hub-layout-test.mjs --shots`: the window, its three sheets
+  and the strip under every look at desktop and phone width). The owner (2026-10-29):
   "this is a very common issue with things you create"; the squeezed Test
   row on the Image Generation page was the last one he had to screenshot.
 - **Never leave the installed clone dirty.** The extension folder under
@@ -268,6 +270,25 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/live-world-test.mjs`, `tools/world-map-test.mjs`,
   `tools/live-world-flow-test.mjs`. Reviewed 2026-10-18 and verified in
   two further passes (`docs/stats-plan.md` §15.9).
+- **The Hub, phase 1 (2026-11-02, `docs/hub-plan.md` D113–D133, on
+  `short-fuse/hub`, four commits: Hub 1 the pure model, Hub 2 the feature,
+  Hub 3 the window, Hub 4 the docs):** a world played as many small chats.
+  `src/utils/hub.js` (pure: the sealed snapshot taken and seeded, the
+  brief, the openers' request and reader, the first message with its
+  swipes, the header and the file name, the recap, the scene records);
+  `src/systems/features/hub.js` (the store under `extensionSettings.hub`,
+  the chat bridge over `getContext()`, Start as prepare and commit, End as
+  prepare and commit, the strip mounted before `#chat`, `/hub`,
+  `/endscene`); `src/systems/ui/hubViews.js` and `src/systems/ui/hub.js`
+  (the window with the Scenes panel, the Start sheet, the picker, the End
+  sheet; lazy); the Hub group on the Live World page and its binder in
+  `index.js`; Hub and End scene in the D menu; `buildGapPrompt` and the
+  gap run in Live World; Canon's `scope: 'scene'` and the mirror export.
+  Off the main path: nothing happens until a world has a narrator card,
+  and a chat without the mark `chat_metadata.dooms_hub` is untouched.
+  `tools/hub-test.mjs`, `tools/hub-flow-test.mjs`,
+  `tools/hub-layout-test.mjs`. Phase 2 (the board and the panels) onwards
+  is in the plan's §8.
 - **Hooks and Canon (2026-11-02, `docs/hooks-canon-plan.md` D100–D112, on
   `short-fuse/hooks-and-canon`):** Hooks, the Map window's fifth panel
   (`src/utils/questHooks.js`, `src/systems/features/questHooks.js`,
@@ -321,6 +342,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/features/liveWorld.js` (places) | The visit recorded in `placeFromScene`, the rewind's `reconcileVisited`, `drawPlace` / `getPlacesRow` / `isDrawingPlace`, the automatic draw after a fresh reply (never a recovery) |
 | `src/systems/features/questCut.js` (travel, done) | `startTravelCut`, the instruction by kind, `recordCompletedQuest` / `getCompletedQuests` |
 | `src/utils/questHooks.js`, `src/systems/features/questHooks.js` | Hooks: `buildHooksPrompt` / `parseHooksReply` / `validateHooks`, `proposeRound` / `takeHook` / `setAside` / `questFromHook`; the feature's `proposeHooks` (the background request), `takeHook` (the shelf's `addOptionalQuest`, `startQuestCut` on request), `setHookAside`; `chat_metadata.dooms_hooks` |
+| `src/utils/hub.js`, `src/systems/features/hub.js`, `src/systems/ui/hub.js`, `src/systems/ui/hubViews.js` | The Hub: `hubConfig`/`normalizeHub`, `takeSnapshot`/`sealStores`/`seedStores`, `buildBrief`, `buildOpenersPrompt`/`parseOpenersReply`/`validateOpeners`, `openerMessage`, `hubMark`/`sceneHeader`/`sceneFileName`, `sceneTranscript`/`buildRecapPrompt`/`parseRecapReply`, the scene records; the feature's store, `bindCard`/`makeNarratorCard`, `prepareScene`/`commitScene`, `prepareEnd`/`commitEnd`, `__setChatBridge` and the transports, the strip, `/hub`, `/endscene`; the window and its sheets (lazy); `chat_metadata.dooms_hub`, `extensionSettings.hub` |
 | `src/utils/canon.js`, `src/systems/features/canon.js` | Canon: `canonConfig`, the ledger (`normalizeCanon`, `applyCanon`, `reconcileCanon`, the caps), `buildCanonPrompt` / `parseCanonReply` / `validateCanon`, `buildCanonBlock`, `canonToLorebookEntries` / `canonToMarkdown`; the feature's count with its own stamp, `updateCanon`, the raw slot `dooms-canon`, `/canon`, `exportCanonToLorebook` (a lazy lorebookAPI, or the test sink); `chat_metadata.dooms_canon` |
 | `src/utils/worldBuilder.js`, `src/systems/features/liveWorld.js` (worlds), `src/systems/ui/worldBuilderViews.js`, `src/systems/ui/worldBuilder.js` | The World Builder: `worldFromState` / `rebindStateToPack` (a chat kept as a world, carried over), `buildWorldDraftPrompt` / `parseWorldDraft`, `packWarnings`, `worldToRaw` / `worldToJson`; the worlds API and the blank world's name and the missing-world fallback in the feature; `builderHtml` and the window's events (a keystroke updates the status, leaving a field redraws, auto ids from labels) |
 | `src/systems/ui/worldViews.js`, `worldDashboard.js`, `worldFace.js` | The Map window: `mapWindowHtml` (the head, the row, the strip, the panel), the window's events (scroll, selection, Travel here, Draw, the panel buttons), the face popover with Show the place |

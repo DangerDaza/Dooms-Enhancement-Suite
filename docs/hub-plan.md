@@ -13,16 +13,23 @@ have a fresh chat, keep your lore and relationships current." And then:
 "give me the plan doc with long chat still available. And I need it all to
 look good, I need all our buttons buttoned and bows bowed."
 
-**Status (2026-11-02):** designed, not built; the plan alone, for the
-owner's reading, on `short-fuse/hub`, a branch off `Project-Short-Fuse`
-(which carries Hooks and Canon, `docs/hooks-canon-plan.md`, since
-`17b8d4f`). The owner answered four questions before this was written:
+**Status (2026-11-02):** phase 1 built on `short-fuse/hub`, a branch off
+`Project-Short-Fuse` (which carries Hooks and Canon,
+`docs/hooks-canon-plan.md`, since `17b8d4f`), in four commits: Hub 1 the
+pure model and its test, Hub 2 the feature with the chat bridge and the
+flow test, Hub 3 the window with its sheets, the strip, the Settings group
+and the render check, Hub 4 the docs. Phase 1 is D113–D115, D117–D123 and
+D127–D131 as written, with the window holding the Scenes panel alone until
+phase 2 brings the board and the other panels (D116, D124–D126 to come).
+Tests: `tools/hub-test.mjs` (pure), `tools/hub-flow-test.mjs` (the sandbox),
+`tools/hub-layout-test.mjs` (the window rendered). Parity rows:
+`docs/parity-checklist.md`, The Hub. The owner answered four questions before this was written:
 where a world's memory lives (D115), which card narrates (D114), where the
 hub lives (D116), which branch (this line); those four are his, marked
 "(the owner)"; every other decision is recommended and standing, and any
 of them is his to change. The SillyTavern calls the plan rests on were
 checked against SillyTavern's own source, release 1.19.0, on the day (§12).
-Phase 1 lands as "Hub 1: the pure model and its test", the way the other
+Phase 1 landed as "Hub 1: the pure model and its test", the way the other
 plans did.
 
 ## 1. Decisions
@@ -513,8 +520,8 @@ enable/disable teardown.
 
 | Phase | What | Proves | Size |
 | --- | --- | --- | --- |
-| 1 | The memory and the lifecycle without a window: the pure model and its test (Hub 1), the feature and the bridge, the Hub group in Settings with a plain Start a scene (a select of places, the gap, Start), the picker as a plain sheet, the strip, End, `/hub` (opens the group), `/endscene`, the flow test | A scene starts fresh, plays, ends, and the next one knows; a long chat is untouched | Large |
-| 2 | The hub window: the board, the panels, the Scenes panel, the sheets from a click, the D menu, the Map window's Hub button, the render check | The owner's sketch on screen, at desktop and phone, under every look | Large |
+| 1 | **Built (2026-11-02).** The memory and the lifecycle: the pure model and its test (Hub 1), the feature and the bridge (Hub 2), the window's shell with the Scenes panel, the Start sheet, the picker, the End sheet, the strip, the Hub group in Settings, Hub and End scene in the D menu, `/hub`, `/endscene`, the render check (Hub 3), the docs (Hub 4) | A scene starts fresh, plays, ends, and the next one knows; a long chat is untouched | Large |
+| 2 | The hub window grown: the board (D124), the News, Rumours, Hooks and People panels over the snapshot, the place sheet, the sheets from a click on a place, a person, a news line, a rumour or a hook, the Map window's Hub button, the render check widened | The owner's sketch on screen, at desktop and phone, under every look | Large |
 | 3 | The world's book (D126) and weather (D125): the state, the advancer's field, the board, the brief, the tracker's seed, the mirror | Lore reaches the prompt two ways; weather moves between scenes and matches in play | Small |
 | 4 | Continue in the hub (D131); the world exported with its story (the builder's Export gains the memory and the scenes; Import takes them back) | An existing campaign moves into the hub; a world travels whole | Medium |
 | 5 | Bonds (D132) | Relationships kept and said | Medium |

@@ -24,7 +24,7 @@ says where things stand.
 | 5b | Cut to a quest: right-click or hold a quest box, the next reply is a montage up to the quest and its opening beat with no message of the player's, the quest becomes the main quest, "when…" for a named time | Yes (2026-10-17; `docs/stats-plan.md` §14, D35–D38) | `quest-cut-test`, `quest-cut-flow-test` | Not yet | Parity rows "Cut to a quest" |
 | 6 | Live World (`docs/live-world-spec.md`): world packs, per-chat clocks and last-seen places, the background advancer every N replies with its reply validated or discarded, the narrator's one line, `/advance`, `/liveworld`, Settings → Live World, the Map window (the places as pictures, Travel here, the news, rumours, people and completed quests, opened from Map in the D menu; `docs/map-window-plan.md`, which replaced D69's board and tabs, which had replaced the dashboard, the node map and the shelf's Map page of D56), the face popover | Yes for G1–G5, the pack, Part B, Part A, D1–D3, C1, C2 and the shelf's Map page (`6524ad1` … the shelf page; `docs/stats-plan.md` §15, D40–D54). Reviewed 2026-10-18 and verified in a second and a third pass (§15.9). Not C3. | `live-world-test`, `live-world-flow-test`, `world-map-test` | Not yet | Parity rows "Live World"; the Skyreach pack's content; then C3 |
 | 4 | Levels | No. Not designed. | — | — | Jordan's decisions first |
-| Hub | Many small chats on a world: a hub window with the places, the people, the weather, the news and the scenes; a scene is a fresh chat on the world's narrator card with a brief and three openers; End remembers it (recap, Canon, the world moved, a sealed snapshot the next scene is seeded from); the long chat stays a mode (`docs/hub-plan.md`, D113–D133) | No. Designed 2026-11-02 on `short-fuse/hub` | — | — | Jordan's reading of the plan; then Hub 1 |
+| Hub | Many small chats on a world: a hub window with the scenes (phase 1) and, to come, the places, the people, the weather and the news; a scene is a fresh chat on the world's narrator card with a brief and three openers; End remembers it (recap, Canon, the world moved, a sealed snapshot the next scene is seeded from); the long chat stays a mode (`docs/hub-plan.md`, D113–D133) | Phase 1 (2026-11-02, `short-fuse/hub`: the memory, the lifecycle, the window with its sheets, the strip) | `hub-test`, `hub-flow-test`, `hub-layout-test` | Not yet | Parity rows "The Hub"; then phase 2, the board and the panels |
 | Release | 3.1.0-beta.1 prepared on the branch 2026-10-16: version, CHANGELOG, What's New, Beta badges, Report a problem with both logs (`tools/beta-report-test.mjs`) | Yes, on the branch | `beta-report-test` | Not yet | Jordan's word, then a fast-forward push of main (handover §9); README and the full 3.1.0 after the beta |
 
 "Not yet" means the cloud session could not run SillyTavern; every row
@@ -486,6 +486,24 @@ then the arrival); a bottom panel that swaps between News, Rumours,
 People and Completed quests (recorded when the shelf's ✓ completes a
 quest). The board of tiles and the three tabs are gone. Tests:
 `tools/world-map-test.mjs`, `tools/map-flow-test.mjs`.
+
+## Phase 10 — The Hub
+
+Status: **phase 1 built** (2026-11-02, `docs/hub-plan.md`, on
+`short-fuse/hub`). The owner's sketch: "a hub panel that takes up most of
+the screen … the user can click on an element of the map and start an RP
+there … a new chat with 3 starting prompts … once the scene is done they
+can end it and DES will commit it to memory so that the next chat has it
+in its context", with the long chat kept. Phase 1 is the memory and the
+lifecycle with a window of scenes: a world bound to a narrator card; Start
+(the sheet, the world moved by the gap, three openers, the file written
+whole with the sealed snapshot, the brief as the chat's scenario and the
+opener with the others as swipes, then opened); the strip; End (the recap,
+Canon over the scene, the advancer, the snapshot); set aside, resume,
+reopen, a chat gone, the records rebuilt from the chats. Phase 2 is the
+board and the panels; then the world's book and weather, Continue in the
+hub, Bonds, the picture with pins. Tests: `tools/hub-test.mjs`,
+`tools/hub-flow-test.mjs`, `tools/hub-layout-test.mjs`.
 
 ## Phase 4 — if wanted (not started, not designed)
 
