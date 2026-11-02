@@ -753,6 +753,8 @@ function renderCampaignBadge() {
     const $badge = $modal.find('#cw-campaign-badge');
     if (!$badge.length) return;
     const campaigns = getCampaignsInOrder();
+    // No campaign anywhere: nothing to version, and the header says where one is made.
+    $modal.find('#cw-nocampaign-hint').prop('hidden', !(draft && !draft.isUser && !campaigns.length));
     if (!draft || draft.isUser || !campaigns.length) {
         $badge.prop('hidden', true).empty();
         applyVersionAccent();

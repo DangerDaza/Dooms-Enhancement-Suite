@@ -223,7 +223,7 @@ function renderLeftPanel() {
 
     // ── Bottom actions ──
     html += '<div class="rpg-lb-panel-actions">';
-    html += '<button class="rpg-lb-tab-add" title="New Library"><i class="fa-solid fa-folder-plus"></i></button>';
+    html += '<button class="rpg-lb-tab-add" title="New campaign: a tab for its books, and a version of each character of its own in the Workshop"><i class="fa-solid fa-folder-plus"></i></button>';
     html += '<button class="rpg-lb-btn-new-book"><i class="fa-solid fa-plus"></i> Lorebook</button>';
     html += '<button class="rpg-lb-btn-import"><i class="fa-solid fa-file-import"></i> Import</button>';
     html += '<input type="file" class="rpg-lb-import-file" accept=".json,.lorebook,.png" hidden>';
@@ -1388,7 +1388,7 @@ export function initLorebookEventDelegation() {
 
     // ── Tab-add: New Campaign ────────────────────────────────────────────────
     $modal.on('click', '.rpg-lb-tab-add', function () {
-        const name = prompt('Enter a name for the new Lore Library:');
+        const name = prompt('Enter a name for the new campaign:');
         if (name && name.trim()) {
             campaignManager.createCampaign(name.trim());
             renderLorebook();

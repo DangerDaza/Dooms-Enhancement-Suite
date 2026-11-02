@@ -1946,6 +1946,9 @@
     width: 180px;
 }
 
+/* A textarea told to be width:100% keeps its padding and border inside that width: under a wide-glyph look it ran a few pixels past the popup (the render check caught it). */
+textarea.rpg-accordion-input { box-sizing: border-box; max-width: 100%; }
+
 
 .rpg-accordion-input::placeholder {
     color: #555;
@@ -6274,6 +6277,15 @@
 }
 
 #character-workshop-popup .cw-campaign-badge[hidden] { display: none !important; }
+/* The header's note when the install has no campaign yet (renderCampaignBadge): plain text, wraps under the title on a phone. */
+#character-workshop-popup .cw-nocampaign-hint { display: inline; margin-left: 0.5rem; font-size: 0.68em; font-weight: 400; letter-spacing: 0; color: #8d8d9a; line-height: 1.3; }
+#character-workshop-popup .cw-nocampaign-hint > i { margin-right: 3px; opacity: 0.8; }
+#character-workshop-popup .cw-nocampaign-hint[hidden] { display: none !important; }
+/* On a phone the note takes a line of its own under the title, so the title and the name are not squeezed into broken words beside it. */
+@media (max-width: 600px) {
+    #character-workshop-popup .rpg-settings-popup-header h3 { flex-wrap: wrap; row-gap: 2px; }
+    #character-workshop-popup .cw-nocampaign-hint { flex: 1 0 100%; margin-left: 0; }
+}
 
 /* text-overflow only works on a block container: truncate the name in its
    own span, keep the icon and the Live pill whole. */

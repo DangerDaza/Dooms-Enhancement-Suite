@@ -3703,6 +3703,13 @@
                      campaign. Filled by renderCampaignBadge(); hidden when the
                      install has no campaigns. -->
                 <span class="cw-campaign-badge cw-npc-only" id="cw-campaign-badge" hidden></span>
+                <!-- With no campaign anywhere there is nothing to version: the
+                     header says where a campaign is made (the Lore Library's +
+                     tab). Toggled by renderCampaignBadge(). -->
+                <span class="cw-nocampaign-hint cw-npc-only" id="cw-nocampaign-hint" hidden
+                    title="A campaign is a tab in the Lore Library (the + tab beside its tabs). Each campaign gives this character a version of its own: portrait, description, knives, voice.">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i> No campaigns yet: the Lore Library's + tab makes one, and each campaign gets its own version of this character.
+                </span>
             </h3>
             <button class="rpg-popup-close" id="cw-close" type="button" aria-label="Close">&times;</button>
         </header>
