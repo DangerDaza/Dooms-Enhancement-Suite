@@ -23,17 +23,23 @@ six-lens review of this plan and its adversarial pass found (noted in
 place below as "(review)"). Phase 1 holds D113–D115, D117–D123 and
 D128–D130 as written, of D127 the Settings group (the gap and the recap's
 length at their defaults), the two D menu items, `/hub` and `/endscene`
-and the strip, and of D116 the window with the Scenes panel alone; phase
-2 brings the board, the other panels, the Map window's Hub button and the
-builder's Play from the hub (D116, D124), phase 3 the book and the weather
-(D125, D126), phase 4 Continue in the hub (D131).
+and the strip, and of D116 the window with the Scenes panel alone. Phase
+2 began on 2026-11-03 with Hub 7: the board is the world's picture with
+its places as nodes (D124 rewritten, D134–D137 added from the owner's
+answers of 2026-11-02 and 2026-11-03 and the survey in
+`docs/support/map-survey.md`), then the builder's Map tab, the board in
+the hub, the other panels, the Map window's Hub button and the builder's
+Play from the hub (§8); phase 3 the book and the weather (D125, D126),
+phase 4 Continue in the hub (D131).
 Tests: `tools/hub-test.mjs` (pure), `tools/hub-flow-test.mjs` (the sandbox),
 `tools/hub-layout-test.mjs` (the window rendered). Parity rows:
-`docs/parity-checklist.md`, The Hub. Five decisions are the owner's: D113
-from his words ("long chat still available"), and D114, D115, D116 and the
-branch from the four questions he answered before this was written; they
-are marked "(the owner)"; every other decision is recommended and
-standing, and any of them is his to change. The SillyTavern calls the plan rests on were
+`docs/parity-checklist.md`, The Hub. Nine decisions are the owner's: D113
+from his words ("long chat still available"), D114, D115, D116 and the
+branch from the four questions he answered before this was written, and
+D124, D134, D135 and D136 from his words and answers on the map ("take a
+picture of a map and drop nodes on it", a test version of a full game map
+with terrain and zoom); they are marked "(the owner)"; every other
+decision is recommended and standing, and any of them is his to change. The SillyTavern calls the plan rests on were
 checked against SillyTavern's own source, release 1.19.0, on the day (§12).
 Phase 1 landed as "Hub 1: the pure model and its test", the way the other
 plans did.
@@ -89,7 +95,7 @@ a chat the hub did not start plays exactly as today.
 | D121 | A scene plays as a chat does today | Nothing new reaches the prompt but the brief. The tracker's present characters are seeded from the cast (with their vitals from the snapshot when they were present at the last End; anyone absent then starts at the sheet's values, as in a long chat), both the last generated and the committed data from the newest block, so the shelf shows them from the first reply. At the scene's first send the chat holds the opener alone and the tracker's injector finds no reply at depth one or more, so the hub sets the tracker's example block itself for that one generation (review); from the first reply on the injector does as in any chat. Live World's cadence, Canon's cadence, Hooks, the dice, the inventory, Cut to a quest, Travel here, scene pictures and the Map window run per chat as now; what they change lands in the chat's stores and so in the snapshot at End. A slim strip at the top of the chat column names the scene (number, place, date) with Hub and End scene; `/hub` and `/endscene` do the same; the D menu gains Hub, and End scene in a scene. |
 | D122 | End a scene, on purpose | The End sheet (from the strip, the D menu, `/endscene`, the hub's Scenes panel): What happened (a recap written by a background request when the sheet opens, editable), the scene's time (its first date to the tracker's date now), what End will do, End scene, Keep playing. End runs in order, one background request at a time (§5): the recap (kept with the scene, 600 characters at most, written in passes when the scene is longer than one page, §5.2); Canon over the whole scene when Canon is on, into the chat (its own run with the scene's messages in place of its recent window and wider caps for the one run; the mark remembers the reply it read up to, so End again after a stop does not read the same scene twice); the chat flushed (the tracker's stores rebuilt and written); the snapshot taken and sealed (the chat's stores, the facts from the newest tracker data: date, time, place, weather, and the persona's name); then the world moved for the scene just ended, over the snapshot's own world state and into the memory, never into the chat (§5.3, review), so the ended chat stays exactly as it was played and a reopened scene plays in the world as it left it; the ledger mirrored to the world's book (D126); the scene marked ended in the record and in the chat's mark. Each step shows on the sheet; a failed step is said and End goes on (the ledger left as the scene's cadence left it is read by the next End after Reopen, since the mark takes the reply only on success; a world not moved is moved by the next Start's gap; the snapshot never fails) (review). The strip's Reopen is the way back into an ended scene; a reopened scene's End replaces its recap and the snapshot, unless the scene is stale (D123). |
 | D123 | One open scene per world | Starting while a scene is open offers End it now, Set it aside, Cancel. A scene set aside keeps its chat and its record under "set aside" in the Scenes panel, with Resume and End. Resuming it while another scene is open sets that one aside: one open scene at a time, always. The snapshot is a line, written by the last End. A scene that began before the memory was last written is stale: its End keeps the world's memory as it is by default (the recap is kept, the ledger reads the scene, the world is not moved, nothing a newer scene wrote is lost), and the sheet offers "Replace the world's memory with this scene's instead" for the player who means it (review). Merging two scenes' stores is not attempted (§11). |
-| D124 | The board now; a picture with pins later | The board shows the world's places as the World Builder's tree: regions as groups, each place a circle with its drawn picture or its glyph (the Map window's circle), the people last seen there as small faces on its rim (four, then "+n"), the player's marker on their place, the region's weather on the group, places never visited dimmed, places the story named under their region or under "Elsewhere". A place clicked opens its sheet: the picture (or Draw it), who is here, the rumours that name it, the scenes played there, Start a scene here. A picture with pins (a map image per world, drawn or uploaded in the builder, each place placed on it by hand) is a later phase the owner decides on when the board stands (§8). |
+| D124 | The board is the world's picture with its places as nodes (the owner) | The board shows the world's picture (D136) under Leaflet (D134) as an image overlay in a plain pixel space: drag to pan, the wheel and a pinch to zoom, the picture fitted to the board when it opens, the zoom clamped between that fit and four times the picture's own size. Each place with a node (D135) is a marker that keeps its screen size while the map zooms: the place's drawn picture or its glyph in a circle (the Map window's circle), its name under it, the people last seen there as small faces on its rim (four, then "+n"), the player's marker on their place, the region's weather by the region's own node when the region is placed, a place never visited dimmed. Places without a node are listed beside the board under "Not on the map yet", and the people whose place has no node under "Elsewhere" (the builder's Map tab places them, D137). A node clicked opens the place sheet (§4.3): the picture (or Draw it), who is here, the rumours that name it, the scenes played there, Start a scene here. A world with no picture shows the tree board: the World Builder's tree, regions as groups, each place a circle with the same rim of faces and the same sheet; it is that world's board, not a lesser one. The full game map the owner described (terrain, zoom levels, a map per region) grows from this board without touching its nodes: a tile pyramid cut from one big picture and a picture per region are phase 6 (§8). |
 | D125 | Weather by region | The world keeps a weather line per region (a top-level place): an emoji, a few words, the date it set in, kept in the snapshot's world state (`weather`, a new field, §3.3). Seeded from the tracker's weather at the first End (the scene's place names the region) or typed in the builder's Places tab; moved by the advancer, whose JSON gains a `weather` list checked like its other fields (a region id, one emoji, a line under 80 characters; a bad entry drops, not the run); shown on the board and in the News panel as dated lines ("Rain over the Harbour since Day 13"); said in the brief; seeded into the scene's tracker weather at Start so the first reply and the weather effects match; and at End the tracker's weather becomes the region's. |
 | D126 | The world's book | Canon's ledger is kept as a lorebook the world owns as well as a block: at End the ledger is mirrored into "Canon of <world>" (made when missing; every entry written as Canon's export writes them, D111, and entries the ledger no longer has removed, which D111's export does not do), and the book is bound to every scene chat as its chat lorebook from the file's header (`chat_metadata.world_info`, §12), so SillyTavern's own keyword triggers carry the lore into the prompt beside the block. Off when Canon is off. The book is the user's to edit; the next End rewrites only the entries it owns (titled "Canon · kind: name"). The shelf's own To a lorebook in a scene chat still writes the chat's book named after the card (D111); the world's book is the hub's. |
 | D127 | Ways in | The D menu gains Hub (the chat's world when the chat is a scene; else the list of worlds with a narrator card; else Settings) and End scene beside Map, both with stable ids and both always listed (the hide-toggles are built from the whole list): outside a scene End scene says this chat is not a scene (review). Settings → Live World gains a Hub group: the world, its narrator card, Make a narrator card, Open the hub, Continue in the hub (D131), and what End remembers (Recap always; the ledger and the book when Canon is on; the world when Live World is on). The World Builder's list gains "Play from the hub" on a world. The Map window's foot gains Hub in a scene. The strip has Hub and End scene. `/hub` opens the window, `/endscene` ends the scene in front (`/scene` is scene pictures'). The Start sheet's pre-chosen gap and the recap's length are settings without a control in phase 1 (their defaults stand, D128). Start and the gap need Live World on: the hub is Live World's; End, Reopen, Set aside, Resume and the strip work with it off, End skipping the world (review). |
@@ -98,7 +104,11 @@ a chat the hub did not start plays exactly as today.
 | D130 | Tests | `tools/hub-test.mjs` (pure): the snapshot taken and sealed from fixture metadata, seeded with the facts adjusted, the brief and its cuts, the gap words, the openers' prompt and reader, the recap's, the weather checks and the advancer's new field, the scene records (one open, set aside, reopened, chat gone), the file name, the header. `tools/hub-flow-test.mjs` (the sandbox): bind a card; Start from a place with the chat bridge stubbed (the file recorded, the open recorded); the stores found by the loaders on the simulated chat change; the brief in the header; the openers as swipes; two replies played; End's steps through injected transports and timing hooks; a second Start reading the memory and carrying last time; set aside and resume; reopen; the chat changed mid-End aborting; Continue in the hub; a plain chat on the bound card untouched. The existing suite runs unchanged as the long chat's guard. |
 | D131 | Continue in the hub | From a long chat (Settings → Live World → Hub, or the Map window's foot when the chat's world has a narrator card): the chat's stores as they stand become the world's snapshot, sealed, a recap of its last forty messages is written and kept as scene 0 ("Before the hub"), and the hub opens. The long chat is not changed and can go on being played; the next Continue replaces the snapshot and says so. This is how an existing campaign moves into the hub without losing a line. |
 | D132 | Bonds, later | Relationships are the hub's People view, written at End: a line per pair among the player and the known people (a stance, a strength, why, since), updated by one more request reading the recap and the ledger, shown on a person's sheet, said in the brief, editable and pinnable like Canon's lines. Phase 5 (§8); its decisions get numbers when it starts. |
-| D133 | Phases, in order | 1 the memory and the lifecycle without a window; 2 the hub window and its render check; 3 the world's book and weather; 4 Continue in the hub and the world exported with its story; 5 Bonds; 6 the picture with pins, if wanted. Each phase is its own commits, tested and rendered before pushed, on `short-fuse/hub`; `Project-Short-Fuse` takes the branch when the owner says so. New decisions inside a phase take numbers from D134 on. |
+| D133 | Phases, in order | 1 the memory and the lifecycle without a window; 2 the hub window and its render check; 3 the world's book and weather; 4 Continue in the hub and the world exported with its story; 5 Bonds; 6 zoom levels and nested maps (the picture with its nodes is phase 2's board, D124). Each phase is its own commits, tested and rendered before pushed, on `short-fuse/hub`; `Project-Short-Fuse` takes the branch when the owner says so. New decisions inside a phase take numbers from D134 on. |
+| D134 | The map engine is Leaflet 1.9.4, vendored (the owner) | The code that drives the board is Leaflet 1.9.4 (BSD-2-Clause; `lib/leaflet/`: `leaflet-src.esm.js`, the self-contained ES module with no imports, `leaflet.css`, `LICENSE`, and a `README.md` with the version and the hashes), imported by the board's module alone, which is lazy (`tools/lazy-graph-test.mjs` lists both); its stylesheet is injected through `ensureCss('leaflet', …)` when the board first mounts, and the marker images it names are not shipped, since every node is a `divIcon`. Why Leaflet and not a camera of our own: pins are HTML elements that keep their size with no code of ours, drag, wheel, double-tap and pinch are built in and proven on phones, `CRS.Simple` makes the picture a plain pixel space, and the growth path is exact: an image overlay now, a tile layer over a pyramid cut from one big picture later, with the same node code; it is what nearly every open-source game map and worldbuilding map runs on (`docs/support/map-survey.md`). Not the 2.0 beta, a day old and without its plugins. What Leaflet needs in a window: `invalidateSize()` after the popup is shown and on every resize, `touch-action: none` on the board, its pointer events kept from the popup's own drag and close handlers, and the map removed (`map.remove()`) when the window closes so the next open starts clean. |
+| D135 | A node is a fraction of the picture (the owner) | A place's node is `x` and `y` in 0 to 1 of the picture's width and height from its top-left, kept on the place in the pack (the fields `normalizePack` already read; a value outside 0 to 1 or not a number reads as no node, and four decimals are kept), carried by `worldToRaw` and so by Save, Export and Import; a place without them is not on the map. Fractions survive the picture being swapped for a redraw at another size (Image Generation will) and read as the same spot on a phone and a desktop; the Leaflet world stores pixels of the full picture instead, and the two meet at render: the board projects a node to Leaflet's units from the picture's own size (`[height × (1 − y), width × x]`, latitude growing upward) and back on a drag (`src/utils/worldPicture.js`, pure, `tools/hub-board-test.mjs`). The `zoom` a place already carries is left for phase 6 (the zoom from which its node shows). |
+| D136 | The picture is a file of SillyTavern's own (the owner) | A world's picture is a file in SillyTavern's images folder, named by path in the pack (`map: { image, width, height, source }`, the path through `safeImageUrl` wherever it is shown), never bytes inside the pack: worlds live in the settings file, saved on every settings save, and a map picture is often a few megabytes. Upload: the Map tab (D137) reads the chosen file with SillyTavern's `getBase64Async` and saves it with `saveBase64AsFile(base64, 'des-worlds', '<worldId>-map-<stamp>', ext)`, SillyTavern's own `/api/images/upload`, which writes `user/images/des-worlds/<worldId>-map-<stamp>.<ext>` and answers the path (§12). Drawn: Draw a map asks the image service (`renderImage` with the purpose `map`; the prompt from the world's name, its blurb and its places; drawn again until liked) and saves the result the same way. The picture's size is read from the image once loaded and kept beside the path, so the board lays out before the file arrives. Replace keeps the old file (the user's images are theirs, and SillyTavern's gallery lists the folder); Remove clears the record only. A world exported travels with the path, not the bytes; embedding on Export is a later item (§11). |
+| D137 | The builder's Map tab | A sixth tab in the World Builder, Map: the picture's row (Upload a file, Draw a map, Remove the picture; its size and its source said), the board itself in a smaller frame (the hub's board module in its edit mode: the picture and the nodes, no people), and the places beside it in two groups, On the map and Not on the map yet. A place is placed by dragging it from the list onto the picture (on a phone: tap the place, then tap the spot), moved by dragging its node, and taken off the map from its node's menu; every change marks the draft dirty, and Save keeps it. The tree the builder has today stays on the Places tab. |
 
 ## 2. The scene lifecycle
 
@@ -385,22 +395,22 @@ redesign; it is not a small one.
 
 ```
 + Harbourside . Day 14, morning . Rain over the Harbour     [Narrator: Mara] [Start anywhere] [World Builder] [x] +
-| +------------------ the board -------------------+ +- News | Rumours | Hooks | People | Scenes -------------+ |
-| | THE HARBOUR  (rain)                            | | Day 14 . The cutter moved to the harbour mouth        | |
-| |  (The Anchor)   (Customs house)   (The quay)   | | Day 13 . Rain over the Harbour                         | |
-| |   Marit, you      Reyes                        | | Day 12 . Captain Reyes seen at the customs house       | |
-| | THE OLD TOWN  (clear)                          | | ...                                                    | |
-| |  (The chandlery)  (The governor's house)       | |                                                        | |
-| | ELSEWHERE                                      | |                                                        | |
-| |  (The sunken Kestrel)                          | |                                                        | |
-| +------------------------------------------------+ +--------------------------------------------------------+ |
-| Scene 4 open at The Anchor since Day 12 . [Resume] [End scene]                                                 |
-+----------------------------------------------------------------------------------------------------------------+
+| +------------------ the board: the picture -------------------+ +- News | Rumours | Hooks | People | Scenes ---+ |
+| |  ~ ~ ~  the sea  ~ ~ ~        (The quay)                   | | Day 14 . The cutter moved to the harbour mouth | |
+| |                 (Customs house)                             | | Day 13 . Rain over the Harbour                 | |
+| |                   Reyes                                     | | Day 12 . Captain Reyes seen at the customs ... | |
+| |   (The Anchor)            THE OLD TOWN  (The chandlery)     | | ...                                            | |
+| |    Marit, you                                               | |                                                | |
+| |                      (The governor's house)     [+] [-] [fit] | | Not on the map yet: The sunken Kestrel        | |
+| +-------------------------------------------------------------+ +-----------------------------------------------+ |
+| Scene 4 open at The Anchor since Day 12 . [Resume] [End scene]                                                     |
++--------------------------------------------------------------------------------------------------------------------+
 ```
 
 The window: `width: min(96vw, 1400px); height: min(94vh, 900px)`, the
-board the left two thirds, the panels the right third, the foot the state
-line. The panels reuse the Map window's renderers over the snapshot's
+board the left two thirds (the picture under Leaflet with its nodes, D124;
+the tree board for a world without a picture), the panels the right
+third, the foot the state line. The panels reuse the Map window's renderers over the snapshot's
 world state (news, rumours, hooks, people) plus the Scenes panel (this
 file's own). Every line of every panel is a way in: a news line, a rumour,
 a hook ("Play this": taken and started), a person, a scene ("Continue from
@@ -412,8 +422,9 @@ under a `dooms-` key, guarded, as the Map's does.
 
 Full screen below 640px, the Workshop's rule (`100dvh`, a solid backdrop; the one hub breakpoint, in the CSS and in the test): the tabs
 across the top (Map, News, Rumours, Hooks, People, Scenes), the board
-scrolling under Map with the regions as rows, the foot pinned at the
-bottom with the open scene. The Start sheet, the picker and the End sheet
+under Map the picture at the tab's full height (pinch to zoom, a tap on a
+node for its sheet; the tree board as rows for a world without a
+picture), the foot pinned at the bottom with the open scene. The Start sheet, the picker and the End sheet
 take the whole screen with Back in their head. Touch targets 44px; long
 press where the desktop has a right click.
 
@@ -459,6 +470,10 @@ last scene left and the gap moves people past it. One small window stack
 (`push` on open, `pop` on close, `isTopmost`) goes in front of the Map's,
 the Builder's and the hub's Escape and backdrop handlers, since each
 closes on any Escape today; the hub's sheets are entries of their own.
+The board's module (`src/systems/ui/hubBoard.js`) is the one Leaflet
+host, mounted by the hub (its `hub` mode: the people, the sheets) and by
+the builder's Map tab (its `edit` mode: drag to place, drag to move, the
+node's menu); it is lazy and the only importer of `lib/leaflet/`.
 
 ### 4.5 Rules the Map window taught
 
@@ -600,7 +615,12 @@ enable/disable teardown.
 | `src/systems/features/canon.js`, `src/utils/canon.js` | the scene scope; the mirror export |
 | `template.html`, `index.js`, `style.css`, `styles/overhaul.css` | the Hub group, the binder, the D menu, the event map; the window's and the strip's rules (eager), the looks |
 | `src/systems/ui/worldDashboard.js`, `src/systems/ui/worldViews.js` | phase 2: the Map window's Hub button; the panels' sections lent to the hub, `hooksHtml` with a mode |
-| `src/systems/ui/worldBuilder.js`, `src/systems/ui/worldBuilderViews.js`, `src/utils/worldBuilder.js` | phase 2: Play from the hub; phase 3: weather on a region through the pack's normaliser and its round trip; phase 4: Export and Import with the memory |
+| `src/systems/ui/worldBuilder.js`, `src/systems/ui/worldBuilderViews.js`, `src/utils/worldBuilder.js` | phase 2: the Map tab (D137) and Play from the hub, `worldToRaw` carrying the nodes and the picture; phase 3: weather on a region through the pack's normaliser and its round trip; phase 4: Export and Import with the memory |
+| `lib/leaflet/leaflet-src.esm.js`, `lib/leaflet/leaflet.css`, `lib/leaflet/LICENSE`, `lib/leaflet/README.md` | the map engine, vendored (D134) |
+| `src/utils/worldPicture.js`, `tools/hub-board-test.mjs` | phase 2: the picture record, the nodes as fractions and their projection, the board's model (D135, D136) |
+| `src/systems/ui/hubBoard.js` | phase 2: the board on Leaflet, in the hub and in the builder's Map tab (D124, D137); lazy |
+| `src/core/cssLoader.js` | `ensureCss(id, href)`: a stylesheet by its path, for Leaflet's |
+| `docs/support/map-survey.md` | the survey the engine and the node model were chosen from |
 | `tools/hub-test.mjs`, `tools/hub-flow-test.mjs`, `tools/hub-layout-test.mjs` | D130, D129 |
 | `tools/lazy-graph-test.mjs` | the two UI modules listed |
 | `docs/parity-checklist.md`, `CHANGELOG.md`, `whatsnew.json`, `docs/phases-short-fuse.md`, `docs/handover-short-fuse.md` | §10 |
@@ -610,11 +630,11 @@ enable/disable teardown.
 | Phase | What | Proves | Size |
 | --- | --- | --- | --- |
 | 1 | **Built (2026-11-02).** The memory and the lifecycle: the pure model and its test (Hub 1), the feature and the bridge (Hub 2), the window's shell with the Scenes panel, the Start sheet, the picker, the End sheet, the strip, the Hub group in Settings, Hub and End scene in the D menu, `/hub`, `/endscene`, the render check (Hub 3), the docs (Hub 4) | A scene starts fresh, plays, ends, and the next one knows; a long chat is untouched | Large |
-| 2 | The hub window grown: the board (D124), the News, Rumours, Hooks and People panels over the snapshot (the hooks request, §4.4), the place sheet, the sheets from a click on a place, a person, a news line, a rumour or a hook, a world with no memory yet shown as the pack's fresh seed, the window stack (§4.4), the Map window's Hub button, the builder's Play from the hub, the render check widened | The owner's sketch on screen, at desktop and phone, under every look | Large |
+| 2 | **In progress (2026-11-03).** The hub window grown, in steps: Hub 7 the plan, Leaflet vendored, the picture record and the nodes in the pack, the pure board model and its test; Hub 8 the builder's Map tab (D137); Hub 9 the board in the hub (D124) with the place sheet and the tree board for a world without a picture, the render check widened; Hub 10 the News, Rumours, Hooks and People panels over the snapshot (the hooks request, §4.4), the sheets from a click on a person, a news line, a rumour or a hook, a world with no memory yet shown as the pack's fresh seed, the window stack (§4.4), the Map window's Hub button, the builder's Play from the hub, the docs | The owner's sketch on screen: the picture, its places, the people on them, at desktop and phone, under every look | Large |
 | 3 | The world's book (D126: the mirror is built; the header's binding and the Settings rows remain) and weather (D125): the state, the advancer's field, the board, the brief, the tracker's seed | Lore reaches the prompt two ways; weather moves between scenes and matches in play | Medium |
 | 4 | Continue in the hub (D131); the world exported with its story (the builder's Export gains the memory and the scenes; Import takes them back) | An existing campaign moves into the hub; a world travels whole | Medium |
 | 5 | Bonds (D132) | Relationships kept and said | Medium |
-| 6 | The picture with pins, if the owner wants it after seeing the board | | Medium |
+| 6 | Zoom levels and nested maps: a tile pyramid cut from one big picture (gdal2tiles with leaflet-rastercoords, or Zoomify) as the board's layer, a picture per region opened from its node, the zoom from which a node shows (`zoom`), terrain baked by a generator (`docs/support/map-survey.md`) | The full game map the owner described, on the same nodes | Large |
 
 Order: 1, 2, 3, 4, 5, 6. Each phase is tested (the gate: every
 `tools/*-test.mjs` and `tools/load-check.mjs`) and rendered (D129) before
@@ -672,7 +692,9 @@ land.
   group (settings with defaults in phase 1).
 - **Merge two scenes' stores** instead of replacing (D123).
 - **Scene pictures' LoRAs and notes** as the world's (§3.1).
-- **The picture with pins** (D124, phase 6).
+- **Zoom levels and nested maps** (phase 6, §8).
+- **Export with the picture embedded** (D136: the bytes travel with the
+  world, as a data URL on the way out and a file again on the way in).
 - **The world exported with its story** (phase 4).
 - **A bug found by reading, not the hub's, fixed on `short-fuse/hub`
   (2026-11-03):** the built-in template was chosen as `example`, its
@@ -719,4 +741,6 @@ and line as of that day.
 | A branch or a checkpoint | saves a new file whose header is the live metadata with `main_chat` and a fresh integrity: the scene's mark travels, so the mark names its file and a mark under another name is not the scene (review) |
 | A card never opened | POST `/api/characters/chats` answers `{ error: true }` with status 200 when the chats folder does not exist (the create endpoint, `/get` and `/save` make it): read as an empty list (review) |
 | The first-message event and the tracker | DES's own tracker handler takes no type and parses the opener on the one-message chat's `MESSAGE_RECEIVED` (`src/systems/integration/sillytavern.js`), writing an empty swipe entry: the hub's handler after it restores the seed (review) |
+| The image upload | `saveBase64AsFile(base64, subFolder, fileName, extension)` (`public/scripts/utils.js:1651-1675`) posts `{ image, format, ch_name, filename }` to `/api/images/upload` (`src/endpoints/images.js:39-70`), which checks the format against its media extensions, sanitises the folder and the name, writes `user/images/<ch_name>/<filename>.<format>` and answers `{ path }`; dots in the name become underscores; `getBase64Async(file)` (`:485`) reads a `File` as a data URL. Read on 2026-11-03 from the `release` branch. |
+| Not SillyTavern's: Leaflet 1.9.4 | `CRS.Simple`, `imageOverlay(url, [[0, 0], [h, w]])`, `marker` with a `divIcon` (an HTML element that keeps its size), pinch zoom built in, `invalidateSize()`; the self-contained ES module `dist/leaflet-src.esm.js` (424 KB unminified; the UMD build is 147 KB), the hashes in `lib/leaflet/README.md` |
 | Not relied on, noted | `doNewChat({ deleteCurrentChat })` (`:10618`) names the file `<name> - <timestamp>` and would need the loaders re-run after the write; `writeExtensionField` (`extensions.js:2070`) could hold a world on its card and is not used; there is no `/newchat` command |

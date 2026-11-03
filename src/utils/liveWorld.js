@@ -32,6 +32,16 @@ export const BLANK_PACK_ID = 'blank';    // the world that grows from play (docs
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const slug = (v) => clean(v, 60).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 const isInt = (n) => Number.isInteger(n);
+/** A node's coordinate: a number within 0..1, four decimals kept; anything else is null (docs/hub-plan.md D135). */
+export const fraction = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? Math.round(v * 10000) / 10000 : null);
+export const MAP_SOURCES = Object.freeze(['upload', 'drawn']);    // where a world's picture came from (docs/hub-plan.md D136)
+/** The world's picture record made safe (D136): the path, its size, its source; '' and 0 when there is none. */
+export function normalizeMap(raw) {
+    const m = raw && typeof raw === 'object' ? raw : {};
+    const image = typeof m.image === 'string' ? m.image.trim().slice(0, 2000) : '';
+    const dim = (v) => (isInt(v) && v > 0 ? v : 0);
+    return { image, width: image ? dim(m.width) : 0, height: image ? dim(m.height) : 0, source: image && MAP_SOURCES.includes(m.source) ? m.source : '' };
+}
 export const sameName = (a, b) => clean(a, MAX_NAME).toLowerCase() === clean(b, MAX_NAME).toLowerCase();
 
 /** The id of a place the story names that no pack place matches (D93): "loc:" and a slug of the text, the key the Map window's row uses (D82); '' for nothing. */
@@ -219,12 +229,13 @@ export function normalizePack(raw) {
             parent: p.parent ? slug(p.parent) : null,
             image: typeof p.image === 'string' ? p.image.trim() : '',
             zoom: isInt(p.zoom) ? p.zoom : null,
-            x: Number.isFinite(p.x) ? p.x : null,
-            y: Number.isFinite(p.y) ? p.y : null,
+            x: fraction(p.x),    // the node on the world's picture (docs/hub-plan.md D135): both or neither
+            y: fraction(p.y),
         });
     }
     for (const p of places) {
         if (p.parent && !seen.has(p.parent)) { errors.push(`The place "${p.id}" names a parent "${p.parent}" that does not exist.`); p.parent = null; }
+        if ((p.x === null) !== (p.y === null)) { p.x = null; p.y = null; }    // half a node is no node
     }
     // Cycles: walk up from each place; a path longer than the tree is a loop.
     const byId = new Map(places.map(p => [p.id, p]));
@@ -278,6 +289,7 @@ export function normalizePack(raw) {
         id, name, version: isInt(r.version) ? r.version : 1,
         description: clean(r.description, 400),
         places, clocks, cast,
+        map: normalizeMap(r.map),
         template: typeof r.template === 'string' && r.template.trim() ? r.template.trim() : '',
         blurb: clean(r.blurb, MAX_BLURB),
     };

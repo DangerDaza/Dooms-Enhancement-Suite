@@ -26,7 +26,8 @@ Design source: voice sessions with Dazia, 2026-10-16. Grounded in a read-only au
 ## 1. World pack (architecture rule)
 
 One pack per world, the same shape as a file (`worldpacks/example.json` is the one shipped, Harbourside, the template; its id is its file's name). It holds:
-- the **place tree** (id, parent, label, optional image);
+- the **place tree** (id, parent, label, optional image; since 2026-11-03 an optional node on the world's picture, `x` and `y` as fractions of it, `docs/hub-plan.md` D135);
+- the **picture** (optional; `map: { image, width, height, source }`, a file in SillyTavern's images folder named by path, `docs/hub-plan.md` D136);
 - the **starting clocks** (id, label, start value, max, step, public-effect text per step, hidden);
 - the **character list** (name, starting place, which tier they begin at);
 - the narrator-facing **injection template** (optional).
