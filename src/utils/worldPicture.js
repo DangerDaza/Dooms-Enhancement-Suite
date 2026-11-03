@@ -5,17 +5,21 @@
  * (`x`, `y` in 0..1 on the place); the board projects it to Leaflet's
  * units from the picture's own size, where latitude grows upward, and
  * back on a drag. `boardModel` is what the board draws: the placed places
- * with the people last seen at them, the player's place, the visited
- * ones, the region's weather; and what is not on the map yet.
+ * with the people last seen at them, the party's place, the visited
+ * ones, the region's weather; and what is not on the map yet. One rule
+ * says where a person stands, for the board, the tree, the place sheet
+ * and the Start sheet alike (`keyOfPath`, `peopleAt`, `playerPlace`).
  * tools/hub-board-test.mjs.
  */
-import { placeChain, placePath, fraction, normalizeMap, locLabel } from './liveWorld.js';
+import { placeChain, placePath, fraction, normalizeMap, locLabel, isLocId } from './liveWorld.js';
+import { currentPlace } from './worldMap.js';
 
 export { fraction, normalizeMap };
 
 export const MAX_ZOOM_IN = 4;    // the board zooms in to four times the picture's own size (D124)
 
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
+const placesOf = (pack) => (pack && Array.isArray(pack.places) ? pack.places : []);
 
 /** The world has a picture. */
 export function hasMap(pack) {
@@ -30,6 +34,12 @@ export function mapSize(pack) {
     return w && h ? { width: w, height: h } : null;
 }
 
+/** What a kept view belongs to: the picture's path and size. A view is restored on that picture alone, never on another world's. */
+export function pictureKey(map) {
+    if (!map || typeof map.image !== 'string' || !map.image) return '';
+    return `${map.image}|${Number(map.width) || 0}x${Number(map.height) || 0}`;
+}
+
 /** The node on a place, or null: both fractions within 0..1. */
 export function nodeOf(place) {
     const x = fraction(place && place.x);
@@ -39,12 +49,12 @@ export function nodeOf(place) {
 
 /** The places on the map, in the pack's order. */
 export function placedPlaces(pack) {
-    return (pack && Array.isArray(pack.places) ? pack.places : []).filter(p => nodeOf(p) !== null);
+    return placesOf(pack).filter(p => nodeOf(p) !== null);
 }
 
 /** The places not on the map yet. */
 export function unplacedPlaces(pack) {
-    return (pack && Array.isArray(pack.places) ? pack.places : []).filter(p => nodeOf(p) === null);
+    return placesOf(pack).filter(p => nodeOf(p) === null);
 }
 
 /** Leaflet's bounds for the picture under CRS.Simple: [[south, west], [north, east]] = [[0, 0], [height, width]]. */
@@ -99,13 +109,84 @@ function regionOf(pack, placeId) {
     return root ? { id: root.id, label: root.label } : null;
 }
 
-/** The deepest placed place a path (a place path or a loc id) falls in, or ''. */
-function placedAt(pack, path, placedIds) {
+// ─── Where a person stands (one rule for the board, the tree and the sheets) ───
+
+/**
+ * The deepest place of the pack a path (a place path or a loc id) falls
+ * in, or ''. On the picture (`placed`) only the placed places count: a
+ * person at an unplaced sub-place stands on its nearest placed ancestor,
+ * the node that shows them. On the tree every place of the pack counts.
+ */
+export function placeOfPath(pack, path, { placed = false } = {}) {
     if (!path || typeof path !== 'string') return '';
+    const ids = new Set((placed ? placedPlaces(pack) : placesOf(pack)).map(p => p.id));
     const parts = path.split('/');
-    for (let i = parts.length - 1; i >= 0; i--) if (placedIds.has(parts[i])) return parts[i];
+    for (let i = parts.length - 1; i >= 0; i--) if (ids.has(parts[i])) return parts[i];
     return '';
 }
+
+/**
+ * The key a path stands under on a board: the pack place (`placeOfPath`),
+ * else on the tree the path itself (the story's own place, a loc id, has
+ * a chip of its own under Elsewhere), else '' (nowhere on the picture).
+ */
+export function keyOfPath(pack, path, { placed = false } = {}) {
+    const id = placeOfPath(pack, path, { placed });
+    if (id) return id;
+    return placed ? '' : String(path || '');
+}
+
+/**
+ * Where the party is, as a board key: the Map window's rule (the newest
+ * visited place, `currentPlace`) read through `keyOfPath`. Live World
+ * never places the player in `where` (the world does not move the
+ * player), so the party's place is the visited row's.
+ */
+export function partyAt(pack, state, { placed = false } = {}) {
+    const here = currentPlace(state);
+    if (!here) return '';
+    if (here.packId) return keyOfPath(pack, here.path || placePath(pack, here.packId) || here.packId, { placed });
+    return keyOfPath(pack, String(here.id || ''), { placed });
+}
+
+/** The player's place as a board key: an entry of `where` under their name when one exists (a test state), else the party's. */
+export function playerPlace(pack, state, player = '', { placed = false } = {}) {
+    const where = state && state.where && typeof state.where === 'object' ? state.where : {};
+    const at = player && where[player] ? keyOfPath(pack, String(where[player]), { placed }) : '';
+    return at || partyAt(pack, state, { placed });
+}
+
+/**
+ * Who is at a place (a pack place or a story place's key), by the board's
+ * rule or the tree's: the people last seen there, the player apart, and
+ * whether the party is there. The place sheet and the Start sheet read
+ * this, so a face on a node is a face on its sheet.
+ */
+export function peopleAt(pack, state, placeId, { placed = false, player = '' } = {}) {
+    const where = state && state.where && typeof state.where === 'object' ? state.where : {};
+    const people = [];
+    if (placeId) for (const [name, at] of Object.entries(where)) if (!(player && name === player) && keyOfPath(pack, at, { placed }) === placeId) people.push(name);
+    return { people, player: !!placeId && playerPlace(pack, state, player, { placed }) === placeId };
+}
+
+/** The name of a board key that is no pack place: the visited row's label when the story named it, else the loc id read as words. */
+export function labelOfKey(state, key) {
+    const list = state && Array.isArray(state.visited) ? state.visited : [];
+    const v = list.find(e => e && e.id === key && e.label);
+    if (v) return v.label;
+    return isLocId(key) ? locLabel(key) : String(key || '');
+}
+
+/** The picture a place shows: the one a scene drew for it (the state's visited row, which the snapshot keeps), else the pack's art. */
+export function placeImage(pack, state, placeId) {
+    const list = state && Array.isArray(state.visited) ? state.visited : [];
+    const drawn = list.find(e => e && typeof e.image === 'string' && e.image && (e.packId === placeId || e.id === placeId));
+    if (drawn) return drawn.image;
+    const p = placesOf(pack).find(x => x.id === placeId);
+    return p && p.image ? p.image : '';
+}
+
+// ─── What the boards draw ───────────────────────────────────────────────
 
 /**
  * What the board draws.
@@ -114,21 +195,23 @@ function placedAt(pack, path, placedIds) {
  * @param {object|null} o.state      the world state the board shows (the snapshot's, or the chat's)
  * @param {string} o.player          the player's name (shown as "you")
  * @param {Object<string,{emoji?:string,text?:string}>} o.weather  by region id (phase 3; empty today)
- * @returns {{ nodes: Array, unplaced: Array<{id:string,label:string}>, elsewhere: Array<{name:string,at:string}>, playerAt: string }}
+ * @returns {{ nodes: Array, unplaced: Array<{id:string,label:string}>, elsewhere: Array<{name:string,at:string,label:string}>, playerAt: string }}
  */
 export function boardModel({ pack, state = null, player = '', weather = {} } = {}) {
     const places = placedPlaces(pack);
-    const placedIds = new Set(places.map(p => p.id));
     const visited = new Set(state && Array.isArray(state.visited) ? state.visited.map(v => v && v.id).filter(Boolean) : []);
     const where = state && state.where && typeof state.where === 'object' ? state.where : {};
     const people = new Map(places.map(p => [p.id, []]));
     const elsewhere = [];
-    let playerAt = '';
+    const playerAt = playerPlace(pack, state, player, { placed: true });
     for (const [name, at] of Object.entries(where)) {
-        const id = placedAt(pack, at, placedIds);
-        if (player && name === player) { playerAt = id; continue; }
-        if (id) people.get(id).push(name);
-        else elsewhere.push({ name, at: String(at || '') });
+        if (player && name === player) continue;
+        const id = keyOfPath(pack, at, { placed: true });
+        if (id) { people.get(id).push(name); continue; }
+        // Nowhere on the picture: at a pack place with no placed ancestor (named by that place), or at the story's own place.
+        const deep = placeOfPath(pack, at, { placed: false });
+        const label = deep ? (placesOf(pack).find(p => p.id === deep) || {}).label || deep : labelOfKey(state, String(at || ''));
+        elsewhere.push({ name, at: String(at || ''), label });
     }
     const nodes = places.map(p => {
         const node = nodeOf(p);
@@ -139,7 +222,7 @@ export function boardModel({ pack, state = null, player = '', weather = {} } = {
             label: p.label,
             x: node.x,
             y: node.y,
-            image: p.image || '',
+            image: placeImage(pack, state, p.id),
             region: region ? region.label : '',
             regionId: region ? region.id : '',
             isRegion: !region,
@@ -156,7 +239,7 @@ export function boardModel({ pack, state = null, player = '', weather = {} } = {
 /**
  * What the tree board draws for a world without a picture (D124): the
  * pack's places under their regions (the root places), each with the
- * people last seen there, the player's place, the visited ones; the
+ * people last seen there, the party's place, the visited ones; the
  * story's own places (the state's loc ids) under Elsewhere, with their
  * people.
  * @param {object} o
@@ -166,36 +249,32 @@ export function boardModel({ pack, state = null, player = '', weather = {} } = {
  * @returns {{ groups: Array<{id:string,label:string,places:Array}>, elsewhere: Array, playerAt: string }}
  */
 export function treeModel({ pack, state = null, player = '' } = {}) {
-    const places = pack && Array.isArray(pack.places) ? pack.places : [];
+    const places = placesOf(pack);
     const ids = new Set(places.map(p => p.id));
     const visited = new Set(state && Array.isArray(state.visited) ? state.visited.map(v => v && v.id).filter(Boolean) : []);
     const where = state && state.where && typeof state.where === 'object' ? state.where : {};
     const people = new Map(places.map(p => [p.id, []]));
     const elsewhere = new Map();
-    let playerAt = '';
-    const deepest = (path) => {
-        if (!path || typeof path !== 'string') return '';
-        const parts = path.split('/');
-        for (let i = parts.length - 1; i >= 0; i--) if (ids.has(parts[i])) return parts[i];
-        return '';
-    };
-    const other = (key) => { if (!elsewhere.has(key)) elsewhere.set(key, { id: key, label: key.startsWith('loc:') ? locLabel(key) : key, people: [] }); return elsewhere.get(key); };
+    const playerAt = playerPlace(pack, state, player, { placed: false });
+    const other = (key) => { if (!elsewhere.has(key)) elsewhere.set(key, { id: key, label: labelOfKey(state, key), people: [] }); return elsewhere.get(key); };
     for (const [name, at] of Object.entries(where)) {
-        const id = deepest(at);
-        if (player && name === player) { playerAt = id || String(at || ''); continue; }
-        if (id) people.get(id).push(name);
-        else if (at) other(String(at)).people.push(name);
+        if (player && name === player) continue;
+        const key = keyOfPath(pack, at, { placed: false });
+        if (!key) continue;
+        if (ids.has(key)) people.get(key).push(name);
+        else other(key).people.push(name);
     }
     for (const v of (state && Array.isArray(state.visited) ? state.visited : [])) {
-        if (v && typeof v.id === 'string' && v.id.startsWith('loc:') && !ids.has(v.id)) { const o = other(v.id); if (v.label) o.label = v.label; }
+        if (v && typeof v.id === 'string' && v.id.startsWith('loc:') && !ids.has(v.id)) other(v.id);
     }
-    const one = (p, isRegion) => ({ id: p.id, label: p.label, image: p.image || '', isRegion, people: people.get(p.id), player: playerAt === p.id, visited: visited.has(p.id) || visited.has(placePath(pack, p.id)) });
+    if (playerAt && !ids.has(playerAt)) other(playerAt);    // the party at a story place of its own: its chip, marked
+    const one = (p, isRegion) => ({ id: p.id, label: p.label, image: placeImage(pack, state, p.id), isRegion, people: people.get(p.id), player: playerAt === p.id, visited: visited.has(p.id) || visited.has(placePath(pack, p.id)) });
     const roots = places.filter(p => !p.parent);
     const groups = roots.map(r => ({
         id: r.id,
         label: r.label,
         places: [one(r, true), ...places.filter(p => p.parent && placeChain(pack, p.id)[0].id === r.id).map(p => one(p, false))],
     }));
-    const loose = [...elsewhere.values()].map(x => ({ ...x, image: '', isRegion: false, player: playerAt === x.id, visited: visited.has(x.id) }));
+    const loose = [...elsewhere.values()].map(x => ({ ...x, image: placeImage(pack, state, x.id), isRegion: false, player: playerAt === x.id, visited: visited.has(x.id) }));
     return { groups, elsewhere: loose, playerAt };
 }

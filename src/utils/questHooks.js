@@ -195,6 +195,26 @@ export function takeHook(hooks, id, { takenAt = 0 } = {}) {
     return { hooks: next, hook };
 }
 
+/**
+ * A hook played that the round no longer holds (another round landed while
+ * the Start waited on the line): recorded as taken from what the seed kept
+ * of it, so the memory's Played list and the next round's "not again" know
+ * it. A hook already taken under that id is left as it is.
+ */
+export function recordTaken(hooks, hook, { takenAt = 0 } = {}) {
+    const next = normalizeHooks(hooks);
+    const id = clean(hook && hook.id, 24);
+    const title = clean(hook && hook.title, MAX_HOOK_TITLE);
+    const text = clean(hook && hook.text, MAX_HOOK_TEXT);
+    if (!title && !text) return { hooks: next, hook: null };
+    const have = id ? next.taken.find(h => h.id === id) : null;
+    if (have) return { hooks: next, hook: have };
+    const taken = { id: id || `h${++next.seq}`, title: title || text.slice(0, MAX_HOOK_TITLE), text: text || title, grounds: clean(hook && hook.grounds, 120), kind: HOOK_KINDS.includes(hook && hook.kind) ? hook.kind : 'other', msgId: null, gameDate: '', at: takenAt };
+    next.taken.push(taken);
+    if (next.taken.length > MAX_TAKEN) next.taken.splice(0, next.taken.length - MAX_TAKEN);
+    return { hooks: next, hook: taken };
+}
+
 /** A hook set aside (D103): off the round, its title remembered so it is not offered again. */
 export function setAside(hooks, id) {
     const next = normalizeHooks(hooks);
@@ -217,6 +237,7 @@ export function describeHooksResult(r) {
     if (r.ok) return `${r.hooks.length} hook${r.hooks.length === 1 ? '' : 's'} on offer.`;
     if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
     if (r.reason === 'running') return 'Hooks are already being asked for.';
+    if (r.reason === 'scene-open') return 'A scene is open: its hooks are the Map window\'s until you end it or set it aside.';
     if (r.reason === 'busy') return 'Another request is running; try again in a moment.';
     if (r.reason === 'stale') return 'The chat changed while the hooks were asked for.';
     if (r.reason === 'invalid') return `No usable hook came back${r.errors && r.errors.length ? `: ${r.errors[0]}` : ''}.`;

@@ -399,5 +399,52 @@ console.log('\n§7 hooks over the memory (§4.4)');
     check('played: the hook is the scene\'s quest in the file and leaves the memory\'s round for its taken list', c.ok && !!saved && JSON.stringify(saved.header.chat_metadata.dooms_tracker).includes('manifest') && hub.hubHooks('harbourside').proposed.length === 0 && hub.hubHooks('harbourside').taken.length === 1 && hub.hubHooks('harbourside').taken[0].title === "The cutter's papers", JSON.stringify(c));
 }
 
+console.log('\n§8 hooks and Start, the review\'s cases');
+{
+    // §7 left a scene open. A round is asked with it set aside, then a scene opened over it: hooks over the memory are refused while a scene is open
+    // (End writes the chat's stores over the memory, D122), Not this one with them; the Map window serves the open scene's own hooks.
+    for (const s of hub.worldEntry('harbourside').scenes) if (s.status === 'open') hub.setSceneAside('harbourside', s.id);
+    hub.__setHooksTransport(async () => '{"hooks":[{"title":"The night watch","text":"Find out why the watch doubled on the hill road.","grounds":"the hill","kind":"place"},{"title":"The ledger","text":"Read the customs ledger before it is copied.","grounds":"the blockade","kind":"clock"}]}');
+    const asked = await hub.proposeHubHooks('harbourside');
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 6","time":"dawn"},"openers":[{"title":"The gate","text":"The hill road is quiet at dawn.","who":[]}]}');
+    const p0 = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'the-hill' }, cast: [], gap: { id: 'now' } });
+    const c0 = p0.ok ? await hub.commitScene(p0.token, { choice: 0 }) : p0;
+    const before = JSON.stringify(hub.hubHooks('harbourside'));
+    const firstId = hub.hubHooks('harbourside').proposed[0].id;
+    hub.__setHooksTransport(async () => '{"hooks":[{"title":"Never offered","text":"This round must not be written.","grounds":"x","kind":"other"}]}');
+    const refused = await hub.proposeHubHooks('harbourside');
+    check('a scene open: Offer hooks is refused with the scene named, Not this one does nothing, the memory\'s round stands', asked.ok && c0.ok && !refused.ok && refused.reason === 'scene-open' && refused.scene.id === c0.scene.id && hub.setHubHookAside('harbourside', firstId) === false && JSON.stringify(hub.hubHooks('harbourside')) === before, JSON.stringify({ asked, c0, refused }));
+    hub.setSceneAside('harbourside', c0.scene.id);
+    // A round that lands between a Start's prepare and its commit is in the memory the scene is seeded from and in the memory written back.
+    const p1 = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'the-hill' }, cast: [], gap: { id: 'now' } });
+    hub.__setHooksTransport(async () => '{"hooks":[{"title":"The cellar door","text":"See what the Anchor keeps behind its cellar door.","grounds":"Old Marit","kind":"person"}]}');
+    const landed = await hub.proposeHubHooks('harbourside');
+    const c1 = p1.ok ? await hub.commitScene(p1.token, { choice: 0 }) : p1;
+    const saved1 = c1.ok ? files.get(c1.file) : null;
+    check('a round landing while a Start waits: the scene is seeded with it and the memory keeps it', landed.ok && c1.ok && !!saved1 && saved1.header.chat_metadata.dooms_hooks.proposed.some(h => h.title === 'The cellar door') && hub.hubHooks('harbourside').proposed.some(h => h.title === 'The cellar door'), JSON.stringify({ landed, c1, round: hub.hubHooks('harbourside') }));
+    hub.setSceneAside('harbourside', c1.scene.id);
+    // Play this on a hook of a round that another round replaced before the commit: recorded as played from the seed, the quest still the scene's.
+    const hook = hub.hubHooks('harbourside').proposed.find(h => h.title === 'The cellar door');
+    const p2 = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'the-anchor' }, cast: ['Old Marit'], gap: { id: 'now' }, seed: { kind: 'hook', id: hook.id, label: hook.title, text: hook.text } });
+    hub.__setHooksTransport(async () => '{"hooks":[{"title":"Another round","text":"Something else entirely.","grounds":"x","kind":"other"}]}');
+    const replaced = await hub.proposeHubHooks('harbourside');
+    const c2 = p2.ok ? await hub.commitScene(p2.token, { choice: 0 }) : p2;
+    const saved2 = c2.ok ? files.get(c2.file) : null;
+    const round = hub.hubHooks('harbourside');
+    check('a hook the round no longer holds is the scene\'s quest still and under Played in the memory; the new round stays on offer', replaced.ok && c2.ok && !!saved2 && JSON.stringify(saved2.header.chat_metadata.dooms_tracker).includes('cellar door') && round.taken.some(h => h.id === hook.id && h.title === 'The cellar door') && round.proposed.some(h => h.title === 'Another round'), JSON.stringify({ c2, round }));
+    hub.setSceneAside('harbourside', c2.scene.id);
+    // A world no scene has ended in: a hooks round gives it a memory (the seed with the round), and the next Start's gap does not move it.
+    const fresh = hub.worldEntry('elsewhere');
+    const noMemory = !!fresh && !fresh.memory;
+    hub.__setHooksTransport(async () => '{"hooks":[{"title":"A first errand","text":"Walk the second world\'s one road.","grounds":"the road","kind":"place"}]}');
+    const first = await hub.proposeHubHooks('elsewhere');
+    let gapCalls = 0;
+    hub.__setGapTransport(async () => { gapCalls++; return '{"now":{"date":"Day 9","time":"noon"},"clocks":[],"moved":[]}'; });
+    const p3 = await hub.prepareScene({ worldId: 'elsewhere', place: { id: 'the-anchor' }, cast: [], gap: { id: 'later' } });
+    const mem = hub.worldEntry('elsewhere').memory;
+    check('a world with no memory yet: the hooks round makes one from the seed (takenAt 0) and a Start "later" does not move it before its first scene', noMemory && first.ok && !!mem && mem.takenAt === 0 && hub.hubHooks('elsewhere').proposed.length === 1 && p3.ok && gapCalls === 0, JSON.stringify({ noMemory, first, takenAt: mem && mem.takenAt, p3, gapCalls }));
+    hub.cancelStart();
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

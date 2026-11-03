@@ -1,19 +1,19 @@
 /**
  * The Hub window (docs/hub-plan.md D116, D117, D119, D122, D127): the
  * world's window on the settings popup's shell, most of the screen; the
- * head with Start a scene, the Scenes panel (the board and the other
- * panels come with phase 2), the foot; the Start sheet, the opener picker
- * and the End sheet in its body. Opened from Hub in the D menu, Settings →
+ * head with Start a scene, the board with its panels beside it (D124,
+ * §4.1), the foot; the Start sheet, the opener picker, the End sheet and
+ * the place sheet in its body. Opened from Hub in the D menu, Settings →
  * Live World → The Hub, /hub, the strip and the Map window's foot. Loaded
  * on first open. The pure rendering is hubViews.js; the lifecycle is
  * src/systems/features/hub.js.
  */
 import { extensionSettings } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
-import { normalizeWorldState, placePath, placeChain, isLocId, locLabel, sameName, seedWorldState, publicEffects, liveWorldConfig } from '../../utils/liveWorld.js';
+import { normalizeWorldState, placeChain, sameName, seedWorldState, publicEffects, liveWorldConfig } from '../../utils/liveWorld.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
-import { pushWindow, popWindow, isTopmost } from './windowStack.js';
-import { boardModel, treeModel, hasMap, mapSize } from '../../utils/worldPicture.js';
+import { pushWindow, popWindow, takesEscape, closeOnBackdrop } from './windowStack.js';
+import { boardModel, treeModel, hasMap, mapSize, pictureKey, peopleAt, keyOfPath, placeImage, labelOfKey } from '../../utils/worldPicture.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { resolvePortrait } from './portraitBar.js';
 import { gapOf, describeStartResult, describeEndResult, hubConfig } from '../../utils/hub.js';
@@ -26,6 +26,8 @@ import {
 import { openSettingsPopup } from './modals.js';
 import { POPUP_ID, HUB_PANELS, hubShellHtml, hubHtml } from './hubViews.js';
 
+const PANEL_KEY = 'dooms-hub-panel';    // the remembered panel (§4.1), guarded, as the Map window's
+
 let built = false;
 let isOpen = false;
 let worldId = '';
@@ -33,14 +35,28 @@ let worlds = [];
 let pack = null;
 let sheet = null;       // { kind: 'start' | 'picker' | 'end' | 'place', ... }
 let note = '';
-let panel = '';         // the side panel (HUB_PANELS), or 'map' for the phone's board; chosen on the first open
+let panel = readPanel();    // the side panel (HUB_PANELS), or 'map' for the phone's board; '' until the first open chooses
 let board = null;       // the board (Leaflet's host) while the picture shows
-let boardView = null;   // its view, kept across re-renders
+let boardView = null;   // its view, kept across re-renders and a reopen, with the key of the picture it belongs to
+let boardKey = '';      // the picture the mounted board shows (pictureKey)
 let boardToken = 0;     // a mount that outlives its render is dropped
-const sizeCache = new Map();    // world id -> the picture's size read from the image when the pack does not carry it
+const sizeCache = new Map();        // a picture's path -> its size read from the image when the pack does not carry it
+const brokenPictures = new Set();   // pictures that would not load this session: the tree board stands in for them
 
 function $body() {
     return $(`#${POPUP_ID} .dooms-hub-body`);
+}
+
+function readPanel() {
+    try {
+        const raw = localStorage.getItem(PANEL_KEY);
+        return raw === 'map' || HUB_PANELS.some(p => p.id === raw) ? raw : '';
+    } catch (e) { return ''; }
+}
+
+function setPanel(id) {
+    panel = id === 'map' || HUB_PANELS.some(p => p.id === id) ? id : 'news';
+    try { localStorage.setItem(PANEL_KEY, panel); } catch (e) { /* no storage */ }
 }
 
 /** The worlds the hub can play, with their names and cards. */
@@ -95,18 +111,23 @@ function worldStateFor(entry) {
     return stored || (pack ? seedWorldState(pack, { name: '' }) : null);
 }
 
+/** The board is the picture: the world has one and it loaded. The tree stands in for a picture that would not. */
+function pictureShows() {
+    return !!(pack && hasMap(pack) && !brokenPictures.has(pack.map.image));
+}
+
 function boardFor(entry) {
     if (!pack) return null;
     const state = worldStateFor(entry);
     const player = playerName(entry);
-    return hasMap(pack)
+    return pictureShows()
         ? { mode: 'picture', model: boardModel({ pack, state, player }), tree: null }
-        : { mode: 'tree', model: null, tree: treeModel({ pack, state, player }) };
+        : { mode: 'tree', model: null, tree: treeModel({ pack, state, player }), broken: hasMap(pack) };
 }
 
 function unmountHubBoard() {
     if (!board) return;
-    try { boardView = board.view(); board.destroy(); } catch (e) { /* the frame is gone already */ }
+    try { boardView = { key: boardKey, ...board.view() }; board.destroy(); } catch (e) { /* the frame is gone already */ }
     board = null;
 }
 
@@ -125,9 +146,12 @@ async function mountHubBoard(data) {
     if (!host || !pack || !hasMap(pack)) return;
     const token = ++boardToken;
     const id = worldId;
-    let size = mapSize(pack) || sizeCache.get(id) || null;
+    const image = pack.map.image;
+    // A picture that will not load (the file gone from SillyTavern's folder, a path refused) is said, and the tree board stands in.
+    const broken = () => { if (token !== boardToken || !isOpen) return; brokenPictures.add(image); render(); };
+    let size = mapSize(pack) || sizeCache.get(image) || null;
     if (!size) {
-        try { size = await readImageSize(safeImageUrl(pack.map.image)); sizeCache.set(id, size); } catch (e) { host.innerHTML = '<p class="dooms-hub-map-wait dooms-hub-hint">The picture could not be read. The World Builder\'s Map tab can upload it again.</p>'; return; }
+        try { size = await readImageSize(safeImageUrl(image)); sizeCache.set(image, size); } catch (e) { broken(); return; }
     }
     let mod;
     try {
@@ -136,33 +160,43 @@ async function mountHubBoard(data) {
     } catch (e) { host.innerHTML = `<p class="dooms-hub-map-wait dooms-hub-hint">The map could not load: ${e && e.message ? e.message : e}</p>`; return; }
     if (token !== boardToken || !isOpen || sheet || worldId !== id || !document.body.contains(host)) return;
     host.innerHTML = '';
+    const picture = { ...pack.map, ...size };
+    const key = pictureKey(picture);
     board = await mod.mountBoard(host, {
-        picture: { ...pack.map, ...size },
+        picture,
         nodes: data.model.nodes,
         mode: 'hub',
         portraits: portraitOf,
-        view: boardView,
-        on: { node: (placeId) => openPlace(placeId) },
+        view: boardView && boardView.key === key ? boardView : null,    // a view kept for this picture alone: another world's opens fitted (D124)
+        on: {
+            node: (placeId) => openPlace(placeId),
+            error: () => { if (token === boardToken) setTimeout(broken, 0); },    // after Leaflet's own handling of the event
+        },
     });
     if (token !== boardToken || !document.body.contains(host)) { try { board.destroy(); } catch (e) { /* gone */ } board = null; return; }
+    boardKey = key;
     boardView = null;
 }
 
-/** The place sheet's data: the place, its region, its picture, who is here, what names it, the scenes played there. */
+/**
+ * The place sheet's data: the place, its region, its picture (the one a
+ * scene drew, else the pack's), who is here by the board's own rule (a
+ * face on a node is a face on its sheet), what names it, the scenes
+ * played there.
+ */
 function placeSheetData(id) {
     const entry = worldEntry(worldId);
     const state = worldStateFor(entry);
     const place = pack ? pack.places.find(x => x.id === id) : null;
-    const tree = pack ? treeModel({ pack, state, player: playerName(entry) }) : { groups: [], elsewhere: [] };
-    const node = [...tree.groups.flatMap(g => g.places), ...tree.elsewhere].find(x => x.id === id) || null;
-    const label = place ? place.label : (node ? node.label : (isLocId(id) ? locLabel(id) : id));
+    const who = pack ? peopleAt(pack, state, id, { placed: pictureShows(), player: playerName(entry) }) : { people: [], player: false };
+    const label = place ? place.label : labelOfKey(state, id);
     const chain = place ? placeChain(pack, id) : [];
     const region = chain.length > 1 ? chain[0].label : '';
     const low = String(label || '').toLowerCase();
     const rumours = pack && state ? publicEffects(state, pack).filter(x => String(x.text || '').toLowerCase().includes(low) || (pack.clocks.find(c => c.id === x.id) || {}).place === id).map(x => x.text) : [];
     const scenes = entry ? entry.scenes.filter(s => s.place && (s.place.id === id || (!s.place.id && label && sameName(s.place.label, label)))).map(s => ({ id: s.id, title: s.title, status: s.status, startDate: s.startDate, endDate: s.endDate })) : [];
     const card = cardOf(worldId);
-    return { kind: 'place', id, label, region, picture: place ? place.image : '', people: node ? node.people : [], player: !!(node && node.player), rumours, scenes, canStart: !!card && isLiveWorldOn() };
+    return { kind: 'place', id, label, region, picture: pack ? placeImage(pack, state, id) : '', people: who.people, player: who.player, rumours, scenes, canStart: !!card && isLiveWorldOn() };
 }
 
 function openPlace(id) {
@@ -178,10 +212,14 @@ function startWithPerson(name) {
     const at = state && state.where ? String(state.where[name] || '') : '';
     let place = null;
     if (at && pack) {
-        const ids = new Set(pack.places.map(p => p.id));
-        const parts = at.split('/');
-        for (let i = parts.length - 1; i >= 0 && !place; i--) if (ids.has(parts[i])) { const p = pack.places.find(x => x.id === parts[i]); place = { id: p.id, label: p.label }; }
-        if (!place && isLocId(at)) place = { label: locLabel(at) };
+        const id = keyOfPath(pack, at, { placed: false });    // their own place, on the map or not
+        const p = id ? pack.places.find(x => x.id === id) : null;
+        if (p) place = { id: p.id, label: p.label };
+        else if (id) {
+            // The story's own place: its row's name (the slug would lose its punctuation), and its id when the sheet's Where lists it.
+            const label = labelOfKey(state, id);
+            place = placesForSheet(entry).some(o => o.id === id) ? { id, label } : { label };
+        }
     }
     openStart({ seed: { kind: 'person', label: name, text: '' }, place, cast: [name] });
 }
@@ -193,17 +231,18 @@ function placesForSheet(entry) {
     const out = [];
     if (pack) for (const p of pack.places) { const chain = placeChain(pack, p.id); const root = chain.length > 1 ? chain[0] : null; out.push({ id: p.id, label: p.label, region: root && !sameName(root.label, p.label) ? root.label : '' }); }
     const state = entry && entry.memory && entry.memory.stores && entry.memory.stores.dooms_world ? normalizeWorldState(entry.memory.stores.dooms_world) : null;
-    if (state) for (const v of state.visited) if (isLocId(v.id) && !out.some(o => o.id === v.id)) out.push({ id: v.id, label: v.label || locLabel(v.id), region: '' });
+    if (state) for (const v of state.visited) if (!out.some(o => o.id === v.id) && !(pack && pack.places.some(p => p.id === v.id))) out.push({ id: v.id, label: labelOfKey(state, v.id), region: '' });
     return out;
 }
 
-/** The people the sheet offers: the snapshot's known people, those last seen at the place marked. */
+/** The people the sheet offers: the snapshot's known people, those last seen at the place marked (by the board's own rule). */
 function peopleForSheet(entry, placeId) {
     const state = entry && entry.memory && entry.memory.stores && entry.memory.stores.dooms_world ? normalizeWorldState(entry.memory.stores.dooms_world) : null;
+    const placed = pictureShows();
     const names = new Set();
     const out = [];
     if (state) {
-        for (const [name, tier] of Object.entries(state.known)) { if (names.has(name)) continue; names.add(name); const at = state.where[name] || ''; out.push({ name, tier, here: !!(placeId && at && (at === placeId || at.endsWith(`> ${placeId}`) || (pack && placePath(pack, placeId) === at))) }); }
+        for (const [name, tier] of Object.entries(state.known)) { if (names.has(name)) continue; names.add(name); const at = state.where[name] || ''; out.push({ name, tier, here: !!(placeId && at && (at === placeId || keyOfPath(pack, at, { placed }) === placeId)) }); }
     } else if (pack) {
         for (const m of pack.cast) { if (names.has(m.name)) continue; names.add(m.name); out.push({ name: m.name, tier: m.tier, here: !!(placeId && m.place === placeId) }); }
     }
@@ -233,7 +272,8 @@ function readStart() {
     const gapId = String($(`${root} input[name="dooms-hub-gap"]:checked`).val() || 'now');
     const gap = gapOf(gapId, String($(`${root} #dooms-hub-when`).val() || ''));
     const seedText = String($(`${root} #dooms-hub-seed`).val() || '').trim();
-    const seed = sheet.seed && typeof sheet.seed === 'object' && sheet.seed.text === seedText ? sheet.seed : { kind: sheet.seed && sheet.seed.kind ? sheet.seed.kind : 'anywhere', text: seedText, label: sheet.seed && sheet.seed.label ? sheet.seed.label : '' };
+    // The seed's text is the user's to edit (§4.3); what it came from (a hook's id, a scene's) stays with it, so a played hook is still taken.
+    const seed = sheet.seed && typeof sheet.seed === 'object' ? { ...sheet.seed, text: seedText } : { kind: 'anywhere', text: seedText, label: '' };
     const n = String($(`${root} #dooms-hub-note`).val() || '').trim();
     return { place, cast, gap, seed, note: n };
 }
@@ -316,9 +356,9 @@ function build() {
     $('body').append(hubShellHtml());
     const root = `#${POPUP_ID}`;
     $(document).on('click', '#dooms-hub-close', closeHub);
-    $(document).on('click', root, (ev) => { if (ev.target && ev.target.id === POPUP_ID) closeHub(); });
+    closeOnBackdrop(POPUP_ID, closeHub);    // a press on the backdrop released there; a pan let go past the window's edge is not a close (D134)
     $(document).on('keydown', (ev) => {
-        if (ev.key !== 'Escape' || !isOpen || !isTopmost('hub')) return;
+        if (!isOpen || !takesEscape('hub', ev)) return;
         // A sheet on top closes first; the hub under it stays (one topmost thing at a time).
         if (sheet) { if (sheet.busy || (sheet.states && Object.values(sheet.states).includes('running'))) return; if (sheet.kind === 'picker') cancelStart(); sheet = null; render(); return; }
         closeHub();
@@ -327,9 +367,8 @@ function build() {
         worldId = String($(this).val() || '');
         sheet = null;
         note = '';
-        boardView = null;
         await refresh();
-        render();
+        render();    // the board's view is kept by its picture (mountHubBoard): the other world's opens fitted
     });
     $(document).on('change', `${root} input[name="dooms-hub-cast"], ${root} input[name="dooms-hub-gap"]`, function () {
         const label = this.closest('label');
@@ -342,8 +381,8 @@ function build() {
         const id = this.getAttribute('data-id') || '';
         try {
             if (act === 'settings') { closeHub(); try { openSettingsPopup(); } catch (e) { /* the settings popup is not mounted yet */ } return; }
-            if (act === 'panel') { const p = this.getAttribute('data-panel') || ''; panel = p === 'map' || HUB_PANELS.some(x => x.id === p) ? p : 'news'; render(); return; }
-            if (act === 'hooks-propose') { note = 'Asking the world for hooks…'; render(); const r = await proposeHubHooks(worldId); note = describeHooksResult(r); render(); return; }
+            if (act === 'panel') { setPanel(this.getAttribute('data-panel') || ''); render(); return; }
+            if (act === 'hooks-propose') { note = 'Asking the world for hooks…'; render(); const r = await proposeHubHooks(worldId); note = describeHooksResult(r); if (!sheet) render(); return; }    // a sheet opened meanwhile keeps what was typed (§4.5)
             if (act === 'hook-aside') { setHubHookAside(worldId, id); render(); return; }
             if (act === 'hook-play') { const h = hubHooks(worldId).proposed.find(x => x.id === id); if (h) openStart({ seed: { kind: 'hook', id: h.id, label: h.title, text: h.text } }); return; }
             if (act === 'place') { openPlace(id); return; }
@@ -383,7 +422,18 @@ function build() {
     $(document).on('click', `${root} .dooms-hub-ways[data-way="news"] .dooms-map-changes li, ${root} .dooms-hub-ways[data-way="rumour"] .dooms-world-effects li`, function () {
         const text = String(this.textContent || '').trim();
         const kind = this.closest('.dooms-hub-ways').getAttribute('data-way') === 'rumour' ? 'rumour' : 'news';
-        if (text) openStart({ seed: { kind, text } });
+        if (!text) return;
+        let place = null;
+        if (kind === 'rumour' && pack) {
+            // A rumour is a clock's public effect: the sheet opens at the place the clock stands at, when it stands at one (§4.3).
+            // The line carries its index into the list, never the clock's id: spoiler-free keeps the clock's name out of the markup.
+            const state = worldStateFor(worldEntry(worldId));
+            const effect = state ? publicEffects(state, pack)[Number(this.getAttribute('data-i'))] : null;
+            const clock = effect ? pack.clocks.find(c => c.id === effect.id) : null;
+            const p = clock && clock.place ? pack.places.find(x => x.id === clock.place) : null;
+            if (p) place = { id: p.id, label: p.label };
+        }
+        openStart({ seed: { kind, text }, place });
     });
     $(document).on('click', `${root} .dooms-hub-ways[data-way="person"] .dooms-world-card[data-name]`, function (ev) {
         ev.preventDefault();
@@ -402,8 +452,10 @@ function build() {
 
 /**
  * Opens the window (building it the first time). `worldId` opens that
- * world; `start` opens the Start sheet at once; `end` the End sheet for
- * the scene in front.
+ * world; with none given, the chat's world when the chat is a scene
+ * (D127: the strip, /hub and the Map window's Hub open on it), else the
+ * world last shown. `start` opens the Start sheet at once; `end` the End
+ * sheet for the scene in front.
  */
 export async function openHub({ worldId: id = '', start = false, end = false, seed = null, place = null, cast = [] } = {}) {
     try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the window still opens */ }
@@ -413,7 +465,7 @@ export async function openHub({ worldId: id = '', start = false, end = false, se
     note = '';
     if (!panel) { try { panel = window.matchMedia && window.matchMedia('(max-width: 640px)').matches ? 'map' : 'news'; } catch (e) { panel = 'news'; } }
     if (id) worldId = id;
-    if (!id && end) { const cur = currentScene(); if (cur) worldId = cur.worldId; }
+    else { const cur = currentScene(); if (cur) worldId = cur.worldId; }
     await refresh();
     if (worldId) { try { await refreshScenes(worldId); } catch (e) { /* the list stands as it is */ } }
     sheet = null;
@@ -435,12 +487,10 @@ export function closeHub() {
     popWindow('hub');
     if (sheet && sheet.kind === 'picker') cancelStart();
     sheet = null;
-    unmountHubBoard();
-    boardView = null;
+    unmountHubBoard();    // the view is kept with its picture's key: the hub opened again shows the map where it was left (D124)
     $(`#${POPUP_ID}`).css('display', 'none');
 }
 
 export function isHubOpen() {
     return isOpen;
 }
-

@@ -10,11 +10,11 @@ import { saveSettings } from '../../core/persistence.js';
 import { ensureCss } from '../../core/cssLoader.js';
 import { escapeHtml } from '../../utils/html.js';
 import { normalizePack, liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
-import { hasMap, mapSize, withMap, withNode, boardModel } from '../../utils/worldPicture.js';
+import { hasMap, mapSize, withMap, withNode, boardModel, pictureKey } from '../../utils/worldPicture.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBase64Async, saveBase64AsFile } from '../../../../../../utils.js';
 import { renderImage, sourceProblem } from '../features/imageGen.js';
-import { pushWindow, popWindow, isTopmost } from './windowStack.js';
+import { pushWindow, popWindow, takesEscape, closeOnBackdrop } from './windowStack.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
     TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
@@ -37,7 +37,8 @@ let mapInput = null;     // the Map tab's file picker (docs/hub-plan.md D137)
 let mapPicked = '';      // the Map tab: a place picked from the list, waiting for a tap on the picture
 let mapBusy = '';        // the Map tab: 'upload' | 'draw' while a picture is saved or drawn
 let board = null;        // the Map tab's board (Leaflet's host), mounted while the tab shows a picture
-let boardView = null;    // the board's view kept across re-renders
+let boardView = null;    // the board's view kept across re-renders, with the key of the picture it belongs to
+let boardKey = '';       // the picture the mounted board shows (pictureKey)
 let mapToken = 0;        // a mount that outlives its render is dropped
 
 const slugOf = (v) => String(v || '').normalize('NFC').trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -318,7 +319,7 @@ function useForNewChats() {
 
 function unmountMap() {
     if (!board) return;
-    try { boardView = board.view(); board.destroy(); } catch (e) { /* the frame is gone already */ }
+    try { boardView = { key: boardKey, ...board.view() }; board.destroy(); } catch (e) { /* the frame is gone already */ }
     board = null;
 }
 
@@ -342,9 +343,7 @@ async function mountMap() {
     if (!size) {
         try { size = await readImageSize(safeImageUrl(pack.map.image)); } catch (e) { host.innerHTML = '<p class="dooms-wb-map-wait dooms-world-muted">The picture could not be read: check its path, or upload it again.</p>'; return; }
         if (token !== mapToken || !isOpen || !draft) return;
-        draft = withMap(draft, { ...pack.map, ...size });    // the size kept beside the path from now on
-        dirty = true;
-        renderStatus();
+        draft = withMap(draft, { ...pack.map, ...size });    // the size kept beside the path from now on; not an edit of the user's (the next Save keeps it)
     }
     let mod;
     try {
@@ -354,19 +353,26 @@ async function mountMap() {
     if (token !== mapToken || !isOpen || tab !== 'map' || !draft || !document.body.contains(host)) return;
     host.innerHTML = '';
     const current = normalizePack(draft).pack;
+    const picture = { ...current.map, ...size };
+    const key = pictureKey(picture);
     board = await mod.mountBoard(host, {
-        picture: { ...current.map, ...size },
+        picture,
         nodes: boardModel({ pack: current }).nodes,
         mode: 'edit',
-        view: boardView,
+        view: boardView && boardView.key === key ? boardView : null,    // a view kept for this picture alone: another world's picture opens fitted
         on: {
             move: (id, node) => { if (!draft) return; draft = withNode(draft, id, node); dirty = true; renderStatus(); },
             drop: (id, node) => { if (!draft) return; draft = withNode(draft, id, node); dirty = true; mapPicked = ''; render(); },
             tap: (node) => { if (!draft || !mapPicked) return; draft = withNode(draft, mapPicked, node); dirty = true; mapPicked = ''; render(); },
             remove: (id) => { if (!draft) return; draft = withNode(draft, id, null); dirty = true; render(); },
+            error: () => {    // the file is gone, or its path refused: said in the frame, the places' lists beside it stay
+                if (token !== mapToken) return;
+                setTimeout(() => { if (token !== mapToken) return; unmountMap(); boardView = null; host.innerHTML = '<p class="dooms-wb-map-wait dooms-world-muted">The picture could not be read: check its path, or upload it again.</p>'; }, 0);
+            },
         },
     });
     if (token !== mapToken || !document.body.contains(host)) { try { board.destroy(); } catch (e) { /* gone */ } board = null; return; }    // a render came while Leaflet loaded
+    boardKey = key;
     boardView = null;
 }
 
@@ -410,13 +416,14 @@ function pickMapFile() {
     mapInput.click();
 }
 
-/** What Image Generation is asked for: the world as a page of an atlas, its regions and places named, no writing on it. */
+/** What Image Generation is asked for (D136): the world as a page of an atlas from its name, its blurb and its description, its regions and places named, no writing on it. */
 function mapPrompt(d) {
     const n = normalizePack(d).pack;
     const roots = n.places.filter(p => !p.parent).map(p => p.label);
     const rest = n.places.filter(p => p.parent).map(p => p.label);
     return [
         `A map of ${n.name}, seen from above, painted as a page of a fantasy atlas: coastlines, hills, forests, rivers and roads, the whole land on one sheet, no writing on it.`,
+        n.blurb,
         n.description,
         roots.length ? `Its regions: ${roots.join(', ')}.` : '',
         rest.length ? `Its places: ${rest.slice(0, 12).join(', ')}.` : '',
@@ -453,8 +460,8 @@ function build() {
     $('body').append(builderShellHtml());
     const root = `#${POPUP_ID}`;
     $(document).on('click', '#dooms-wb-close', close);
-    $(document).on('click', root, (ev) => { if (ev.target && ev.target.id === POPUP_ID) close(); });
-    $(document).on('keydown', (ev) => { if (ev.key === 'Escape' && isOpen && isTopmost('builder')) close(); });
+    closeOnBackdrop(POPUP_ID, close);    // a press on the backdrop released there; a node's drag or a pan let go past the window's edge is not a close
+    $(document).on('keydown', (ev) => { if (isOpen && takesEscape('builder', ev)) close(); });
     $(document).on('click', `${root} [data-act]`, async function (ev) {
         const act = this.getAttribute('data-act');
         if (act === 'open') { await openWorld(this.getAttribute('data-id') || ''); return; }
@@ -470,7 +477,7 @@ function build() {
         if (act === 'play') {    // the hub on this world (docs/hub-plan.md D127)
             const id = selectedId;
             if (!id || id === 'new' || !discardOk()) return;
-            dirty = false;
+            if (dirty) await openWorld(id, { force: true });    // the edits let go: the world as saved is what the builder holds when it opens again
             close();
             import('./hub.js').then(m => m.openHub({ worldId: id })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
             return;

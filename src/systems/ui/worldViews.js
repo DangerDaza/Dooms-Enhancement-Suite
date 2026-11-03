@@ -128,7 +128,7 @@ export function newsHtml({ state, pack, cfg, feed = FEED_LIMITS[0] } = {}) {
 export function rumoursHtml({ state, pack, cfg } = {}) {
     const effects = publicEffects(state, pack);
     const street = effects.length
-        ? `<ul class="dooms-world-effects">${effects.map(e => `<li${cfg.spoilerFree ? '' : ` title="${escapeHtml(e.label)}"`}>${escapeHtml(e.text)}</li>`).join('')}</ul>`
+        ? `<ul class="dooms-world-effects">${effects.map((e, i) => `<li data-i="${i}"${cfg.spoilerFree ? '' : ` title="${escapeHtml(e.label)}"`}>${escapeHtml(e.text)}</li>`).join('')}</ul>`
         : '<p class="dooms-world-muted">Nothing yet.</p>';
     return `<section class="dooms-world-street">
         <div class="dooms-inv-head"><span class="dooms-inv-label">💬 Word on the street</span></div>

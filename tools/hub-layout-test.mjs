@@ -56,6 +56,7 @@ const entry = H.normalizeWorldEntry({
         { id: 's5', title: 'Rain on the quay', status: 'open', place: { id: 'the-quay', label: 'The quay' }, cast: ['Captain Reyes', 'Old Marit'], startDate: 'Day 14' },
     ],
 });
+const noOpen = H.normalizeWorldEntry({ ...entry, scenes: entry.scenes.filter(s => s.status !== 'open') });    // the same world with no scene open (the Hooks panel's buttons live)
 const worlds = [{ id: 'harbourside', name: 'Harbourside', card: 'Mara Vane.png', cardName: 'Mara Vane' }];
 const twoWorlds = [...worlds, { id: 'skyreach', name: 'Skyreach, the long campaign of the northern crossings', card: '', cardName: '' }];
 const card = { name: 'Mara Vane' };
@@ -82,8 +83,10 @@ const scenes = [
     { name: 'board-tree-map', html: V.hubHtml({ ...sheetBase, note: '', board: boardTree, panel: 'map' }) },
     { name: 'board-news', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'news', world }) },
     { name: 'board-rumours', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'rumours', world }) },
-    { name: 'board-hooks', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: hooksFixture }) },
-    { name: 'board-hooks-busy', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: { proposed: [], taken: [], aside: [], last: null }, hooksBusy: true }) },
+    { name: 'board-hooks', html: V.hubHtml({ ...sheetBase, entry: noOpen, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: hooksFixture }) },
+    { name: 'board-hooks-open', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: hooksFixture }) },    // a scene open: Offer and Not this one held, the reason said
+    { name: 'board-hooks-busy', html: V.hubHtml({ ...sheetBase, entry: noOpen, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: { proposed: [], taken: [], aside: [], last: null }, hooksBusy: true }) },
+    { name: 'board-tree-broken', html: V.hubHtml({ ...sheetBase, pack: picPack, note: '', board: { ...boardTree, broken: true } }) },    // the picture would not load: the tree with the note
     { name: 'board-people', html: V.hubHtml({ ...sheetBase, board: boardTree, panel: 'people', world: { ...world, pack } }) },
     { name: 'place', html: V.hubHtml({ ...sheetBase, sheet: placeSheet }) },
     { name: 'place-bare', html: V.hubHtml({ ...sheetBase, sheet: { kind: 'place', id: 'loc:the-mill', label: 'The old mill', region: '', picture: '', people: [], player: false, rumours: [], scenes: [], canStart: false } }) },
@@ -172,6 +175,10 @@ for (const w of WIDTHS) {
                     const sideBody = main.querySelector('.dooms-hub-side-body');
                     if (phone) {
                         if (!shown(tabs)) faults.push('the phone has no tabs over the board');
+                        main.querySelectorAll('.dooms-hub-tab').forEach(el => { const r = el.getBoundingClientRect(); if (r.height > 0 && r.height < 44) faults.push(`the tab "${el.textContent.trim()}" is ${Math.round(r.height)}px tall (44 is the touch target, §4.2)`); });
+                        const wrap = main.querySelector('.dooms-hub-board-wrap');
+                        const notes = main.querySelector('.dooms-hub-board-notes');
+                        if (onMap && wrap && notes && shown(notes) && notes.getBoundingClientRect().bottom > wrap.getBoundingClientRect().bottom + 1 && !(wrap.scrollHeight > wrap.clientHeight + 1)) faults.push('the notes under the map sit under the foot and cannot be scrolled to');
                         if (shown(sideNav)) faults.push('the phone shows the side nav as well as the tabs');
                         if (!onMap && !shown(sideBody)) faults.push('the panel tab shows no panel');
                         if (onMap && shown(side)) faults.push('the Map tab shows the panels too');

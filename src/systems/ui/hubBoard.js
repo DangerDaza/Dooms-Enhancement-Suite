@@ -59,9 +59,9 @@ function nodeClass(node, mode) {
  * @param {{ image: string, width: number, height: number }} o.picture
  * @param {Array} o.nodes            boardModel().nodes
  * @param {'hub'|'edit'} o.mode
- * @param {{ node?: Function, move?: Function, drop?: Function, tap?: Function, remove?: Function }} o.on
+ * @param {{ node?: Function, move?: Function, drop?: Function, tap?: Function, remove?: Function, error?: Function }} o.on  `error`: the picture could not be loaded (a file gone, a path refused)
  * @param {Function} o.portraits     name -> a portrait URL or ''
- * @param {{ center: any, zoom: number }|null} o.view  a view to restore (the builder re-renders)
+ * @param {{ center: any, zoom: number }|null} o.view  a view to restore (the builder re-renders; the host keeps it for this picture alone)
  * @returns {Promise<{ map: object, update: Function, view: Function, fit: Function, destroy: Function }>}
  */
 export async function mountBoard(el, { picture, nodes = [], mode = 'hub', on = {}, portraits = () => '', view = null } = {}) {
@@ -84,7 +84,11 @@ export async function mountBoard(el, { picture, nodes = [], mode = 'hub', on = {
         markerZoomAnimation: false,
     });
     const url = safeImageUrl(picture.image);
-    const overlay = L.imageOverlay(url, bounds, { interactive: false, alt: '' }).addTo(map);
+    const overlay = L.imageOverlay(url, bounds, { interactive: false, alt: '' });
+    // A picture that does not load (the file gone from SillyTavern's folder, a path safeImageUrl refused, so an empty src)
+    // fires Leaflet's error: the host hears it, since the nodes would otherwise float over a dark frame without a word.
+    overlay.on('error', () => { if (typeof on.error === 'function') on.error(); });
+    overlay.addTo(map);
     map.invalidateSize(false);
     map.fitBounds(bounds, { animate: false });
     map.setMinZoom(map.getZoom());

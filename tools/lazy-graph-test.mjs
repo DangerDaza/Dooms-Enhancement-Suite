@@ -43,7 +43,7 @@ const MUST_BE_LAZY = [
     // The Hub's window and its views load on first open (the strip loads the views on the first scene chat).
     'src/systems/ui/hub.js',
     'src/systems/ui/hubViews.js',
-    // The board (Leaflet's host) loads when a board mounts; Leaflet itself only then, by a dynamic import inside it.
+    // The board (Leaflet's host) loads with the hub's views, which draw its nodes; Leaflet itself only when a board mounts, by a dynamic import inside it.
     'src/systems/ui/hubBoard.js',
     'lib/leaflet/leaflet-src.esm.js',
 ];

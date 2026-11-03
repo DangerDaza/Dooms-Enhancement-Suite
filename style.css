@@ -14379,13 +14379,13 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     /* The board and the panels one at a time, under tabs */
     .dooms-hub-main.is-board { display: flex; flex-direction: column; gap: 8px; }
     .dooms-hub-tabs { display: flex; gap: 2px; flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.12); scrollbar-width: none; }
-    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.84em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 10px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; flex: 0 0 auto; white-space: nowrap; }
+    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.84em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 10px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; flex: 0 0 auto; white-space: nowrap; }    /* a touch target (docs/hub-plan.md §4.2) */
     .dooms-hub-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
     .dooms-hub-side-nav { display: none; }
     .dooms-hub-side { overflow: auto; }
     .dooms-hub-main.is-board[data-panel="map"] .dooms-hub-side { display: none; }
     .dooms-hub-main.is-board:not([data-panel="map"]) .dooms-hub-board-wrap { display: none; }
-    .dooms-hub-board-wrap { flex: 1 1 auto; }
+    .dooms-hub-board-wrap { flex: 1 1 auto; overflow: auto; }    /* the notes under the map scroll into view rather than sit under the foot */
     .dooms-hub-map { min-height: 50vh; }
     .dooms-hub-place-head { flex-direction: column; }
     #dooms-scene-strip .dooms-strip-actions { margin-left: 0; width: 100%; }

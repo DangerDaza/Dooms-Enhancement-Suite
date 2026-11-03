@@ -51,13 +51,48 @@ window.__mount = async (opts) => {
         drop: (id, n) => window.__events.push(['drop', id, n]),
         tap: (n) => window.__events.push(['tap', n]),
         remove: (id) => window.__events.push(['remove', id]),
+        error: () => window.__events.push(['error']),
     } });
     return true;
 };
 </script></body></html>`;
+// The hub's own window: the shell and the views, the board in its frame, the backdrop bound through the window stack's helper
+// (no SillyTavern: the controller is not loaded; the helper and the shell are the real ones).
+const windowHarness = `<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/lib/leaflet/leaflet.css"><link rel="stylesheet" href="/styles/modals.css"><link rel="stylesheet" href="/style.css">
+<style>html, body { margin: 0; background: #222; }</style></head>
+<body>
+<script type="module">
+import { hubShellHtml, hubHtml, POPUP_ID } from '/src/systems/ui/hubViews.js';
+import { mountBoard } from '/src/systems/ui/hubBoard.js';
+import { closeOnBackdrop } from '/src/systems/ui/windowStack.js';
+import { normalizePack, seedWorldState, liveWorldConfig } from '/src/utils/liveWorld.js';
+import { normalizeWorldEntry } from '/src/utils/hub.js';
+import { boardModel } from '/src/utils/worldPicture.js';
+window.__closes = 0;
+document.body.insertAdjacentHTML('beforeend', hubShellHtml());
+closeOnBackdrop(POPUP_ID, () => { window.__closes++; });
+window.__open = async (picture) => {
+    const raw = await (await fetch('/worldpacks/example.json')).json();
+    const placed = raw.places.map(p => (p.id === 'the-anchor' ? { ...p, x: 0.2, y: 0.7 } : p.id === 'customs-house' ? { ...p, x: 0.6, y: 0.3 } : p.id === 'harbourside' ? { ...p, x: 0.5, y: 0.5 } : p));
+    const pack = normalizePack({ ...raw, id: 'harbourside', map: { ...picture, source: 'upload' }, places: placed }).pack;
+    const state = seedWorldState(pack, { name: '' });
+    const model = boardModel({ pack, state, player: 'Jordan' });
+    const entry = normalizeWorldEntry({ card: 'Mara Vane.png', memory: { stores: { dooms_world: state }, facts: {} }, scenes: [] });
+    const popup = document.getElementById(POPUP_ID);
+    popup.querySelector('.dooms-hub-body').innerHTML = hubHtml({ worlds: [{ id: 'harbourside', name: 'Harbourside', card: 'Mara Vane.png', cardName: 'Mara Vane' }], worldId: 'harbourside', pack, entry, card: { name: 'Mara Vane' }, liveWorldOn: true, board: { mode: 'picture', model, tree: null }, panel: 'news', world: { state, pack, cfg: liveWorldConfig(null) } });
+    popup.style.display = 'flex';
+    const host = popup.querySelector('.dooms-hub-map');
+    host.innerHTML = '';
+    window.__board = await mountBoard(host, { picture, nodes: model.nodes, mode: 'hub', on: { node: () => {} } });
+    return true;
+};
+window.__ready = true;
+</script></body></html>`;
 const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     if (url.pathname === '/harness.html') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(harness); return; }
+    if (url.pathname === '/window.html') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(windowHarness); return; }
     const file = normalize(join(repo, decodeURIComponent(url.pathname)));
     if (!file.startsWith(repo)) { res.writeHead(403); res.end(); return; }
     try { const data = await readFile(file); res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream' }); res.end(data); }
@@ -175,6 +210,62 @@ console.log('\n§2 the builder\'s board (edit mode)');
     const closed = await page.evaluate(() => !document.querySelector('.dooms-node-popup'));
     check('"Take off the map" names the node and closes the menu', ev.some(x => x[0] === 'remove' && x[1] === 'b') && closed, JSON.stringify(ev));
     await page.evaluate(() => window.__board.destroy());
+}
+console.log('\n§3 a picture that will not load');
+{
+    await page.evaluate((o) => window.__mount(o), { picture: { image: '/no-such-folder/gone.png', width: 1000, height: 500 }, nodes, mode: 'hub' });
+    await page.waitForTimeout(300);
+    const ev = await page.evaluate(() => window.__events.splice(0));
+    const lay = await layout();
+    check('the file gone: the host hears error (the nodes would float over a dark frame without a word otherwise)', ev.some(x => x[0] === 'error') && lay.mounted, JSON.stringify(ev));
+    await page.evaluate(() => window.__board.destroy());
+    await page.evaluate((o) => window.__mount(o), { picture: { image: 'C:\\maps\\world.png', width: 1000, height: 500 }, nodes, mode: 'hub' });
+    await page.waitForTimeout(300);
+    const ev2 = await page.evaluate(() => window.__events.splice(0));
+    check('a path safeImageUrl refuses (an empty src): error too', ev2.some(x => x[0] === 'error'), JSON.stringify(ev2));
+    await page.evaluate(() => window.__board.destroy());
+}
+
+console.log('\n§4 the window\'s backdrop: a pan let go past the window\'s edge is not a close (D134)');
+{
+    const win = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+    win.on('pageerror', (e) => errors.push(String(e && e.message ? e.message : e)));
+    await win.goto(`${base}/window.html`, { waitUntil: 'load' });
+    await win.waitForFunction(() => window.__ready === true);
+    await win.evaluate((p) => window.__open(p), picture);
+    await win.waitForTimeout(300);
+    const rects = await win.evaluate(() => {
+        const r = (sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height }; };
+        const nodes = [...document.querySelectorAll('#rpg-hub-popup .dooms-node')].map(el => { const b = el.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; });
+        return { content: r('#rpg-hub-popup .rpg-settings-popup-content'), host: r('#rpg-hub-popup .dooms-hub-map'), nodes };
+    });
+    const band = Math.max(2, Math.floor(rects.content.left / 2));    // the backdrop's band left of the window
+    const press = { x: rects.host.left + 30, y: rects.host.bottom - 30 };
+    const onNode = rects.nodes.some(n => press.x >= n.left && press.x <= n.right && press.y >= n.top && press.y <= n.bottom);
+    check('the window leaves a band of backdrop beside it on a desktop, and the press spot is clear of every node', rects.content.left > 8 && !onNode, JSON.stringify(rects));
+    const centre = () => win.evaluate(() => { const c = window.__board.map.getCenter(); return [c.lat, c.lng]; });
+    const before = await centre();
+    await win.mouse.move(press.x, press.y);
+    await win.mouse.down();
+    await win.mouse.move(band, press.y, { steps: 12 });
+    await win.mouse.up();
+    await win.waitForTimeout(150);
+    const after = await centre();
+    let closes = await win.evaluate(() => window.__closes);
+    check('a pan from the board released over the backdrop pans the map and does not close the window', JSON.stringify(before) !== JSON.stringify(after) && closes === 0, JSON.stringify({ before, after, closes }));
+    await win.mouse.click(band, rects.content.top + 40);
+    await win.waitForTimeout(100);
+    closes = await win.evaluate(() => window.__closes);
+    check('a click on the backdrop itself still closes', closes === 1, String(closes));
+    await win.mouse.move(rects.host.left + 30, rects.host.top + 30);
+    await win.mouse.down();
+    await win.mouse.move(rects.host.left + 30, Math.max(2, Math.floor(rects.content.top / 2)), { steps: 10 });
+    await win.mouse.up();
+    await win.waitForTimeout(150);
+    closes = await win.evaluate(() => window.__closes);
+    check('a pan released over the backdrop above the window: not a close either', closes === 1, String(closes));
+    if (shots) await win.screenshot({ path: join(shotDir, 'window-backdrop.png') });
+    await win.close();
 }
 check('no page errors', errors.length === 0, errors.join(' | '));
 

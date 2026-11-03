@@ -39,10 +39,13 @@ state and the next moves.
   every look at desktop and phone width; the strip holds its buttons, the
   row shows its names whole, the foot's buttons keep their size); a window
   built in JS gets one before it ships (the World Builder's is
-  `node tools/world-builder-layout-test.mjs --shots`: six scenes under every
-  look at desktop and phone width; the Hub's is
-  `node tools/hub-layout-test.mjs --shots`: the window, its three sheets
-  and the strip under every look at desktop and phone width). The owner (2026-10-29):
+  `node tools/world-builder-layout-test.mjs --shots`: nine scenes, the Map
+  tab among them, under every look at desktop and phone width; the Hub's is
+  `node tools/hub-layout-test.mjs --shots`: the window, its board and its
+  tree, its panels, its four sheets and the strip under every look at
+  desktop and phone width; and the board for real is
+  `node tools/hub-board-browser-test.mjs --shots`, the one check that
+  mounts Leaflet, in the hub's own window too). The owner (2026-10-29):
   "this is a very common issue with things you create"; the squeezed Test
   row on the Image Generation page was the last one he had to screenshot.
 - **Never leave the installed clone dirty.** The extension folder under

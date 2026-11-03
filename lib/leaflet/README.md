@@ -15,5 +15,7 @@ loads the stylesheet through `ensureCss('leaflet', …)`; the marker images
 the stylesheet names are not shipped, since every node is a `divIcon`.
 
 To update: copy the two files from the new package, update the version
-and the hashes here, and run `node tools/hub-board-test.mjs` and
-`node tools/hub-layout-test.mjs --shots`.
+and the hashes here, and run `node tools/hub-board-browser-test.mjs --shots`
+(the one check that mounts Leaflet: a headless Chromium over the board's
+module; look at its PNGs) and `node tools/lazy-graph-test.mjs` (the module
+stays out of the startup graph).

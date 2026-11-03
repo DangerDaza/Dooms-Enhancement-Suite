@@ -15,7 +15,7 @@ import { extensionSettings, lastGeneratedData, committedTrackerData } from '../.
 import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { isScene } from '../features/hub.js';
-import { pushWindow, popWindow, isTopmost } from './windowStack.js';
+import { pushWindow, popWindow, takesEscape, closeOnBackdrop } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { rowIdForCharacter } from '../../utils/worldMap.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -173,7 +173,7 @@ function build() {
             </div>
         </div>`);
     $(document).on('click', '#rpg-close-world', closeWorldDashboard);
-    $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
+    closeOnBackdrop(POPUP_ID, closeWorldDashboard);    // a press on the backdrop released there; a drag out of the window is not a close
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
     $(document).on('click', '#rpg-world-hub', () => {
         closeWorldDashboard();
@@ -265,7 +265,7 @@ function build() {
         }
         render();
     });
-    $(document).on('keydown', (e) => { if (e.key === 'Escape' && isOpen && isTopmost('map') && !isFacePopoverOpen()) closeWorldDashboard(); });
+    $(document).on('keydown', (e) => { if (isOpen && !isFacePopoverOpen() && takesEscape('map', e)) closeWorldDashboard(); });
     window.addEventListener(WORLD_CHANGED_EVENT, onChanged);
     window.addEventListener(QUESTS_DONE_CHANGED_EVENT, () => { if (isOpen) render(); });
     // The Hooks panel (docs/hooks-canon-plan.md D104): a round asked for; a hook taken (a quest on the shelf), taken

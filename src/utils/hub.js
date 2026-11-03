@@ -15,7 +15,7 @@
  */
 import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock } from './canon.js';
-import { normalizeHooks, takeHook as takeHookPure, questFromHook } from './questHooks.js';
+import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
 
 export const HUB_META_KEY = 'dooms_hub';
@@ -362,16 +362,19 @@ function readCharacters(json) {
  * chat, the seeding hook moved to taken. Returns the stores and the facts
  * the brief says.
  */
-export function seedStores(memory, { chatId = '', place = '', cast = [], player = [], weather = '', when = null, hookId = '', now = 0 } = {}) {
+export function seedStores(memory, { chatId = '', place = '', cast = [], player = [], weather = '', when = null, hookId = '', hook = null, now = 0 } = {}) {
     const mem = normalizeMemory(memory) || { stores: {}, facts: { date: '', time: '', location: '', weather: '' }, player: '' };
     const stores = sealStores(mem.stores);
     const players = (Array.isArray(player) ? player : [player]).map(p => clean(p, 60)).filter(Boolean);
     // A hook played from the hub is a quest too, as a hook taken in the Map window is (D102): the quest rides the seeded stores.
+    // A round that landed while the Start waited no longer holds the hook: what the seed kept of it is recorded as taken instead.
     let hookQuest = '';
-    if (hookId && stores.dooms_hooks) {
-        const taken = takeHookPure(stores.dooms_hooks, hookId, { takenAt: now });
+    if (hookId && (stores.dooms_hooks || (hook && typeof hook === 'object'))) {
+        const taken = takeHookPure(stores.dooms_hooks || null, hookId, { takenAt: now });
         stores.dooms_hooks = taken.hooks;
-        if (taken.hook) hookQuest = questFromHook(taken.hook);
+        let played = taken.hook;
+        if (!played && hook && typeof hook === 'object') { const r = recordTaken(stores.dooms_hooks, { ...hook, id: hookId }, { takenAt: now }); stores.dooms_hooks = r.hooks; played = r.hook; }
+        if (played) hookQuest = questFromHook(played);
     }
     // The persona's vitals are the persona's: another persona starts fresh (the block carries no name, so the snapshot does).
     const personaChanged = !!(mem.player && players[0] && !sameName(mem.player, players[0]));

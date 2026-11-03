@@ -15,6 +15,7 @@ import { worldToRaw } from '../src/utils/worldBuilder.js';
 import {
     normalizeMap, fraction, hasMap, mapSize, nodeOf, placedPlaces, unplacedPlaces, boardBounds, nodeLatLng, latLngToNode,
     withNode, withMap, boardModel, treeModel, MAX_ZOOM_IN,
+    pictureKey, placeOfPath, keyOfPath, partyAt, playerPlace, peopleAt, labelOfKey, placeImage,
 } from '../src/utils/worldPicture.js';
 
 let failures = 0;
@@ -93,13 +94,22 @@ console.log('\n§5 what the board draws');
     check('three nodes, in the pack\'s order, with their fractions and paths', m.nodes.map(n => n.id).join(',') === 'harbourside,customs-house,the-anchor' && node('the-anchor').x === 0.2 && node('the-anchor').path === 'harbourside/old-town/the-anchor');
     check('a person is at the deepest placed place their place falls in', same(node('the-anchor').people, ['Old Marit']) && same(node('customs-house').people, ['Captain Reyes']) && same(node('harbourside').people, ['The governor']));
     check('the player is marked, not listed', m.playerAt === 'the-anchor' && node('the-anchor').player === true && !node('the-anchor').people.includes('Jordan') && node('customs-house').player === false);
-    check('a person whose place has no node is elsewhere', same(m.elsewhere, [{ name: 'Wanderer', at: 'loc:the-mill' }]));
+    check('a person whose place has no node is elsewhere, with the place\'s name', same(m.elsewhere, [{ name: 'Wanderer', at: 'loc:the-mill', label: 'the mill' }]));
     check('visited is read from the state', node('the-anchor').visited === true && node('customs-house').visited === false);
     check('the region: the root of the chain; the root is a region itself', node('the-anchor').region === 'Harbourside' && node('the-anchor').regionId === 'harbourside' && node('harbourside').isRegion === true && node('harbourside').region === '');
     check('weather by region reaches every node under it, and the region\'s own', node('the-anchor').weather.emoji === '🌧' && node('harbourside').weather.text === 'rain');
     check('what is not on the map yet, by label', m.unplaced.length === 5 && m.unplaced.some(p => p.id === 'old-town' && p.label));
     const bare = boardModel({ pack: normalizePack(file).pack });
     check('no picture, no state: nothing placed, nobody anywhere', bare.nodes.length === 0 && bare.unplaced.length === 8 && bare.elsewhere.length === 0 && bare.playerAt === '');
+    // Live World never writes the player into `where`: the party's place is the visited row's newest (the Map window's rule), on the board by the placed rule.
+    const party = boardModel({ pack, state: { where: { 'Old Marit': 'harbourside/old-town/the-anchor' }, visited: [{ id: 'back-room', packId: 'back-room', path: 'harbourside/old-town/the-anchor/back-room', visits: ['m9'] }, { id: 'customs-house', packId: 'customs-house', path: 'harbourside/the-docks/customs-house', visits: [] }] }, player: 'Jordan' });
+    check('the party\'s marker from the visited row: the newest place with a standing visit, on its nearest placed ancestor', party.playerAt === 'the-anchor' && party.nodes.find(n => n.id === 'the-anchor').player === true && party.nodes.find(n => n.id === 'customs-house').player === false);
+    const sealed = boardModel({ pack, state: { where: {}, visited: [{ id: 'customs-house', packId: 'customs-house', path: 'harbourside/the-docks/customs-house', visits: [] }, { id: 'the-anchor', packId: 'the-anchor', path: 'harbourside/old-town/the-anchor', visits: [] }] }, player: 'Jordan' });
+    check('a sealed snapshot (no visits kept): the first row is the party\'s place', sealed.playerAt === 'customs-house');
+    const drawn = boardModel({ pack, state: { where: {}, visited: [{ id: 'the-anchor', packId: 'the-anchor', path: 'harbourside/old-town/the-anchor', visits: [], image: '/user/images/anchor-drawn.png' }] } });
+    check('a node shows the picture a scene drew for its place, else the pack\'s art', drawn.nodes.find(n => n.id === 'the-anchor').image === '/user/images/anchor-drawn.png' && drawn.nodes.find(n => n.id === 'customs-house').image === (pack.places.find(p => p.id === 'customs-house').image || ''));
+    const noRoot = boardModel({ pack: normalizePack(withNode(withNodes(file), 'harbourside', null)).pack, state: { where: { 'The governor': 'harbourside/the-hill/governors-house' }, visited: [] } });
+    check('a person at a pack place with no placed ancestor is elsewhere, named by that place', same(noRoot.elsewhere, [{ name: 'The governor', at: 'harbourside/the-hill/governors-house', label: pack.places.find(p => p.id === 'governors-house').label }]));
 }
 
 console.log('\n§6 what the tree board draws (a world without a picture)');
@@ -118,6 +128,24 @@ console.log('\n§6 what the tree board draws (a world without a picture)');
     check('the story\'s own places under Elsewhere, named by their visit, with their people; the player there is marked', t.elsewhere.length === 2 && t.elsewhere[0].id === 'loc:the-mill' && t.elsewhere[0].label === 'The old mill' && same(t.elsewhere[0].people, ['Wanderer']) && t.elsewhere[0].player === true && t.playerAt === 'loc:the-mill' && t.elsewhere[1].id === 'loc:a-road' && t.elsewhere[1].people.length === 0);
     const bare = treeModel({ pack });
     check('no state: the places alone, nobody anywhere', bare.groups[0].places.every(p => p.people.length === 0 && !p.visited && !p.player) && bare.elsewhere.length === 0 && bare.playerAt === '');
+}
+
+console.log('\n§7 one rule for where a person stands: the board\'s, the tree\'s, the sheets\'');
+{
+    const pack = normalizePack(withNodes(file)).pack;    // the-anchor, customs-house and harbourside placed; back-room under the-anchor is not
+    const back = 'harbourside/old-town/the-anchor/back-room';
+    check('a path on the picture resolves to its deepest placed place; on the tree to its deepest place', placeOfPath(pack, back, { placed: true }) === 'the-anchor' && placeOfPath(pack, back, { placed: false }) === 'back-room' && placeOfPath(pack, 'harbourside/the-hill', { placed: true }) === 'harbourside' && placeOfPath(pack, 'loc:the-mill', { placed: true }) === '' && placeOfPath(pack, '', { placed: false }) === '');
+    check('a story place keys itself on the tree and nowhere on the picture', keyOfPath(pack, 'loc:the-mill', { placed: false }) === 'loc:the-mill' && keyOfPath(pack, 'loc:the-mill', { placed: true }) === '' && keyOfPath(pack, back, { placed: true }) === 'the-anchor');
+    const state = { where: { 'Old Marit': back, 'Captain Reyes': 'harbourside/the-docks/customs-house', 'Wanderer': 'loc:the-mill' }, visited: [{ id: 'back-room', packId: 'back-room', path: back, visits: ['m1'], image: '/user/images/back-room.png' }, { id: 'loc:the-mill', label: 'The old mill', visits: [], image: '' }] };
+    const onNode = peopleAt(pack, state, 'the-anchor', { placed: true, player: 'Jordan' });
+    const onChip = peopleAt(pack, state, 'the-anchor', { placed: false, player: 'Jordan' });
+    const inBack = peopleAt(pack, state, 'back-room', { placed: false, player: 'Jordan' });
+    check('the face on the node is the face on its sheet: a person at an unplaced sub-place is at the node on the picture, at the sub-place on the tree', same(onNode.people, ['Old Marit']) && onNode.player === true && same(onChip.people, []) && onChip.player === false && same(inBack.people, ['Old Marit']) && inBack.player === true);
+    check('the story\'s own place on the tree has its people', same(peopleAt(pack, state, 'loc:the-mill', { placed: false }).people, ['Wanderer']) && peopleAt(pack, state, 'loc:the-mill', { placed: true }).people.length === 0 && peopleAt(pack, state, '', { placed: false }).people.length === 0);
+    check('the party\'s place: the visited row\'s, by the board\'s rule; a `where` entry under the player\'s name wins when a state has one', partyAt(pack, state, { placed: true }) === 'the-anchor' && partyAt(pack, state, { placed: false }) === 'back-room' && playerPlace(pack, state, 'Jordan', { placed: false }) === 'back-room' && playerPlace(pack, { ...state, where: { ...state.where, Jordan: 'harbourside/the-docks/customs-house' } }, 'Jordan', { placed: true }) === 'customs-house' && partyAt(pack, { visited: [{ id: 'loc:the-mill', visits: [] }] }, { placed: false }) === 'loc:the-mill' && partyAt(pack, { visited: [] }) === '');
+    check('a story place\'s name: the row\'s label, else the id read as words', labelOfKey(state, 'loc:the-mill') === 'The old mill' && labelOfKey({ visited: [] }, 'loc:the-mill') === 'the mill' && labelOfKey(null, 'x') === 'x');
+    check('a place\'s picture: the one a scene drew, else the pack\'s art, else none', placeImage(pack, state, 'back-room') === '/user/images/back-room.png' && placeImage(pack, state, 'the-anchor') === (pack.places.find(p => p.id === 'the-anchor').image || '') && placeImage(pack, state, 'loc:the-mill') === '' && placeImage(pack, null, 'nowhere') === '');
+    check('a kept view belongs to a picture: its path and size', pictureKey({ image: 'a.png', width: 10, height: 20 }) === 'a.png|10x20' && pictureKey({ image: 'a.png', width: 10, height: 21 }) !== pictureKey({ image: 'a.png', width: 10, height: 20 }) && pictureKey({ image: '' }) === '' && pictureKey(null) === '');
 }
 
 console.log(`\n${failures === 0 ? 'All hub board checks pass' : `${failures} FAILURE(S)`}`);
