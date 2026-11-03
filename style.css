@@ -14274,6 +14274,38 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 .dooms-hub-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px 2px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 .dooms-hub-status { font-size: 0.8em; color: #8d8d9a; margin-right: auto; min-width: 0; }
 .dooms-hub-panel-title { font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; margin: 2px 2px 0; }
+/* The board (D124) beside the panels; on a phone, tabs and one at a time */
+.dooms-hub-main.is-board { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 12px; overflow: hidden; padding: 0; }
+.dooms-hub-tabs { display: none; }
+.dooms-hub-board-wrap { min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.dooms-hub-map { position: relative; flex: 1 1 auto; min-height: 240px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: #0b0b12; overflow: hidden; }
+.dooms-hub-map-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; text-align: center; pointer-events: none; }
+.dooms-hub-board-notes { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; font-size: 0.78em; color: #c9c9d6; line-height: 1.45; }
+.dooms-hub-board-note-label { font-weight: 600; color: #8d8d9a; text-transform: uppercase; font-size: 0.84em; letter-spacing: 0.06em; margin-right: 4px; }
+.dooms-hub-link { appearance: none; font: inherit; background: none; border: 0; padding: 0; color: #eaeaea; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.dooms-hub-link:hover, .dooms-hub-link:focus-visible { color: #fff; text-decoration-style: solid; }
+.dooms-hub-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+/* The tree board: regions as groups, each place a node like the picture's */
+.dooms-tree { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+.dooms-tree-hint { margin: 0 2px; }
+.dooms-tree-group { padding: 8px 10px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
+.dooms-tree-group.is-elsewhere { border-style: dashed; }
+.dooms-tree-title { font-size: 0.7em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; margin-bottom: 8px; }
+.dooms-tree-places { display: flex; flex-wrap: wrap; gap: 18px 10px; align-items: flex-start; }
+.dooms-tree-place { appearance: none; font: inherit; background: none; border: 0; padding: 4px 0 44px; margin: 0; cursor: pointer; width: 104px; min-width: 0; display: flex; justify-content: center; color: inherit; }
+.dooms-tree-place:focus-visible { outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 2px; border-radius: 10px; }
+.dooms-tree-head { position: relative; display: block; width: 48px; height: 48px; }
+.dooms-tree-head .dooms-node-label { width: 100px; max-width: 100px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.15; text-align: center; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* The place sheet */
+.dooms-hub-place-head { display: flex; gap: 14px; align-items: flex-start; }
+.dooms-hub-place-pic { flex: 0 0 auto; width: 112px; height: 112px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(20, 20, 30, 0.9) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: #8d8d9a; font-size: 2em; }
+.dooms-hub-place-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dooms-hub-place-you { color: var(--rpg-highlight, #e94560); }
+.dooms-hub-place-people, .dooms-hub-place-rumours, .dooms-hub-place-scenes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.88em; color: #d4d4de; }
+.dooms-hub-place-people li { display: flex; align-items: center; gap: 8px; }
+.dooms-hub-place-people .dooms-node-face { position: static; margin: 0; width: 24px; height: 24px; flex: 0 0 24px; font-size: 0.7em; transform: none; }
+.dooms-hub-place-rumours li { padding-left: 12px; border-left: 2px solid rgba(255, 255, 255, 0.18); line-height: 1.4; }
+.dooms-hub-place-scenes li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 /* The Scenes panel */
 .dooms-hub-scenes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .dooms-hub-scene { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; background: rgba(0, 0, 0, 0.14); }
@@ -14334,6 +14366,16 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     #rpg-hub-popup .rpg-settings-popup-content { width: 100%; max-width: 100%; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; margin: 0; border-radius: 0; }
     .dooms-hub-head-actions { margin-left: 0; width: 100%; }
     .dooms-hub-openers { grid-template-columns: 1fr; }
+    /* The board and the panels one at a time, under tabs */
+    .dooms-hub-main.is-board { display: flex; flex-direction: column; gap: 8px; }
+    .dooms-hub-tabs { display: flex; gap: 4px; flex: 0 0 auto; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.86em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+    .dooms-hub-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
+    .dooms-hub-main.is-board[data-panel="map"] .dooms-hub-side { display: none; }
+    .dooms-hub-main.is-board[data-panel="scenes"] .dooms-hub-board-wrap { display: none; }
+    .dooms-hub-board-wrap { flex: 1 1 auto; }
+    .dooms-hub-map { min-height: 50vh; }
+    .dooms-hub-place-head { flex-direction: column; }
     #dooms-scene-strip .dooms-strip-actions { margin-left: 0; width: 100%; }
     #dooms-scene-strip .dooms-strip-text span { white-space: normal; }
 }

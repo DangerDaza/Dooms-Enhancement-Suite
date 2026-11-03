@@ -8,6 +8,8 @@
  */
 import { escapeHtml } from '../../utils/html.js';
 import { GAPS, openSceneOf, hubStatusLine } from '../../utils/hub.js';
+import { safeImageUrl } from '../../utils/worldBoard.js';
+import { nodeHtml, initialsOf } from './hubBoard.js';
 
 export const POPUP_ID = 'rpg-hub-popup';
 export const STRIP_ID = 'dooms-scene-strip';
@@ -43,8 +45,11 @@ export function hubShellHtml() {
  * @param {object|null} o.sheet      { kind: 'start'|'picker'|'end', ... } or null
  * @param {string} o.note            the last result line
  * @param {boolean} o.liveWorldOn
+ * @param {{mode:'picture'|'tree',model?:object,tree?:object}|null} o.board  what the board draws (D124); null while a sheet is open
+ * @param {string} o.panel           the phone's tab: 'map' | 'scenes'
+ * @param {Function} o.portraits     name -> a portrait URL or ''
  */
-export function hubHtml({ worlds = [], worldId = '', pack = null, entry = null, card = null, sheet = null, note = '', liveWorldOn = true } = {}) {
+export function hubHtml({ worlds = [], worldId = '', pack = null, entry = null, card = null, sheet = null, note = '', liveWorldOn = true, board = null, panel = 'scenes', portraits = () => '' } = {}) {
     const name = pack ? pack.name : (worldId || 'No world');
     const facts = entry && entry.memory && entry.memory.facts ? entry.memory.facts : null;
     const date = facts && facts.date ? `${facts.date}${facts.time ? `, ${facts.time}` : ''}` : 'no scene ended yet';
@@ -66,15 +71,89 @@ export function hubHtml({ worlds = [], worldId = '', pack = null, entry = null, 
     if (sheet && sheet.kind === 'start') main = startSheetHtml(sheet);
     else if (sheet && sheet.kind === 'picker') main = pickerHtml(sheet);
     else if (sheet && sheet.kind === 'end') main = endSheetHtml(sheet);
+    else if (sheet && sheet.kind === 'place') main = placeSheetHtml({ ...sheet, portraits });
     else if (!liveWorldOn) main = `<div class="dooms-hub-empty">Live World is off. The hub is Live World's: switch it on in Settings → Live World.</div>`;
     else if (!worlds.length) main = `<div class="dooms-hub-empty">No world of your own yet. Build one in the World Builder (Settings → Live World), then pick its narrator card here.</div>`;
     else if (!card) main = `<div class="dooms-hub-empty">${e(name)} has no narrator card. A scene is a chat, and a chat belongs to a card: pick any card to narrate this world, or make one, in Settings → Live World → The Hub.</div>`;
-    else main = `<div class="dooms-hub-main">${scenesPanelHtml({ entry })}</div>`;
+    else main = boardMainHtml({ board, entry, panel, portraits });
     const foot = `<div class="dooms-hub-foot">
         <span class="dooms-hub-status">${e(note || hubStatusLine({ worldName: name, entry, cardName: card ? card.name : '' }))}</span>
         ${open && !sheet ? `<button type="button" class="rpg-accordion-action-btn" data-act="resume" data-id="${attr(open.id)}" title="The scene's chat in front"><i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i> Resume</button><button type="button" class="rpg-accordion-action-btn" data-act="end" data-id="${attr(open.id)}" title="End the scene and remember it"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>` : ''}
     </div>`;
     return `<div class="dooms-hub" data-sheet="${sheet ? attr(sheet.kind) : ''}">${head}${main}${foot}</div>`;
+}
+
+/**
+ * The main body (D124): the board on the left (the picture's frame, which
+ * the controller fills with Leaflet, or the tree board) and the panels on
+ * the right (the Scenes panel; the others come with Hub 10); on a phone,
+ * tabs across the top and one of them at a time.
+ */
+function boardMainHtml({ board, entry, panel = 'scenes', portraits = () => '' } = {}) {
+    const mode = board && board.mode === 'picture' ? 'picture' : 'tree';
+    const tabs = [['map', 'Map', 'fa-map'], ['scenes', 'Scenes', 'fa-clapperboard']];
+    const nav = `<nav class="dooms-hub-tabs" role="tablist" aria-label="The hub's panels">${tabs.map(([id, label, icon]) => `<button type="button" class="dooms-hub-tab${panel === id ? ' is-active' : ''}" role="tab" aria-selected="${panel === id ? 'true' : 'false'}" data-act="panel" data-panel="${id}"><i class="fa-solid ${icon}" aria-hidden="true"></i> ${label}</button>`).join('')}</nav>`;
+    const frame = mode === 'picture'
+        ? `<div class="dooms-hub-map" role="application" aria-label="The world's map: drag to pan, the wheel or a pinch to zoom, a node for its place"><p class="dooms-hub-map-wait dooms-hub-hint">The map is loading…</p></div>${boardNotesHtml(board && board.model ? board.model : null)}`
+        : treeBoardHtml(board && board.tree ? board.tree : { groups: [], elsewhere: [] }, { portraits });
+    return `<div class="dooms-hub-main is-board" data-panel="${attr(panel === 'map' ? 'map' : 'scenes')}">${nav}<section class="dooms-hub-board-wrap" data-mode="${mode}">${frame}</section><aside class="dooms-hub-side">${scenesPanelHtml({ entry })}</aside></div>`;
+}
+
+/** Under the picture: the places not on the map yet (each a way to its sheet) and the people whose place has no node. */
+function boardNotesHtml(model) {
+    if (!model) return '';
+    const unplaced = Array.isArray(model.unplaced) ? model.unplaced : [];
+    const elsewhere = Array.isArray(model.elsewhere) ? model.elsewhere : [];
+    if (!unplaced.length && !elsewhere.length) return '';
+    const places = unplaced.length ? `<span class="dooms-hub-board-note"><span class="dooms-hub-board-note-label">Not on the map yet</span> ${unplaced.map(p => `<button type="button" class="dooms-hub-link" data-act="place" data-id="${attr(p.id)}">${e(p.label || p.id)}</button>`).join(', ')} <span class="dooms-hub-hint">(the World Builder's Map tab places them)</span></span>` : '';
+    const people = elsewhere.length ? `<span class="dooms-hub-board-note"><span class="dooms-hub-board-note-label">Elsewhere</span> ${elsewhere.map(x => `${e(x.name)}${x.at ? ` <span class="dooms-hub-hint">(${e(x.at.startsWith('loc:') ? x.at.slice(4).replace(/-/g, ' ') : x.at)})</span>` : ''}`).join(', ')}</span>` : '';
+    return `<div class="dooms-hub-board-notes">${places}${people}</div>`;
+}
+
+/**
+ * The tree board (D124) for a world without a picture: regions as groups,
+ * each place a node (the same circle, faces and label as on the picture),
+ * the story's own places under Elsewhere. A node is a way to its sheet.
+ */
+export function treeBoardHtml({ groups = [], elsewhere = [] } = {}, { portraits = () => '' } = {}) {
+    const chip = (p) => `<button type="button" class="dooms-tree-place${p.isRegion ? ' is-region' : ''}${p.player ? ' is-player' : ''}" data-act="place" data-id="${attr(p.id)}" title="${attr(p.label)}${p.people && p.people.length ? `: ${attr(p.people.join(', '))}` : ''}"><span class="dooms-tree-head dooms-node is-hub${p.isRegion ? ' is-region' : ''}${p.player ? ' is-player' : ''}${p.visited === false ? ' is-unvisited' : ''}">${nodeHtml(p, { mode: 'hub', portraits })}</span></button>`;
+    const group = (g) => `<div class="dooms-tree-group" data-id="${attr(g.id)}"><div class="dooms-tree-title">${e(g.label)}</div><div class="dooms-tree-places">${g.places.map(chip).join('')}</div></div>`;
+    const body = groups.length ? groups.map(group).join('') : '<p class="dooms-hub-empty">This world has no places yet: the World Builder\'s Places tab adds them, and the story names its own as it goes.</p>';
+    const loose = elsewhere.length ? `<div class="dooms-tree-group is-elsewhere"><div class="dooms-tree-title">Elsewhere</div><div class="dooms-tree-places">${elsewhere.map(chip).join('')}</div></div>` : '';
+    return `<div class="dooms-tree" role="list" aria-label="The world's places"><p class="dooms-hub-hint dooms-tree-hint">No picture for this world yet: its places as a tree. The World Builder's Map tab takes a picture and puts them on it.</p>${body}${loose}</div>`;
+}
+
+/**
+ * The place sheet (D124, §4.3): the picture, the region, who is here, the
+ * rumours that name it, the scenes played there, Start a scene here.
+ */
+export function placeSheetHtml({ id = '', label = '', region = '', picture = '', people = [], player = false, rumours = [], scenes = [], canStart = true, portraits = () => '' } = {}) {
+    const img = safeImageUrl(picture);
+    const pic = img ? `<div class="dooms-hub-place-pic" style="background-image: url('${attr(img)}')" role="img" aria-label="${attr(label)}"></div>` : `<div class="dooms-hub-place-pic is-empty" aria-hidden="true"><i class="fa-solid fa-location-dot"></i></div>`;
+    const faces = people.length
+        ? `<ul class="dooms-hub-place-people">${people.map(n => { const u = safeImageUrl(portraits(n)); return `<li>${u ? `<span class="dooms-node-face has-picture" style="background-image: url('${attr(u)}')"></span>` : `<span class="dooms-node-face">${e(initialsOf(n))}</span>`}<span>${e(n)}</span></li>`; }).join('')}</ul>`
+        : '<p class="dooms-hub-hint">No one was last seen here.</p>';
+    const talk = rumours.length ? `<ul class="dooms-hub-place-rumours">${rumours.map(r => `<li>${e(r)}</li>`).join('')}</ul>` : '<p class="dooms-hub-hint">Nothing names it yet.</p>';
+    const played = scenes.length
+        ? `<ul class="dooms-hub-place-scenes">${scenes.map(s => `<li><span class="dooms-hub-scene-no">Scene ${e(sceneNo(s.id))}</span> <span>${e(s.title || 'Untitled')}</span> <span class="dooms-hub-hint">${e([s.status === 'open' ? 'open' : s.status === 'aside' ? 'set aside' : '', s.startDate ? `from ${s.startDate}` : '', s.endDate ? `to ${s.endDate}` : ''].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>`
+        : '<p class="dooms-hub-hint">No scene has been played here yet.</p>';
+    return `<div class="dooms-hub-sheet dooms-hub-sheet-place" data-id="${attr(id)}">
+        <div class="dooms-hub-place-head">
+            ${pic}
+            <div class="dooms-hub-place-titles">
+                <h4 class="dooms-hub-sheet-title">${e(label || id)}</h4>
+                ${region ? `<span class="dooms-hub-sub">${e(region)}</span>` : ''}
+                ${player ? '<span class="dooms-hub-sub dooms-hub-place-you">You are here</span>' : ''}
+            </div>
+        </div>
+        <div class="dooms-hub-field"><span class="dooms-hub-field-label">Who is here</span>${faces}</div>
+        <div class="dooms-hub-field"><span class="dooms-hub-field-label">What is said about it</span>${talk}</div>
+        <div class="dooms-hub-field"><span class="dooms-hub-field-label">Scenes played here</span>${played}</div>
+        <div class="dooms-hub-sheet-actions">
+            <button type="button" class="rpg-accordion-action-btn" data-act="start-here" data-id="${attr(id)}"${canStart ? '' : ' disabled'} title="${canStart ? 'The Start sheet with this place filled in' : 'Live World is off, or this world has no narrator card'}"><i class="fa-solid fa-play" aria-hidden="true"></i> Start a scene here</button>
+            <button type="button" class="rpg-accordion-action-btn" data-act="sheet-close">Back</button>
+        </div>
+    </div>`;
 }
 
 /** The Scenes panel (D122, D123, D128): the open scene first, then the set-aside ones, then the ended ones newest first. */

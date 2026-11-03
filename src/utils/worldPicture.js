@@ -9,7 +9,7 @@
  * ones, the region's weather; and what is not on the map yet.
  * tools/hub-board-test.mjs.
  */
-import { placeChain, placePath, fraction, normalizeMap } from './liveWorld.js';
+import { placeChain, placePath, fraction, normalizeMap, locLabel } from './liveWorld.js';
 
 export { fraction, normalizeMap };
 
@@ -151,4 +151,51 @@ export function boardModel({ pack, state = null, player = '', weather = {} } = {
         };
     });
     return { nodes, unplaced: unplacedPlaces(pack).map(p => ({ id: p.id, label: p.label })), elsewhere, playerAt };
+}
+
+/**
+ * What the tree board draws for a world without a picture (D124): the
+ * pack's places under their regions (the root places), each with the
+ * people last seen there, the player's place, the visited ones; the
+ * story's own places (the state's loc ids) under Elsewhere, with their
+ * people.
+ * @param {object} o
+ * @param {object} o.pack
+ * @param {object|null} o.state
+ * @param {string} o.player
+ * @returns {{ groups: Array<{id:string,label:string,places:Array}>, elsewhere: Array, playerAt: string }}
+ */
+export function treeModel({ pack, state = null, player = '' } = {}) {
+    const places = pack && Array.isArray(pack.places) ? pack.places : [];
+    const ids = new Set(places.map(p => p.id));
+    const visited = new Set(state && Array.isArray(state.visited) ? state.visited.map(v => v && v.id).filter(Boolean) : []);
+    const where = state && state.where && typeof state.where === 'object' ? state.where : {};
+    const people = new Map(places.map(p => [p.id, []]));
+    const elsewhere = new Map();
+    let playerAt = '';
+    const deepest = (path) => {
+        if (!path || typeof path !== 'string') return '';
+        const parts = path.split('/');
+        for (let i = parts.length - 1; i >= 0; i--) if (ids.has(parts[i])) return parts[i];
+        return '';
+    };
+    const other = (key) => { if (!elsewhere.has(key)) elsewhere.set(key, { id: key, label: key.startsWith('loc:') ? locLabel(key) : key, people: [] }); return elsewhere.get(key); };
+    for (const [name, at] of Object.entries(where)) {
+        const id = deepest(at);
+        if (player && name === player) { playerAt = id || String(at || ''); continue; }
+        if (id) people.get(id).push(name);
+        else if (at) other(String(at)).people.push(name);
+    }
+    for (const v of (state && Array.isArray(state.visited) ? state.visited : [])) {
+        if (v && typeof v.id === 'string' && v.id.startsWith('loc:') && !ids.has(v.id)) { const o = other(v.id); if (v.label) o.label = v.label; }
+    }
+    const one = (p, isRegion) => ({ id: p.id, label: p.label, image: p.image || '', isRegion, people: people.get(p.id), player: playerAt === p.id, visited: visited.has(p.id) || visited.has(placePath(pack, p.id)) });
+    const roots = places.filter(p => !p.parent);
+    const groups = roots.map(r => ({
+        id: r.id,
+        label: r.label,
+        places: [one(r, true), ...places.filter(p => p.parent && placeChain(pack, p.id)[0].id === r.id).map(p => one(p, false))],
+    }));
+    const loose = [...elsewhere.values()].map(x => ({ ...x, image: '', isRegion: false, player: playerAt === x.id, visited: visited.has(x.id) }));
+    return { groups, elsewhere: loose, playerAt };
 }

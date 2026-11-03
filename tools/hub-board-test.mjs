@@ -14,7 +14,7 @@ import { normalizePack } from '../src/utils/liveWorld.js';
 import { worldToRaw } from '../src/utils/worldBuilder.js';
 import {
     normalizeMap, fraction, hasMap, mapSize, nodeOf, placedPlaces, unplacedPlaces, boardBounds, nodeLatLng, latLngToNode,
-    withNode, withMap, boardModel, MAX_ZOOM_IN,
+    withNode, withMap, boardModel, treeModel, MAX_ZOOM_IN,
 } from '../src/utils/worldPicture.js';
 
 let failures = 0;
@@ -100,6 +100,24 @@ console.log('\n§5 what the board draws');
     check('what is not on the map yet, by label', m.unplaced.length === 5 && m.unplaced.some(p => p.id === 'old-town' && p.label));
     const bare = boardModel({ pack: normalizePack(file).pack });
     check('no picture, no state: nothing placed, nobody anywhere', bare.nodes.length === 0 && bare.unplaced.length === 8 && bare.elsewhere.length === 0 && bare.playerAt === '');
+}
+
+console.log('\n§6 what the tree board draws (a world without a picture)');
+{
+    const pack = normalizePack(file).pack;
+    const state = {
+        where: { 'Old Marit': 'harbourside/old-town/the-anchor/back-room', 'Captain Reyes': 'harbourside/the-docks/customs-house', 'Jordan': 'loc:the-mill', 'Wanderer': 'loc:the-mill', 'The governor': 'harbourside' },
+        visited: [{ id: 'back-room' }, { id: 'loc:the-mill', label: 'The old mill' }, { id: 'loc:a-road' }],
+    };
+    const t = treeModel({ pack, state, player: 'Jordan' });
+    const g = t.groups[0];
+    const at = (id) => g.places.find(p => p.id === id);
+    check('one region, the root, with every place of the pack under it, the region first and marked', t.groups.length === 1 && g.id === 'harbourside' && g.places.length === 8 && g.places[0].id === 'harbourside' && g.places[0].isRegion === true && at('back-room') && at('back-room').isRegion === false);
+    check('people at their own place, the region\'s own people on the region', same(at('back-room').people, ['Old Marit']) && same(at('customs-house').people, ['Captain Reyes']) && same(at('harbourside').people, ['The governor']) && at('the-anchor').people.length === 0);
+    check('visited is read from the state', at('back-room').visited === true && at('the-anchor').visited === false);
+    check('the story\'s own places under Elsewhere, named by their visit, with their people; the player there is marked', t.elsewhere.length === 2 && t.elsewhere[0].id === 'loc:the-mill' && t.elsewhere[0].label === 'The old mill' && same(t.elsewhere[0].people, ['Wanderer']) && t.elsewhere[0].player === true && t.playerAt === 'loc:the-mill' && t.elsewhere[1].id === 'loc:a-road' && t.elsewhere[1].people.length === 0);
+    const bare = treeModel({ pack });
+    check('no state: the places alone, nobody anywhere', bare.groups[0].places.every(p => p.people.length === 0 && !p.visited && !p.player) && bare.elsewhere.length === 0 && bare.playerAt === '');
 }
 
 console.log(`\n${failures === 0 ? 'All hub board checks pass' : `${failures} FAILURE(S)`}`);

@@ -2514,6 +2514,17 @@ body[data-dooms-ui] .dooms-hub-chip { background: var(--ov-panel); border-color:
 body[data-dooms-ui] .dooms-hub-chip.is-on { border-color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 14%, var(--ov-panel)); }
 body[data-dooms-ui] .dooms-hub-chip-here, body[data-dooms-ui] .dooms-hub-note { color: var(--ov-accent2); }
 body[data-dooms-ui] .dooms-hub-done, body[data-dooms-ui] .dooms-hub-step.is-ok .dooms-hub-step-state { color: var(--ov-accent); }
+/* The board, the tree board and the place sheet (docs/hub-plan.md D124) under the looks */
+body[data-dooms-ui] .dooms-hub-map, body[data-dooms-ui] .dooms-tree-group, body[data-dooms-ui] .dooms-hub-place-pic, body[data-dooms-ui] .dooms-hub-tabs { border-color: var(--ov-line); }
+body[data-dooms-ui] .dooms-tree-group { background: var(--ov-panel); border-radius: var(--ov-radius); }
+body[data-dooms-ui] .dooms-tree-title, body[data-dooms-ui] .dooms-hub-board-note-label, body[data-dooms-ui] .dooms-hub-tab { color: var(--ov-muted); }
+body[data-dooms-ui] .dooms-hub-tab.is-active { color: var(--ov-text); border-bottom-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-hub-board-notes, body[data-dooms-ui] .dooms-hub-place-people, body[data-dooms-ui] .dooms-hub-place-rumours, body[data-dooms-ui] .dooms-hub-place-scenes { color: var(--ov-text); }
+body[data-dooms-ui] .dooms-hub-link { color: var(--ov-text); }
+body[data-dooms-ui] .dooms-hub-place-you, body[data-dooms-ui] .dooms-tree-place:focus-visible { color: var(--ov-accent); outline-color: var(--ov-accent); }
+body[data-dooms-ui] .dooms-node.is-player .dooms-node-circle { box-shadow: 0 0 0 3px var(--ov-accent), 0 2px 8px rgba(0, 0, 0, 0.6); }
+body[data-dooms-ui] .dooms-node-face.is-more { background: var(--ov-accent); }
+body[data-dooms-ui] .dooms-node.is-edit:hover .dooms-node-circle { border-color: var(--ov-accent); }
 body[data-dooms-ui] .dooms-hub-step.is-running .dooms-hub-step-state { color: var(--ov-text); }
 body[data-dooms-ui="lumen"] .dooms-hub-head, body[data-dooms-ui="lumen"] .dooms-hub-scene, body[data-dooms-ui="lumen"] .dooms-hub-card, body[data-dooms-ui="lumen"] .dooms-hub-empty, body[data-dooms-ui="lumen"] #dooms-scene-strip { border-radius: 14px; }
 body[data-dooms-ui="lumen"] .dooms-hub-chip, body[data-dooms-ui="lumen"] .dooms-hub-scene-tag { border-radius: 999px; }

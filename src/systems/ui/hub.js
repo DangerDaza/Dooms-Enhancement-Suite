@@ -10,7 +10,10 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
-import { normalizeWorldState, placePath, placeChain, isLocId, locLabel, sameName } from '../../utils/liveWorld.js';
+import { normalizeWorldState, placePath, placeChain, isLocId, locLabel, sameName, seedWorldState, publicEffects } from '../../utils/liveWorld.js';
+import { boardModel, treeModel, hasMap, mapSize } from '../../utils/worldPicture.js';
+import { safeImageUrl } from '../../utils/worldBoard.js';
+import { resolvePortrait } from './portraitBar.js';
 import { gapOf, describeStartResult, describeEndResult, hubConfig } from '../../utils/hub.js';
 import { isLiveWorldOn, loadPack } from '../features/liveWorld.js';
 import {
@@ -25,8 +28,13 @@ let isOpen = false;
 let worldId = '';
 let worlds = [];
 let pack = null;
-let sheet = null;       // { kind: 'start' | 'picker' | 'end', ... }
+let sheet = null;       // { kind: 'start' | 'picker' | 'end' | 'place', ... }
 let note = '';
+let panel = 'scenes';   // the phone's tab: 'map' | 'scenes'
+let board = null;       // the board (Leaflet's host) while the picture shows
+let boardView = null;   // its view, kept across re-renders
+let boardToken = 0;     // a mount that outlives its render is dropped
+const sizeCache = new Map();    // world id -> the picture's size read from the image when the pack does not carry it
 
 function $body() {
     return $(`#${POPUP_ID} .dooms-hub-body`);
@@ -56,8 +64,107 @@ async function refresh() {
 function render() {
     const $b = $body();
     if (!$b.length) return;
+    unmountHubBoard();
     const entry = worldId ? worldEntry(worldId) : null;
-    $b.html(hubHtml({ worlds, worldId, pack, entry, card: worldId ? cardOf(worldId) : null, sheet, note, liveWorldOn: isLiveWorldOn() && isHubOn() }));
+    const card = worldId ? cardOf(worldId) : null;
+    const on = isLiveWorldOn() && isHubOn();
+    const data = !sheet && pack && card && on ? boardFor(entry) : null;
+    $b.html(hubHtml({ worlds, worldId, pack, entry, card, sheet, note, liveWorldOn: on, board: data, panel, portraits: portraitOf }));
+    if (data && data.mode === 'picture') mountHubBoard(data);
+}
+
+// ─── The board (D124) ───────────────────────────────────────────────────
+
+function portraitOf(name) {
+    try { return resolvePortrait(name) || ''; } catch (e) { return ''; }
+}
+
+/** The player's name: the one the memory was taken under, else the persona in front. */
+function playerName(entry) {
+    if (entry && entry.memory && entry.memory.player) return entry.memory.player;
+    try { const ctx = window.SillyTavern && window.SillyTavern.getContext ? window.SillyTavern.getContext() : null; return ctx && ctx.name1 ? String(ctx.name1) : ''; } catch (e) { return ''; }
+}
+
+/** The world state the board shows: the memory's, or the pack's fresh seed while no scene has ended. */
+function worldStateFor(entry) {
+    const stored = entry && entry.memory && entry.memory.stores && entry.memory.stores.dooms_world ? normalizeWorldState(entry.memory.stores.dooms_world) : null;
+    return stored || (pack ? seedWorldState(pack, { name: '' }) : null);
+}
+
+function boardFor(entry) {
+    if (!pack) return null;
+    const state = worldStateFor(entry);
+    const player = playerName(entry);
+    return hasMap(pack)
+        ? { mode: 'picture', model: boardModel({ pack, state, player }), tree: null }
+        : { mode: 'tree', model: null, tree: treeModel({ pack, state, player }) };
+}
+
+function unmountHubBoard() {
+    if (!board) return;
+    try { boardView = board.view(); board.destroy(); } catch (e) { /* the frame is gone already */ }
+    board = null;
+}
+
+function readImageSize(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error('the picture could not be read'));
+        img.src = url;
+    });
+}
+
+/** Leaflet over the world's picture in the hub's frame, the nodes a way to their sheets. */
+async function mountHubBoard(data) {
+    const host = document.querySelector(`#${POPUP_ID} .dooms-hub-map`);
+    if (!host || !pack || !hasMap(pack)) return;
+    const token = ++boardToken;
+    const id = worldId;
+    let size = mapSize(pack) || sizeCache.get(id) || null;
+    if (!size) {
+        try { size = await readImageSize(safeImageUrl(pack.map.image)); sizeCache.set(id, size); } catch (e) { host.innerHTML = '<p class="dooms-hub-map-wait dooms-hub-hint">The picture could not be read. The World Builder\'s Map tab can upload it again.</p>'; return; }
+    }
+    let mod;
+    try {
+        mod = await import('./hubBoard.js');
+        await ensureCss('leaflet', mod.LEAFLET_CSS);
+    } catch (e) { host.innerHTML = `<p class="dooms-hub-map-wait dooms-hub-hint">The map could not load: ${e && e.message ? e.message : e}</p>`; return; }
+    if (token !== boardToken || !isOpen || sheet || worldId !== id || !document.body.contains(host)) return;
+    host.innerHTML = '';
+    board = await mod.mountBoard(host, {
+        picture: { ...pack.map, ...size },
+        nodes: data.model.nodes,
+        mode: 'hub',
+        portraits: portraitOf,
+        view: boardView,
+        on: { node: (placeId) => openPlace(placeId) },
+    });
+    if (token !== boardToken || !document.body.contains(host)) { try { board.destroy(); } catch (e) { /* gone */ } board = null; return; }
+    boardView = null;
+}
+
+/** The place sheet's data: the place, its region, its picture, who is here, what names it, the scenes played there. */
+function placeSheetData(id) {
+    const entry = worldEntry(worldId);
+    const state = worldStateFor(entry);
+    const place = pack ? pack.places.find(x => x.id === id) : null;
+    const tree = pack ? treeModel({ pack, state, player: playerName(entry) }) : { groups: [], elsewhere: [] };
+    const node = [...tree.groups.flatMap(g => g.places), ...tree.elsewhere].find(x => x.id === id) || null;
+    const label = place ? place.label : (node ? node.label : (isLocId(id) ? locLabel(id) : id));
+    const chain = place ? placeChain(pack, id) : [];
+    const region = chain.length > 1 ? chain[0].label : '';
+    const low = String(label || '').toLowerCase();
+    const rumours = pack && state ? publicEffects(state, pack).filter(x => String(x.text || '').toLowerCase().includes(low) || (pack.clocks.find(c => c.id === x.id) || {}).place === id).map(x => x.text) : [];
+    const scenes = entry ? entry.scenes.filter(s => s.place && (s.place.id === id || (!s.place.id && label && sameName(s.place.label, label)))).map(s => ({ id: s.id, title: s.title, status: s.status, startDate: s.startDate, endDate: s.endDate })) : [];
+    const card = cardOf(worldId);
+    return { kind: 'place', id, label, region, picture: place ? place.image : '', people: node ? node.people : [], player: !!(node && node.player), rumours, scenes, canStart: !!card && isLiveWorldOn() };
+}
+
+function openPlace(id) {
+    if (!id) return;
+    sheet = placeSheetData(id);
+    render();
 }
 
 // ─── The Start sheet ────────────────────────────────────────────────────
@@ -201,6 +308,7 @@ function build() {
         worldId = String($(this).val() || '');
         sheet = null;
         note = '';
+        boardView = null;
         await refresh();
         render();
     });
@@ -215,6 +323,9 @@ function build() {
         const id = this.getAttribute('data-id') || '';
         try {
             if (act === 'settings') { closeHub(); try { openSettingsPopup(); } catch (e) { /* the settings popup is not mounted yet */ } return; }
+            if (act === 'panel') { panel = this.getAttribute('data-panel') === 'map' ? 'map' : 'scenes'; render(); return; }
+            if (act === 'place') { openPlace(id); return; }
+            if (act === 'start-here') { const d = placeSheetData(id); openStart({ place: { id, label: d.label } }); return; }
             if (act === 'start') { openStart(); return; }
             if (act === 'start-go') { await startGo(); return; }
             if (act === 'sheet-close') { if (sheet && sheet.kind === 'picker') cancelStart(); sheet = null; await refresh(); render(); return; }
@@ -270,8 +381,8 @@ export async function openHub({ worldId: id = '', start = false, end = false, se
     await refresh();
     if (worldId) { try { await refreshScenes(worldId); } catch (e) { /* the list stands as it is */ } }
     sheet = null;
+    $(`#${POPUP_ID}`).css('display', 'flex');    // shown before the render, so the board's frame has its size when Leaflet fits the picture
     render();
-    $(`#${POPUP_ID}`).css('display', 'flex');
     if (end) await openEnd();
     else if (start) openStart({ seed, place, cast });
 }
@@ -287,6 +398,8 @@ export function closeHub() {
     isOpen = false;
     if (sheet && sheet.kind === 'picker') cancelStart();
     sheet = null;
+    unmountHubBoard();
+    boardView = null;
     $(`#${POPUP_ID}`).css('display', 'none');
 }
 
