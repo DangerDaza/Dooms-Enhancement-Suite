@@ -14,6 +14,7 @@ import { hasMap, mapSize, withMap, withNode, boardModel } from '../../utils/worl
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBase64Async, saveBase64AsFile } from '../../../../../../utils.js';
 import { renderImage, sourceProblem } from '../features/imageGen.js';
+import { pushWindow, popWindow, isTopmost } from './windowStack.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
     TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
@@ -453,7 +454,7 @@ function build() {
     const root = `#${POPUP_ID}`;
     $(document).on('click', '#dooms-wb-close', close);
     $(document).on('click', root, (ev) => { if (ev.target && ev.target.id === POPUP_ID) close(); });
-    $(document).on('keydown', (ev) => { if (ev.key === 'Escape' && isOpen) close(); });
+    $(document).on('keydown', (ev) => { if (ev.key === 'Escape' && isOpen && isTopmost('builder')) close(); });
     $(document).on('click', `${root} [data-act]`, async function (ev) {
         const act = this.getAttribute('data-act');
         if (act === 'open') { await openWorld(this.getAttribute('data-id') || ''); return; }
@@ -466,6 +467,14 @@ function build() {
         if (act === 'export') { exportFile(); return; }
         if (act === 'delete') { await remove(); return; }
         if (act === 'use') { useForNewChats(); return; }
+        if (act === 'play') {    // the hub on this world (docs/hub-plan.md D127)
+            const id = selectedId;
+            if (!id || id === 'new' || !discardOk()) return;
+            dirty = false;
+            close();
+            import('./hub.js').then(m => m.openHub({ worldId: id })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+            return;
+        }
         if (act === 'tab') { const t = this.getAttribute('data-tab'); if (WB_TABS.some(x => x.id === t)) { tab = t; mapPicked = ''; render(); } return; }
         if (!draft) return;
         if (act === 'map-upload') { pickMapFile(); return; }
@@ -516,6 +525,7 @@ export async function openWorldBuilder({ id = '', fromChat = false } = {}) {
     try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;
+    pushWindow('builder');
     await refreshWorlds();
     if (fromChat) {
         const raw = worldFromThisChat();
@@ -543,6 +553,7 @@ function close() {
     if (!isOpen) return;
     if (!discardOk()) return;
     isOpen = false;
+    popWindow('builder');
     unmountMap();
     boardView = null;
     $(`#${POPUP_ID}`).css('display', 'none');

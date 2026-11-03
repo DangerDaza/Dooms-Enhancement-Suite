@@ -14,6 +14,8 @@
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
+import { isScene } from '../features/hub.js';
+import { pushWindow, popWindow, isTopmost } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { rowIdForCharacter } from '../../utils/worldMap.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -106,6 +108,9 @@ function render() {
     $edit.attr('title', blank
         ? 'Keep what this chat grew as a world of your own: its places and its people, named, kept and editable; the chat carries over to it'
         : 'Open this chat\'s world in the World Builder');
+    let scene = false;
+    try { scene = isScene(); } catch (e) { scene = false; }
+    $(`#${POPUP_ID} #rpg-world-hub`).toggle(scene);    // the Hub in a scene chat (docs/hub-plan.md D116, D127)
 }
 
 /** The circle of a place brought into view (smoothly, when the browser can). */
@@ -162,6 +167,7 @@ function build() {
                     <button id="rpg-world-advance-now" class="rpg-accordion-action-btn" type="button" title="Run the plot advancer now (the same as /advance)"><i class="fa-solid fa-forward"></i> Advance now</button>
                     <button id="rpg-world-refresh" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
                     <button id="rpg-world-edit" class="rpg-accordion-action-btn" type="button" title="Open this chat's world in the World Builder"><i class="fa-solid fa-earth-europe"></i> <span>Edit this world</span></button>
+                    <button id="rpg-world-hub" class="rpg-accordion-action-btn" type="button" title="This scene's world in the Hub: its map, its news, its scenes" style="display: none;"><i class="fa-solid fa-compass"></i> Hub</button>
                     <span class="dooms-world-result"></span>
                 </footer>
             </div>
@@ -169,6 +175,10 @@ function build() {
     $(document).on('click', '#rpg-close-world', closeWorldDashboard);
     $(document).on('click', `#${POPUP_ID}`, (e) => { if (e.target && e.target.id === POPUP_ID) closeWorldDashboard(); });
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
+    $(document).on('click', '#rpg-world-hub', () => {
+        closeWorldDashboard();
+        import('./hub.js').then(m => m.openHub()).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+    });
     $(document).on('click', '#rpg-world-edit', () => {
         const s = getWorldState();
         const pack = getActivePack();
@@ -255,7 +265,7 @@ function build() {
         }
         render();
     });
-    $(document).on('keydown', (e) => { if (e.key === 'Escape' && isOpen && !isFacePopoverOpen()) closeWorldDashboard(); });
+    $(document).on('keydown', (e) => { if (e.key === 'Escape' && isOpen && isTopmost('map') && !isFacePopoverOpen()) closeWorldDashboard(); });
     window.addEventListener(WORLD_CHANGED_EVENT, onChanged);
     window.addEventListener(QUESTS_DONE_CHANGED_EVENT, () => { if (isOpen) render(); });
     // The Hooks panel (docs/hooks-canon-plan.md D104): a round asked for; a hook taken (a quest on the shelf), taken
@@ -294,6 +304,7 @@ export async function openWorldDashboard({ name = '', place = '' } = {}) {
     try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;
+    pushWindow('map');
     lastResult = '';
     if (place) selected = String(place);
     try { recordCurrentScene(); } catch (e) { /* the row stays as it is */ }    // the place the chat stands in, if the row never saw its reply
@@ -305,6 +316,7 @@ export async function openWorldDashboard({ name = '', place = '' } = {}) {
 
 export function closeWorldDashboard() {
     isOpen = false;
+    popWindow('map');
     closeFacePopover();
     $(`#${POPUP_ID}`).css('display', 'none');
 }

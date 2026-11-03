@@ -72,12 +72,19 @@ const boardState = { ...M.seedWorldState(pack), where: { 'Old Marit': 'harboursi
 const picPack = { ...pack, map: { image: '/user/images/des-worlds/harbourside-map.png', width: 1600, height: 1000, source: 'upload' }, places: pack.places.map(p => (p.id === 'the-anchor' ? { ...p, x: 0.2, y: 0.7 } : p.id === 'customs-house' ? { ...p, x: 0.6, y: 0.3 } : p.id === 'harbourside' ? { ...p, x: 0.5, y: 0.5 } : p)) };
 const boardPicture = { mode: 'picture', model: P.boardModel({ pack: picPack, state: boardState, player: 'Jordan' }), tree: null };
 const boardTree = { mode: 'tree', model: null, tree: P.treeModel({ pack, state: boardState, player: 'Jordan' }) };
+const world = { state: boardState, pack: picPack, cfg: M.liveWorldConfig(null) };
+const hooksFixture = { proposed: [{ id: 'h2', title: 'The cutter\'s papers', text: 'Get a look at the cutter\'s manifest at the customs house before Reyes files it.', grounds: 'the blockade', kind: 'clock' }, { id: 'h3', title: 'Marit\'s errand', text: 'Carry Old Marit\'s message to the governor\'s house by dusk, past the watch on the hill road.', grounds: 'Old Marit', kind: 'person' }], taken: [{ id: 'h1', title: 'An errand for Marit' }], aside: [], last: { ok: false, error: 'the line was busy' } };
 const placeSheet = { kind: 'place', id: 'the-anchor', label: 'The Anchor, a tavern', region: 'Harbourside', picture: '', people: ['Old Marit', 'A nameless courier with a very long name indeed'], player: true, rumours: ['A navy cutter sits at the harbour mouth and every hold is searched; the Anchor is full of sailors with nowhere to sail.'], scenes: [{ id: 's2', title: 'A quiet corner in the back room of the Anchor where everything is heard', status: 'ended', startDate: 'Day 12', endDate: 'Day 13' }, { id: 's5', title: 'Rain on the quay', status: 'open', startDate: 'Day 14' }], canStart: true };
 const scenes = [
     { name: 'hub', html: V.hubHtml({ ...sheetBase, note: '', board: boardTree }) },
     { name: 'board', html: V.hubHtml({ ...sheetBase, pack: picPack, note: '', board: boardPicture, panel: 'scenes' }) },
     { name: 'board-map', html: V.hubHtml({ ...sheetBase, pack: picPack, note: '', board: boardPicture, panel: 'map' }) },
     { name: 'board-tree-map', html: V.hubHtml({ ...sheetBase, note: '', board: boardTree, panel: 'map' }) },
+    { name: 'board-news', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'news', world }) },
+    { name: 'board-rumours', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'rumours', world }) },
+    { name: 'board-hooks', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: hooksFixture }) },
+    { name: 'board-hooks-busy', html: V.hubHtml({ ...sheetBase, pack: picPack, board: boardPicture, panel: 'hooks', world, hooks: { proposed: [], taken: [], aside: [], last: null }, hooksBusy: true }) },
+    { name: 'board-people', html: V.hubHtml({ ...sheetBase, board: boardTree, panel: 'people', world: { ...world, pack } }) },
     { name: 'place', html: V.hubHtml({ ...sheetBase, sheet: placeSheet }) },
     { name: 'place-bare', html: V.hubHtml({ ...sheetBase, sheet: { kind: 'place', id: 'loc:the-mill', label: 'The old mill', region: '', picture: '', people: [], player: false, rumours: [], scenes: [], canStart: false } }) },
     { name: 'hub-two-worlds', html: V.hubHtml({ ...sheetBase, worlds: twoWorlds, note: 'Scene 5 is open at The quay.', board: boardTree }) },
@@ -161,14 +168,21 @@ for (const w of WIDTHS) {
                     const tabs = main.querySelector('.dooms-hub-tabs');
                     const shown = (el) => el && el.getBoundingClientRect().height > 0;
                     const onMap = main.getAttribute('data-panel') === 'map';
+                    const sideNav = main.querySelector('.dooms-hub-side-nav');
+                    const sideBody = main.querySelector('.dooms-hub-side-body');
                     if (phone) {
                         if (!shown(tabs)) faults.push('the phone has no tabs over the board');
+                        if (shown(sideNav)) faults.push('the phone shows the side nav as well as the tabs');
+                        if (!onMap && !shown(sideBody)) faults.push('the panel tab shows no panel');
                         if (onMap && shown(side)) faults.push('the Map tab shows the panels too');
                         if (!onMap && (shown(frame) || shown(tree))) faults.push('the Scenes tab shows the board too');
                         if (onMap && frame && frame.getBoundingClientRect().height < window.innerHeight * 0.4) faults.push(`the map is only ${Math.round(frame.getBoundingClientRect().height)}px tall on the phone`);
                     } else {
                         if (shown(tabs)) faults.push('the desktop shows the phone\'s tabs');
                         if (!shown(side)) faults.push('the panels are not shown beside the board');
+                        if (!shown(sideNav)) faults.push('the side has no nav');
+                        if (sideBody && sideBody.scrollWidth > sideBody.clientWidth + 1) faults.push(`the panel scrolls sideways (${sideBody.scrollWidth} > ${sideBody.clientWidth})`);
+                        main.querySelectorAll('.dooms-hub-side-tab').forEach(el => inside(el, `the side tab "${el.textContent.trim()}"`));
                         if (frame && frame.getBoundingClientRect().height < 240) faults.push(`the map frame is ${Math.round(frame.getBoundingClientRect().height)}px tall`);
                         if (frame && side && frame.getBoundingClientRect().right > side.getBoundingClientRect().left) faults.push('the map frame overlaps the panels');
                     }

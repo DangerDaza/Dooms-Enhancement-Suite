@@ -10,7 +10,9 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { ensureCss } from '../../core/cssLoader.js';
-import { normalizeWorldState, placePath, placeChain, isLocId, locLabel, sameName, seedWorldState, publicEffects } from '../../utils/liveWorld.js';
+import { normalizeWorldState, placePath, placeChain, isLocId, locLabel, sameName, seedWorldState, publicEffects, liveWorldConfig } from '../../utils/liveWorld.js';
+import { describeHooksResult } from '../../utils/questHooks.js';
+import { pushWindow, popWindow, isTopmost } from './windowStack.js';
 import { boardModel, treeModel, hasMap, mapSize } from '../../utils/worldPicture.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { resolvePortrait } from './portraitBar.js';
@@ -19,9 +21,10 @@ import { isLiveWorldOn, loadPack } from '../features/liveWorld.js';
 import {
     HUB_CHANGED_EVENT, isHubOn, hubWorldIds, worldEntry, cardOf, currentScene, prepareScene, pendingStart, askOpenersAgain, cancelStart, commitScene,
     prepareEnd, commitEnd, setSceneAside, resumeScene, openSceneChat, refreshScenes, removeGoneScene,
+    hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside,
 } from '../features/hub.js';
 import { openSettingsPopup } from './modals.js';
-import { POPUP_ID, hubShellHtml, hubHtml } from './hubViews.js';
+import { POPUP_ID, HUB_PANELS, hubShellHtml, hubHtml } from './hubViews.js';
 
 let built = false;
 let isOpen = false;
@@ -30,7 +33,7 @@ let worlds = [];
 let pack = null;
 let sheet = null;       // { kind: 'start' | 'picker' | 'end' | 'place', ... }
 let note = '';
-let panel = 'scenes';   // the phone's tab: 'map' | 'scenes'
+let panel = '';         // the side panel (HUB_PANELS), or 'map' for the phone's board; chosen on the first open
 let board = null;       // the board (Leaflet's host) while the picture shows
 let boardView = null;   // its view, kept across re-renders
 let boardToken = 0;     // a mount that outlives its render is dropped
@@ -69,7 +72,8 @@ function render() {
     const card = worldId ? cardOf(worldId) : null;
     const on = isLiveWorldOn() && isHubOn();
     const data = !sheet && pack && card && on ? boardFor(entry) : null;
-    $b.html(hubHtml({ worlds, worldId, pack, entry, card, sheet, note, liveWorldOn: on, board: data, panel, portraits: portraitOf }));
+    const world = pack ? { state: worldStateFor(entry), pack, cfg: liveWorldConfig(extensionSettings) } : null;
+    $b.html(hubHtml({ worlds, worldId, pack, entry, card, sheet, note, liveWorldOn: on, board: data, panel, portraits: portraitOf, world, hooks: worldId ? hubHooks(worldId) : null, hooksBusy: worldId ? isHooksBusy(worldId) : false }));
     if (data && data.mode === 'picture') mountHubBoard(data);
 }
 
@@ -165,6 +169,21 @@ function openPlace(id) {
     if (!id) return;
     sheet = placeSheetData(id);
     render();
+}
+
+/** A person as a way in (§4.1): the Start sheet with them, at the place they were last seen. */
+function startWithPerson(name) {
+    const entry = worldEntry(worldId);
+    const state = worldStateFor(entry);
+    const at = state && state.where ? String(state.where[name] || '') : '';
+    let place = null;
+    if (at && pack) {
+        const ids = new Set(pack.places.map(p => p.id));
+        const parts = at.split('/');
+        for (let i = parts.length - 1; i >= 0 && !place; i--) if (ids.has(parts[i])) { const p = pack.places.find(x => x.id === parts[i]); place = { id: p.id, label: p.label }; }
+        if (!place && isLocId(at)) place = { label: locLabel(at) };
+    }
+    openStart({ seed: { kind: 'person', label: name, text: '' }, place, cast: [name] });
 }
 
 // ─── The Start sheet ────────────────────────────────────────────────────
@@ -299,7 +318,7 @@ function build() {
     $(document).on('click', '#dooms-hub-close', closeHub);
     $(document).on('click', root, (ev) => { if (ev.target && ev.target.id === POPUP_ID) closeHub(); });
     $(document).on('keydown', (ev) => {
-        if (ev.key !== 'Escape' || !isOpen) return;
+        if (ev.key !== 'Escape' || !isOpen || !isTopmost('hub')) return;
         // A sheet on top closes first; the hub under it stays (one topmost thing at a time).
         if (sheet) { if (sheet.busy || (sheet.states && Object.values(sheet.states).includes('running'))) return; if (sheet.kind === 'picker') cancelStart(); sheet = null; render(); return; }
         closeHub();
@@ -323,7 +342,10 @@ function build() {
         const id = this.getAttribute('data-id') || '';
         try {
             if (act === 'settings') { closeHub(); try { openSettingsPopup(); } catch (e) { /* the settings popup is not mounted yet */ } return; }
-            if (act === 'panel') { panel = this.getAttribute('data-panel') === 'map' ? 'map' : 'scenes'; render(); return; }
+            if (act === 'panel') { const p = this.getAttribute('data-panel') || ''; panel = p === 'map' || HUB_PANELS.some(x => x.id === p) ? p : 'news'; render(); return; }
+            if (act === 'hooks-propose') { note = 'Asking the world for hooks…'; render(); const r = await proposeHubHooks(worldId); note = describeHooksResult(r); render(); return; }
+            if (act === 'hook-aside') { setHubHookAside(worldId, id); render(); return; }
+            if (act === 'hook-play') { const h = hubHooks(worldId).proposed.find(x => x.id === id); if (h) openStart({ seed: { kind: 'hook', id: h.id, label: h.title, text: h.text } }); return; }
             if (act === 'place') { openPlace(id); return; }
             if (act === 'start-here') { const d = placeSheetData(id); openStart({ place: { id, label: d.label } }); return; }
             if (act === 'start') { openStart(); return; }
@@ -357,12 +379,24 @@ function build() {
         }
         ev.preventDefault();
     });
+    // Every line of the News and Rumours panels and every face of the People panel is a way in (§4.1).
+    $(document).on('click', `${root} .dooms-hub-ways[data-way="news"] .dooms-map-changes li, ${root} .dooms-hub-ways[data-way="rumour"] .dooms-world-effects li`, function () {
+        const text = String(this.textContent || '').trim();
+        const kind = this.closest('.dooms-hub-ways').getAttribute('data-way') === 'rumour' ? 'rumour' : 'news';
+        if (text) openStart({ seed: { kind, text } });
+    });
+    $(document).on('click', `${root} .dooms-hub-ways[data-way="person"] .dooms-world-card[data-name]`, function (ev) {
+        ev.preventDefault();
+        const name = String(this.getAttribute('data-name') || '');
+        if (name) startWithPerson(name);
+    });
+    $(document).on('change', `${root} .dooms-hub-ways .dooms-map-feed`, function () { render(); });    // the Map window's feed control is not the hub's: the panel keeps its latest twelve
     window.addEventListener(HUB_CHANGED_EVENT, async (ev) => {
         if (!isOpen) return;
         const source = ev && ev.detail ? ev.detail.source : '';
         if (source === 'chat' && sheet && (sheet.kind === 'picker' || sheet.kind === 'end') && (sheet.busy || (sheet.states && Object.values(sheet.states).includes('running')))) return;    // a sheet mid-request keeps its own state
         if (source === 'chat' && sheet && sheet.kind === 'end') return;    // End's own chat change (the resume before it) is not a reason to drop the sheet
-        if (['end', 'start', 'gap', 'bind', 'unbind', 'refresh', 'chat-gone', 'reopen', 'aside', 'resume'].includes(source) && !sheet) render();
+        if (['end', 'start', 'gap', 'bind', 'unbind', 'refresh', 'chat-gone', 'reopen', 'aside', 'resume', 'hooks', 'hooks-failed', 'hook-aside', 'hooks-start', 'hooks-end'].includes(source) && !sheet) render();
     });
 }
 
@@ -375,7 +409,9 @@ export async function openHub({ worldId: id = '', start = false, end = false, se
     try { await ensureCss('modals'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;
+    pushWindow('hub');
     note = '';
+    if (!panel) { try { panel = window.matchMedia && window.matchMedia('(max-width: 640px)').matches ? 'map' : 'news'; } catch (e) { panel = 'news'; } }
     if (id) worldId = id;
     if (!id && end) { const cur = currentScene(); if (cur) worldId = cur.worldId; }
     await refresh();
@@ -396,6 +432,7 @@ export async function openEndSheet() {
 
 export function closeHub() {
     isOpen = false;
+    popWindow('hub');
     if (sheet && sheet.kind === 'picker') cancelStart();
     sheet = null;
     unmountHubBoard();

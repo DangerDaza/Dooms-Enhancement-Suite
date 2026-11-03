@@ -375,5 +375,29 @@ console.log('\n§6 the chat changing under End; Live World off');
     hub.__setChatBridge(null);
 }
 
+console.log('\n§7 hooks over the memory (§4.4)');
+{
+    extensionSettings.liveWorld.enabled = true;
+    resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-h7';
+    hub.onHubChatChanged();
+    for (const s of hub.worldEntry('harbourside').scenes) if (s.status === 'open') hub.setSceneAside('harbourside', s.id);
+    let hooksPrompt = null;
+    hub.__setHooksTransport(async (prompt) => { hooksPrompt = prompt; return '{"hooks":[{"title":"The cutter\'s papers","text":"Get a look at the cutter\'s manifest at the customs house before Reyes files it.","grounds":"the blockade","kind":"clock"},{"title":"Marit\'s errand","text":"Carry Old Marit\'s message to the governor\'s house by dusk.","grounds":"Old Marit","kind":"person"}]}'; });
+    const r = await hub.proposeHubHooks('harbourside');
+    const round = hub.hubHooks('harbourside');
+    check('a round asked over the memory: the prompt reads the snapshot and the recaps stand in for recent scenes; two hooks written into the memory, sealed (no reply id)', r.ok && r.hooks.length === 2 && !!hooksPrompt && hooksPrompt.user.includes('Recent scenes') && hooksPrompt.user.includes('World: Harbourside') && round.proposed.length === 2 && round.proposed[0].msgId === null, JSON.stringify(r));
+    const ids = round.proposed.map(h => h.id);
+    check('a hook set aside leaves the round and is remembered; an unknown id changes nothing', hub.setHubHookAside('harbourside', ids[1]) === true && hub.hubHooks('harbourside').proposed.length === 1 && hub.hubHooks('harbourside').aside.length === 1 && hub.setHubHookAside('harbourside', 'nope') === false);
+    hub.__setHooksTransport(async () => 'nothing of the kind');
+    const bad = await hub.proposeHubHooks('harbourside');
+    check('a reply with no hooks: the round stays, the failure noted', !bad.ok && bad.reason === 'invalid' && hub.hubHooks('harbourside').proposed.length === 1 && hub.hubHooks('harbourside').last.ok === false, JSON.stringify(bad));
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 5","time":"noon"},"openers":[{"title":"The manifest","text":"The customs house hums with the morning\'s business.","who":["Captain Reyes"]}]}');
+    const hook = hub.hubHooks('harbourside').proposed[0];
+    const p = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'customs-house' }, cast: ['Captain Reyes'], gap: { id: 'now' }, seed: { kind: 'hook', id: hook.id, label: hook.title, text: hook.text } });
+    const c = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p;
+    const saved = c.ok ? files.get(c.file) : null;
+    check('played: the hook is the scene\'s quest in the file and leaves the memory\'s round for its taken list', c.ok && !!saved && JSON.stringify(saved.header.chat_metadata.dooms_tracker).includes('manifest') && hub.hubHooks('harbourside').proposed.length === 0 && hub.hubHooks('harbourside').taken.length === 1 && hub.hubHooks('harbourside').taken[0].title === "The cutter's papers", JSON.stringify(c));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

@@ -298,6 +298,29 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/hub-test.mjs`, `tools/hub-flow-test.mjs`,
   `tools/hub-layout-test.mjs`. Phase 2 (the board and the panels) onwards
   is in the plan's §8.
+- **The Hub, phase 2 (2026-11-03, `docs/hub-plan.md` D124 and D134–D137,
+  on `short-fuse/hub`, four commits: Hub 7 the plan, Leaflet vendored and
+  the picture and the nodes in the pack with the board's pure model; Hub
+  8 the World Builder's Map tab and the board's module; Hub 9 the board
+  in the hub, the place sheet, the tree board; Hub 10 the panels, the
+  ways in, hooks over the memory, the window stack, the Map window's Hub
+  button, Play from the hub):** the board is the world's picture with its
+  places as nodes. `lib/leaflet/` (Leaflet 1.9.4, BSD-2, vendored; its
+  README has the hashes); `src/utils/worldPicture.js` (pure: the picture
+  record, nodes as fractions, the projection to Leaflet's units and back,
+  `boardModel`, `treeModel`); `src/systems/ui/hubBoard.js` (the one
+  Leaflet host, modes `hub` and `edit`, Leaflet imported only when a board
+  mounts); the Map tab in `worldBuilder.js`/`worldBuilderViews.js`
+  (upload through SillyTavern's `/api/images/upload` into `des-worlds`,
+  Draw a map through the image service, drag to place); the board, the
+  place sheet, the tree board and the side panels in `hubViews.js`/`hub.js`;
+  `proposeHubHooks`/`setHubHookAside`/`hubHooks` in the hub feature;
+  `src/systems/ui/windowStack.js` (Escape closes the window on top
+  alone). Tests: `tools/hub-board-test.mjs` (pure),
+  `tools/hub-board-browser-test.mjs` (Leaflet driven in Chromium over an
+  HTTP server, with `--shots`), the hub's flow test §7, the hub's and the
+  builder's render checks widened. The survey the engine was chosen from:
+  `docs/support/map-survey.md`.
 - **Harbourside found again (2026-11-03, on `short-fuse/hub`):** the
   built-in world was chosen as `example`, its file's name, while the file
   carried the id `harbourside`; a chat seeded from it stored that id and
@@ -364,6 +387,7 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
 | `src/systems/features/liveWorld.js` (places) | The visit recorded in `placeFromScene`, the rewind's `reconcileVisited`, `drawPlace` / `getPlacesRow` / `isDrawingPlace`, the automatic draw after a fresh reply (never a recovery) |
 | `src/systems/features/questCut.js` (travel, done) | `startTravelCut`, the instruction by kind, `recordCompletedQuest` / `getCompletedQuests` |
 | `src/utils/questHooks.js`, `src/systems/features/questHooks.js` | Hooks: `buildHooksPrompt` / `parseHooksReply` / `validateHooks`, `proposeRound` / `takeHook` / `setAside` / `questFromHook`; the feature's `proposeHooks` (the background request), `takeHook` (the shelf's `addOptionalQuest`, `startQuestCut` on request), `setHookAside`; `chat_metadata.dooms_hooks` |
+| `lib/leaflet/`, `src/utils/worldPicture.js`, `src/systems/ui/hubBoard.js`, `src/systems/ui/windowStack.js` | The Hub's board: Leaflet vendored (BSD-2; `lib/leaflet/README.md`), the picture record and the nodes as fractions with their projection (`nodeLatLng`/`latLngToNode`), what the board draws (`boardModel`, `treeModel`), the one Leaflet host (`mountBoard` in modes `hub` and `edit`, Leaflet imported on mount), the windows' order for Escape |
 | `src/utils/hub.js`, `src/systems/features/hub.js`, `src/systems/ui/hub.js`, `src/systems/ui/hubViews.js` | The Hub: `hubConfig`/`normalizeHub`, `takeSnapshot`/`sealStores`/`seedStores`, `buildBrief`, `buildOpenersPrompt`/`parseOpenersReply`/`validateOpeners`, `openerMessage`, `hubMark`/`sceneHeader`/`sceneFileName`, `sceneTranscript`/`buildRecapPrompt`/`parseRecapReply`, the scene records; the feature's store, `bindCard`/`makeNarratorCard`, `prepareScene`/`commitScene`, `prepareEnd`/`commitEnd`, `__setChatBridge` and the transports, the strip, `/hub`, `/endscene`; the window and its sheets (lazy); `chat_metadata.dooms_hub`, `extensionSettings.hub` |
 | `src/utils/canon.js`, `src/systems/features/canon.js` | Canon: `canonConfig`, the ledger (`normalizeCanon`, `applyCanon`, `reconcileCanon`, the caps), `buildCanonPrompt` / `parseCanonReply` / `validateCanon`, `buildCanonBlock`, `canonToLorebookEntries` / `canonToMarkdown`; the feature's count with its own stamp, `updateCanon`, the raw slot `dooms-canon`, `/canon`, `exportCanonToLorebook` (a lazy lorebookAPI, or the test sink); `chat_metadata.dooms_canon` |
 | `src/utils/worldBuilder.js`, `src/systems/features/liveWorld.js` (worlds), `src/systems/ui/worldBuilderViews.js`, `src/systems/ui/worldBuilder.js` | The World Builder: `worldFromState` / `rebindStateToPack` (a chat kept as a world, carried over), `buildWorldDraftPrompt` / `parseWorldDraft`, `packWarnings`, `worldToRaw` / `worldToJson`; the worlds API and the blank world's name and the missing-world fallback in the feature; `builderHtml` and the window's events (a keystroke updates the status, leaving a field redraws, auto ids from labels) |

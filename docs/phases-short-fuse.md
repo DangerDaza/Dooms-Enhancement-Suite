@@ -489,7 +489,7 @@ quest). The board of tiles and the three tabs are gone. Tests:
 
 ## Phase 10 — The Hub
 
-Status: **phase 1 built** (2026-11-02, `docs/hub-plan.md`, on
+Status: **phases 1 and 2 built** (2026-11-02 and 2026-11-03, `docs/hub-plan.md`, on
 `short-fuse/hub`). The owner's sketch: "a hub panel that takes up most of
 the screen … the user can click on an element of the map and start an RP
 there … a new chat with 3 starting prompts … once the scene is done they
@@ -501,9 +501,14 @@ whole with the sealed snapshot, the brief as the chat's scenario and the
 opener with the others as swipes, then opened); the strip; End (the recap,
 Canon over the scene, the advancer, the snapshot); set aside, resume,
 reopen, a chat gone, the records rebuilt from the chats. Phase 2 is the
-board and the panels; then the world's book and weather, Continue in the
-hub, Bonds, the picture with pins. Tests: `tools/hub-test.mjs`,
-`tools/hub-flow-test.mjs`, `tools/hub-layout-test.mjs`.
+board (the world's picture with its places as nodes under Leaflet, the
+builder's Map tab that places them, the tree board for a world without a
+picture, the place sheet) and the panels (News, Rumours, Hooks over the
+memory, People, Scenes; every line a way in), with the Map window's Hub
+button and the builder's Play from the hub; then the world's book and
+weather, Continue in the hub, Bonds, zoom levels and nested maps. Tests:
+`tools/hub-test.mjs`, `tools/hub-flow-test.mjs`, `tools/hub-layout-test.mjs`,
+`tools/hub-board-test.mjs`, `tools/hub-board-browser-test.mjs`.
 
 ## Phase 4 — if wanted (not started, not designed)
 

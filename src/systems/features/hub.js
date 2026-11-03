@@ -29,6 +29,7 @@ import {
     placeLabel, placeChain, resolvePlace, liveWorldConfig, sameName,
 } from '../../utils/liveWorld.js';
 import { buildCanonBlock, normalizeCanon } from '../../utils/canon.js';
+import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRound, setAside as setAsidePureHook, normalizeHooks, emptyHooks, takeHook as takeHookPure } from '../../utils/questHooks.js';
 import {
     HUB_META_KEY, hubConfig, normalizeHub, normalizeWorldEntry, gapOf, gapMoves, takeSnapshot, seedStores, personLine, buildBrief,
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
@@ -53,6 +54,8 @@ let bridgeOverride = null;
 let openersTransport = null;
 let recapTransport = null;
 let gapTransport = null;
+let hooksTransport = null;
+let hooksBusyWorld = '';     // the world a hooks request runs for, '' when none
 let timing = { idleStepMs: 250, idleMaxMs: 120000 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -231,6 +234,7 @@ export function __setChatBridge(b) {
 export function __setOpenersTransport(fn) { openersTransport = typeof fn === 'function' ? fn : null; }
 export function __setRecapTransport(fn) { recapTransport = typeof fn === 'function' ? fn : null; }
 export function __setGapTransport(fn) { gapTransport = typeof fn === 'function' ? fn : null; }
+export function __setHooksTransport(fn) { hooksTransport = typeof fn === 'function' ? fn : null; }
 export function __setHubTiming(t) { timing = { ...timing, ...(t || {}) }; }
 
 /** The card bound to a world: its index, avatar and name; null when none or gone. */
@@ -542,6 +546,87 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes };
 }
 
+// ─── Hooks over the memory (§4.4) ────────────────────────────────────────
+
+/** The round on offer in a world's memory (empty until one is asked for). */
+export function hubHooks(worldId) {
+    const entry = worldEntry(worldId);
+    const raw = entry && entry.memory && entry.memory.stores ? entry.memory.stores.dooms_hooks : null;
+    return raw ? normalizeHooks(raw) : emptyHooks();
+}
+
+export function isHooksBusy(worldId) {
+    return !!hooksBusyWorld && hooksBusyWorld === String(worldId || '').trim();
+}
+
+/**
+ * Asks for a round of hooks over the world's memory: Hooks' own prompt and
+ * checks over the snapshot's world state and quests, the last recaps in
+ * place of recent scenes; the round is written sealed into the memory (a
+ * world with no memory yet gets one from the pack's seed) and a scene
+ * started from a hook takes it as its quest (seedStores). Nothing is
+ * written when the reply holds no usable hook; the round on offer stays
+ * and the failure is noted.
+ * @returns {Promise<{ ok: boolean, reason?: string, hooks?: object[], errors?: string[], error?: string }>}
+ */
+export async function proposeHubHooks(worldId) {
+    if (!isLiveWorldOn()) return { ok: false, reason: 'off' };
+    const id = String(worldId || '').trim();
+    const entry = worldEntry(id);
+    if (!id || !entry) return { ok: false, reason: 'no-world' };
+    const res = await loadPack(id);
+    if (!res.ok) return { ok: false, reason: 'no-world', errors: res.errors };
+    if (hooksBusyWorld) return { ok: false, reason: 'running' };
+    const pack = res.pack;
+    hooksBusyWorld = id;
+    notify({ source: 'hooks-start', world: id });
+    try {
+        const memory = memoryFor(entry, pack, id);
+        const state = normalizeWorldState(memory.stores.dooms_world);
+        const current = memory.stores.dooms_hooks ? normalizeHooks(memory.stores.dooms_hooks) : emptyHooks();
+        const quests = memory.stores.dooms_tracker && memory.stores.dooms_tracker.quests ? memory.stores.dooms_tracker.quests : { main: 'None', optional: [] };
+        const done = Array.isArray(memory.stores.dooms_quests_done) ? memory.stores.dooms_quests_done : [];
+        const recent = lastRecaps(entry, 3).map((r, i) => `${i + 1}. ${r}`).join('\n');
+        const now = { date: memory.facts.date, time: memory.facts.time, location: memory.facts.location };
+        const prompt = buildHooksPrompt({ pack, state, quests, done, taken: current.taken, aside: current.aside, recent, now, player: memory.player || playerNames() });
+        log('hooks requested over the memory', { world: id });
+        const r = await request(prompt, { transport: hooksTransport, label: 'hooks' });
+        if (r.busy) return { ok: false, reason: 'busy' };
+        const v = validateHooks(parseHooksReply(r.text), { quests, done, taken: current.taken, aside: current.aside });
+        const ranAt = Date.now();
+        const latest = worldEntry(id);
+        if (!latest) return { ok: false, reason: 'no-world' };
+        const mem = latest.memory && latest.memory.stores && latest.memory.stores.dooms_world ? latest.memory : memoryFor(latest, pack, id);
+        const held = mem.stores.dooms_hooks ? normalizeHooks(mem.stores.dooms_hooks) : current;
+        if (!v.ok) {
+            putEntry(id, normalizeWorldEntry({ ...latest, memory: { ...mem, stores: { ...mem.stores, dooms_hooks: failRound(held, { error: v.errors.join(' '), ranAt }) } } }), { source: 'hooks-failed', world: id });
+            log('hooks discarded', { errors: v.errors, reply: r.text.slice(0, 400) });
+            return { ok: false, reason: 'invalid', errors: v.errors };
+        }
+        putEntry(id, normalizeWorldEntry({ ...latest, memory: { ...mem, stores: { ...mem.stores, dooms_hooks: proposeRound(held, v.hooks, { msgId: null, gameDate: now.date || '', ranAt }) } } }), { source: 'hooks', world: id });
+        log('hooks offered', v.hooks.map(h => h.title));
+        return { ok: true, hooks: v.hooks, errors: v.errors };
+    } catch (e) {
+        const error = String(e && e.message || e);
+        log('the hooks request failed', error);
+        return { ok: false, reason: 'error', error };
+    } finally {
+        hooksBusyWorld = '';
+        notify({ source: 'hooks-end', world: id });
+    }
+}
+
+/** A hook set aside in the memory's round (D103): not offered again. */
+export function setHubHookAside(worldId, hookId) {
+    const id = String(worldId || '').trim();
+    const entry = worldEntry(id);
+    if (!entry || !entry.memory || !entry.memory.stores || !entry.memory.stores.dooms_hooks) return false;
+    const r = setAsidePureHook(normalizeHooks(entry.memory.stores.dooms_hooks), hookId);
+    if (!r.hook) return false;
+    putEntry(id, normalizeWorldEntry({ ...entry, memory: { ...entry.memory, stores: { ...entry.memory.stores, dooms_hooks: r.hooks } } }), { source: 'hook-aside', world: id });
+    return true;
+}
+
 /** The pending Start, for the picker. */
 export function pendingStart() {
     return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes } : null;
@@ -610,8 +695,13 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
         return { ok: false, reason: 'file', error };
     }
     const opened = openScene(entry, { title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, chat: fileName, card: p.card.avatar, startedAt: now, startDate: seeded.facts.date });
-    // The record and the world moved by the gap are written together, once the file exists (D117, §2.2).
-    putEntry(p.worldId, p.movedMemory ? { ...opened.entry, memory: p.movedMemory } : opened.entry, { source: 'start', world: p.worldId });
+    // The record and the world moved by the gap are written together, once the file exists (D117, §2.2); a hook played
+    // leaves the memory's round, the way it left the chat's copy (§4.4).
+    let memoryOut = p.movedMemory || opened.entry.memory;
+    if (memoryOut && p.seed && p.seed.kind === 'hook' && p.seed.id && memoryOut.stores && memoryOut.stores.dooms_hooks) {
+        memoryOut = { ...memoryOut, stores: { ...memoryOut.stores, dooms_hooks: takeHookPure(memoryOut.stores.dooms_hooks, p.seed.id, { takenAt: now }).hooks } };
+    }
+    putEntry(p.worldId, memoryOut ? { ...opened.entry, memory: memoryOut } : opened.entry, { source: 'start', world: p.worldId });
     pending = null;
     log(`scene ${n} written: "${fileName}"`);
     if (!(await flushChat())) log('the chat in front could not be flushed before the switch; its last edits may be lost');

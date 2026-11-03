@@ -14284,7 +14284,17 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 .dooms-hub-board-note-label { font-weight: 600; color: #8d8d9a; text-transform: uppercase; font-size: 0.84em; letter-spacing: 0.06em; margin-right: 4px; }
 .dooms-hub-link { appearance: none; font: inherit; background: none; border: 0; padding: 0; color: #eaeaea; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
 .dooms-hub-link:hover, .dooms-hub-link:focus-visible { color: #fff; text-decoration-style: solid; }
-.dooms-hub-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+.dooms-hub-side { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding: 2px; }
+.dooms-hub-side-nav { flex: 0 0 auto; display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.dooms-hub-side-tab { appearance: none; font: inherit; font-size: 0.78em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 5px 9px; color: #bbb; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; }
+.dooms-hub-side-tab:hover, .dooms-hub-side-tab:focus-visible { color: #fff; }
+.dooms-hub-side-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
+.dooms-hub-side-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+.dooms-hub-ways { display: flex; flex-direction: column; gap: 8px; }
+.dooms-hub-ways .dooms-map-changes li, .dooms-hub-ways .dooms-world-effects li { cursor: pointer; border-radius: 4px; }
+.dooms-hub-ways .dooms-map-changes li:hover, .dooms-hub-ways .dooms-world-effects li:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.dooms-hub-ways .dooms-map-feed-label { display: none; }
+.dooms-hub-hooks .dooms-map-hook-actions .rpg-accordion-action-btn, .dooms-hub-hooks .dooms-map-hook-foot .rpg-accordion-action-btn { width: auto; }
 /* The tree board: regions as groups, each place a node like the picture's */
 .dooms-tree { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
 .dooms-tree-hint { margin: 0 2px; }
@@ -14368,11 +14378,13 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     .dooms-hub-openers { grid-template-columns: 1fr; }
     /* The board and the panels one at a time, under tabs */
     .dooms-hub-main.is-board { display: flex; flex-direction: column; gap: 8px; }
-    .dooms-hub-tabs { display: flex; gap: 4px; flex: 0 0 auto; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
-    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.86em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+    .dooms-hub-tabs { display: flex; gap: 2px; flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.12); scrollbar-width: none; }
+    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.84em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 10px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; flex: 0 0 auto; white-space: nowrap; }
     .dooms-hub-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
+    .dooms-hub-side-nav { display: none; }
+    .dooms-hub-side { overflow: auto; }
     .dooms-hub-main.is-board[data-panel="map"] .dooms-hub-side { display: none; }
-    .dooms-hub-main.is-board[data-panel="scenes"] .dooms-hub-board-wrap { display: none; }
+    .dooms-hub-main.is-board:not([data-panel="map"]) .dooms-hub-board-wrap { display: none; }
     .dooms-hub-board-wrap { flex: 1 1 auto; }
     .dooms-hub-map { min-height: 50vh; }
     .dooms-hub-place-head { flex-direction: column; }
