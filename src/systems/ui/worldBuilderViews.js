@@ -15,6 +15,7 @@ export const WB_TABS = Object.freeze([
     { id: 'places', label: 'Places', icon: 'fa-map-location-dot' },
     { id: 'clocks', label: 'Clocks', icon: 'fa-clock' },
     { id: 'cast', label: 'Cast', icon: 'fa-users' },
+    { id: 'map', label: 'Map', icon: 'fa-map' },
 ]);
 
 const e = escapeHtml;
@@ -42,13 +43,15 @@ export function builderShellHtml() {
  * @param {string} o.selectedId  the world open: an id, 'new' for one not saved yet, '' for none
  * @param {object|null} o.draft  the world being edited, in the file's shape
  * @param {boolean} o.dirty      changes not saved
- * @param {string} o.tab         'world' | 'places' | 'clocks' | 'cast'
+ * @param {string} o.tab         'world' | 'places' | 'clocks' | 'cast' | 'map'
+ * @param {string} o.mapPicked   the Map tab: the place picked from the list, waiting for a tap on the picture
+ * @param {string} o.mapBusy     the Map tab: 'draw' while a map is drawn, 'upload' while one is saved
  * @param {string} o.note        the last result line
  * @param {string} o.busy        'draft' while a draft is being written
  * @param {boolean} o.adoptOnSave  Save makes it the open chat's world (D96)
  * @param {{ pack?: string, chatPack?: string, chatOpen?: boolean }} o.where  the world for new chats, the open chat's world id, whether a chat is open
  */
-export function builderHtml({ worlds = [], selectedId = '', draft = null, dirty = false, tab = 'world', note = '', busy = '', adoptOnSave = false, where = {} } = {}) {
+export function builderHtml({ worlds = [], selectedId = '', draft = null, dirty = false, tab = 'world', note = '', busy = '', adoptOnSave = false, where = {}, mapPicked = '', mapBusy = '' } = {}) {
     const w = { pack: '', chatPack: '', chatOpen: false, ...where };
     const hasTemplate = worlds.some(x => x && x.template);
     const left = `<aside class="dooms-wb-list" aria-label="Your worlds">
@@ -60,7 +63,7 @@ export function builderHtml({ worlds = [], selectedId = '', draft = null, dirty 
         </div>
         <div class="dooms-wb-worlds" role="list">${worldRows(worlds, selectedId, w)}</div>
     </aside>`;
-    const right = `<section class="dooms-wb-editor">${draft ? editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where: w, worlds }) : emptyEditorHtml(worlds)}</section>`;
+    const right = `<section class="dooms-wb-editor">${draft ? editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where: w, worlds, mapPicked, mapBusy }) : emptyEditorHtml(worlds)}</section>`;
     return `<div class="dooms-wb">${left}${right}</div>`;
 }
 
@@ -98,7 +101,7 @@ function count(draft, id) {
     return ` <span class="dooms-wb-count">${n}</span>`;
 }
 
-function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, worlds }) {
+function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, worlds, mapPicked = '', mapBusy = '' }) {
     const n = normalizePack(draft);
     const errors = n.errors;
     const warnings = n.ok ? packWarnings(n.pack) : [];
@@ -106,7 +109,7 @@ function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, w
     const isTemplate = !isNew && worlds.some(x => x && x.id === selectedId && x.template);
     const active = WB_TABS.some(t => t.id === tab) ? tab : 'world';
     const tabs = WB_TABS.map(t => `<button type="button" class="dooms-wb-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i> ${t.label}${count(draft, t.id)}</button>`).join('');
-    const pane = active === 'places' ? placesPane(draft) : active === 'clocks' ? clocksPane(draft) : active === 'cast' ? castPane(draft) : worldPane(draft);
+    const pane = active === 'places' ? placesPane(draft) : active === 'clocks' ? clocksPane(draft) : active === 'cast' ? castPane(draft) : active === 'map' ? mapPane(draft, { picked: mapPicked, busy: mapBusy }) : worldPane(draft);
     const notes = [
         `${e(n.pack.id || '')} · ${e(worldSummary(n.pack))}`,
         isTemplate ? 'the template: Save keeps a copy as your own' : '',
@@ -226,6 +229,45 @@ function clocksPane(d) {
     return `<p class="dooms-wb-hint">A clock is a pressure that grows or eases between scenes: a blockade, a fever, a feud. The advancer moves it by at most its step each run; the text at each step is what anyone in the world could see or hear, and Rumours shows the current one.</p>
     <div class="dooms-wb-rows">${cards || '<p class="dooms-world-muted">No clocks yet: nothing moves between scenes until there is one.</p>'}</div>
     <button type="button" class="rpg-accordion-action-btn" data-act="add-clock"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add a clock</button>`;
+}
+
+/**
+ * The Map tab (docs/hub-plan.md D137): the picture's row, the board's frame
+ * (the controller mounts Leaflet in it when there is a picture), the places
+ * in two groups. A place is dragged from the list onto the picture, or
+ * picked and then tapped into place; a placed one is taken off from its
+ * node's menu or its row.
+ */
+function mapPane(d, { picked = '', busy = '' } = {}) {
+    const n = normalizePack(d);
+    const pack = n.pack;
+    const m = pack.map || { image: '', width: 0, height: 0, source: '' };
+    const has = !!m.image;
+    const node = (p) => (Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null);
+    const on = pack.places.filter(p => node(p));
+    const off = pack.places.filter(p => !node(p));
+    const file = has ? m.image.split('/').pop() : '';
+    const state = !has ? 'No picture yet.' : `${file}${m.width && m.height ? ` · ${m.width} × ${m.height}` : ''}${m.source === 'drawn' ? ' · drawn' : m.source === 'upload' ? ' · uploaded' : ''}`;
+    const row = `<div class="dooms-wb-map-row">
+        <span class="dooms-wb-map-state" title="${attr(has ? m.image : '')}">${e(busy === 'upload' ? 'Saving the picture…' : busy === 'draw' ? 'Drawing the map…' : state)}</span>
+        <button type="button" class="rpg-accordion-action-btn" data-act="map-upload"${busy ? ' disabled' : ''} title="A PNG, JPG or WebP from this device, kept in SillyTavern's images folder"><i class="fa-solid fa-upload" aria-hidden="true"></i> ${has ? 'Replace with a file' : 'Upload a file'}</button>
+        <button type="button" class="rpg-accordion-action-btn" data-act="map-draw"${busy ? ' disabled' : ''} title="Image Generation draws a map of the world from its name, its blurb and its places"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> ${has ? 'Draw it again' : 'Draw a map'}</button>
+        ${has ? `<button type="button" class="rpg-accordion-action-btn" data-act="map-remove"${busy ? ' disabled' : ''} title="The world keeps its places and their spots; the file stays in SillyTavern's images folder"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Remove the picture</button>` : ''}
+    </div>`;
+    const item = (p, placed) => `<li class="dooms-wb-map-place${picked === p.id ? ' is-picked' : ''}${placed ? ' is-placed' : ''}" data-id="${attr(p.id)}" draggable="${has ? 'true' : 'false'}">
+        <button type="button" class="dooms-wb-map-pick" data-act="map-pick" data-id="${attr(p.id)}"${has ? '' : ' disabled'} title="${placed ? 'Pick it, then tap the picture to move it' : 'Pick it, then tap the picture where it is; or drag it there'}"><i class="fa-solid ${placed ? 'fa-location-dot' : 'fa-grip-vertical'}" aria-hidden="true"></i> <span>${e(p.label || p.id)}</span></button>
+        ${placed ? `<button type="button" class="dooms-wb-remove" data-act="map-unplace" data-id="${attr(p.id)}" title="Take it off the map" aria-label="Take ${attr(p.label || p.id)} off the map">&times;</button>` : ''}
+    </li>`;
+    const lists = `<div class="dooms-wb-map-places">
+        <div class="dooms-wb-map-group"><div class="dooms-wb-map-group-title">On the map <span class="dooms-wb-count">${on.length}</span></div>${on.length ? `<ul>${on.map(p => item(p, true)).join('')}</ul>` : '<p class="dooms-world-muted">Nothing placed yet.</p>'}</div>
+        <div class="dooms-wb-map-group"><div class="dooms-wb-map-group-title">Not on the map yet <span class="dooms-wb-count">${off.length}</span></div>${off.length ? `<ul>${off.map(p => item(p, false)).join('')}</ul>` : `<p class="dooms-world-muted">${pack.places.length ? 'Every place is on the map.' : 'No places yet: add them on the Places tab.'}</p>`}</div>
+    </div>`;
+    const frame = has
+        ? `<div class="dooms-wb-map" role="application" aria-label="The map: drag a place onto it, drag a node to move it"><p class="dooms-wb-map-wait dooms-world-muted">${picked ? 'Tap the picture where the place is.' : 'The picture is loading…'}</p></div>`
+        : `<div class="dooms-wb-map is-empty"><p class="dooms-world-muted">No picture yet. Upload one or have one drawn, then drag the places onto it. The hub shows the world's places as a tree until then.</p></div>`;
+    return `<p class="dooms-wb-hint">The world's map: a picture, and its places as nodes on it (the Hub's board). Drag a place from the list onto the picture, or pick it and tap the spot; drag a node to move it; a node's menu takes it off. Save keeps the spots with the world.</p>
+    ${row}
+    <div class="dooms-wb-map-wrap">${frame}${lists}</div>`;
 }
 
 function castPane(d) {

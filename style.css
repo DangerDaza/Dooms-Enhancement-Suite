@@ -14161,6 +14161,62 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     .dooms-wb-foot .is-danger { margin-left: 0; }
 }
 
+/* ── The World Builder's Map tab (docs/hub-plan.md D137): the picture's row, the board's frame beside the places in two groups. ── */
+.dooms-wb-map-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.dooms-wb-map-state { font-size: 0.8em; color: #bbb; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dooms-wb-map-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 10px; align-items: start; }
+.dooms-wb-map { position: relative; min-height: 320px; height: min(52vh, 560px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.14); background: #0b0b12; overflow: hidden; }
+.dooms-wb-map.is-empty { display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+.dooms-wb-map.is-empty p { margin: 0; max-width: 420px; line-height: 1.45; }
+.dooms-wb-map-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; text-align: center; pointer-events: none; }
+.dooms-wb-map-places { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-height: min(52vh, 560px); overflow-y: auto; }
+.dooms-wb-map-group-title { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.8em; font-weight: 600; color: #ddd; }
+.dooms-wb-map-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dooms-wb-map-group .dooms-world-muted { margin: 0; font-size: 0.78em; }
+.dooms-wb-map-place { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.dooms-wb-map-place[draggable="true"] { cursor: grab; }
+.dooms-wb-map-pick { appearance: none; font: inherit; font-size: 0.82em; cursor: pointer; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); color: #ddd; text-align: left; }
+.dooms-wb-map-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dooms-wb-map-pick:hover, .dooms-wb-map-pick:focus-visible { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.dooms-wb-map-pick:disabled { opacity: 0.5; cursor: default; }
+.dooms-wb-map-place.is-picked .dooms-wb-map-pick { border-color: var(--rpg-highlight, #e94560); box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.3); color: #fff; }
+.dooms-wb-map-place.is-placed .dooms-wb-map-pick i { color: var(--rpg-highlight, #e94560); }
+@media (max-width: 700px) {
+    .dooms-wb-map-wrap { grid-template-columns: minmax(0, 1fr); }
+    .dooms-wb-map { height: 48vh; min-height: 260px; }
+    .dooms-wb-map-places { max-height: none; }
+}
+
+/* ── The board (docs/hub-plan.md D124, D134): Leaflet's host, the picture in a plain pixel space with the dark around it; the nodes keep their size while the map zooms. ── */
+.dooms-board { background: #0b0b12; touch-action: none; }
+.dooms-board.leaflet-container { font: inherit; background: #0b0b12; outline: none; }
+.dooms-board .leaflet-bar { border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: none; }
+.dooms-board .leaflet-bar a { background: rgba(10, 10, 18, 0.85); color: #eee; border-bottom-color: rgba(255, 255, 255, 0.15); }
+.dooms-board .leaflet-bar a:hover, .dooms-board .leaflet-bar a:focus-visible { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.dooms-board .leaflet-bar a.leaflet-disabled { opacity: 0.4; }
+.dooms-node { background: none; border: 0; }
+.dooms-node-circle { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85); background: rgba(20, 20, 30, 0.9) center / cover no-repeat; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; color: #eee; font-size: 1em; }
+.dooms-node.is-region .dooms-node-circle { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-style: dashed; }
+.dooms-node.is-edit .dooms-node-circle { cursor: grab; }
+.dooms-node.is-edit:hover .dooms-node-circle { border-color: var(--rpg-highlight, #e94560); }
+.dooms-node.is-player .dooms-node-circle { box-shadow: 0 0 0 3px var(--rpg-highlight, #e94560), 0 2px 8px rgba(0, 0, 0, 0.6); }
+.dooms-node.is-unvisited .dooms-node-circle { opacity: 0.55; border-style: dotted; }
+.dooms-node-label { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 6px); white-space: nowrap; font-size: 0.74em; font-weight: 600; color: #fff; text-shadow: 0 1px 3px #000, 0 0 6px #000; pointer-events: none; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.dooms-node-rim { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.dooms-node-face { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 1px solid #fff; background: #2a2a3a center / cover no-repeat; color: #fff; font-size: 0.55em; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.dooms-node-face:nth-child(1) { transform: translate(-22px, -14px); }
+.dooms-node-face:nth-child(2) { transform: translate(22px, -14px); }
+.dooms-node-face:nth-child(3) { transform: translate(-22px, 14px); }
+.dooms-node-face:nth-child(4) { transform: translate(22px, 14px); }
+.dooms-node-face:nth-child(5), .dooms-node-face.is-more { transform: translate(28px, 0); }
+.dooms-node-face.is-more { background: var(--rpg-highlight, #e94560); }
+.dooms-node-weather { position: absolute; left: 50%; top: 50%; transform: translate(-36px, -30px); font-size: 0.9em; pointer-events: none; text-shadow: 0 1px 3px #000; }
+.dooms-node-popup .leaflet-popup-content-wrapper { background: rgba(14, 14, 22, 0.96); color: #eee; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6); }
+.dooms-node-popup .leaflet-popup-tip { background: rgba(14, 14, 22, 0.96); }
+.dooms-node-popup .leaflet-popup-content { margin: 10px 12px; font: inherit; font-size: 0.86em; }
+.dooms-node-pop { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.dooms-node-pop .rpg-accordion-action-btn { width: auto; }
+
 /* ── The Map window's Hooks panel (docs/hooks-canon-plan.md D104): the round on offer as cards with their three buttons, the ask button, the taken folded. ── */
 .dooms-map-hook-hint { margin: 0 0 8px; font-size: 0.78em; line-height: 1.4; }
 .dooms-map-hook-list { display: flex; flex-direction: column; gap: 8px; }

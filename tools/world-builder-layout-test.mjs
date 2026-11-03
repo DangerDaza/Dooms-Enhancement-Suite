@@ -44,6 +44,9 @@ const harbour = M.normalizePack({ ...JSON.parse(readFileSync(join(repo, 'worldpa
 const draft = B.worldToRaw(harbour);
 draft.places.push({ id: 'the-long-stair', label: 'The long stair down to the water, past the chandlery and the rope-walk', parent: 'the-hill' });
 draft.cast.push({ name: 'A nameless courier with a very long name indeed', tier: 'heard' });
+draft.map = { image: '/user/images/des-worlds/harbourside-map-2026-11-03.png', width: 1600, height: 1000, source: 'upload' };    // the Map tab (docs/hub-plan.md D137): a picture and two nodes
+draft.places = draft.places.map(p => (p.id === 'the-anchor' ? { ...p, x: 0.2, y: 0.7 } : p.id === 'customs-house' ? { ...p, x: 0.6, y: 0.3 } : p));
+const nopic = B.worldToRaw(harbour);
 const broken = B.worldToRaw(harbour);
 broken.places[1].parent = 'nowhere';
 broken.clocks[0].max = 0;
@@ -58,6 +61,8 @@ const scenes = [
     { name: 'empty', html: V.builderHtml({ worlds, selectedId: '', draft: null, where }) },
     ...V.WB_TABS.map(t => ({ name: t.id, html: V.builderHtml({ worlds, selectedId: 'harbourside', draft, dirty: true, tab: t.id, note: 'Saved.', where }) })),
     { name: 'errors', html: V.builderHtml({ worlds, selectedId: 'new', draft: broken, dirty: true, tab: 'places', note: 'Drafted, with problems listed below.', adoptOnSave: true, where }) },
+    { name: 'map-nopic', html: V.builderHtml({ worlds, selectedId: 'harbourside', draft: nopic, tab: 'map', where }) },
+    { name: 'map-picked', html: V.builderHtml({ worlds, selectedId: 'harbourside', draft, dirty: true, tab: 'map', where, mapPicked: 'old-town' }) },
 ];
 
 const css = ['styles/modals.css', 'style.css', 'styles/overhaul.css'].map(f => `<link rel="stylesheet" href="${pathToFileURL(join(repo, f)).href}">`).join('\n');
@@ -115,13 +120,16 @@ for (const w of WIDTHS) {
                     if (list && wr.bottom > list.getBoundingClientRect().bottom + 1) faults.push(`the worlds row is cut off below the list (${Math.round(wr.bottom)} > ${Math.round(list.getBoundingClientRect().bottom)})`);
                 }
                 popup.querySelectorAll('.dooms-wb-tab').forEach(el => inside(el, `the tab "${el.textContent.trim()}"`));
-                popup.querySelectorAll('.dooms-wb-foot button, .dooms-wb-new button').forEach(el => {
+                popup.querySelectorAll('.dooms-wb-foot button, .dooms-wb-new button, .dooms-wb-map-row button').forEach(el => {
                     inside(el, `the button "${el.textContent.trim()}"`);
                     const share = phone ? 0.9 : 0.6;    // a phone's window is narrow: only a button stretched across it is a fault there
                     if (el.getBoundingClientRect().width > cb.width * share) faults.push(`the button "${el.textContent.trim()}" is wider than ${Math.round(share * 100)}% of the window`);
                 });
                 if (pane) {
                     const pr = pane.getBoundingClientRect();
+                    const frame = pane.querySelector('.dooms-wb-map');
+                    if (frame) { inside(frame, 'the map frame'); const fr = frame.getBoundingClientRect(); if (fr.height < 200) faults.push(`the map frame is ${Math.round(fr.height)}px tall`); }
+                    pane.querySelectorAll('.dooms-wb-map-place').forEach(el => inside(el, `the place "${el.textContent.trim().slice(0, 24)}"`));
                     pane.querySelectorAll('input, select, textarea').forEach(el => {
                         const r = el.getBoundingClientRect();
                         if (r.width === 0 || el.type === 'checkbox') return;

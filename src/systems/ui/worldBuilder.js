@@ -8,7 +8,12 @@
 import { extensionSettings } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { ensureCss } from '../../core/cssLoader.js';
+import { escapeHtml } from '../../utils/html.js';
 import { normalizePack, liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
+import { hasMap, mapSize, withMap, withNode, boardModel } from '../../utils/worldPicture.js';
+import { safeImageUrl } from '../../utils/worldBoard.js';
+import { getBase64Async, saveBase64AsFile } from '../../../../../../utils.js';
+import { renderImage, sourceProblem } from '../features/imageGen.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
     TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
@@ -27,6 +32,12 @@ let tab = 'world';
 let note = '';
 let adoptOnSave = false; // Save makes it the open chat's world (D96)
 let fileInput = null;
+let mapInput = null;     // the Map tab's file picker (docs/hub-plan.md D137)
+let mapPicked = '';      // the Map tab: a place picked from the list, waiting for a tap on the picture
+let mapBusy = '';        // the Map tab: 'upload' | 'draw' while a picture is saved or drawn
+let board = null;        // the Map tab's board (Leaflet's host), mounted while the tab shows a picture
+let boardView = null;    // the board's view kept across re-renders
+let mapToken = 0;        // a mount that outlives its render is dropped
 
 const slugOf = (v) => String(v || '').normalize('NFC').trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 const AUTO_ID = /^new-(place|clock)(-\d+)?$/;
@@ -53,9 +64,11 @@ function render() {
     if (!$body.length) return;
     const paneEl = $body.find('.dooms-wb-pane')[0];
     const scroll = paneEl ? paneEl.scrollTop : 0;
-    $body.html(builderHtml({ worlds, selectedId, draft, dirty, tab, note, busy: isDrafting() ? 'draft' : '', adoptOnSave, where: where() }));
+    unmountMap();
+    $body.html(builderHtml({ worlds, selectedId, draft, dirty, tab, note, busy: isDrafting() ? 'draft' : '', adoptOnSave, where: where(), mapPicked, mapBusy }));
     const pane = $body.find('.dooms-wb-pane')[0];
     if (pane) pane.scrollTop = scroll;
+    if (tab === 'map' && draft) mountMap();
 }
 
 /** The status and the head follow a keystroke; the pane is left alone so the field keeps its focus. */
@@ -300,6 +313,137 @@ function useForNewChats() {
     render();
 }
 
+// ─── The Map tab (docs/hub-plan.md D136, D137) ──────────────────────────
+
+function unmountMap() {
+    if (!board) return;
+    try { boardView = board.view(); board.destroy(); } catch (e) { /* the frame is gone already */ }
+    board = null;
+}
+
+function readImageSize(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error('the picture could not be read'));
+        img.src = url;
+    });
+}
+
+/** The board in the Map tab's frame: Leaflet over the world's picture, the nodes draggable, a dropped or tapped place set. */
+async function mountMap() {
+    const host = document.querySelector(`#${POPUP_ID} .dooms-wb-map:not(.is-empty)`);
+    if (!host || !draft) return;
+    const pack = normalizePack(draft).pack;
+    if (!hasMap(pack)) return;
+    const token = ++mapToken;
+    let size = mapSize(pack);
+    if (!size) {
+        try { size = await readImageSize(safeImageUrl(pack.map.image)); } catch (e) { host.innerHTML = '<p class="dooms-wb-map-wait dooms-world-muted">The picture could not be read: check its path, or upload it again.</p>'; return; }
+        if (token !== mapToken || !isOpen || !draft) return;
+        draft = withMap(draft, { ...pack.map, ...size });    // the size kept beside the path from now on
+        dirty = true;
+        renderStatus();
+    }
+    let mod;
+    try {
+        mod = await import('./hubBoard.js');
+        await ensureCss('leaflet', mod.LEAFLET_CSS);
+    } catch (e) { host.innerHTML = `<p class="dooms-wb-map-wait dooms-world-muted">The map could not load: ${escapeHtml(e && e.message ? e.message : String(e))}</p>`; return; }
+    if (token !== mapToken || !isOpen || tab !== 'map' || !draft || !document.body.contains(host)) return;
+    host.innerHTML = '';
+    const current = normalizePack(draft).pack;
+    board = await mod.mountBoard(host, {
+        picture: { ...current.map, ...size },
+        nodes: boardModel({ pack: current }).nodes,
+        mode: 'edit',
+        view: boardView,
+        on: {
+            move: (id, node) => { if (!draft) return; draft = withNode(draft, id, node); dirty = true; renderStatus(); },
+            drop: (id, node) => { if (!draft) return; draft = withNode(draft, id, node); dirty = true; mapPicked = ''; render(); },
+            tap: (node) => { if (!draft || !mapPicked) return; draft = withNode(draft, mapPicked, node); dirty = true; mapPicked = ''; render(); },
+            remove: (id) => { if (!draft) return; draft = withNode(draft, id, null); dirty = true; render(); },
+        },
+    });
+    if (token !== mapToken || !document.body.contains(host)) { try { board.destroy(); } catch (e) { /* gone */ } board = null; return; }    // a render came while Leaflet loaded
+    boardView = null;
+}
+
+/** A data URL saved as a file in SillyTavern's images folder (D136): the path, the size, the source. */
+async function savePicture(dataUrl, source) {
+    const comma = dataUrl.indexOf(',');
+    const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    const mime = (/^data:image\/(\w+)/.exec(dataUrl) || [])[1] || 'png';
+    const ext = mime === 'jpeg' ? 'jpg' : mime;
+    const size = await readImageSize(dataUrl);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `${slugOf((draft && (draft.id || draft.name)) || '') || 'world'}-map-${stamp}`;
+    const path = await saveBase64AsFile(base64, 'des-worlds', name, ext);
+    if (!path) throw new Error('SillyTavern saved the picture but gave no path back');
+    return { image: String(path), width: size.width, height: size.height, source };
+}
+
+function pickMapFile() {
+    if (!draft || mapBusy) return;
+    if (!mapInput) {
+        mapInput = document.createElement('input');
+        mapInput.type = 'file';
+        mapInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+        mapInput.style.display = 'none';
+        document.body.appendChild(mapInput);
+        mapInput.addEventListener('change', async () => {
+            const file = mapInput.files && mapInput.files[0];
+            mapInput.value = '';
+            if (!file || !draft) return;
+            mapBusy = 'upload';
+            render();
+            try {
+                const dataUrl = await getBase64Async(file);
+                const m = await savePicture(dataUrl, 'upload');
+                if (draft) { draft = withMap(draft, m); dirty = true; boardView = null; note = `The picture is saved (${m.width} × ${m.height}). Drag the places onto it.`; }
+            } catch (e) { note = `The picture was not saved: ${e && e.message ? e.message : e}`; }
+            mapBusy = '';
+            render();
+        });
+    }
+    mapInput.click();
+}
+
+/** What Image Generation is asked for: the world as a page of an atlas, its regions and places named, no writing on it. */
+function mapPrompt(d) {
+    const n = normalizePack(d).pack;
+    const roots = n.places.filter(p => !p.parent).map(p => p.label);
+    const rest = n.places.filter(p => p.parent).map(p => p.label);
+    return [
+        `A map of ${n.name}, seen from above, painted as a page of a fantasy atlas: coastlines, hills, forests, rivers and roads, the whole land on one sheet, no writing on it.`,
+        n.description,
+        roots.length ? `Its regions: ${roots.join(', ')}.` : '',
+        rest.length ? `Its places: ${rest.slice(0, 12).join(', ')}.` : '',
+    ].filter(Boolean).join(' ');
+}
+
+async function drawMap() {
+    if (!draft || mapBusy) return;
+    const problem = sourceProblem();
+    if (problem) { note = `The map cannot be drawn: ${problem}.`; renderStatus(); return; }
+    mapBusy = 'draw';
+    note = 'Drawing the map…';
+    render();
+    try {
+        const r = await renderImage(
+            { purpose: 'map', prompt: mapPrompt(draft), negative: 'text, letters, writing, labels, watermark, frame, border', size: 'landscape' },
+            { onProgress: (p) => { if (!p) return; if (p.error) note = `Drawing the map… ${p.error}`; else if (p.stage) note = `Drawing the map… ${p.stage}${p.max ? ` ${p.value || 0}/${p.max}` : ''}`; renderStatus(); } },
+        );
+        let m;
+        if (r && r.dataUrl) m = await savePicture(r.dataUrl, 'drawn');
+        else if (r && r.url) { const size = await readImageSize(safeImageUrl(r.url)); m = { image: String(r.url), ...size, source: 'drawn' }; }
+        else throw new Error('the image source answered with no picture');
+        if (draft) { draft = withMap(draft, m); dirty = true; boardView = null; note = `The map is drawn (${m.width} × ${m.height}). Draw it again if it is not the one; drag the places onto it when it is.`; }
+    } catch (e) { note = `The map was not drawn: ${e && e.message ? e.message : e}`; }
+    mapBusy = '';
+    render();
+}
+
 // ─── The window ─────────────────────────────────────────────────────────
 
 function build() {
@@ -322,12 +466,24 @@ function build() {
         if (act === 'export') { exportFile(); return; }
         if (act === 'delete') { await remove(); return; }
         if (act === 'use') { useForNewChats(); return; }
-        if (act === 'tab') { const t = this.getAttribute('data-tab'); if (WB_TABS.some(x => x.id === t)) { tab = t; render(); } return; }
+        if (act === 'tab') { const t = this.getAttribute('data-tab'); if (WB_TABS.some(x => x.id === t)) { tab = t; mapPicked = ''; render(); } return; }
         if (!draft) return;
+        if (act === 'map-upload') { pickMapFile(); return; }
+        if (act === 'map-draw') { await drawMap(); return; }
+        if (act === 'map-remove') { if (!window.confirm('Remove the picture from this world? The places keep their spots; the file stays in SillyTavern\'s images folder.')) return; draft = withMap(draft, null); dirty = true; mapPicked = ''; render(); return; }
+        if (act === 'map-pick') { const id = this.getAttribute('data-id') || ''; mapPicked = mapPicked === id ? '' : id; render(); return; }
+        if (act === 'map-unplace') { draft = withNode(draft, this.getAttribute('data-id') || '', null); dirty = true; render(); return; }
         if (act === 'add-place') { if (!Array.isArray(draft.places)) draft.places = []; draft.places.push({ id: uniqueId('new-place', draft.places), label: '', parent: null }); dirty = true; tab = 'places'; render(); focusLast('.dooms-wb-place'); return; }
         if (act === 'add-clock') { if (!Array.isArray(draft.clocks)) draft.clocks = []; draft.clocks.push({ id: uniqueId('new-clock', draft.clocks), label: '', start: 0, max: 6, effects: {} }); dirty = true; tab = 'clocks'; render(); focusLast('.dooms-wb-clock'); return; }
         if (act === 'add-person') { if (!Array.isArray(draft.cast)) draft.cast = []; draft.cast.push({ name: '', tier: 'heard' }); dirty = true; tab = 'cast'; render(); focusLast('.dooms-wb-person'); return; }
         if (act === 'remove') { removeItem(this.getAttribute('data-kind'), Number(this.getAttribute('data-i'))); render(); ev.preventDefault(); }
+    });
+    // The Map tab: a place dragged from its list onto the picture carries its id (the board reads it on drop).
+    $(document).on('dragstart', `${root} .dooms-wb-map-place`, function (ev) {
+        const dt = ev.originalEvent && ev.originalEvent.dataTransfer;
+        if (!dt) return;
+        dt.setData('text/plain', this.getAttribute('data-id') || '');
+        dt.effectAllowed = 'move';
     });
     // A keystroke updates the world and the status only; leaving the field (change) redraws, so the selects follow a new label.
     $(document).on('input', `${root} [data-f]`, function () { applyField(this); renderStatus(); });
@@ -387,5 +543,7 @@ function close() {
     if (!isOpen) return;
     if (!discardOk()) return;
     isOpen = false;
+    unmountMap();
+    boardView = null;
     $(`#${POPUP_ID}`).css('display', 'none');
 }
