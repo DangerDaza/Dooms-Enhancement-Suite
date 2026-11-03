@@ -25,7 +25,7 @@ const check = (label, cond, extra = '') => {
     if (cond) console.log(`pass  ${label}`);
     else { console.error(`FAIL  ${label}${extra ? '\n      ' + extra : ''}`); failures++; }
 };
-const harbour = normalizePack(JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'))).pack;
+const harbour = normalizePack({ ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' }).pack;
 const ids = (s) => s.visited.map(e => e.id).join(',');
 
 console.log('\n§1 the blank world (D93)');

@@ -11,7 +11,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { normalizePack, liveWorldConfig, BLANK_PACK_ID } from '../../utils/liveWorld.js';
 import { emptyWorld, worldFileName, worldToJson, packWarnings } from '../../utils/worldBuilder.js';
 import {
-    TEMPLATE_PACK_ID, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
+    TEMPLATE_PACK_ID, BUILTIN_PACKS, listWorlds, getWorldRaw, saveWorld, deleteWorld, importWorldJson, worldFromThisChat, adoptWorld, draftWorldFromChat,
     isDrafting, getWorldState, WORLD_CHANGED_EVENT,
 } from '../features/liveWorld.js';
 import { builderShellHtml, builderHtml, statusHtml, nameHtml, POPUP_ID, WB_TABS } from './worldBuilderViews.js';
@@ -164,6 +164,7 @@ async function openWorld(id, { force = false } = {}) {
     if (!r.raw) { note = r.errors.join(' ') || `The world "${id}" could not be read.`; render(); return false; }
     draft = r.raw;
     draftFrom = r.custom ? id : '';
+    if (BUILTIN_PACKS.includes(id)) draft.id = uniqueId(draft.name || id, worlds);    // Save keeps a copy as your own (D92): the copy takes an id of its own, the template keeps its key
     selectedId = id;
     dirty = false;
     adoptOnSave = false;

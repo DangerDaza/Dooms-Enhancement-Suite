@@ -76,7 +76,7 @@ const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
 const qc = await import(`${DES}/src/systems/features/questCut.js`);
 const svc = await import(`${DES}/src/systems/features/imageGen.js`);
-const packJson = readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8');
+const packJson = JSON.stringify({ ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' });    // a copy of the template, as Start from Harbourside saves it
 
 let failures = 0;
 const check = (label, cond, extra = '') => {

@@ -1829,7 +1829,7 @@ the timelines in §6, the shelf's Map page in §10);
 `src/utils/responseExtractor.js` (the shared fetch capture);
 `src/systems/generation/apiClient.js` (`withBackgroundProfile`,
 `BACKGROUND_BUSY`); `src/systems/ui/worldDashboard.js` (lazy);
-`worldpacks/example.json`, `worldpacks/skyreach.json`; `index.js`,
+`worldpacks/example.json` (`worldpacks/skyreach.json` left the extension under D92, to `docs/support/skyreach-world.json`); `index.js`,
 `template.html`, `src/core/state.js`, `style.css` (the map's rules),
 `styles/modals.css`, `styles/overhaul.css`; `docs/live-world-spec.md`.
 

@@ -29,7 +29,7 @@ his to change.
 | D94 | The builder is a window | `#world-builder-popup`, the Workshop's shell: a list of your worlds on the left (New, Start from Harbourside, Draft it from this chat, Import), the world on the right under four tabs: World (name, description, blurb, the narrator's template), Places (the tree: label, inside, picture), Clocks (label, place, start, max, step, hidden, a text per step), Cast (name, place, tier). Save stores the world under its id and reloads the open chat when it uses that world; Save as copy, Export (the JSON file, `<id>.json`), Delete (asks). The pack's own errors are listed as they are typed; a world with errors is not saved. |
 | D95 | Draft it from this chat | One background request (the tracker's profile, `withBackgroundProfile`) writes a whole world from the character card (description, personality, scenario), the lore the chat carries (the active lorebooks' entries, cut to length), the names DES knows, and the recent scenes; the player is never cast. The reply's JSON is read like the advancer's (fenced, bare or whole, reasoning stripped), made loose where weak models slip (parents "null", numbers as strings, effects as a list), then `normalizePack`. The draft lands in the builder unsaved, with its errors and warnings; the user reads it before it is a world. |
 | D96 | Make this a world | A chat on the blank world can become a world: `worldFromState` writes one from the chat as it stands (the places visited, a pack place with its ancestors and a story-named place as its own with its drawn picture; the clocks at their values now; the known people where they were last seen; the blurb) and opens it in the builder; Save sets the chat's `state.pack` to the new world's id, nothing re-seeded, and the world goes on as it was. |
-| D97 | A chat and its world | A chat keeps the pack id it was seeded with. A world edited in the builder reaches every chat using it on its next load (the clocks clamped as before, a new clock at its start). A world that is gone (removed, or Skyreach after D92) leaves the chat on the blank world without clamping: the clocks and places stay in the state, the status line says the world is missing, the Map window still works, and importing the world back restores it whole. |
+| D97 | A chat and its world | A chat keeps the pack id it was seeded with. A world edited in the builder reaches every chat using it on its next load (the clocks clamped as before, a new clock at its start). A world that is gone (removed, or Skyreach after D92) leaves the chat on the blank world without clamping: the clocks and places stay in the state, the status line says the world is missing, the Map window still works, and importing the world back restores it whole. One id is the exception: a world of the user's keyed `harbourside`, the id the template's file once carried (a copy saved from the template before 2026-11-03 kept it), falls back to the template when it is gone, since a chat seeded from either stored the same id. |
 | D98 | Ways in | Settings → Live World: "World for new chats" lists the blank world, your worlds and Harbourside; "World Builder" opens the window; the paste box goes (Import lives in the builder). The Map window's foot gains "Edit this world" (a world of yours) or "Make this a world" (the blank world); Harbourside opens as "Start from Harbourside". The D menu stays as it is. |
 | D99 | Rendered before pushed | `tools/world-builder-layout-test.mjs` renders the window with a fixture world at desktop and phone width under every look: nothing past the window, the list and the tabs reachable, the clock steps' grid inside its pane; `--shots` writes the PNGs, looked at before the push (handover §1). |
 
@@ -55,11 +55,15 @@ shared `locPlaceId`; `rowIdForCharacter` finds a loc place's own row entry.
 
 ## 3. The feature (commit 2)
 
-`src/systems/features/liveWorld.js`: `BUILTIN_PACKS = ['harbourside']`
-(the template's file is named after its id since 2026-11-02: it was
-`example.json`, so a chat seeded from it stored `harbourside` and found no
-file by that name on its next load; `example` still reads as `harbourside`
-wherever a pack is chosen, `packKey` in `src/utils/liveWorld.js`),
+`src/systems/features/liveWorld.js`: `BUILTIN_PACKS = [TEMPLATE_PACK_ID]`,
+the template's id `example` being its file's name (until 2026-11-03 the
+file carried `harbourside`, so a chat seeded from it stored an id no pack
+had and lost its world on the next load; `harbourside` now reads as the
+template wherever a pack is chosen or loaded unless a world of the user's
+own holds that id, `packKey` in `src/utils/liveWorld.js`, and a chat that
+stored it takes the template's own id on its next load; the template's id
+is refused for a world of the user's, and Start from Harbourside gives the
+copy an id of its own from its name),
 `loadPack('blank')` needs no file; the blank world takes the chat's
 character name when the state loads (and keeps it in `state.name`); a
 missing world falls back to the blank world (D97); `listWorlds`,

@@ -66,7 +66,7 @@ import {
 } from '../../utils/liveWorld.js';
 
 export const WORLD_CHANGED_EVENT = 'dooms:world-changed';
-export const TEMPLATE_PACK_ID = 'harbourside';    // Harbourside, the one template (docs/world-builder-plan.md D92): its file is named after its id, so a chat seeded from it finds its world again
+export const TEMPLATE_PACK_ID = 'example';    // Harbourside, the one template (docs/world-builder-plan.md D92): its id is its file's name, so a chat seeded from it finds its world again; no world of the user's can take the id
 export const BUILTIN_PACKS = Object.freeze([TEMPLATE_PACK_ID]);    // the blank world needs no file (D93)
 const META_KEY = 'dooms_world';
 
@@ -100,6 +100,13 @@ const GENERATION_START_STALE_MS = 15000;    // a start with no end (a slash comm
 
 function cfg() {
     return liveWorldConfig(extensionSettings);
+}
+
+/** The ids no world of the user's can take: the blank world's and the template's. '' when the id is free. */
+function reservedIdError(id) {
+    if (id === BLANK_PACK_ID) return '"blank" is the blank world\'s own id; give this world another name.';
+    if (BUILTIN_PACKS.includes(id)) return `"${id}" is the template's own id; give this world another name.`;
+    return '';
 }
 
 /** The master switch and DES's own. */
@@ -161,7 +168,7 @@ function clone(v) {
  * @returns {Promise<{ ok: boolean, pack: object|null, errors: string[] }>}
  */
 export async function loadPack(id, { fresh = false } = {}) {
-    const key = packKey(id, cfg().customPacks);    // the old key "example" reads as the template's id
+    const key = packKey(id, cfg().customPacks);    // the id the template's file once carried reads as the template
     if (!key) return { ok: false, pack: null, errors: ['No pack chosen.'] };
     if (!fresh && packCache.has(key)) return packCache.get(key);
     let raw = null;
@@ -187,6 +194,7 @@ export async function loadPack(id, { fresh = false } = {}) {
 
 /** Forgets a cached pack (after a paste or an edit). */
 export function forgetPack(id) {
+    packCache.delete(String(id || '').trim());
     packCache.delete(packKey(id, cfg().customPacks));
 }
 
@@ -204,6 +212,8 @@ export function addCustomPack(json) {
     try { raw = typeof json === 'string' ? JSON.parse(json) : json; } catch (e) { return { ok: false, errors: [`Not valid JSON: ${e.message}`], pack: null }; }
     const out = normalizePack(raw);
     if (!out.ok) return { ok: false, errors: out.errors, pack: out.pack };
+    const reserved = reservedIdError(out.pack.id);
+    if (reserved) return { ok: false, errors: [reserved], pack: out.pack };
     if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = {};
     if (!extensionSettings.liveWorld.customPacks || typeof extensionSettings.liveWorld.customPacks !== 'object') extensionSettings.liveWorld.customPacks = {};
     extensionSettings.liveWorld.customPacks[out.pack.id] = JSON.stringify(raw);
@@ -214,7 +224,7 @@ export function addCustomPack(json) {
 /** Removes a pasted pack. */
 export function removeCustomPack(id) {
     const packs = extensionSettings.liveWorld && extensionSettings.liveWorld.customPacks;
-    if (packs && typeof packs === 'object' && id in packs) { delete packs[id]; forgetPack(id); return true; }
+    if (packs && typeof packs === 'object' && id in packs) { forgetPack(id); delete packs[id]; return true; }
     return false;
 }
 
@@ -280,7 +290,8 @@ export async function saveWorld(raw, { previousId = '' } = {}) {
     const n = normalizePack(raw);
     if (!n.ok) return { ok: false, errors: n.errors, pack: n.pack };
     const id = n.pack.id;
-    if (id === BLANK_PACK_ID) return { ok: false, errors: ['"blank" is the blank world\'s own id; give this world another name.'], pack: n.pack };
+    const reserved = reservedIdError(id);
+    if (reserved) return { ok: false, errors: [reserved], pack: n.pack };
     if (!extensionSettings.liveWorld || typeof extensionSettings.liveWorld !== 'object') extensionSettings.liveWorld = {};
     if (!extensionSettings.liveWorld.customPacks || typeof extensionSettings.liveWorld.customPacks !== 'object') extensionSettings.liveWorld.customPacks = {};
     const packs = extensionSettings.liveWorld.customPacks;
@@ -289,9 +300,10 @@ export async function saveWorld(raw, { previousId = '' } = {}) {
     const old = String(previousId || '').trim();
     const renamed = old && old !== id && old in packs;
     if (renamed) {
-        delete packs[old];
+        const chosen = cfg().pack === old;    // read while the old key is still the user's own: gone, an old id of the template's reads as the template
         forgetPack(old);
-        if (cfg().pack === old) extensionSettings.liveWorld.pack = id;
+        delete packs[old];
+        if (chosen) extensionSettings.liveWorld.pack = id;
     }
     persist();
     const mine = !!state && (state.pack === id || (renamed && state.pack === old));
@@ -306,8 +318,9 @@ export async function saveWorld(raw, { previousId = '' } = {}) {
 /** Removes one of your worlds. The setting falls back to the blank world; a chat using it goes on in the blank world (D97). */
 export async function deleteWorld(id) {
     const key = String(id || '').trim();
+    const chosen = cfg().pack === key;    // read before the removal, for the reason saveWorld gives
     if (!removeCustomPack(key)) return false;
-    if (cfg().pack === key) extensionSettings.liveWorld.pack = BLANK_PACK_ID;
+    if (chosen) extensionSettings.liveWorld.pack = BLANK_PACK_ID;
     persist();
     if (state && state.pack === key) await onWorldChatChanged();
     else notify({ source: 'world' });
@@ -571,7 +584,11 @@ export async function onWorldChatChanged() {
             const bound = rebindStateToPack(stored, activePack);
             const clamped = clampClocksToPack(bound.state, activePack);
             state = clamped.state;
-            if (clamped.changed || bound.rebound) commit(state, { source: 'clamp' }, { immediate: true });
+            // A chat that stored an id the template's file once carried (packKey) takes the template's own id, so a
+            // world of the user's saved under the old id later does not take the chat with it.
+            const moved = state.pack !== activePack.id && packKey(state.pack, cfg().customPacks) === activePack.id;
+            if (moved) state.pack = activePack.id;
+            if (clamped.changed || bound.rebound || moved) commit(state, { source: 'clamp' }, { immediate: true });
         }
         reconcile({ at: 'load' });
     } else {

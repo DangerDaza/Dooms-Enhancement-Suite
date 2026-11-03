@@ -675,13 +675,14 @@ land.
 - **The picture with pins** (D124, phase 6).
 - **The world exported with its story** (phase 4).
 - **A bug found by reading, not the hub's, fixed on `short-fuse/hub`
-  (2026-11-02):** the built-in template was chosen as `example`, its
-  file's name, while its pack id is `harbourside`, so a chat seeded from it
-  stored an id the next load could not fetch and reported a missing world.
-  The file is named after its id now (`worldpacks/harbourside.json`,
-  `BUILTIN_PACKS`), `example` reads as `harbourside` wherever a pack is
-  chosen (`packKey`), and `tools/live-world-flow-test.mjs` §13 seeds from
-  the file and loads the chat again. The hub itself binds only the user's
+  (2026-11-03):** the built-in template was chosen as `example`, its
+  file's name, while the file carried the id `harbourside`, so a chat
+  seeded from it stored an id no pack had and reported a missing world on
+  its next load. The template's id is its file's name now, `harbourside`
+  reads as the template unless a world of the user's own holds it
+  (`packKey`), a chat that stored it takes the template's id on its next
+  load, and `tools/live-world-flow-test.mjs` §13 covers the seed, the
+  reload, the old chat and the copy. The hub itself binds only the user's
   worlds.
 - **A doc drift, not the hub's:** `docs/world-builder-plan.md` D94 names
   the builder's popup `#world-builder-popup`; the code's id is

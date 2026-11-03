@@ -76,7 +76,7 @@ const state = await import(`${DES}/src/core/state.js`);
 const { extensionSettings, lastGeneratedData, committedTrackerData } = state;
 const lw = await import(`${DES}/src/systems/features/liveWorld.js`);
 const STUB = await import(`${SANDBOX}/script.js`);
-const packJson = readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8');
+const packJson = JSON.stringify({ ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' });    // a copy of the template, as Start from Harbourside saves it
 
 let failures = 0;
 const check = (label, cond, extra = '') => {
@@ -105,8 +105,8 @@ console.log('\n§1 packs');
     check('a pack with no places is stored (D93: the builder warns; the places come from play)', bad.ok && bad.pack.places.length === 0 && 'nope' in extensionSettings.liveWorld.customPacks);
     lw.removeCustomPack('nope');
     check('not JSON is refused', !lw.addCustomPack('{nope').ok);
-    check('the list offers the built-in template and the pasted ones, each once, Skyreach gone (D92)', JSON.stringify(lw.listPackIds()) === '["harbourside"]');
-    check('the template\'s old key ("example", its file\'s old name) loads the same pack as its id', (await lw.loadPack('example')) === (await lw.loadPack('harbourside')) && (await lw.loadPack('example')).ok);
+    check('the list offers the built-in template and the pasted ones, Skyreach gone (D92)', JSON.stringify(lw.listPackIds()) === '["example","harbourside"]');
+    check('a world of your own under the id the template\'s file once carried is yours, not the template', (await lw.loadPack('harbourside')).ok && (await lw.loadPack('harbourside')).pack.id === 'harbourside');
     const missing = await lw.loadPack('no-such-pack');
     check('a pack that is nowhere says so', !missing.ok && missing.errors[0].includes('No pack named'));
     const loaded = await lw.loadPack('harbourside');
@@ -620,30 +620,41 @@ console.log('\n§12 the place the chat stands in, recorded at load (D82: a reply
     check('the player\'s message alone is not a scene', lw.recordCurrentScene() === false);
 }
 
-console.log('\n§13 the template is a file named after its id: a chat seeded from it finds its world again');
+console.log('\n§13 the template\'s id is its file\'s name: a chat seeded from it finds its world again');
 {
     const fetched = [];
-    const template = readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8');
+    const file = readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8');
     globalThis.fetch = async (url) => {
         fetched.push(String(url));
-        if (String(url).endsWith('/worldpacks/harbourside.json')) return { ok: true, status: 200, json: async () => JSON.parse(template) };
+        if (String(url).endsWith('/worldpacks/example.json')) return { ok: true, status: 200, json: async () => JSON.parse(file) };
         return { ok: false, status: 404, json: async () => ({}) };
     };
     check('every built-in pack is a file named after its id', lw.BUILTIN_PACKS.length === 1 && lw.BUILTIN_PACKS.every(id => JSON.parse(readFileSync(new URL(`../worldpacks/${id}.json`, import.meta.url), 'utf8')).id === id));
     for (const id of Object.keys(extensionSettings.liveWorld.customPacks)) lw.removeCustomPack(id);
-    lw.forgetPack('harbourside');
+    lw.forgetPack('example'); lw.forgetPack('harbourside');
     resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-template';
     extensionSettings.liveWorld.enabled = true; extensionSettings.liveWorld.pack = 'example'; extensionSettings.liveWorld.every = 50;
     await lw.onWorldChatChanged();
     const st = lw.getWorldState();
-    check('a setting that chose the template by its old key seeds from the file named after its id, and nothing is missing', !!st && st.seeded && st.pack === 'harbourside' && lw.getActivePack().id === 'harbourside' && lw.getMissingWorld() === '' && fetched.some(u => u.endsWith('/worldpacks/harbourside.json')) && !fetched.some(u => u.endsWith('/worldpacks/example.json')), JSON.stringify(fetched));
+    check('a new chat seeded from the template stores its id, and nothing is missing', !!st && st.seeded && st.pack === 'example' && lw.getActivePack().id === 'example' && lw.getMissingWorld() === '' && fetched.some(u => u.endsWith('/worldpacks/example.json')), JSON.stringify(fetched));
     const seeded = JSON.stringify(st);
-    lw.forgetPack('harbourside');
+    lw.forgetPack('example');
     await lw.onWorldChatChanged();
-    check('loaded again with the pack read afresh: the world is found by the id the chat stored, nothing missing, nothing re-seeded', lw.getMissingWorld() === '' && lw.getActivePack().id === 'harbourside' && JSON.stringify(lw.getWorldState()) === seeded, `missing="${lw.getMissingWorld()}"`);
-    check('a world of your own under the old key is yours, not the template', (lw.addCustomPack(JSON.stringify({ id: 'example', name: 'Example, mine', version: 1, places: [], clocks: [], cast: [] })).ok && (await lw.loadPack('example')).pack.name === 'Example, mine' && lw.listPackIds().includes('example')));
-    lw.removeCustomPack('example');
-    check('...and with it gone the old key is the template again', (await lw.loadPack('example')).pack.id === 'harbourside');
+    check('loaded again with the pack read afresh: found by the id the chat stored, nothing missing, nothing re-seeded', lw.getMissingWorld() === '' && lw.getActivePack().id === 'example' && JSON.stringify(lw.getWorldState()) === seeded, `missing="${lw.getMissingWorld()}"`);
+    resetMeta(); chat.length = 0; globalThis.__DES_CTX__.chatId = 'chat-old';
+    meta.dooms_world = { ...JSON.parse(seeded), pack: 'harbourside' };    // a chat seeded before the fix stored the id the file carried then
+    lw.forgetPack('example');
+    await lw.onWorldChatChanged();
+    check('a chat that stored the file\'s old id finds the template, nothing missing, and carries the template\'s own id from now on', lw.getMissingWorld() === '' && lw.getActivePack().id === 'example' && lw.getWorldState().pack === 'example' && lw.getWorldState().clocks.blockade === 1 && meta.dooms_world.pack === 'example', `missing="${lw.getMissingWorld()}" pack=${lw.getWorldState() && lw.getWorldState().pack}`);
+    const copy = JSON.stringify({ ...JSON.parse(file), id: 'harbourside', name: 'Harbourside, mine' });
+    check('a world of your own under the old id is yours, not the template, and both are listed', lw.addCustomPack(copy).ok && (await lw.loadPack('harbourside')).pack.name === 'Harbourside, mine' && JSON.stringify(lw.listPackIds()) === '["example","harbourside"]');
+    const bare = { id: 'example', name: 'Example', version: 1, places: [], clocks: [], cast: [] };
+    check('the template\'s own id is refused for a world of yours, pasted or saved', !lw.addCustomPack(JSON.stringify(bare)).ok && lw.addCustomPack(JSON.stringify(bare)).errors[0].includes("template's own id") && !(await lw.saveWorld(bare)).ok && !('example' in extensionSettings.liveWorld.customPacks));
+    extensionSettings.liveWorld.pack = 'harbourside';
+    const renamed = await lw.saveWorld({ ...JSON.parse(copy), id: 'harbour-mine', name: 'Harbour, mine' }, { previousId: 'harbourside' });
+    check('renaming the world under the old id carries the new-chats setting with it', renamed.ok && extensionSettings.liveWorld.pack === 'harbour-mine' && !('harbourside' in extensionSettings.liveWorld.customPacks), extensionSettings.liveWorld.pack);
+    check('...and deleting it sends the setting to the blank world', (await lw.deleteWorld('harbour-mine')) === true && extensionSettings.liveWorld.pack === 'blank', extensionSettings.liveWorld.pack);
+    check('with no world of yours under it, the old id is the template again', (await lw.loadPack('harbourside')).pack.id === 'example');
     globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
 }
 

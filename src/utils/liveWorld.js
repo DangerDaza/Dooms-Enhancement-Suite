@@ -124,14 +124,16 @@ const CONFIG_DEFAULTS = Object.freeze({
 });
 
 /**
- * Ids a pack was once chosen by. The template was chosen as `example`, its
- * file's old name, while the pack's own id is `harbourside`: a chat seeded
- * from it stored the id, and the next load found no file by that name and
- * called the world missing. The file is named after its id now, and the
- * old key reads as the id wherever a pack is chosen (the setting, the
- * loader and its cache), unless a world of the user's own holds that key.
+ * Ids a pack was once known by. The template's file carried the id
+ * `harbourside` while the template was chosen as `example`, its file's
+ * name: a chat seeded from it stored `harbourside`, and the next load found
+ * no pack by that id and called the world missing. The file carries its
+ * own name as its id now, and `harbourside` reads as the template wherever
+ * a pack is chosen or loaded, unless a world of the user's own holds that
+ * key (a copy saved from the template takes it, since it is the natural id
+ * of the name "Harbourside").
  */
-export const PACK_ALIASES = Object.freeze({ example: 'harbourside' });
+export const PACK_ALIASES = Object.freeze({ harbourside: 'example' });
 
 /** A pack id as the loader keys it: trimmed, an old key read as the id it stands for. */
 export function packKey(id, customPacks = null) {

@@ -30,11 +30,11 @@ function check(name, ok, detail = '') {
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const raw = JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'));
+const raw = JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8'));
 const { ok: packOk, pack, errors: packErrors } = normalizePack(raw);
 
 console.log('\n§1 the pack');
-check('the example pack is sound', packOk && packErrors.length === 0 && pack.id === 'harbourside' && pack.places.length === 8 && pack.clocks.length === 2 && pack.cast.length === 3, packErrors.join(' | '));
+check('the example pack is sound, its id its file\'s name', packOk && packErrors.length === 0 && pack.id === 'example' && raw.id === 'example' && pack.places.length === 8 && pack.clocks.length === 2 && pack.cast.length === 3, packErrors.join(' | '));
 check('clock effects keyed by integer, within range', pack.clocks[0].effects[6].startsWith('The harbour is closed') && Object.keys(pack.clocks[1].effects).length === 4);
 check('the cast resolves its places and tiers', pack.cast[0].place === 'customs-house' && pack.cast[0].tier === 'known' && pack.cast[2].tier === 'heard' && pack.cast[2].place === 'governors-house');
 {
@@ -55,7 +55,7 @@ check('the tree text nests by indentation', placeTreeText(pack).split('\n')[0] =
 
 console.log('\n§3 the state');
 const seeded = seedWorldState(pack);
-check('seeding: clocks at their starts, the cast placed, tiers set, the blurb', same(seeded.clocks, { blockade: 1, fever: 0 }) && seeded.where['Captain Reyes'] === 'harbourside/the-docks/customs-house' && seeded.known['Old Marit'] === 'known' && seeded.known['The governor'] === 'heard' && seeded.blurb.startsWith('Harbourside talks') && seeded.seeded === true && seeded.pack === 'harbourside' && seeded.sinceLast === 0 && seeded.log.length === 0);
+check('seeding: clocks at their starts, the cast placed, tiers set, the blurb', same(seeded.clocks, { blockade: 1, fever: 0 }) && seeded.where['Captain Reyes'] === 'harbourside/the-docks/customs-house' && seeded.known['Old Marit'] === 'known' && seeded.known['The governor'] === 'heard' && seeded.blurb.startsWith('Harbourside talks') && seeded.seeded === true && seeded.pack === 'example' && seeded.sinceLast === 0 && seeded.log.length === 0);
 check('an empty state', same(emptyWorldState('x').clocks, {}) && emptyWorldState().pack === '' && emptyWorldState().last === null);
 check('normalizeWorldState keeps the good and drops the junk', (() => { const n = normalizeWorldState({ pack: 'p', clocks: { a: 2, b: 'x' }, where: { X: 'p/q', Y: 3 }, known: { X: 'known', Z: 'friend' }, log: [{ who: 'X', to: 'p/q' }, null, { to: 'p' }], counted: ['1', 2, {}], sinceLast: -1, retryNext: 'yes', blurb: 42 }); return same(n.clocks, { a: 2 }) && same(n.where, { X: 'p/q' }) && same(n.known, { X: 'known' }) && n.log.length === 1 && same(n.counted, ['1', 2]) && n.sinceLast === 0 && n.retryNext === false && n.blurb === '42'; })());
 {
@@ -192,9 +192,9 @@ console.log('\n§10 the rules and the recent scenes');
     const d = defaultLiveWorldConfig();
     check('defaults: off, the blank world (D93), every 6, step 1, inject at depth 2 as system, 12 recent, no spoilers clamp, no debug', same(d, { enabled: false, pack: 'blank', every: 6, maxStep: 1, spoilerFree: false, inject: true, depth: 2, role: 'system', recentMessages: 12, debug: false, customPacks: {} }), JSON.stringify(d));
     check('no settings → defaults', same(liveWorldConfig(null), d) && same(liveWorldConfig({ liveWorld: 'x' }), d));
-    const c = liveWorldConfig({ liveWorld: { enabled: true, pack: ' harbourside ', every: 0, maxStep: 99, depth: -3, role: 'wizard', recentMessages: 1000, customPacks: { a: '{}' }, spoilerFree: 1, inject: false, debug: true } });
-    check('clamps and fallbacks', c.enabled && c.pack === 'harbourside' && c.every === 1 && c.maxStep === 6 && c.depth === 0 && c.role === 'system' && c.recentMessages === 40 && same(c.customPacks, { a: '{}' }) && !c.spoilerFree && !c.inject && c.debug);
-    check('the template\'s old key ("example", its file\'s old name) reads as its id, unless a world of your own holds the key', liveWorldConfig({ liveWorld: { pack: 'example' } }).pack === 'harbourside' && liveWorldConfig({ liveWorld: { pack: 'example', customPacks: { example: '{}' } } }).pack === 'example' && packKey(' example ') === 'harbourside' && packKey('example', { example: '{}' }) === 'example' && packKey('mine') === 'mine' && packKey('') === '' && packKey(null) === '');
+    const c = liveWorldConfig({ liveWorld: { enabled: true, pack: ' mine ', every: 0, maxStep: 99, depth: -3, role: 'wizard', recentMessages: 1000, customPacks: { a: '{}' }, spoilerFree: 1, inject: false, debug: true } });
+    check('clamps and fallbacks', c.enabled && c.pack === 'mine' && c.every === 1 && c.maxStep === 6 && c.depth === 0 && c.role === 'system' && c.recentMessages === 40 && same(c.customPacks, { a: '{}' }) && !c.spoilerFree && !c.inject && c.debug);
+    check('the id the template\'s file once carried ("harbourside") reads as the template, unless a world of your own holds it', liveWorldConfig({ liveWorld: { pack: 'harbourside' } }).pack === 'example' && liveWorldConfig({ liveWorld: { pack: 'harbourside', customPacks: { harbourside: '{}' } } }).pack === 'harbourside' && packKey(' harbourside ') === 'example' && packKey('harbourside', { harbourside: '{}' }) === 'harbourside' && packKey('mine') === 'mine' && packKey('') === '' && packKey(null) === '');
     const chat = [
         { is_user: true, name: 'Jordan', mes: 'I run for the Anchor.' },
         { is_system: true, mes: 'hidden' },

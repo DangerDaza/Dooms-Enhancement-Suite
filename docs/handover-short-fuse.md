@@ -298,15 +298,19 @@ Phase 4 candidates, the release list) is `docs/phases-short-fuse.md`.
   `tools/hub-test.mjs`, `tools/hub-flow-test.mjs`,
   `tools/hub-layout-test.mjs`. Phase 2 (the board and the panels) onwards
   is in the plan's §8.
-- **Harbourside found again (2026-11-02, on `short-fuse/hub`):** the
-  built-in world was chosen as `example`, its file's name, while its id is
-  `harbourside`; a chat seeded from it stored the id and reported a missing
-  world on its next load. `worldpacks/harbourside.json` now,
-  `BUILTIN_PACKS = [TEMPLATE_PACK_ID]`, `packKey` in
-  `src/utils/liveWorld.js` reads `example` as `harbourside` (the setting,
-  the loader, its cache) unless a world of the user's own holds that key;
-  `tools/live-world-flow-test.mjs` §13 seeds from the file and loads the
-  chat again.
+- **Harbourside found again (2026-11-03, on `short-fuse/hub`):** the
+  built-in world was chosen as `example`, its file's name, while the file
+  carried the id `harbourside`; a chat seeded from it stored that id and
+  reported a missing world on its next load. The file's id is `example`
+  now (`TEMPLATE_PACK_ID`, `BUILTIN_PACKS`), `packKey` in
+  `src/utils/liveWorld.js` reads `harbourside` as the template (the
+  setting, the loader, its cache) unless a world of the user's own holds
+  that key, a chat that stored it takes `example` on its next load, the
+  template's id is refused for a world of the user's (`reservedIdError`),
+  Start from Harbourside gives the copy a free id from its name, and the
+  rename and delete paths read the chosen setting before the old key goes
+  (an adversarial review caught the file-rename version colliding with
+  the builder's copies). `tools/live-world-flow-test.mjs` §13.
 - **Hooks and Canon (2026-11-02, `docs/hooks-canon-plan.md` D100–D112, on
   `short-fuse/hooks-and-canon`):** Hooks, the Map window's fifth panel
   (`src/utils/questHooks.js`, `src/systems/features/questHooks.js`,

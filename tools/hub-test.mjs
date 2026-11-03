@@ -32,7 +32,7 @@ const check = (label, cond, extra = '') => {
 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const raw = JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'));
+const raw = { ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' };
 const { pack } = normalizePack(raw);
 const clock = pack.clocks[0];
 

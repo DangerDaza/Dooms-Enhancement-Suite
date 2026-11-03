@@ -170,7 +170,7 @@ async function openPlain(name = 'Mara Vane - plain') {
     await loaders();
 }
 
-const example = JSON.parse(readFileSync(new URL('../worldpacks/harbourside.json', import.meta.url), 'utf8'));
+const example = { ...JSON.parse(readFileSync(new URL('../worldpacks/example.json', import.meta.url), 'utf8')), id: 'harbourside' };
 const elsewhere = { ...example, id: 'elsewhere', name: 'Elsewhere', description: 'A second world.' };
 extensionSettings.enabled = true;
 extensionSettings.generationMode = 'together';
