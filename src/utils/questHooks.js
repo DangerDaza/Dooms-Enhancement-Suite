@@ -237,7 +237,7 @@ export function describeHooksResult(r) {
     if (r.ok) return `${r.hooks.length} hook${r.hooks.length === 1 ? '' : 's'} on offer.`;
     if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
     if (r.reason === 'running') return 'Hooks are already being asked for.';
-    if (r.reason === 'scene-open') return 'A scene is open: its hooks are the Map window\'s until you end it or set it aside.';
+    if (r.reason === 'scene-open') return 'A scene is open: its hooks are the Hub window\'s until you end it or set it aside.';
     if (r.reason === 'busy') return 'Another request is running; try again in a moment.';
     if (r.reason === 'stale') return 'The chat changed while the hooks were asked for.';
     if (r.reason === 'invalid') return `No usable hook came back${r.errors && r.errors.length ? `: ${r.errors[0]}` : ''}.`;

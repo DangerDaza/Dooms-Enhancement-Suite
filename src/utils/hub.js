@@ -840,7 +840,7 @@ export function lastRecaps(entry, count = 2) {
 /** One line for the hub's foot and the Settings status (D128). */
 export function hubStatusLine({ worldName = '', entry = null, cardName = '' } = {}) {
     const name = clean(worldName, 80) || 'This world';
-    if (!entry || !entry.card) return `${name}: no narrator card yet; pick one to play it from the hub.`;
+    if (!entry || !entry.card) return `${name}: no narrator card yet; pick one to play it from the Map.`;
     const open = openSceneOf(entry);
     const ended = entry.scenes.filter(s => s.status === 'ended').length;
     const aside = entry.scenes.filter(s => s.status === 'aside' && !s.gone).length;
@@ -864,7 +864,7 @@ export function describeStartResult(r) {
         'scene-open': 'A scene is still open: end it or set it aside first.',
         temporary: 'A temporary chat is in front; open any card first.',
         group: 'A group cannot be the narrator.',
-        'too-old': 'This SillyTavern is too old for the hub.',
+        'too-old': 'This SillyTavern is too old for the Map.',
         openers: 'The narrator wrote no usable opener; write your own, ask again, or start without one.',
         file: 'SillyTavern refused the new chat file.',
         open: 'The chat is written; open it from Scenes.',

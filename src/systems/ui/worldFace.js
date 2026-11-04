@@ -75,7 +75,7 @@ export function openFacePopover(anchor, name, { onBoard } = {}) {
         closeFacePopover();
         if (act === 'board') {
             if (typeof onBoard === 'function') onBoard(name);
-            else import('./worldDashboard.js').then(m => m.openWorldDashboard({ name })).catch(err => console.error('[Dooms Tracker] Live World: the Map window failed to load', err));
+            else import('./worldDashboard.js').then(m => m.openWorldDashboard({ name })).catch(err => console.error('[Dooms Tracker] Live World: the Hub window failed to load', err));
         }
     });
     el.addEventListener('keydown', (e) => {

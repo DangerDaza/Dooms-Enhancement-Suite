@@ -1106,22 +1106,26 @@ export async function hubStatusLines() {
 
 // ─── Init ───────────────────────────────────────────────────────────────
 
-/** Registers /hub and /endscene. The events are wired by index.js. */
+/**
+ * Registers /map and /endscene. The events are wired by index.js. The
+ * world's window is the Map to the user (2026-11-04; the plan's "hub");
+ * /hub opens this chat's own window (Live World's, src/systems/features/liveWorld.js).
+ */
 export function initHub() {
     try {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
-            name: 'hub',
+            name: 'map',
             callback: async () => {
-                try { const m = await import('../ui/hub.js'); await m.openHub(); return ''; } catch (e) { log('the hub window failed to load', String(e && e.message || e)); }
+                try { const m = await import('../ui/hub.js'); await m.openHub(); return ''; } catch (e) { log('the Map window failed to load', String(e && e.message || e)); }
                 const lines = await hubStatusLines();
-                return lines.length ? lines.map(l => l.line).join('\n') : 'No world of your own yet: build one in the World Builder, then pick its narrator card in Settings → Live World → The Hub.';
+                return lines.length ? lines.map(l => l.line).join('\n') : 'No world of your own yet: build one in the World Builder, then pick its narrator card in Settings → Live World → The Map.';
             },
-            helpString: 'The Hub: opens the world\'s window (Settings → Live World → The Hub).',
+            helpString: 'The Map: opens the world\'s window, its picture with its places, the news and the scenes (Settings → Live World → The Map).',
         }));
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'endscene',
             callback: async () => describeEndResult(await endScene()),
-            helpString: 'The Hub: ends this scene and remembers it (the recap, the ledger, the world, the snapshot).',
+            helpString: 'The Map: ends this scene and remembers it (the recap, the ledger, the world, the snapshot).',
         }));
     } catch (e) {
         log('the hub commands could not be registered', String(e && e.message || e));

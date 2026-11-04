@@ -1,5 +1,11 @@
 # The Map window (Live World's face, second pass)
 
+**Names (the owner, 2026-11-04):** on screen this window is **the Hub** now
+(Hub in the D menu, `/hub` and `/liveworld`, Settings → Live World → Open
+the Hub), and the world's window of `docs/hub-plan.md` is **the Map**. The
+owner expects this window to go once the Map carries what it does. The
+document keeps its old name; its ids and modules never changed.
+
 The owner's sketch (2026-10-28): a window with the world's name across the
 top; a row of circles, each the picture of a place, the most recent place
 on the left and older ones to the right, scrollable; a News panel across

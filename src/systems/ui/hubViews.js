@@ -33,7 +33,7 @@ export function hubShellHtml() {
     return `<div id="${POPUP_ID}" class="rpg-settings-popup" role="dialog" aria-modal="true" aria-labelledby="dooms-hub-title" style="display: none;">
         <div class="rpg-settings-popup-content">
             <header class="rpg-settings-popup-header">
-                <h3 id="dooms-hub-title"><i class="fa-solid fa-compass" aria-hidden="true"></i> <span>The Hub</span></h3>
+                <h3 id="dooms-hub-title"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>The Map</span></h3>
                 <button id="dooms-hub-close" class="rpg-popup-close" type="button" aria-label="Close">&times;</button>
             </header>
             <div class="rpg-settings-popup-body"><div class="dooms-hub-body"></div></div>
@@ -76,8 +76,8 @@ export function hubHtml({ worlds = [], worldId = '', pack = null, entry = null, 
         <span class="dooms-hub-sub dooms-hub-narrator">${card ? `Narrated by ${e(card.name)}` : 'No narrator card yet'}</span>
         <div class="dooms-hub-head-actions">
             ${pick}
-            <button type="button" class="rpg-accordion-action-btn" data-act="start"${!card || !liveWorldOn || sheet ? ' disabled' : ''} title="${card ? 'A fresh chat on the narrator card, from a place of the world' : 'Pick a narrator card first (Settings → Live World → The Hub)'}"><i class="fa-solid fa-play" aria-hidden="true"></i> Start a scene</button>
-            <button type="button" class="rpg-accordion-action-btn" data-act="settings" title="Settings → Live World → The Hub"><i class="fa-solid fa-gear" aria-hidden="true"></i> Settings</button>
+            <button type="button" class="rpg-accordion-action-btn" data-act="start"${!card || !liveWorldOn || sheet ? ' disabled' : ''} title="${card ? 'A fresh chat on the narrator card, from a place of the world' : 'Pick a narrator card first (Settings → Live World → The Map)'}"><i class="fa-solid fa-play" aria-hidden="true"></i> Start a scene</button>
+            <button type="button" class="rpg-accordion-action-btn" data-act="settings" title="Settings → Live World → The Map"><i class="fa-solid fa-gear" aria-hidden="true"></i> Settings</button>
         </div>
     </div>`;
     let main;
@@ -87,7 +87,7 @@ export function hubHtml({ worlds = [], worldId = '', pack = null, entry = null, 
     else if (sheet && sheet.kind === 'place') main = placeSheetHtml({ ...sheet, portraits });
     else if (!liveWorldOn) main = `<div class="dooms-hub-empty">Live World is off. The hub is Live World's: switch it on in Settings → Live World.</div>`;
     else if (!worlds.length) main = `<div class="dooms-hub-empty">No world of your own yet. Build one in the World Builder (Settings → Live World), then pick its narrator card here.</div>`;
-    else if (!card) main = `<div class="dooms-hub-empty">${e(name)} has no narrator card. A scene is a chat, and a chat belongs to a card: pick any card to narrate this world, or make one, in Settings → Live World → The Hub.</div>`;
+    else if (!card) main = `<div class="dooms-hub-empty">${e(name)} has no narrator card. A scene is a chat, and a chat belongs to a card: pick any card to narrate this world, or make one, in Settings → Live World → The Map.</div>`;
     else main = boardMainHtml({ board, entry, panel, portraits, world, hooks, hooksBusy, sceneOpen: !!(open && !open.gone) });
     const foot = `<div class="dooms-hub-foot">
         <span class="dooms-hub-status">${e(note || hubStatusLine({ worldName: name, entry, cardName: card ? card.name : '' }))}</span>
@@ -107,7 +107,7 @@ function boardMainHtml({ board, entry, panel = 'news', portraits = () => '', wor
     const side = HUB_PANELS.some(p => p.id === panel) ? panel : 'news';
     const top = panel === 'map' ? 'map' : side;
     const tab = (id, label, icon, cls) => `<button type="button" class="${cls}${top === id ? ' is-active' : ''}" role="tab" aria-selected="${top === id ? 'true' : 'false'}" data-act="panel" data-panel="${id}"><i class="fa-solid ${icon}" aria-hidden="true"></i> <span>${label}</span></button>`;
-    const nav = `<nav class="dooms-hub-tabs" role="tablist" aria-label="The hub's panels">${tab('map', 'Map', 'fa-map', 'dooms-hub-tab')}${HUB_PANELS.map(p => tab(p.id, p.label, p.icon, 'dooms-hub-tab')).join('')}</nav>`;
+    const nav = `<nav class="dooms-hub-tabs" role="tablist" aria-label="The Map's panels">${tab('map', 'Map', 'fa-map', 'dooms-hub-tab')}${HUB_PANELS.map(p => tab(p.id, p.label, p.icon, 'dooms-hub-tab')).join('')}</nav>`;
     const sideNav = `<nav class="dooms-hub-side-nav" role="tablist" aria-label="The panels">${HUB_PANELS.map(p => tab(p.id, p.label, p.icon, 'dooms-hub-side-tab')).join('')}</nav>`;
     const frame = mode === 'picture'
         ? `<div class="dooms-hub-map" role="application" aria-label="The world's map: drag to pan, the wheel or a pinch to zoom, a node for its place"><p class="dooms-hub-map-wait dooms-hub-hint">The map is loading…</p></div>${boardNotesHtml(board && board.model ? board.model : null)}`
@@ -151,12 +151,12 @@ export function hubHooksHtml({ hooks = null, busy = false, sceneOpen = false } =
     const failed = h.last && !h.last.ok && h.last.error ? `<p class="dooms-world-error">The last round failed: ${e(h.last.error)}</p>` : '';
     return `<section class="dooms-map-hooks dooms-hub-hooks">
         <div class="dooms-inv-head"><span class="dooms-inv-label">🪝 Hooks</span><span class="dooms-inv-fill" title="Hooks played">${takenAll.length}</span></div>
-        <p class="dooms-world-muted dooms-map-hook-hint">What the world offers to do next, from its clocks, its rumours and who was last seen where, as the world stands in the hub's memory. Play this opens the Start sheet with the hook, and the scene takes it as a quest.</p>
+        <p class="dooms-world-muted dooms-map-hook-hint">What the world offers to do next, from its clocks, its rumours and who was last seen where, as the world stands in its memory. Play this opens the Start sheet with the hook, and the scene takes it as a quest.</p>
         <div class="dooms-map-hook-list">${cards || `<p class="dooms-world-muted">${busy ? 'Asking the world…' : 'No hooks on offer yet.'}</p>`}</div>
         <div class="dooms-map-hook-foot">
             <button type="button" class="rpg-accordion-action-btn" data-act="hooks-propose"${busy || sceneOpen ? ' disabled' : ''}${sceneOpen ? ' title="A scene is open: end it or set it aside first"' : ''}><i class="fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-signs-post'}" aria-hidden="true"></i> ${busy ? 'Asking…' : (proposed.length ? 'Offer others' : 'Offer hooks')}</button>
             ${failed}
-            ${sceneOpen ? '<p class="dooms-hub-hint">A scene is open: its hooks are the Map window\'s until you end it or set it aside, since End keeps the scene\'s round as the world\'s.</p>' : ''}
+            ${sceneOpen ? '<p class="dooms-hub-hint">A scene is open: its hooks are the Hub window\'s until you end it or set it aside, since End keeps the scene\'s round as the world\'s.</p>' : ''}
         </div>
         ${taken.length ? `<details class="dooms-map-hook-taken"><summary>Played${takenAll.length > taken.length ? `, the last ${taken.length}` : ''}</summary><ul class="dooms-map-done-list">${taken.map(t => `<li><span class="dooms-map-done-text">${e(t.title)}</span></li>`).join('')}</ul></details>` : ''}
     </section>`;
@@ -383,7 +383,7 @@ export function endSheetHtml({ prep = null, busy = false, states = {}, result = 
         ${error ? `<p class="dooms-hub-note">${e(error)}</p>` : ''}
         <div class="dooms-hub-sheet-actions">
             ${done
-                ? `<button type="button" class="rpg-accordion-action-btn" data-act="to-hub"><i class="fa-solid fa-compass" aria-hidden="true"></i> To the hub</button><button type="button" class="rpg-accordion-action-btn" data-act="sheet-close">Close</button>`
+                ? `<button type="button" class="rpg-accordion-action-btn" data-act="to-hub"><i class="fa-solid fa-map" aria-hidden="true"></i> To the Map</button><button type="button" class="rpg-accordion-action-btn" data-act="sheet-close">Close</button>`
                 : `<button type="button" class="rpg-accordion-action-btn" data-act="end-go"${busy || running ? ' disabled' : ''}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> ${running ? 'Ending…' : 'End scene'}</button><button type="button" class="rpg-accordion-action-btn" data-act="sheet-close"${running ? ' disabled' : ''}>Keep playing</button>`}
         </div>
     </div>`;
@@ -401,7 +401,7 @@ export function stripHtml({ mark = null, scene = null, ended = false } = {}) {
     const date = mark && mark.startDate ? mark.startDate : (scene && scene.startDate ? scene.startDate : '');
     const text = [`Scene ${sceneNo(id)}${title ? `: ${title}` : ''}`, ended ? 'ended' : place, ended ? (mark && mark.endDate ? mark.endDate : '') : date].filter(Boolean).join(' · ');
     const actions = ended
-        ? `<button type="button" class="rpg-accordion-action-btn" data-act="hub"><i class="fa-solid fa-compass" aria-hidden="true"></i> Hub</button><button type="button" class="rpg-accordion-action-btn" data-act="reopen" title="Play on; End again replaces the recap and the snapshot"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen</button>`
-        : `<button type="button" class="rpg-accordion-action-btn" data-act="hub"><i class="fa-solid fa-compass" aria-hidden="true"></i> Hub</button><button type="button" class="rpg-accordion-action-btn" data-act="end"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>`;
-    return `<div class="dooms-strip-text"><i class="fa-solid fa-compass" aria-hidden="true"></i><span>${e(text)}</span></div><div class="dooms-strip-actions">${actions}</div>`;
+        ? `<button type="button" class="rpg-accordion-action-btn" data-act="hub"><i class="fa-solid fa-map" aria-hidden="true"></i> Map</button><button type="button" class="rpg-accordion-action-btn" data-act="reopen" title="Play on; End again replaces the recap and the snapshot"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen</button>`
+        : `<button type="button" class="rpg-accordion-action-btn" data-act="hub"><i class="fa-solid fa-map" aria-hidden="true"></i> Map</button><button type="button" class="rpg-accordion-action-btn" data-act="end"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>`;
+    return `<div class="dooms-strip-text"><i class="fa-solid fa-map" aria-hidden="true"></i><span>${e(text)}</span></div><div class="dooms-strip-actions">${actions}</div>`;
 }

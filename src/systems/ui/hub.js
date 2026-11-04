@@ -478,7 +478,7 @@ export async function openHub({ worldId: id = '', start = false, end = false, se
 /** The End sheet for the scene in front (the strip, the D menu). */
 export async function openEndSheet() {
     const cur = currentScene();
-    if (!cur) { try { toastr.info('This chat is not a scene of a world.', 'The Hub', { timeOut: 3000 }); } catch (e) { /* no toastr */ } return; }
+    if (!cur) { try { toastr.info('This chat is not a scene of a world.', 'The Map', { timeOut: 3000 }); } catch (e) { /* no toastr */ } return; }
     await openHub({ worldId: cur.worldId, end: true });
 }
 

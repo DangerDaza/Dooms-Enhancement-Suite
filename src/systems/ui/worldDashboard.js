@@ -157,7 +157,7 @@ function build() {
         <div id="${POPUP_ID}" class="rpg-settings-popup" role="dialog" aria-modal="true" aria-labelledby="rpg-world-title" style="display: none;">
             <div class="rpg-settings-popup-content">
                 <header class="rpg-settings-popup-header">
-                    <h3 id="rpg-world-title"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>Map</span></h3>
+                    <h3 id="rpg-world-title"><i class="fa-solid fa-compass" aria-hidden="true"></i> <span>Hub</span></h3>
                     <button id="rpg-close-world" class="rpg-popup-close" type="button" aria-label="Close">&times;</button>
                 </header>
                 <div class="rpg-settings-popup-body">
@@ -167,7 +167,7 @@ function build() {
                     <button id="rpg-world-advance-now" class="rpg-accordion-action-btn" type="button" title="Run the plot advancer now (the same as /advance)"><i class="fa-solid fa-forward"></i> Advance now</button>
                     <button id="rpg-world-refresh" class="rpg-accordion-action-btn" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
                     <button id="rpg-world-edit" class="rpg-accordion-action-btn" type="button" title="Open this chat's world in the World Builder"><i class="fa-solid fa-earth-europe"></i> <span>Edit this world</span></button>
-                    <button id="rpg-world-hub" class="rpg-accordion-action-btn" type="button" title="This scene's world in the Hub: its map, its news, its scenes" style="display: none;"><i class="fa-solid fa-compass"></i> Hub</button>
+                    <button id="rpg-world-hub" class="rpg-accordion-action-btn" type="button" title="This scene's world on the Map: its picture, its news, its scenes" style="display: none;"><i class="fa-solid fa-map"></i> Map</button>
                     <span class="dooms-world-result"></span>
                 </footer>
             </div>
@@ -177,7 +177,7 @@ function build() {
     $(document).on('click', '#rpg-world-refresh', () => { lastResult = ''; render(); });
     $(document).on('click', '#rpg-world-hub', () => {
         closeWorldDashboard();
-        import('./hub.js').then(m => m.openHub()).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+        import('./hub.js').then(m => m.openHub()).catch(err => console.error('[Dooms Tracker] The Map failed to load:', err));
     });
     $(document).on('click', '#rpg-world-edit', () => {
         const s = getWorldState();

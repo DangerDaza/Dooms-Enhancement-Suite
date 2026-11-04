@@ -1180,7 +1180,22 @@ function registerWorldCommands() {
                     return `The window could not open: ${e && e.message ? e.message : e}`;
                 }
             },
-            helpString: 'Live World: opens the Map window (the places the story has been to as pictures, Travel here, the news, rumours, people and completed quests).',
+            helpString: 'Live World: opens the Hub window, this chat\'s own (the places the story has been to as pictures, Travel here, the news, rumours, people and completed quests); the same as /hub.',
+            returns: 'nothing',
+        }));
+        // The window's name since 2026-11-04: the Hub (the world's window is the Map, /map). /liveworld stays as its older name.
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'hub',
+            callback: async () => {
+                try {
+                    const m = await import('../ui/worldDashboard.js');
+                    m.openWorldDashboard();
+                    return '';
+                } catch (e) {
+                    return `The window could not open: ${e && e.message ? e.message : e}`;
+                }
+            },
+            helpString: 'Live World: opens the Hub window, this chat\'s own (the places the story has been to as pictures, Travel here, the news, rumours, people and completed quests); the same as /liveworld.',
             returns: 'nothing',
         }));
     } catch (e) {

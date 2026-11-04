@@ -4,7 +4,7 @@ The owner (2026-10-29): "We need to rework the Live World. We can't have
 everything tied to Skyreach or the other one. We need a way for people to
 build their own." Until now a world was one of two JSON files shipped in
 `worldpacks/` (Skyreach, the owner's placeholder draft, and Harbourside,
-the example) or JSON pasted into Settings → Live World. The Map window
+the example) or JSON pasted into Settings → Live World. The Hub window (the Map window until 2026-11-04)
 already records the places the story visits without the pack naming them
 (D82); the clocks, the cast and the world's name still came from a file.
 

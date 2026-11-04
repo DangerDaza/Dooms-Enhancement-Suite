@@ -1,5 +1,14 @@
 # The Hub (Live World, fourth pass: many small chats)
 
+**Names (the owner, 2026-11-04):** on screen this window is **the Map**
+(Map in the D menu, `/map`, Settings → Live World → The Map, the strip's
+Map, the builder's Open the Map), since the map is what it is; the per-chat
+window of visited places (`docs/map-window-plan.md`) is **the Hub** (Hub in
+the D menu, `/hub` and `/liveworld`, Open the Hub), and will likely go.
+This document, the code's module names, element ids, settings keys and the
+System Log's `[Hub]` prefix keep "the hub" for the feature. Where a passage
+below names a button or a command, read the new name.
+
 The owner (2026-11-02): "I am thinking of a feature that the map can become.
 We are throwing the long chat style out and going to many small chats. I
 want a hub panel that takes up most of the screen. It has a map and every

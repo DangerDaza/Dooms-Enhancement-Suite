@@ -25,6 +25,16 @@ state and the next moves.
   credits also get a courtesy line for Multihog's D&D framework (GPL-3.0;
   its design was read and compared, DES's dice were written from scratch,
   nothing copied, nothing owed; the credit was agreed for the release).
+- **Two windows, two names (2026-11-04).** On screen the world's window
+  (the picture with its places, the panels, the scenes; `docs/hub-plan.md`,
+  `src/systems/ui/hub.js`) is **the Map**: Map in the D menu, `/map`,
+  Settings → Live World → The Map. The per-chat window of visited places
+  (`docs/map-window-plan.md`, `src/systems/ui/worldDashboard.js`) is **the
+  Hub**: Hub in the D menu, `/hub` and `/liveworld`, Open the Hub; the owner
+  expects it to go. The plans, the module names, the element ids, the
+  settings keys and the System Log's `[Hub]` prefix keep the old names;
+  this file's older entries below do too. Anything a user reads says the
+  new ones.
 - **Working style:** ask clarifying questions; say the plan before acting;
   one tested commit per step, pushed as you go; when you talk about removing
   something, Jordan likes "𝖆𝖓𝖓𝖎𝖍𝖎𝖑𝖆𝖙𝖊" in that font.

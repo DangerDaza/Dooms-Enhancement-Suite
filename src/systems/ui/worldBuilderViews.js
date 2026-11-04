@@ -91,7 +91,7 @@ function emptyEditorHtml(worlds) {
     const any = worlds.some(x => x && x.custom);
     return `<div class="dooms-wb-hint dooms-wb-welcome">
         <p>${any ? 'Pick a world on the left, or make one.' : 'Make a world: New world, Draft from this chat, Start from Harbourside, or Import a file.'}</p>
-        <p>A world is its <strong>places</strong> (a tree: a region, its districts, the rooms the story uses), its <strong>clocks</strong> (what builds between scenes, with what anyone could see at each step) and its <strong>cast</strong> (who lives there, and where). A chat keeps the world it starts in; new chats start in the one chosen in Settings → Live World, the blank world unless you choose another. The blank world grows from play: the places the story names, the people who speak; Make this a world in the Map window keeps what grew.</p>
+        <p>A world is its <strong>places</strong> (a tree: a region, its districts, the rooms the story uses), its <strong>clocks</strong> (what builds between scenes, with what anyone could see at each step) and its <strong>cast</strong> (who lives there, and where). A chat keeps the world it starts in; new chats start in the one chosen in Settings → Live World, the blank world unless you choose another. The blank world grows from play: the places the story names, the people who speak; Make this a world in the Hub window keeps what grew.</p>
     </div>`;
 }
 
@@ -125,7 +125,7 @@ function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, w
         <button type="button" class="rpg-accordion-action-btn" data-act="copy"${errors.length ? ' disabled' : ''} title="Keep it under a new name as well"><i class="fa-solid fa-copy" aria-hidden="true"></i> Save as copy</button>
         <button type="button" class="rpg-accordion-action-btn" data-act="export"${errors.length ? ' disabled' : ''} title="Download the world as a JSON file"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Export</button>
         ${!isNew && !isTemplate ? `<button type="button" class="rpg-accordion-action-btn" data-act="use"${usedForNew ? ' disabled' : ''} title="New chats start in this world">${usedForNew ? 'Used for new chats' : 'Use for new chats'}</button>` : ''}
-        ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn" data-act="play" title="This world in the Hub: its map, its news, its scenes (docs/hub-plan.md)"><i class="fa-solid fa-compass" aria-hidden="true"></i> Play from the hub</button>' : ''}
+        ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn" data-act="play" title="This world on the Map: its picture, its news, its scenes (docs/hub-plan.md)"><i class="fa-solid fa-map" aria-hidden="true"></i> Open the Map</button>' : ''}
         ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn is-danger" data-act="delete" title="Remove the world; a chat in it goes on in the blank world until it is imported back"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>' : ''}
     </div>`;
     return `${head}<nav class="dooms-wb-tabs" role="tablist" aria-label="The world's parts">${tabs}</nav><div class="dooms-wb-pane" data-tab="${active}">${pane}</div><div class="dooms-wb-status">${statusHtml(errors, warnings, note)}</div>${foot}`;
@@ -160,10 +160,10 @@ function field(key, label, control, hint) {
 function worldPane(d) {
     return `<p class="dooms-wb-hint">A world is what Live World keeps moving while you play: its <strong>places</strong> (the Places tab), its <strong>clocks</strong>, the pressures that build between scenes (Clocks), and the <strong>people</strong> who live there (Cast). Every few replies a quiet request, the plot advancer, reads what happened and moves the clocks and the people; each turn the narrator is told in one line where things stand. This tab is the world itself: what it is called, what it is, and how the narrator hears of it.</p>
     <div class="dooms-wb-fields">
-        ${field('name', 'Name', `<input type="text" class="rpg-accordion-input" data-f="name" value="${attr(d.name)}" maxlength="80" placeholder="The world's name">`, 'Shown across the top of the Map window, and in the narrator\'s line as "World of …".')}
+        ${field('name', 'Name', `<input type="text" class="rpg-accordion-input" data-f="name" value="${attr(d.name)}" maxlength="80" placeholder="The world's name">`, 'Shown across the top of the Hub window and the Map, and in the narrator\'s line as "World of …".')}
         ${field('id', 'Id', `<input type="text" class="rpg-accordion-input" data-f="id" value="${attr(d.id)}" maxlength="60" placeholder="a-short-slug">`, 'A short handle in letters, digits and dashes: the name of the file when the world is exported, and how a chat remembers which world it plays in. Changing it on a saved world moves the world, and the chats in it follow.')}
         ${field('description', 'Description', `<textarea class="rpg-accordion-input" data-f="description" rows="2" maxlength="400" placeholder="One or two sentences: what this world is.">${e(d.description || '')}</textarea>`, 'A sentence or two for the plot advancer: the kind of world this is, so what it moves fits. The narrator never sees this.')}
-        ${field('blurb', 'Blurb', `<textarea class="rpg-accordion-input" data-f="blurb" rows="2" maxlength="600" placeholder="What the world talks about as the story opens.">${e(d.blurb || '')}</textarea>`, 'What people are saying as the story opens. The Map window\'s Rumours panel shows it, and the plot advancer rewrites it as things change.')}
+        ${field('blurb', 'Blurb', `<textarea class="rpg-accordion-input" data-f="blurb" rows="2" maxlength="600" placeholder="What the world talks about as the story opens.">${e(d.blurb || '')}</textarea>`, 'What people are saying as the story opens. The Rumours panels (the Hub\'s and the Map\'s) show it, and the plot advancer rewrites it as things change.')}
         ${field('template', 'The narrator\'s line (optional)', `<textarea class="rpg-accordion-input" data-f="template" rows="2" placeholder="[WORLD OF {name}: clocks: {clocks}. Last seen: {where}.]">${e(d.template || '')}</textarea>`, 'Each turn the narrator gets one line on where the world stands: the clocks and where people were last seen. Leave this empty for the standard line, or write your own with {name}, {clocks} and {where} where those go.')}
     </div>`;
 }
@@ -201,7 +201,7 @@ function placesPane(d) {
         <span class="dooms-wb-id" title="The id the advancer uses">${e(place.id)}</span>
         <button type="button" class="dooms-wb-remove" data-act="remove" data-kind="places" data-i="${i}" title="Remove this place" aria-label="Remove ${attr(place.label)}">&times;</button>
     </div>`).join('');
-    return `<p class="dooms-wb-hint">The places the story moves through, as a tree: a region, its districts, the rooms the story uses. "Inside" nests a place; the Map window shows a place's parent under its name. A place the story names that is not here is kept by the Map all the same.</p>
+    return `<p class="dooms-wb-hint">The places the story moves through, as a tree: a region, its districts, the rooms the story uses. "Inside" nests a place; the Hub window shows a place's parent under its name. A place the story names that is not here is kept by the Map all the same.</p>
     <div class="dooms-wb-rows">${rows || '<p class="dooms-world-muted">No places yet.</p>'}</div>
     <button type="button" class="rpg-accordion-action-btn" data-act="add-place"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add a place</button>`;
 }
@@ -265,8 +265,8 @@ function mapPane(d, { picked = '', busy = '' } = {}) {
     </div>`;
     const frame = has
         ? `<div class="dooms-wb-map" role="application" aria-label="The map: drag a place onto it, drag a node to move it"><p class="dooms-wb-map-wait dooms-world-muted">${picked ? 'Tap the picture where the place is.' : 'The picture is loading…'}</p></div>`
-        : `<div class="dooms-wb-map is-empty"><p class="dooms-world-muted">No picture yet. Upload one or have one drawn, then drag the places onto it. The hub shows the world's places as a tree until then.</p></div>`;
-    return `<p class="dooms-wb-hint">The world's map: a picture, and its places as nodes on it (the Hub's board). Drag a place from the list onto the picture, or pick it and tap the spot; drag a node to move it; a node's menu takes it off. Save keeps the spots with the world.</p>
+        : `<div class="dooms-wb-map is-empty"><p class="dooms-world-muted">No picture yet. Upload one or have one drawn, then drag the places onto it. The Map shows the world's places as a tree until then.</p></div>`;
+    return `<p class="dooms-wb-hint">The world's map: a picture, and its places as nodes on it (the Map window's board). Drag a place from the list onto the picture, or pick it and tap the spot; drag a node to move it; a node's menu takes it off. Save keeps the spots with the world.</p>
     ${row}
     <div class="dooms-wb-map-wrap">${frame}${lists}</div>`;
 }
@@ -280,7 +280,7 @@ function castPane(d) {
         <select class="rpg-accordion-select dooms-wb-tier" data-f="cast.${i}.tier" aria-label="Tier" title="Known: the player has met them. Heard of: only spoken of"><option value="known"${m.tier === 'known' ? ' selected' : ''}>known</option><option value="heard"${m.tier !== 'known' ? ' selected' : ''}>heard of</option></select>
         <button type="button" class="dooms-wb-remove" data-act="remove" data-kind="cast" data-i="${i}" title="Remove" aria-label="Remove ${attr(m.name)}">&times;</button>
     </div>`).join('');
-    return `<p class="dooms-wb-hint">The people of the world and where they start. Known: on the Map's People panel from the first scene; heard of: named, not met yet. The story adds whoever speaks; the player is never cast.</p>
+    return `<p class="dooms-wb-hint">The people of the world and where they start. Known: on the People panels from the first scene; heard of: named, not met yet. The story adds whoever speaks; the player is never cast.</p>
     <div class="dooms-wb-rows">${rows || '<p class="dooms-world-muted">No one yet.</p>'}</div>
     <button type="button" class="rpg-accordion-action-btn" data-act="add-person"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add a person</button>`;
 }

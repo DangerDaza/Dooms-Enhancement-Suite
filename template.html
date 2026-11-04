@@ -1855,7 +1855,7 @@
                             <span class="rpg-setting-label">Your worlds</span>
                             <span class="rpg-setting-hint">The World Builder makes and edits worlds: places as a tree, clocks
                                 with a public effect per step, a cast. Draft one from this chat, start from Harbourside,
-                                or import a file; Export writes one. In the Map window, Make this a world keeps what a
+                                or import a file; Export writes one. In the Hub window, Make this a world keeps what a
                                 chat's blank world grew.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                                 <button id="rpg-world-builder" class="rpg-accordion-action-btn" type="button" title="Open the World Builder"><i class="fa-solid fa-earth-europe"></i> Open the World Builder</button>
@@ -1865,11 +1865,11 @@
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">This chat</span>
-                            <span class="rpg-setting-hint">Open the map shows this chat's world in a window: the places the story has been to as pictures, Travel here, and the news, rumours, people and completed quests below (the same as /liveworld and the D menu's Map). Advance now
+                            <span class="rpg-setting-hint">Open the Hub shows this chat's own window: the places the story has been to as pictures, Travel here, and the news, rumours, people and completed quests below (the same as /hub, /liveworld and the D menu's Hub). Advance now
                                 runs the plot advancer at once (the same as /advance). Re-seed throws this chat's world
                                 away and starts it again from the pack above.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                            <button id="rpg-world-dashboard" class="rpg-accordion-action-btn" type="button" title="Open the Map window (the same as /liveworld)"><i class="fa-solid fa-map"></i> Open the map</button>
+                            <button id="rpg-world-dashboard" class="rpg-accordion-action-btn" type="button" title="Open the Hub window (the same as /hub and /liveworld)"><i class="fa-solid fa-compass"></i> Open the Hub</button>
                             <button id="rpg-world-advance" class="rpg-accordion-action-btn" type="button" title="Run the plot advancer now"><i class="fa-solid fa-forward"></i> Advance now</button>
                             <button id="rpg-world-reseed" class="rpg-accordion-action-btn" type="button" title="Throw this chat's world away and seed it again"><i class="fa-solid fa-seedling"></i> Re-seed this chat</button>
                             </div>
@@ -1952,14 +1952,14 @@
                     </div>
                     <!-- The Hub (docs/hub-plan.md D113–D133): a world played as many small chats. Bound in index.js (#rpg-hub-*);
                          the feature is src/systems/features/hub.js; the window src/systems/ui/hub.js. -->
-                    <div class="rpg-subsection-label rpg-world-sub" style="margin-top:12px;">The Hub <span class="rpg-accordion-badge rpg-beta-badge" title="The Hub is in beta: nothing happens until a world has a narrator card.">Beta</span></div>
+                    <div class="rpg-subsection-label rpg-world-sub" style="margin-top:12px;">The Map <span class="rpg-accordion-badge rpg-beta-badge" title="The Map is in beta: nothing happens until a world has a narrator card.">Beta</span></div>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">Play a world from the hub</span>
-                            <span class="rpg-setting-hint">A world played as many small chats. Each scene is a fresh chat on the
+                            <span class="rpg-setting-label">Play a world from the Map</span>
+                            <span class="rpg-setting-hint">A world played as many small chats, from its map. Each scene is a fresh chat on the
                                 world's narrator card, opened with a brief and three openers; End remembers it (a recap, the
                                 ledger, the world moved, a snapshot the next scene starts from). The long chat stays as it
-                                is: a chat the hub did not start plays exactly as today.</span>
+                                is: a chat the Map did not start plays exactly as today.</span>
                         </div>
                         <select id="rpg-hub-world" class="rpg-accordion-select"></select>
                     </div>
@@ -1977,20 +1977,21 @@
                     <p class="rpg-note-text rpg-world-sub" id="rpg-hub-status" style="margin-top:4px;"></p>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">The hub</span>
-                            <span class="rpg-setting-hint">Open the hub shows the world and its scenes (the same as Hub in the D
-                                menu and /hub); Start a scene opens the Start sheet. End remembers: the recap always; the
+                            <span class="rpg-setting-label">The Map</span>
+                            <span class="rpg-setting-hint">Open the Map shows the world's picture with its places, the people on them,
+                                the news, rumours, hooks and scenes beside it (the same as Map in the D menu and /map);
+                                Start a scene opens the Start sheet. End remembers: the recap always; the
                                 ledger when Canon is on; the world when Live World is on.</span>
                             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                                <button id="rpg-hub-open" class="rpg-accordion-action-btn" type="button" title="The world's window"><i class="fa-solid fa-compass"></i> Open the hub</button>
+                                <button id="rpg-hub-open" class="rpg-accordion-action-btn" type="button" title="The world's window: its map, its news, its scenes"><i class="fa-solid fa-map"></i> Open the Map</button>
                                 <button id="rpg-hub-start" class="rpg-accordion-action-btn" type="button" title="A fresh chat on the narrator card, from a place of the world"><i class="fa-solid fa-play"></i> Start a scene</button>
                             </div>
                         </div>
                     </div>
                     <div class="rpg-setting-row rpg-world-sub">
                         <div class="rpg-setting-label-group">
-                            <span class="rpg-setting-label">The hub closes when a scene opens</span>
-                            <span class="rpg-setting-hint">Off: the hub stays open over the new chat.</span>
+                            <span class="rpg-setting-label">The Map closes when a scene opens</span>
+                            <span class="rpg-setting-hint">Off: the Map stays open over the new chat.</span>
                         </div>
                         <label class="rpg-toggle-switch">
                             <input type="checkbox" id="rpg-hub-close" />
@@ -2275,7 +2276,7 @@
                     <div class="rpg-setting-row">
                         <div class="rpg-setting-label-group">
                             <span class="rpg-setting-label">Draw new places automatically</span>
-                            <span class="rpg-setting-hint">The Map window (Live World) shows the places the story has been to as pictures.
+                            <span class="rpg-setting-hint">The Hub window (Live World) shows the places the story has been to as pictures.
                                 Draw on a place asks the AI for a short description of it from the scenes there and renders it
                                 with the source above; with this on, a place is drawn the first time the story reaches it, after
                                 the reply, with a toast. Off: only when you press Draw.</span>

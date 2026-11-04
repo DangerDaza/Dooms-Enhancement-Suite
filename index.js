@@ -2237,7 +2237,7 @@ function bindSettingsUI() {
         const avatar = String($(this).val() || '');
         if (!worldId) return;
         const r = avatar ? bindCard(worldId, avatar) : { ok: unbindCard(worldId) || true };
-        if (!r.ok) toastr.warning(r.reason === 'bound-elsewhere' ? `That card already narrates "${r.world}".` : `The card could not be bound (${r.reason}).`, 'The Hub', { timeOut: 5000 });
+        if (!r.ok) toastr.warning(r.reason === 'bound-elsewhere' ? `That card already narrates "${r.world}".` : `The card could not be bound (${r.reason}).`, 'The Map', { timeOut: 5000 });
         renderHubSettings();
     });
     $(document).on('click', '#rpg-hub-make', async function () {
@@ -2247,8 +2247,8 @@ function bindSettingsUI() {
         $b.prop('disabled', true);
         try {
             const r = await makeNarratorCard(worldId);
-            if (r.ok) toastr.success(`"${r.name}" narrates this world now.`, 'The Hub', { timeOut: 4000 });
-            else toastr.warning(`The card could not be made: ${r.error || r.reason}`, 'The Hub', { timeOut: 7000 });
+            if (r.ok) toastr.success(`"${r.name}" narrates this world now.`, 'The Map', { timeOut: 4000 });
+            else toastr.warning(`The card could not be made: ${r.error || r.reason}`, 'The Map', { timeOut: 7000 });
         } finally {
             $b.prop('disabled', false);
             renderHubSettings();
@@ -2256,11 +2256,11 @@ function bindSettingsUI() {
     });
     $(document).on('click', '#rpg-hub-open', function () {
         const worldId = String($('#rpg-hub-world').val() || '');
-        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId })).catch(err => console.error('[Dooms Tracker] The Map failed to load:', err));
     });
     $(document).on('click', '#rpg-hub-start', function () {
         const worldId = String($('#rpg-hub-world').val() || '');
-        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId, start: true })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId, start: true })).catch(err => console.error('[Dooms Tracker] The Map failed to load:', err));
     });
     $(document).on('change', '#rpg-hub-close', function () { _hubRules().closeOnStart = $(this).prop('checked'); saveSettings(); });
     window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
@@ -3940,31 +3940,32 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
-            // The Map window (docs/map-window-plan.md), listed whatever Live
+            // The Hub, this chat's own window (docs/map-window-plan.md; called the Map until 2026-11-04), listed whatever Live
             // World's switch says: the window itself says when Live World is
             // off, and the entry sits in the hide-toggles below like the rest.
             // (Roll a check left the fly-out on 2026-10-29: the player's card
-            // menu and the chip by the message box keep it.)
+            // menu and the chip by the message box keep it.) The id is the
+            // hide-toggles' key and stays.
             items.push({
                 id: 'live-world',
-                label: 'Map',
-                iconClass: 'fa-solid fa-map',
+                label: 'Hub',
+                iconClass: 'fa-solid fa-compass',
                 action: () => {
                     import('./src/systems/ui/worldDashboard.js')
                         .then(m => m.openWorldDashboard())
                         .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
                 },
             });
-            // The Hub (docs/hub-plan.md D127): the world's window, and End scene for the scene in front; listed
-            // whatever Live World's switch says, like Map (the window itself says when the hub is off).
+            // The Map, the world's window (docs/hub-plan.md D127; the plan calls it the hub), and End scene for the scene in
+            // front; listed whatever Live World's switch says, like Hub (the window itself says when Live World is off).
             items.push({
                 id: 'hub',
-                label: 'Hub',
-                iconClass: 'fa-solid fa-compass',
+                label: 'Map',
+                iconClass: 'fa-solid fa-map',
                 action: () => {
                     import('./src/systems/ui/hub.js')
                         .then(m => m.openHub())
-                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+                        .catch(err => console.error('[Dooms Tracker] The Map failed to load:', err));
                 },
             });
             items.push({
@@ -3974,7 +3975,7 @@ async function initUI() {
                 action: () => {
                     import('./src/systems/ui/hub.js')
                         .then(m => m.openEndSheet())
-                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+                        .catch(err => console.error('[Dooms Tracker] The Map failed to load:', err));
                 },
             });
             items.push({
