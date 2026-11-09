@@ -49,6 +49,7 @@ const MUST_BE_LAZY = [
     'src/systems/ui/atlas.js',
     'src/systems/ui/atlasViews.js',
     'src/systems/ui/atlasMap.js',
+    'src/systems/features/atlasBook.js',
     'lib/leaflet/leaflet-src.esm.js',
 ];
 

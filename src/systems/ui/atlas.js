@@ -12,7 +12,9 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, ELSEWHERE_ID } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem } from '../../utils/atlas.js';
+import { safeImageUrl } from '../../utils/worldBoard.js';
+import { getBook, setBook, proposeTidy } from '../features/atlasBook.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
@@ -21,6 +23,8 @@ import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHAN
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml } from './atlasViews.js';
+
+const MOVE_KEY = 'dooms-atlas-moving';
 
 const TAB_KEY = 'dooms-atlas-tab';
 const HIDDEN_KEY = 'dooms-atlas-hidden';
@@ -41,6 +45,12 @@ let boardWorld = '';      // the world the mounted map shows: another world's op
 let boardView = null;     // the view kept across a close, with its world
 let mountToken = 0;
 let model = null;
+let moving = readFlag(MOVE_KEY);    // markers can be dragged
+let armed = null;         // what waits for a tap on the map: { kind: 'place', id, label } (a tray row) or { kind: 'add' } (a new marker)
+let cardMode = 'view';    // the open card: 'view' | 'edit' | 'merge'
+let tidy = { busy: false, items: [], error: '', asked: false };    // the clean-up pass: what it proposed, to be approved (D155)
+let tidyChat = null;      // the chat the proposals are about: another chat's are dropped
+let brokenPicture = '';   // a world's picture that would not load: the drawn land stands in
 
 function readTab() {
     try { const raw = localStorage.getItem(TAB_KEY); return ATLAS_TABS.some(t => t.id === raw) ? raw : ATLAS_TABS[0].id; } catch (e) { return ATLAS_TABS[0].id; }
@@ -83,7 +93,7 @@ function read() {
     const cfg = liveWorldConfig(extensionSettings);
     const empty = worldEmptyMessage({ state, pack, cfg, packError: getPackError(), masterOn: !!extensionSettings.enabled });
     if (empty) { model = null; return { state, pack, cfg, empty }; }
-    model = atlasModel({ pack, state, player: playerName(), worldName: state.name || pack.name || '' });
+    model = atlasModel({ pack, state, player: playerName(), book: getBook() });
     return { state, pack, cfg, empty: '' };
 }
 
@@ -103,15 +113,60 @@ function cardFor(marker) {
     const ctx = read();
     if (!model) return '';
     const m = model.markers.find(x => x.id === marker.id) || marker;
-    const said = saidAbout(m, ctx);
+    const said = cardMode === 'view' ? saidAbout(m, ctx) : { rumours: [], news: [] };
     const pending = getPendingQuestCut();
+    const others = [...model.markers, ...model.tray].filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label })).sort((a, b) => a.label.localeCompare(b.label));
     return atlasCardHtml({
-        marker: m,
+        marker: m, mode: cardMode, others,
         distance: describeDistance(model, model.party, m.id),
-        canTravel: isLiveWorldOn() && chatOpen() && m.id !== ELSEWHERE_ID,
+        canTravel: isLiveWorldOn() && chatOpen(),
         travelling: travelling || !!(pending && pending.kind === 'travel'),
         rumours: said.rumours, news: said.news, portraits: portraitOf,
     });
+}
+
+/** The world's own picture, when it has one that loads (D154). */
+function pictureOf(pack) {
+    const m = pack && pack.map;
+    if (!m || !m.image || m.image === brokenPicture) return null;
+    const image = safeImageUrl(m.image);
+    return image && m.width > 0 && m.height > 0 ? { image, width: m.width, height: m.height } : null;
+}
+
+/** The book changed: saved with the chat, everything drawn again. */
+function commit(next, word = '') {
+    if (!setBook(next)) { result = 'The map could not be saved: no chat is open.'; render(); return false; }
+    result = word;
+    render();
+    return true;
+}
+
+/** The word across the top of the map while something waits for a tap. */
+function setHint(text) {
+    const $h = $(`${root()} .dooms-atlas-hint`);
+    $h.prop('hidden', !text).text(text || '');
+}
+
+function arm(next) {
+    armed = next;
+    setHint(!armed ? '' : armed.kind === 'add' ? 'Tap the map where the new marker goes. Esc cancels.' : `Tap the map where ${armed.label} goes. Esc cancels.`);
+    $(root()).toggleClass('is-armed', !!armed);
+    $(`${root()} .dooms-atlas-tool[data-act="add"]`).toggleClass('is-on', !!armed && armed.kind === 'add');
+    $(`${root()} .dooms-atlas-tray-row`).each(function () { $(this).toggleClass('is-armed', !!armed && armed.kind === 'place' && this.getAttribute('data-id') === armed.id); });
+}
+
+/** The map tapped: what was waiting lands there. */
+function tapped(at) {
+    if (!armed) return;
+    const a = armed;
+    arm(null);
+    if (a.kind === 'place') { commit(placeAt(getBook(), a.id, at)); return; }
+    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y });
+    if (!commit(made.book)) return;
+    if (!board) return;
+    board.open(made.id);    // opening closes any other card, which sets the mode back to reading
+    cardMode = 'edit';      // the new marker opens on its name
+    board.redrawCard();
 }
 
 function tabBody({ state, pack, cfg }) {
@@ -119,7 +174,7 @@ function tabBody({ state, pack, cfg }) {
     if (tab === 'news') return newsHtml({ state, pack, cfg, feed: feedLimit });
     if (tab === 'rumours') return rumoursHtml({ state, pack, cfg });
     if (tab === 'hooks') return hooksHtml({ hooks: getHooks(), busy: isProposing() });
-    return atlasPlacesHtml({ markers: model ? model.markers : [], query, hidden });
+    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy });
 }
 
 function renderSide(ctx) {
@@ -148,7 +203,10 @@ function setScale({ px, length, unit }) {
     if (!px || !length) { $s.hide(); return; }
     $s.show();
     $s.find('.dooms-atlas-scale-bar').css('width', `${px}px`);
-    $s.find('.dooms-atlas-scale-text').text(`${length} ${unit === 'mi' ? (length === 1 ? 'mile' : 'miles') : unit === 'league' ? (length === 1 ? 'league' : 'leagues') : 'km'}`);
+    let words = `${length} ${unit === 'mi' ? (length === 1 ? 'mile' : 'miles') : unit === 'league' ? (length === 1 ? 'league' : 'leagues') : 'km'}`;
+    if (unit === 'mi' && length < 0.2) words = `${Math.round(length * 5280 / 10) * 10} feet`;      // a town's map reads in feet
+    if (unit === 'km' && length < 1) words = `${Math.round(length * 1000)} m`;
+    $s.find('.dooms-atlas-scale-text').text(words);
 }
 
 function unmount({ keepView = true } = {}) {
@@ -172,9 +230,17 @@ async function mount(ctx) {
     }
     if (token !== mountToken || !isOpen || !model || !document.body.contains(host)) return;
     const made = await mod.mountAtlasMap(host, {
-        model, hidden, query, portraits: portraitOf, card: cardFor,
+        model, picture: pictureOf(ctx.pack), hidden, query, moving, portraits: portraitOf, card: cardFor,
         view: boardView && boardView.world === world ? boardView : null,
-        on: { scale: setScale, close: () => closeFacePopover() },
+        on: {
+            scale: setScale,
+            open: () => { /* the card's mode was set by whoever opened it */ },
+            close: () => { closeFacePopover(); cardMode = 'view'; },
+            drop: (id, at) => { arm(null); commit(placeAt(getBook(), id, at)); },
+            tap: tapped,
+            move: (id, at) => commit(placeAt(getBook(), id, at)),
+            pictureError: () => { brokenPicture = ctx.pack && ctx.pack.map ? ctx.pack.map.image : ''; result = 'The world\'s picture could not be loaded; the drawn map stands in.'; setTimeout(render, 0); },
+        },
     });
     if (token !== mountToken || !isOpen) { try { made.destroy(); } catch (e) { /* gone */ } return; }
     board = made;
@@ -186,19 +252,25 @@ async function mount(ctx) {
 function render() {
     if (!isOpen) return;
     const ctx = read();
+    if (tidyChat !== null && tidyChat !== worldKey()) { tidy = { busy: false, items: [], error: '', asked: false }; tidyChat = null; }    // another chat's proposals are not this one's
     renderSide(ctx);
     const $empty = $(`${root()} .dooms-atlas-empty`);
-    if (ctx.empty || !model || model.empty) {
+    if (ctx.empty || !model) {
         unmount({ keepView: false });
-        $empty.prop('hidden', false).html(ctx.empty || '<p>The map is empty: this world has no places yet. They appear as the story names them, or add them in the World Builder.</p>');
+        $empty.prop('hidden', false).html(ctx.empty || '<p>There is no world to draw.</p>');
         $(`${root()} .dooms-atlas-scale`).hide();
         return;
     }
     $empty.prop('hidden', true).empty();
     const world = `${ctx.state.pack || ''}|${ctx.state.name || ''}`;
     if (board && boardWorld !== world) unmount({ keepView: false });
-    if (board) board.update({ model, hidden, query });
+    if (board) board.update({ model, picture: pictureOf(ctx.pack), hidden, query, moving });
     else mount(ctx);
+    // An empty map says how it fills: nothing lands on it by itself (D145).
+    const word = model.markers.length ? '' : (model.tray.length ? 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.' : 'This world has no places yet. They appear in the list as the story names them; the pin button above adds one by hand.');
+    if (!armed) setHint(word);
+    $(root()).toggleClass('is-armed', !!armed);
+    $(`${root()} .dooms-atlas-tool[data-act="move"]`).toggleClass('is-on', moving);
 }
 
 /** The search typed: the list and the markers follow; the box keeps its caret (the sidebar is not drawn again). */
@@ -218,6 +290,7 @@ function showMarker(id) {
     const m = model.markers.find(x => x.id === id);
     if (!m) return;
     if (hidden.includes(m.kind)) { hidden = hidden.filter(k => k !== m.kind); keep(HIDDEN_KEY, JSON.stringify(hidden)); render(); }
+    cardMode = 'view';
     board.show(id);
     try { if (window.matchMedia('(max-width: 720px)').matches) setFolded(true); } catch (e) { /* no matchMedia */ }
 }
@@ -230,6 +303,17 @@ function showPlaceOf(name) {
     if (!m) { result = `${name} is nowhere on the map yet.`; render(); return; }
     result = '';
     showMarker(m.id);
+}
+
+/** The chat's world, as a key: what a kept view and a clean-up's proposals belong to. */
+function worldKey() {
+    const st = getWorldState();
+    return st ? `${st.pack || ''}|${st.name || ''}` : '';
+}
+
+function labelOf(id) {
+    const m = model ? [...model.markers, ...model.tray, ...model.deleted].find(x => x.id === id) : null;
+    return m ? m.label : 'The place';
 }
 
 function setFolded(v) {
@@ -275,6 +359,58 @@ function build() {
             if (act === 'kinds-on') { setHidden([]); return; }
             if (act === 'kinds-off') { setHidden(ATLAS_KINDS.map(k => k.id)); return; }
             if (act === 'goto') { showMarker(this.getAttribute('data-id') || ''); return; }
+            // The markers (D145, D151): placed, made, moved, edited, merged, taken off, deleted, brought back.
+            const id = this.getAttribute('data-id') || '';
+            if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
+            if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); return; }
+            if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
+            if (act === 'place-all') { if (model) commit(placeAll(getBook(), model, getActivePack()), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (board) board.fit(); return; }
+            if (act === 'delete') { ev.stopPropagation(); const label = labelOf(id); if (board) board.closeCard(); commit(removeMarker(getBook(), id), `${label} is deleted. It is under Deleted at the foot of Places if you want it back.`); return; }
+            if (act === 'restore') { commit(restoreMarker(getBook(), id), 'Brought back: it waits in the list to be placed.'); return; }
+            if (act === 'unplace') { ev.stopPropagation(); if (board) board.closeCard(); commit(unplace(getBook(), id)); return; }
+            if (act === 'unmerge') { ev.stopPropagation(); commit(unmerge(getBook(), id), 'Split off: it waits in the list to be placed.'); return; }
+            // The clean-up pass (D155): asked for, then each proposal done or passed over.
+            if (act === 'tidy') {
+                if (!model || tidy.busy) return;
+                const world = worldKey();
+                tidy = { busy: true, items: [], error: '', asked: true };
+                tidyChat = world;
+                render();
+                const r = await proposeTidy(model, { world: (getWorldState() || {}).name || '' });
+                if (tidyChat !== world) return;    // the chat changed while the AI read
+                tidy = { busy: false, items: r.ok ? r.items : [], error: r.ok ? '' : (r.error || 'The clean-up could not be asked for.'), asked: true };
+                render();
+                return;
+            }
+            if (act === 'tidy-yes' || act === 'tidy-no') {
+                const i = Number(this.getAttribute('data-i'));
+                const item = tidy.items[i];
+                if (!item) return;
+                tidy = { ...tidy, items: tidy.items.filter((_, k) => k !== i) };
+                if (act === 'tidy-yes') commit(applyTidyItem(getBook(), item), item.kind === 'merge' ? `${item.label} is merged into ${item.toLabel}.` : `${item.label} is deleted.`);
+                else render();
+                return;
+            }
+            if (act === 'tidy-all') { let b = getBook(); const n = tidy.items.length; for (const item of tidy.items) b = applyTidyItem(b, item); tidy = { ...tidy, items: [], asked: false }; commit(b, `${n} done. Anything deleted is under Deleted at the foot of Places.`); return; }
+            if (act === 'tidy-none') { tidy = { ...tidy, items: [], asked: false }; render(); return; }
+            if (act === 'card-edit' || act === 'card-merge' || act === 'card-view') { ev.stopPropagation(); cardMode = act === 'card-edit' ? 'edit' : act === 'card-merge' ? 'merge' : 'view'; if (board) board.redrawCard(); return; }
+            if (act === 'edit-save') {
+                ev.stopPropagation();
+                const $c = $(this).closest('.dooms-atlas-card');
+                cardMode = 'view';
+                commit(editMarker(getBook(), id, { label: String($c.find('[data-field="label"]').val() || ''), kind: String($c.find('[data-field="kind"]').val() || ''), note: String($c.find('[data-field="note"]').val() || '') }));
+                return;
+            }
+            if (act === 'merge-go') {
+                ev.stopPropagation();
+                const to = String($(this).closest('.dooms-atlas-card').find('[data-field="target"]').val() || '');
+                if (!to) return;
+                const label = labelOf(id);
+                cardMode = 'view';
+                if (board) board.closeCard();
+                commit(mergeInto(getBook(), id, to), `${label} is merged into ${labelOf(to)}.`);
+                return;
+            }
             if (act === 'travel') { ev.stopPropagation(); await travel(this.getAttribute('data-id') || ''); return; }
             if (act === 'person') { ev.stopPropagation(); openFacePopover(this, this.getAttribute('data-name') || '', { onBoard: showPlaceOf }); return; }
             if (act === 'advance') {
@@ -317,6 +453,14 @@ function build() {
             render();
         }
     });
+    // A tray row dragged: its id rides the drag, and the map hears the drop.
+    document.addEventListener('dragstart', (ev) => {
+        const row = ev.target && ev.target.closest ? ev.target.closest(`${root()} .dooms-atlas-tray-row[data-id]`) : null;
+        if (!row || !ev.dataTransfer) return;
+        ev.dataTransfer.setData('text/plain', row.getAttribute('data-id') || '');
+        ev.dataTransfer.effectAllowed = 'move';
+    });
+    $(document).on('change', `${root()} .dooms-atlas-scale-select`, function () { commit(withScale(getBook(), String($(this).val() || ''))); });
     $(document).on('input', `${root()} .dooms-atlas-query`, function () { query = String($(this).val() || ''); searched(); });
     $(document).on('keydown', `${root()} .dooms-atlas-query`, function (ev) {
         if (ev.key !== 'Enter') return;
@@ -329,6 +473,7 @@ function build() {
     });
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
+        if (armed) { arm(null); render(); return; }    // what waited for a tap is let go first
         if (board && board.opened()) { board.closeCard(); return; }    // a card on top closes first
         closeAtlas();
     });
@@ -362,7 +507,9 @@ export function closeAtlas() {
     popWindow('atlas');
     closeFacePopover();
     unmount();    // the view is kept with its world: the Atlas opened again shows the map where it was left
-    $(root()).removeClass('is-open').css('display', 'none');
+    armed = null;
+    cardMode = 'view';
+    $(root()).removeClass('is-open is-armed').css('display', 'none');
 }
 
 export function isAtlasOpen() {

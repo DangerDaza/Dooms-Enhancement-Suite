@@ -14,8 +14,11 @@ Map Genie's Elden Ring map (a full-screen map, a sidebar of categories
 with counts that switch markers on and off, a search, a card on a marker).
 
 **Status (2026-11-09):** branch `Project-Long-Shot`, cut from
-`Project-Short-Fuse` at `43837f5`. Phase 1 built (§6). Phases 2 to 4 are
-planned below and not built.
+`Project-Short-Fuse` at `43837f5`. Phase 1 built, then reworked the same
+day from the owner's first look at it (§6, §7: "very ugly", markers "not
+in the right spots, but I didn't place them", "we need a way to create new
+map markers and delete ones that are redundant"). The rest of phase 2, and
+phases 3 and 4, are planned below and not built.
 
 ## 1. Decisions
 
@@ -38,6 +41,11 @@ and any of them is his to change.
 | D148 | The looks restyle it through tokens | The Atlas's colours are custom properties on `#dooms-atlas`, read from the look in force (`--ov-*` under `body[data-dooms-ui]`, else `--rpg-*`). Land, sea, the terrains, the routes and the markers are all tokens; a look changes them in one rule. |
 | D149 | The Hub window is replaced entirely (the owner) | The Hub's window goes with its board. **Open:** whether the scene engine under it (`features/hub.js`: many small chats, the Start and End sheets, the memory) goes too, or keeps a way in from the Atlas. Nothing in phases 1 to 3 depends on the answer; phase 4 does. |
 | D150 | The branch (the owner) | `Project-Long-Shot`, from `Project-Short-Fuse`. |
+| D151 | Nothing lands on the map by itself (the owner) | Replaces the automatic layout of D140 as the way places arrive. A place is a marker once the player gives it a spot; until then it waits in the tray at the head of Places. A row is dragged onto the map, or tapped and then the map is tapped; Place all puts every one at a free spot (the world's places at the layout's spots, the rest on a spiral), to be moved after. What the player did is the chat's **book** (`chat_metadata.dooms_atlas`): the spots, the deletions, the merges, the markers made by hand, the names, kinds and notes changed, the scale. A spot is still written once and never recomputed; a spot the world itself carries (`pack.atlas.spots`) counts as placed. |
+| D152 | Markers are made, moved, renamed, merged, taken off and deleted by hand (the owner) | The pin tool, then a tap: a new marker, opened on its name. The arrows tool: while on, a marker is dragged to where it belongs. The card's foot: Edit (name, kind, note), Merge (into another place: the marker goes, and its names, rooms, people and visits count at the other from then on; the other is "also called" it, and can split it off again), Take off (back to the tray), Delete (for good: the story naming it again does not bring it back; it is listed under Deleted, where it can be restored). |
+| D153 | Rooms fold into their building (the owner) | A room, a wall, a corner of a place is not a place of its own. Of the world's places, anything below a region's place is a room of it. Of the story's own, a location with a room in it ("Mara's House, Bedroom") folds into the part that is not a room; a part two locations share is their place; a location that is only a room ("Bedroom", "bedroom on the wall") folds with the others of that room. The card lists them under Inside. A room alone cannot be told which house it is in: that is what Merge is for. |
+| D154 | Ink on parchment, or the world's own picture (the owner: "both") | The map is drawn like an inked map: paper with a grain and a darkened edge, one shore in ink with two ripples off it, regions tinted by their terrain with its drawings (peaks, trees, dunes, reeds, tufts), dashed paths, names in a serif hand, a compass. Still vectors: one SVG layer and one still paper layer over it. The land is drawn around the markers, so it follows where the player puts things. A world that has a picture (`pack.map`, the World Builder's) shows it under the markers instead of the drawn land; a picture that will not load falls back to the drawn land. The sidebar keeps the look in force. |
+| D155 | The clean-up pass (the owner) | Clean up with AI: one background request (the tracker's profile) lists the places by number and asks which are the same place or a part of another (merge) and which are not places at all (delete). The reply only proposes; each proposal is done or passed over by the player, or all at once. Nothing changes by asking. |
 
 ## 2. Shapes
 
@@ -60,73 +68,81 @@ for "guess it") and `note` (a sentence, 300 characters).
 
 ## 3. The pure model (`src/utils/atlas.js`)
 
-One layout unit is the step between two sibling places. A scale says how
-far that is: `town` 0.1 mi (a street), `region` 15 mi, `world` 60 mi.
+One layout unit is a short walk between two neighbouring places. A scale
+says how far that is: `town` 0.1 mi (a street), `region` 15 mi, `world`
+60 mi. The scale is the book's when the player chose one, else the
+world's own, else a guess (a region for a world with several regions,
+else a town).
 
-**The layout.** Places are laid on sunflower spirals: a root place (a
-region) around the origin with a step of 7 units, a place inside it
-around the region's centre with a step of 1, a place inside that with a
-step of 0.09, and so on. The n-th child of a parent sits at
-`step * sqrt(n + 0.5)` from it, at n golden angles plus a turn hashed
-from the parent's id. A child's spot depends only on its parent's spot
-and its own index among its siblings, so a place added later moves
-nothing (D140). A story place the pack does not name (a `loc:` id) is
-laid the same way under the world itself.
+**The book** (`normalizeBook`, `placeAt`, `unplace`, `addPin`,
+`removeMarker`, `restoreMarker`, `mergeInto`, `mergeTarget`, `unmerge`,
+`editMarker`, `withScale`, `placeAll`): pure edits, each returning a new
+book. `{ scale, spots: { id: { x, y } }, gone: [id], merged: { from: to },
+made: [{ id: 'pin:…', label, kind, note }], edits: { id: { label, kind,
+note } } }`. A merge that would loop is refused.
 
-**Regions.** A root place is drawn as a blob: 40 points around its centre
-at the radius of its farthest child plus a margin, waved by three sines
-whose phases are hashed from its id. Around it a wider blob is its coast;
-the coasts of neighbours overlap and are drawn as one landmass (every
-coast's line, then every coast's fill over the lines). Its terrain (plains, forest,
-mountains, desert, snow, swamp, coast, town) is guessed from its name.
+**Folding** (`labelSegments`, `roomKey`, `foldPlaces`): D153. A folded
+place keeps the id of the location that names it plainly when there is
+one, so a spot put under it stays its own; a spot under any location
+folded into it still places it.
 
-**Routes.** A minimum spanning tree over the places of each region, and
-one over the regions through their nearest places. Drawn, never measured
-(D141).
+**The model** (`atlasModel({ pack, state, player, book, weather })`):
+`markers` (the placed), `tray` (the party's place first, then the
+visited), `deleted`, `regions` (a region of the world is a named blob
+around its placed places, with its terrain and its drawings), `land` (a
+blob under every region and every lone marker, each with two ripples),
+`routes` (a minimum spanning tree over the markers: drawn, never
+measured), `party` and `partyInTray`, `bounds`, `measure`.
 
-**What it exports.** `normalizeAtlas`, `ATLAS_KINDS`, `guessKind`,
-`guessTerrain`, `layoutAtlas(pack, state)`, `atlasModel({ pack, state,
-player })` (regions, routes, markers with their people, the party's
-place, the bounds), `distanceBetween(model, a, b)`, `travelTime`,
-`describeDistance`, `filterMarkers(markers, { query, hidden })`,
-`kindCounts`, `withSpot(raw, placeId, spot)`. Tested by
-`tools/atlas-test.mjs`.
+**The layout** (`layoutAtlas`, `suggestSpots`): what Place all proposes.
+The world's places on sunflower spirals (a place's spot depends only on
+its parent's and its own index among its siblings, so a place added later
+moves none); anything else on a spiral from the middle, each at the first
+point far enough from everything already there.
+
+**Distance** (D141): `distanceBetween`, `travelHours`, `describeLength`,
+`describeTime`, `describeDistance`. **The search and the switches**:
+`filterMarkers` (names, notes, regions, rooms, other names, people),
+`kindCounts`. **The clean-up pass** (D155): `tidyList`, `buildTidyPrompt`,
+`parseTidy`, `applyTidyItem`. Tested by `tools/atlas-test.mjs`.
 
 ## 4. The window
 
 `src/systems/ui/atlasViews.js` (pure HTML: the shell, the sidebar, the
-marker card) and `src/systems/ui/atlas.js` (Leaflet under `CRS.Simple`
-with one SVG renderer, the markers as `divIcon`s, the events).
-`styles/atlas.css`, loaded when the window first opens. Opened from
-**Atlas** in the D menu.
+tray, the clean-up's proposals, the marker, the card in its three modes),
+`src/systems/ui/atlasMap.js` (Leaflet under `CRS.Simple` with one SVG
+renderer, the markers as `divIcon`s; the drop, the tap, the drag) and
+`src/systems/ui/atlas.js` (the controller). The book and the clean-up's
+request are `src/systems/features/atlasBook.js`. `styles/atlas.css`,
+loaded when the window first opens. Opened from **Atlas** in the D menu
+and by `/atlas`.
 
-- The sidebar: the world's name with the date; a search; the tabs
-  Places, People, News, Rumours. Places is the grid of kinds with their
-  counts and the visited count.
-- The map: wheel, drag and pinch; the zoom buttons; Find the party; The
-  whole map; a scale bar that reads in the world's unit. What a zoom
-  shows goes by how many pixels one layout unit is on screen: under 30
-  the places are dots (pins would sit on one another), from 30 pins, from
-  84 pins with their names, from 420 the places inside places too. The
-  regions' names and the party's marker show at every zoom.
-- The card: D142.
+- The sidebar: the world's name with the date; the tabs Places, People,
+  News, Rumours, Hooks. Places: the tray, Clean up with AI, the search,
+  the kinds with their counts, the list, the scale, Deleted.
+- The map: wheel, drag and pinch; the zoom buttons; the tools (the
+  sidebar, add a marker, move markers, find the party, the whole map,
+  close); a scale bar in the world's unit (feet on a town's map). What a
+  zoom shows goes by how many pixels one layout unit is on screen: under
+  26 the places are dots, from 26 pins, from 52 pins with their names.
+  The party's marker is whole at every zoom.
+- The card: D142 and D152.
 
 ## 5. Phases
 
-1. **The map** (built): the model, the window, the kinds, the search,
-   the card with distance and Travel here, News, Rumours and People in
-   the sidebar from Live World's own views.
-2. **The sheet and the markers**: the notes box, the draft around the
-   notes, `atlas.links` and the solver, the guesses marked, the lock; the
-   tray, the drag, pinned spots; the kind and the note editable on the
-   card.
-3. **Tracking**: weather by region on the map and the card; hooks in the
-   sidebar and on the card; news and rumours that name a place listed on
-   its card; the distance and the travel time given to the travel cut,
-   so the story's clock moves by the road's length.
+1. **The map** (built, then reworked: §6, §7).
+2. **The sheet**: the notes box, the draft around the notes,
+   `atlas.links` and the solver that turns them into the spots Place all
+   proposes, the guesses marked, the lock (D143, D144). The markers' half
+   of this phase (the tray, the drag, the card's tools) is built (§7).
+3. **Tracking**: weather by region on the map and the card; hooks on the
+   card; the distance and the travel time given to the travel cut, so the
+   story's clock moves by the road's length; a merged or deleted place
+   told to the tracker, so the story stops naming it apart.
 4. **The clean-up**: the Map window, the Hub window and the board
    removed with their styles and tests (D138, and D149 once answered);
-   the World Builder's Map tab becomes the Atlas's own edit mode.
+   the World Builder's Map tab keeps the picture upload and gives its
+   nodes to the Atlas.
 
 ## 6. Phase 1 as built
 
@@ -147,3 +163,31 @@ covered by the load check alone): the tracker's weather in the sidebar's
 head; the parity rows; the What's New entry. The Map window and the Hub
 are untouched and still open from their own menu items until phase 4.
 
+## 7. The rework after the first look (2026-11-09)
+
+The owner opened phase 1 on a long campaign: every location the story had
+ever named stood on the map at a spot the layout chose, five of them the
+same house. D151 to D155 are his answers. Built in one commit, "Atlas 3":
+
+- The model rewritten around the book (§3); the Elsewhere region and the
+  automatic placement of the story's places are gone.
+- The tray, the pin and arrows tools, the card's Edit, Merge, Take off
+  and Delete, Deleted with Restore, the scale's select.
+- The parchment look and the world's own picture (D154).
+- The clean-up pass (D155).
+
+Tests: `tools/atlas-test.mjs` (pure, 90 checks), `tools/atlas-flow-test.mjs`
+(the book and the clean-up's request in the sandbox),
+`tools/atlas-browser-test.mjs` (the views, the map and the stylesheet in a
+headless Chromium: a long campaign's fifteen wordings as eight places, the
+drag, the tap, Place all, a marker made, moved, merged, deleted and
+restored, a built world's regions, the switches, the search, the card, the
+zoom, a world's picture, the fold, the five looks, a phone).
+
+Still true: the controller `atlas.js` needs SillyTavern and is covered by
+the load check alone; its first real run is the owner's. Known limits: a
+room named alone ("Bedroom") cannot be put in its house without a Merge
+or the clean-up pass; the book is the chat's, so two chats of one world
+do not share a map (a world's own spots, `pack.atlas.spots`, are read but
+nothing writes them yet); the tracker's weather is not in the sidebar's
+head yet.
