@@ -14,6 +14,7 @@
  * src/systems/features/liveWorld.js; the dashboard in
  * src/systems/ui/worldDashboard.js.
  */
+import { normalizeAtlas, cleanKind } from './atlas.js';
 
 export const WORLD_SLOT = 'dooms-world-state';
 export const LOG_PER_CHARACTER = 20;
@@ -231,6 +232,8 @@ export function normalizePack(raw) {
             zoom: isInt(p.zoom) ? p.zoom : null,
             x: fraction(p.x),    // the node on the world's picture (docs/hub-plan.md D135): both or neither
             y: fraction(p.y),
+            kind: cleanKind(p.kind),             // the Atlas's category (docs/long-shot-plan.md D146); '' = guessed from the name
+            note: clean(p.note, 300),            // a sentence about the place, for its card
         });
     }
     for (const p of places) {
@@ -290,6 +293,7 @@ export function normalizePack(raw) {
         description: clean(r.description, 400),
         places, clocks, cast,
         map: normalizeMap(r.map),
+        atlas: normalizeAtlas(r.atlas, seen),    // the vector map's record (docs/long-shot-plan.md §2)
         template: typeof r.template === 'string' && r.template.trim() ? r.template.trim() : '',
         blurb: clean(r.blurb, MAX_BLURB),
     };

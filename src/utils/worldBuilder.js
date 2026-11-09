@@ -5,6 +5,7 @@
  * own errors, and the file a world is exported as. No SillyTavern, no DOM:
  * tools/world-builder-test.mjs imports this directly.
  */
+import { atlasToRaw } from './atlas.js';
 import { normalizePack, placeChain, placePath, isLocId, locLabel, jsonObjectsIn, MAX_NAME, MAX_BLURB } from './liveWorld.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -29,7 +30,7 @@ export function worldToRaw(pack) {
         name: clean(p.name, 80),
         version: isInt(p.version) ? p.version : 1,
         description: clean(p.description, 400),
-        places: (Array.isArray(p.places) ? p.places : []).map(x => ({ id: x.id, label: x.label, parent: x.parent || null, ...(x.image ? { image: x.image } : {}), ...(Number.isFinite(x.x) && Number.isFinite(x.y) ? { x: x.x, y: x.y } : {}) })),
+        places: (Array.isArray(p.places) ? p.places : []).map(x => ({ id: x.id, label: x.label, parent: x.parent || null, ...(x.image ? { image: x.image } : {}), ...(Number.isFinite(x.x) && Number.isFinite(x.y) ? { x: x.x, y: x.y } : {}), ...(x.kind ? { kind: x.kind } : {}), ...(x.note ? { note: x.note } : {}) })),
         clocks: (Array.isArray(p.clocks) ? p.clocks : []).map(c => ({
             id: c.id, label: c.label, ...(c.place ? { place: c.place } : {}),
             start: isInt(c.start) ? c.start : 0, max: isInt(c.max) ? c.max : 6,
@@ -41,6 +42,8 @@ export function worldToRaw(pack) {
     };
     if (p.template) raw.template = String(p.template);
     if (p.map && p.map.image) raw.map = { image: p.map.image, width: p.map.width || 0, height: p.map.height || 0, source: p.map.source || '' };    // the world's picture (docs/hub-plan.md D136)
+    const atlas = atlasToRaw(p.atlas);    // the vector map's record (docs/long-shot-plan.md §2)
+    if (atlas) raw.atlas = atlas;
     return raw;
 }
 
