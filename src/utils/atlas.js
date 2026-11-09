@@ -42,7 +42,8 @@ export const ATLAS_SCALES = Object.freeze({
 export const ATLAS_UNITS = Object.freeze({ mi: 1, km: 1.609344, league: 1 / 3 });    // one mile in each unit
 export const DEFAULT_PACE_MILES = 24;     // a day on foot
 export const TRAVEL_HOURS_A_DAY = 8;
-const STEPS = [14, 1, 0.09, 0.012];       // the step between siblings at each depth, in layout units
+export const STEPS = Object.freeze([7, 1, 0.09, 0.012]);    // the step between siblings at each depth, in layout units
+const STORY_SLOTS = 14;                   // the points of the Elsewhere spiral a story place can land on
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 const DIRS = new Set(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']);
 export const ELSEWHERE_ID = 'atlas:elsewhere';    // the region the story's own places stand in
@@ -219,7 +220,7 @@ export function layoutAtlas(pack, state = null) {
         out.set(ELSEWHERE_ID, { x: center.x, y: center.y, by: 'layout', depth: 0, parent: '', root: ELSEWHERE_ID });
         for (const s of story) {
             const h = hash01(s.id);
-            const at = spiral(center, Math.floor(h * 60), STEPS[1], hash01(`${s.id}/turn`));
+            const at = spiral(center, Math.floor(h * STORY_SLOTS), STEPS[1], hash01(`${s.id}/turn`));
             out.set(s.id, { x: at.x, y: at.y, by: 'layout', depth: 1, parent: ELSEWHERE_ID, root: ELSEWHERE_ID });
         }
     }
@@ -355,7 +356,8 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, worl
         let far = 0;
         for (const o of markers) if (o.region === m.id && o.depth === 1) far = Math.max(far, dist(o, m));
         const radius = round4(Math.max(STEPS[1] * 1.6, far + STEPS[1] * 1.25));
-        regions.push({ id: m.id, label: m.label, terrain: guessTerrain(m.label), x: m.x, y: m.y, radius, outline: regionOutline(m.id, m, radius) });
+        // The coast: a wider outline around the same centre; the coasts of neighbours overlap into one landmass.
+        regions.push({ id: m.id, label: m.label, terrain: guessTerrain(m.label), x: m.x, y: m.y, radius, outline: regionOutline(m.id, m, radius), coast: regionOutline(`${m.id}/coast`, m, round4(radius * 1.45 + STEPS[1])) });
     }
 
     // Routes (drawn, never measured: D141): a tree inside each region, a tree over the regions.
@@ -367,7 +369,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, worl
     for (const [a, b] of spanningTree(regions)) routes.push({ a: regions[a].id, b: regions[b].id, kind: 'highway', points: [[regions[a].x, regions[a].y], [regions[b].x, regions[b].y]] });
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const r of regions) for (const [x, y] of r.outline) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    for (const r of regions) for (const [x, y] of r.coast) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
     if (!regions.length) { minX = -1; minY = -1; maxX = 1; maxY = 1; }
     const pad = Math.max(maxX - minX, maxY - minY) * 0.08 + 0.5;
     return {

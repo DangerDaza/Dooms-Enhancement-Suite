@@ -3945,6 +3945,18 @@ async function initUI() {
             // off, and the entry sits in the hide-toggles below like the rest.
             // (Roll a check left the fly-out on 2026-10-29: the player's card
             // menu and the chip by the message box keep it.)
+            // The Atlas (docs/long-shot-plan.md D138, D147): the world's map, the whole screen. Listed whatever
+            // Live World's switch says, like Map: the window itself says when Live World is off.
+            items.push({
+                id: 'atlas',
+                label: 'Atlas',
+                iconClass: 'fa-solid fa-earth-europe',
+                action: () => {
+                    import('./src/systems/ui/atlas.js')
+                        .then(m => m.openAtlas())
+                        .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
+                },
+            });
             items.push({
                 id: 'live-world',
                 label: 'Map',

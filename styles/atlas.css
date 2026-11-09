@@ -1,0 +1,206 @@
+/* ── The Atlas (docs/long-shot-plan.md D139, D147, D148): the whole screen, the sidebar on the left, the map
+   in the rest. Loaded when the window first opens (ensureCss('atlas')). Every colour is a custom property on
+   #dooms-atlas, read from the look in force (--ov-* under body[data-dooms-ui], else --rpg-*): a look restyles
+   the map, the land and the markers through these and nothing else. ── */
+#dooms-atlas {
+    --atlas-bg: var(--ov-ground, var(--rpg-bg, #12121a));
+    --atlas-panel: var(--ov-panel, #191923);
+    --atlas-panel2: var(--ov-panel2, rgba(255, 255, 255, 0.05));
+    --atlas-line: var(--ov-line, rgba(255, 255, 255, 0.14));
+    --atlas-text: var(--ov-text, var(--rpg-text, #ececf1));
+    --atlas-muted: var(--ov-muted, #9a9aa8);
+    --atlas-accent: var(--ov-accent, var(--rpg-highlight, #e94560));
+    --atlas-accent2: var(--ov-accent2, #f2c14e);
+    --atlas-on-accent: var(--ov-on-accent, #fff);
+    --atlas-radius: var(--ov-radius-sm, 8px);
+    --atlas-display: var(--ov-display, inherit);
+    /* The map's own colours: mixed from the look, so every look has a sea, a land and its terrains. */
+    --atlas-sea: color-mix(in srgb, var(--atlas-bg) 82%, #2f6f9f);
+    --atlas-land: color-mix(in srgb, var(--atlas-panel) 62%, #a89f7a);
+    --atlas-coastline: color-mix(in srgb, var(--atlas-text) 55%, var(--atlas-sea));
+    --atlas-border: color-mix(in srgb, var(--atlas-text) 30%, transparent);
+    --atlas-plains: color-mix(in srgb, var(--atlas-land) 70%, #8fae5f);
+    --atlas-forest: color-mix(in srgb, var(--atlas-land) 62%, #3f8f52);
+    --atlas-mountains: color-mix(in srgb, var(--atlas-land) 62%, #8d8d99);
+    --atlas-desert: color-mix(in srgb, var(--atlas-land) 55%, #d9b56a);
+    --atlas-snow: color-mix(in srgb, var(--atlas-land) 62%, #dfe9f2);
+    --atlas-swamp: color-mix(in srgb, var(--atlas-land) 60%, #4f6f5f);
+    --atlas-coast: color-mix(in srgb, var(--atlas-land) 70%, #5fa7b7);
+    --atlas-town: color-mix(in srgb, var(--atlas-land) 70%, #b78f6f);
+    --atlas-road: color-mix(in srgb, var(--atlas-text) 55%, transparent);
+    --atlas-side-w: 340px;
+    position: fixed; inset: 0; z-index: 10010; display: none; background: var(--atlas-bg); color: var(--atlas-text);
+    font-size: 15px; line-height: 1.4;
+}
+#dooms-atlas.is-open { display: flex; }
+#dooms-atlas * { box-sizing: border-box; }
+
+/* ── The sidebar ── */
+.dooms-atlas-side { flex: 0 0 var(--atlas-side-w); width: var(--atlas-side-w); min-width: 0; height: 100%; display: flex; flex-direction: column; background: var(--atlas-panel); border-right: 1px solid var(--atlas-line); z-index: 2; }
+#dooms-atlas.is-folded .dooms-atlas-side { display: none; }
+.dooms-atlas-head { flex: 0 0 auto; padding: 16px 16px 10px; border-bottom: 1px solid var(--atlas-line); }
+.dooms-atlas-title { margin: 0; font-size: 1.35em; font-weight: 700; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-sub { margin: 4px 0 0; font-size: 0.8em; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-sub.is-place { color: var(--atlas-accent2); }
+.dooms-atlas-tabs { flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--atlas-line); }
+.dooms-atlas-tab { flex: 1 1 0; min-width: 0; appearance: none; font: inherit; font-size: 0.68em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 2px 7px; color: var(--atlas-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dooms-atlas-tab i { font-size: 1.45em; }
+.dooms-atlas-tab:hover, .dooms-atlas-tab:focus-visible { color: var(--atlas-text); }
+.dooms-atlas-tab.is-active { color: var(--atlas-text); border-bottom-color: var(--atlas-accent); }
+.dooms-atlas-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.dooms-atlas-foot { flex: 0 0 auto; padding: 8px 14px 12px; border-top: 1px solid var(--atlas-line); display: flex; flex-direction: column; gap: 4px; }
+.dooms-atlas-status, .dooms-atlas-result { margin: 0; font-size: 0.74em; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-result { color: var(--atlas-accent2); }
+.dooms-atlas-result:empty { display: none; }
+.dooms-atlas-foot-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.dooms-atlas-btn { appearance: none; font: inherit; font-size: 0.82em; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-btn:hover:not(:disabled), .dooms-atlas-btn:focus-visible { border-color: var(--atlas-accent); }
+.dooms-atlas-btn:disabled { opacity: 0.5; cursor: default; }
+.dooms-atlas-btn.is-primary { background: var(--atlas-accent); border-color: var(--atlas-accent); color: var(--atlas-on-accent); font-weight: 600; }
+.dooms-atlas-link { appearance: none; font: inherit; font-size: 0.78em; background: none; border: 0; padding: 0; cursor: pointer; color: var(--atlas-accent2); }
+.dooms-atlas-link:hover, .dooms-atlas-link:focus-visible { text-decoration: underline; }
+
+/* Places: the search, the switches, the kinds, the list */
+.dooms-atlas-search { position: relative; flex: 0 0 auto; }
+.dooms-atlas-search i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--atlas-muted); font-size: 0.85em; pointer-events: none; }
+#dooms-atlas .dooms-atlas-query { width: 100%; margin: 0; font: inherit; font-size: 0.9em; padding: 8px 10px 8px 32px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+#dooms-atlas .dooms-atlas-query:focus { outline: none; border-color: var(--atlas-accent); }
+.dooms-atlas-switches { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; }
+.dooms-atlas-visited { margin-left: auto; font-size: 0.74em; color: var(--atlas-muted); }
+.dooms-atlas-kinds { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.dooms-atlas-kind { appearance: none; font: inherit; font-size: 0.8em; cursor: pointer; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 5px 6px; border: 0; border-radius: var(--atlas-radius); background: none; color: var(--atlas-text); text-align: left; }
+.dooms-atlas-kind:hover, .dooms-atlas-kind:focus-visible { background: var(--atlas-panel2); }
+.dooms-atlas-kind-icon { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72em; background: var(--kind, var(--atlas-accent)); color: #fff; }
+.dooms-atlas-kind-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dooms-atlas-kind-count { flex: 0 0 auto; color: var(--atlas-muted); font-variant-numeric: tabular-nums; }
+.dooms-atlas-kind.is-off { opacity: 0.45; }
+.dooms-atlas-kind.is-off .dooms-atlas-kind-label { text-decoration: line-through; }
+.dooms-atlas-results { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--atlas-line); padding-top: 10px; }
+.dooms-atlas-none { margin: 0; font-size: 0.82em; color: var(--atlas-muted); }
+.dooms-atlas-group ul { list-style: none; margin: 2px 0 0; padding: 0; }
+.dooms-atlas-group-head { appearance: none; font: inherit; display: block; width: 100%; text-align: left; background: none; border: 0; padding: 2px 0; font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--atlas-muted); }
+button.dooms-atlas-group-head { cursor: pointer; }
+button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible { color: var(--atlas-text); }
+.dooms-atlas-row { appearance: none; font: inherit; font-size: 0.86em; cursor: pointer; width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 0; border-radius: var(--atlas-radius); background: none; color: var(--atlas-text); text-align: left; }
+.dooms-atlas-row:hover, .dooms-atlas-row:focus-visible { background: var(--atlas-panel2); }
+.dooms-atlas-row > i { flex: 0 0 16px; text-align: center; font-size: 0.85em; color: var(--kind, var(--atlas-accent)); }
+.dooms-atlas-row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dooms-atlas-row:not(.is-visited) .dooms-atlas-row-name { color: var(--atlas-muted); }
+.dooms-atlas-row-people { flex: 0 0 auto; font-size: 0.82em; color: var(--atlas-muted); }
+.dooms-atlas-here { flex: 0 0 auto; font-size: 0.72em; letter-spacing: 0; text-transform: none; padding: 1px 6px; border-radius: 999px; background: var(--atlas-accent); color: var(--atlas-on-accent); }
+
+/* The kinds' colours: one property, read by the switch, the list and the pin */
+#dooms-atlas .kind-region { --kind: #6b7a8f; }
+#dooms-atlas .kind-settlement { --kind: #c8793a; }
+#dooms-atlas .kind-stronghold { --kind: #8a5cc2; }
+#dooms-atlas .kind-tavern { --kind: #c9a227; }
+#dooms-atlas .kind-shop { --kind: #2f9e8f; }
+#dooms-atlas .kind-sacred { --kind: #d1639a; }
+#dooms-atlas .kind-ruin { --kind: #b0413e; }
+#dooms-atlas .kind-wild { --kind: #3f8f52; }
+#dooms-atlas .kind-water { --kind: #3b82c4; }
+#dooms-atlas .kind-home { --kind: #7d8f3a; }
+#dooms-atlas .kind-landmark { --kind: #5b6ee1; }
+#dooms-atlas .kind-other { --kind: #7a7a88; }
+
+/* ── The stage: the map, the tools, the scale ── */
+.dooms-atlas-stage { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; background: var(--atlas-sea); }
+.dooms-atlas-map { position: absolute; inset: 0; }
+.dooms-atlas-leaflet.leaflet-container { font: inherit; background: var(--atlas-sea); outline: none; }
+.dooms-atlas-empty { position: absolute; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; background: var(--atlas-bg); color: var(--atlas-muted); }
+.dooms-atlas-empty[hidden] { display: none; }
+.dooms-atlas-empty p { max-width: 460px; margin: 0; font-size: 1em; line-height: 1.5; }
+.dooms-atlas-tools { position: absolute; top: 12px; right: 12px; z-index: 600; display: flex; gap: 6px; }
+.dooms-atlas-tool { appearance: none; cursor: pointer; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel); color: var(--atlas-text); font-size: 0.95em; }
+.dooms-atlas-tool:hover, .dooms-atlas-tool:focus-visible { border-color: var(--atlas-accent); }
+.dooms-atlas-tool.is-close { margin-left: 8px; }
+.dooms-atlas-scale { position: absolute; left: 14px; bottom: 14px; z-index: 600; display: flex; flex-direction: column; gap: 3px; font-size: 0.74em; color: var(--atlas-text); pointer-events: none; text-shadow: 0 1px 2px var(--atlas-bg); }
+.dooms-atlas-scale-bar { display: block; height: 6px; border: 2px solid var(--atlas-text); border-top: 0; }
+.dooms-atlas-leaflet .leaflet-top.leaflet-left { top: auto; bottom: 46px; left: 4px; }
+.dooms-atlas-leaflet .leaflet-bar { border: 1px solid var(--atlas-line); box-shadow: none; border-radius: var(--atlas-radius); overflow: hidden; }
+.dooms-atlas-leaflet .leaflet-bar a { background: var(--atlas-panel); color: var(--atlas-text); border-bottom-color: var(--atlas-line); }
+.dooms-atlas-leaflet .leaflet-bar a:hover, .dooms-atlas-leaflet .leaflet-bar a:focus-visible { background: var(--atlas-panel); color: var(--atlas-accent); }
+.dooms-atlas-leaflet .leaflet-bar a.leaflet-disabled { opacity: 0.4; background: var(--atlas-panel); }
+
+/* The land and the routes: vectors, their strokes the same width at every zoom */
+.dooms-atlas-shore { fill: none; stroke: var(--atlas-coastline); stroke-width: 3; stroke-opacity: 1; stroke-linejoin: round; }
+.dooms-atlas-coast { fill: var(--atlas-land); fill-opacity: 1; stroke: none; }
+.dooms-atlas-land { fill: var(--atlas-plains); fill-opacity: 1; stroke: var(--atlas-border); stroke-width: 1; stroke-opacity: 1; stroke-dasharray: 2 5; stroke-linejoin: round; }
+.dooms-atlas-land.is-forest { fill: var(--atlas-forest); }
+.dooms-atlas-land.is-mountains { fill: var(--atlas-mountains); }
+.dooms-atlas-land.is-desert { fill: var(--atlas-desert); }
+.dooms-atlas-land.is-snow { fill: var(--atlas-snow); }
+.dooms-atlas-land.is-swamp { fill: var(--atlas-swamp); }
+.dooms-atlas-land.is-coast { fill: var(--atlas-coast); }
+.dooms-atlas-land.is-town { fill: var(--atlas-town); }
+.dooms-atlas-route { fill: none; stroke: var(--atlas-road); stroke-width: 1.6; stroke-opacity: 0.8; stroke-dasharray: 5 6; stroke-linecap: round; }
+.dooms-atlas-route.is-highway { stroke-width: 2.2; stroke-dasharray: 10 7; stroke-opacity: 0.6; }
+
+/* The markers */
+.dooms-atlas-marker { background: none; border: 0; }
+.dooms-atlas-marker.is-dim { opacity: 0.25; }
+.dooms-atlas-pin { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; background: var(--kind, var(--atlas-accent)); color: #fff; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55); cursor: pointer; }
+.dooms-atlas-marker:not(.is-visited) .dooms-atlas-pin { background: color-mix(in srgb, var(--kind, var(--atlas-accent)) 55%, #555); border-color: rgba(255, 255, 255, 0.65); }
+.dooms-atlas-marker:hover .dooms-atlas-pin, .dooms-atlas-marker:focus-visible .dooms-atlas-pin { transform: scale(1.14); }
+.dooms-atlas-marker.is-player .dooms-atlas-pin { box-shadow: 0 0 0 3px var(--atlas-accent), 0 0 0 6px color-mix(in srgb, var(--atlas-accent) 35%, transparent), 0 2px 6px rgba(0, 0, 0, 0.55); }
+.dooms-atlas-label { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 3px; padding: 1px 6px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--atlas-text); background: color-mix(in srgb, var(--atlas-bg) 78%, transparent); border-radius: 4px; pointer-events: none; }
+.dooms-atlas-party { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 2px; color: var(--atlas-accent); font-size: 15px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7)); pointer-events: none; }
+.dooms-atlas-faces { position: absolute; left: 100%; top: -4px; margin-left: -8px; display: flex; pointer-events: none; }
+.dooms-atlas-face { width: 20px; height: 20px; flex: 0 0 20px; margin-left: -5px; border-radius: 50%; border: 1.5px solid #fff; background: #2b2b3a center / cover no-repeat; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.dooms-atlas-face:first-child { margin-left: 0; }
+.dooms-atlas-weather { position: absolute; right: 100%; top: -6px; margin-right: -6px; font-size: 14px; pointer-events: none; }
+/* A region is its name on the land */
+.dooms-atlas-marker.is-region { display: flex; align-items: center; justify-content: center; }
+.dooms-atlas-region-name { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-family: var(--atlas-display); font-size: 17px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--atlas-text); opacity: 0.8; text-shadow: 0 1px 3px var(--atlas-bg), 0 0 8px var(--atlas-bg); cursor: pointer; }
+.dooms-atlas-marker.is-region:hover .dooms-atlas-region-name { opacity: 1; }
+.dooms-atlas-marker.is-region .dooms-atlas-party { bottom: auto; top: -26px; }
+.dooms-atlas-marker.is-region .dooms-atlas-faces { top: 14px; left: 50%; margin-left: 0; transform: translateX(-50%); }
+/* What the zoom shows (atlasMap.js, by the pixels of one layout unit): far, the places are dots; mid, pins; close,
+   pins with their names; near, the places inside places too. The party's own marker is whole at every zoom. */
+.dooms-atlas-leaflet:not([data-zoom="close"]):not([data-zoom="near"]) .dooms-atlas-marker:not(.is-region):not(.is-player) .dooms-atlas-label { display: none; }
+.dooms-atlas-leaflet:not([data-zoom="near"]) .dooms-atlas-marker.depth-2:not(.is-player), .dooms-atlas-leaflet:not([data-zoom="near"]) .dooms-atlas-marker.depth-3:not(.is-player) { display: none; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-region):not(.is-player) .dooms-atlas-pin { width: 12px; height: 12px; flex-basis: 12px; margin: 9px; border-width: 1.5px; font-size: 0; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-region):not(.is-player) .dooms-atlas-faces, .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-region) .dooms-atlas-weather { display: none; }
+.dooms-atlas-leaflet[data-zoom="close"] .dooms-atlas-region-name { opacity: 0.55; }
+.dooms-atlas-leaflet[data-zoom="near"] .dooms-atlas-region-name { opacity: 0.3; }
+.dooms-atlas-marker.depth-2 .dooms-atlas-pin, .dooms-atlas-marker.depth-3 .dooms-atlas-pin { width: 24px; height: 24px; flex-basis: 24px; margin: 3px; font-size: 10px; }
+
+/* The card (a Leaflet popup) */
+.dooms-atlas-popup .leaflet-popup-content-wrapper { background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); border-radius: calc(var(--atlas-radius) + 2px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); padding: 0; overflow: hidden; }
+.dooms-atlas-popup .leaflet-popup-content { margin: 0; width: auto !important; font-size: 14px; line-height: 1.4; }
+.dooms-atlas-popup .leaflet-popup-tip { background: var(--atlas-panel); border: 1px solid var(--atlas-line); box-shadow: none; }
+.dooms-atlas-popup a.leaflet-popup-close-button { color: var(--atlas-muted); top: 4px; right: 4px; }
+.dooms-atlas-popup a.leaflet-popup-close-button:hover { color: var(--atlas-text); }
+.dooms-atlas-popup .dooms-atlas-card p { margin: 0; }    /* Leaflet gives a popup's paragraphs a margin of its own */
+.dooms-atlas-card { width: 300px; max-width: 78vw; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+.dooms-atlas-card-picture { height: 120px; margin: -12px -14px 2px; background: center / cover no-repeat; }
+.dooms-atlas-card-head { display: flex; align-items: center; gap: 10px; padding-right: 16px; }
+.dooms-atlas-card-head .dooms-atlas-pin { cursor: default; box-shadow: none; }
+.dooms-atlas-card-title { margin: 0; font-size: 1.12em; font-weight: 700; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-card-kind { margin: 1px 0 0; font-size: 0.78em; color: var(--atlas-muted); }
+.dooms-atlas-card-note, .dooms-atlas-card-weather, .dooms-atlas-card-where { margin: 0; font-size: 0.88em; }
+.dooms-atlas-card-where { color: var(--atlas-accent2); }
+.dooms-atlas-card-where.is-here { color: var(--atlas-accent); font-weight: 600; }
+.dooms-atlas-card-label { display: block; font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--atlas-muted); margin-bottom: 3px; }
+.dooms-atlas-card-people { display: flex; flex-wrap: wrap; gap: 5px; }
+.dooms-atlas-card-people .dooms-atlas-card-label { flex: 0 0 100%; margin: 0; }
+.dooms-atlas-chip { appearance: none; font: inherit; font-size: 0.82em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 2px; border-radius: 999px; border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-chip:hover, .dooms-atlas-chip:focus-visible { border-color: var(--atlas-accent); }
+.dooms-atlas-chip .dooms-atlas-face { margin: 0; border-width: 0; }
+.dooms-atlas-card-list ul { margin: 0; padding-left: 16px; font-size: 0.84em; }
+.dooms-atlas-card-travel { display: flex; gap: 6px; margin-top: 2px; }
+#dooms-atlas .dooms-atlas-when { flex: 1 1 auto; min-width: 0; margin: 0; font: inherit; font-size: 0.82em; padding: 6px 8px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-card-travel .dooms-atlas-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* Live World's own views in the sidebar keep their styles; only their room is set here */
+.dooms-atlas-body .dooms-world-cards { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+
+/* A phone: the sidebar is a sheet over the map */
+@media (max-width: 720px) {
+    #dooms-atlas { --atlas-side-w: min(88vw, 340px); }
+    .dooms-atlas-side { position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 8px 0 30px rgba(0, 0, 0, 0.5); }
+    .dooms-atlas-card { width: 260px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dooms-atlas-marker:hover .dooms-atlas-pin { transform: none; }
+}

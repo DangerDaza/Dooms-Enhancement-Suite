@@ -1186,6 +1186,25 @@ function registerWorldCommands() {
     } catch (e) {
         console.warn('[Live World] /liveworld could not be registered', e);
     }
+    try {
+        // The Atlas (docs/long-shot-plan.md D147). Not /map: too likely to be another extension's.
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+            name: 'atlas',
+            callback: async () => {
+                try {
+                    const m = await import('../ui/atlas.js');
+                    m.openAtlas();
+                    return '';
+                } catch (e) {
+                    return `The Atlas could not open: ${e && e.message ? e.message : e}`;
+                }
+            },
+            helpString: 'Live World: opens the Atlas (the world as a full-screen map: the places by kind, the search, a place\'s card with the distance and Travel here, the people, news, rumours and hooks).',
+            returns: 'nothing',
+        }));
+    } catch (e) {
+        console.warn('[Live World] /atlas could not be registered', e);
+    }
 }
 
 /** Registers the command and listens for the tracker request's end. */

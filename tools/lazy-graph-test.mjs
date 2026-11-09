@@ -45,6 +45,10 @@ const MUST_BE_LAZY = [
     'src/systems/ui/hubViews.js',
     // The board (Leaflet's host) loads with the hub's views, which draw its nodes; Leaflet itself only when a board mounts, by a dynamic import inside it.
     'src/systems/ui/hubBoard.js',
+    // The Atlas (docs/long-shot-plan.md): the window, its views and its map load on first open; Leaflet only when the map mounts.
+    'src/systems/ui/atlas.js',
+    'src/systems/ui/atlasViews.js',
+    'src/systems/ui/atlasMap.js',
     'lib/leaflet/leaflet-src.esm.js',
 ];
 

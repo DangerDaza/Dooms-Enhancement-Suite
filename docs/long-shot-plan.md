@@ -64,7 +64,7 @@ One layout unit is the step between two sibling places. A scale says how
 far that is: `town` 0.1 mi (a street), `region` 15 mi, `world` 60 mi.
 
 **The layout.** Places are laid on sunflower spirals: a root place (a
-region) around the origin with a step of 14 units, a place inside it
+region) around the origin with a step of 7 units, a place inside it
 around the region's centre with a step of 1, a place inside that with a
 step of 0.09, and so on. The n-th child of a parent sits at
 `step * sqrt(n + 0.5)` from it, at n golden angles plus a turn hashed
@@ -75,7 +75,9 @@ laid the same way under the world itself.
 
 **Regions.** A root place is drawn as a blob: 40 points around its centre
 at the radius of its farthest child plus a margin, waved by three sines
-whose phases are hashed from its id. Its terrain (plains, forest,
+whose phases are hashed from its id. Around it a wider blob is its coast;
+the coasts of neighbours overlap and are drawn as one landmass (every
+coast's line, then every coast's fill over the lines). Its terrain (plains, forest,
 mountains, desert, snow, swamp, coast, town) is guessed from its name.
 
 **Routes.** A minimum spanning tree over the places of each region, and
@@ -101,10 +103,12 @@ with one SVG renderer, the markers as `divIcon`s, the events).
 - The sidebar: the world's name with the date; a search; the tabs
   Places, People, News, Rumours. Places is the grid of kinds with their
   counts and the visited count.
-- The map: wheel, drag and pinch; the zoom buttons; Find the party; a
-  scale bar that reads in the world's unit. Region names show zoomed
-  out, place names zoomed in; places nested two deep appear when zoomed
-  in.
+- The map: wheel, drag and pinch; the zoom buttons; Find the party; The
+  whole map; a scale bar that reads in the world's unit. What a zoom
+  shows goes by how many pixels one layout unit is on screen: under 30
+  the places are dots (pins would sit on one another), from 30 pins, from
+  84 pins with their names, from 420 the places inside places too. The
+  regions' names and the party's marker show at every zoom.
 - The card: D142.
 
 ## 5. Phases
@@ -126,4 +130,20 @@ with one SVG renderer, the markers as `divIcon`s, the events).
 
 ## 6. Phase 1 as built
 
-See the commits "Atlas 1" to "Atlas 3" on `Project-Long-Shot`.
+Two commits on `Project-Long-Shot`: "Atlas 1" (this plan, the pure model,
+its test) and "Atlas 2" (the window: `atlasViews.js`, `atlasMap.js`,
+`atlas.js`, `styles/atlas.css`, **Atlas** in the D menu, `/atlas`).
+
+Tests: `tools/atlas-test.mjs` (pure, 63 checks) and
+`tools/atlas-browser-test.mjs` (the views, the map and the stylesheet in
+a headless Chromium: the window, the switches, the search, the card, the
+zoom, the fold, the five looks, a phone; `--shots` writes PNGs, and
+`DES_FA=<a Font Awesome folder>` draws the icons in them). The three
+modules are in `tools/lazy-graph-test.mjs`'s lazy list.
+
+Not yet done in phase 1, and not yet looked at inside SillyTavern itself
+(the browser test has no SillyTavern, so the controller `atlas.js` is
+covered by the load check alone): the tracker's weather in the sidebar's
+head; the parity rows; the What's New entry. The Map window and the Hub
+are untouched and still open from their own menu items until phase 4.
+
