@@ -522,21 +522,50 @@ function glyphAt(terrain, x, y, s) {
  * shapes in layout units over the bounds and a margin past them (the map
  * can be panned a little past its bounds). The same map draws the same
  * ground every time: everything is hashed from the layer's id.
- *   country      nothing: the land is the paper itself
+ *   country      woods (a patch of trees), ponds and open plain, at random, away from the places
  *   city         blocks: streets a unit apart, a little askew
  *   indoors      a floor's squares, half a unit apart
  *   coast-n/e/s/w  the sea past a waved shore on that side, with two ripples off it
  *   underground, island  nothing here: the chambers and the shores are the land's own blobs
- * @returns {{ lines: number[][][], sea: number[][]|null, ripples: number[][][] }}
+ * @returns {{ lines: number[][][], sea: number[][]|null, ripples: number[][][], woods: number[][][], trees: number[][][], ponds: number[][][] }}
  */
 export function groundDecor(ground, seed, bounds, markers = []) {
-    const out = { lines: [], sea: null, ripples: [] };
+    const out = { lines: [], sea: null, ripples: [], woods: [], trees: [], ponds: [] };
     const padX = (bounds.maxX - bounds.minX) * 2;    // the map can be panned well past its bounds (atlasMap.js)
     const padY = (bounds.maxY - bounds.minY) * 2;
     const x0 = bounds.minX - padX, x1 = bounds.maxX + padX, y0 = bounds.minY - padY, y1 = bounds.maxY + padY;
     const clear = (x, y, r) => markers.every(m => Math.hypot(m.x - x, m.y - y) >= r);
     if (ground === 'country') {
-        // Plain land: the paper is the ground. (Tufts and hills were scattered here once; they read as stray marks.)
+        // Woods, ponds and open plain, at random over the land away from the places (D162). The land is cut into
+        // squares; each is a wood (a patch of trees), a pond, or left open, by a hash of the map's id and the square's place.
+        const cell = 5;
+        // Over what the map can be panned across and no further (atlasMap.js: the canvas and half again on every side).
+        const w = bounds.maxX - bounds.minX, h = bounds.maxY - bounds.minY;
+        const c0 = Math.floor((bounds.minX - w * 1.5) / cell), c1 = Math.ceil((bounds.maxX + w * 1.5) / cell), r0 = Math.floor((bounds.minY - h * 1.5) / cell), r1 = Math.ceil((bounds.maxY + h * 1.5) / cell);
+        for (let cx = c0; cx < c1; cx++) for (let cy = r0; cy < r1; cy++) {
+            const id = `${seed}/q${cx},${cy}`;
+            const pick = hash01(`${id}/k`);
+            if (pick >= 0.56) continue;    // open plain
+            const x = round4((cx + 0.25 + 0.5 * hash01(`${id}/x`)) * cell);
+            const y = round4((cy + 0.25 + 0.5 * hash01(`${id}/y`)) * cell);
+            if (pick < 0.11) {
+                const r = 0.5 + 0.5 * hash01(`${id}/r`);
+                if (clear(x, y, r + 1.5)) out.ponds.push(regionOutline(`${id}/pond`, { x, y }, r, 18));
+                continue;
+            }
+            const r = 1 + 1.1 * hash01(`${id}/r`);
+            if (!clear(x, y, r + 1.3)) continue;
+            out.woods.push(regionOutline(`${id}/wood`, { x, y }, r, 22));
+            const count = Math.round(3 + r * r * 1.8);
+            for (let i = 0; i < count; i++) {
+                const t = hash01(`${id}/t${i}/a`) * Math.PI * 2;
+                const d = r * 0.86 * Math.sqrt(hash01(`${id}/t${i}/d`));
+                const tx = x + d * Math.cos(t), ty = y + d * Math.sin(t);
+                const sz = 0.2 + 0.1 * hash01(`${id}/t${i}/s`);
+                const pt = (dx, dy) => [round4(tx + dx * sz), round4(ty + dy * sz)];
+                out.trees.push([pt(0, -1), pt(0.5, -0.55), pt(0.55, -0.05), pt(0, 0.2), pt(-0.55, -0.05), pt(-0.5, -0.55), pt(0, -1)], [pt(0, 0.2), pt(0, 0.7)]);    // a crown and a trunk
+            }
+        }
     } else if (ground === 'city' || ground === 'indoors') {
         const step = ground === 'city' ? 1 : 0.5;
         const tilt = ground === 'city' ? (hash01(`${seed}/tilt`) - 0.5) * 0.5 : 0;    // a city's blocks sit a little askew; a floor's squares are square

@@ -297,3 +297,5 @@ Not done: the lock (D143's last word: nothing stops a later set-up from
 replacing the map but the warning); non-canon places are not told to the
 story (nothing of the Atlas is yet); the notes are not kept after the
 set-up closes.
+
+| D162 | Open country has woods, ponds and plain (the owner: "trees on the outside, even better trees, ponds, plains, randomly") | The land of an open-country map is cut into squares five units wide; each is a wood (a green patch with trees drawn on it: a crown and a trunk), a pond (a blue blob with an inked edge) or left as open plain, by a hash of the map and the square. None stands within reach of a place, so a place put down later clears what it lands in and moves nothing else. Drawn over what the map can be panned across and no further; one path for all the trees. |

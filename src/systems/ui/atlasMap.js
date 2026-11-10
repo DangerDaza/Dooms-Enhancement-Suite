@@ -142,6 +142,9 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 // The land is everywhere (D158): what the ground draws over it, and the sea past a coast's shore.
                 if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
                 else lines(decor.lines, `dooms-atlas-ground is-${ground}`);
+                for (const w of decor.woods || []) poly(w, 'dooms-atlas-wood');
+                lines(decor.trees || [], 'dooms-atlas-tree');
+                for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
             }
             for (const r of current.regions) {
                 poly(r.outline, `dooms-atlas-land is-${r.terrain}`);

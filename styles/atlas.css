@@ -239,6 +239,9 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-ground.is-city { stroke: rgba(255, 250, 235, 0.75); stroke-width: 5; }
 .dooms-atlas-ground.is-indoors { stroke: rgba(75, 55, 35, 0.14); stroke-width: 1; }
 .dooms-atlas-water.is-sea { fill: var(--atlas-sea); }
+.dooms-atlas-wood { fill: rgba(86, 122, 70, 0.26); fill-opacity: 1; stroke: none; }
+.dooms-atlas-tree { fill: rgba(86, 122, 70, 0.35); fill-opacity: 1; stroke: #4f6b3c; stroke-width: 1.1; stroke-opacity: 0.9; stroke-linejoin: round; stroke-linecap: round; }
+.dooms-atlas-pond { fill: #a9c4c9; fill-opacity: 1; stroke: var(--atlas-ink-soft); stroke-width: 1.4; stroke-opacity: 1; stroke-linejoin: round; }
 .dooms-atlas-shore.is-line { stroke-width: 3; }
 .dooms-atlas-leaflet[data-ground="city"] .dooms-atlas-route { stroke: var(--atlas-ink-soft); stroke-width: 2.4; stroke-dasharray: none; }
 .dooms-atlas-wall { fill: none; stroke: #1f1a16; stroke-width: 5; stroke-opacity: 1; stroke-linejoin: round; }

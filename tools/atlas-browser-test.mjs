@@ -218,7 +218,7 @@ const layout = () => page.evaluate(() => {
         shore: q('path.dooms-atlas-shore'), coast: q('path.dooms-atlas-coast'), ripples: q('path.dooms-atlas-ripple'), regions: q('path.dooms-atlas-land'), glyphs: q('path.dooms-atlas-glyph'), routes: q('path.dooms-atlas-route'), regionNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-region-name')].map(x => x.textContent),
         images: q('.leaflet-pane img') + q('canvas'),
         zoom: document.querySelector('.dooms-atlas-map').getAttribute('data-zoom'),
-        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
+        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
         kinds: [...document.querySelectorAll('.dooms-atlas-kind')].map(k => ({ id: k.getAttribute('data-kind'), count: Number(k.querySelector('.dooms-atlas-kind-count').textContent), off: k.classList.contains('is-off') })),
         tray: [...document.querySelectorAll('.dooms-atlas-tray-row')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         rows: q('.dooms-atlas-results .dooms-atlas-row'),
@@ -465,7 +465,7 @@ console.log('\n§5b the grounds (D158)');
     await settle();
     let l = await layout();
     const sea = await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-stage')).backgroundColor);
-    check('the top map of a region is open country: land all over, no shore, no island', l.ground === 'country' && l.shore === 0 && l.ripples === 0 && l.groundLines === 0 && l.mapBg !== sea && l.groundPick === 'country', `${l.ground} ${l.mapBg} ${sea}`);
+    check('the top map of a region is open country: land all over with woods and ponds, no shore, no island, still no picture', l.ground === 'country' && l.shore === 0 && l.ripples === 0 && l.groundLines === 0 && l.woods > 5 && l.trees === 1 && l.ponds > 0 && l.images === 0 && l.mapBg !== sea && l.groundPick === 'country', `${l.ground} ${l.mapBg} ${sea}`);
     await shot('7a-ground-country');
     // The view is the player's: dragged away from the middle, it stays where it was let go.
     const c0 = await page.evaluate(() => { const c = window.__board.map.getCenter(); return { lat: c.lat, lng: c.lng }; });
