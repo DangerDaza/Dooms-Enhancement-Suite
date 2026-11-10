@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill } from '../../utils/atlasSetup.js';
@@ -506,6 +506,13 @@ function build() {
             if (act === 'fill-draft' || act === 'fill-again') { await runFill(); return; }
             if (act === 'fill-remove') { if (setup && setup.fill) { const k = this.getAttribute('data-key') || ''; setup = { ...setup, places: setup.places.filter(p => p.key !== k).map(p => ({ ...p, near: p.near.filter(r => r.key !== k) })) }; renderSetup(); } return; }
             if (act === 'fill-apply') { applyFillNow(); return; }
+            if (act === 'group') {
+                if (!model) return;
+                const r = wrapInRegion(getBook(), model, { label: 'New region' });
+                if (!commit(r.book, `${r.moved} ${r.moved === 1 ? 'place is' : 'places are'} inside a new region now. Name it; click its land to enter it. Fill out this map adds its neighbours.`)) return;
+                if (board) { board.fit(); board.open(r.id); cardMode = 'edit'; board.redrawCard(); }    // the new region opens on its name
+                return;
+            }
             if (act === 'canon') { ev.stopPropagation(); commit(setCanon(getBook(), this.getAttribute('data-id') || '', true)); return; }
             if (act === 'setup-undo') { if (undoBook && undoBook.world === worldKey()) { const b = undoBook.book; undoBook = null; layer = ''; commit(b, 'The set-up is undone: the map is as it was.'); if (board) board.fit(); } return; }
             if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }

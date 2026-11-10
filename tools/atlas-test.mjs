@@ -18,7 +18,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -246,6 +246,41 @@ console.log('\n§6b the grounds (D158)');
     const p = realm([{ id: 'stair', label: 'The Black Stair', parent: 'frosthold' }, { id: 'level-1', label: 'First Landing', parent: 'stair' }]);
     const st = seedWorldState(p, { name: '' });
     check('the model carries each map\'s ground: country on top, streets in a town, the underground in the stair', atlasModel({ pack: p, state: st }).ground === 'country' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).ground === 'city' && atlasModel({ pack: p, state: st, layer: 'stair' }).ground === 'underground' && atlasModel({ pack: p, state: st, layer: 'stair' }).measure.scale === 'site' && atlasModel({ pack: p, state: st, book: withGround(null, 'island') }).ground === 'island' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).decor.lines.length > 0);
+}
+
+console.log('\n§6c territories (D163)');
+{
+    const sites = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 6, y: 0 }, { id: 'c', x: 3, y: 5 }, { id: 'far', x: 40, y: 40 }];
+    const cells = territoryOutlines(sites);
+    const inside = (poly, [x, y]) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+    check('every region has a land around its own spot', sites.every(s => cells.get(s.id).length >= 3 && inside(cells.get(s.id), [s.x, s.y])));
+    check('neighbours meet at a border: neither holds the other\'s spot, and each stops near the line halfway', !inside(cells.get('a'), [6, 0]) && !inside(cells.get('b'), [0, 0]) && cells.get('a').every(([x]) => x < 3.4) && cells.get('b').every(([x]) => x > 2.6));
+    check('a point near the border is in one land or the other, not both and not neither', [[2.4, 0.5], [3.6, 0.5], [2.9, 1.8], [1.5, 2.2]].every(pt => ['a', 'b', 'c'].filter(k => inside(cells.get(k), pt)).length === 1));
+    check('a region with no neighbour near keeps its whole land', cells.get('far').every(([x, y]) => Math.hypot(x - 40, y - 40) > TERRITORY_RADIUS * 0.7 && Math.hypot(x - 40, y - 40) < TERRITORY_RADIUS * 1.3));
+    check('the same spots give the same lands; a border is waved, not ruled', same([...cells], [...territoryOutlines(sites)]) && cells.get('a').filter(([x]) => x > 2.6).some(([x]) => Math.abs(x - 3) > 0.03) && cells.get('a').length > 48);
+    const moved = territoryOutlines([{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 6, y: 0 }, { id: 'c', x: 3, y: 5 }, { id: 'far', x: 41, y: 40 }]);
+    check('a region moved far away redraws no other land', same(moved.get('a'), cells.get('a')) && same(moved.get('b'), cells.get('b')) && !same(moved.get('far'), cells.get('far')));
+    check('no regions, no lands', territoryOutlines([]).size === 0 && territoryOutlines(null).size === 0);
+
+    // The owner's world: a city and a castle on the top map, grouped into the region they lie in.
+    const pack = blankPack('The Eld');
+    const st = seedWorldState(pack, { name: 'The Eld' });
+    let book = addPin(null, { label: 'Hask', kind: 'settlement', x: 0, y: 0 }).book;
+    book = addPin(book, { label: 'Redfall Castle', kind: 'stronghold', x: 2, y: 2 }).book;
+    book = addPin(book, { label: 'The Black Stair', kind: 'ruin', x: 0, y: 0, layer: 'pin:hask' }).book;
+    const before = atlasModel({ pack, state: st, book });
+    check('before: two pins on the top map, no lands, a region\'s scale', before.markers.length === 2 && before.territories.length === 0 && before.measure.scale === 'region');
+    const g = wrapInRegion(book, before, { label: 'The Haskmarch' });
+    const top = atlasModel({ pack, state: st, book: g.book });
+    check('grouped: one region on the top map where they stood, drawn as a land; the top map is a world\'s now', g.moved === 2 && top.markers.length === 1 && top.markers[0].kind === 'region' && top.markers[0].territory === true && top.markers[0].x === 1 && top.markers[0].y === 1 && top.territories.length === 1 && top.territories[0].outline.length >= 40 && top.measure.scale === 'world' && top.markers[0].holds === 2 && top.routes.length === 0);
+    const region = atlasModel({ pack, state: st, book: g.book, layer: g.id });
+    check('inside the region: the city and the castle where they were, at a region\'s scale on open country', same(region.markers.map(m => [m.label, m.x, m.y]), [['Hask', 0, 0], ['Redfall Castle', 2, 2]]) && region.measure.scale === 'region' && region.ground === 'country' && region.territories.length === 0);
+    const hask = atlasModel({ pack, state: st, book: g.book, layer: 'pin:hask' });
+    check('the city inside the region is still a town, and the stair inside it a site', hask.measure.scale === 'town' && hask.depth === 2 && atlasModel({ pack, state: st, book: g.book, layer: 'pin:the-black-stair' }).measure.scale === 'site');
+    const two = atlasModel({ pack, state: st, book: addPin(g.book, { label: 'The Grey Forest', kind: 'region', x: 7, y: 1, loose: true }).book });
+    check('a second region beside it: two lands, the new one marked not canon, tinted as a forest', two.territories.length === 2 && two.territories.find(t => t.label === 'The Grey Forest').loose === true && two.territories.find(t => t.label === 'The Grey Forest').terrain === 'forest' && two.territories.every(t => t.hue >= 0 && t.hue < 6));
+    check('open country keeps its woods and ponds off the lands', (() => { const d = two.decor; const off = (pts) => pts.every(([x, y]) => two.markers.every(m => Math.hypot(m.x - x, m.y - y) > TERRITORY_RADIUS)); return d.woods.length > 0 && d.woods.every(off) && d.ponds.every(off); })());
+    check('Place all gives regions room for their lands', (() => { const m = atlasModel({ pack, state: st, book: { ...normalizeBook(null), made: [{ id: 'pin:a', label: 'A', kind: 'region' }, { id: 'pin:b', label: 'B', kind: 'region' }, { id: 'pin:c', label: 'C', kind: 'region' }] } }); const sp = [...suggestSpots(m).values()]; return sp.length === 3 && sp.every((a, i) => sp.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= TERRITORY_RADIUS * 1.29)); })());
 }
 
 console.log('\n§7 distance');

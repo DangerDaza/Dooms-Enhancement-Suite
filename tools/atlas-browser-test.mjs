@@ -218,7 +218,7 @@ const layout = () => page.evaluate(() => {
         shore: q('path.dooms-atlas-shore'), coast: q('path.dooms-atlas-coast'), ripples: q('path.dooms-atlas-ripple'), regions: q('path.dooms-atlas-land'), glyphs: q('path.dooms-atlas-glyph'), routes: q('path.dooms-atlas-route'), regionNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-region-name')].map(x => x.textContent),
         images: q('.leaflet-pane img') + q('canvas'),
         zoom: document.querySelector('.dooms-atlas-map').getAttribute('data-zoom'),
-        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
+        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), lands: q('path.dooms-atlas-territory'), looseLands: q('path.dooms-atlas-territory.is-loose'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
         kinds: [...document.querySelectorAll('.dooms-atlas-kind')].map(k => ({ id: k.getAttribute('data-kind'), count: Number(k.querySelector('.dooms-atlas-kind-count').textContent), off: k.classList.contains('is-off') })),
         tray: [...document.querySelectorAll('.dooms-atlas-tray-row')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         rows: q('.dooms-atlas-results .dooms-atlas-row'),
@@ -578,6 +578,81 @@ console.log('\n§5c setting up the world (D159)');
     l = await layout();
     check('inside the stair: its landings, underground', l.count === 2 && l.ground === 'underground' && /Hask.*The Temple.*The Black Stair/.test(l.trail));
     await shot('7h-setup-applied-stair');
+}
+
+console.log('\n§5d territories: regions as lands that share borders, clicked to enter (D163)');
+{
+    // The owner's world: a city and a castle two days out, on the top map.
+    await page.evaluate(() => { let b = window.A.addPin(null, { label: 'Hask', kind: 'settlement', x: 0, y: 0 }).book; b = window.A.addPin(b, { label: 'Redfall Castle', kind: 'stronghold', x: 2.5, y: 1.5 }).book; return window.__open({ world: 'campaign', book: b }); });
+    await settle();
+    check('a map of pins offers Group into a region', await page.evaluate(() => !!document.querySelector('.dooms-atlas-tidy [data-act="group"]')));
+    await page.evaluate(() => { const r = window.A.wrapInRegion(window.__book, window.__model, { label: 'The Haskmarch' }); window.__book = r.book; window.__region = r.id; window.__draw(); window.__board.fit(); });
+    await settle();
+    let l = await layout();
+    check('grouped: the top map is one land, the city and the castle inside it', l.lands === 1 && l.count === 1 && /is-territory/.test(Object.values(l.markers)[0].cls) && l.routes === 0 && (await page.evaluate(() => window.__model.measure.scale)) === 'world');
+    check('a map that holds a region no longer offers to group', await page.evaluate(() => !document.querySelector('.dooms-atlas-tidy [data-act="group"]')));
+    // Neighbours, as Fill out this map would add them: regions, not canon.
+    await page.evaluate(() => {
+        const reply = JSON.stringify({ places: [
+            { name: 'The Grey Forest', kind: 'wild', note: 'Old woods where the road gives out.', near: [{ to: 'The Haskmarch', dir: 'e', far: 'near' }] },
+            { name: 'The Salt Fens', kind: 'region', note: 'Brackish marsh and reed-cutters.', near: [{ to: 'The Haskmarch', dir: 'n', far: 'near' }] },
+            { name: 'Redfall Heights', kind: 'region', note: 'Cold uplands above the castle.', near: [{ to: 'The Haskmarch', dir: 'w', far: 'near' }] },
+            { name: 'The Amber Waste', kind: 'region', note: 'Dry country nobody claims.', near: [{ to: 'The Haskmarch', dir: 's', far: 'near' }] },
+            { name: 'Kessel Vale', kind: 'region', note: 'Farmland and a toll road.', near: [{ to: 'The Grey Forest', dir: 's', far: 'near' }] },
+        ] });
+        const places = window.S.parseFill(reply, window.__model).places;
+        window.__fillKinds = places.map(p => p.kind);
+        window.__book = window.S.applyFill(window.__book, window.__model, places).book;
+        window.__draw(); window.__board.fit();
+    });
+    await settle();
+    l = await layout();
+    check('filled out: six lands, the five new ones not canon, every new place a region whatever the reply called it', l.lands === 6 && l.looseLands === 5 && (await page.evaluate(() => window.__fillKinds.every(k => k === 'region'))));
+    const geo = await page.evaluate(() => {
+        const t = window.__model.territories;
+        const inside = (poly, [x, y]) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+        const own = t.every(a => inside(a.outline, [a.x, a.y]) && t.every(b => a === b || !inside(a.outline, [b.x, b.y])));
+        const fills = new Set([...document.querySelectorAll('path.dooms-atlas-territory')].map(p => getComputedStyle(p).fill));
+        return { own, fills: fills.size, shared: t.filter(a => t.some(b => a !== b && Math.hypot(a.x - b.x, a.y - b.y) < 8.4)).length };
+    });
+    check('each land holds its own spot and no other\'s; the lands border one another and are tinted apart', geo.own && geo.shared === 6 && geo.fills >= 3, JSON.stringify(geo));
+    await shot('7k-territories');
+    // Hover names the land; a click enters it.
+    const mid = await page.evaluate(() => { const t = window.__model.territories.find(x => x.label === 'The Salt Fens'); const p = window.__board.map.latLngToContainerPoint([-(t.y - 1.2), t.x + 1.2]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y }; });
+    await page.mouse.move(mid.x, mid.y);
+    await page.waitForTimeout(250);
+    const tip = await page.evaluate(() => (document.querySelector('.dooms-atlas-territory-name') || {}).textContent || '');
+    check('a land under the pointer names itself', tip === 'The Salt Fens', tip);
+    await shot('7l-territory-hover');
+    await page.evaluate(() => { window.__events.length = 0; });
+    await page.mouse.click(mid.x, mid.y);
+    await settle();
+    l = await layout();
+    check('a land clicked is entered: its own map, a region\'s, on open country, with the trail back', (await page.evaluate(() => window.__events.some(e => e[0] === 'enter'))) && /The Salt Fens/.test(l.trail) && l.ground === 'country' && l.lands === 0 && (await page.evaluate(() => window.__model.measure.scale)) === 'region');
+    await page.evaluate(() => window.__layer(window.__region));
+    await settle();
+    l = await layout();
+    check('inside the first region: the city and the castle as pins, where they were', l.count === 2 && !!l.markers['Hask'] && !!l.markers['Redfall Castle'] && l.lands === 0);
+    await page.evaluate(() => window.__layer(''));
+    await settle();
+    // The land's own marker (its standard) opens its card; so does a right-click on the land.
+    await page.locator('#dooms-atlas .dooms-atlas-marker.is-territory', { hasText: 'The Haskmarch' }).locator('.dooms-atlas-standard').click();
+    await settle();
+    l = await layout();
+    check('a land\'s standard opens its card: a region, what is inside (the two pins and the eight places that waited), Enter and the tools', /The Haskmarch/.test(l.cardText) && /Regions · 10 places inside/.test(l.cardText) && /Enter \(10 places inside\)/.test(l.cardText) && /Edit.*Merge.*Move.*Take off.*Delete/.test(l.cardText), l.cardText.slice(0, 200));
+    await page.evaluate(() => window.__board.closeCard());
+    await page.mouse.click(mid.x, mid.y, { button: 'right' });
+    await settle();
+    l = await layout();
+    check('a right-click on a land opens its card too, with the mark that it is not canon', /The Salt Fens/.test(l.cardText) && /Not canon/.test(l.cardText) && /reed-cutters/.test(l.cardText));
+    await page.evaluate(() => window.__board.closeCard());
+    // While something waits to be put down, a click on a land puts it there instead of entering.
+    await page.evaluate(() => { window.__events.length = 0; window.__set({ armed: '+' }); document.getElementById('dooms-atlas').classList.add('is-armed'); });
+    await page.mouse.click(mid.x, mid.y);
+    await settle();
+    const armedEvents = await page.evaluate(() => { document.getElementById('dooms-atlas').classList.remove('is-armed'); return window.__events.map(e => e[0]); });
+    check('with a marker waiting, a click on a land puts it down and does not enter', armedEvents.includes('tap') && !armedEvents.includes('enter') && (await page.evaluate(() => window.__model.markers.some(m => m.label === 'New place'))));
+    await page.evaluate(() => window.__board.closeCard());
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

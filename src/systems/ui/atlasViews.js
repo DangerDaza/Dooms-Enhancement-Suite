@@ -306,11 +306,12 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
  * proposed, each to be approved or passed over.
  * @param {{ busy: boolean, items: Array, error: string, asked: boolean }|null} tidy
  */
-export function atlasTidyHtml(tidy, { count = 0 } = {}) {
+export function atlasTidyHtml(tidy, { count = 0, canGroup = false } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
     const setup = `<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
     const fill = `<button type="button" class="dooms-atlas-btn" data-act="fill" title="Add places that plausibly belong on this map, around the ones already here. You check them first; they go on the map marked as not canon, and nothing already there moves."><i class="fa-solid fa-seedling" aria-hidden="true"></i> <span>Fill out this map</span></button>`;
-    if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy"><div class="dooms-atlas-tidy-buttons">${setup}${fill}</div></section>`;
+    const group = canGroup ? `<button type="button" class="dooms-atlas-btn" data-act="group" title="Put everything on this map inside a new region that stands where they stood: a land with borders you can click to enter. Each place keeps its spot, on the region's own map."><i class="fa-solid fa-object-group" aria-hidden="true"></i> <span>Group into a region</span></button>` : '';
+    if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy"><div class="dooms-atlas-tidy-buttons">${setup}${fill}${group}</div></section>`;
     const item = (x, i) => `<li class="dooms-atlas-tidy-item is-${attr(x.kind)}">
             <span class="dooms-atlas-tidy-text">${x.kind === 'merge' ? `Merge <strong>${e(x.label)}</strong> into <strong>${e(x.toLabel)}</strong>` : `Delete <strong>${e(x.label)}</strong>`}${x.why ? `<span class="dooms-atlas-tidy-why">${e(x.why)}</span>` : ''}</span>
             <button type="button" class="dooms-atlas-icon-btn is-yes" data-act="tidy-yes" data-i="${i}" title="Do it" aria-label="Do it"><i class="fa-solid fa-check" aria-hidden="true"></i></button>
@@ -320,7 +321,7 @@ export function atlasTidyHtml(tidy, { count = 0 } = {}) {
         ? `<ul>${t.items.map(item).join('')}</ul><div class="dooms-atlas-tidy-all"><button type="button" class="dooms-atlas-link" data-act="tidy-all">Do all ${t.items.length}</button><button type="button" class="dooms-atlas-link" data-act="tidy-none">Leave them all</button></div>`
         : (t.error ? `<p class="dooms-atlas-none is-error">${e(t.error)}</p>` : (t.asked && !t.busy ? '<p class="dooms-atlas-none">Nothing to tidy: no duplicates were found.</p>' : ''));
     return `<section class="dooms-atlas-tidy" aria-label="Set up and clean up the places">
-        <div class="dooms-atlas-tidy-buttons">${setup}${fill}<button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button></div>
+        <div class="dooms-atlas-tidy-buttons">${setup}${fill}${group}<button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button></div>
         ${body}
     </section>`;
 }
@@ -338,7 +339,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
     const visited = markers.filter(m => m.visited).length;
     const scales = Object.entries(ATLAS_SCALES).map(([id, s]) => `<option value="${id}"${id === scale ? ' selected' : ''}>${e(s.label)}</option>`).join('');
     return `${atlasTrayHtml({ tray, armed, layerLabel })}
-        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length })}
+        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length, canGroup: markers.some(m => m.kind !== 'region') && !markers.some(m => m.kind === 'region') })}
         <div class="dooms-atlas-search">
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
             <input type="search" class="dooms-atlas-query" placeholder="Search every map" aria-label="Search places and people on every map" value="${attr(query)}" autocomplete="off" />
@@ -390,13 +391,14 @@ export function atlasMarkerHtml(m, { portraits = () => '' } = {}) {
         : '';
     const weather = m.weather && m.weather.emoji ? `<span class="dooms-atlas-weather" title="${attr(m.weather.text)}">${e(m.weather.emoji)}</span>` : '';
     const party = m.player ? '<span class="dooms-atlas-party" title="The party is here"><i class="fa-solid fa-flag" aria-hidden="true"></i></span>' : '';
+    if (m.territory) return `<span class="dooms-atlas-standard" title="${attr(m.label)}: its card"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></span>${party}${faces}${weather}<span class="dooms-atlas-label">${e(m.label)}</span>`;
     const holds = m.holds ? `<span class="dooms-atlas-holds" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside: double-click to enter"><i class="fa-solid fa-door-open" aria-hidden="true"></i>${m.holds}</span>` : '';
     return `<span class="dooms-atlas-pin"><i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i></span>${party}${faces}${weather}${holds}<span class="dooms-atlas-label">${e(m.label)}</span>`;
 }
 
 /** A marker's classes: its kind, whether it was visited, whether the party is there. */
 export function atlasMarkerClass(m) {
-    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : '', m.loose ? 'is-loose' : ''].filter(Boolean).join(' ');
+    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : '', m.loose ? 'is-loose' : '', m.territory ? 'is-territory' : ''].filter(Boolean).join(' ');
 }
 
 /** A region's name, written across its land. */

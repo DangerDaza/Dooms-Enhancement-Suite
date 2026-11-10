@@ -254,6 +254,32 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-leaflet[data-ground="underground"] ~ .dooms-atlas-scale .dooms-atlas-scale-bar { border-color: #e8dcbd; }
 .dooms-atlas-scale-pick + .dooms-atlas-scale-pick { margin-top: -4px; }
 
+/* Territories (D163): the regions of a map as lands that share borders. A land is tinted by its terrain, or by one of
+   six parchment hues when its name tells none; it lights under the pointer and is clicked to enter. */
+.dooms-atlas-territory { fill: #e3c98a; fill-opacity: 0.92; stroke: var(--atlas-ink); stroke-width: 1.8; stroke-opacity: 0.85; stroke-linejoin: round; cursor: pointer; transition: fill-opacity 0.12s; }
+.dooms-atlas-territory.hue-0 { fill: #e6cf8f; }
+.dooms-atlas-territory.hue-1 { fill: #dcc27a; }
+.dooms-atlas-territory.hue-2 { fill: #e0b872; }
+.dooms-atlas-territory.hue-3 { fill: #cfc487; }
+.dooms-atlas-territory.hue-4 { fill: #d9ad6c; }
+.dooms-atlas-territory.hue-5 { fill: #c9c992; }
+.dooms-atlas-territory.is-forest { fill: #b9c58a; }
+.dooms-atlas-territory.is-mountains { fill: #c9b79a; }
+.dooms-atlas-territory.is-desert { fill: #ecc878; }
+.dooms-atlas-territory.is-snow { fill: #ece6d4; }
+.dooms-atlas-territory.is-swamp { fill: #b3b98f; }
+.dooms-atlas-territory.is-coast { fill: #c4cfae; }
+.dooms-atlas-territory.is-loose { stroke-dasharray: 6 5; fill-opacity: 0.7; }
+.dooms-atlas-territory.is-player { stroke-width: 2.6; }
+.dooms-atlas-territory:hover { fill-opacity: 1; stroke-opacity: 1; stroke-width: 2.8; filter: brightness(1.08); }
+#dooms-atlas.is-armed .dooms-atlas-territory { cursor: crosshair; }
+.leaflet-tooltip.dooms-atlas-territory-name { background: none; border: 0; box-shadow: none; padding: 0; font-family: var(--atlas-map-font); font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: #fff8e8; text-shadow: 0 0 3px var(--atlas-ink), 0 0 3px var(--atlas-ink), 0 1px 6px rgba(0, 0, 0, 0.6); white-space: nowrap; }
+.leaflet-tooltip.dooms-atlas-territory-name::before { display: none; }
+/* A region's own marker is a small standard on its land: its card, and what is known of it (the party, the people) */
+.dooms-atlas-standard { width: 22px; height: 22px; margin: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--atlas-ink); color: var(--atlas-land); opacity: 0.55; cursor: pointer; }
+.dooms-atlas-marker.is-territory:hover .dooms-atlas-standard, .dooms-atlas-marker.is-territory.leaflet-marker-draggable .dooms-atlas-standard { opacity: 1; }
+.dooms-atlas-marker.is-territory.leaflet-marker-draggable .dooms-atlas-standard { outline: 2px dashed var(--atlas-ink-soft); outline-offset: 3px; cursor: grab; }
+
 /* The markers: a seal of the kind's colour, ringed in ink; the name in the map's hand under it */
 .dooms-atlas-marker { background: none; border: 0; }
 .dooms-atlas-marker.is-dim { opacity: 0.25; }

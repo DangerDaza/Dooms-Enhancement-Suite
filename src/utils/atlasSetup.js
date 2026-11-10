@@ -12,7 +12,7 @@
  * The requests are in src/systems/features/atlasBook.js; the window's
  * steps in src/systems/ui/atlasViews.js. tools/atlas-setup-test.mjs.
  */
-import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList } from './atlas.js';
+import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList, TERRITORY_RADIUS } from './atlas.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = (t) => clean(t, 120).toLowerCase().replace(/^the\s+/, '').replace(/[’]/g, "'");
@@ -33,6 +33,8 @@ export const SETUP_REACHES = Object.freeze(['recent', 'full']);
 const DIRS = Object.freeze({ n: [0, -1], ne: [0.707, -0.707], e: [1, 0], se: [0.707, 0.707], s: [0, 1], sw: [-0.707, 0.707], w: [-1, 0], nw: [-0.707, -0.707] });
 const FARS = Object.freeze({ close: 1.5, near: 2.6, far: 4.4 });
 const KIND_LIST = ATLAS_KINDS.map(k => k.id).join(', ');
+const WIDE = TERRITORY_RADIUS * 1.35;    // regions are lands: they stand this far apart, and what is near a region is further off by the same measure
+const REGION_FAR = 2.5;
 
 /** A chat's messages as lines, "Name: what was said", each cut to length; the empty ones left out. `strip` cleans a message (the tracker blocks, the thinking). */
 export function chatLines(chat, { strip = (t) => String(t || ''), persona = 'Player' } = {}) {
@@ -141,7 +143,8 @@ export function buildSetupPrompt({ notes = '', world = '', card = {}, lore = '',
         `Kinds: ${KIND_LIST}.`,
         'Rules:',
         '- THE PLAYER\'S NOTES OUTRANK EVERYTHING. If they name a place, it is in the list as they named it. If they say something is true, it is true.',
-        '- "inside" builds layers: a city is on the top map; a house, a temple, a dungeon\'s entrance are inside the city; a dungeon\'s levels are inside the dungeon. A place has at most one "inside", and it names another place of your list exactly. Do not list rooms, furniture or corners: they are part of their building.',
+        '- A region (kind "region") is a land with borders: a march, a vale, a kingdom, a stretch of wilds. When the story reaches beyond one settlement, the top map holds regions and nothing else, and every city, castle and wild place is inside the region it lies in. Name the region the story is in even when the sources do not (mark it "guess"), and add its neighbours only when the sources name them.',
+        '- "inside" builds layers: a city is inside its region (or on the top map of a one-town story); a house, a temple, a dungeon\'s entrance are inside the city; a dungeon\'s levels are inside the dungeon. A place has at most one "inside", and it names another place of your list exactly. Do not list rooms, furniture or corners: they are part of their building.',
         '- "near" only between places with the same "inside". "dir" is the way you would walk from this place to reach the other ("dir":"n" means the other place lies to the north). Give what the sources say; when they say nothing, leave it empty rather than invent it.',
         '- "was": every known place you are given is the same as one of your places (put its number in that place\'s "was"), or is a room or part of one (put its number in the building\'s "was"), or is not a place at all (put its number in "drop"). Use each number once.',
         '- "scale" is what the top map shows: a town when the whole story is in one town, a region for a few settlements and the land between, a world for more.',
@@ -282,9 +285,12 @@ export function layoutDraft(draft) {
         const at = new Map();
         // "dir" is the way from the place to the other one. Both ways of every relation: "B lies north of A" also places A south of B.
         const rel = new Map(list.map(p => [p.key, []]));
-        for (const p of list) for (const r of p.near) { if (!rel.has(r.to)) continue; const [dx, dy] = DIRS[r.dir]; const d = FARS[r.far] || FARS.near; rel.get(p.key).push({ to: r.to, dx: dx * d, dy: dy * d }); rel.get(r.to).push({ to: p.key, dx: -dx * d, dy: -dy * d }); }
+        const kindOfKey = new Map(list.map(p => [p.key, p.kind]));
+        const wide = (a, b) => kindOfKey.get(a) === 'region' || kindOfKey.get(b) === 'region';
+        for (const p of list) for (const r of p.near) { if (!rel.has(r.to)) continue; const [dx, dy] = DIRS[r.dir]; const d = (FARS[r.far] || FARS.near) * (wide(p.key, r.to) ? REGION_FAR : 1); rel.get(p.key).push({ to: r.to, dx: dx * d, dy: dy * d }); rel.get(r.to).push({ to: p.key, dx: -dx * d, dy: -dy * d }); }
         let spare = 0;
-        const next = () => { const i = spare++; const r = 2.2 * Math.sqrt(i + 0.5); return { x: r * Math.cos(i * GOLDEN + 0.6), y: r * Math.sin(i * GOLDEN + 0.6) }; };
+        const anyWide = list.some(p => p.kind === 'region');
+        const next = () => { const i = spare++; const r = (anyWide ? WIDE : 2.2) * Math.sqrt(i + 0.5); return { x: r * Math.cos(i * GOLDEN + 0.6), y: r * Math.sin(i * GOLDEN + 0.6) }; };
         for (const start of list) {
             if (at.has(start.key)) continue;
             at.set(start.key, at.size ? next() : { x: 0, y: 0 });
@@ -297,15 +303,16 @@ export function layoutDraft(draft) {
         }
         // Apart: any two closer than a marker's own land are pushed along the line between them (or sideways when they coincide).
         const keys = list.map(p => p.key);
-        for (let pass = 0; pass < 60; pass++) {
+        for (let pass = 0; pass < 200; pass++) {
             let moved = false;
             for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
                 const a = at.get(keys[i]), b = at.get(keys[j]);
                 let dx = b.x - a.x, dy = b.y - a.y;
                 let d = Math.hypot(dx, dy);
-                if (d >= 1.35) continue;
+                const gap = wide(keys[i], keys[j]) ? WIDE : 1.35;
+                if (d >= gap) continue;
                 if (d < 1e-6) { dx = Math.cos(j * GOLDEN); dy = Math.sin(j * GOLDEN); d = 1; }
-                const push = (1.4 - Math.min(d, 1.4)) / 2 + 0.01;
+                const push = (gap + 0.05 - Math.min(d, gap + 0.05)) / 2 + 0.01;
                 a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push;
                 moved = true;
             }
@@ -377,12 +384,14 @@ export function buildFillPrompt({ model = null, world = '', wish = '', count = 8
     const scale = model && model.measure ? (ATLAS_SCALES[model.measure.scale] || {}).label || '' : '';
     const ground = model ? (ATLAS_GROUNDS.find(g => g.id === model.ground) || {}).label || '' : '';
     const other = model && Array.isArray(model.all) ? model.all.filter(x => x.layer !== model.layer).map(x => x.label) : [];
+    const regionsHere = markers.some(m => m.kind === 'region') || (!markers.length && model && model.measure && model.measure.scale === 'world');
     const system = [
         'You fill out one map of a role-play story\'s world: you add places that plausibly belong on it, around the places already there, so the area feels lived in and there is somewhere to go. The story has not named these places; they are suggestions the player can keep, change or remove.',
         'Reply with one JSON object and nothing else:',
         '{"places":[{"name":"<proper name>","kind":"<one kind>","note":"<one sentence: what it is, and a reason someone might go there>","near":[{"to":"<name of a place on this map: one already there, or another of yours>","dir":"n|ne|e|se|s|sw|w|nw","far":"close|near|far"}]}]}',
         `Kinds: ${KIND_LIST}.`,
         'Rules:',
+        ...(regionsHere ? ['- THIS IS A MAP OF REGIONS. Every new place is a region (kind "region"): a neighbouring land with borders and a character of its own (a march, a vale, a forest, a waste), not a town or a building. Say in its note what kind of land it is.'] : []),
         `- Exactly ${n} new places. Fit the map: for a city, its districts, markets, inns, temples, gates; for a region, its villages, roads, ruins, wilds; for a dungeon or a building, its halls, chambers, levels.`,
         '- Fit the world: its tone, its names, its level of magic and technology. Use names in the style of the names already there. Do not contradict the lore.',
         '- Do not repeat or rename a place already on this map or elsewhere in the world. Do not add rooms, furniture or people.',
@@ -413,6 +422,7 @@ export function parseFill(text, model = null) {
     if (!obj || !Array.isArray(obj.places)) return { ok: false, places: [], error: 'The reply was not the list of places asked for.' };
     const taken = new Set((model && Array.isArray(model.all) ? model.all : []).flatMap(x => [norm(x.label), ...(x.names || []).map(n => norm(n.label))]));
     const onMap = new Map((model && Array.isArray(model.markers) ? model.markers : []).map(m => [norm(m.label), m.id]));
+    const regionMap = !!(model && Array.isArray(model.markers) && model.markers.some(m => m.kind === 'region'));
     const places = [];
     const keys = new Set();
     for (const p of obj.places) {
@@ -420,7 +430,7 @@ export function parseFill(text, model = null) {
         const key = norm(name);
         if (!key || keys.has(key) || taken.has(key)) continue;
         keys.add(key);
-        places.push({ key, name, kind: cleanKind(p.kind) || guessKind(name), note: clean(p.note, 300), near: Array.isArray(p.near) ? p.near : [] });
+        places.push({ key, name, kind: regionMap ? 'region' : (cleanKind(p.kind) || guessKind(name)), note: clean(p.note, 300), near: Array.isArray(p.near) ? p.near : [] });    // on a map of regions a new place is a region, whatever the reply called it
         if (places.length >= 16) break;
     }
     if (!places.length) return { ok: false, places: [], error: 'The reply added no new places.' };
@@ -447,7 +457,7 @@ export function parseFill(text, model = null) {
  * @returns {Map<string, { x: number, y: number }>}
  */
 export function layoutFill(model, places) {
-    const fixed = (model && Array.isArray(model.markers) ? model.markers : []).map(m => ({ id: m.id, x: m.x, y: m.y }));
+    const fixed = (model && Array.isArray(model.markers) ? model.markers : []).map(m => ({ id: m.id, x: m.x, y: m.y, wide: m.kind === 'region' }));
     const byId = new Map(fixed.map(f => [f.id, f]));
     const at = new Map();
     const GOLDEN = Math.PI * (3 - Math.sqrt(5));
@@ -463,8 +473,8 @@ export function layoutFill(model, places) {
                 const anchor = r.id ? byId.get(r.id) : at.get(r.key);
                 if (!anchor) continue;
                 const [dx, dy] = DIRS[r.dir];
-                const d = FARS[r.far] || FARS.near;
-                at.set(p.key, { x: anchor.x - dx * d, y: anchor.y - dy * d });
+                const d = (FARS[r.far] || FARS.near) * (p.kind === 'region' || anchor.wide ? REGION_FAR : 1);
+                at.set(p.key, { x: anchor.x - dx * d, y: anchor.y - dy * d, wide: p.kind === 'region' });
                 any = true;
                 break;
             }
@@ -475,11 +485,11 @@ export function layoutFill(model, places) {
     for (const p of list) {
         if (at.has(p.key)) continue;
         const i = spare++;
-        const r = reach + 2 + 0.9 * Math.sqrt(i);
-        at.set(p.key, { x: cx + r * Math.cos(i * GOLDEN + 0.4), y: cy + r * Math.sin(i * GOLDEN + 0.4) });
+        const r = reach + (p.kind === 'region' ? WIDE : 2) + (p.kind === 'region' ? 2.4 : 0.9) * Math.sqrt(i);
+        at.set(p.key, { x: cx + r * Math.cos(i * GOLDEN + 0.4), y: cy + r * Math.sin(i * GOLDEN + 0.4), wide: p.kind === 'region' });
     }
     const keys = list.map(p => p.key);
-    for (let pass = 0; pass < 80; pass++) {
+    for (let pass = 0; pass < 200; pass++) {
         let moved = false;
         for (let i = 0; i < keys.length; i++) {
             const a = at.get(keys[i]);
@@ -487,9 +497,10 @@ export function layoutFill(model, places) {
             for (const b of others) {
                 let dx = a.x - b.x, dy = a.y - b.y;
                 let d = Math.hypot(dx, dy);
-                if (d >= 1.35) continue;
+                const gap = a.wide || b.wide ? WIDE : 1.35;
+                if (d >= gap) continue;
                 if (d < 1e-6) { dx = Math.cos(i * GOLDEN + 1); dy = Math.sin(i * GOLDEN + 1); d = 1; }
-                const push = 1.42 - Math.min(d, 1.42) + 0.01;
+                const push = gap + 0.07 - Math.min(d, gap + 0.07) + 0.01;
                 a.x += dx / d * push; a.y += dy / d * push;
                 moved = true;
             }

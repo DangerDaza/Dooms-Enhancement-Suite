@@ -299,3 +299,24 @@ story (nothing of the Atlas is yet); the notes are not kept after the
 set-up closes.
 
 | D162 | Open country has woods, ponds and plain (the owner: "trees on the outside, even better trees, ponds, plains, randomly") | The land of an open-country map is cut into squares five units wide; each is a wood (a green patch with trees drawn on it: a crown and a trunk), a pond (a blue blob with an inked edge) or left as open plain, by a hash of the map and the square. None stands within reach of a place, so a place put down later clears what it lands in and moves nothing else. Drawn over what the map can be panned across and no further; one path for all the trees. |
+
+## 12. Territories (2026-11-10, D163)
+
+The owner, with two screenshots of World of Warcraft's maps (a continent
+cut into zones that share borders; a zone with its terrain, its towns and
+its neighbours named at the edges): "this is what I am looking for: the
+segmented borders, and you click on a region to zoom into it. How do we
+get there?" His world so far: Hask, a city, and Redfall Castle two days
+out; the region they lie in is landlocked. Three steps were agreed; step
+1 is built ("Atlas 9").
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D163 | A region is a land with borders (the owner) | A place whose kind is Region is drawn as a territory, not a pin: its own blob around its spot, cut along the line halfway to every other region on the map, so neighbours meet at one border and the lands tile into one country (`territoryOutlines`). A border between two lands is waved the same from both sides. A land is tinted by its terrain, else by one of six parchment hues; it names itself under the pointer; **a click enters it**. Its card is behind its small standard on the land, or a right-click. With a marker waiting to be put down, a click on a land puts it there. **Group into a region** (Places, on a map of pins with no region yet) puts everything on the map inside a new region standing where they stood, each keeping its spot on the region's own map (`wrapInRegion`). A map that holds regions is a world's by default, a region's own map a region's, a city in a region a town's. Fill out this map on a map of regions suggests neighbouring regions, not canon; the set-up is told to put regions on the top map when the story reaches beyond one settlement. Regions stand further apart than pins when laid out, so their lands have room. Outside the lands the ground is the map's own: open country for a landlocked world, the sea with Islands. |
+
+Step 2 (not built): inside a region, the land takes the outline it has on
+the map above, with its neighbours named along the borders they share, and
+terrain drawn across it (ranges, lakes, forests, roads). Step 3 (not
+built): the set-up and the fill say what each region's land is like, so
+the terrain follows the story. A picture of the player's own under any
+map, not only the top one, is the way to a painted look.

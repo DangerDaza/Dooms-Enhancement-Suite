@@ -146,6 +146,18 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 lines(decor.trees || [], 'dooms-atlas-tree');
                 for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
             }
+            // The regions' lands (D163): every land's edge first, then every land over the edges, so borders shared by two
+            // lands are one line; a land is clicked to enter it and names itself under the pointer.
+            const lands = current.territories || [];
+            if (ground === 'island') for (const t of lands) poly(t.outline, 'dooms-atlas-shore');
+            for (const t of lands) {
+                const land = L.polygon(t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain} hue-${t.hue}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
+                land.bindTooltip(t.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
+                // While something waits to be put down, a click on a land puts it there (the map's own tap); else it enters the land.
+                land.on('click', (ev) => { if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; } if (typeof on.enter === 'function') on.enter(t.id); });
+                land.on('contextmenu', (ev) => { if (ev.originalEvent) ev.originalEvent.preventDefault(); openCard(t.id); });
+                land.addTo(shapes);
+            }
             for (const r of current.regions) {
                 poly(r.outline, `dooms-atlas-land is-${r.terrain}`);
                 if (r.glyphs.length) L.polyline(r.glyphs.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-glyph is-${r.terrain}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);

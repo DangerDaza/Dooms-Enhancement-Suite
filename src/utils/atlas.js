@@ -17,6 +17,7 @@ const finite = (n) => typeof n === 'number' && Number.isFinite(n);
 
 /** The kinds a place can be (D146), in the sidebar's order: the categories. */
 export const ATLAS_KINDS = Object.freeze([
+    { id: 'region', label: 'Regions', icon: 'fa-map' },
     { id: 'settlement', label: 'Settlements', icon: 'fa-city' },
     { id: 'stronghold', label: 'Strongholds', icon: 'fa-chess-rook' },
     { id: 'tavern', label: 'Taverns & inns', icon: 'fa-beer-mug-empty' },
@@ -480,21 +481,26 @@ export function partyKey(pack, state, player = '') {
 }
 
 /**
- * The scale in force on a layer (D156): the one the player chose for it,
- * else for the top map the world's own or a guess (a region when places
- * hold maps of their own, else a town), a town one layer in, a site below
- * that.
+ * The scale in force on a layer (D156, D163): the one the player chose for
+ * it; else for the top map the world's own, or a guess (a world when it
+ * holds regions, a region when places hold maps of their own, else a
+ * town); a region's own map is a region; a place's map is a town when it
+ * stands on the top map or in a region, and a site below that.
+ * `below` counts the places from the nearest region above down to the
+ * layer (the layer itself is 1).
  */
-export function scaleOf(pack, book = null, layer = '', { depth = 0, layered = false } = {}) {
+export function scaleOf(pack, book = null, layer = '', { depth = 0, below = 0, layered = false, regions = false, kind = '' } = {}) {
     const b = book && typeof book === 'object' ? book : null;
     if (!layer) {
         if (b && ATLAS_SCALES[b.scale]) return b.scale;
         const a = pack && pack.atlas;
         if (a && ATLAS_SCALES[a.scale]) return a.scale;
+        if (regions) return 'world';
         return layered || placesOf(pack).some(p => p.parent) ? 'region' : 'town';
     }
     if (b && b.scales && ATLAS_SCALES[b.scales[layer]]) return b.scales[layer];
-    return depth >= 2 ? 'site' : 'town';
+    if (kind === 'region') return 'region';
+    return (below || depth) >= 2 ? 'site' : 'town';
 }
 
 /** A layer's measure: the unit, what a layout unit is in it, and the pace (units a day). */
@@ -534,7 +540,7 @@ export function groundDecor(ground, seed, bounds, markers = []) {
     const padX = (bounds.maxX - bounds.minX) * 2;    // the map can be panned well past its bounds (atlasMap.js)
     const padY = (bounds.maxY - bounds.minY) * 2;
     const x0 = bounds.minX - padX, x1 = bounds.maxX + padX, y0 = bounds.minY - padY, y1 = bounds.maxY + padY;
-    const clear = (x, y, r) => markers.every(m => Math.hypot(m.x - x, m.y - y) >= r);
+    const clear = (x, y, r) => markers.every(m => Math.hypot(m.x - x, m.y - y) >= r + (m.territory ? TERRITORY_RADIUS : 0));    // a region's land is kept clear to its edge
     if (ground === 'country') {
         // Woods, ponds and open plain, at random over the land away from the places (D162). The land is cut into
         // squares; each is a wood (a patch of trees), a pond, or left open, by a hash of the map's id and the square's place.
@@ -597,6 +603,88 @@ export function groundDecor(ground, seed, bounds, markers = []) {
         out.ripples = [line(0.25), line(0.55)];
     }
     return out;
+}
+
+// ─── Territories (D163): regions drawn as lands that share borders ─────────
+
+export const TERRITORY_RADIUS = 4.2;    // how far a region's land reaches from its spot when no neighbour is nearer
+const HUES = 6;
+
+/** A polygon cut by a half-plane: the part where a*x + b*y <= c (Sutherland–Hodgman). */
+function clipHalf(poly, a, b, c) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+        const p = poly[i], q = poly[(i + 1) % poly.length];
+        const dp = a * p[0] + b * p[1] - c, dq = a * q[0] + b * q[1] - c;
+        if (dp <= 0) out.push(p);
+        if ((dp < 0 && dq > 0) || (dp > 0 && dq < 0)) { const t = dp / (dp - dq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+    return out;
+}
+
+/**
+ * The lands of the regions on one map: each region's own blob around its
+ * spot, cut along the line halfway to every other region (so neighbours
+ * meet at one border and the lands tile into one country), the borders
+ * between two regions waved the same from both sides. The same spots
+ * give the same lands; a region moved redraws only the borders it has.
+ * @param {Array<{ id: string, x: number, y: number }>} sites
+ * @returns {Map<string, number[][]>}  a region's id -> its outline
+ */
+export function territoryOutlines(sites, radius = TERRITORY_RADIUS) {
+    const out = new Map();
+    const list = Array.isArray(sites) ? sites : [];
+    for (const s of list) {
+        let poly = regionOutline(`${s.id}/territory`, s, radius, 48);
+        for (const o of list) {
+            if (o === s) continue;
+            const a = o.x - s.x, b = o.y - s.y;
+            if (Math.hypot(a, b) < 1e-6 || Math.hypot(a, b) > radius * 2.5) continue;
+            poly = clipHalf(poly, a, b, (o.x * o.x + o.y * o.y - s.x * s.x - s.y * s.y) / 2);    // nearer to s than to o
+            if (poly.length < 3) break;
+        }
+        if (poly.length < 3) { out.set(s.id, []); continue; }
+        // A border shared with a neighbour is waved along its own line, the wave read from the pair (not from who asks),
+        // so both lands draw the same border; the wave dies away toward the border's ends, where three lands meet.
+        const waved = [];
+        for (let i = 0; i < poly.length; i++) {
+            const p = poly[i], q = poly[(i + 1) % poly.length];
+            waved.push(p);
+            const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+            if (len < 0.8) continue;
+            const on = (pt, o) => Math.abs(Math.hypot(pt[0] - s.x, pt[1] - s.y) - Math.hypot(pt[0] - o.x, pt[1] - o.y)) < 1e-3;
+            const o = list.find(x => x !== s && on(p, x) && on(q, x));
+            if (!o) continue;
+            const [lo, hi] = s.id < o.id ? [s, o] : [o, s];
+            const nd = Math.hypot(hi.x - lo.x, hi.y - lo.y);
+            const nx = (hi.x - lo.x) / nd, ny = (hi.y - lo.y) / nd;       // across the border, the same for both lands
+            const mx = (lo.x + hi.x) / 2, my = (lo.y + hi.y) / 2;
+            const ph1 = hash01(`${lo.id}|${hi.id}/1`) * Math.PI * 2, ph2 = hash01(`${lo.id}|${hi.id}/2`) * Math.PI * 2;
+            const steps = Math.ceil(len / 0.4);
+            for (let k = 1; k < steps; k++) {
+                const t = k / steps;
+                const x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t;
+                const u = (x - mx) * -ny + (y - my) * nx;                     // along the border, from the pair's midpoint
+                const taper = Math.min(1, Math.min(t, 1 - t) * len / 0.7);
+                const f = 0.2 * taper * (Math.sin(u * 1.7 + ph1) + 0.6 * Math.sin(u * 3.9 + ph2)) / 1.6;
+                waved.push([x + nx * f, y + ny * f]);
+            }
+        }
+        out.set(s.id, waved.map(([x, y]) => [round4(x), round4(y)]));
+    }
+    return out;
+}
+
+/** A raw-less grouping (D163): everything on the model's map put inside a new region that stands where they stood; each keeps its spot, now on the region's own map. The book and the region's id. */
+export function wrapInRegion(book, model, { label = 'New region' } = {}) {
+    const here = [...(model && model.markers ? model.markers : []), ...(model && model.tray ? model.tray.filter(t => t.here !== false) : [])].filter(m => m.kind !== 'region');
+    const placed = here.filter(m => finite(m.x) && finite(m.y));
+    const cx = placed.length ? placed.reduce((n, m) => n + m.x, 0) / placed.length : 0;
+    const cy = placed.length ? placed.reduce((n, m) => n + m.y, 0) / placed.length : 0;
+    const made = addPin(book, { label, kind: 'region', x: cx, y: cy, layer: model ? model.layer : '' });
+    let b = made.book;
+    for (const m of here) b = { ...b, inside: { ...b.inside, [m.id]: made.id } };
+    return { book: b, id: made.id, moved: here.length };
 }
 
 /**
@@ -771,7 +859,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     const regions = [];
     for (const m of markers) {
         const terrain = guessTerrain(m.label);
-        if (terrain === 'plains') continue;
+        if (terrain === 'plains' || m.kind === 'region') continue;    // a region's land is its territory, drawn further down
         const radius = round4(LAND_RADIUS * 0.84);
         const glyphs = [];
         for (let i = 0; i < 9; i++) {
@@ -783,16 +871,26 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     }
 
     // The land: a blob under every marker; drawn as one shore (atlasMap.js).
-    const land = markers.map(m => ({ id: m.id, x: m.x, y: m.y, radius: LAND_RADIUS }))
+    // The regions on this map are lands that share borders (D163); what a land shows of itself comes with it.
+    const sites = markers.filter(m => m.kind === 'region');
+    const cells = territoryOutlines(sites);
+    const territories = sites.map(m => ({ id: m.id, label: m.label, terrain: guessTerrain(m.label), hue: Math.floor(hash01(`${m.id}/hue`) * HUES), x: m.x, y: m.y, outline: cells.get(m.id) || [], loose: m.loose, player: m.player, visited: m.visited, holds: m.holds })).filter(t => t.outline.length >= 3);
+    for (const m of markers) m.territory = territories.some(t => t.id === m.id);
+
+    const land = markers.map(m => ({ id: m.id, x: m.x, y: m.y, radius: m.territory ? TERRITORY_RADIUS : LAND_RADIUS }))
         .map(b => ({ ...b, outline: regionOutline(`${b.id}/land`, b, b.radius, 28), ripple1: regionOutline(`${b.id}/land`, b, b.radius + 0.22, 28), ripple2: regionOutline(`${b.id}/land`, b, b.radius + 0.5, 28) }));
 
     // Paths (drawn, never measured: D141): a tree over the markers.
-    const routes = spanningTree(markers).map(([a, b]) => ({ a: markers[a].id, b: markers[b].id, kind: 'road', points: [[markers[a].x, markers[a].y], [markers[b].x, markers[b].y]] }));
+    const joined = markers.filter(m => m.kind !== 'region');    // lands are joined by their borders, not by a path
+    const routes = spanningTree(joined).map(([a, b]) => ({ a: joined[a].id, b: joined[b].id, kind: 'road', points: [[joined[a].x, joined[a].y], [joined[b].x, joined[b].y]] }));
 
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
     for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
     const bounds = { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) };
-    const measure = measureOf(pack, bk, cur, { depth, layered: holds.size > 0 });
+    const kindOfId = (id) => (live.get(id).kind || guessKind(live.get(id).label));
+    const up = chain(cur);
+    const lastRegion = up.map(kindOfId).lastIndexOf('region');
+    const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0, kind: cur ? kindOfId(cur) : '' });
     const ground = groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
     return {
         layer: cur, layerLabel: labelOfLayer(cur), depth,
@@ -801,7 +899,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         party: partyOn && markers.some(m => m.id === partyOn) ? partyOn : '',
         partyInTray: partyOn && tray.some(m => m.id === partyOn) ? partyOn : '',
         partyId, partyLayer: partyId ? (par.get(partyId) || '') : '',
-        bounds, measure, ground, decor: groundDecor(ground, cur || 'top', bounds, markers),
+        bounds, measure, ground, territories, decor: groundDecor(ground, cur || 'top', bounds, markers),
         empty: live.size === 0,
     };
 }
@@ -815,16 +913,16 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
  * @returns {Map<string, { x: number, y: number }>}
  */
 export function suggestSpots(model) {
-    const taken = (model && model.markers ? model.markers : []).map(m => ({ x: m.x, y: m.y }));
-    const free = (at) => taken.every(t => dist(t, at) >= 1.3);
+    const taken = (model && model.markers ? model.markers : []).map(m => ({ x: m.x, y: m.y, wide: m.kind === 'region' }));
+    const free = (at, wide) => taken.every(t => dist(t, at) >= (wide || t.wide ? TERRITORY_RADIUS * 1.3 : 1.3));    // a region needs room for its land
     const out = new Map();
     let n = 0;
     for (const t of (model && model.tray ? model.tray : [])) {
         if (t.here === false) continue;
         let at = null;
-        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral({ x: 0, y: 0 }, n++, 1.7, 0.1); if (free(s)) at = s; }
+        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral({ x: 0, y: 0 }, n++, 1.7, 0.1); if (free(s, t.kind === 'region')) at = s; }
         if (!at) continue;
-        taken.push(at);
+        taken.push({ ...at, wide: t.kind === 'region' });
         out.set(t.id, at);
     }
     return out;
