@@ -894,6 +894,34 @@ export function isEnding() {
     return ending;
 }
 
+// ─── Starting from the Atlas (D174) ─────────────────────────────────────
+
+/**
+ * Whether a scene can be started from the chat in front, and in which
+ * world (D174): between scenes, in the world of the ended scene in
+ * front; in a chat that was taken as a world's beginning, in that world.
+ * A scene being played or set aside must be ended first; a chat whose
+ * world is not played as scenes has Play as scenes instead.
+ * @returns {{ ok: boolean, reason: string, worldId?: string, number?: number, card?: string, scene?: object }}
+ */
+export function sceneStartPlan() {
+    if (!isHubOn()) return { ok: false, reason: 'off' };
+    const cur = currentScene();
+    let worldId = '';
+    if (cur) {
+        if (!cur.ended) return { ok: false, reason: 'scene-open', scene: cur.scene };
+        worldId = cur.worldId;
+    } else {
+        const st = getWorldState();
+        worldId = st && st.pack ? String(st.pack) : '';
+        const e = worldId ? store().worlds[worldId] : null;
+        if (!e || !e.memory) return { ok: false, reason: 'not-scenes' };
+    }
+    const g = guardStart(worldId);
+    if (!g.ok) return { ok: false, reason: g.reason, scene: g.scene };
+    return { ok: true, reason: '', worldId, number: g.entry.seq + 1, card: g.card.name };
+}
+
 // ─── The world's map (D172, D173) ───────────────────────────────────────
 
 /**

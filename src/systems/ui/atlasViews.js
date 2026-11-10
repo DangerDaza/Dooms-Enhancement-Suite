@@ -12,6 +12,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
+import { GAPS } from '../../utils/hub.js';
 
 export const ATLAS_ID = 'dooms-atlas';
 
@@ -190,6 +191,77 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
             <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-draft"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Draft the world</span></button>
             <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
         </div>
+    </div>`;
+}
+
+/**
+ * Starting a scene from the map (D174), a panel over it in two steps:
+ * who is there, when, and what brings the party; then three ways the
+ * scene could open, to pick one of or to write over.
+ * @param {object} o
+ * @param {'form'|'busy'|'pick'|'opening'} o.step
+ * @param {{ id: string, label: string }} o.place
+ * @param {number} o.sceneNo
+ * @param {Array<{ name: string, here: boolean }>} o.people   the people the world knows; `here` when last seen at the place
+ * @param {string[]} o.cast          the names ticked
+ * @param {{ id: string, words: string }} o.gap
+ * @param {string} o.journey         what the map says of the way there ('' when the party is there or it cannot tell)
+ * @param {object|null} o.pending    pendingStart(): the openers and when the scene opens
+ */
+export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: '' }, sceneNo = 0, people = [], cast = [], extra = '', gap = { id: 'now', words: '' }, journey = '', seedText = '', note = '', error = '', pending = null, card = '' } = {}) {
+    const where = place && place.label ? place.label : 'here';
+    const title = `${sceneNo ? `Scene ${sceneNo}` : 'A scene'} at ${e(where)}`;
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    if (step === 'busy' || step === 'opening') return `<div class="dooms-atlas-setup-card is-busy is-scene"><h3>${title}</h3><p>${step === 'busy' ? 'Writing three ways it could open…' : 'Opening the scene…'}</p><div class="dooms-atlas-setup-bar" role="progressbar" aria-label="${step === 'busy' ? 'Writing the openings' : 'Opening the scene'}"><span style="width:60%"></span></div></div>`;
+    if (step === 'pick') {
+        const p = pending && typeof pending === 'object' ? pending : { openers: [], when: null };
+        const when = p.when ? [p.when.date, p.when.time].filter(Boolean).join(', ') : '';
+        const openers = (Array.isArray(p.openers) ? p.openers : []).map((o, i) => `<li class="dooms-atlas-opener">
+                <h4>${e(o.title || `Opening ${i + 1}`)}</h4>
+                <p>${e(o.text)}</p>
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-pick" data-choice="${i}"><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Open with this</span></button>
+            </li>`).join('');
+        return `<div class="dooms-atlas-setup-card is-review is-scene">
+            <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
+            <p>${e(where)}${when ? ` · ${e(when)}` : ''}. Pick one; the other two stay as swipes on the first message.</p>
+            ${err}
+            <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
+            <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
+                <textarea class="dooms-atlas-input dooms-atlas-scene-own" maxlength="1500" placeholder="The first message of the scene, in the narrator's voice."></textarea></label>
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn" data-act="scene-own"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>Open with mine</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scene-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scene-back">Back</button>
+            </div>
+        </div>`;
+    }
+    const ticked = new Set(cast);
+    const who = people.length
+        ? `<div class="dooms-atlas-cast">${people.map(p => `<label class="dooms-atlas-cast-one${p.here ? ' is-here' : ''}"><input type="checkbox" name="dooms-atlas-cast" value="${attr(p.name)}"${ticked.has(p.name) ? ' checked' : ''} /> <span>${e(p.name)}</span>${p.here ? '<span class="dooms-atlas-cast-here" title="Last seen here">here</span>' : ''}</label>`).join('')}</div>`
+        : '<p class="dooms-atlas-none">The world knows no one yet. Name who is there below.</p>';
+    const gaps = [...GAPS.filter(g => g.id !== 'when'), { id: 'when', label: 'In my words' }].map(g => `<label><input type="radio" name="dooms-atlas-gap" value="${g.id}"${g.id === gap.id ? ' checked' : ''} /> <span>${e(g.label)}</span></label>`).join('');
+    return `<div class="dooms-atlas-setup-card is-scene">
+        <h3>${title}</h3>
+        <p>A fresh chat${card ? ` with ${e(card)}` : ''} that opens here, told what happened before and who is in it.</p>
+        <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">Who is there</legend>
+            ${who}
+            <input type="text" class="dooms-atlas-input dooms-atlas-scene-who" maxlength="200" value="${attr(extra)}" placeholder="Someone else, separated by commas" aria-label="Someone else who is there" />
+        </fieldset>
+        <fieldset class="dooms-atlas-scene-field"><legend class="dooms-atlas-card-label">When, counted from the last scene</legend>
+            <div class="dooms-atlas-gaps">${gaps}</div>
+            <input type="text" class="dooms-atlas-input dooms-atlas-scene-when" maxlength="80" value="${attr(gap.id === 'when' ? gap.words : '')}" placeholder="In my words: three days later, at the turn of the season…" aria-label="When, in your words" />
+            ${journey ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-route" aria-hidden="true"></i> The map puts the way here at ${e(journey)}.</p>` : ''}
+        </fieldset>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What brings the party here (optional)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-scene-seed" maxlength="400" placeholder="An errand, a summons, a rumour followed…">${e(seedText)}</textarea></label>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What you want from the scene (optional)</span>
+            <input type="text" class="dooms-atlas-input dooms-atlas-scene-note" maxlength="300" value="${attr(note)}" placeholder="A quiet talk, a fight, an answer…" /></label>
+        ${err}
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="scene-write"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write three openings</span></button>
+            <button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>
+        </div>
+        <p class="dooms-atlas-start-note">One request writes three ways the scene could open. Nothing is started until you pick one.</p>
     </div>`;
 }
 
@@ -541,7 +613,7 @@ export function atlasBeyondHtml(n) {
  * @param {string[]} o.news       the changes that name the place
  * @param {Function} o.portraits  name -> a portrait URL or ''
  */
-export function atlasCardHtml({ marker = null, mode = 'view', others = [], distance = '', canTravel = false, travelling = false, rumours = [], news = [], portraits = () => '' } = {}) {
+export function atlasCardHtml({ marker = null, mode = 'view', others = [], distance = '', canTravel = false, travelling = false, rumours = [], news = [], portraits = () => '', canStart = false, sceneNo = 0 } = {}) {
     const m = marker;
     if (!m) return '';
     const k = kindOf(m.kind);
@@ -603,12 +675,14 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
     const where = m.player
         ? `<p class="dooms-atlas-card-where is-here"><i class="fa-solid fa-flag" aria-hidden="true"></i> ${m.partyInside ? 'The party is inside' : 'You are here'}</p>`
         : (distance ? `<p class="dooms-atlas-card-where"><i class="fa-solid fa-route" aria-hidden="true"></i> ${e(distance)}</p>` : '');
-    const travel = m.player
+    const travel = m.player || (canStart && !canTravel)    // the party is here already; or between scenes, where a scene is how one goes anywhere
         ? ''
         : `<div class="dooms-atlas-card-travel">
             <input type="text" class="dooms-atlas-when" maxlength="80" placeholder="arriving when… (optional)" aria-label="Arriving when" />
             <button type="button" class="dooms-atlas-btn is-primary" data-act="travel" data-id="${id}"${canTravel && !travelling ? '' : ' disabled'} title="${canTravel ? 'The next reply montages the road, then the arrival' : 'Travel needs Live World on and a chat open'}"><i class="fa-solid fa-person-walking" aria-hidden="true"></i> <span>${travelling ? 'Setting out…' : 'Travel here'}</span></button>
         </div>`;
+    // A world played as scenes (D174): a scene is started here, in a chat of its own. Between scenes it is the way to go anywhere.
+    const start = canStart ? `<div class="dooms-atlas-card-scene"><button type="button" class="dooms-atlas-btn${canTravel && !m.player ? '' : ' is-primary'}" data-act="scene-start" data-id="${id}" title="A fresh chat that opens here, knowing what happened before"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'a scene'} here</span></button></div>` : '';
     const tool = (act, icon, label, title) => `<button type="button" class="dooms-atlas-card-tool" data-act="${act}" data-id="${id}" title="${attr(title)}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
     return `<article class="dooms-atlas-card kind-${attr(m.kind)}" data-id="${id}">
         ${picture ? `<div class="dooms-atlas-card-picture" style="background-image: url('${attr(picture)}')"></div>` : ''}
@@ -623,6 +697,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
         ${list('Rumours', rumours)}
         ${list('Lately', news)}
         ${travel}
+        ${start}
         <button type="button" class="dooms-atlas-btn dooms-atlas-enter" data-act="enter" data-id="${id}" title="Open the map inside ${attr(m.label)}: its own places, at its own scale. Double-clicking the marker does the same."><i class="fa-solid fa-door-open" aria-hidden="true"></i> <span>${m.holds ? `Enter (${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside)` : 'Enter: give it a map of its own'}</span></button>
         <div class="dooms-atlas-card-tools">
             ${tool('card-edit', 'fa-pen', 'Edit', 'Change the name, the kind or the note')}

@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
@@ -81,7 +81,7 @@ window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view
 window.__book = null;
 let pack = null, state = null;
 const model = () => A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: window.__ui.layer, weather: pack.id === 'realm' ? { greywood: { emoji: '🌧️', text: 'Steady rain' } } : {} });
-const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: mod.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: true, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
+const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: mod.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: !window.__ui.between, canStart: !!window.__ui.canStart, sceneNo: 4, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
@@ -184,6 +184,8 @@ window.__applyFillRegions = () => { const home = S.fillOptions(window.__model).h
 // Playing the story as scenes (D172): the panel at a step, with a plan as the scene engine would give it.
 window.__scenes = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasScenesHtml(o); return true; };
 window.__refusal = (plan) => scenesRefusalText(plan);
+// Starting a scene from a marker (D174): the sheet at a step.
+window.__sceneStart = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasStartSceneHtml(o); return true; };
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
 window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
@@ -1024,6 +1026,46 @@ console.log('\n§5g playing the story as scenes: the way in and its panel (D172)
     check('with a scene being played it is named, with the way to it', !!b && /Scene 3 \(The gate at dusk\) is being played, and the map is changed there\./.test(b.text) && /Go to it/.test(b.text) && b.id === 's3', JSON.stringify(b));
     await shot('7zb-between-scenes');
     await page.evaluate(() => window.__set({ between: null }));
+}
+
+console.log('\n§5h starting a scene from a place (D174)');
+{
+    // The place's card: in a chat that was taken as the scenes' beginning both ways of going there are offered; between scenes, the scene alone.
+    await page.evaluate(() => window.__set({ canStart: true }));
+    await page.locator('#dooms-atlas .dooms-atlas-marker', { hasText: 'Redfall Castle' }).locator('.dooms-atlas-pin').click();
+    await settle();
+    let c = await page.evaluate(() => { const card = document.querySelector('.dooms-atlas-card'); const st = card.querySelector('[data-act="scene-start"]'); const tr = card.querySelector('[data-act="travel"]'); return { start: st ? st.textContent.trim() : '', startPrimary: st ? st.classList.contains('is-primary') : false, travel: !!tr, travelPrimary: tr ? tr.classList.contains('is-primary') : false, id: st ? st.getAttribute('data-id') : '' }; });
+    check('a place\'s card offers Start scene 4 here beside Travel here, the scene the quieter of the two', c.start === 'Start scene 4 here' && c.travel && c.travelPrimary && !c.startPrimary && c.id === (await page.evaluate(() => window.__model.markers.find(m => m.label === 'Redfall Castle').id)), JSON.stringify(c));
+    await page.evaluate(() => window.__board.closeCard());
+    await page.evaluate(() => window.__set({ between: { open: null } }));
+    await page.locator('#dooms-atlas .dooms-atlas-marker', { hasText: 'Redfall Castle' }).locator('.dooms-atlas-pin').click();
+    await settle();
+    c = await page.evaluate(() => { const card = document.querySelector('.dooms-atlas-card'); const st = card.querySelector('[data-act="scene-start"]'); return { start: st ? st.textContent.trim() : '', startPrimary: st ? st.classList.contains('is-primary') : false, travel: !!card.querySelector('[data-act="travel"]'), fits: card.scrollWidth <= card.clientWidth + 1 }; });
+    check('between scenes there is no chat to travel in: the card offers the scene alone, as the thing to press', c.start === 'Start scene 4 here' && c.startPrimary && !c.travel && c.fits, JSON.stringify(c));
+    await shot('7zc-card-start-scene');
+    await page.evaluate(() => window.__board.closeCard());
+    await page.evaluate(() => window.__set({ between: null, canStart: false }));
+
+    const panel = () => page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card'); if (!el) return null; const b = el.getBoundingClientRect(); return { text: el.textContent.replace(/\s+/g, ' ').trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => x.getAttribute('data-act') + (x.hasAttribute('data-choice') ? ':' + x.getAttribute('data-choice') : '')), inside: b.top >= 0 && b.bottom <= innerHeight && b.left >= 0 && b.right <= innerWidth, ticked: [...el.querySelectorAll('input[name="dooms-atlas-cast"]:checked')].map(x => x.value), gap: (el.querySelector('input[name="dooms-atlas-gap"]:checked') || {}).value, when: (el.querySelector('.dooms-atlas-scene-when') || {}).value, seed: (el.querySelector('.dooms-atlas-scene-seed') || {}).value, overflow: el.scrollWidth > el.clientWidth + 1 }; });
+    const form = { step: 'form', place: { id: 'pin:redfall-castle', label: 'Redfall Castle' }, sceneNo: 4, card: 'The Redward', people: [{ name: 'Kiyoha', here: true }, { name: 'Lysandra', here: true }, { name: 'Dagger', here: false }, { name: 'Solveig', here: false }, { name: 'Blythe', here: false }], cast: ['Kiyoha', 'Lysandra'], gap: { id: 'when', words: 'about 2 days later' }, journey: 'about 2 days on foot by road (48 miles)', seedText: 'The party came here from Hask: about 2 days on foot by road (48 miles).' };
+    await page.evaluate((o) => window.__sceneStart(o), form);
+    let v = await panel();
+    check('the sheet: the scene and its place named, the people last seen there ticked, the time counted from the journey on the map, what brings the party filled in from it', /Scene 4 at Redfall Castle/.test(v.text) && /A fresh chat with The Redward/.test(v.text) && v.ticked.join() === 'Kiyoha,Lysandra' && v.gap === 'when' && v.when === 'about 2 days later' && /The map puts the way here at about 2 days on foot by road \(48 miles\)/.test(v.text) && v.seed.startsWith('The party came here from Hask') && v.acts.join() === 'scene-write,setup-close' && v.inside && !v.overflow, JSON.stringify(v));
+    check('every gap can be picked, the player\'s own words among them', (await page.evaluate(() => [...document.querySelectorAll('input[name="dooms-atlas-gap"]')].map(x => x.value).join())) === 'now,later,tomorrow,days,weeks,when');
+    await shot('7zd-scene-sheet');
+    await page.evaluate((o) => window.__sceneStart({ ...o, step: 'busy' }), form);
+    check('while the openings are written the sheet says so', /Writing three ways it could open/.test((await panel()).text) && (await panel()).acts.length === 0);
+    const pending = { when: { date: 'Day 44', time: 'dusk' }, openers: [{ title: 'The gate', text: 'Fog lies on the causeway. Kiyoha is already at the gate, axe across her shoulders, singing badly.' }, { title: 'The yard', text: 'The castle yard is empty but for a boy with a bucket, who will not look at Lysandra\'s hands.' }, { title: 'A summons', text: 'A steward waits under the arch with a sealed letter and the look of a man told to hurry.' }] };
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending });
+    v = await panel();
+    check('three openings to pick from, each with its own button; or the player\'s own, or three more, or back', /How does scene 4 open\?/.test(v.text) && /Redfall Castle · Day 44, dusk/.test(v.text) && /singing badly/.test(v.text) && /sealed letter/.test(v.text) && v.acts.join() === 'scene-pick:0,scene-pick:1,scene-pick:2,scene-own,scene-again,scene-back' && v.inside && !v.overflow, JSON.stringify(v.acts));
+    await shot('7ze-scene-openings');
+    await page.evaluate((o) => window.__sceneStart(o), { ...form, step: 'pick', pending: { when: null, openers: [] }, error: 'The narrator wrote no usable opener; write your own, ask again, or start without one.' });
+    v = await panel();
+    check('no opening written: the sheet says so and still lets the player write one or ask again', /No opening was written/.test(v.text) && /wrote no usable opener/.test(v.text) && v.acts.join() === 'scene-own,scene-again,scene-back');
+    await page.evaluate((o) => window.__sceneStart({ ...o, step: 'opening' }), form);
+    check('while the scene is opened the sheet says so', /Opening the scene/.test((await panel()).text));
+    await page.evaluate(() => window.__setup(''));
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

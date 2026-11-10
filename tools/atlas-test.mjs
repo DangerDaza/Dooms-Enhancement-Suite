@@ -19,7 +19,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand, journeyGap,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -406,6 +406,17 @@ console.log('\n§6c2 inside a region: its land, its neighbours, its terrain (D16
     check('a region that holds regions of its own shows their lands, not its own', nested.realm === null && nested.territories.length === 2);
     const alone = atlasModel({ pack, state: st, book: g.book, layer: g.id });
     check('a region alone on the map above has its land and no neighbours', !!alone.realm && alone.realm.neighbours.length === 0 && same(alone.realm.outline, atlasModel({ pack, state: st, book: g.book }).territories[0].outline));
+}
+
+console.log('\n§6c3 when a scene at a place opens, by the journey there (D174)');
+{
+    let b = withScale(null, 'region');
+    for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 3.2, 0], ['The Gate', 'landmark', 0.05, 0], ['The Mill', 'landmark', 0.6, 0.3], ['Far Keep', 'stronghold', 40, 0]]) b = addPin(b, { label, kind, x, y }).book;
+    const m = atlasModel({ pack: blankPack('x'), book: b });
+    const id = (l) => m.markers.find(x => x.label === l).id;
+    check('two days\' road away: the scene opens that long after, in the journey\'s own words', same(journeyGap(m, id('Hask'), id('Redfall Castle')), { id: 'when', words: 'about 2 days later' }) && same(journeyGap(m, id('Hask'), id('Far Keep')), { id: 'when', words: 'about 25 days later' }));
+    check('within a day\'s travel: later that day; a few steps off, or the place the party stands at: right after', same(journeyGap(m, id('Hask'), id('The Mill')), { id: 'later', words: '' }) && same(journeyGap(m, id('Hask'), id('The Gate')), { id: 'now', words: '' }) && same(journeyGap(m, id('Hask'), id('Hask')), { id: 'now', words: '' }));
+    check('with no party on the map, or a place that is not on it, the map cannot tell: right after', same(journeyGap(m, '', id('Hask')), { id: 'now', words: '' }) && same(journeyGap(m, id('Hask'), 'pin:nowhere'), { id: 'now', words: '' }) && same(journeyGap(null, 'a', 'b'), { id: 'now', words: '' }));
 }
 
 console.log('\n§6d roads the player draws (D164)');

@@ -488,3 +488,20 @@ tested in the hub's sandbox (`tools/hub-flow-test.mjs` §10). Not yet: the
 Atlas with no scene chat in front at all (another chat, or none) cannot
 show a world of scenes; choosing one comes with starting scenes from the
 Atlas (step 3).
+
+## 19. The scenes build, step 3a: a scene started from a place (2026-11-10, D174)
+
+Built in "Atlas 17". D142 ("starting a scene from a marker was not
+chosen") is reversed by the owner's order of §17.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D174 | Start a scene here, on a place's card | Where a scene can be started (`sceneStartPlan`: between scenes, in the world of the ended scene in front; in the chat a world's scenes began from, in that world; not in a scene being played or set aside, which is ended first; not in a chat whose world is not played as scenes, which has Play as scenes), a place's card has **Start scene N here**. Between scenes it is the card's one way of going there (there is no chat to travel in); in the chat the scenes began from it stands beside Travel here, the quieter of the two. **The sheet** (a panel over the map): who is there, as ticks over the people the world knows, those last seen at the place ticked, and a line for anyone else; when, counted from the last scene, pre-chosen **from the journey on the map** (`journeyGap`: right after when the party stands there or the way is under an hour, later that day within a day's travel, else the journey's own time, "about 2 days later"), with the map's line for the way there under it, and the setting's own gap when the party is on another map; what brings the party, filled in from the journey; what the player wants from the scene. Write three openings asks the scene engine (`prepareScene`: one request, and one more when time passes); nothing is started. **The openings:** three cards with Open with this, the player's own text with Open with mine, Ask again, Back (`commitScene`, `askOpenersAgain`, `cancelStart`). Opened, the scene's chat is written and comes to the front, and the Atlas closes to make way for it. |
+
+A whole loop can be played now: Play as scenes, Start scene here, play, End
+the scene (from the strip above the chat, which still opens the old Hub's
+End sheet), and between scenes start the next from the map. Not yet moved
+to the Atlas (step 3b, 3c): the End sheet and the strip's buttons; the
+list of scenes; starting from a person, a rumour, a piece of news or a
+hook; choosing a world of scenes when no scene chat is in front; the D
+menu's Hub and End scene.

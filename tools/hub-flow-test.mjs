@@ -603,5 +603,30 @@ console.log('\n§10 the world\'s map: carried as it is edited, and edited betwee
     hub.__setOpenersTransport(null);
 }
 
+console.log('\n§11 where a scene can be started from (D174)');
+{
+    const W = 'first-descent';
+    // §10 left scene 2 reopened and in front, scene 3 ended after it.
+    const playing = hub.sceneStartPlan();
+    check('in a scene being played no other is started: it is ended first, and the plan names it', playing.ok === false && playing.reason === 'scene-open' && playing.scene.id === 's2', JSON.stringify(playing));
+    hub.__setRecapTransport(async () => '{"recap":"Back on the lane."}');
+    const pe = await hub.prepareEnd();
+    await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true, replaceMemory: false });
+    const after = hub.sceneStartPlan();
+    check('between scenes one can be: in the world of the ended scene in front, numbered next, on the narrator\'s card', after.ok && after.worldId === W && after.number === 4 && after.card === 'The Redward', JSON.stringify(after));
+    await openFile('The Redward - long');
+    const fromLong = hub.sceneStartPlan();
+    check('from the chat the scenes began from, too', fromLong.ok && fromLong.worldId === W && fromLong.number === 4, JSON.stringify(fromLong));
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain two');
+    const plain = hub.sceneStartPlan();
+    check('a chat whose world is not played as scenes has none to start (it has Play as scenes)', plain.ok === false && plain.reason === 'not-scenes', JSON.stringify(plain));
+    extensionSettings.liveWorld.enabled = false;
+    check('nor with Live World off', hub.sceneStartPlan().reason === 'off');
+    extensionSettings.liveWorld.enabled = true;
+    hub.__setRecapTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

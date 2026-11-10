@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects, normalizeWorldState } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
@@ -23,8 +23,9 @@ import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHA
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
-import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT } from '../features/hub.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
+import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart } from '../features/hub.js';
+import { describeStartResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -86,6 +87,7 @@ function portraitOf(name) {
 // the world has moved on from an ended scene, so its chat no longer says how things stand. Read anew on every draw.
 let source = { kind: 'chat' };
 const between = () => source.kind === 'world';
+let startPlan = { ok: false, reason: '' };    // whether a scene can be started from here, and in which world (D174); read anew on every draw
 
 /** The world's state as the Atlas draws it: the chat's, or between scenes the memory's. */
 function theState() {
@@ -125,6 +127,7 @@ function chatOpen() {
 /** The world in front and what the map draws of it; null while there is nothing to draw. */
 function read() {
     try { source = atlasSource(); } catch (e) { source = { kind: 'chat' }; }
+    try { startPlan = sceneStartPlan(); } catch (e) { startPlan = { ok: false, reason: 'error' }; }
     const pack = getActivePack();
     // The memory is this chat's world's: a memory of another world (the chat's world was changed under it) is not shown over this pack.
     if (between() && !(pack && source.memory.stores.dooms_world && source.memory.stores.dooms_world.pack === pack.id)) source = { kind: 'chat' };
@@ -164,6 +167,7 @@ function cardFor(marker) {
         canTravel: isLiveWorldOn() && chatOpen() && !between(),    // between scenes there is no chat to travel in: a scene is started instead
         travelling: travelling || !!(pending && pending.kind === 'travel'),
         rumours: said.rumours, news: said.news, portraits: portraitOf,
+        canStart: startPlan.ok, sceneNo: startPlan.ok ? startPlan.number : 0,
     });
 }
 
@@ -425,8 +429,83 @@ function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
-    $p.prop('hidden', false).html(setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.prop('hidden', false).html(setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
+}
+
+// ─── Starting a scene from a place (D174) ───────────────────────────────────
+
+/** The sheet opened for a marker: who the world last saw there ticked, the time counted from the journey on the map. */
+function openSceneStart(id) {
+    const m = model ? model.markers.find(x => x.id === id) : null;
+    if (!m || !startPlan.ok) return;
+    if (board) board.closeCard();
+    arm(null);
+    const state = theState();
+    const here = new Set(m.people || []);
+    const people = Object.keys((state && state.known) || {}).map(name => ({ name, here: here.has(name) })).sort((a, b) => Number(b.here) - Number(a.here) || a.name.localeCompare(b.name));
+    const from = model.party && model.party !== m.id ? model.markers.find(x => x.id === model.party) : null;
+    const journey = from ? describeJourney(model, from.id, m.id) : '';
+    // The party on this map: the time is the journey's. Elsewhere, or already here: the setting's own.
+    const gap = from ? journeyGap(model, from.id, m.id) : m.player ? gapOf('now') : gapOf(hubConfig(extensionSettings).gap);
+    setup = {
+        start: true, step: 'form', worldId: startPlan.worldId, sceneNo: startPlan.number, card: startPlan.card,
+        place: { id: m.id, label: m.label }, people, cast: people.filter(p => p.here).map(p => p.name), extra: '',
+        gap, journey, seedText: from && journey ? `The party came here from ${from.label}: ${journey}.` : '', note: '', error: '', pending: null, world: worldKey(),
+    };
+    $(`${root()} .dooms-atlas-start`).prop('hidden', true);
+    renderSetup();
+}
+
+/** What the sheet holds now, read from the page. */
+function readSceneForm() {
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    const cast = [];
+    $p.find('input[name="dooms-atlas-cast"]:checked').each(function () { cast.push(String($(this).val() || '')); });
+    const extra = String($p.find('.dooms-atlas-scene-who').val() || '');
+    for (const n of extra.split(',')) { const t = n.trim(); if (t && !cast.some(c => c.toLowerCase() === t.toLowerCase())) cast.push(t); }
+    const gap = gapOf(String($p.find('input[name="dooms-atlas-gap"]:checked').val() || 'now'), String($p.find('.dooms-atlas-scene-when').val() || ''));
+    return { cast, extra, gap, seedText: String($p.find('.dooms-atlas-scene-seed').val() || '').trim(), note: String($p.find('.dooms-atlas-scene-note').val() || '').trim() };
+}
+
+/** Three openings asked for; the sheet shows them to pick from. Nothing is started yet. */
+async function writeOpenings() {
+    if (!setup || !setup.start || setup.step !== 'form') return;
+    const f = readSceneForm();
+    setup = { ...setup, ...f, cast: f.cast, step: 'busy', error: '' };
+    renderSetup();
+    const p = await prepareScene({ worldId: setup.worldId, seed: { kind: 'place', id: setup.place.id, label: setup.place.label, text: f.seedText }, place: setup.place, cast: f.cast, gap: f.gap, note: f.note });
+    if (!setup || !setup.start) { cancelStart(); return; }    // the sheet was closed meanwhile
+    if (!p.ok) { setup = { ...setup, step: 'form', error: describeStartResult(p) }; renderSetup(); return; }
+    setup = { ...setup, step: 'pick', pending: pendingStart() || p, error: p.errors && p.errors.length ? p.errors.join(' ') : '' };
+    renderSetup();
+}
+
+/** The scene started with one of the openings, or the player's own: its chat is written and opened, and the Atlas makes way for it. */
+async function openWith(choice, ownText = '') {
+    const pending = pendingStart();
+    if (!setup || !setup.start || setup.step !== 'pick' || !pending) return;
+    const keep = setup;
+    setup = { ...setup, step: 'opening', error: '' };
+    renderSetup();
+    const r = await commitScene(pending.token, { choice, ownText });
+    if (!r.ok) { if (setup && setup.start) { setup = { ...keep, step: 'pick', error: describeStartResult(r) }; renderSetup(); } return; }
+    setup = null;
+    renderSetup();
+    closeAtlas();
+}
+
+async function askOpeningsAgain() {
+    const pending = pendingStart();
+    if (!setup || !setup.start || setup.step !== 'pick' || !pending) return;
+    const own = String($(`${root()} .dooms-atlas-scene-own`).val() || '');
+    setup = { ...setup, step: 'busy', error: '' };
+    renderSetup();
+    const r = await askOpenersAgain(pending.token);
+    if (!setup || !setup.start) return;
+    setup = { ...setup, step: 'pick', pending: pendingStart() || setup.pending, error: r.ok ? '' : (r.errors ? r.errors.join(' ') : describeStartResult(r)) };
+    renderSetup();
+    if (own) $(`${root()} .dooms-atlas-scene-own`).val(own);
 }
 
 // ─── Playing the story as scenes (D172) ─────────────────────────────────────
@@ -665,7 +744,18 @@ function build() {
                 import('./hub.js').then(m => m.openHub({ worldId: id })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
                 return;
             }
-            if (act === 'setup-close') { setup = null; renderSetup(); render(); return; }
+            if (act === 'setup-close') { if (setup && setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }
+            if (act === 'scene-start') { ev.stopPropagation(); openSceneStart(this.getAttribute('data-id') || ''); return; }
+            if (act === 'scene-write') { await writeOpenings(); return; }
+            if (act === 'scene-pick') { await openWith(Number(this.getAttribute('data-choice')) || 0); return; }
+            if (act === 'scene-own') {
+                const own = String($(`${root()} .dooms-atlas-scene-own`).val() || '').trim();
+                if (!own) { if (setup && setup.start) { setup = { ...setup, error: 'Write the opening first, or pick one above.' }; renderSetup(); } return; }
+                await openWith(0, own);
+                return;
+            }
+            if (act === 'scene-again') { await askOpeningsAgain(); return; }
+            if (act === 'scene-back') { cancelStart(); if (setup && setup.start) { setup = { ...setup, step: 'form', pending: null, error: '' }; renderSetup(); } return; }
             if (act === 'setup-draft') { await runSetup(); return; }
             if (act === 'setup-stop') { stopSetup(); if (setup) { setup = { ...setup, progress: { ...setup.progress, word: 'Stopping after this part…' } }; renderSetup(); } return; }
             if (act === 'setup-back') { if (setup) { setup = { ...setup, step: 'notes', error: '' }; renderSetup(); } return; }
@@ -845,7 +935,7 @@ function build() {
     });
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
-        if (setup) { if (setup.step === 'busy') return; setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
+        if (setup) { if (setup.step === 'busy' || setup.step === 'opening') return; if (setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
         if (roading) { setRoading(false); render(); return; }    // drawing roads ends first
         if (armed) { arm(null); render(); return; }    // what waited for a tap is let go first
         if (board && (board.opened() || board.popupOpen())) { board.closeCard(); return; }    // a card on top (a marker's, a road's) closes first

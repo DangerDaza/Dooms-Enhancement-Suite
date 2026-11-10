@@ -1612,6 +1612,22 @@ export function describeJourney(model, fromId, toId) {
     return r.set ? `${time}${way}` : `${time} on foot${way} (${describeLength(r.length, model.measure.unit)})`;
 }
 
+/**
+ * How long after the last scene a scene at a place opens, by the journey
+ * there (D174): the scene engine's gap, { id, words }. Right after when
+ * the party is there already or the map cannot tell; later that day for a
+ * journey within a day's travel; else the journey's own time in words
+ * ("about 2 days later").
+ */
+export function journeyGap(model, fromId, toId) {
+    const now = { id: 'now', words: '' };
+    if (!fromId || !toId || fromId === toId) return now;
+    const r = routeBetween(model, fromId, toId);
+    if (!r || !(r.hours >= 1)) return now;    // under an hour's walk is no time to speak of
+    if (r.hours < TRAVEL_HOURS_A_DAY) return { id: 'later', words: '' };
+    return { id: 'when', words: `${describeTime(r.hours)} later` };
+}
+
 /** The markers a search and the switched-off kinds leave: the name, the note, the region, the rooms, the other names and the people are searched. */
 export function filterMarkers(markers, { query = '', hidden = [] } = {}) {
     const off = new Set(hidden);
