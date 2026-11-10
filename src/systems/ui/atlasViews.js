@@ -55,6 +55,7 @@ export function atlasShellHtml() {
             <div class="dooms-atlas-tools">
                 ${tool('fold', 'fa-bars', 'Hide or show the sidebar')}
                 ${tool('add', 'fa-map-pin', 'Add a marker: click this, then the map', ' is-edit')}
+                ${tool('roads', 'fa-road', 'Roads: while this is on, click two places to join them with a road, or two joined places to take their road away', ' is-edit')}
                 ${tool('move', 'fa-up-down-left-right', 'Move markers: while this is on, drag a marker to where it belongs', ' is-edit')}
                 ${tool('base', 'fa-image', 'Switch between this world\'s picture and the drawn map', ' is-base')}
                 ${tool('party', 'fa-location-crosshairs', 'Find the party')}
@@ -398,7 +399,7 @@ export function atlasMarkerHtml(m, { portraits = () => '' } = {}) {
 
 /** A marker's classes: its kind, whether it was visited, whether the party is there. */
 export function atlasMarkerClass(m) {
-    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : '', m.loose ? 'is-loose' : '', m.territory ? 'is-territory' : ''].filter(Boolean).join(' ');
+    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : '', m.loose ? 'is-loose' : '', m.territory ? 'is-territory' : '', m.picked ? 'is-picked' : ''].filter(Boolean).join(' ');
 }
 
 /** A region's name, written across its land. */

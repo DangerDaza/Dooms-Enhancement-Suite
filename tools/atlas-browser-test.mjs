@@ -122,6 +122,7 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
             open: (id) => window.__events.push(['open', id]), close: () => { window.__events.push(['close']); window.__ui.cardMode = 'view'; },
             drop: (id, at) => { window.__events.push(['drop', id, at]); window.__book = A.placeAt(window.__book, id, at, window.__ui.layer); draw(); },
             enter: (id) => { window.__events.push(['enter', id]); window.__layer(id); },
+            pick: (id) => { window.__events.push(['pick', id]); const ui = window.__ui; if (!ui.first || ui.first === id) { ui.first = ui.first === id ? '' : id; window.__board.update({ picked: ui.first }); return; } const a = ui.first; ui.first = ''; window.__board.update({ picked: '' }); window.__book = A.toggleRoad(window.__book, a, id, window.__model); draw(); },
             tap: (at) => { window.__events.push(['tap', at]); const ui = window.__ui; if (ui.armed === '+') { ui.armed = ''; const made = A.addPin(window.__book, { label: 'New place', x: at.x, y: at.y, layer: ui.layer }); window.__book = made.book; draw(); window.__board.open(made.id); ui.cardMode = 'edit'; window.__board.redrawCard(); } else if (ui.armed) { window.__book = A.placeAt(window.__book, ui.armed, at, ui.layer); ui.armed = ''; draw(); } },
             move: (id, at) => { window.__events.push(['move', id, at]); window.__book = A.placeAt(window.__book, id, at); draw(); },
             scale: (s) => { window.__scale = s; root.querySelector('.dooms-atlas-scale-bar').style.width = s.px + 'px'; root.querySelector('.dooms-atlas-scale-text').textContent = s.length + ' miles'; },
@@ -293,6 +294,48 @@ console.log('\n§2 placing: a drag, a tap, Place all');
     check('Place all puts the rest on the map and keeps what was placed where it was', l.count === 8 && l.tray.length === 0 && (await page.evaluate(() => { const m = window.__model.markers; return m.every((a, i) => m.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.29)); })));
     check('the map is vectors: the streets, the paths, and no picture', l.groundLines === 1 && l.routes === 7 && l.images === 0);
     await shot('2-campaign-placed');
+}
+
+console.log('\n§2b roads drawn by hand (D164)');
+{
+    check('the tools offer Roads', await page.evaluate(() => !!document.querySelector('.dooms-atlas-tool[data-act="roads"]')));
+    const pair = await page.evaluate(() => { const m = window.__model; const linked = (a, b) => m.routes.some(r => (r.a === a && r.b === b) || (r.a === b && r.b === a)); for (const a of m.markers) for (const b of m.markers) if (a.id < b.id && !linked(a.id, b.id)) return [a.id, b.id]; return null; });
+    await page.evaluate(() => { window.__events.length = 0; window.__board.update({ picking: true }); });
+    const p1 = await spotOf(pair[0]);
+    const p2 = await spotOf(pair[1]);
+    await page.mouse.click(p1.sx, p1.sy);
+    await settle();
+    let l = await layout();
+    check('with Roads on, a place clicked is picked (ringed) and opens no card', !l.card && Object.values(l.markers).filter(m => /is-picked/.test(m.cls)).length === 1 && (await page.evaluate(() => window.__events.some(e => e[0] === 'pick'))));
+    await page.mouse.click(p2.sx, p2.sy);
+    await settle();
+    l = await layout();
+    check('a second place clicked: a road joins the two, and nothing is ringed', l.routes === 8 && Object.values(l.markers).filter(m => /is-picked/.test(m.cls)).length === 0 && (await page.evaluate((pr) => window.__model.routes.some(r => !r.auto && ((r.a === pr[0] && r.b === pr[1]) || (r.a === pr[1] && r.b === pr[0]))), pair)));
+    await shot('2b-road-drawn');
+    await page.mouse.move(700, 5);
+    await page.mouse.click(p1.sx, p1.sy);
+    await page.mouse.click(p2.sx, p2.sy);
+    await settle();
+    l = await layout();
+    check('the same two clicked again: their road is taken away', l.routes === 7);
+    const auto = await page.evaluate(() => { const r = window.__model.routes.find(x => x.auto); return [r.a, r.b]; });
+    const a1 = await spotOf(auto[0]);
+    const a2 = await spotOf(auto[1]);
+    await page.mouse.click(a1.sx, a1.sy);
+    await page.mouse.click(a2.sx, a2.sy);
+    await settle();
+    l = await layout();
+    check('a road the map drew by itself can be taken away too', l.routes === 6 && (await page.evaluate(() => window.__book.cut.length)) === 1);
+    await page.mouse.click(a1.sx, a1.sy);
+    await page.mouse.click(a2.sx, a2.sy);
+    await settle();
+    check('and drawn back', (await layout()).routes === 7);
+    await page.evaluate(() => window.__board.update({ picking: false }));
+    await page.mouse.move(700, 5);
+    await page.mouse.click(p1.sx, p1.sy);
+    await settle();
+    check('with Roads off, a place clicked opens its card again', !!(await layout()).card);
+    await page.evaluate(() => window.__board.closeCard());
 }
 
 console.log('\n§3 made by hand, moved, merged, deleted, brought back');

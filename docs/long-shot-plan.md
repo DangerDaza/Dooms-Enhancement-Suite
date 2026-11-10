@@ -320,3 +320,5 @@ terrain drawn across it (ranges, lakes, forests, roads). Step 3 (not
 built): the set-up and the fill say what each region's land is like, so
 the terrain follows the story. A picture of the player's own under any
 map, not only the top one, is the way to a painted look.
+
+| D164 | Roads are the player's to draw (the owner: "I am moving it but I can't add new roads") | The map still joins each place to its nearest by itself. The Roads tool (the road button among the tools): while it is on, a place clicked is picked, a second place clicked makes a road between the two, or takes away the one that was there, whether the player drew it (`book.roads`) or the map did (`book.cut`); Esc ends. A road follows its places when they are moved; one to a place that is deleted, merged away or on another map is not drawn. Roads are still drawn, never measured (D141). |

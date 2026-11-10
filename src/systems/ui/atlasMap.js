@@ -58,7 +58,7 @@ export function pictureRect(picture) {
  * @param {Function} o.card           marker -> the card's HTML (asked when a marker opens, and again on an update)
  * @param {{ open?: Function, close?: Function, scale?: Function, drop?: Function, tap?: Function, move?: Function, pictureError?: Function }} o.on
  *   `open(id)` a card opened; `close()`; `scale({ px, length, unit, perPx })` after a zoom; `drop(id, { x, y })` a tray row dropped on the map;
- *   `enter(id)` a marker double-clicked; `tap({ x, y })` the map itself tapped; `move(id, { x, y })` a marker dragged; `pictureError()` the picture would not load
+ *   `pick(id)` a marker clicked while roads are being drawn; `enter(id)` a marker double-clicked; `tap({ x, y })` the map itself tapped; `move(id, { x, y })` a marker dragged; `pictureError()` the picture would not load
  * @param {{ center: any, zoom: number }|null} o.view  a view to restore
  */
 export async function mountAtlasMap(el, { model, picture = null, hidden = [], query = '', moving = false, portraits = () => '', card = () => '', on = {}, view = null } = {}) {
@@ -89,6 +89,8 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     let search = String(query || '').trim().toLowerCase();
     let canMove = !!moving;
     let opened = '';
+    let picking = false;      // roads are being drawn: a click on a marker picks it
+    let pickedId = '';        // the first marker picked for a road
 
     const rectBounds = (b) => L.latLngBounds(ll(b.minX, b.maxY), ll(b.maxX, b.minY));
     /** The canvas: everything the map can be panned over. */
@@ -154,7 +156,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 const land = L.polygon(t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain} hue-${t.hue}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
                 land.bindTooltip(t.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
                 // While something waits to be put down, a click on a land puts it there (the map's own tap); else it enters the land.
-                land.on('click', (ev) => { if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; } if (typeof on.enter === 'function') on.enter(t.id); });
+                land.on('click', (ev) => { if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; } if (!picking && typeof on.enter === 'function') on.enter(t.id); });
                 land.on('contextmenu', (ev) => { if (ev.originalEvent) ev.originalEvent.preventDefault(); openCard(t.id); });
                 land.addTo(shapes);
             }
@@ -189,8 +191,9 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
 
     function drawMarkers() {
         const keep = new Set();
-        for (const m of current.markers) {
-            if (off.has(m.kind)) continue;
+        for (const raw of current.markers) {
+            if (off.has(raw.kind)) continue;
+            const m = raw.id === pickedId ? { ...raw, picked: true } : raw;
             keep.add(m.id);
             const html = atlasMarkerHtml(m, { portraits }) + atlasMarkerClass(m) + (matches(m) ? '' : ' is-dim');
             const have = markers.get(m.id);
@@ -201,8 +204,9 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 continue;
             }
             const marker = L.marker(ll(m.x, m.y), { icon: iconOf(m), draggable: canMove, autoPan: true, keyboard: true, title: '', alt: m.label, riseOnHover: true, zIndexOffset: m.player ? 1000 : 0 });
-            marker.on('click', () => openCard(m.id));
-            marker.on('dblclick', () => { if (typeof on.enter === 'function') on.enter(m.id); });    // a place entered: its own map (D156)
+            // While roads are being drawn a marker clicked is picked for one (the host's to act on), and opens no card.
+            marker.on('click', () => { if (picking) { if (typeof on.pick === 'function') on.pick(m.id); return; } openCard(m.id); });
+            marker.on('dblclick', () => { if (!picking && typeof on.enter === 'function') on.enter(m.id); });    // a place entered: its own map (D156)
             marker.on('keypress', (ev) => { if (ev.originalEvent && ev.originalEvent.key === 'Enter') openCard(m.id); });
             marker.on('dragstart', () => { map.closePopup(); });
             marker.on('dragend', () => { const at = marker.getLatLng(); if (typeof on.move === 'function') on.move(m.id, { x: round4(at.lng), y: round4(-at.lat) }); });
@@ -261,7 +265,9 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     return {
         map,
         /** A new model, a new picture, new switches, a new search, moving on or off: the shapes redrawn, the markers added, moved, redrawn or removed. The view stays. */
-        update({ model: next = null, picture: nextPic, hidden: h = null, query: q = null, moving: mv = null } = {}) {
+        update({ model: next = null, picture: nextPic, hidden: h = null, query: q = null, moving: mv = null, picking: pk = null, picked: pd = null } = {}) {
+            if (pk !== null) picking = !!pk;
+            if (pd !== null) pickedId = String(pd || '');
             if (next) current = next;
             if (nextPic !== undefined) pic = nextPic && nextPic.image ? nextPic : null;
             if (h) off = new Set(h);

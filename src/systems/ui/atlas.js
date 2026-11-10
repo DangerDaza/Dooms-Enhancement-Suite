@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill } from '../../utils/atlasSetup.js';
@@ -53,6 +53,7 @@ let tidy = { busy: false, items: [], error: '', asked: false };    // the clean-
 let tidyChat = null;      // the chat the proposals are about: another chat's are dropped
 let layer = '';           // the place whose map is drawn; '' for the top map (D156)
 let layerWorld = '';      // the world that layer belongs to: another world opens on its top map
+let roading = null;       // roads are being drawn (D164): { first: '' | the marker picked first }, or null
 let setup = null;         // the set-up in hand (D159): { step, notes, reach, cost, progress, draft, error, note, world }, or null
 let undoBook = null;      // the book as it was before a set-up was applied, with its world: one Undo, until the Atlas closes
 let startDismissed = '';   // the world whose Start panel was waved away this session
@@ -164,6 +165,28 @@ function arm(next) {
     $(`${root()} .dooms-atlas-tray-row`).each(function () { $(this).toggleClass('is-armed', !!armed && armed.kind === 'place' && this.getAttribute('data-id') === armed.id); });
 }
 
+/** Roads on or off (D164). On: what waited for a tap is let go, the cards close, and a click on a marker picks it. */
+function setRoading(on) {
+    roading = on ? { first: '' } : null;
+    if (on) { arm(null); if (board) board.closeCard(); }
+    if (board) board.update({ picking: !!roading, picked: '' });
+    $(`${root()} .dooms-atlas-tool[data-act="roads"]`).toggleClass('is-on', !!roading);
+    $(root()).toggleClass('is-roading', !!roading);
+    setHint(roading ? 'Roads: click a place, then another, to join them. Click two joined places to take their road away. Esc ends.' : '');
+}
+
+/** A marker picked while roads are drawn: the first is held; the second makes or takes away the road between the two. */
+function pickForRoad(id) {
+    if (!roading || !model) return;
+    if (!roading.first || roading.first === id) { roading = { first: roading.first === id ? '' : id }; if (board) board.update({ picked: roading.first }); return; }
+    const a = roading.first;
+    const had = model.routes.some(r => (r.a === a && r.b === id) || (r.a === id && r.b === a));
+    roading = { first: '' };
+    if (board) board.update({ picked: '' });
+    commit(toggleRoad(getBook(), a, id, model), had ? `The road between ${labelOf(a)} and ${labelOf(id)} is gone.` : `A road joins ${labelOf(a)} and ${labelOf(id)}.`);
+    setHint('Roads: click a place, then another, to join them. Click two joined places to take their road away. Esc ends.');
+}
+
 /** The map tapped: what was waiting lands there. */
 function tapped(at) {
     if (!armed) return;
@@ -248,6 +271,7 @@ async function mount(ctx) {
             close: () => { closeFacePopover(); cardMode = 'view'; },
             drop: (id, at) => { arm(null); commit(placeAt(getBook(), id, at, layer)); },    // what is dropped on a map belongs to it
             enter: (id) => enter(id),
+            pick: (id) => pickForRoad(id),
             tap: tapped,
             move: (id, at) => commit(placeAt(getBook(), id, at)),
             pictureError: () => { brokenPicture = ctx.pack && ctx.pack.map ? ctx.pack.map.image : ''; result = 'The world\'s picture could not be loaded; the drawn map stands in.'; setTimeout(render, 0); },
@@ -285,7 +309,7 @@ function render() {
     const showStart = bare && !armed && !setup && startDismissed !== `${world}|${layer}`;
     $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
     $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
-    if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
+    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
     // The picture tool shows for a world that has a picture, lit while the picture is the map.
     const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
     $(root()).toggleClass('has-picture', hasPicture);
@@ -399,6 +423,7 @@ function applyDraft() {
 
 /** Another map shown (D156): the place's own, or '' for the top map. The cards and what waited for a tap are let go; the new map is fitted. */
 function setLayer(id) {
+    if (roading) setRoading(false);
     if (board) board.closeCard();
     arm(null);
     cardMode = 'view';
@@ -492,7 +517,8 @@ function build() {
             // The markers (D145, D151): placed, made, moved, edited, merged, taken off, deleted, brought back.
             const id = this.getAttribute('data-id') || '';
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
-            if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
+            if (act === 'roads') { setRoading(!roading); return; }
+            if (act === 'add') { if (roading) setRoading(false); arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
             // Setting up the world (D159).
             if (act === 'setup') { openSetup(); return; }
             if (act === 'setup-close') { setup = null; renderSetup(); render(); return; }
@@ -658,6 +684,7 @@ function build() {
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
         if (setup) { if (setup.step === 'busy') return; setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
+        if (roading) { setRoading(false); render(); return; }    // drawing roads ends first
         if (armed) { arm(null); render(); return; }    // what waited for a tap is let go first
         if (board && board.opened()) { board.closeCard(); return; }    // a card on top closes first
         closeAtlas();
@@ -693,12 +720,14 @@ export function closeAtlas() {
     closeFacePopover();
     unmount();    // the view is kept with its world: the Atlas opened again shows the map where it was left
     armed = null;
+    roading = null;
     cardMode = 'view';
     if (setup && setup.step === 'busy') stopSetup();
     setup = null;
     undoBook = null;
     $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();
-    $(root()).removeClass('is-open is-armed').css('display', 'none');
+    $(root()).removeClass('is-open is-armed is-roading').css('display', 'none');
+    $(`${root()} .dooms-atlas-tool[data-act="roads"]`).removeClass('is-on');
 }
 
 export function isAtlasOpen() {

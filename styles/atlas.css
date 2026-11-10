@@ -280,6 +280,11 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-marker.is-territory:hover .dooms-atlas-standard, .dooms-atlas-marker.is-territory.leaflet-marker-draggable .dooms-atlas-standard { opacity: 1; }
 .dooms-atlas-marker.is-territory.leaflet-marker-draggable .dooms-atlas-standard { outline: 2px dashed var(--atlas-ink-soft); outline-offset: 3px; cursor: grab; }
 
+/* Roads being drawn (D164): the markers are picked, not opened; the first one picked is ringed */
+#dooms-atlas.is-roading .dooms-atlas-marker .dooms-atlas-pin { cursor: crosshair; }
+.dooms-atlas-marker.is-picked .dooms-atlas-pin { box-shadow: 0 0 0 3px var(--atlas-land), 0 0 0 7px var(--atlas-accent2), 0 2px 6px rgba(60, 40, 20, 0.5); transform: scale(1.12); }
+#dooms-atlas.is-roading .dooms-atlas-hint { border-color: var(--atlas-accent2); }
+
 /* The markers: a seal of the kind's colour, ringed in ink; the name in the map's hand under it */
 .dooms-atlas-marker { background: none; border: 0; }
 .dooms-atlas-marker.is-dim { opacity: 0.25; }

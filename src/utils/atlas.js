@@ -307,11 +307,14 @@ export function normalizeBook(raw) {
     }
     const inside = {};    // a place -> the place whose map it is on ('' = the top map, said outright)
     if (r.inside && typeof r.inside === 'object') for (const [id, to] of Object.entries(r.inside)) { if (idOk(id) && typeof to === 'string' && to.length <= 160 && to !== id) inside[id] = to; }
+    const pairs = (list) => { const out = []; const seen = new Set(); for (const r of Array.isArray(list) ? list : []) { const x = Array.isArray(r) ? r : [r && r.a, r && r.b]; if (!idOk(x[0]) || !idOk(x[1]) || x[0] === x[1]) continue; const pr = x[0] < x[1] ? [x[0], x[1]] : [x[1], x[0]]; const k = pr.join('|'); if (seen.has(k)) continue; seen.add(k); out.push(pr); if (out.length >= 600) break; } return out; };
+    const roads = pairs(r.roads);    // roads the player drew (D164), each a pair of markers
+    const cut = pairs(r.cut);        // roads the map drew by itself that the player took away
     const grounds = {};   // a layer's own ground
     if (r.grounds && typeof r.grounds === 'object') for (const [id, g] of Object.entries(r.grounds)) { if (idOk(id) && GROUND_IDS.has(g)) grounds[id] = g; }
     const scales = {};    // a layer's own scale
     if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, gone, merged, made, edits };
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, gone, merged, made, edits };
 }
 
 /** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
@@ -396,6 +399,22 @@ export function editMarker(book, id, { label, kind, note } = {}) {
     if (kind !== undefined) { if (cleanKind(kind)) one.kind = cleanKind(kind); else delete one.kind; }
     if (note !== undefined) one.note = clean(note, 300);
     return { ...b, edits: { ...b.edits, [id]: one } };
+}
+
+/**
+ * A road between two markers drawn or taken away (D164). Where the model
+ * shows a road between them it goes: one the player drew is forgotten,
+ * one the map drew by itself is cut. Where it shows none, one is drawn
+ * (and a cut between them is undone).
+ */
+export function toggleRoad(book, a, b, model = null) {
+    const bk = normalizeBook(book);
+    if (!idOk(a) || !idOk(b) || a === b) return bk;
+    const pr = a < b ? [a, b] : [b, a];
+    const is = (x) => x[0] === pr[0] && x[1] === pr[1];
+    const shown = model && Array.isArray(model.routes) ? model.routes.find(r => (r.a === a && r.b === b) || (r.a === b && r.b === a)) : null;
+    if (shown) return shown.auto ? { ...bk, cut: bk.cut.some(is) ? bk.cut : [...bk.cut, pr] } : { ...bk, roads: bk.roads.filter(x => !is(x)) };
+    return { ...bk, cut: bk.cut.filter(x => !is(x)), roads: bk.roads.some(is) ? bk.roads : [...bk.roads, pr] };
 }
 
 /** A place the AI added to fill out a map made canon (D160): it is the story's now, like any other. Or put back as not canon. */
@@ -882,7 +901,16 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     // Paths (drawn, never measured: D141): a tree over the markers.
     const joined = markers.filter(m => m.kind !== 'region');    // lands are joined by their borders, not by a path
-    const routes = spanningTree(joined).map(([a, b]) => ({ a: joined[a].id, b: joined[b].id, kind: 'road', points: [[joined[a].x, joined[a].y], [joined[b].x, joined[b].y]] }));
+    // The map joins each place to its nearest by itself; the player's own roads are added and the ones they cut left out (D164).
+    const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+    const cutKeys = new Set(bk.cut.map(([a, b]) => pairKey(a, b)));
+    const byMarker = new Map(markers.map(m => [m.id, m]));
+    const routes = spanningTree(joined).map(([a, b]) => ({ a: joined[a].id, b: joined[b].id, kind: 'road', auto: true, points: [[joined[a].x, joined[a].y], [joined[b].x, joined[b].y]] })).filter(r => !cutKeys.has(pairKey(r.a, r.b)));
+    for (const [a, b] of bk.roads) {
+        const ma = byMarker.get(resolve(a)), mb = byMarker.get(resolve(b));
+        if (!ma || !mb || ma === mb || routes.some(r => pairKey(r.a, r.b) === pairKey(ma.id, mb.id))) continue;
+        routes.push({ a: ma.id, b: mb.id, kind: 'road', auto: false, points: [[ma.x, ma.y], [mb.x, mb.y]] });
+    }
 
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
     for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }

@@ -18,7 +18,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, toggleRoad, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -102,9 +102,9 @@ console.log('\n§4 rooms fold into their building (D152)');
 
 console.log('\n§5 the book (D151)');
 {
-    check('nothing: an empty book', same(normalizeBook(null), { scale: '', ground: '', drawn: false, spots: {}, inside: {}, scales: {}, grounds: {}, gone: [], merged: {}, made: [], edits: {} }));
+    check('nothing: an empty book', same(normalizeBook(null), { scale: '', ground: '', drawn: false, spots: {}, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], gone: [], merged: {}, made: [], edits: {} }));
     const dirty = normalizeBook({ scale: 'galaxy', spots: { a: { x: 1.23456, y: 2 }, b: { x: 'no', y: 1 } }, gone: ['x', 'x', 7], merged: { a: 'a', b: 'c' }, made: [{ id: 'pin:a', label: ' The Well ', kind: 'WATER' }, { id: 'nope', label: 'x' }, { id: 'pin:a', label: 'twice' }], edits: { q: { label: ' New ', kind: 'spaceship', note: 'n' }, z: {} } });
-    check('a book made safe', same(dirty, { scale: '', ground: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, grounds: {}, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
+    check('a book made safe', same(dirty, { scale: '', ground: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
     let b = placeAt(null, 'loc:the-quay', { x: 2, y: -3 });
     check('a marker placed, moved, taken off', same(b.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && same(placeAt(b, 'loc:the-quay', { x: 5, y: 5 }).spots['loc:the-quay'], { x: 5, y: 5 }) && same(unplace(b, 'loc:the-quay').spots, {}) && same(placeAt(b, 'x', { x: NaN, y: 1 }), b));
     const p1 = addPin(b, { label: 'The Old Well', kind: 'water', note: 'Dry.', x: 1, y: 1 });
@@ -281,6 +281,34 @@ console.log('\n§6c territories (D163)');
     check('a second region beside it: two lands, the new one marked not canon, tinted as a forest', two.territories.length === 2 && two.territories.find(t => t.label === 'The Grey Forest').loose === true && two.territories.find(t => t.label === 'The Grey Forest').terrain === 'forest' && two.territories.every(t => t.hue >= 0 && t.hue < 6));
     check('open country keeps its woods and ponds off the lands', (() => { const d = two.decor; const off = (pts) => pts.every(([x, y]) => two.markers.every(m => Math.hypot(m.x - x, m.y - y) > TERRITORY_RADIUS)); return d.woods.length > 0 && d.woods.every(off) && d.ponds.every(off); })());
     check('Place all gives regions room for their lands', (() => { const m = atlasModel({ pack, state: st, book: { ...normalizeBook(null), made: [{ id: 'pin:a', label: 'A', kind: 'region' }, { id: 'pin:b', label: 'B', kind: 'region' }, { id: 'pin:c', label: 'C', kind: 'region' }] } }); const sp = [...suggestSpots(m).values()]; return sp.length === 3 && sp.every((a, i) => sp.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= TERRITORY_RADIUS * 1.29)); })());
+}
+
+console.log('\n§6d roads the player draws (D164)');
+{
+    const pack = blankPack('The Eld');
+    let book = null;
+    for (const [label, x, y] of [['Hask', 0, 0], ['Redfall Castle', 3, 0], ['The Ford', 0, 3], ['Old Mill', 6, 0]]) book = addPin(book, { label, x, y }).book;
+    const id = (l) => `pin:${l.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const m0 = atlasModel({ pack, book });
+    const has = (m, a, b) => m.routes.some(r => (r.a === id(a) && r.b === id(b)) || (r.a === id(b) && r.b === id(a)));
+    check('by itself the map joins each place to its nearest: three roads for four places, each marked as the map\'s own', m0.routes.length === 3 && m0.routes.every(r => r.auto === true) && has(m0, 'Hask', 'Redfall Castle') && has(m0, 'Hask', 'The Ford') && has(m0, 'Redfall Castle', 'Old Mill') && !has(m0, 'The Ford', 'Old Mill'));
+    const b1 = toggleRoad(book, id('The Ford'), id('Old Mill'), m0);
+    const m1 = atlasModel({ pack, book: b1 });
+    check('a road drawn between two places that had none: it is there, the player\'s own, the others untouched', same(b1.roads, [[id('Old Mill'), id('The Ford')]]) && m1.routes.length === 4 && has(m1, 'The Ford', 'Old Mill') && m1.routes.find(r => r.a === id('The Ford') || r.b === id('The Ford') && !r.auto).auto !== undefined && m1.routes.filter(r => !r.auto).length === 1);
+    const b2 = toggleRoad(b1, id('Old Mill'), id('The Ford'), m1);
+    check('toggled again, the player\'s road is forgotten, whichever end is named first', same(b2.roads, []) && atlasModel({ pack, book: b2 }).routes.length === 3);
+    const b3 = toggleRoad(book, id('Hask'), id('Redfall Castle'), m0);
+    const m3 = atlasModel({ pack, book: b3 });
+    check('a road the map drew taken away: it is cut and stays cut', same(b3.cut, [[id('Hask'), id('Redfall Castle')]]) && !has(m3, 'Hask', 'Redfall Castle') && m3.routes.length === 2);
+    const b4 = toggleRoad(b3, id('Hask'), id('Redfall Castle'), m3);
+    check('and drawn back: the cut is undone and the road is there again', same(b4.cut, []) && has(atlasModel({ pack, book: b4 }), 'Hask', 'Redfall Castle'));
+    const far = atlasModel({ pack, book: placeAt(b1, id('Old Mill'), { x: 9, y: 9 }) });
+    check('a road follows its places when one is moved', has(far, 'The Ford', 'Old Mill') && same(far.routes.find(r => !r.auto).points.find(p => p[0] === 9), [9, 9]));
+    check('a road to itself, or to nothing, is refused; a road is kept once however it is written', same(toggleRoad(book, id('Hask'), id('Hask'), m0), normalizeBook(book)) && normalizeBook({ roads: [['b', 'a'], ['a', 'b'], { a: 'a', b: 'b' }, ['a', 'a'], ['a']] }).roads.length === 1);
+    const gone = atlasModel({ pack, book: removeMarker(b1, id('Old Mill')) });
+    check('a road to a place that is deleted is not drawn', !gone.routes.some(r => r.a === id('Old Mill') || r.b === id('Old Mill')));
+    const inner = atlasModel({ pack, book: moveInto(b1, id('Old Mill'), id('Hask')) });
+    check('a road between places on different maps is not drawn', !inner.routes.some(r => !r.auto));
 }
 
 console.log('\n§7 distance');
