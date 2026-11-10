@@ -322,3 +322,13 @@ the terrain follows the story. A picture of the player's own under any
 map, not only the top one, is the way to a painted look.
 
 | D164 | Roads are the player's to draw (the owner: "I am moving it but I can't add new roads") | The map still joins each place to its nearest by itself. The Roads tool (the road button among the tools): while it is on, a place clicked is picked, a second place clicked makes a road between the two, or takes away the one that was there, whether the player drew it (`book.roads`) or the map did (`book.cut`); Esc ends. A road follows its places when they are moved; one to a place that is deleted, merged away or on another map is not drawn. Roads are still drawn, never measured (D141). |
+| D165 | The time is the roads' (the owner: "should the time be based on the roads?" Yes to all three) | Supersedes the part of D141 that said routes do not shorten or lengthen anything; the straight line (`distanceBetween`) is kept for what it is. **By road:** the time from the party to a place is the quickest way there is (`routeBetween`), along roads where roads join the places; a road takes its drawn length at the map's pace. **Cross-country:** a stretch no road covers takes its straight line half as long again (`CROSS_COUNTRY` 1.5); a way can be partly by road. Between lands (regions) there are no roads to miss: the straight line at the pace. **A set time:** a road clicked opens its own card (the two places, what it is as drawn, a figure and a unit: minutes, hours, days; Save, Remove road); the time set (`book.roadHours`, hours of travel, a day being eight) is what that journey takes however far apart the pins are drawn, even where another way would be quicker, and the drawn miles are left out of the card's line. A time set on a road the map drew makes that road the player's, so it stays when the map redraws its own. A road taken away takes its set time with it and is cut, so the map does not draw one there by itself. **Told to the story:** Travel here passes the journey (`describeJourney`: "about 2 days by road") to the travel cut; the instruction says the journey takes that long and the date and time move on by it, and an arrival the player typed still stands, with the map's word beside it. |
+
+The card's line reads "96 miles by road, about 4 days on foot", "about 2
+days by road" (a set time on the way), "75 miles cross-country, about 4.5
+days on foot", "…, partly by road, …". Known limits: the map's own roads
+are redrawn when places are added or moved, so a time that goes by length
+along them can shift a little unasked (a set time cannot); roads are
+straight lines; the time told to the story moves the tracker's date and
+time through the reply, not Live World's own clocks; across maps no time
+is told.

@@ -310,11 +310,17 @@ export function normalizeBook(raw) {
     const pairs = (list) => { const out = []; const seen = new Set(); for (const r of Array.isArray(list) ? list : []) { const x = Array.isArray(r) ? r : [r && r.a, r && r.b]; if (!idOk(x[0]) || !idOk(x[1]) || x[0] === x[1]) continue; const pr = x[0] < x[1] ? [x[0], x[1]] : [x[1], x[0]]; const k = pr.join('|'); if (seen.has(k)) continue; seen.add(k); out.push(pr); if (out.length >= 600) break; } return out; };
     const roads = pairs(r.roads);    // roads the player drew (D164), each a pair of markers
     const cut = pairs(r.cut);        // roads the map drew by itself that the player took away
+    const roadHours = {};    // a road's set travel time in hours (D165), by its pair "a|b"; it outranks the road's drawn length
+    if (r.roadHours && typeof r.roadHours === 'object') for (const [key, h] of Object.entries(r.roadHours)) {
+        const ends = String(key).split('|');
+        if (ends.length !== 2 || !idOk(ends[0]) || !idOk(ends[1]) || ends[0] >= ends[1] || !finite(h) || h <= 0 || h > 100000) continue;
+        roadHours[key] = Math.round(h * 1000) / 1000;
+    }
     const grounds = {};   // a layer's own ground
     if (r.grounds && typeof r.grounds === 'object') for (const [id, g] of Object.entries(r.grounds)) { if (idOk(id) && GROUND_IDS.has(g)) grounds[id] = g; }
     const scales = {};    // a layer's own scale
     if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, gone, merged, made, edits };
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, roadHours, gone, merged, made, edits };
 }
 
 /** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
@@ -403,18 +409,40 @@ export function editMarker(book, id, { label, kind, note } = {}) {
 
 /**
  * A road between two markers drawn or taken away (D164). Where the model
- * shows a road between them it goes: one the player drew is forgotten,
- * one the map drew by itself is cut. Where it shows none, one is drawn
- * (and a cut between them is undone).
+ * shows a road between them it goes, whoever drew it: the player's is
+ * forgotten with its set time, and the pair is cut so the map does not
+ * draw one there by itself. Where it shows none, one is drawn and the cut
+ * undone.
  */
 export function toggleRoad(book, a, b, model = null) {
     const bk = normalizeBook(book);
     if (!idOk(a) || !idOk(b) || a === b) return bk;
     const pr = a < b ? [a, b] : [b, a];
     const is = (x) => x[0] === pr[0] && x[1] === pr[1];
-    const shown = model && Array.isArray(model.routes) ? model.routes.find(r => (r.a === a && r.b === b) || (r.a === b && r.b === a)) : null;
-    if (shown) return shown.auto ? { ...bk, cut: bk.cut.some(is) ? bk.cut : [...bk.cut, pr] } : { ...bk, roads: bk.roads.filter(x => !is(x)) };
+    const shown = model && Array.isArray(model.routes) ? model.routes.some(r => (r.a === a && r.b === b) || (r.a === b && r.b === a)) : false;
+    if (shown) {
+        const { [pr.join('|')]: _h, ...roadHours } = bk.roadHours;
+        return { ...bk, roads: bk.roads.filter(x => !is(x)), cut: bk.cut.some(is) ? bk.cut : [...bk.cut, pr], roadHours };
+    }
     return { ...bk, cut: bk.cut.filter(x => !is(x)), roads: bk.roads.some(is) ? bk.roads : [...bk.roads, pr] };
+}
+
+/**
+ * A road given a travel time of its own (D165), in hours of travel: what
+ * the card and Travel here go by, however far apart its two places are
+ * drawn. The road is the player's from then on (a road the map drew is
+ * kept when the map would redraw its roads). No hours, or none above
+ * nothing, and the road goes by its length again.
+ */
+export function setRoadTime(book, a, b, hours) {
+    const bk = normalizeBook(book);
+    if (!idOk(a) || !idOk(b) || a === b) return bk;
+    const pr = a < b ? [a, b] : [b, a];
+    const is = (x) => x[0] === pr[0] && x[1] === pr[1];
+    const key = pr.join('|');
+    const { [key]: _old, ...rest } = bk.roadHours;
+    const set = finite(hours) && hours > 0 && hours <= 100000;
+    return { ...bk, cut: bk.cut.filter(x => !is(x)), roads: bk.roads.some(is) ? bk.roads : [...bk.roads, pr], roadHours: set ? { ...rest, [key]: Math.round(hours * 1000) / 1000 } : rest };
 }
 
 /** A place the AI added to fill out a map made canon (D160): it is the story's now, like any other. Or put back as not canon. */
@@ -901,15 +929,20 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     // Paths (drawn, never measured: D141): a tree over the markers.
     const joined = markers.filter(m => m.kind !== 'region');    // lands are joined by their borders, not by a path
-    // The map joins each place to its nearest by itself; the player's own roads are added and the ones they cut left out (D164).
+    // The map joins each place to its nearest by itself; the player's own roads are added and the ones they cut left out
+    // (D164). A road knows its drawn length and, when the player set one, its own travel time (D165).
     const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
     const cutKeys = new Set(bk.cut.map(([a, b]) => pairKey(a, b)));
     const byMarker = new Map(markers.map(m => [m.id, m]));
-    const routes = spanningTree(joined).map(([a, b]) => ({ a: joined[a].id, b: joined[b].id, kind: 'road', auto: true, points: [[joined[a].x, joined[a].y], [joined[b].x, joined[b].y]] })).filter(r => !cutKeys.has(pairKey(r.a, r.b)));
+    const roadOf = (ma, mb, auto, hours) => ({ a: ma.id, b: mb.id, kind: 'road', auto, hours: hours > 0 ? hours : 0, units: round4(dist(ma, mb)), points: [[ma.x, ma.y], [mb.x, mb.y]] });
+    const routes = spanningTree(joined).map(([a, b]) => roadOf(joined[a], joined[b], true, 0)).filter(r => !cutKeys.has(pairKey(r.a, r.b)));
     for (const [a, b] of bk.roads) {
         const ma = byMarker.get(resolve(a)), mb = byMarker.get(resolve(b));
-        if (!ma || !mb || ma === mb || routes.some(r => pairKey(r.a, r.b) === pairKey(ma.id, mb.id))) continue;
-        routes.push({ a: ma.id, b: mb.id, kind: 'road', auto: false, points: [[ma.x, ma.y], [mb.x, mb.y]] });
+        if (!ma || !mb || ma === mb || cutKeys.has(pairKey(ma.id, mb.id))) continue;
+        const hours = bk.roadHours[pairKey(a, b)] || 0;
+        const have = routes.find(r => pairKey(r.a, r.b) === pairKey(ma.id, mb.id));
+        if (have) { have.auto = false; if (hours) have.hours = hours; continue; }    // the map drew it too: it is the player's now
+        routes.push(roadOf(ma, mb, false, hours));
     }
 
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
@@ -998,13 +1031,98 @@ export function describeTime(hours) {
     return `about ${days === 1 ? 'a day' : `${days} days`}`;
 }
 
-/** The line a card shows and the travel cut is told: "3.2 miles, about an hour on foot"; '' when the place is the party's or is off the map. */
+export const CROSS_COUNTRY = 1.5;    // off the roads a journey takes half as long again (D165)
+
+/**
+ * The way from one marker to another on a map, and how long it takes
+ * (D165): the quickest of every way there is, by road where roads join
+ * the places and across country where none does. A road takes the time
+ * the player set for it, else its drawn length at the map's pace; a
+ * stretch across country takes its straight line at the pace, half as
+ * long again. Two places joined by a road with a set time take that
+ * time, whatever other way there might be: the set time is the story's
+ * word for that journey. Between lands (regions) there are no roads to
+ * miss: the straight line at the pace.
+ * @returns {{ hours: number, length: number, mode: 'here'|'road'|'cross'|'mixed'|'open', via: string[], set: boolean }|null}
+ *   `length` in the map's unit along the way taken; `via` the ids of the places passed through; `set` when a road with a set time is on the way; null when either is not on this map
+ */
+export function routeBetween(model, fromId, toId) {
+    const ms = model && Array.isArray(model.markers) ? model.markers : [];
+    const from = ms.findIndex(m => m.id === fromId);
+    const to = ms.findIndex(m => m.id === toId);
+    if (from < 0 || to < 0) return null;
+    if (from === to) return { hours: 0, length: 0, mode: 'here', via: [], set: false };
+    const per = model.measure.per;
+    const n = ms.length;
+    const road = new Map();
+    for (const r of Array.isArray(model.routes) ? model.routes : []) {
+        const i = ms.findIndex(m => m.id === r.a), j = ms.findIndex(m => m.id === r.b);
+        if (i < 0 || j < 0) continue;
+        const length = dist(ms[i], ms[j]) * per;
+        const e = { hours: r.hours > 0 ? r.hours : travelHours(length, model.measure), length, set: r.hours > 0, kind: 'road' };
+        road.set(i * n + j, e);
+        road.set(j * n + i, e);
+    }
+    // A road with a set time straight between the two is the story's word for that journey: nothing is searched for.
+    const direct = road.get(from * n + to);
+    if (direct && direct.set) return { hours: direct.hours, length: direct.length, mode: 'road', via: [], set: true };
+    const hop = (i, j) => {
+        const e = road.get(i * n + j);
+        if (e) return e;
+        const length = dist(ms[i], ms[j]) * per;
+        const open = ms[i].territory || ms[j].territory;
+        return { hours: travelHours(length, model.measure) * (open ? 1 : CROSS_COUNTRY), length, set: false, kind: open ? 'open' : 'cross' };
+    };
+    const best = new Array(n).fill(Infinity);
+    const prev = new Array(n).fill(-1);
+    const done = new Array(n).fill(false);
+    best[from] = 0;
+    for (let k = 0; k < n; k++) {
+        let u = -1;
+        for (let i = 0; i < n; i++) if (!done[i] && (u < 0 || best[i] < best[u])) u = i;
+        if (u < 0 || best[u] === Infinity || u === to) break;
+        done[u] = true;
+        for (let v = 0; v < n; v++) {
+            if (done[v]) continue;
+            const c = best[u] + hop(u, v).hours;
+            if (c < best[v] - 1e-9) { best[v] = c; prev[v] = u; }
+        }
+    }
+    const path = [to];
+    for (let cur = to; prev[cur] >= 0; cur = prev[cur]) path.unshift(prev[cur]);
+    const hops = path.slice(1).map((v, i) => hop(path[i], v));
+    const kinds = new Set(hops.map(h => h.kind));
+    const mode = kinds.size === 1 ? [...kinds][0] : (kinds.has('road') ? 'mixed' : 'open');
+    return { hours: best[to], length: hops.reduce((sum, h) => sum + h.length, 0), mode, via: path.slice(1, -1).map(i => ms[i].id), set: hops.some(h => h.set) };
+}
+
+/**
+ * The line a card shows: "96 miles by road, about 4 days on foot", "about
+ * 2 days by road" (a set time is on the way: the miles drawn are not the
+ * story's), "83 miles cross-country, about 5 days on foot", "40 miles,
+ * partly by road, about 2 days on foot"; '' when the place is the party's
+ * or is off this map.
+ */
 export function describeDistance(model, fromId, toId) {
     if (!fromId || !toId || fromId === toId) return '';
-    const d = distanceBetween(model, fromId, toId);
-    if (d === null) return '';
-    if (d < 0.05) return 'a few steps away';
-    return `${describeLength(d, model.measure.unit)}, ${describeTime(travelHours(d, model.measure))} on foot`;
+    const r = routeBetween(model, fromId, toId);
+    if (!r) return '';
+    const straight = distanceBetween(model, fromId, toId);
+    if (!r.set && straight !== null && straight < 0.05) return 'a few steps away';
+    const time = describeTime(r.hours);
+    const way = r.mode === 'road' ? ' by road' : r.mode === 'cross' ? ' cross-country' : '';
+    if (r.set) return `${time}${r.mode === 'mixed' ? ', partly by road' : way}`;
+    return `${describeLength(r.length, model.measure.unit)}${r.mode === 'mixed' ? ', partly by road' : way}, ${time} on foot`;
+}
+
+/** The same told to the story (Travel here): "about 2 days by road", "about 4 days on foot by road (96 miles)", "about 5 days on foot across country (83 miles)"; '' when there is nothing to tell. */
+export function describeJourney(model, fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return '';
+    const r = routeBetween(model, fromId, toId);
+    if (!r || !(r.hours > 0)) return '';
+    const time = describeTime(r.hours);
+    const way = r.mode === 'road' ? ' by road' : r.mode === 'cross' ? ' across country' : r.mode === 'mixed' ? ', partly by road' : '';
+    return r.set ? `${time}${way}` : `${time} on foot${way} (${describeLength(r.length, model.measure.unit)})`;
 }
 
 /** The markers a search and the switched-off kinds leave: the name, the note, the region, the rooms, the other names and the people are searched. */

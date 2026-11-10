@@ -182,14 +182,21 @@ export function buildPlacePrompt({ place, recent = '', world = '', size = 'squar
  * of the road from now, then the arrival with the first move the player's;
  * the tracker's location moves to the place.
  */
-export function buildTravelInstruction({ place, when = '', userName = 'the player', facts = {} } = {}) {
+export function buildTravelInstruction({ place, when = '', userName = 'the player', facts = {}, journey = '' } = {}) {
     const to = clean(place && typeof place === 'object' ? place.label : place, MAX_PLACE).replace(/[\[\]]/g, '').replace(/"([^"]*)"/g, '“$1”').replace(/"/g, '”');
     if (!to) return '';
     const who = clean(userName, 80) || 'the player';
     const now = [facts.date, facts.time, facts.location ? `at ${facts.location}` : ''].map(s => String(s || '').trim()).filter(Boolean).join(', ');
     const nowClause = now ? ` from now (${now})` : ' from now';
     const w = cleanWhen(when);
-    const whenClause = w ? ` ${who} arrives ${w}.` : ' How long the road takes is yours to judge from the distance: hours or days, whatever it plausibly takes.';
+    // How long the journey takes by the map (the Atlas: docs/long-shot-plan.md D165): the story's to follow. An arrival
+    // the player named stands as they named it, with the map's word beside it.
+    const j = clean(journey, 120).replace(/[\[\]]/g, '');
+    const whenClause = w
+        ? ` ${who} arrives ${w}.${j ? ` The map puts the journey at ${j}.` : ''}`
+        : j
+            ? ` The map puts the journey at ${j}: it takes that long, no less and no more, and the date and time move on by it.`
+            : ' How long the road takes is yours to judge from the distance: hours or days, whatever it plausibly takes.';
     return `[TRAVEL: ${who} has chosen to travel to ${to}. This reply is the journey. First, a brief montage of a paragraph or two: the road${nowClause} to ${to}, the hours or days it takes, the rest, the weather and the company, told in summary and never played out; nothing on the way is resolved or decided.${whenClause} Then open on the arrival: ${to} as ${who} finds it, who is there, the first thing that happens, and stop with the first move still ${who}'s. Everything else about your reply is unchanged: the tracker data block and everything else you are required to output still follow as usual, with the date, time and location moved to the arrival at ${to}, and what ${who} carries kept consistent with the journey.]`;
 }
 

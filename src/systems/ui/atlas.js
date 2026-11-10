@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill } from '../../utils/atlasSetup.js';
@@ -23,7 +23,7 @@ import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -132,6 +132,20 @@ function cardFor(marker) {
         canTravel: isLiveWorldOn() && chatOpen(),
         travelling: travelling || !!(pending && pending.kind === 'travel'),
         rumours: said.rumours, news: said.news, portraits: portraitOf,
+    });
+}
+
+/** A road's card (D165): the places it joins, what it is as drawn, its set time. */
+function roadCardFor(route) {
+    if (!model) return '';
+    const r = model.routes.find(x => (x.a === route.a && x.b === route.b) || (x.a === route.b && x.b === route.a)) || route;
+    const length = (r.units || 0) * model.measure.per;
+    const scale = model.measure.scale;
+    return atlasRoadHtml({
+        a: { id: r.a, label: labelOf(r.a) }, b: { id: r.b, label: labelOf(r.b) },
+        drawn: `${describeLength(length, model.measure.unit)}, ${describeTime(travelHours(length, model.measure))} on foot`,
+        hours: r.hours || 0,
+        unit: scale === 'world' || scale === 'region' ? 'days' : 'minutes',
     });
 }
 
@@ -263,7 +277,7 @@ async function mount(ctx) {
     }
     if (token !== mountToken || !isOpen || !model || !document.body.contains(host)) return;
     const made = await mod.mountAtlasMap(host, {
-        model, picture: pictureOf(ctx.pack), hidden, query, moving, portraits: portraitOf, card: cardFor,
+        model, picture: pictureOf(ctx.pack), hidden, query, moving, portraits: portraitOf, card: cardFor, road: roadCardFor,
         view: boardView && boardView.world === world ? boardView : null,
         on: {
             scale: setScale,
@@ -484,7 +498,7 @@ async function travel(id) {
     travelling = true;
     if (board) board.update({});
     try {
-        const ok = await startTravelCut({ place: m.label, placeId: m.id, when });
+        const ok = await startTravelCut({ place: m.label, placeId: m.id, when, journey: describeJourney(model, model.party, m.id) });    // how long the map says it takes, told to the story (D165)
         if (ok) { closeAtlas(); return; }
         result = 'The journey could not be asked for; the System Log has the error.';
     } catch (e) {
@@ -537,6 +551,18 @@ function build() {
                 const r = wrapInRegion(getBook(), model, { label: 'New region' });
                 if (!commit(r.book, `${r.moved} ${r.moved === 1 ? 'place is' : 'places are'} inside a new region now. Name it; click its land to enter it. Fill out this map adds its neighbours.`)) return;
                 if (board) { board.fit(); board.open(r.id); cardMode = 'edit'; board.redrawCard(); }    // the new region opens on its name
+                return;
+            }
+            // A road's own card (D165): its travel time set or cleared, or the road taken away.
+            if (act === 'road-save' || act === 'road-remove') {
+                ev.stopPropagation();
+                const $c = $(this).closest('.dooms-atlas-card');
+                const ra = String($c.attr('data-a') || ''), rb = String($c.attr('data-b') || '');
+                if (!ra || !rb || !model) return;
+                if (board) board.closeCard();
+                if (act === 'road-remove') { commit(toggleRoad(getBook(), ra, rb, model), `The road between ${labelOf(ra)} and ${labelOf(rb)} is gone.`); return; }
+                const hours = roadTimeHours($c.find('[data-field="amount"]').val(), String($c.find('[data-field="unit"]').val() || 'days'));
+                commit(setRoadTime(getBook(), ra, rb, hours), hours > 0 ? `The road between ${labelOf(ra)} and ${labelOf(rb)} takes ${describeTime(hours).replace(/^about /, '')} now, however it is drawn.` : `The road between ${labelOf(ra)} and ${labelOf(rb)} goes by its length again.`);
                 return;
             }
             if (act === 'canon') { ev.stopPropagation(); commit(setCanon(getBook(), this.getAttribute('data-id') || '', true)); return; }
@@ -686,7 +712,7 @@ function build() {
         if (setup) { if (setup.step === 'busy') return; setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
         if (roading) { setRoading(false); render(); return; }    // drawing roads ends first
         if (armed) { arm(null); render(); return; }    // what waited for a tap is let go first
-        if (board && board.opened()) { board.closeCard(); return; }    // a card on top closes first
+        if (board && (board.opened() || board.popupOpen())) { board.closeCard(); return; }    // a card on top (a marker's, a road's) closes first
         closeAtlas();
     });
     window.addEventListener(WORLD_CHANGED_EVENT, () => { if (isOpen) render(); });

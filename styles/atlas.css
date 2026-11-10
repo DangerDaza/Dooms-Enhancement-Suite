@@ -285,6 +285,15 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-marker.is-picked .dooms-atlas-pin { box-shadow: 0 0 0 3px var(--atlas-land), 0 0 0 7px var(--atlas-accent2), 0 2px 6px rgba(60, 40, 20, 0.5); transform: scale(1.12); }
 #dooms-atlas.is-roading .dooms-atlas-hint { border-color: var(--atlas-accent2); }
 
+/* A road is clicked to open its card (D165): the unseen wide line over it takes the click; a road with a set time is drawn firmer */
+.dooms-atlas-route-hit { fill: none; stroke: #000; stroke-opacity: 0; stroke-width: 16; stroke-linecap: round; cursor: pointer; pointer-events: stroke; }
+.dooms-atlas-route-hit:hover { stroke: var(--atlas-accent2); stroke-opacity: 0.35; }
+.dooms-atlas-route.is-set { stroke: var(--atlas-ink); stroke-width: 2.4; stroke-dasharray: 10 4; stroke-opacity: 0.85; }
+#dooms-atlas.is-armed .dooms-atlas-route-hit { cursor: crosshair; }
+.dooms-atlas-pin.is-road { --kind: #7a6a55; cursor: default; box-shadow: none; }
+.dooms-atlas-road-time { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 6px; }
+.dooms-atlas-popup .dooms-atlas-card p.dooms-atlas-card-hint { font-size: 0.78em; color: var(--atlas-muted); }
+
 /* The markers: a seal of the kind's colour, ringed in ink; the name in the map's hand under it */
 .dooms-atlas-marker { background: none; border: 0; }
 .dooms-atlas-marker.is-dim { opacity: 0.25; }

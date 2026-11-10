@@ -92,13 +92,13 @@ export async function startQuestCut({ quest, when = '' } = {}) {
 /**
  * Travel here (D84): arms a cut to the place and asks for the reply. The
  * facts of now are captured here, as for a quest.
- * @param {{ place: string, placeId?: string, when?: string }} args
+ * @param {{ place: string, placeId?: string, when?: string, journey?: string }} args  `journey`: how long the map says it takes (the Atlas), told to the story
  * @returns {Promise<boolean>} whether a reply was asked for
  */
-export async function startTravelCut({ place, placeId = '', when = '' } = {}) {
+export async function startTravelCut({ place, placeId = '', when = '', journey = '' } = {}) {
     const to = String(place || '').replace(/\s+/g, ' ').trim().slice(0, MAX_PLACE);
     if (!to) return false;
-    setPending({ kind: 'travel', place: to, placeId: String(placeId || ''), when: cleanWhen(when), at: Date.now(), facts: factsNow() });
+    setPending({ kind: 'travel', place: to, placeId: String(placeId || ''), when: cleanWhen(when), journey: String(journey || '').replace(/\s+/g, ' ').trim().slice(0, 120), at: Date.now(), facts: factsNow() });
     toast('info', `Travelling to ${to}…`);
     try {
         await executeSlashCommandsOnChatInput('/trigger', { quiet: true });
@@ -127,7 +127,7 @@ export function buildQuestCutForGeneration() {
     const p = getPendingQuestCut();
     if (!p) return '';
     const facts = p.facts && typeof p.facts === 'object' ? p.facts : factsNow();
-    if (p.kind === 'travel') return buildTravelInstruction({ place: p.place, when: p.when, userName: resolvePersonaName() || 'the player', facts });
+    if (p.kind === 'travel') return buildTravelInstruction({ place: p.place, when: p.when, userName: resolvePersonaName() || 'the player', facts, journey: typeof p.journey === 'string' ? p.journey : '' });
     const quests = normalizeQuests(extensionSettings.quests);
     const others = quests.optional.filter(t => t && t !== 'None' && t !== p.quest).slice(0, 6);
     return buildQuestCutInstruction({ quest: p.quest, when: p.when, userName: resolvePersonaName() || 'the player', facts, otherQuests: others });

@@ -94,7 +94,7 @@ console.log('\n§1 the book in the chat');
     check('a book written is in the chat\'s metadata and saved with the chat', ok === true && same(meta.dooms_atlas.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && globalThis.__DES_SAVES__.debounced === saves + 1);
     check('it reads back as written', same(book.getBook().spots, { 'loc:the-quay': { x: 2, y: -3 } }));
     meta.dooms_atlas = { spots: { a: { x: 'no', y: 1 }, b: { x: 1, y: 1 } }, gone: 'nope', made: [{ id: 'not-a-pin' }] };
-    check('a damaged book is made safe on the way out', same(book.getBook(), { scale: '', ground: '', drawn: false, spots: { b: { x: 1, y: 1 } }, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], gone: [], merged: {}, made: [], edits: {} }));
+    check('a damaged book is made safe on the way out', same(book.getBook(), { scale: '', ground: '', drawn: false, spots: { b: { x: 1, y: 1 } }, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], roadHours: {}, gone: [], merged: {}, made: [], edits: {} }));
     delete meta.dooms_atlas;
 }
 

@@ -190,6 +190,14 @@ check('the instruction that rides the generation is the travel\'s', /^\[TRAVEL: 
 qc.onQuestCutMessageSent();
 check('the player\'s next message ends it', qc.getPendingQuestCut() === null && qc.buildQuestCutForGeneration() === '');
 check('no place: nothing armed', (await qc.startTravelCut({ place: '  ' })) === false && qc.getPendingQuestCut() === null);
+// The Atlas's Travel here (docs/long-shot-plan.md D165): how long the map says the journey takes rides the cut to the story.
+await qc.startTravelCut({ place: 'Redfall Castle', placeId: 'pin:redfall-castle', journey: '  about 2 days   by road ' });
+check('the journey the map tells is kept on the cut, cleaned', qc.getPendingQuestCut().journey === 'about 2 days by road');
+check('and the instruction tells the story how long it takes', qc.buildQuestCutForGeneration().includes('The map puts the journey at about 2 days by road: it takes that long, no less and no more, and the date and time move on by it.') && !/yours to judge/.test(qc.buildQuestCutForGeneration()));
+qc.onQuestCutMessageSent();
+await qc.startTravelCut({ place: 'Redfall Castle' });
+check('with no journey told, how long it takes is the story\'s to judge, as before', /yours to judge/.test(qc.buildQuestCutForGeneration()) && qc.getPendingQuestCut().journey === '');
+qc.onQuestCutMessageSent();
 
 console.log('\n§6 the completed quests');
 check('nothing yet', qc.getCompletedQuests().length === 0);

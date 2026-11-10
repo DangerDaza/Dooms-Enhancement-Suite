@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
@@ -118,6 +118,7 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
     draw();
     window.__board = await mountAtlasMap(root.querySelector('.dooms-atlas-map'), {
         model: window.__model, picture, hidden: [], query: '', moving: false, card,
+        road: (r) => { const m = window.__model; const cur = m.routes.find(x => (x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a)) || r; const len = (cur.units || 0) * m.measure.per; const name = (id) => (m.markers.find(x => x.id === id) || {}).label || id; return atlasRoadHtml({ a: { id: cur.a, label: name(cur.a) }, b: { id: cur.b, label: name(cur.b) }, drawn: A.describeLength(len, m.measure.unit) + ', ' + A.describeTime(A.travelHours(len, m.measure)) + ' on foot', hours: cur.hours || 0, unit: m.measure.scale === 'world' || m.measure.scale === 'region' ? 'days' : 'minutes' }); },
         on: {
             open: (id) => window.__events.push(['open', id]), close: () => { window.__events.push(['close']); window.__ui.cardMode = 'view'; },
             drop: (id, at) => { window.__events.push(['drop', id, at]); window.__book = A.placeAt(window.__book, id, at, window.__ui.layer); draw(); },
@@ -168,6 +169,9 @@ window.__fill = (step) => {
     return true;
 };
 window.__applyFill = () => { const r = S.applyFill(window.__book, window.__model, window.__fillPlaces); window.__book = r.book; window.__setup(''); draw(); window.__board.fit(); return r.ids; };
+window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
+// A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
+window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
 window.__layer = (id) => { window.__board.closeCard(); window.__ui.layer = id; window.__ui.cardMode = 'view'; draw(); window.__board.fit(); return true; };
 window.__set = (next) => { Object.assign(window.__ui, next); draw(); return true; };
 window.__edit = (fn) => { window.__book = fn(window.__book, window.__model, window.__pack); draw(); return true; };
@@ -219,7 +223,7 @@ const layout = () => page.evaluate(() => {
         shore: q('path.dooms-atlas-shore'), coast: q('path.dooms-atlas-coast'), ripples: q('path.dooms-atlas-ripple'), regions: q('path.dooms-atlas-land'), glyphs: q('path.dooms-atlas-glyph'), routes: q('path.dooms-atlas-route'), regionNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-region-name')].map(x => x.textContent),
         images: q('.leaflet-pane img') + q('canvas'),
         zoom: document.querySelector('.dooms-atlas-map').getAttribute('data-zoom'),
-        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), lands: q('path.dooms-atlas-territory'), looseLands: q('path.dooms-atlas-territory.is-loose'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
+        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), lands: q('path.dooms-atlas-territory'), looseLands: q('path.dooms-atlas-territory.is-loose'), hits: q('path.dooms-atlas-route-hit'), setRoads: q('path.dooms-atlas-route.is-set'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
         kinds: [...document.querySelectorAll('.dooms-atlas-kind')].map(k => ({ id: k.getAttribute('data-kind'), count: Number(k.querySelector('.dooms-atlas-kind-count').textContent), off: k.classList.contains('is-off') })),
         tray: [...document.querySelectorAll('.dooms-atlas-tray-row')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         rows: q('.dooms-atlas-results .dooms-atlas-row'),
@@ -325,7 +329,7 @@ console.log('\n§2b roads drawn by hand (D164)');
     await page.mouse.click(a2.sx, a2.sy);
     await settle();
     l = await layout();
-    check('a road the map drew by itself can be taken away too', l.routes === 6 && (await page.evaluate(() => window.__book.cut.length)) === 1);
+    check('a road the map drew by itself can be taken away too', l.routes === 6 && (await page.evaluate((pr) => window.__book.cut.some(c => c.includes(pr[0]) && c.includes(pr[1])), auto)));
     await page.mouse.click(a1.sx, a1.sy);
     await page.mouse.click(a2.sx, a2.sy);
     await settle();
@@ -336,6 +340,74 @@ console.log('\n§2b roads drawn by hand (D164)');
     await settle();
     check('with Roads off, a place clicked opens its card again', !!(await layout()).card);
     await page.evaluate(() => window.__board.closeCard());
+}
+
+console.log('\n§2c the time is the roads\' (D165)');
+{
+    // The owner's case on a region's map: a city, and a castle the story says is two days out but drawn further.
+    const keptBook = await page.evaluate(() => window.__book);    // the campaign as the sections before left it: put back at the end
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        b = window.A.addPin(b, { label: 'Hask', kind: 'settlement', x: 0, y: 0 }).book;
+        b = window.A.addPin(b, { label: 'Redfall Castle', kind: 'stronghold', x: 5, y: 2 }).book;
+        b = window.A.addPin(b, { label: 'Lone Tower', kind: 'stronghold', x: -3, y: 4 }).book;
+        b = window.A.mergeInto(b, 'loc:jordan-s-house', 'pin:hask');    // the party's place is Hask: distances are told from it
+        return window.__open({ world: 'campaign', book: b });
+    });
+    check('the party stands at Hask on this map', (await page.evaluate(() => window.__model.party)) === 'pin:hask');
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    let l = await layout();
+    check('every road has a line of its own to take a click', l.routes === 2 && l.hits === 2 && l.setRoads === 0);
+    await page.evaluate(() => window.__board.show('pin:redfall-castle'));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('a place joined by road: the card tells the way by road and how long at the pace', /81 miles by road, about 3\.5 days on foot/.test(l.cardText), l.cardText.slice(0, 160));
+    await page.evaluate(() => window.__board.closeCard());
+    // The road itself clicked: its card.
+    const mid = await page.evaluate(() => { const m = window.__model.markers; const a = m.find(x => x.id === 'pin:hask'), b = m.find(x => x.id === 'pin:redfall-castle'); const p = window.__board.map.latLngToContainerPoint([-(a.y + b.y) / 2, (a.x + b.x) / 2]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y }; });
+    await page.mouse.click(mid.x, mid.y);
+    await settle();
+    l = await layout();
+    const fields = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-card.is-road'); return c ? { amount: c.querySelector('[data-field="amount"]').value, unit: c.querySelector('[data-field="unit"]').value, acts: [...c.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act')) } : null; });
+    check('a road clicked opens its card: the two places, what it is as drawn, a time to set, Save and Remove', !!fields && /Road/.test(l.cardText) && /Hask.*Redfall Castle|Redfall Castle.*Hask/.test(l.cardText) && /As drawn: 81 miles, about 3\.5 days on foot/.test(l.cardText) && fields.amount === '' && fields.unit === 'days' && fields.acts.join() === 'road-save,road-remove', JSON.stringify(fields));
+    check('the road\'s card is inside the screen', l.card.left >= 0 && l.card.right <= VIEW.width && l.card.top >= 0 && l.card.bottom <= VIEW.height);
+    await shot('2c-road-card');
+    await page.locator('.dooms-atlas-card.is-road [data-field="amount"]').fill('2');
+    const saved = await page.evaluate(() => window.__saveRoad());
+    await settle();
+    l = await layout();
+    check('two days set: the road is drawn firmer and no card is left open', saved === 16 && l.setRoads === 1 && !l.card);
+    await page.evaluate(() => window.__board.show('pin:redfall-castle'));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('the place\'s card goes by the set time, and leaves the drawn miles out', /about 2 days by road/.test(l.cardText) && !/81 miles/.test(l.cardText), l.cardText.slice(0, 160));
+    await shot('2d-road-set');
+    await page.evaluate(() => window.__board.closeCard());
+    await page.mouse.click(mid.x, mid.y);
+    await settle();
+    const again = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-card.is-road'); return c ? { amount: c.querySelector('[data-field="amount"]').value, unit: c.querySelector('[data-field="unit"]').value, text: c.textContent.replace(/\s+/g, ' ') } : null; });
+    check('opened again, the road shows what it was set to', !!again && again.amount === '2' && again.unit === 'days' && /Set to 2 days/.test(again.text), JSON.stringify(again));
+    await page.evaluate(() => window.__board.closeCard());
+    // No road: across country.
+    await page.evaluate(() => { window.__book = window.A.toggleRoad(window.__book, 'pin:hask', 'pin:lone-tower', window.__model); window.__draw(); });
+    await page.evaluate(() => window.__board.show('pin:lone-tower'));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('a place no road reaches: the card says cross-country, and it takes half as long again', /75 miles cross-country, about 4\.5 days on foot/.test(l.cardText), l.cardText.slice(0, 160));
+    await page.evaluate(() => window.__board.closeCard());
+    const parts = await page.evaluate(() => [window.__roadTime.parts(16), window.__roadTime.parts(3), window.__roadTime.parts(0.25), window.__roadTime.parts(0), window.__roadTime.hours('2', 'days'), window.__roadTime.hours('1,5', 'hours'), window.__roadTime.hours('30', 'minutes'), window.__roadTime.hours('', 'days'), window.__roadTime.hours('-2', 'days')]);
+    check('a set time reads back in the unit that suits it, and a figure is read with its unit', JSON.stringify(parts) === JSON.stringify([{ amount: '2', unit: 'days' }, { amount: '3', unit: 'hours' }, { amount: '15', unit: 'minutes' }, { amount: '', unit: '' }, 16, 1.5, 0.5, 0, 0]), JSON.stringify(parts));
+    // While a marker waits to be put down, a click on a road puts it there.
+    await page.evaluate(() => { window.__events.length = 0; window.__set({ armed: '+' }); document.getElementById('dooms-atlas').classList.add('is-armed'); });
+    await page.mouse.click(mid.x, mid.y);
+    await settle();
+    const ev = await page.evaluate(() => { document.getElementById('dooms-atlas').classList.remove('is-armed'); return window.__events.map(e => e[0]); });
+    check('with a marker waiting, a click on a road puts it down and opens no road card', ev.includes('tap') && (await page.evaluate(() => !document.querySelector('.dooms-atlas-card.is-road'))));
+    await page.evaluate(() => window.__board.closeCard());
+    await page.evaluate((b) => window.__open({ world: 'campaign', book: b }), keptBook);
+    await page.evaluate(() => window.__board.fit());
+    await settle();
 }
 
 console.log('\n§3 made by hand, moved, merged, deleted, brought back');
@@ -471,7 +543,7 @@ console.log('\n§4 layers: a place entered, its own map, the way back out (D156)
     await page.evaluate(() => window.__board.show('lighthouse'));
     await page.waitForTimeout(600);
     l = await layout();
-    check('on the party\'s own map a card says how far the party is', /(miles|mile), about .+ on foot|a few steps away/.test(l.cardText), l.cardText.slice(0, 200));
+    check('on the party\'s own map a card says how far the party is', /(miles|mile)( by road| cross-country|, partly by road)?, about .+ on foot|a few steps away/.test(l.cardText), l.cardText.slice(0, 200));
     await page.evaluate(() => window.__board.closeCard());
 }
 

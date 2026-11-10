@@ -14,11 +14,12 @@
 import { readFileSync } from 'node:fs';
 import { normalizePack, seedWorldState, blankPack } from '../src/utils/liveWorld.js';
 import { worldToRaw } from '../src/utils/worldBuilder.js';
+import { buildTravelInstruction } from '../src/utils/worldMap.js';
 import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, toggleRoad, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -102,9 +103,9 @@ console.log('\n§4 rooms fold into their building (D152)');
 
 console.log('\n§5 the book (D151)');
 {
-    check('nothing: an empty book', same(normalizeBook(null), { scale: '', ground: '', drawn: false, spots: {}, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], gone: [], merged: {}, made: [], edits: {} }));
+    check('nothing: an empty book', same(normalizeBook(null), { scale: '', ground: '', drawn: false, spots: {}, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], roadHours: {}, gone: [], merged: {}, made: [], edits: {} }));
     const dirty = normalizeBook({ scale: 'galaxy', spots: { a: { x: 1.23456, y: 2 }, b: { x: 'no', y: 1 } }, gone: ['x', 'x', 7], merged: { a: 'a', b: 'c' }, made: [{ id: 'pin:a', label: ' The Well ', kind: 'WATER' }, { id: 'nope', label: 'x' }, { id: 'pin:a', label: 'twice' }], edits: { q: { label: ' New ', kind: 'spaceship', note: 'n' }, z: {} } });
-    check('a book made safe', same(dirty, { scale: '', ground: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
+    check('a book made safe', same(dirty, { scale: '', ground: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, grounds: {}, roads: [], cut: [], roadHours: {}, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
     let b = placeAt(null, 'loc:the-quay', { x: 2, y: -3 });
     check('a marker placed, moved, taken off', same(b.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && same(placeAt(b, 'loc:the-quay', { x: 5, y: 5 }).spots['loc:the-quay'], { x: 5, y: 5 }) && same(unplace(b, 'loc:the-quay').spots, {}) && same(placeAt(b, 'x', { x: NaN, y: 1 }), b));
     const p1 = addPin(b, { label: 'The Old Well', kind: 'water', note: 'Dry.', x: 1, y: 1 });
@@ -311,6 +312,67 @@ console.log('\n§6d roads the player draws (D164)');
     check('a road between places on different maps is not drawn', !inner.routes.some(r => !r.auto));
 }
 
+console.log('\n§6e the time is the roads\' (D165)');
+{
+    // A region's map: one layout unit is 15 miles, a day on foot is 24.
+    const pack = blankPack('W');
+    let book = withScale(null, 'region');
+    for (const [label, x, y] of [['Hask', 0, 0], ['The Ford', 4, 0], ['Redfall Castle', 4, 3], ['Lone Tower', -6, 0]]) book = addPin(book, { label, x, y }).book;
+    const id = (l) => `pin:${l.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const m0 = atlasModel({ pack, book });
+    check('the fixture: a region\'s scale, and the map\'s own roads Hask–Ford, Ford–Redfall, Hask–Tower', m0.measure.scale === 'region' && m0.measure.per === 15 && m0.routes.length === 3 && m0.routes.every(r => r.auto && r.hours === 0 && r.units > 0));
+    const r1 = routeBetween(m0, id('Hask'), id('Redfall Castle'));
+    check('by road: the way along the roads, through the place between, at the map\'s pace', r1.mode === 'road' && near(r1.length, (4 + 3) * 15) && near(r1.hours, 105 / 3) && same(r1.via, [id('The Ford')]) && r1.set === false);
+    check('the card says so, and what is told to the story', describeDistance(m0, id('Hask'), id('Redfall Castle')) === '105 miles by road, about 4.5 days on foot' && describeJourney(m0, id('Hask'), id('Redfall Castle')) === 'about 4.5 days on foot by road (105 miles)');
+    check('the straight line is still the straight line (D141 keeps it for what it is)', near(distanceBetween(m0, id('Hask'), id('Redfall Castle')), 75));
+    // No road: cross-country.
+    const cut = toggleRoad(toggleRoad(book, id('Hask'), id('The Ford'), m0), id('The Ford'), id('Redfall Castle'), m0);
+    const m1 = atlasModel({ pack, book: cut });
+    const r2 = routeBetween(m1, id('Hask'), id('Redfall Castle'));
+    check('with no road between them: across country, the straight line, half as long again', r2.mode === 'cross' && near(r2.length, 75) && near(r2.hours, 75 / 3 * CROSS_COUNTRY) && r2.via.length === 0 && CROSS_COUNTRY === 1.5);
+    check('and the card says cross-country', describeDistance(m1, id('Hask'), id('Redfall Castle')) === '75 miles cross-country, about 4.5 days on foot' && describeJourney(m1, id('Hask'), id('Redfall Castle')) === 'about 4.5 days on foot across country (75 miles)');
+    // A road drawn straight there is quicker than the way round.
+    const direct = atlasModel({ pack, book: toggleRoad(book, id('Hask'), id('Redfall Castle'), m0) });
+    const r3 = routeBetween(direct, id('Hask'), id('Redfall Castle'));
+    check('a road drawn straight there is the way taken: quicker than the way round', r3.mode === 'road' && near(r3.length, 75) && r3.via.length === 0 && describeDistance(direct, id('Hask'), id('Redfall Castle')) === '75 miles by road, about 3 days on foot');
+    // The owner's case: the story says two days.
+    const setBook = setRoadTime(toggleRoad(book, id('Hask'), id('Redfall Castle'), m0), id('Redfall Castle'), id('Hask'), 16);
+    const m2 = atlasModel({ pack, book: setBook });
+    const road = m2.routes.find(r => (r.a === id('Hask') && r.b === id('Redfall Castle')) || (r.b === id('Hask') && r.a === id('Redfall Castle')));
+    check('a road given a time of its own carries it, whichever end is named first', !!road && road.hours === 16 && road.auto === false && same(setBook.roadHours, { [`${id('Hask')}|${id('Redfall Castle')}`]: 16 }));
+    check('the card and the story go by the set time, and the miles drawn are left out', describeDistance(m2, id('Hask'), id('Redfall Castle')) === 'about 2 days by road' && describeJourney(m2, id('Hask'), id('Redfall Castle')) === 'about 2 days by road' && routeBetween(m2, id('Hask'), id('Redfall Castle')).set === true);
+    const dragged = atlasModel({ pack, book: placeAt(setBook, id('Redfall Castle'), { x: 30, y: 30 }) });
+    check('the pin dragged far away, the set time stands', describeDistance(dragged, id('Hask'), id('Redfall Castle')) === 'about 2 days by road');
+    const slow = atlasModel({ pack, book: setRoadTime(toggleRoad(book, id('Hask'), id('Redfall Castle'), m0), id('Hask'), id('Redfall Castle'), 80) });
+    check('a set time is the story\'s word for that journey: it stands even where a way round by other roads would be quicker', routeBetween(slow, id('Hask'), id('Redfall Castle')).mode === 'road' && near(routeBetween(slow, id('Hask'), id('Redfall Castle')).hours, 80) && same(routeBetween(slow, id('Hask'), id('Redfall Castle')).via, []) && near(routeBetween(slow, id('Hask'), id('The Ford')).hours, 20));
+    const onlySlow = atlasModel({ pack, book: setRoadTime(cut, id('Hask'), id('Redfall Castle'), 80) });
+    check('nor is a slow set road undercut across country', near(routeBetween(onlySlow, id('Hask'), id('Redfall Castle')).hours, 80) && describeDistance(onlySlow, id('Hask'), id('Redfall Castle')) === 'about 10 days by road');
+    // A time set on a road the map drew makes it the player's: it stays when the map would redraw its roads.
+    const kept = setRoadTime(book, id('Hask'), id('The Ford'), 4);
+    const mk = atlasModel({ pack, book: addPin(kept, { label: 'Halfway House', x: 2, y: 0 }).book });
+    check('a time set on a road the map drew keeps that road when a new place would have rerouted it', mk.routes.some(r => !r.auto && r.hours === 4 && ((r.a === id('Hask') && r.b === id('The Ford')) || (r.b === id('Hask') && r.a === id('The Ford')))));
+    check('cleared, the road goes by its length again and stays the player\'s', same(setRoadTime(kept, id('The Ford'), id('Hask'), 0).roadHours, {}) && setRoadTime(kept, id('Hask'), id('The Ford'), 0).roads.length === 1 && same(setRoadTime(kept, id('Hask'), id('Hask'), 5), normalizeBook(kept)));
+    const removed = toggleRoad(setBook, id('Hask'), id('Redfall Castle'), m2);
+    check('a road taken away takes its set time with it, and the map does not draw one there by itself', same(removed.roadHours, {}) && removed.roads.length === 0 && removed.cut.length === 1 && !atlasModel({ pack, book: removed }).routes.some(r => (r.a === id('Hask') && r.b === id('Redfall Castle')) || (r.b === id('Hask') && r.a === id('Redfall Castle'))));
+    // Partly by road.
+    const mixedBook = toggleRoad(book, id('The Ford'), id('Redfall Castle'), m0);
+    const mm = atlasModel({ pack, book: mixedBook });
+    const r4 = routeBetween(mm, id('Lone Tower'), id('Redfall Castle'));
+    check('partly by road: along the roads as far as they go, then across country, when that is quicker than straight across', r4.mode === 'mixed' && same(r4.via, [id('Hask')]) && near(r4.hours, 30 + 37.5) && r4.hours < distanceBetween(mm, id('Lone Tower'), id('Redfall Castle')) / 3 * CROSS_COUNTRY && /partly by road/.test(describeDistance(mm, id('Lone Tower'), id('Redfall Castle'))) && /partly by road/.test(describeJourney(mm, id('Lone Tower'), id('Redfall Castle'))));
+    check('nothing to say for the same place, a place off this map, or no model', routeBetween(m0, id('Hask'), id('Hask')).mode === 'here' && describeDistance(m0, id('Hask'), id('Hask')) === '' && describeJourney(m0, id('Hask'), id('Hask')) === '' && routeBetween(m0, id('Hask'), 'nowhere') === null && describeJourney(m0, '', id('Hask')) === '' && routeBetween(null, 'a', 'b') === null);
+    check('a damaged set time is dropped; a good one is kept by its pair', same(normalizeBook({ roadHours: { 'a|b': 4.00049, 'b|a': 2, 'a|a': 1, 'a': 3, 'c|d': -1, 'e|f': 'x' } }).roadHours, { 'a|b': 4 }));
+    // Between lands there are no roads to miss.
+    let lands = addPin(null, { label: 'North', kind: 'region', x: 0, y: 0 }).book;
+    lands = addPin(lands, { label: 'South', kind: 'region', x: 0, y: 8 }).book;
+    const lm = atlasModel({ pack: blankPack('x'), book: lands });
+    check('between two regions: the straight line at the pace, with no cross-country penalty', routeBetween(lm, 'pin:north', 'pin:south').mode === 'open' && near(routeBetween(lm, 'pin:north', 'pin:south').hours, 8 * 60 / 3) && describeDistance(lm, 'pin:north', 'pin:south') === '480 miles, about 20 days on foot');
+    // What the story is told.
+    const told = buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan', journey: describeJourney(m2, id('Hask'), id('Redfall Castle')) });
+    check('Travel here tells the story how long the map says it takes', told.includes('The map puts the journey at about 2 days by road: it takes that long, no less and no more, and the date and time move on by it.') && !/yours to judge/.test(told));
+    const both = buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan', when: 'by nightfall.', journey: 'about 2 days by road' });
+    check('an arrival the player named stands, with the map\'s word beside it; with no journey the judgement is the story\'s as before', / Jordan arrives by nightfall\. The map puts the journey at about 2 days by road\./.test(both) && /yours to judge/.test(buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan' })) && !buildTravelInstruction({ place: 'X', journey: 'about [2] days' }).includes('[2]'));
+}
+
 console.log('\n§7 distance');
 {
     const p = realm();
@@ -328,7 +390,7 @@ console.log('\n§7 distance');
     check('hours at the pace: a day is eight hours of the road', near(travelHours(24, measureOf(p)), 8) && near(travelHours(3, measureOf(p)), 1));
     check('a length in words', describeLength(3.24) === '3.2 miles' && describeLength(1) === '1 mile' && describeLength(12.3) === '12.5 miles' && describeLength(240.4) === '240 miles' && describeLength(5, 'km') === '5 km' && describeLength(2, 'league') === '2 leagues');
     check('a time in words', describeTime(0) === 'no time at all' && describeTime(0.05) === 'a few minutes' && describeTime(0.33) === 'about 20 minutes' && describeTime(1) === 'about an hour' && describeTime(3.2) === 'about 3 hours' && describeTime(8) === 'about a day' && describeTime(20) === 'about 2.5 days');
-    check('the card\'s line', describeDistance(m, 'northmarch', 'greywood') === '75 miles, about 3 days on foot' && describeDistance(m, 'northmarch', 'northmarch') === '' && describeDistance(m, '', 'northmarch') === '' && describeDistance(m, 'northmarch', 'nowhere') === '', describeDistance(m, 'northmarch', 'greywood'));
+    check('the card\'s line', describeDistance(m, 'northmarch', 'greywood') === '75 miles by road, about 3 days on foot' && describeDistance(m, 'northmarch', 'northmarch') === '' && describeDistance(m, '', 'northmarch') === '' && describeDistance(m, 'northmarch', 'nowhere') === '', describeDistance(m, 'northmarch', 'greywood'));
 }
 
 console.log('\n§8 the search and the switches');

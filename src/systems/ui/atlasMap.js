@@ -56,12 +56,13 @@ export function pictureRect(picture) {
  * @param {boolean} o.moving          markers can be dragged
  * @param {Function} o.portraits      name -> a portrait URL or ''
  * @param {Function} o.card           marker -> the card's HTML (asked when a marker opens, and again on an update)
+ * @param {Function} o.road           route -> a road's card HTML (asked when a road is clicked)
  * @param {{ open?: Function, close?: Function, scale?: Function, drop?: Function, tap?: Function, move?: Function, pictureError?: Function }} o.on
  *   `open(id)` a card opened; `close()`; `scale({ px, length, unit, perPx })` after a zoom; `drop(id, { x, y })` a tray row dropped on the map;
  *   `pick(id)` a marker clicked while roads are being drawn; `enter(id)` a marker double-clicked; `tap({ x, y })` the map itself tapped; `move(id, { x, y })` a marker dragged; `pictureError()` the picture would not load
  * @param {{ center: any, zoom: number }|null} o.view  a view to restore
  */
-export async function mountAtlasMap(el, { model, picture = null, hidden = [], query = '', moving = false, portraits = () => '', card = () => '', on = {}, view = null } = {}) {
+export async function mountAtlasMap(el, { model, picture = null, hidden = [], query = '', moving = false, portraits = () => '', card = () => '', road = () => '', on = {}, view = null } = {}) {
     const L = await leaflet();
     el.classList.add('dooms-atlas-leaflet');
     const map = L.map(el, {
@@ -89,6 +90,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     let search = String(query || '').trim().toLowerCase();
     let canMove = !!moving;
     let opened = '';
+    let popups = 0;           // a card is open: a marker's or a road's
     let picking = false;      // roads are being drawn: a click on a marker picks it
     let pickedId = '';        // the first marker picked for a road
 
@@ -166,7 +168,17 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             }
         }
         el.setAttribute('data-ground', pic ? 'picture' : (current.ground || 'island'));
-        if (pic || current.ground !== 'underground') for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}`, interactive: false }).addTo(shapes);
+        if (pic || current.ground !== 'underground') for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}${r.hours > 0 ? ' is-set' : ''}`, interactive: false }).addTo(shapes);
+        // A road is clicked to open its own card (its travel time, Remove): a wide unseen line over each takes the click (D165).
+        // While something waits to be put down, a click on a road puts it there, as anywhere on the map.
+        for (const r of current.routes) {
+            const hit = L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: 'dooms-atlas-route-hit', interactive: true, bubblingMouseEvents: false });
+            hit.on('click', (ev) => {
+                if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; }
+                openRoad(r, ev.latlng);
+            });
+            hit.addTo(shapes);
+        }
         for (const r of current.regions) {
             if (!r.label) continue;
             L.marker(ll(r.x, r.y - r.radius * 0.72), { icon: L.divIcon({ className: 'dooms-atlas-region', html: atlasRegionHtml(r), iconSize: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(names);
@@ -175,6 +187,16 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
 
     const matches = (m) => !search || [m.label, m.note, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(search));
     const iconOf = (m) => L.divIcon({ className: `${atlasMarkerClass(m)}${matches(m) ? '' : ' is-dim'}`, html: atlasMarkerHtml(m, { portraits }), iconSize: [PIN_SIZE, PIN_SIZE], iconAnchor: [PIN_SIZE / 2, PIN_SIZE / 2], popupAnchor: [0, -PIN_SIZE / 2] });
+
+    /** A road's card, opened where the road was clicked. */
+    function openRoad(r, latlng) {
+        const html = road(r);
+        if (!html) return;
+        map.closePopup();
+        opened = '';
+        L.popup({ className: 'dooms-atlas-popup', closeButton: true, maxWidth: 340, minWidth: 260, autoPanPadding: [40, 40] }).setLatLng(latlng).setContent(html).openOn(map);
+        if (typeof on.openRoad === 'function') on.openRoad(r);
+    }
 
     function openCard(id) {
         const have = markers.get(id);
@@ -259,7 +281,8 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     fit();
     if (view && view.center && Number.isFinite(view.zoom)) map.setView(view.center, Math.min(Math.max(view.zoom, map.getMinZoom()), map.getMaxZoom()), { animate: false });
     map.on('zoomend', zoomed);
-    map.on('popupclose', () => { opened = ''; if (typeof on.close === 'function') on.close(); });
+    map.on('popupopen', () => { popups++; });
+    map.on('popupclose', () => { popups = Math.max(0, popups - 1); opened = ''; if (typeof on.close === 'function') on.close(); });
     zoomed();
 
     return {
@@ -298,6 +321,8 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
         },
         open(id) { openCard(id); },
         opened() { return opened; },
+        /** A card is open, a marker's or a road's. */
+        popupOpen() { return popups > 0; },
         closeCard() { map.closePopup(); },
         view() { return { center: map.getCenter(), zoom: map.getZoom() }; },
         fit() { fit(); zoomed(); },

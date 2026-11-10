@@ -517,6 +517,67 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
     </article>`;
 }
 
+/** A set time in hours as the figure and the unit a road's card shows: days from a day up, hours from an hour, else minutes. */
+export function roadTimeParts(hours) {
+    if (!(hours > 0)) return { amount: '', unit: '' };
+    const trim = (n) => String(Math.round(n * 100) / 100);
+    if (hours >= 8) return { amount: trim(hours / 8), unit: 'days' };
+    if (hours >= 1) return { amount: trim(hours), unit: 'hours' };
+    return { amount: trim(hours * 60), unit: 'minutes' };
+}
+
+/** A figure and a unit as hours of travel (a day is eight of them); 0 for nothing usable. */
+export function roadTimeHours(amount, unit) {
+    const n = Number(String(amount ?? '').replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return unit === 'days' ? n * 8 : unit === 'minutes' ? n / 60 : n;
+}
+
+/**
+ * A road's card (D165): the two places it joins, what it is as drawn, and
+ * the travel time the player can give it; Save and Remove.
+ * @param {object} o
+ * @param {{id:string,label:string}} o.a
+ * @param {{id:string,label:string}} o.b
+ * @param {string} o.drawn      "83 miles, about 3.5 days on foot": the road by its length
+ * @param {number} o.hours      the set time in hours, or 0
+ * @param {string} o.unit       the unit offered when none is set ('days' | 'hours' | 'minutes')
+ */
+export function atlasRoadHtml({ a = { id: '', label: '' }, b = { id: '', label: '' }, drawn = '', hours = 0, unit = 'days' } = {}) {
+    const set = roadTimeParts(hours);
+    const u = set.unit || unit;
+    const opt = (id, label) => `<option value="${id}"${id === u ? ' selected' : ''}>${label}</option>`;
+    return `<article class="dooms-atlas-card is-road" data-a="${attr(a.id)}" data-b="${attr(b.id)}">
+        <header class="dooms-atlas-card-head">
+            <span class="dooms-atlas-pin is-road"><i class="fa-solid fa-road" aria-hidden="true"></i></span>
+            <div>
+                <h3 class="dooms-atlas-card-title">Road</h3>
+                <p class="dooms-atlas-card-kind">${e(a.label)} <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i> ${e(b.label)}</p>
+            </div>
+        </header>
+        <p class="dooms-atlas-card-note">${hours > 0 ? `Set to ${e(describeSet(hours))}. ` : ''}As drawn: ${e(drawn)}.</p>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Travel time on this road</span>
+            <span class="dooms-atlas-road-time">
+                <input type="number" class="dooms-atlas-input" data-field="amount" min="0" step="any" inputmode="decimal" placeholder="by its length" value="${attr(set.amount)}" aria-label="How long" />
+                <select class="dooms-atlas-input" data-field="unit" aria-label="Unit">${opt('minutes', 'minutes')}${opt('hours', 'hours')}${opt('days', 'days')}</select>
+            </span></label>
+        <p class="dooms-atlas-card-hint">A set time is what the card and Travel here go by, however far apart the two places are drawn. Leave it empty to go by the road's length.</p>
+        <div class="dooms-atlas-card-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="road-save"><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Save</span></button>
+            <button type="button" class="dooms-atlas-btn" data-act="road-remove"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> <span>Remove road</span></button>
+        </div>
+    </article>`;
+}
+
+/** A set time in words: "2 days", "half a day", "3 hours", "20 minutes". */
+function describeSet(hours) {
+    const p = roadTimeParts(hours);
+    const n = Number(p.amount);
+    if (p.unit === 'days' && n === 0.5) return 'half a day';
+    const one = { days: 'day', hours: 'hour', minutes: 'minute' }[p.unit];
+    return `${p.amount} ${n === 1 ? one : `${one}s`}`;
+}
+
 /** The scale bar's figures at a zoom: the round length that fits `maxPx`, its width and its words. `perPx` is world units in one screen pixel. */
 export function scaleBarFor(perPx, maxPx = 120) {
     if (!(perPx > 0)) return { px: 0, length: 0 };
