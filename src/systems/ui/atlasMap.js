@@ -58,7 +58,7 @@ export function pictureRect(picture) {
  * @param {Function} o.card           marker -> the card's HTML (asked when a marker opens, and again on an update)
  * @param {{ open?: Function, close?: Function, scale?: Function, drop?: Function, tap?: Function, move?: Function, pictureError?: Function }} o.on
  *   `open(id)` a card opened; `close()`; `scale({ px, length, unit, perPx })` after a zoom; `drop(id, { x, y })` a tray row dropped on the map;
- *   `tap({ x, y })` the map itself tapped; `move(id, { x, y })` a marker dragged; `pictureError()` the picture would not load
+ *   `enter(id)` a marker double-clicked; `tap({ x, y })` the map itself tapped; `move(id, { x, y })` a marker dragged; `pictureError()` the picture would not load
  * @param {{ center: any, zoom: number }|null} o.view  a view to restore
  */
 export async function mountAtlasMap(el, { model, picture = null, hidden = [], query = '', moving = false, portraits = () => '', card = () => '', on = {}, view = null } = {}) {
@@ -134,11 +134,12 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
         }
         for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}`, interactive: false }).addTo(shapes);
         for (const r of current.regions) {
+            if (!r.label) continue;
             L.marker(ll(r.x, r.y - r.radius * 0.72), { icon: L.divIcon({ className: 'dooms-atlas-region', html: atlasRegionHtml(r), iconSize: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(names);
         }
     }
 
-    const matches = (m) => !search || [m.label, m.note, m.regionLabel, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(search));
+    const matches = (m) => !search || [m.label, m.note, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(search));
     const iconOf = (m) => L.divIcon({ className: `${atlasMarkerClass(m)}${matches(m) ? '' : ' is-dim'}`, html: atlasMarkerHtml(m, { portraits }), iconSize: [PIN_SIZE, PIN_SIZE], iconAnchor: [PIN_SIZE / 2, PIN_SIZE / 2], popupAnchor: [0, -PIN_SIZE / 2] });
 
     function openCard(id) {
@@ -169,6 +170,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             }
             const marker = L.marker(ll(m.x, m.y), { icon: iconOf(m), draggable: canMove, autoPan: true, keyboard: true, title: '', alt: m.label, riseOnHover: true, zIndexOffset: m.player ? 1000 : 0 });
             marker.on('click', () => openCard(m.id));
+            marker.on('dblclick', () => { if (typeof on.enter === 'function') on.enter(m.id); });    // a place entered: its own map (D156)
             marker.on('keypress', (ev) => { if (ev.originalEvent && ev.originalEvent.key === 'Enter') openCard(m.id); });
             marker.on('dragstart', () => { map.closePopup(); });
             marker.on('dragend', () => { const at = marker.getLatLng(); if (typeof on.move === 'function') on.move(m.id, { x: round4(at.lng), y: round4(-at.lat) }); });

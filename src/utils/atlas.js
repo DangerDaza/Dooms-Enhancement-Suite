@@ -36,14 +36,14 @@ export const ATLAS_TERRAINS = Object.freeze(['plains', 'forest', 'mountains', 'd
 
 /** What one layout unit is, in miles, and what the scale is called. */
 export const ATLAS_SCALES = Object.freeze({
-    town: { per: 0.1, label: 'A town' },
+    site: { per: 0.012, label: 'A building or dungeon' },
+    town: { per: 0.1, label: 'A town or city' },
     region: { per: 15, label: 'A region' },
     world: { per: 60, label: 'A world' },
 });
 export const ATLAS_UNITS = Object.freeze({ mi: 1, km: 1.609344, league: 1 / 3 });    // one mile in each unit
 export const DEFAULT_PACE_MILES = 24;     // a day on foot
 export const TRAVEL_HOURS_A_DAY = 8;
-export const STEPS = Object.freeze([7, 1, 0.09, 0.012]);    // the step between siblings at each depth, in layout units
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 const DIRS = new Set(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']);
 
@@ -151,37 +151,6 @@ function spiral(center, index, step, turn) {
     const r = step * Math.sqrt(index + 0.5);
     const t = index * GOLDEN + turn * Math.PI * 2;
     return { x: round4(center.x + r * Math.cos(t)), y: round4(center.y + r * Math.sin(t)) };
-}
-
-/**
- * A spot the layout would give every place of the pack: what Place all
- * proposes (D145). A root is the n-th point of the world's spiral, a child
- * the n-th point of its parent's; n is the place's index among its
- * siblings in the pack's order, so a place appended later moves nothing.
- * A spot the world carries of its own (`atlas.spots`) is kept.
- * @returns {Map<string, { x: number, y: number, by: 'layout'|'user', depth: number, parent: string, root: string }>}
- */
-export function layoutAtlas(pack) {
-    const places = placesOf(pack);
-    const atlas = pack && pack.atlas ? pack.atlas : null;
-    const stored = atlas && atlas.spots && typeof atlas.spots === 'object' ? atlas.spots : {};
-    const byId = new Map(places.map(p => [p.id, p]));
-    const kids = new Map();
-    for (const p of places) {
-        const key = p.parent && byId.has(p.parent) ? p.parent : '';
-        if (!kids.has(key)) kids.set(key, []);
-        kids.get(key).push(p);
-    }
-    const out = new Map();
-    const lay = (p, index, center, depth, root) => {
-        const s = stored[p.id];
-        const step = STEPS[Math.min(depth, STEPS.length - 1)];
-        const at = s && finite(s.x) && finite(s.y) ? { x: s.x, y: s.y } : spiral(center, index, step, hash01(depth ? p.parent : 'world'));
-        out.set(p.id, { x: at.x, y: at.y, by: s && s.by === 'user' ? 'user' : 'layout', depth, parent: depth ? p.parent : '', root: root || p.id });
-        (kids.get(p.id) || []).forEach((c, i) => lay(c, i, at, depth + 1, root || p.id));
-    };
-    (kids.get('') || []).forEach((p, i) => lay(p, i + 1, { x: 0, y: 0 }, 0, ''));
-    return out;
 }
 
 /** A blob's outline: `points` points around its centre, waved by three sines hashed from its id. */
@@ -321,14 +290,27 @@ export function normalizeBook(raw) {
         if (typeof e.note === 'string') one.note = clean(e.note, 300);
         if (Object.keys(one).length) edits[id] = one;
     }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', drawn: r.drawn === true, spots, gone, merged, made, edits };
+    const inside = {};    // a place -> the place whose map it is on ('' = the top map, said outright)
+    if (r.inside && typeof r.inside === 'object') for (const [id, to] of Object.entries(r.inside)) { if (idOk(id) && typeof to === 'string' && to.length <= 160 && to !== id) inside[id] = to; }
+    const scales = {};    // a layer's own scale
+    if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', drawn: r.drawn === true, spots, inside, scales, gone, merged, made, edits };
 }
 
-/** A marker put at a spot (or moved there). */
-export function placeAt(book, id, spot) {
+/** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
+export function placeAt(book, id, spot, layer) {
     const b = normalizeBook(book);
     if (!idOk(id) || !spot || !finite(spot.x) || !finite(spot.y)) return b;
-    return { ...b, spots: { ...b.spots, [id]: { x: round4(spot.x), y: round4(spot.y) } } };
+    const next = { ...b, spots: { ...b.spots, [id]: { x: round4(spot.x), y: round4(spot.y) } } };
+    return typeof layer === 'string' && layer !== id ? { ...next, inside: { ...next.inside, [id]: layer } } : next;
+}
+
+/** A place moved onto another place's map ('' = the top map): it leaves the map it was on and waits in the new one's tray. Onto itself is refused. */
+export function moveInto(book, id, layer) {
+    const b = normalizeBook(book);
+    if (!idOk(id) || typeof layer !== 'string' || layer === id) return b;
+    const { [id]: _s, ...spots } = b.spots;
+    return { ...b, spots, inside: { ...b.inside, [id]: layer } };
 }
 
 /** A marker taken off the map: back to the tray. */
@@ -339,13 +321,13 @@ export function unplace(book, id) {
 }
 
 /** A marker made by hand at a spot: the book and the new marker's id. */
-export function addPin(book, { label = 'New place', kind = '', note = '', x = 0, y = 0 } = {}) {
+export function addPin(book, { label = 'New place', kind = '', note = '', x = 0, y = 0, layer = '' } = {}) {
     const b = normalizeBook(book);
     const base = `pin:${locSlug(label) || 'place'}`;
     let id = base;
     for (let n = 2; b.made.some(m => m.id === id) || b.gone.includes(id); n++) id = `${base}-${n}`;
     const next = { ...b, made: [...b.made, { id, label: clean(label, 80) || 'New place', kind: cleanKind(kind), note: clean(note, 300) }] };
-    return { book: finite(x) && finite(y) ? placeAt(next, id, { x, y }) : next, id };
+    return { book: finite(x) && finite(y) ? placeAt(next, id, { x, y }, typeof layer === 'string' ? layer : '') : next, id };
 }
 
 /** A marker deleted for good: one made by hand is forgotten; any other is kept in `gone`, so the story naming it again does not bring it back. What was merged into it is let go. */
@@ -405,10 +387,12 @@ export function withDrawn(book, drawn) {
     return { ...b, drawn: drawn === true };
 }
 
-/** The map's scale chosen by hand ('' = the world's own, or a guess). */
-export function withScale(book, scale) {
+/** A layer's scale chosen by hand ('' for the scale = the default again; `layer` '' = the top map). */
+export function withScale(book, scale, layer = '') {
     const b = normalizeBook(book);
-    return { ...b, scale: ATLAS_SCALES[scale] ? scale : '' };
+    if (!layer) return { ...b, scale: ATLAS_SCALES[scale] ? scale : '' };
+    const { [layer]: _old, ...rest } = b.scales;
+    return { ...b, scales: ATLAS_SCALES[scale] ? { ...rest, [layer]: scale } : rest };
 }
 
 // ─── The model ──────────────────────────────────────────────────────────────
@@ -450,25 +434,35 @@ export function partyKey(pack, state, player = '') {
     return String(here.id || '');
 }
 
-/** The scale in force: the book's, else the world's own, else a guess (a town for a world with one region or none, else a region). */
-export function scaleOf(pack, book = null) {
-    if (book && ATLAS_SCALES[book.scale]) return book.scale;
-    const a = pack && pack.atlas;
-    if (a && ATLAS_SCALES[a.scale]) return a.scale;
-    return placesOf(pack).filter(p => !p.parent).length > 1 ? 'region' : 'town';
+/**
+ * The scale in force on a layer (D156): the one the player chose for it,
+ * else for the top map the world's own or a guess (a region when places
+ * hold maps of their own, else a town), a town one layer in, a site below
+ * that.
+ */
+export function scaleOf(pack, book = null, layer = '', { depth = 0, layered = false } = {}) {
+    const b = book && typeof book === 'object' ? book : null;
+    if (!layer) {
+        if (b && ATLAS_SCALES[b.scale]) return b.scale;
+        const a = pack && pack.atlas;
+        if (a && ATLAS_SCALES[a.scale]) return a.scale;
+        return layered || placesOf(pack).some(p => p.parent) ? 'region' : 'town';
+    }
+    if (b && b.scales && ATLAS_SCALES[b.scales[layer]]) return b.scales[layer];
+    return depth >= 2 ? 'site' : 'town';
 }
 
-/** The world's measure: the unit, what a layout unit is in it, and the pace (units a day). */
-export function measureOf(pack, book = null) {
+/** A layer's measure: the unit, what a layout unit is in it, and the pace (units a day). */
+export function measureOf(pack, book = null, layer = '', opts = {}) {
     const a = pack && pack.atlas ? pack.atlas : null;
     const unit = a && ATLAS_UNITS[a.unit] ? a.unit : 'mi';
-    const scale = scaleOf(pack, book);
+    const scale = scaleOf(pack, book, layer, opts);
     const per = round4(ATLAS_SCALES[scale].per * ATLAS_UNITS[unit]);
     const pace = a && finite(a.pace) && a.pace > 0 ? a.pace : round4(DEFAULT_PACE_MILES * ATLAS_UNITS[unit]);
     return { unit, per, pace, scale };
 }
 
-/** The little drawings a terrain is told by, as lines in layout units around a point (D153): a peak, a tree, a dune, reeds, a tuft. */
+/** The little drawings a terrain is told by, as lines in layout units around a point (D154): a peak, a tree, a dune, reeds, a tuft. */
 function glyphAt(terrain, x, y, s) {
     const p = (dx, dy) => [round4(x + dx * s), round4(y + dy * s)];
     if (terrain === 'mountains' || terrain === 'snow') return [[p(-1, 0.6), p(0, -0.8), p(1, 0.6)], [p(0, -0.8), p(0.3, 0.1), p(0.1, 0.6)]];
@@ -479,49 +473,48 @@ function glyphAt(terrain, x, y, s) {
 }
 
 /**
- * What the Atlas draws (D151–D153). Nothing stands on the map by itself:
- * a place is a marker once it has a spot (the book's, or the world's own),
- * and waits in the tray until then. Rooms fold into their building,
- * merged markers into their target, deleted ones are left out. The land
- * is drawn around the markers; a region of the world is a named blob
- * around its placed places.
+ * What the Atlas draws (D151–D156). The map is layered: every place
+ * stands on one layer, the top map or the map inside another place
+ * (a city's, a dungeon's), and `layer` says which one is drawn. Nothing
+ * stands on a map by itself: a place is a marker once it has a spot, and
+ * waits in the tray until then. Rooms fold into their building, merged
+ * markers into their target, deleted ones are left out. A marker carries
+ * what is inside it: how many places, the people, the party. The land is
+ * drawn around the markers.
  * @param {object} o
  * @param {object} o.pack            the world (normalised)
  * @param {object|null} o.state      the world state: who is where, what was visited
  * @param {string} o.player          the player's name
  * @param {object|null} o.book       the chat's book (normalizeBook)
- * @param {Object<string,{emoji?:string,text?:string}>} o.weather  by region id or marker id
- * @returns {{ markers: Array, tray: Array, deleted: Array, regions: Array, land: Array, routes: Array, party: string, partyInTray: string, bounds: object, measure: object, empty: boolean }}
+ * @param {string} o.layer           the place whose map is drawn; '' for the top map
+ * @param {Object<string,{emoji?:string,text?:string}>} o.weather  by marker id
  */
-export function atlasModel({ pack, state = null, player = '', weather = {}, book = null } = {}) {
+export function atlasModel({ pack, state = null, player = '', weather = {}, book = null, layer = '' } = {}) {
     const bk = normalizeBook(book);
     const places = placesOf(pack);
     const byId = new Map(places.map(p => [p.id, p]));
     const ids = new Set(byId.keys());
     const world = pack && pack.atlas && pack.atlas.spots ? pack.atlas.spots : {};
-    const hasKids = new Set(places.filter(p => p.parent && ids.has(p.parent)).map(p => p.parent));
 
-    // The candidates: the world's places (the rooms of a place folded into it), the story's own (folded), the ones made by hand.
+    // The candidates: the world's places, the story's own (folded), the ones made by hand. Of the world's, a place
+    // inside another is on that place's own map, unless it is a room of it or carries its name: then it folds into it.
     const cands = new Map();
-    const alias = new Map();    // a folded place's id -> the marker that holds it
-    const regionsOf = new Map();    // a root with places inside: a region, not a marker
-    const make = (id, o) => { cands.set(id, { id, label: id, kind: '', note: '', image: '', source: 'story', region: '', regionLabel: '', rooms: [], names: [], ids: [id], ...o }); return cands.get(id); };
+    const alias = new Map();        // a folded place's id -> the place it folds into
+    const packParent = new Map();   // a world's place -> the place whose map it is on
+    const make = (id, o) => { cands.set(id, { id, label: id, kind: '', note: '', image: '', source: 'story', rooms: [], names: [], ids: [id], ...o }); return cands.get(id); };
     for (const p of places) {
-        if (!p.parent || !ids.has(p.parent)) {
-            if (hasKids.has(p.id)) regionsOf.set(p.id, { id: p.id, label: p.label || p.id });
-            else make(p.id, { label: p.label || p.id, kind: cleanKind(p.kind), note: p.note || '', image: p.image || '', source: 'world' });
-            continue;
-        }
-        let top = p;
-        let root = byId.get(p.parent);
-        for (let guard = 0; root && root.parent && ids.has(root.parent) && guard < places.length; guard++) { top = root; root = byId.get(root.parent); }
-        if (top === p) make(p.id, { label: p.label || p.id, kind: cleanKind(p.kind), note: p.note || '', image: p.image || '', source: 'world', region: root ? root.id : '', regionLabel: root ? root.label || root.id : '' });
-        else alias.set(p.id, top.id);
+        const up = p.parent && ids.has(p.parent) ? byId.get(p.parent) : null;
+        if (up && (roomKey(p.label) || norm(p.label) === norm(up.label))) { alias.set(p.id, up.id); continue; }
+        make(p.id, { label: p.label || p.id, kind: cleanKind(p.kind), note: p.note || '', image: p.image || '', source: 'world' });
+        if (up) packParent.set(p.id, up.id);
     }
+    const hold = (id) => { let cur = id; for (let i = 0; i < 12 && alias.has(cur); i++) cur = alias.get(cur); return cur; };
     for (const p of places) {
-        const to = alias.get(p.id);
-        const c = to ? cands.get(to) : null;
-        if (c) { c.rooms.push(p.label || p.id); c.ids.push(p.id); }
+        if (!alias.has(p.id)) continue;
+        const c = cands.get(hold(p.id));
+        if (!c) continue;
+        if (norm(p.label) !== norm(c.label) && !c.rooms.includes(p.label)) c.rooms.push(p.label || p.id);
+        c.ids.push(p.id);
     }
     const story = storyPlaces(pack, state);
     for (const g of foldPlaces(story)) {
@@ -533,7 +526,6 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     // Deleted, merged, renamed.
     const gone = new Set(bk.gone);
-    const hold = (id) => alias.get(id) || id;
     const resolve = (id) => {
         let cur = hold(id);
         for (let i = 0; i < 12 && bk.merged[cur]; i++) cur = hold(bk.merged[cur]);
@@ -559,64 +551,89 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         if (!t.image && c.image) t.image = c.image;
     }
 
+    // The layers (D156): whose map each place is on. The book's word, else the world's own nesting; a place whose
+    // holder is gone, or that would hold itself, stands on the top map.
+    const par = new Map();
+    for (const c of live.values()) {
+        const want = Object.prototype.hasOwnProperty.call(bk.inside, c.id) ? bk.inside[c.id] : (packParent.get(c.id) || '');
+        const to = want ? resolve(want) : '';
+        par.set(c.id, to && to !== c.id && live.has(to) ? to : '');
+    }
+    for (const id of par.keys()) {
+        let cur = par.get(id);
+        for (let i = 0; cur && i < 40; i++) { if (cur === id) { par.set(id, ''); break; } cur = par.get(cur) || ''; }
+    }
+    const chain = (id) => { const out = []; let cur = id; for (let i = 0; cur && i < 40; i++) { out.unshift(cur); cur = par.get(cur) || ''; } return out; };    // from the top map down to the place
+    const cur = layer && live.has(layer) ? layer : '';
+    const depth = cur ? chain(cur).length : 0;
+    /** The place on the drawn layer that a place is, or is inside of; '' when it is on another branch. */
+    const onLayer = (id) => { let c = id; for (let i = 0; c && i < 40; i++) { if ((par.get(c) || '') === cur) return c; c = par.get(c) || ''; } return ''; };
+    const holds = new Map();
+    for (const p of par.values()) if (p) holds.set(p, (holds.get(p) || 0) + 1);
+
     // Who is where, what was visited, where the party is.
     const visitedIds = new Set();
     for (const v of (state && Array.isArray(state.visited) ? state.visited : [])) { if (!v) continue; if (v.id) visitedIds.add(v.id); if (v.packId) visitedIds.add(v.packId); }
     const where = state && state.where && typeof state.where === 'object' ? state.where : {};
-    const people = new Map();
+    const own = new Map();       // a place -> the people last seen at it
     for (const [name, at] of Object.entries(where)) {
         if (player && name === player) continue;
         const key = resolve(keyOf(ids, at));
-        if (!key) continue;
-        if (!people.has(key)) people.set(key, []);
-        people.get(key).push(name);
+        if (!key || !live.has(key)) continue;
+        if (!own.has(key)) own.set(key, []);
+        own.get(key).push(name);
     }
-    const partyAt = resolve(partyKey(pack, state, player));
+    const within = new Map();    // a place on the drawn layer -> the people at it or anywhere inside it
+    for (const [key, list] of own) { const m = onLayer(key); if (!m) continue; if (!within.has(m)) within.set(m, []); within.get(m).push(...list); }
+    const partyId = (() => { const k = resolve(partyKey(pack, state, player)); return k && live.has(k) ? k : ''; })();
+    const partyOn = partyId ? onLayer(partyId) : '';
+    const visitedWithin = new Set();
+    for (const c of live.values()) if (c.ids.some(i => visitedIds.has(i))) { const m = onLayer(c.id); if (m) visitedWithin.add(m); }
 
     const spotOf = (c) => { for (const id of c.ids) { if (bk.spots[id]) return { ...bk.spots[id], by: 'user' }; } for (const id of c.ids) { const s = world[id]; if (s && finite(s.x) && finite(s.y)) return { x: s.x, y: s.y, by: 'world' }; } return null; };
+    const describe = (c) => {
+        const w = weather && weather[c.id] ? weather[c.id] : null;
+        return {
+            id: c.id, label: c.label, kind: c.kind || guessKind(c.label), note: c.note, image: c.image, source: c.source,
+            rooms: c.rooms, names: c.names, holds: holds.get(c.id) || 0,
+            visited: visitedWithin.has(c.id) || c.ids.some(i => visitedIds.has(i)),
+            player: partyOn === c.id, partyInside: partyOn === c.id && partyId !== c.id,
+            people: within.get(c.id) || own.get(c.id) || [],
+            weather: w ? { emoji: clean(w.emoji, 8), text: clean(w.text, 120) } : null,
+        };
+    };
     const markers = [];
     const tray = [];
     for (const c of live.values()) {
+        const at = par.get(c.id) || '';
         const s = spotOf(c);
-        const w = weather && (weather[c.id] || weather[c.region]) ? (weather[c.id] || weather[c.region]) : null;
-        const one = {
-            id: c.id, label: c.label, kind: c.kind || guessKind(c.label), note: c.note, image: c.image, source: c.source,
-            region: c.region, regionLabel: c.regionLabel, rooms: c.rooms, names: c.names,
-            visited: c.ids.some(i => visitedIds.has(i)), player: partyAt === c.id, people: people.get(c.id) || [],
-            weather: w ? { emoji: clean(w.emoji, 8), text: clean(w.text, 120) } : null,
-        };
-        if (s) markers.push({ ...one, x: s.x, y: s.y, by: s.by });
-        else tray.push(one);
+        if (at === cur) { if (s) markers.push({ ...describe(c), x: s.x, y: s.y, by: s.by }); else tray.push({ ...describe(c), here: true }); }
+        else if (cur && !at && !s && c.source !== 'world' && !chain(cur).includes(c.id)) tray.push({ ...describe(c), here: false });    // the story's own, on no map yet: it can be put on this one
     }
-    tray.sort((a, b) => Number(b.player) - Number(a.player) || Number(b.visited) - Number(a.visited) || a.label.localeCompare(b.label));
+    tray.sort((a, b) => Number(b.here) - Number(a.here) || Number(b.player) - Number(a.player) || Number(b.visited) - Number(a.visited) || a.label.localeCompare(b.label));
 
-    // A region of the world: a named blob around its placed places, with its terrain's drawings.
+    // Every live place, whatever map it is on: for the search, Merge, Move and the clean-up pass.
+    const labelOfLayer = (id) => (id && live.has(id) ? live.get(id).label : '');
+    const all = [...live.values()].map(c => ({ id: c.id, label: c.label, kind: c.kind || guessKind(c.label), rooms: c.rooms, names: c.names, people: own.get(c.id) || [], layer: par.get(c.id) || '', layerLabel: labelOfLayer(par.get(c.id) || ''), placed: !!spotOf(c), inside: chain(c.id).slice(0, -1) }));
+
+    // A marker whose name tells a terrain stands on tinted ground with that terrain's drawings (D154).
     const regions = [];
-    for (const r of regionsOf.values()) {
-        const own = markers.filter(m => m.region === r.id);
-        if (!own.length) continue;
-        const cx = round4(own.reduce((n, m) => n + m.x, 0) / own.length);
-        const cy = round4(own.reduce((n, m) => n + m.y, 0) / own.length);
-        const center = { x: cx, y: cy };
-        const radius = round4(Math.max(...own.map(m => dist(m, center))) + LAND_RADIUS * 1.15);
-        const terrain = guessTerrain(r.label);
+    for (const m of markers) {
+        const terrain = guessTerrain(m.label);
+        if (terrain === 'plains') continue;
+        const radius = round4(LAND_RADIUS * 0.84);
         const glyphs = [];
-        const count = Math.min(46, Math.round(radius * radius * 1.6));
-        for (let i = 0; i < count; i++) {
-            const t = hash01(`${r.id}/g${i}/a`) * Math.PI * 2;
-            const rr = radius * 0.86 * Math.sqrt(hash01(`${r.id}/g${i}/r`));
-            const at = { x: cx + rr * Math.cos(t), y: cy + rr * Math.sin(t) };
-            if (own.some(m => dist(m, at) < 0.62) || Math.hypot(at.x - cx, at.y - cy) < 0.5) continue;
-            glyphs.push(...glyphAt(terrain, at.x, at.y, 0.2));
+        for (let i = 0; i < 9; i++) {
+            const t = hash01(`${m.id}/g${i}/a`) * Math.PI * 2;
+            const rr = radius * (0.5 + 0.42 * hash01(`${m.id}/g${i}/r`));
+            glyphs.push(...glyphAt(terrain, m.x + rr * Math.cos(t), m.y + rr * Math.sin(t), 0.17));
         }
-        regions.push({ id: r.id, label: r.label, terrain, x: cx, y: cy, radius, outline: regionOutline(r.id, center, radius), glyphs });
+        regions.push({ id: m.id, label: '', terrain, x: m.x, y: m.y, radius, outline: regionOutline(m.id, m, radius), glyphs });
     }
 
-    // The land: a blob under every marker and every region; drawn as one shore (atlasMap.js).
-    const land = [
-        ...regions.map(r => ({ id: r.id, x: r.x, y: r.y, radius: round4(r.radius * 1.18 + 0.4) })),
-        ...markers.filter(m => !regions.some(r => r.id === m.region)).map(m => ({ id: m.id, x: m.x, y: m.y, radius: LAND_RADIUS })),
-    ].map(b => ({ ...b, outline: regionOutline(`${b.id}/land`, b, b.radius, 28), ripple1: regionOutline(`${b.id}/land`, b, b.radius + 0.22, 28), ripple2: regionOutline(`${b.id}/land`, b, b.radius + 0.5, 28) }));
+    // The land: a blob under every marker; drawn as one shore (atlasMap.js).
+    const land = markers.map(m => ({ id: m.id, x: m.x, y: m.y, radius: LAND_RADIUS }))
+        .map(b => ({ ...b, outline: regionOutline(`${b.id}/land`, b, b.radius, 28), ripple1: regionOutline(`${b.id}/land`, b, b.radius + 0.22, 28), ripple2: regionOutline(`${b.id}/land`, b, b.radius + 0.5, 28) }));
 
     // Paths (drawn, never measured: D141): a tree over the markers.
     const routes = spanningTree(markers).map(([a, b]) => ({ a: markers[a].id, b: markers[b].id, kind: 'road', points: [[markers[a].x, markers[a].y], [markers[b].x, markers[b].y]] }));
@@ -624,30 +641,34 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
     for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
     return {
-        markers, tray, deleted, regions, land, routes,
-        party: partyAt && markers.some(m => m.id === partyAt) ? partyAt : '',
-        partyInTray: partyAt && tray.some(m => m.id === partyAt) ? partyAt : '',
+        layer: cur, layerLabel: labelOfLayer(cur), depth,
+        trail: chain(cur).map(id => ({ id, label: labelOfLayer(id) })),
+        markers, tray, deleted, regions, land, routes, all,
+        party: partyOn && markers.some(m => m.id === partyOn) ? partyOn : '',
+        partyInTray: partyOn && tray.some(m => m.id === partyOn) ? partyOn : '',
+        partyId, partyLayer: partyId ? (par.get(partyId) || '') : '',
         bounds: { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) },
-        measure: measureOf(pack, bk),
-        empty: markers.length === 0 && tray.length === 0,
+        measure: measureOf(pack, bk, cur, { depth, layered: holds.size > 0 }),
+        empty: live.size === 0,
     };
 }
 
 /**
- * Where Place all would put what is in the tray (D145): a world's place
- * at the layout's spot when that is free, anything else on a spiral from
- * the middle, each at the first point far enough from everything
- * already there. The same tray gives the same spots.
+ * Where Place all would put what waits for this layer (D145): on a spiral
+ * from the middle, each at the first point far enough from everything
+ * already there. The same tray gives the same spots. What is on no map
+ * yet (`here` false) is left where it is: Place all fills a map with its
+ * own places.
  * @returns {Map<string, { x: number, y: number }>}
  */
-export function suggestSpots(model, pack) {
-    const laid = layoutAtlas(pack);
+export function suggestSpots(model) {
     const taken = (model && model.markers ? model.markers : []).map(m => ({ x: m.x, y: m.y }));
     const free = (at) => taken.every(t => dist(t, at) >= 1.3);
     const out = new Map();
     let n = 0;
     for (const t of (model && model.tray ? model.tray : [])) {
-        let at = laid.has(t.id) && free(laid.get(t.id)) ? { x: laid.get(t.id).x, y: laid.get(t.id).y } : null;
+        if (t.here === false) continue;
+        let at = null;
         for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral({ x: 0, y: 0 }, n++, 1.7, 0.1); if (free(s)) at = s; }
         if (!at) continue;
         taken.push(at);
@@ -656,10 +677,10 @@ export function suggestSpots(model, pack) {
     return out;
 }
 
-/** The book with everything in the tray placed where `suggestSpots` says. */
-export function placeAll(book, model, pack) {
+/** The book with everything that waits for this layer placed where `suggestSpots` says. */
+export function placeAll(book, model) {
     let b = normalizeBook(book);
-    for (const [id, at] of suggestSpots(model, pack)) b = placeAt(b, id, at);
+    for (const [id, at] of suggestSpots(model)) b = placeAt(b, id, at, model.layer);
     return b;
 }
 
@@ -714,7 +735,7 @@ export function filterMarkers(markers, { query = '', hidden = [] } = {}) {
     return (Array.isArray(markers) ? markers : []).filter(m => {
         if (off.has(m.kind)) return false;
         if (!q) return true;
-        return [m.label, m.note, m.regionLabel, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(q));
+        return [m.label, m.note, m.layerLabel, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(q));
     });
 }
 
@@ -746,16 +767,16 @@ export function withSpot(raw, placeId, spot) {
 
 export const TIDY_MAX = 120;    // places sent in one pass
 
-/** The places a pass looks over: the markers and the tray, numbered from 1 (the reply names them by number). */
+/** The places a pass looks over: every place on every map, numbered from 1 (the reply names them by number). */
 export function tidyList(model) {
-    const all = [...(model && model.markers ? model.markers : []), ...(model && model.tray ? model.tray : [])];
-    return all.slice(0, TIDY_MAX).map((m, i) => ({ n: i + 1, id: m.id, label: m.label, rooms: m.rooms || [], people: m.people || [], placed: Number.isFinite(m.x) }));
+    const all = model && Array.isArray(model.all) ? model.all : [];
+    return all.slice(0, TIDY_MAX).map((m, i) => ({ n: i + 1, id: m.id, label: m.label, rooms: m.rooms || [], people: m.people || [], placed: !!m.placed, layerLabel: m.layerLabel || '' }));
 }
 
 /** The request: the numbered places, and what to send back. */
 export function buildTidyPrompt({ model, world = '' } = {}) {
     const list = tidyList(model);
-    const lines = list.map(p => `${p.n}. ${p.label}${p.rooms.length ? ` (inside it: ${p.rooms.slice(0, 8).join('; ')})` : ''}`).join('\n');
+    const lines = list.map(p => `${p.n}. ${p.label}${p.layerLabel ? ` [in ${p.layerLabel}]` : ''}${p.rooms.length ? ` (inside it: ${p.rooms.slice(0, 8).join('; ')})` : ''}`).join('\n');
     const system = [
         'You tidy the list of places on a story\'s map. The list was gathered automatically from the story, so it holds duplicates: the same place under two wordings, a room or a corner listed apart from its building, a passing description that is not a place at all.',
         'Reply with one JSON object and nothing else: {"merge":[{"from":<number>,"into":<number>,"why":"<a few words>"}],"delete":[{"id":<number>,"why":"<a few words>"}]}',

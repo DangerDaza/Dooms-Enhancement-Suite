@@ -120,6 +120,22 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-empty { position: absolute; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; background: var(--atlas-bg); color: var(--atlas-muted); }
 .dooms-atlas-empty[hidden] { display: none; }
 .dooms-atlas-empty p { max-width: 460px; margin: 0; font-size: 1em; line-height: 1.5; }
+/* The trail: where this map is, and the way back out (D156) */
+.dooms-atlas-trail { position: absolute; left: 12px; top: 12px; z-index: 820; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 330px); padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--atlas-panel); border: 1px solid var(--atlas-line); color: var(--atlas-text); font-size: 0.86em; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); overflow: hidden; }
+.dooms-atlas-trail[hidden] { display: none; }
+.dooms-atlas-trail-up { appearance: none; cursor: pointer; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--atlas-accent); color: var(--atlas-on-accent); display: inline-flex; align-items: center; justify-content: center; font-size: 0.85em; }
+.dooms-atlas-trail-up i { transform: scaleX(-1); }
+.dooms-atlas-trail-step { appearance: none; font: inherit; cursor: pointer; background: none; border: 0; padding: 0; color: var(--atlas-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dooms-atlas-trail-step:hover, .dooms-atlas-trail-step:focus-visible { color: var(--atlas-text); text-decoration: underline; }
+.dooms-atlas-trail-sep { font-size: 0.6em; color: var(--atlas-muted); flex: 0 0 auto; }
+.dooms-atlas-trail-here { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* A place that holds a map of its own: a door and how many are inside */
+.dooms-atlas-holds { position: absolute; left: 50%; top: 100%; transform: translate(-50%, -55%); display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; height: 15px; border-radius: 999px; background: var(--atlas-ink); color: var(--atlas-land); font-size: 9px; font-weight: 700; pointer-events: none; white-space: nowrap; }
+.dooms-atlas-holds i { font-size: 8px; }
+.dooms-atlas-marker.is-layer .dooms-atlas-pin { border-width: 3px; }
+.dooms-atlas-marker.is-layer .dooms-atlas-label { margin-top: 10px; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-player) .dooms-atlas-holds { display: none; }
+.dooms-atlas-enter { align-self: stretch; justify-content: center; }
 .dooms-atlas-start { position: absolute; inset: 0; z-index: 815; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
 .dooms-atlas-start[hidden] { display: none; }
 .dooms-atlas-start-card { pointer-events: auto; max-width: 460px; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 10px; }
@@ -275,7 +291,8 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
     .dooms-atlas-side { position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 8px 0 30px rgba(0, 0, 0, 0.5); }
     .dooms-atlas-card { width: 260px; }
     .dooms-atlas-compass { width: 70px; height: 70px; right: 10px; bottom: 10px; }
-    .dooms-atlas-hint { max-width: 86%; top: 58px; }
+    .dooms-atlas-hint { max-width: 86%; top: 104px; }
+    .dooms-atlas-trail { top: 58px; max-width: calc(100% - 24px); }
 }
 @media (prefers-reduced-motion: reduce) {
     .dooms-atlas-marker:hover .dooms-atlas-pin { transform: none; }

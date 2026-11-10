@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml } from '/src/systems/ui/atlasViews.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
 import * as A from '/src/utils/atlas.js';
@@ -76,21 +76,24 @@ document.body.insertAdjacentHTML('beforeend', atlasShellHtml());
 const root = document.getElementById(ATLAS_ID);
 window.A = A;
 window.__events = [];
-window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view', picture: null };
+window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view', picture: null, layer: '' };
 window.__book = null;
 let pack = null, state = null;
-const model = () => A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, weather: pack.id === 'realm' ? { greywood: { emoji: '🌧️', text: 'Steady rain' } } : {} });
-const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: [...mod.markers, ...mod.tray].filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: true, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
+const model = () => A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: window.__ui.layer, weather: pack.id === 'realm' ? { greywood: { emoji: '🌧️', text: 'Steady rain' } } : {} });
+const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: mod.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: true, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
     const start = root.querySelector('.dooms-atlas-start');
-    start.hidden = m.markers.length > 0; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting: m.tray.length, picture: !!ui.picture });
-    if (window.__board) window.__board.update({ model: m, picture: ui.picture, hidden: ui.hidden, query: ui.query, moving: ui.moving });
+    const waiting = m.tray.filter(t => t.here !== false).length;
+    start.hidden = m.markers.length > 0; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting, loose: m.tray.length - waiting, picture: !!ui.picture, layerLabel: m.layerLabel });
+    const trail = root.querySelector('.dooms-atlas-trail');
+    trail.hidden = !m.layer; trail.innerHTML = atlasTrailHtml({ world: pack.name, trail: m.trail });
+    if (window.__board) window.__board.update({ model: m, picture: ui.layer ? null : ui.picture, hidden: ui.hidden, query: ui.query, moving: ui.moving });
 }
 window.__draw = draw;
 window.__open = async ({ look = '', world = 'realm', book = null, picture = null } = {}) => {
@@ -107,7 +110,7 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
     }
     window.__pack = pack;
     window.__book = book;
-    window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view', picture };
+    window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view', picture, layer: '' };
     if (window.__board) { window.__board.destroy(); window.__board = null; }
     root.classList.add('is-open');
     root.style.display = 'flex';    // the controller's own way: the shell is hidden inline until it opens
@@ -116,8 +119,9 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
         model: window.__model, picture, hidden: [], query: '', moving: false, card,
         on: {
             open: (id) => window.__events.push(['open', id]), close: () => { window.__events.push(['close']); window.__ui.cardMode = 'view'; },
-            drop: (id, at) => { window.__events.push(['drop', id, at]); window.__book = A.placeAt(window.__book, id, at); draw(); },
-            tap: (at) => { window.__events.push(['tap', at]); const ui = window.__ui; if (ui.armed === '+') { ui.armed = ''; const made = A.addPin(window.__book, { label: 'New place', x: at.x, y: at.y }); window.__book = made.book; draw(); window.__board.open(made.id); ui.cardMode = 'edit'; window.__board.redrawCard(); } else if (ui.armed) { window.__book = A.placeAt(window.__book, ui.armed, at); ui.armed = ''; draw(); } },
+            drop: (id, at) => { window.__events.push(['drop', id, at]); window.__book = A.placeAt(window.__book, id, at, window.__ui.layer); draw(); },
+            enter: (id) => { window.__events.push(['enter', id]); window.__layer(id); },
+            tap: (at) => { window.__events.push(['tap', at]); const ui = window.__ui; if (ui.armed === '+') { ui.armed = ''; const made = A.addPin(window.__book, { label: 'New place', x: at.x, y: at.y, layer: ui.layer }); window.__book = made.book; draw(); window.__board.open(made.id); ui.cardMode = 'edit'; window.__board.redrawCard(); } else if (ui.armed) { window.__book = A.placeAt(window.__book, ui.armed, at, ui.layer); ui.armed = ''; draw(); } },
             move: (id, at) => { window.__events.push(['move', id, at]); window.__book = A.placeAt(window.__book, id, at); draw(); },
             scale: (s) => { window.__scale = s; root.querySelector('.dooms-atlas-scale-bar').style.width = s.px + 'px'; root.querySelector('.dooms-atlas-scale-text').textContent = s.length + ' miles'; },
             pictureError: () => window.__events.push(['picture-error']),
@@ -125,9 +129,10 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
     });
     return true;
 };
+window.__layer = (id) => { window.__board.closeCard(); window.__ui.layer = id; window.__ui.cardMode = 'view'; draw(); window.__board.fit(); return true; };
 window.__set = (next) => { Object.assign(window.__ui, next); draw(); return true; };
 window.__edit = (fn) => { window.__book = fn(window.__book, window.__model, window.__pack); draw(); return true; };
-window.__results = (q) => atlasResultsHtml({ markers: window.__model.markers, query: q, hidden: window.__ui.hidden });
+window.__results = (q) => atlasResultsHtml({ markers: window.__model.markers, query: q, hidden: window.__ui.hidden, all: window.__model.all, layer: window.__model.layer });
 // A tray row's own drag: its id rides the drag (the controller's listener, here).
 document.addEventListener('dragstart', (ev) => { const row = ev.target.closest ? ev.target.closest('.dooms-atlas-tray-row[data-id]') : null; if (row && ev.dataTransfer) ev.dataTransfer.setData('text/plain', row.getAttribute('data-id')); });
 window.__ready = true;
@@ -182,6 +187,8 @@ const layout = () => page.evaluate(() => {
         hint: (() => { const h = document.querySelector('.dooms-atlas-hint'); return h && !h.hidden ? h.textContent : ''; })(),
         card: r(document.querySelector('.dooms-atlas-card')), cardText: ((document.querySelector('.dooms-atlas-card') || {}).textContent || '').replace(/\s+/g, ' '),
         cardInputs: q('.dooms-atlas-card .dooms-atlas-input'),
+        trail: (() => { const t = document.querySelector('.dooms-atlas-trail'); return t && !t.hidden ? t.textContent.replace(/\s+/g, ' ').trim() : ''; })(),
+        far: [...document.querySelectorAll('.dooms-atlas-results [data-layer]')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         paper: shown(document.querySelector('.dooms-atlas-paper')), compass: shown(document.querySelector('.dooms-atlas-compass')),
         scale: window.__scale || null,
         overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -235,7 +242,7 @@ console.log('\n§2 placing: a drag, a tap, Place all');
     const anchor = l.markers['The Rusty Anchor'];
     check('a place tapped in the tray lands where the map is tapped next', !!anchor && near(anchor.pin.cx, 1100, 3) && near(anchor.pin.cy, 300, 3), JSON.stringify(anchor && anchor.pin));
     check('the people of its rooms stand at it, and a path joins the two places', anchor.faces === 2 && l.routes === 1);
-    await page.evaluate(() => window.__edit((b, m, p) => window.A.placeAll(b, m, p)));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
     await page.evaluate(() => window.__board.fit());
     await settle();
     l = await layout();
@@ -274,7 +281,7 @@ console.log('\n§3 made by hand, moved, merged, deleted, brought back');
     await page.evaluate(() => window.__board.show(window.__model.markers.find(m => m.label === 'Bedroom').id));
     await page.waitForTimeout(600);
     l = await layout();
-    check('the card lists the rooms folded into the place and offers Edit, Merge, Take off, Delete', /Inside.*bedroom on the wall.*by the window/.test(l.cardText) && /Edit.*Merge.*Take off.*Delete/.test(l.cardText), l.cardText.slice(0, 260));
+    check('the card lists the rooms folded into the place and offers Enter, Edit, Merge, Move, Take off, Delete', /Inside.*bedroom on the wall.*by the window/.test(l.cardText) && /Enter.*Edit.*Merge.*Move.*Take off.*Delete/.test(l.cardText), l.cardText.slice(0, 260));
     await shot('4-card');
     await page.evaluate(() => { window.__ui.cardMode = 'edit'; window.__board.redrawCard(); });
     await page.locator('#dooms-atlas .dooms-atlas-marker', { hasText: 'The Rusty Anchor' }).locator('.dooms-atlas-pin').click();
@@ -303,60 +310,103 @@ console.log('\n§3 made by hand, moved, merged, deleted, brought back');
     check('taken off the map: it waits in the tray', l.tray.includes('The Old Well') && !l.markers['The Old Well']);
 }
 
-console.log('\n§4 a built world: regions, the switches, the search, the card');
+console.log('\n§4 layers: a place entered, its own map, the way back out (D156)');
 {
     await page.evaluate(() => window.__open({ world: 'realm' }));
-    await page.evaluate(() => window.__edit((b, m, p) => window.A.placeAll(b, m, p)));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
     await page.evaluate(() => window.__board.fit());
     await settle();
     let l = await layout();
-    check('seventeen places on the map, the rooms of Saltport folded into it', l.count === 17 && !l.markers['Fish Market'] && l.tray.length === 0, String(l.count));
-    check('a region is named across its land, tinted by its terrain, with its drawings', l.regions === 5 && l.glyphs === 5 && l.regionNames.length === 5 && l.regionNames.includes('Greywood Forest'));
-    check('the kinds with their counts', l.kinds.length >= 6 && l.kinds.reduce((n, k) => n + k.count, 0) === 17 && l.kinds.every(k => !k.off));
-    check('the scale bar reads in the world\'s unit', !!l.scale && l.scale.px > 20 && l.scale.px <= 120 && l.scale.length > 0 && l.scale.unit === 'mi', JSON.stringify(l.scale));
-    await shot('5-realm');
-    await page.evaluate(() => window.__set({ hidden: ['ruin'] }));
+    check('the top map holds the five regions, each a marker that holds a map of its own', l.count === 5 && l.tray.length === 0 && Object.values(l.markers).every(m => /is-layer/.test(m.cls)) && l.trail === '', `${l.count} ${JSON.stringify(Object.keys(l.markers))}`);
+    check('the party inside a region marks it', /is-player/.test(l.markers['The Salt Coast'].cls));
+    check('a marker whose name tells a terrain stands on tinted ground with its drawings', l.regions >= 3 && l.glyphs >= 3);
+    check('the top map of a world whose places hold maps reads as a region', (await page.evaluate(() => window.__model.measure.scale)) === 'region');
+    await shot('5-realm-top');
+    await page.evaluate(() => window.__board.show('northmarch'));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('the card offers Enter, with how many places are inside', /Enter \(4 places inside\)/.test(l.cardText) && /Regions|Other places|Wilds/.test(l.cardText) === true || /4 places inside/.test(l.cardText));
+    await page.evaluate(() => window.__board.closeCard());
+    await page.mouse.move(700, 5);
+    const at = await spotOf('northmarch');
+    await page.mouse.dblclick(at.sx, at.sy);
     await settle();
     l = await layout();
-    check('a kind switched off takes its markers away; its switch is struck through', !l.markers['The Old Shrine'] && !l.markers["Smugglers' Cove"] && !!l.markers['Saltport'] && l.kinds.find(k => k.id === 'ruin').off && !l.kinds.find(k => k.id === 'settlement').off);
+    check('a marker double-clicked is entered: its own map, empty until its places are put down', (await page.evaluate(() => window.__events.some(e => e[0] === 'enter' && e[1] === 'northmarch'))) && l.count === 0 && l.tray.length === 4 && l.tray.includes('Frosthold Keep'));
+    check('the trail says where this map is: the world, then the place', /The Realm of Vael.*The Northmarch/.test(l.trail), l.trail);
+    const start = await page.evaluate(() => (document.querySelector('.dooms-atlas-start-card') || {}).textContent || '');
+    check('an empty inner map says it is inside the place', /Inside The Northmarch/.test(start) && /Place all 4 for me/.test(start.replace(/\s+/g, ' ')));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    l = await layout();
+    check('its places stand on its own map, at a town\'s scale', l.count === 4 && !!l.markers['Frosthold Keep'] && !l.markers['The Northmarch'] && (await page.evaluate(() => window.__model.measure.scale)) === 'town');
+    check('the people stand at their places: three faces and a count for more', l.markers['The Iron Inn'].faces === 4 && l.markers['Frosthold Keep'].faces === 1);
+    await shot('6-inside-northmarch');
+    await page.evaluate(() => window.__set({ hidden: ['tavern'] }));
+    await settle();
+    l = await layout();
+    check('a kind switched off takes its markers away; its switch is struck through', !l.markers['The Iron Inn'] && !!l.markers['Frosthold Keep'] && l.kinds.find(k => k.id === 'tavern').off && !l.kinds.find(k => k.id === 'stronghold').off);
     await page.evaluate(() => window.__set({ hidden: [], query: 'inn' }));
     await settle();
     l = await layout();
-    check('a search dims what does not match, and the list holds the matches', l.markers['The Iron Inn'].opacity === 1 && l.markers['Elderglade'].opacity < 0.5 && l.rows === 1);
-    check('a search with no match says so', /Nothing on the map matches/.test(await page.evaluate(() => window.__results('zzzz'))));
+    check('a search dims what does not match, and the list holds the matches', l.markers['The Iron Inn'].opacity === 1 && l.markers['Frosthold Keep'].opacity < 0.5 && l.rows === 1);
+    await page.evaluate(() => window.__set({ query: 'salt' }));
+    l = await layout();
+    check('a search reaches the other maps: The Salt Coast is on the top map', l.far.includes('The Salt Coast') && l.rows === 1, JSON.stringify(l.far));
+    check('a search with no match says so', /Nothing on any map matches/.test(await page.evaluate(() => window.__results('zzzz'))));
     await page.evaluate(() => window.__set({ query: '' }));
     await page.evaluate(() => window.__board.show('frosthold'));
     await page.waitForTimeout(600);
     l = await layout();
-    check('the card names the place, its kind, its region, its note and who is there', /Frosthold Keep/.test(l.cardText) && /Strongholds · The Northmarch/.test(l.cardText) && /last garrison/.test(l.cardText) && /Captain Rusk/.test(l.cardText));
-    check('the card says how far the party is and offers Travel here', /\d+(\.\d)? miles, about .+ on foot/.test(l.cardText) && /Travel here/.test(l.cardText), l.cardText.slice(0, 200));
+    check('the card names the place, its kind, its note and who is there', /Frosthold Keep/.test(l.cardText) && /Strongholds/.test(l.cardText) && /last garrison/.test(l.cardText) && /Captain Rusk/.test(l.cardText));
+    check('the party is on another map: no distance is told, Travel here is offered', !/on foot/.test(l.cardText) && /Travel here/.test(l.cardText));
     check('the card is inside the screen', l.card.left >= 0 && l.card.right <= VIEW.width && l.card.top >= 0 && l.card.bottom <= VIEW.height, JSON.stringify(l.card));
-    await shot('6-realm-card');
+    await page.evaluate(() => { window.__ui.cardMode = 'move'; window.__board.redrawCard(); });
+    l = await layout();
+    check('Move offers the top map and the other places', /Move into/.test(l.cardText) && /The top map/.test(l.cardText) && /Greywood Forest/.test(l.cardText) && l.cardInputs === 1);
+    await page.evaluate(() => { window.__board.closeCard(); window.__edit((b) => window.A.moveInto(b, 'frosthold', 'greywood')); });
+    l = await layout();
+    check('moved into another place: it leaves this map', l.count === 3 && !l.markers['Frosthold Keep'] && !l.tray.includes('Frosthold Keep'));
+    await page.locator('.dooms-atlas-trail-up').click({ force: true }).catch(() => {});
+    await page.evaluate(() => window.__layer(''));
+    await settle();
+    l = await layout();
+    check('back out on the top map: the five regions where they were, no trail', l.count === 5 && l.trail === '' && !!l.markers['The Northmarch']);
+    await page.evaluate(() => window.__layer('saltcoast'));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
     await page.evaluate(() => window.__board.show('saltport'));
     await page.waitForTimeout(600);
     l = await layout();
-    check('the party\'s own place says You are here, with no Travel, its rooms and what is said of it', /You are here/.test(l.cardText) && !/Travel here/.test(l.cardText) && /harbour chain/.test(l.cardText) && /Inside.*Fish Market/.test(l.cardText));
+    check('the party\'s own place says You are here, with no Travel, and what is said of it', /You are here/.test(l.cardText) && !/Travel here/.test(l.cardText) && /harbour chain/.test(l.cardText) && /3 places inside/.test(l.cardText));
+    await page.evaluate(() => window.__board.show('lighthouse'));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('on the party\'s own map a card says how far the party is', /(miles|mile), about .+ on foot|a few steps away/.test(l.cardText), l.cardText.slice(0, 200));
     await page.evaluate(() => window.__board.closeCard());
 }
 
 console.log('\n§5 the zoom');
 {
+    await page.evaluate(() => window.__layer('northmarch'));
     await page.mouse.move(700, 5);    // off the markers: a pin under the pointer is drawn larger
-    await page.evaluate(() => { const b = window.__board; const m = window.__model.markers.find(x => x.id === 'frosthold'); b.map.setView([-m.y, m.x], 6, { animate: false }); });
+    await page.evaluate(() => { const b = window.__board; const m = window.__model.markers.find(x => x.id === 'iron-inn'); b.map.setView([-m.y, m.x], 6, { animate: false }); });
     await settle();
     const before = await layout();
     await page.evaluate(() => { const b = window.__board; b.map.setView(b.map.getCenter(), b.map.getZoom() + 2, { animate: false }); });
     await settle();
     const after = await layout();
-    const a = before.markers['Frosthold Keep'].pin;
-    const z = after.markers['Frosthold Keep'].pin;
-    check('a marker keeps its size after a zoom', near(a.width, z.width, 0.5) && near(a.width, 30, 1) && before.markers['Frosthold Keep'].label === true, `${a.width} → ${z.width}`);
-    check('the land is still vectors after a zoom (nothing to pixelate)', after.shore === 5 && after.images === 0);
+    const a = before.markers['The Iron Inn'].pin;
+    const z = after.markers['The Iron Inn'].pin;
+    check('a marker keeps its size after a zoom', near(a.width, z.width, 0.5) && near(a.width, 30, 1) && before.markers['The Iron Inn'].label === true, `${a.width} → ${z.width}`);
+    check('the land is still vectors after a zoom (nothing to pixelate)', after.shore === 3 && after.images === 0);
     check('the scale bar follows the zoom', near(after.scale.perPx * 4, before.scale.perPx, before.scale.perPx * 0.01));
     await page.evaluate(() => { const b = window.__board; b.map.setView(b.map.getCenter(), 3.5, { animate: false }); });
     await settle();
     const far = await layout();
-    check('far out the places are dots without names; the party\'s marker stays whole', far.zoom === 'far' && near(far.markers['Frosthold Keep'].pin.width, 12, 1) && far.markers['Frosthold Keep'].label === false && near(far.markers['Saltport'].pin.width, 30, 1) && far.markers['Saltport'].label === true);
+    check('as far out as a small map goes, the places are still pins (dots are for maps too wide for them)', far.zoom !== 'far' && near(far.markers['The Iron Inn'].pin.width, 30, 1), far.zoom);
     const view = await page.evaluate(() => { const v = window.__board.view(); return { lat: v.center.lat, lng: v.center.lng, zoom: v.zoom }; });
     await page.evaluate(() => window.__draw());
     const kept = await page.evaluate(() => { const v = window.__board.view(); return { lat: v.center.lat, lng: v.center.lng, zoom: v.zoom }; });
@@ -367,19 +417,23 @@ console.log('\n§6 a world with a picture of its own (D154)');
 {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#3c5a4a"/><circle cx="600" cy="400" r="260" fill="#8a7a52"/></svg>';
     const picture = { image: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`, width: 1200, height: 800 };
-    await page.evaluate((pic) => window.__open({ world: 'realm', picture: pic, book: window.A.placeAt(window.A.placeAt(null, 'frosthold', { x: -3, y: -2 }), 'saltport', { x: 4, y: 3 }) }), picture);
+    await page.evaluate((pic) => window.__open({ world: 'realm', picture: pic, book: window.A.placeAt(window.A.placeAt(null, 'northmarch', { x: -3, y: -2 }), 'saltcoast', { x: 4, y: 3 }) }), picture);
     await settle();
     const l = await layout();
     const img = await page.evaluate(() => { const i = document.querySelector('#dooms-atlas img.dooms-atlas-picture'); if (!i) return null; const b = i.getBoundingClientRect(); return { w: b.width, h: b.height }; });
     check('the picture lies under the markers, whole, at its own shape', !!img && near(img.w / img.h, 1.5, 0.01) && img.h <= VIEW.height + 1, JSON.stringify(img));
     check('with a picture the drawn land is left out; the markers and their path stay', l.shore === 0 && l.regions === 0 && l.count === 2 && l.routes === 1);
+    await page.evaluate(() => window.__layer('northmarch'));
+    await settle();
+    check('a place\'s own map is drawn, not the world\'s picture', await page.evaluate(() => !document.querySelector('#dooms-atlas img.dooms-atlas-picture')));
+    await page.evaluate(() => window.__layer(''));
     await shot('7-picture');
 }
 
 console.log('\n§7 the sidebar folds; the looks; a phone');
 {
     await page.evaluate(() => window.__open({ world: 'realm' }));
-    await page.evaluate(() => window.__edit((b, m, p) => window.A.placeAll(b, m, p)));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
     await page.evaluate(() => { document.getElementById('dooms-atlas').classList.add('is-folded'); window.__board.size(); });
     await settle();
     let l = await layout();
@@ -388,12 +442,12 @@ console.log('\n§7 the sidebar folds; the looks; a phone');
     const sides = {};
     for (const look of ['', 'arcade', 'console', 'grimoire', 'inked', 'lumen']) {
         await page.evaluate((k) => window.__open({ look: k, world: 'realm' }), look);
-        await page.evaluate(() => window.__edit((b, m, p) => window.A.placeAll(b, m, p)));
+        await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
         await page.evaluate(() => window.__board.fit());
         await settle();
         l = await layout();
         sides[look || 'default'] = await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-side')).backgroundColor);
-        check(`the look "${look || 'default'}": the window, the markers and the land`, near(l.atlas.width, VIEW.width, 1) && l.count === 17 && l.shore === 5 && !l.overflowX && !l.sideOverflow);
+        check(`the look "${look || 'default'}": the window, the markers and the land`, near(l.atlas.width, VIEW.width, 1) && l.count === 5 && l.shore === 5 && !l.overflowX && !l.sideOverflow);
         await shot(`8-look-${look || 'default'}`);
     }
     check('the looks colour the sidebar their own way', new Set(Object.values(sides)).size >= 3, JSON.stringify(sides));

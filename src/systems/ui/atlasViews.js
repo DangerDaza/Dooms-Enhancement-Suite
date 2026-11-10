@@ -48,6 +48,7 @@ export function atlasShellHtml() {
             ${COMPASS}
             <div class="dooms-atlas-empty" hidden></div>
             <div class="dooms-atlas-start" hidden></div>
+            <nav class="dooms-atlas-trail" aria-label="Where this map is" hidden></nav>
             <p class="dooms-atlas-hint" role="status" hidden></p>
             <div class="dooms-atlas-tools">
                 ${tool('fold', 'fa-bars', 'Hide or show the sidebar')}
@@ -64,6 +65,24 @@ export function atlasShellHtml() {
 }
 
 /**
+ * The trail across the top of a map inside a place (D156): the world,
+ * then each place down to the one whose map this is; every step but the
+ * last goes back out to that map.
+ * @param {object} o
+ * @param {string} o.world   the world's name
+ * @param {Array<{id:string,label:string}>} o.trail  from the top map down to this layer
+ */
+export function atlasTrailHtml({ world = 'The world', trail = [] } = {}) {
+    if (!trail.length) return '';
+    const steps = [{ id: '', label: world || 'The world' }, ...trail];
+    const up = steps[steps.length - 2];
+    return `<button type="button" class="dooms-atlas-trail-up" data-act="layer" data-id="${attr(up.id)}" title="Back out to ${attr(up.label)}" aria-label="Back out to ${attr(up.label)}"><i class="fa-solid fa-arrow-turn-up" aria-hidden="true"></i></button>`
+        + steps.map((st, i) => (i === steps.length - 1
+            ? `<span class="dooms-atlas-trail-here" aria-current="page">${e(st.label)}</span>`
+            : `<button type="button" class="dooms-atlas-trail-step" data-act="layer" data-id="${attr(st.id)}" title="The map of ${attr(st.label)}">${e(st.label)}</button><i class="fa-solid fa-chevron-right dooms-atlas-trail-sep" aria-hidden="true"></i>`)).join('');
+}
+
+/**
  * The panel in the middle of a map with nothing on it (D151): how the map
  * is made. The drawn map is not generated up front: the land draws itself
  * around the places as they are put down.
@@ -71,10 +90,12 @@ export function atlasShellHtml() {
  * @param {number} o.waiting   the places in the tray
  * @param {boolean} o.picture  the world's own picture is showing
  */
-export function atlasStartHtml({ waiting = 0, picture = false } = {}) {
+export function atlasStartHtml({ waiting = 0, loose = 0, picture = false, layerLabel = '' } = {}) {
     const lead = picture
         ? 'This world\'s picture is the map. Put the places on it.'
-        : 'The map draws itself around your places: land appears wherever you put one, and the paths join them.';
+        : layerLabel
+            ? `This is the map inside ${e(layerLabel)}. It draws itself around the places you put here.`
+            : 'The map draws itself around your places: land appears wherever you put one, and the paths join them.';
     const how = waiting
         ? `<p>${waiting === 1 ? 'One place is' : `${waiting} places are`} waiting in the list on the left.</p>
            <div class="dooms-atlas-start-actions">
@@ -82,12 +103,12 @@ export function atlasStartHtml({ waiting = 0, picture = false } = {}) {
                <button type="button" class="dooms-atlas-btn" data-act="start-dismiss"><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> <span>I'll place them myself</span></button>
            </div>
            <p class="dooms-atlas-start-note">Placed for you, they land at free spots and you drag them to where they belong (the arrows button, top right). Placing them yourself: drag a place from the list onto the map.</p>`
-        : `<p>This world has no places yet. They appear in the list on the left as the story names them.</p>
+        : `<p>${layerLabel ? (loose ? `Nothing is inside ${e(layerLabel)} yet. Drag a place from the list on the left onto this map to put it in here, or add one by hand.` : `Nothing is inside ${e(layerLabel)} yet.`) : 'This world has no places yet. They appear in the list on the left as the story names them.'}</p>
            <div class="dooms-atlas-start-actions">
                <button type="button" class="dooms-atlas-btn is-primary" data-act="add"><i class="fa-solid fa-map-pin" aria-hidden="true"></i> <span>Add a place by hand</span></button>
                <button type="button" class="dooms-atlas-btn" data-act="start-dismiss">Not now</button>
            </div>`;
-    return `<div class="dooms-atlas-start-card"><h3>Start your map</h3><p>${lead}</p>${how}</div>`;
+    return `<div class="dooms-atlas-start-card"><h3>${layerLabel ? `Inside ${e(layerLabel)}` : 'Start your map'}</h3><p>${lead}</p>${how}</div>`;
 }
 
 /** A kind's switch: the icon, the name, the count; struck through while off. */
@@ -108,25 +129,28 @@ const peopleChip = (m) => (m.people && m.people.length ? `<span class="dooms-atl
  * for that tap); its bin deletes it for good. Place all puts every one
  * where the layout proposes.
  */
-export function atlasTrayHtml({ tray = [], armed = '' } = {}) {
+export function atlasTrayHtml({ tray = [], armed = '', layerLabel = '' } = {}) {
     if (!tray.length) return '';
     const row = (m) => {
         const k = kindOf(m.kind);
         const rooms = m.rooms && m.rooms.length ? ` title="${attr(`${m.label}: ${m.rooms.join(', ')}`)}"` : ` title="${attr(m.label)}"`;
         return `<li class="dooms-atlas-tray-row kind-${attr(m.kind)}${armed === m.id ? ' is-armed' : ''}" draggable="true" data-id="${attr(m.id)}">
             <button type="button" class="dooms-atlas-row" data-act="arm" data-id="${attr(m.id)}"${rooms}>
-                <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name">${e(m.label)}</span>${m.player ? hereChip : ''}${peopleChip(m)}
+                <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name">${e(m.label)}</span>${m.player ? hereChip : ''}${m.holds ? `<span class="dooms-atlas-row-people" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside"><i class="fa-solid fa-door-open" aria-hidden="true"></i> ${m.holds}</span>` : ''}${peopleChip(m)}
             </button>
             <button type="button" class="dooms-atlas-icon-btn" data-act="delete" data-id="${attr(m.id)}" title="Delete ${attr(m.label)}: it will not come back when the story names it again" aria-label="Delete ${attr(m.label)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
         </li>`;
     };
+    const here = tray.filter(m => m.here !== false);
+    const loose = tray.filter(m => m.here === false);
     return `<section class="dooms-atlas-tray" aria-label="Not on the map yet">
-        <div class="dooms-atlas-tray-head">
-            <span class="dooms-atlas-group-head">Not on the map yet · ${tray.length}</span>
+        ${here.length ? `<div class="dooms-atlas-tray-head">
+            <span class="dooms-atlas-group-head">${layerLabel ? `In ${e(layerLabel)}, not placed` : 'Not on the map yet'} · ${here.length}</span>
             <button type="button" class="dooms-atlas-link" data-act="place-all" title="Put every one of these on the map at a free spot; you can move them after">Place all</button>
-        </div>
+        </div>` : ''}
         <p class="dooms-atlas-tray-help">Drag a place onto the map, or tap it and then tap the map.</p>
-        <ul>${tray.map(row).join('')}</ul>
+        ${here.length ? `<ul>${here.map(row).join('')}</ul>` : ''}
+        ${loose.length ? `<div class="dooms-atlas-tray-head"><span class="dooms-atlas-group-head">On no map yet · ${loose.length}</span></div><p class="dooms-atlas-tray-help">Put one on this map and it belongs ${layerLabel ? `inside ${e(layerLabel)}` : 'here'}.</p><ul>${loose.map(row).join('')}</ul>` : ''}
     </section>`;
 }
 
@@ -134,22 +158,18 @@ export function atlasTrayHtml({ tray = [], armed = '' } = {}) {
  * The list under the kinds: the markers the search and the switches
  * leave, under their regions, each a way to its spot on the map.
  */
-export function atlasResultsHtml({ markers = [], query = '', hidden = [] } = {}) {
+export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = [], layer = '' } = {}) {
     const shown = filterMarkers(markers, { query, hidden });
-    if (!shown.length) return `<p class="dooms-atlas-none">${query ? 'Nothing on the map matches.' : (markers.length ? 'Every kind is switched off.' : 'Nothing is on the map yet.')}</p>`;
-    const groups = new Map();
-    for (const m of shown) {
-        const key = m.regionLabel || '';
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(m);
-    }
-    const row = (m) => {
+    // A search reaches the other maps too (D156): a match there goes to its map.
+    const far = query ? filterMarkers(all.filter(m => m.placed && m.layer !== layer), { query }) : [];
+    if (!shown.length && !far.length) return `<p class="dooms-atlas-none">${query ? 'Nothing on any map matches.' : (markers.length ? 'Every kind is switched off.' : 'Nothing is on this map yet.')}</p>`;
+    const row = (m, elsewhere) => {
         const k = kindOf(m.kind);
-        return `<li><button type="button" class="dooms-atlas-row kind-${attr(m.kind)}${m.visited ? ' is-visited' : ''}" data-act="goto" data-id="${attr(m.id)}" title="Show ${attr(m.label)} on the map">
-            <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name">${e(m.label)}</span>${m.player ? hereChip : ''}${peopleChip(m)}
+        return `<li><button type="button" class="dooms-atlas-row kind-${attr(m.kind)}${m.visited || elsewhere ? ' is-visited' : ''}" data-act="goto" data-id="${attr(m.id)}"${elsewhere ? ` data-layer="${attr(m.layer)}"` : ''} title="Show ${attr(m.label)} on ${elsewhere ? `the map of ${attr(m.layerLabel || 'the world')}` : 'the map'}">
+            <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name">${e(m.label)}</span>${m.player ? hereChip : ''}${m.holds ? `<span class="dooms-atlas-row-people" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside"><i class="fa-solid fa-door-open" aria-hidden="true"></i> ${m.holds}</span>` : ''}${elsewhere ? `<span class="dooms-atlas-row-people">${e(m.layerLabel || 'top map')}</span>` : peopleChip(m)}
         </button></li>`;
     };
-    return [...groups.entries()].map(([label, list]) => `<section class="dooms-atlas-group">${label ? `<span class="dooms-atlas-group-head">${e(label)}</span>` : (groups.size > 1 ? '<span class="dooms-atlas-group-head">Elsewhere</span>' : '')}<ul>${list.map(row).join('')}</ul></section>`).join('');
+    return `${shown.length ? `<section class="dooms-atlas-group"><ul>${shown.map(m => row(m, false)).join('')}</ul></section>` : ''}${far.length ? `<section class="dooms-atlas-group"><span class="dooms-atlas-group-head">On other maps</span><ul>${far.map(m => row(m, true)).join('')}</ul></section>` : ''}`;
 }
 
 /**
@@ -181,16 +201,16 @@ function deletedHtml(deleted) {
 }
 
 /** The Places tab: the tray, the search, Show all and Hide all, the visited count, the kinds, the list, the scale, what was deleted. */
-export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null } = {}) {
+export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null, all = [], layer = '', layerLabel = '' } = {}) {
     const counts = kindCounts(markers);
     const off = new Set(hidden);
     const visited = markers.filter(m => m.visited).length;
     const scales = Object.entries(ATLAS_SCALES).map(([id, s]) => `<option value="${id}"${id === scale ? ' selected' : ''}>${e(s.label)}</option>`).join('');
-    return `${atlasTrayHtml({ tray, armed })}
-        ${atlasTidyHtml(tidy, { count: markers.length + tray.length })}
+    return `${atlasTrayHtml({ tray, armed, layerLabel })}
+        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length })}
         <div class="dooms-atlas-search">
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-            <input type="search" class="dooms-atlas-query" placeholder="Search places and people" aria-label="Search places and people" value="${attr(query)}" autocomplete="off" />
+            <input type="search" class="dooms-atlas-query" placeholder="Search every map" aria-label="Search places and people on every map" value="${attr(query)}" autocomplete="off" />
         </div>
         <div class="dooms-atlas-switches">
             <button type="button" class="dooms-atlas-link" data-act="kinds-on">Show all</button>
@@ -198,8 +218,8 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
             <span class="dooms-atlas-visited" title="Places on the map the story has been to">${markers.length ? `Visited ${visited} of ${markers.length}` : ''}</span>
         </div>
         <div class="dooms-atlas-kinds">${counts.map(k => kindHtml(k, off.has(k.id))).join('')}</div>
-        <div class="dooms-atlas-results">${atlasResultsHtml({ markers, query, hidden })}</div>
-        <label class="dooms-atlas-scale-pick" title="How far apart the places are: it sets the distances and the travel times">This map is of <select class="dooms-atlas-scale-select" aria-label="What this map is of">${scales}</select></label>
+        <div class="dooms-atlas-results">${atlasResultsHtml({ markers, query, hidden, all, layer })}</div>
+        <label class="dooms-atlas-scale-pick" title="How far apart the places on this map are: it sets its distances and travel times. Every map has its own.">This map is of <select class="dooms-atlas-scale-select" aria-label="What this map is of">${scales}</select></label>
         ${deletedHtml(deleted)}`;
 }
 
@@ -238,12 +258,13 @@ export function atlasMarkerHtml(m, { portraits = () => '' } = {}) {
         : '';
     const weather = m.weather && m.weather.emoji ? `<span class="dooms-atlas-weather" title="${attr(m.weather.text)}">${e(m.weather.emoji)}</span>` : '';
     const party = m.player ? '<span class="dooms-atlas-party" title="The party is here"><i class="fa-solid fa-flag" aria-hidden="true"></i></span>' : '';
-    return `<span class="dooms-atlas-pin"><i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i></span>${party}${faces}${weather}<span class="dooms-atlas-label">${e(m.label)}</span>`;
+    const holds = m.holds ? `<span class="dooms-atlas-holds" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside: double-click to enter"><i class="fa-solid fa-door-open" aria-hidden="true"></i>${m.holds}</span>` : '';
+    return `<span class="dooms-atlas-pin"><i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i></span>${party}${faces}${weather}${holds}<span class="dooms-atlas-label">${e(m.label)}</span>`;
 }
 
 /** A marker's classes: its kind, whether it was visited, whether the party is there. */
 export function atlasMarkerClass(m) {
-    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : ''].filter(Boolean).join(' ');
+    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : ''].filter(Boolean).join(' ');
 }
 
 /** A region's name, written across its land. */
@@ -259,8 +280,8 @@ export function atlasRegionHtml(r) {
  * take it off the map, delete it.
  * @param {object} o
  * @param {object} o.marker
- * @param {'view'|'edit'|'merge'} o.mode
- * @param {Array<{id:string,label:string}>} o.others  what it can be merged into
+ * @param {'view'|'edit'|'merge'|'move'} o.mode
+ * @param {Array<{id:string,label:string,layerLabel?:string,inside?:string[]}>} o.others  every other place: what it can be merged into, or moved into (not one that is inside it)
  * @param {string} o.distance     "3 miles, about an hour on foot", or ''
  * @param {boolean} o.canTravel   Live World is on and a chat is open
  * @param {boolean} o.travelling  a journey is being asked for
@@ -277,7 +298,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
             <span class="dooms-atlas-pin"><i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i></span>
             <div>
                 <h3 class="dooms-atlas-card-title">${e(m.label)}</h3>
-                <p class="dooms-atlas-card-kind">${e(k.label)}${m.regionLabel ? ` · ${e(m.regionLabel)}` : ''}${m.visited ? ' · visited' : ''}</p>
+                <p class="dooms-atlas-card-kind">${e(k.label)}${m.holds ? ` · ${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside` : ''}${m.visited ? ' · visited' : ''}</p>
             </div>
         </header>`;
     if (mode === 'edit') {
@@ -306,6 +327,18 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
                 : `<p class="dooms-atlas-card-note">There is no other place to merge it into yet.</p><div class="dooms-atlas-card-actions"><button type="button" class="dooms-atlas-btn" data-act="card-view" data-id="${id}">Back</button></div>`}
         </article>`;
     }
+    if (mode === 'move') {
+        const options = [`<option value="">The top map</option>`, ...others.filter(o => !(o.inside || []).includes(m.id)).map(o => `<option value="${attr(o.id)}">${e(o.label)}${o.layerLabel ? ` (in ${e(o.layerLabel)})` : ''}</option>`)].join('');
+        return `<article class="dooms-atlas-card is-editing kind-${attr(m.kind)}" data-id="${id}">
+            ${head}
+            <p class="dooms-atlas-card-note">Move this onto another place's map: a house into its city, a level into its dungeon. It leaves this map and waits in that one's list to be placed.</p>
+            <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Move into</span><select class="dooms-atlas-input" data-field="layer">${options}</select></label>
+            <div class="dooms-atlas-card-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="move-go" data-id="${id}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> <span>Move</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="card-view" data-id="${id}">Cancel</button>
+            </div>
+        </article>`;
+    }
     const picture = safeImageUrl(m.image);
     const people = (m.people || []).length
         ? `<div class="dooms-atlas-card-people"><span class="dooms-atlas-card-label">Here</span>${m.people.map(n => { const p = safeImageUrl(portraits(n)); return `<button type="button" class="dooms-atlas-chip" data-act="person" data-name="${attr(n)}" title="${attr(n)}: where they have been">${p ? `<span class="dooms-atlas-face has-picture" style="background-image: url('${attr(p)}')"></span>` : `<span class="dooms-atlas-face">${e(initialsOf(n))}</span>`}<span>${e(n)}</span></button>`; }).join('')}</div>`
@@ -316,7 +349,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
         ? `<div class="dooms-atlas-card-names"><span class="dooms-atlas-card-label">Also called</span>${m.names.map(n => `<span class="dooms-atlas-chip is-name">${e(n.label)}<button type="button" class="dooms-atlas-chip-x" data-act="unmerge" data-id="${attr(n.id)}" title="Split ${attr(n.label)} off again" aria-label="Split ${attr(n.label)} off again">&times;</button></span>`).join('')}</div>`
         : '';
     const where = m.player
-        ? '<p class="dooms-atlas-card-where is-here"><i class="fa-solid fa-flag" aria-hidden="true"></i> You are here</p>'
+        ? `<p class="dooms-atlas-card-where is-here"><i class="fa-solid fa-flag" aria-hidden="true"></i> ${m.partyInside ? 'The party is inside' : 'You are here'}</p>`
         : (distance ? `<p class="dooms-atlas-card-where"><i class="fa-solid fa-route" aria-hidden="true"></i> ${e(distance)}</p>` : '');
     const travel = m.player
         ? ''
@@ -337,9 +370,11 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
         ${list('Rumours', rumours)}
         ${list('Lately', news)}
         ${travel}
+        <button type="button" class="dooms-atlas-btn dooms-atlas-enter" data-act="enter" data-id="${id}" title="Open the map inside ${attr(m.label)}: its own places, at its own scale. Double-clicking the marker does the same."><i class="fa-solid fa-door-open" aria-hidden="true"></i> <span>${m.holds ? `Enter (${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside)` : 'Enter: give it a map of its own'}</span></button>
         <div class="dooms-atlas-card-tools">
             ${tool('card-edit', 'fa-pen', 'Edit', 'Change the name, the kind or the note')}
             ${tool('card-merge', 'fa-code-merge', 'Merge', 'Merge this into another place')}
+            ${tool('card-move', 'fa-right-to-bracket', 'Move', 'Move it onto another place\'s map: a house into its city')}
             ${tool('unplace', 'fa-arrow-right-from-bracket', 'Take off', 'Take it off the map: it waits in the tray again')}
             ${tool('delete', 'fa-trash-can', 'Delete', 'Delete it for good: it will not come back when the story names it again')}
         </div>

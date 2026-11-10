@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy } from '../features/atlasBook.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -22,7 +22,7 @@ import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml } from './atlasViews.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -50,6 +50,8 @@ let armed = null;         // what waits for a tap on the map: { kind: 'place', i
 let cardMode = 'view';    // the open card: 'view' | 'edit' | 'merge'
 let tidy = { busy: false, items: [], error: '', asked: false };    // the clean-up pass: what it proposed, to be approved (D155)
 let tidyChat = null;      // the chat the proposals are about: another chat's are dropped
+let layer = '';           // the place whose map is drawn; '' for the top map (D156)
+let layerWorld = '';      // the world that layer belongs to: another world opens on its top map
 let startDismissed = '';   // the world whose Start panel was waved away this session
 let brokenPicture = '';   // a world's picture that would not load: the drawn land stands in
 
@@ -94,7 +96,10 @@ function read() {
     const cfg = liveWorldConfig(extensionSettings);
     const empty = worldEmptyMessage({ state, pack, cfg, packError: getPackError(), masterOn: !!extensionSettings.enabled });
     if (empty) { model = null; return { state, pack, cfg, empty }; }
-    model = atlasModel({ pack, state, player: playerName(), book: getBook() });
+    const world = `${state.pack || ''}|${state.name || ''}`;
+    if (layerWorld !== world) { layer = ''; layerWorld = world; }
+    model = atlasModel({ pack, state, player: playerName(), book: getBook(), layer });
+    layer = model.layer;    // a layer that is gone (deleted, merged away) falls back to the top map
     return { state, pack, cfg, empty: '' };
 }
 
@@ -116,7 +121,7 @@ function cardFor(marker) {
     const m = model.markers.find(x => x.id === marker.id) || marker;
     const said = cardMode === 'view' ? saidAbout(m, ctx) : { rumours: [], news: [] };
     const pending = getPendingQuestCut();
-    const others = [...model.markers, ...model.tray].filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label })).sort((a, b) => a.label.localeCompare(b.label));
+    const others = model.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })).sort((a, b) => a.label.localeCompare(b.label));
     return atlasCardHtml({
         marker: m, mode: cardMode, others,
         distance: describeDistance(model, model.party, m.id),
@@ -129,7 +134,7 @@ function cardFor(marker) {
 /** The world's own picture, when it has one that loads (D154). */
 function pictureOf(pack) {
     const m = pack && pack.map;
-    if (!m || !m.image || m.image === brokenPicture || getBook().drawn) return null;
+    if (layer || !m || !m.image || m.image === brokenPicture || getBook().drawn) return null;    // the picture is the top map's; a place's own map is drawn
     const image = safeImageUrl(m.image);
     return image && m.width > 0 && m.height > 0 ? { image, width: m.width, height: m.height } : null;
 }
@@ -161,8 +166,8 @@ function tapped(at) {
     if (!armed) return;
     const a = armed;
     arm(null);
-    if (a.kind === 'place') { commit(placeAt(getBook(), a.id, at)); return; }
-    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y });
+    if (a.kind === 'place') { commit(placeAt(getBook(), a.id, at, layer)); return; }
+    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y, layer });
     if (!commit(made.book)) return;
     if (!board) return;
     board.open(made.id);    // opening closes any other card, which sets the mode back to reading
@@ -175,7 +180,7 @@ function tabBody({ state, pack, cfg }) {
     if (tab === 'news') return newsHtml({ state, pack, cfg, feed: feedLimit });
     if (tab === 'rumours') return rumoursHtml({ state, pack, cfg });
     if (tab === 'hooks') return hooksHtml({ hooks: getHooks(), busy: isProposing() });
-    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy });
+    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '' });
 }
 
 function renderSide(ctx) {
@@ -237,7 +242,8 @@ async function mount(ctx) {
             scale: setScale,
             open: () => { /* the card's mode was set by whoever opened it */ },
             close: () => { closeFacePopover(); cardMode = 'view'; },
-            drop: (id, at) => { arm(null); commit(placeAt(getBook(), id, at)); },
+            drop: (id, at) => { arm(null); commit(placeAt(getBook(), id, at, layer)); },    // what is dropped on a map belongs to it
+            enter: (id) => enter(id),
             tap: tapped,
             move: (id, at) => commit(placeAt(getBook(), id, at)),
             pictureError: () => { brokenPicture = ctx.pack && ctx.pack.map ? ctx.pack.map.image : ''; result = 'The world\'s picture could not be loaded; the drawn map stands in.'; setTimeout(render, 0); },
@@ -269,8 +275,10 @@ function render() {
     else mount(ctx);
     // An empty map says how it is made: nothing lands on it by itself (D151). The panel until it is waved away, then a line.
     const bare = model.markers.length === 0;
-    const showStart = bare && !armed && startDismissed !== world;
-    $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting: model.tray.length, picture: !!pictureOf(ctx.pack) }) : '');
+    const waiting = model.tray.filter(t => t.here !== false).length;
+    const showStart = bare && !armed && startDismissed !== `${world}|${layer}`;
+    $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
+    $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
     if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
     // The picture tool shows for a world that has a picture, lit while the picture is the map.
     const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
@@ -282,7 +290,7 @@ function render() {
 
 /** The search typed: the list and the markers follow; the box keeps its caret (the sidebar is not drawn again). */
 function searched() {
-    $(`${root()} .dooms-atlas-results`).html(atlasResultsHtml({ markers: model ? model.markers : [], query, hidden }));
+    $(`${root()} .dooms-atlas-results`).html(atlasResultsHtml({ markers: model ? model.markers : [], query, hidden, all: model ? model.all : [], layer }));
     if (board) board.update({ query });
 }
 
@@ -302,14 +310,40 @@ function showMarker(id) {
     try { if (window.matchMedia('(max-width: 720px)').matches) setFolded(true); } catch (e) { /* no matchMedia */ }
 }
 
+/** Another map shown (D156): the place's own, or '' for the top map. The cards and what waited for a tap are let go; the new map is fitted. */
+function setLayer(id) {
+    if (board) board.closeCard();
+    arm(null);
+    cardMode = 'view';
+    layer = String(id || '');
+    result = '';
+    render();
+    if (board) board.fit();
+}
+
+/** A place entered: its own map. */
+function enter(id) {
+    if (!model || !model.all.some(x => x.id === id)) return;
+    setLayer(id);
+}
+
+/** A place shown wherever it is: its map first, then the marker. */
+function showAnywhere(id) {
+    const m = model ? model.all.find(x => x.id === id) : null;
+    if (!m || !m.placed) return false;
+    if (m.layer !== layer) setLayer(m.layer);
+    showMarker(id);
+    return true;
+}
+
 /** A character's place shown on the map: the face popover's Show the place. */
 function showPlaceOf(name) {
     closeFacePopover();
     if (!model) return;
-    const m = model.markers.find(x => (x.people || []).includes(name));
-    if (!m) { result = `${name} is nowhere on the map yet.`; render(); return; }
+    const m = model.all.find(x => (x.people || []).includes(name));
+    if (!m || !m.placed) { result = `${name} is nowhere on a map yet.`; render(); return; }
     result = '';
-    showMarker(m.id);
+    showAnywhere(m.id);
 }
 
 /** The chat's world, as a key: what a kept view and a clean-up's proposals belong to. */
@@ -319,7 +353,7 @@ function worldKey() {
 }
 
 function labelOf(id) {
-    const m = model ? [...model.markers, ...model.tray, ...model.deleted].find(x => x.id === id) : null;
+    const m = model ? [...model.all, ...model.deleted].find(x => x.id === id) : null;
     return m ? m.label : 'The place';
 }
 
@@ -360,20 +394,22 @@ function build() {
             if (act === 'close') { closeAtlas(); return; }
             if (act === 'fold') { setFolded(!folded); return; }
             if (act === 'fit') { if (board) board.fit(); return; }
-            if (act === 'party') { if (model && model.party) showMarker(model.party); else { result = 'The party is nowhere on the map yet.'; render(); } return; }
+            if (act === 'party') { if (!(model && model.partyId && showAnywhere(model.partyId))) { result = 'The party is nowhere on a map yet.'; render(); } return; }
+            if (act === 'layer') { setLayer(this.getAttribute('data-id') || ''); return; }
+            if (act === 'enter') { ev.stopPropagation(); enter(this.getAttribute('data-id') || ''); return; }
             if (act === 'tab') { closeFacePopover(); const next = this.getAttribute('data-tab') || ''; if (next !== tab) { tab = ATLAS_TABS.some(t => t.id === next) ? next : ATLAS_TABS[0].id; keep(TAB_KEY, tab); render(); } return; }
             if (act === 'kind') { const k = this.getAttribute('data-kind') || ''; setHidden(hidden.includes(k) ? hidden.filter(x => x !== k) : [...hidden, k]); return; }
             if (act === 'kinds-on') { setHidden([]); return; }
             if (act === 'kinds-off') { setHidden(ATLAS_KINDS.map(k => k.id)); return; }
-            if (act === 'goto') { showMarker(this.getAttribute('data-id') || ''); return; }
+            if (act === 'goto') { if (this.hasAttribute('data-layer')) showAnywhere(this.getAttribute('data-id') || ''); else showMarker(this.getAttribute('data-id') || ''); return; }
             // The markers (D145, D151): placed, made, moved, edited, merged, taken off, deleted, brought back.
             const id = this.getAttribute('data-id') || '';
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
             if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
-            if (act === 'start-dismiss') { startDismissed = worldKey(); render(); return; }
+            if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }
             if (act === 'base') { const b = getBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
             if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
-            if (act === 'place-all') { if (model) commit(placeAll(getBook(), model, getActivePack()), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (board) board.fit(); return; }
+            if (act === 'place-all') { if (model) commit(placeAll(getBook(), model), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (board) board.fit(); return; }
             if (act === 'delete') { ev.stopPropagation(); const label = labelOf(id); if (board) board.closeCard(); commit(removeMarker(getBook(), id), `${label} is deleted. It is under Deleted at the foot of Places if you want it back.`); return; }
             if (act === 'restore') { commit(restoreMarker(getBook(), id), 'Brought back: it waits in the list to be placed.'); return; }
             if (act === 'unplace') { ev.stopPropagation(); if (board) board.closeCard(); commit(unplace(getBook(), id)); return; }
@@ -402,7 +438,16 @@ function build() {
             }
             if (act === 'tidy-all') { let b = getBook(); const n = tidy.items.length; for (const item of tidy.items) b = applyTidyItem(b, item); tidy = { ...tidy, items: [], asked: false }; commit(b, `${n} done. Anything deleted is under Deleted at the foot of Places.`); return; }
             if (act === 'tidy-none') { tidy = { ...tidy, items: [], asked: false }; render(); return; }
-            if (act === 'card-edit' || act === 'card-merge' || act === 'card-view') { ev.stopPropagation(); cardMode = act === 'card-edit' ? 'edit' : act === 'card-merge' ? 'merge' : 'view'; if (board) board.redrawCard(); return; }
+            if (act === 'card-edit' || act === 'card-merge' || act === 'card-move' || act === 'card-view') { ev.stopPropagation(); cardMode = act === 'card-edit' ? 'edit' : act === 'card-merge' ? 'merge' : act === 'card-move' ? 'move' : 'view'; if (board) board.redrawCard(); return; }
+            if (act === 'move-go') {
+                ev.stopPropagation();
+                const to = String($(this).closest('.dooms-atlas-card').find('[data-field="layer"]').val() || '');
+                const label = labelOf(id);
+                cardMode = 'view';
+                if (board) board.closeCard();
+                commit(moveInto(getBook(), id, to), to ? `${label} is inside ${labelOf(to)} now: enter ${labelOf(to)} to place it.` : `${label} is on the top map's list now.`);
+                return;
+            }
             if (act === 'edit-save') {
                 ev.stopPropagation();
                 const $c = $(this).closest('.dooms-atlas-card');
@@ -469,7 +514,7 @@ function build() {
         ev.dataTransfer.setData('text/plain', row.getAttribute('data-id') || '');
         ev.dataTransfer.effectAllowed = 'move';
     });
-    $(document).on('change', `${root()} .dooms-atlas-scale-select`, function () { commit(withScale(getBook(), String($(this).val() || ''))); });
+    $(document).on('change', `${root()} .dooms-atlas-scale-select`, function () { commit(withScale(getBook(), String($(this).val() || ''), layer)); });
     $(document).on('input', `${root()} .dooms-atlas-query`, function () { query = String($(this).val() || ''); searched(); });
     $(document).on('keydown', `${root()} .dooms-atlas-query`, function (ev) {
         if (ev.key !== 'Enter') return;

@@ -207,3 +207,32 @@ gaps, both closed in "Atlas 4":
   the tools that switches between the picture and the drawn map
   (`book.drawn`, `withDrawn`); the picture is kept. Nothing has to be
   removed in the World Builder to see the drawn map.
+
+## 9. Layers (2026-11-10, D156)
+
+The owner, with a screenshot of the city of Hask and a house drawn as two
+pins of one size on one map: "Hask is a city, it's going to be wide and
+the house marker needs to be able to sit inside it. Should we make a
+layered map like World of Warcraft where you can click on a region and
+zoom in?" And: "the stair in my current story is a dungeon that goes
+pretty far underground." His answers: rooms stay a list on the card for
+now; Hask is a city; build it now. Built in "Atlas 5".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D156 | The maps are layered (the owner) | Every place stands on one map: the top map, or the map inside another place (a city's, a dungeon's, a level's). Any marker can be entered (Enter on its card, or a double-click): its own map, with a trail across the top (the world, then each place down to this one) that leads back out. A place put on a map belongs to it: dropped from the tray, tapped down, or made by hand there. The card's Move sends a place onto another place's map, where it waits to be placed. A marker carries what is inside it: a door with the count, the people, the party's flag ("The party is inside"). Each map has its own scale (a region on top when places hold maps, a town one map in, a building or dungeon below; the select changes this map's alone). Distances are told on the party's own map; across maps they are not told yet. |
+| D157 | The world's own nesting is read as layers | A world's place that has a parent stands on its parent's map, unless it is a room of it (its name is a room's) or carries its parent's name (the city listed inside the city): then it folds into the parent, as rooms do (D153). The named regions drawn around places (phase 1's) are gone: a region is a marker that holds a map. A marker whose name tells a terrain stands on tinted ground with that terrain's drawings. |
+
+The book gains `inside: { id: holder }` ('' said outright = the top map)
+and `scales: { layerId: scale }`; `placeAt(book, id, spot, layer)`,
+`moveInto`, `withScale(book, scale, layer)`. The model takes `layer` and
+returns `layer`, `layerLabel`, `depth`, `trail`, `all` (every live place
+with its map: the search, Merge, Move and the clean-up read it),
+`partyId`, `partyLayer`. A place whose holder is deleted, or that would
+hold itself, stands on the top map. The world's picture is the top map's
+alone. The search reaches every map and a match elsewhere goes to its
+map; Find the party goes to the party's map.
+
+Known limits: a room named alone still needs Merge or Move; a place whose
+holder is deleted keeps the spot it had on the inner map; distances
+across maps (a house in one city to a house in another) are not told.
