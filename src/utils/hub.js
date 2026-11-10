@@ -633,6 +633,16 @@ export function sceneFileName(n, title, existing = []) {
     return `${base} (${Date.now()})`;
 }
 
+/** A backup's name (D175): the chat's own with what it is said after it, safe for a file, free among `existing` (names with or without .jsonl). */
+export function backupFileName(chat, existing = []) {
+    const own = String(chat ?? '').replace(/\.jsonl$/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Chat';
+    const base = `${own.slice(0, 120).trim()} - before scenes`;
+    const taken = new Set((Array.isArray(existing) ? existing : []).map(x => String(x || '').replace(/\.jsonl$/i, '').toLowerCase()));
+    if (!taken.has(base.toLowerCase())) return base;
+    for (let i = 2; i < 1000; i++) { const name = `${base} (${i})`; if (!taken.has(name.toLowerCase())) return name; }
+    return `${base} (${Date.now()})`;
+}
+
 // ─── The recap (D122, §5.2) ─────────────────────────────────────────────
 
 /** The scene's text for a recap or a Canon run over the scene: the newest kept within the budget. */

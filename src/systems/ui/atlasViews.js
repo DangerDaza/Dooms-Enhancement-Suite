@@ -278,6 +278,7 @@ export function scenesRefusalText(plan) {
     if (p.reason === 'changed') return 'The chat changed while this was being prepared. Nothing was changed; start again.';
     if (p.reason === 'running') return 'This is already being done.';
     if (p.reason === 'bound-elsewhere') return `${(p.card && p.card.name) || 'This chat\'s card'} already narrates another world (${p.boundTo || 'one of yours'}), and a card narrates one world. Open this story with a card of its own, or free the card in Settings, under Live World, The Hub.`;
+    if (p.reason === 'backup') return `A copy of this chat could not be saved first (${(Array.isArray(p.errors) ? p.errors.join(' ') : '') || 'SillyTavern refused the file'}), so nothing was changed.`;
     if (p.reason === 'world' || p.reason === 'error') return `It could not be done: ${(Array.isArray(p.errors) ? p.errors.join(' ') : '') || 'the world could not be made'}.`;
     return 'This chat cannot be played as scenes.';
 }
@@ -307,6 +308,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <h3><i class="fa-solid fa-check" aria-hidden="true"></i> ${e(r.worldName || world)} is played as scenes</h3>
             <p>${r.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(r.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
             <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
+            ${r.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(r.backup)}</strong>.</p>` : ''}
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-hub"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Start a scene</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button>
@@ -342,6 +344,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <li><strong>${e((p.card && p.card.name) || 'This chat\'s card')}</strong> narrates its scenes.</li>
             <li>This chat as it stands becomes its memory: the tracker, the inventory, the quests, the world, the canon, the hooks and the map.</li>
             <li>This chat is kept as scene 0 and stays an ordinary chat you can go on playing.</li>
+            <li>A copy of the chat as it is now is saved beside it first. If the copy cannot be saved, nothing is changed.</li>
         </ul>
         ${warn}
         ${err}

@@ -489,6 +489,8 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     check('the places the story named stay the story\'s, so the map made of them stands', same(now.visited.map(v => v.id), storyPlaces));
     check('the world\'s entry: narrated by the chat\'s card, the campaign it is the scenes of, the hub can play it', entry.card === 'The Redward.png' && entry.campaign === 'camp1' && hub.hubWorldIds().includes('first-descent') && hub.cardOf('first-descent').name === 'The Redward');
     check('the chat\'s stores as they stand are the world\'s memory, sealed: the world, the map, where the story stopped', entry.memory.scene === 's0' && entry.memory.takenAt > 0 && entry.memory.stores.dooms_world.pack === 'first-descent' && same(entry.memory.stores.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 1 } }) && entry.memory.stores.dooms_atlas.made[0].label === 'Hask' && entry.memory.facts.location === 'Hask, the house on the lane' && entry.memory.facts.date === 'Day 41' && entry.memory.stores.dooms_world.visited.every(v => v.visits.length === 0));
+    const copy = files.get(done.backup);
+    check('a copy of the chat as it was is saved beside it first: under its card, every message, its world still the blank one, the map in it, no scene\'s mark (D175)', done.backup === 'The Redward - long - before scenes' && !!copy && copy.avatar === 'The Redward.png' && copy.chName === 'The Redward' && copy.messages.length === 9 && copy.messages[8].mes.includes('landing 4') && copy.header.chat_metadata.dooms_world.pack === 'blank' && copy.header.chat_metadata.dooms_world.name === 'The Redward' && same(copy.header.chat_metadata.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 1 } }) && !copy.header.chat_metadata.dooms_hub, JSON.stringify([done.backup, !!copy]));
     check('the chat is kept as scene 0, ended, with its record; it stays an ordinary chat', entry.scenes.length === 1 && entry.scenes[0].id === 's0' && entry.scenes[0].status === 'ended' && entry.scenes[0].chat === long && entry.scenes[0].card === 'The Redward.png' && entry.scenes[0].recap.startsWith('The company came up') && entry.scenes[0].endDate === 'Day 41' && !hub.isScene() && !meta.dooms_hub && hub.currentScene() === null);
 
     await hub.refreshScenes('first-descent');
@@ -520,6 +522,7 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     check('without the player\'s word nothing is replaced', refused.ok === false && refused.reason === 'has-memory' && refused.scenes === 1 && mid.memory.scene === 's1' && mid.scenes[0].recap.startsWith('The company came up'));
     const replaced = await hub.commitAdopt({ recap: 'The long chat went on.', replace: true });
     const after = hub.worldEntry('first-descent');
+    check('taken again, another copy is saved under a name of its own; the first is left as it was', replaced.backup === 'The Redward - long - before scenes (2)' && files.has(replaced.backup) && files.get('The Redward - long - before scenes').header.chat_metadata.dooms_world.pack === 'blank' && files.get(replaced.backup).header.chat_metadata.dooms_world.pack === 'first-descent');
     check('with it: the memory is the long chat\'s again, scene 0 is rewritten, the scene played since stays in the list', replaced.ok && replaced.replaced === true && replaced.made === false && after.memory.scene === 's0' && Object.keys(after.memory.stores.dooms_atlas.spots).length === 1 && same(after.scenes.map(x => x.id), ['s0', 's1']) && after.scenes[0].recap === 'The long chat went on.' && after.scenes[1].recap === 'They met at the gate in the fog.' && after.card === 'The Redward.png' && after.campaign === 'camp1');
 
     // The refusals.
@@ -537,6 +540,12 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     await openPlain('Third - plain');
     const own = hub.scenesPlan();
     check('with no campaign switched on, the world is named after the chat\'s own', own.ok && own.campaign === null && own.world.made === true && own.world.name === 'Third' && own.world.id === 'third' && own.card.avatar === 'Third.png', JSON.stringify(own));
+    // The copy cannot be saved: nothing is changed.
+    hub.__setChatBridge({ saveChatFile: async () => { throw new Error('the disk is full'); } });
+    const packsBefore = Object.keys(extensionSettings.liveWorld.customPacks).join();
+    const unsaved = await hub.commitAdopt({ recap: 'x' });
+    check('when the copy cannot be saved nothing is changed, and it says why', unsaved.ok === false && unsaved.reason === 'backup' && /disk is full/.test(unsaved.errors.join(' ')) && Object.keys(extensionSettings.liveWorld.customPacks).join() === packsBefore && lw.getWorldState().pack === 'blank' && hub.worldEntry('third') === null, JSON.stringify(unsaved));
+    hub.__setChatBridge(null);
     extensionSettings.lorebook.activeCampaignId = 'camp1';
     const joins = hub.scenesPlan();
     check('with the campaign on, another chat of it is taken into the campaign\'s world, which keeps its narrator', joins.ok && joins.world.id === 'first-descent' && joins.world.made === false && joins.card.avatar === 'The Redward.png' && joins.replaces === true, JSON.stringify(joins));

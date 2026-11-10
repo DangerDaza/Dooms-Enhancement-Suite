@@ -18,7 +18,7 @@ import {
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
     sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
-    hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE,
+    hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -269,6 +269,7 @@ console.log('\n§8b a chat taken as where the scenes of a world begin (D131, D17
     check('taken again, scene 0 is replaced where it stood and the scenes played since stay', same(r.entry.scenes.map(x => x.id), ['s0', 's1']) && r.entry.scenes[0].recap.startsWith('Longer now') && r.entry.scenes[0].endDate === 'Day 44' && r.entry.scenes[1].recap === 'They argued at the gate.' && r.entry.seq === 1 && r.entry.campaign === 'camp_first-descent' && r.entry.card === 'Narrator.png');
     check('a chat taken with no record written says so and gives the next scene nothing to be told', (() => { const e = adoptScene(normalizeWorldEntry({}), { chat: 'x' }).entry; return e.scenes[0].noRecap === true && lastRecaps(e).length === 0; })());
     check('the entry survives being stored and read back', same(normalizeWorldEntry(JSON.parse(JSON.stringify(r.entry))), r.entry));
+    check('the copy saved before a chat is taken is named after the chat, says what it is, and never takes a name in use (D175)', backupFileName('First Descent - 2026-10-01@20h00m') === 'First Descent - 2026-10-01@20h00m - before scenes' && backupFileName('First Descent.jsonl', ['First Descent - before scenes.jsonl']) === 'First Descent - before scenes (2)' && backupFileName('First Descent', ['first descent - BEFORE scenes', 'First Descent - before scenes (2)']) === 'First Descent - before scenes (3)' && backupFileName('a/b:c?', []) === 'a b c - before scenes' && backupFileName('', []) === 'Chat - before scenes');
     const other = adoptScene(normalizeWorldEntry({ card: 'Narrator.png' }), { chat: 'A side chat', card: 'Someone Else.png', recap: 'x' }).entry;
     check('a chat taken from a card that is not the narrator\'s is not called gone when the narrator\'s chats are looked over; under the narrator\'s own card it is', reconcileScenesWithChats(other, [{ file: 'Scene 1 - x' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === false && reconcileScenesWithChats(r.entry, [{ file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === true && reconcileScenesWithChats(r.entry, [{ file: 'First Descent - 2026-10-01.jsonl' }, { file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).changed === 0);
 }

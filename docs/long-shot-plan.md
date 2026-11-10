@@ -505,3 +505,17 @@ to the Atlas (step 3b, 3c): the End sheet and the strip's buttons; the
 list of scenes; starting from a person, a rumour, a piece of news or a
 hook; choosing a world of scenes when no scene chat is in front; the D
 menu's Hub and End scene.
+
+## 20. Play as scenes saves a copy of the chat first (2026-11-10, D175)
+
+The owner, told to back his chat up before trying Play as scenes on his
+campaign: "that backup should be automatic no?" Built in "Atlas 18".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D175 | The chat is copied before it is taken (the owner) | `commitAdopt` writes a copy of the chat in front beside it, under its card, before anything is changed: the metadata and every message as they stand, named after the chat with "before scenes" after it (`backupFileName`; a name in use gets a number). It is an ordinary chat, opened like any other if the scenes are not wanted after all: its world is still the one the chat had. When the copy cannot be written, nothing is changed and the panel says why. The panel says beforehand that a copy is saved, and afterwards under which name. Taken again, another copy is saved under a name of its own. |
+
+What the copy does not hold: the world made for the scenes and its entry
+in the hub's store live in the settings, not in the chat. They change
+nothing in the copy, and a world that is not wanted is removed in the
+World Builder.

@@ -36,7 +36,7 @@ import {
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
-    adoptScene, ADOPTED_ID,
+    adoptScene, ADOPTED_ID, backupFileName,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 
@@ -1078,6 +1078,30 @@ export async function prepareAdopt() {
 }
 
 /**
+ * A copy of the chat in front, written beside it under its card before
+ * anything is changed (D175): its metadata and every message as they
+ * stand, under the chat's own name with "before scenes" after it. An
+ * ordinary chat, to open if the scenes are not wanted after all.
+ * @returns {Promise<{ ok: boolean, file: string, error: string }>}
+ */
+async function backupChat(card) {
+    try {
+        const list = chatArray();
+        const m = meta();
+        const id = chatId();
+        if (!card || !card.avatar || !list || !m || id === undefined) return { ok: false, file: '', error: 'There is no chat to copy.' };
+        const b = bridge();
+        const existing = (await b.listChats(card.avatar)).map(c => String(c.file_name || c.file_id || ''));
+        const file = backupFileName(id, existing);
+        const header = { chat_metadata: JSON.parse(JSON.stringify(m)), user_name: 'unused', character_name: 'unused' };
+        await b.saveChatFile({ chName: card.name, avatar: card.avatar, fileName: file, header, messages: JSON.parse(JSON.stringify(list)) });
+        return { ok: true, file, error: '' };
+    } catch (e) {
+        return { ok: false, file: '', error: String(e && e.message || e) };
+    }
+}
+
+/**
  * The chat in front becomes where a world's scenes begin (D131, D172).
  * The world is made when the chat has none of the player's (an empty one
  * under the campaign's name: the places the story named stay the story's,
@@ -1085,8 +1109,10 @@ export async function prepareAdopt() {
  * chat's card narrates it, the chat's stores as they stand are the world's
  * memory, sealed, and the chat is kept as scene 0 with its record. The
  * chat itself stays an ordinary chat and can go on being played; taken
- * again, the memory is replaced (`replace` says the player knows).
- * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, worldName?: string, made?: boolean, card?: string, replaced?: boolean, recap?: string }>}
+ * again, the memory is replaced (`replace` says the player knows). Before
+ * any of it a copy of the chat is written beside it (D175); when the copy
+ * cannot be written, nothing is changed.
+ * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, worldName?: string, made?: boolean, card?: string, replaced?: boolean, recap?: string, backup?: string }>}
  */
 export async function commitAdopt({ recap = '', replace = false } = {}) {
     if (adopting) return { ok: false, reason: 'running' };
@@ -1098,6 +1124,11 @@ export async function commitAdopt({ recap = '', replace = false } = {}) {
     try {
         const token = { meta: meta(), id: chatId() };
         const worldId = plan.world.id;
+        // The copy first: the chat as it stands before its world is changed under it.
+        await flushChat();
+        const kept = await backupChat(chatCard());
+        if (!kept.ok) return { ok: false, reason: 'backup', errors: [kept.error] };
+        if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
         if (plan.world.made) {
             const saved = await saveWorld({ id: worldId, name: plan.world.name, version: 1, description: '', places: [], clocks: [], cast: [], blurb: '' });
             if (!saved.ok) return { ok: false, reason: 'world', errors: saved.errors };
@@ -1122,8 +1153,8 @@ export async function commitAdopt({ recap = '', replace = false } = {}) {
         if (plan.campaign) base.campaign = plan.campaign.id;
         const r = adoptScene({ ...base, memory }, { chat: String(chatId() || ''), card: card ? card.avatar : '', recap, place: { label: facts.location || '' }, endDate: facts.date || '', endedAt: now });
         putEntry(worldId, r.entry, { source: 'adopt', world: worldId });
-        log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '' });
-        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap };
+        log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '', backup: kept.file });
+        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file };
     } catch (e) {
         return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
     } finally {
