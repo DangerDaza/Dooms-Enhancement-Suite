@@ -16,7 +16,7 @@
  * ensureCss('leaflet', LEAFLET_CSS). Layout units have y down; Leaflet's
  * latitude grows upward: lat = -y.
  */
-import { atlasMarkerHtml, atlasMarkerClass, atlasRegionHtml, scaleBarFor } from './atlasViews.js';
+import { atlasMarkerHtml, atlasMarkerClass, atlasRegionHtml, atlasBeyondHtml, scaleBarFor } from './atlasViews.js';
 
 export const LEAFLET_CSS = 'lib/leaflet/leaflet.css';
 export const PIN_SIZE = 30;          // a marker's box in CSS pixels; the name hangs below it
@@ -104,6 +104,14 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     /** What a fit shows: the picture when there is one, else the land with a margin, else the empty canvas. */
     function content() {
         if (pic) return pictureRect(pic);
+        if (current.realm) {
+            // Inside a region the fit shows its land, all of it and little else (D168): the land holds its places.
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const [x, y] of current.realm.outline) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+            for (const m of current.markers) { minX = Math.min(minX, m.x); minY = Math.min(minY, m.y); maxX = Math.max(maxX, m.x); maxY = Math.max(maxY, m.y); }
+            const pad = Math.max(0.8, Math.max(maxX - minX, maxY - minY) * 0.07);
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        }
         if (!current.land.length) return current.bounds;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const b of current.land) { minX = Math.min(minX, b.x - b.radius); minY = Math.min(minY, b.y - b.radius); maxX = Math.max(maxX, b.x + b.radius); maxY = Math.max(maxY, b.y + b.radius); }
@@ -143,12 +151,27 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 for (const b of current.land) poly(b.outline, 'dooms-atlas-floor');
                 lines(current.routes.map(r => r.points), 'dooms-atlas-passage');
             } else {
+                // Inside a region (D168): the lands it borders lie around it, dimmed, each clicked to go there; then its own
+                // land, in the shape and the colour it has on the map above; its terrain is drawn across it just below.
+                const realm = current.realm;
+                if (realm) {
+                    for (const n of realm.neighbours) {
+                        const land = L.polygon(n.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-beyond${n.loose ? ' is-loose' : ''}`, fillColor: n.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
+                        land.bindTooltip(n.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
+                        land.on('click', (ev) => goBeyond(n.id, ev.latlng));
+                        land.addTo(shapes);
+                    }
+                    L.polygon(realm.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-realm is-${realm.terrain}${realm.loose ? ' is-loose' : ''}`, fillColor: realm.fill || '#e3c98a', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                }
                 // The land is everywhere (D158): what the ground draws over it, and the sea past a coast's shore.
                 if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
                 else lines(decor.lines, `dooms-atlas-ground is-${ground}`);
                 for (const w of decor.woods || []) poly(w, 'dooms-atlas-wood');
                 lines(decor.trees || [], 'dooms-atlas-tree');
                 for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
+                lines(decor.marks || [], `dooms-atlas-glyph is-${decor.look || 'plains'}`);
+                // A peak is one shape of its own, the farthest drawn first, so a nearer one stands in front of it.
+                for (const peak of decor.peaks || []) L.polyline(peak.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-peak is-${decor.look || 'plains'}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
             }
             // The regions' lands (D163): every land's edge first, then every land over the edges, so borders shared by two
             // lands are one line; a land is clicked to enter it and names itself under the pointer.
@@ -183,6 +206,21 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             if (!r.label) continue;
             L.marker(ll(r.x, r.y - r.radius * 0.72), { icon: L.divIcon({ className: 'dooms-atlas-region', html: atlasRegionHtml(r), iconSize: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(names);
         }
+        // A neighbouring region is named along the border shared with it, on its own side; the name is clicked to go there (D168).
+        if (!pic && current.realm && current.ground === 'country') {
+            for (const n of current.realm.neighbours) {
+                const name = L.marker(ll(n.at[0], n.at[1]), { icon: L.divIcon({ className: 'dooms-atlas-beyond-label', html: atlasBeyondHtml(n), iconSize: [0, 0] }), interactive: true, keyboard: true, title: '', alt: n.label, zIndexOffset: -900 });
+                name.on('click', (ev) => goBeyond(n.id, ev.latlng));
+                name.on('keypress', (ev) => { if (ev.originalEvent && ev.originalEvent.key === 'Enter') goBeyond(n.id, null); });
+                name.addTo(names);
+            }
+        }
+    }
+
+    /** A neighbouring land (or its name) clicked: its own map; while something waits to be put down, the click puts it there instead. */
+    function goBeyond(id, latlng) {
+        if (latlng && el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(latlng.lng), y: round4(-latlng.lat) }); return; }
+        if (!picking && typeof on.enter === 'function') on.enter(id);
     }
 
     const matches = (m) => !search || [m.label, m.note, ...(m.rooms || []), ...(m.names || []).map(n => n.label), ...(m.people || [])].some(t => String(t || '').toLowerCase().includes(search));
@@ -259,8 +297,13 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
         // The view is the player's: it is never pulled back to the middle. The limits only stop the map being lost
         // (a canvas three times as wide as what a fit shows, held firmly at its edge rather than sprung back from it).
         map.setMaxBounds(all.pad(1.5));
-        map.setMinZoom(z - 1);
-        map.setMaxZoom(Math.max(z + 2, Math.log2(MAX_PX)));
+        // A view outside the new limits is put inside them at once: left to the limits themselves it would glide there, and
+        // the glide would end after (and undo) a fit asked for in the meantime, as when a smaller map is entered (D168).
+        const lo = z - 1, hi = Math.max(z + 2, Math.log2(MAX_PX));
+        if (map.getZoom() < lo) map.setZoom(lo, { animate: false });
+        if (map.getZoom() > hi) map.setZoom(hi, { animate: false });
+        map.setMinZoom(lo);
+        map.setMaxZoom(hi);
     }
 
     // A place dragged from the tray and let go over the map; the map itself tapped.

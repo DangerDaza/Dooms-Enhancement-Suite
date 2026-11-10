@@ -428,6 +428,12 @@ export function atlasRegionHtml(r) {
     return `<span class="dooms-atlas-region-name">${e(r.label)}</span>`;
 }
 
+/** A neighbouring region's name on the border shared with it (D168): turned the way the border runs, set on the neighbour's side of it. */
+export function atlasBeyondHtml(n) {
+    const turn = Number.isFinite(n.angle) ? Math.round(n.angle * 10) / 10 : 0;
+    return `<span class="dooms-atlas-beyond-name" style="--turn:${turn}deg;--side:${n.side < 0 ? -1 : 1}" title="Go to ${e(n.label)}">${e(n.label)}</span>`;
+}
+
 /**
  * The card a marker opens (D142, D151): the place, its kind and where it
  * is, its note, its rooms and other names, who is there, the weather, how

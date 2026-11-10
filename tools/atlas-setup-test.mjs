@@ -195,6 +195,12 @@ console.log('\n§7 filling out a map (D160)');
     const empty = atlasModel({ pack: blankPack('x'), state: null });
     const es = [...layoutFill(empty, r.places).values()];
     check('an empty map filled: its first places, spread out', es.length === 3 && es.every((a, i) => es.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.3)));
+    // An empty region filled (D168): its first places are laid out from the region's spot, on its land, and the land stays as it was.
+    const marches = (() => { let b = addPin(null, { label: 'The Far March', kind: 'region', x: 21, y: -13 }); const id = b.id; b = addPin(b.book, { label: 'The Near March', kind: 'region', x: 9, y: -12 }); return { book: b.book, id }; })();
+    const march = atlasModel({ pack: blankPack('x'), state: null, book: marches.book, layer: marches.id });
+    const filled = applyFill(marches.book, march, r.places);
+    const marchAfter = atlasModel({ pack: blankPack('x'), state: null, book: filled.book, layer: marches.id });
+    check('an empty region filled: its first places stand on its land, about its spot, and the land lies as it did', !!march.realm && march.markers.length === 0 && marchAfter.markers.length === 3 && marchAfter.markers.every(m => Math.hypot(m.x - march.realm.x, m.y - march.realm.y) < 4) && marchAfter.realm.k === 1 && same(marchAfter.realm.outline, march.realm.outline), JSON.stringify(marchAfter.markers.map(m => [m.x, m.y])));
 }
 
 console.log('\n§8 filling out with regions (D166)');

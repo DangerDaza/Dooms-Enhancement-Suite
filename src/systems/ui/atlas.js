@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
@@ -206,11 +206,20 @@ function landAt(at) {
     return model ? territoryAt(model, at.x, at.y) : '';
 }
 
+/**
+ * A spot on a region's land, as it is on that region's own map (D168): the same spot while the land lies there as
+ * it does here, and the matching spot of the land when it is laid wider, or elsewhere, to hold its places.
+ */
+function spotInside(into, at) {
+    const inner = atlasModel({ pack: getActivePack(), state: getWorldState(), player: playerName(), book: getBook(), layer: into });
+    return inner.layer === into ? spotOnLand(inner.realm, at) : at;
+}
+
 /** A place put down at a spot of the shown map: on it, or, when the spot is on a region's land and the place is no region itself, inside that region. */
 function putDown(id, at) {
     const item = model ? [...model.tray, ...model.markers].find(x => x.id === id) : null;
     const into = item && item.kind === 'region' ? '' : landAt(at);
-    commit(placeAt(getBook(), id, at, into || layer), into ? `${labelOf(id)} is inside ${labelOf(into)} now: click its land to enter it.` : '');
+    commit(placeAt(getBook(), id, into ? spotInside(into, at) : at, into || layer), into ? `${labelOf(id)} is inside ${labelOf(into)} now: click its land to enter it.` : '');
 }
 
 /** The map tapped: what was waiting lands there. */
@@ -220,7 +229,8 @@ function tapped(at) {
     arm(null);
     if (a.kind === 'place') { putDown(a.id, at); return; }
     const into = landAt(at);
-    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y, layer: into || layer });
+    const spot = into ? spotInside(into, at) : at;
+    const made = addPin(getBook(), { label: 'New place', x: spot.x, y: spot.y, layer: into || layer });
     if (!commit(made.book, into ? `The new place is inside ${labelOf(into)}: this is its map.` : '')) return;
     if (into) setLayer(into);    // put down on a region's land, it is inside that region: its map is shown, the new marker open on its name
     if (!board) return;
@@ -334,10 +344,11 @@ function render() {
     // An empty map says how it is made: nothing lands on it by itself (D151). The panel until it is waved away, then a line.
     const bare = model.markers.length === 0;
     const waiting = model.tray.filter(t => t.here !== false).length;
-    const showStart = bare && !armed && !setup && startDismissed !== `${world}|${layer}`;
+    // A region's own map is not empty: its land is there to be seen (D168), so no panel is laid over it, only the line.
+    const showStart = bare && !model.realm && !armed && !setup && startDismissed !== `${world}|${layer}`;
     $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
     $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
-    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
+    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.realm ? `Nothing stands in ${model.layerLabel} yet. ${model.tray.length ? 'Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'The pin button above adds a place to its land.'}` : model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
     // The picture tool shows for a world that has a picture, lit while the picture is the map.
     const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
     $(root()).toggleClass('has-picture', hasPicture);

@@ -762,9 +762,11 @@ export function landmassOutline(sites, margin = TERRITORY_RADIUS, seed = 'land')
  * everything is drawn through the map's bend. The lands tile the
  * landmass with nothing left over; every region borders its neighbours
  * however far apart their spots are; a region's spot is always on its
- * own land. The same spots give the same lands.
+ * own land. The same spots give the same lands. With each land come the
+ * borders it shares, one run of points for every neighbour, as they lie
+ * along its outline (D168).
  * @param {Array<{ id: string, x: number, y: number }>} sites
- * @returns {Map<string, { outline: number[][], neighbours: string[] }>}
+ * @returns {Map<string, { outline: number[][], neighbours: string[], borders: Array<{ id: string, points: number[][] }> }>}
  */
 export function territoryCells(sites, radius = TERRITORY_RADIUS, seed = 'land') {
     const out = new Map();
@@ -790,11 +792,11 @@ export function territoryCells(sites, radius = TERRITORY_RADIUS, seed = 'land') 
             poly = clipHalf(poly, a, b, (o.x * o.x + o.y * o.y - s.x * s.x - s.y * s.y + s.w - o.w) / 2);    // the side of the line that is s's
             if (poly.length < 3) break;
         }
-        if (poly.length < 3) { out.set(s.id, { outline: [], neighbours: [] }); continue; }
+        if (poly.length < 3) { out.set(s.id, { outline: [], neighbours: [], borders: [] }); continue; }
         // A border shared with a neighbour is waved along its own line, the wave read from the pair (not from who asks),
         // so both lands draw the same border; the wave dies away toward the border's ends, where three lands meet.
         const waved = [];
-        const neighbours = new Set();
+        const shared = new Map();    // a neighbour -> the border shared with it, as it runs along this land's outline
         for (let i = 0; i < poly.length; i++) {
             const p = poly[i], q = poly[(i + 1) % poly.length];
             waved.push(p);
@@ -802,8 +804,10 @@ export function territoryCells(sites, radius = TERRITORY_RADIUS, seed = 'land') 
             const on = (pt, o) => Math.abs(pd(pt, s) - pd(pt, o)) < 1e-6;
             const o = list.find(x => x !== s && on(p, x) && on(q, x));
             if (!o) continue;
-            neighbours.add(o.id);
-            if (len < 0.8) continue;
+            if (!shared.has(o.id)) shared.set(o.id, []);
+            const run = shared.get(o.id);
+            run.push(p);
+            if (len < 0.8) { run.push(q); continue; }
             const [lo, hi] = s.id < o.id ? [s, o] : [o, s];
             const nd = Math.hypot(hi.x - lo.x, hi.y - lo.y);
             const nx = (hi.x - lo.x) / nd, ny = (hi.y - lo.y) / nd;       // across the border, the same for both lands
@@ -817,10 +821,14 @@ export function territoryCells(sites, radius = TERRITORY_RADIUS, seed = 'land') 
                 const u = (x - mx) * -ny + (y - my) * nx;                     // along the border, from the pair's midpoint
                 const taper = Math.min(1, Math.min(t, 1 - t) * len / 0.9);
                 const f = amp * taper * (Math.sin(u * 0.9 + ph[0]) + 0.55 * Math.sin(u * 2.3 + ph[1]) + 0.3 * Math.sin(u * 4.9 + ph[2])) / 1.85;
-                waved.push([x + nx * f, y + ny * f]);
+                const pt = [x + nx * f, y + ny * f];
+                waved.push(pt);
+                run.push(pt);
             }
+            run.push(q);
         }
-        out.set(s.id, { outline: waved.map(([x, y]) => bend.to(x, y).map(round4)), neighbours: [...neighbours] });
+        const bent = (pts) => pts.map(([x, y]) => bend.to(x, y).map(round4));
+        out.set(s.id, { outline: bent(waved), neighbours: [...shared.keys()], borders: [...shared].map(([id, pts]) => ({ id, points: bent(pts) })) });
     }
     return out;
 }
@@ -892,6 +900,273 @@ export function wrapInRegion(book, model, { label = 'New region', loose = false 
     // The region's own map keeps the scale the places were on: grouping changes no distance between them.
     if (model && model.measure && ATLAS_SCALES[model.measure.scale]) b = { ...b, scales: { ...b.scales, [made.id]: model.measure.scale } };
     return { book: b, id: made.id, moved: here.length };
+}
+
+// ─── Inside a region (D168): its land as on the map above, its neighbours, its terrain ───
+
+const boxOf = (pts) => { let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; for (const [x, y] of pts) { if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; } return { minX, minY, maxX, maxY }; };
+const areaOf = (poly) => { let a = 0; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) a += poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1]; return Math.abs(a) / 2; };
+function segDist(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+    return Math.hypot(px - ax - dx * t, py - ay - dy * t);
+}
+
+/** How far a point is from the edge of a polygon (from its nearest side). */
+export function edgeDistance(poly, x, y) {
+    let d = Infinity;
+    for (let i = 0, j = (poly ? poly.length : 0) - 1; i < (poly ? poly.length : 0); j = i++) d = Math.min(d, segDist(x, y, poly[j][0], poly[j][1], poly[i][0], poly[i][1]));
+    return d;
+}
+const insideBy = (poly, x, y, margin) => pointInPolygon(poly, x, y) && (!(margin > 0) || edgeDistance(poly, x, y) >= margin);
+const lineDist = (line, x, y) => { let d = Infinity; for (let i = 1; i < line.length; i++) d = Math.min(d, segDist(x, y, line[i - 1][0], line[i - 1][1], line[i][0], line[i][1])); return d; };
+
+/** The middle of a land: the point of it farthest from its edge, looked for on a grid over it. */
+function landMiddle(outline) {
+    const b = boxOf(outline);
+    const N = 14;
+    let best = null;
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+        const x = b.minX + (b.maxX - b.minX) * i / N, y = b.minY + (b.maxY - b.minY) * j / N;
+        if (!pointInPolygon(outline, x, y)) continue;
+        const d = edgeDistance(outline, x, y);
+        if (!best || d > best.d) best = { x, y, d };
+    }
+    return best || { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, d: 0 };
+}
+
+// How much wider a land is drawn on its own map than on the map above, when its places need the room: in steps, so
+// a place moved a little leaves the land as it was.
+const FRAME_STEPS = Object.freeze([1, 1.25, 1.6, 2, 2.5, 3.2, 4, 5, 6.4, 8, 10, 12.5, 16, 20, 25, 32, 40, 50, 64]);
+const FRAME_MARGIN = 0.45;    // how far inside the border a place stands at the least, once the land is fitted to its places
+
+/**
+ * How a region's land lies on the region's own map (D168): a point of
+ * the map above at (x, y) is at (x * k + dx, y * k + dy) on it. While
+ * every place of the region stands on the land as it is on the map
+ * above, nothing is moved (k 1, dx 0, dy 0): a place is at the same spot
+ * of the land on both maps. When one does not, the land is drawn wider,
+ * a step at a time, until it holds them all: a land always holds its
+ * places. It grows where it lies, about its own middle (a place put a
+ * little past the border widens the land and moves nothing else far);
+ * unless laying it under its places, its middle on theirs, takes much
+ * less widening (the places were laid out before the land was there).
+ * @param {number[][]} outline  the land on the map above
+ * @param {Array<{ x: number, y: number }>} spots  the region's places, on the region's own map
+ * @returns {{ k: number, dx: number, dy: number }}
+ */
+export function landFrame(outline, spots) {
+    const same = { k: 1, dx: 0, dy: 0 };
+    const pts = (Array.isArray(spots) ? spots : []).filter(p => p && finite(p.x) && finite(p.y));
+    if (!Array.isArray(outline) || outline.length < 3 || !pts.length) return same;
+    const holds = (f, margin) => pts.every(p => insideBy(outline, (p.x - f.dx) / f.k, (p.y - f.dy) / f.k, margin));
+    if (holds(same, 0)) return same;
+    const mid = landMiddle(outline);
+    const b = boxOf(pts.map(p => [p.x, p.y]));
+    const px = Math.round(b.minX + b.maxX) / 2, py = Math.round(b.minY + b.maxY) / 2;    // the places' middle, to the half unit
+    const first = (make) => { for (const k of FRAME_STEPS) { const f = make(k); if (holds(f, FRAME_MARGIN)) return f; } return null; };
+    const grown = first((k) => ({ k, dx: round4(mid.x * (1 - k)), dy: round4(mid.y * (1 - k)) }));    // wider where it lies
+    const laid = first((k) => ({ k, dx: round4(px - mid.x * k), dy: round4(py - mid.y * k) }));       // under its places
+    if (grown && (!laid || grown.k <= laid.k * 1.6)) return grown;
+    const most = FRAME_STEPS[FRAME_STEPS.length - 1];
+    return laid || { k: most, dx: round4(px - mid.x * most), dy: round4(py - mid.y * most) };
+}
+
+/** A spot of the map above, where it is on a region's own map (D168): `realm` is that map's model's (atlasModel().realm); with none, the same spot. */
+export function spotOnLand(realm, at) {
+    if (!realm || !finite(realm.k) || !finite(realm.dx) || !finite(realm.dy)) return { x: at.x, y: at.y };
+    return { x: round4(at.x * realm.k + realm.dx), y: round4(at.y * realm.k + realm.dy) };
+}
+
+// What a land has on it, by its terrain (D168): how many mountain ranges, woods and lakes, from the fewest to the
+// most; how large its woods and lakes are; and fields of a terrain's own marks (dunes, reeds).
+const TERRAIN_PLANS = Object.freeze({
+    plains: { ranges: [0, 1], woods: [3, 4], lakes: [1, 2] },
+    forest: { ranges: [0, 1], woods: [6, 8], lakes: [1, 1], wood: 1.2, cover: 0.7 },
+    mountains: { ranges: [3, 4], woods: [2, 3], lakes: [0, 1], wood: 0.85 },
+    snow: { ranges: [2, 3], woods: [1, 2], lakes: [1, 1], wood: 0.85 },
+    desert: { ranges: [1, 1], woods: [0, 0], lakes: [0, 1], lake: 0.6, fields: [5, 6] },
+    swamp: { ranges: [0, 0], woods: [2, 3], lakes: [4, 5], lake: 0.6, fields: [4, 5], cover: 0.12 },
+});
+const LAND_AREA = 55;     // the area of a land that stands alone: what the terrain's sizes are told for
+const HOME_GRID = 1.3;    // the squares a land's terrain is looked for on
+const TREE_GRID = 0.85;   // the squares a forest's own trees stand on, one to a square
+
+/**
+ * The terrain drawn across a region's land (D168): mountain ranges,
+ * woods and lakes (and dunes on a desert, reeds on a swamp), as many and
+ * as large as the land's terrain has. Everything is read from the
+ * region's id and from where on the land it is, counted from the
+ * region's own spot: the same land has the same terrain every time, a
+ * land moved takes its terrain with it, and a border that moves changes
+ * only what stood by it. Nothing is moved to make room for a place or a
+ * road: a peak or a tree that would stand on one is left out (a pass, a
+ * clearing), and so is a lake.
+ * @param {object} o
+ * @param {string} o.id               the region
+ * @param {{ x: number, y: number }} o.site  its spot
+ * @param {number[][]} o.outline      its land
+ * @param {string} o.terrain          guessTerrain's word for it
+ * @param {Array<{ x: number, y: number }>} o.spots  the places on the land
+ * @param {number[][][]} o.roads      the roads between them
+ * @returns {{ unit: number, woods: number[][][], trees: number[][][], lakes: number[][][], peaks: number[][][][], marks: number[][][] }}
+ *   `peaks` is one list of lines for every peak, the farthest (most northern) first; the first line of a peak is its shape
+ */
+export function landTerrain({ id = '', site = { x: 0, y: 0 }, outline = [], terrain = 'plains', spots = [], roads = [] } = {}) {
+    const out = { unit: 1, woods: [], trees: [], lakes: [], peaks: [], marks: [] };
+    if (!Array.isArray(outline) || outline.length < 3) return out;
+    const plan = TERRAIN_PLANS[terrain] || TERRAIN_PLANS.plains;
+    const u = Math.min(1.5, Math.max(0.7, Math.sqrt(areaOf(outline) / LAND_AREA)));    // a larger land has larger terrain, not more of it
+    out.unit = round4(u);
+    const count = (kind) => { const [lo, hi] = plan[kind] || [0, 0]; return Math.min(hi, lo + Math.floor(hash01(`${id}/n/${kind}`) * (hi - lo + 1))); };
+    const clearOf = (x, y, ofSpots, ofRoads) => spots.every(p => Math.hypot(p.x - x, p.y - y) >= ofSpots) && roads.every(line => lineDist(line, x, y) >= ofRoads);
+    const box = boxOf(outline);
+    // Where a kind of terrain may stand: one point in every square of a grid laid from the region's spot, the squares
+    // taken in an order of their own; the first `n` that are far enough inside the land and from one another.
+    const homes = (kind, n, { size = () => 0, apart = 0, bar = () => false } = {}) => {
+        if (n <= 0) return [];
+        const cands = [];
+        for (let ix = Math.floor((box.minX - site.x) / HOME_GRID); ix <= Math.ceil((box.maxX - site.x) / HOME_GRID); ix++) {
+            for (let iy = Math.floor((box.minY - site.y) / HOME_GRID); iy <= Math.ceil((box.maxY - site.y) / HOME_GRID); iy++) {
+                const key = `${id}/${kind}/${ix},${iy}`;
+                cands.push({ key, p: hash01(`${key}/p`), x: site.x + (ix + 0.15 + 0.7 * hash01(`${key}/x`)) * HOME_GRID, y: site.y + (iy + 0.15 + 0.7 * hash01(`${key}/y`)) * HOME_GRID });
+            }
+        }
+        cands.sort((a, b) => a.p - b.p);
+        const got = [];
+        for (const c of cands) {
+            if (got.length >= n) break;
+            c.r = size(c);
+            if (!insideBy(outline, c.x, c.y, c.r) || got.some(o => Math.hypot(o.x - c.x, o.y - c.y) < apart) || bar(c)) continue;
+            got.push(c);
+        }
+        return got;
+    };
+
+    // Lakes: a lumpy round of water, longer one way than the other. Where a lake lies is the land's own; a place or
+    // a road on it only leaves it undrawn, and the ranges and the woods still stand off where it would be, so what a
+    // place changes is what is next to it and nothing further off.
+    const beds = [];
+    for (const c of homes('lake', count('lakes'), { size: (c) => (0.55 + 0.6 * hash01(`${c.key}/r`)) * (plan.lake || 1) * u * (1 + 0.5 * hash01(`${c.key}/st`)) * 1.22 + 0.3 * u, apart: 2.6 * u })) {
+        const r = (0.55 + 0.6 * hash01(`${c.key}/r`)) * (plan.lake || 1) * u;
+        const long = r * (1 + 0.5 * hash01(`${c.key}/st`));
+        const reach = long * 1.22;    // its waved shore reaches this far at the most
+        const turn = hash01(`${c.key}/turn`) * Math.PI;
+        const ct = Math.cos(turn), st = Math.sin(turn);
+        const shore = regionOutline(`${c.key}/lake`, { x: 0, y: 0 }, 1, 26).map(([x, y]) => [round4(c.x + x * long * ct - y * r * st), round4(c.y + x * long * st + y * r * ct)]);
+        beds.push({ x: c.x, y: c.y, reach, shore, dry: !clearOf(c.x, c.y, reach + 0.75 * u, reach + 0.3 * u) });
+    }
+    const lakes = beds.filter(l => !l.dry);
+    const wet = (list) => (x, y, by) => list.some(l => Math.hypot(l.x - x, l.y - y) < l.reach + by && (pointInPolygon(l.shore, x, y) || edgeDistance(l.shore, x, y) < by));
+    const inLake = wet(lakes);    // in the water that is drawn
+    const inBed = wet(beds);      // where a lake lies, drawn or not
+
+    // Mountain ranges: a line of peaks that wanders across the land, the tallest in its middle, a foothill beside
+    // every other one.
+    const peaks = [];
+    for (const c of homes('range', count('ranges'), { size: () => 0.9 * u, apart: 2.8 * u, bar: (c) => inBed(c.x, c.y, 0.9 * u) })) {
+        const way = hash01(`${c.key}/way`) * Math.PI;
+        const dx = Math.cos(way), dy = Math.sin(way);
+        const long = (3.2 + 2.6 * hash01(`${c.key}/long`)) * u;
+        const ph = hash01(`${c.key}/ph`) * Math.PI * 2;
+        const step = 0.46 * u;
+        const mine = [];
+        for (let i = 0; i * step <= long; i++) {
+            const t = -long / 2 + i * step;
+            const mid = 1 - Math.pow(2 * t / long, 2);
+            const off = 0.5 * u * Math.sin(t * 0.85 / u + ph) + (hash01(`${c.key}/p${i}/j`) - 0.5) * 0.24 * u;
+            const main = { key: `${c.key}/p${i}`, x: c.x + dx * t - dy * off, y: c.y + dy * t + dx * off, s: (0.5 + 0.34 * mid + 0.14 * hash01(`${c.key}/p${i}/s`)) * u };
+            mine.push(main);
+            if (i % 2 === 1 && mid > 0.25) {
+                const d = (hash01(`${c.key}/p${i}/side`) < 0.5 ? -1 : 1) * (0.5 + 0.2 * hash01(`${c.key}/p${i}/d`)) * u;
+                mine.push({ key: `${c.key}/f${i}`, x: main.x - dy * d + dx * 0.2 * u, y: main.y + dx * d + dy * 0.2 * u, s: main.s * 0.62 });
+            }
+        }
+        // A peak stands at the middle of its foot; what must be clear is the peak itself, which rises above it.
+        const ok = mine.filter(p => insideBy(outline, p.x, p.y - p.s * 0.45, 0.3 * u + p.s * 0.55) && !inLake(p.x, p.y - p.s * 0.3, 0.3 * u + p.s * 0.4) && clearOf(p.x, p.y - p.s * 0.45, 0.6 * u + p.s * 0.5, 0.2 * u + p.s * 0.45));
+        if (ok.length >= 4) peaks.push(...ok);    // two or three peaks alone are no range
+    }
+    peaks.sort((a, b) => a.y - b.y);
+    for (const p of peaks) {
+        const w = p.s * 0.62, h = p.s * 1.05;
+        const lean = (hash01(`${p.key}/a`) - 0.5) * 0.3 * w;
+        const j1 = (hash01(`${p.key}/b`) - 0.5) * 0.14 * h, j2 = (hash01(`${p.key}/c`) - 0.5) * 0.14 * h;
+        const at = (ox, oy) => [round4(p.x + ox), round4(p.y + oy)];
+        out.peaks.push([
+            [at(-w, 0), at(-0.45 * w, -0.56 * h + j1), at(lean, -h), at(0.48 * w, -0.5 * h + j2), at(w, 0)],    // the peak, open at its foot
+            [at(lean, -h), at(lean * 0.4 + 0.14 * w, -0.56 * h), at(-0.06 * w, -0.16 * h)],                     // the ridge down its face
+            [at(0.36 * w, -0.4 * h), at(0.24 * w, -0.1 * h)], [at(0.62 * w, -0.26 * h), at(0.54 * w, -0.05 * h)],    // its shaded side
+        ]);
+    }
+    const onPeak = (x, y, by) => peaks.some(p => Math.abs(p.x - x) < p.s * 0.62 + by && y > p.y - p.s * 1.05 - by && y < p.y + by);
+
+    // Woods: a patch of green with its trees; a tree that would stand on a place, a road, a lake or a peak is left out.
+    const tree = (key, x, y) => {
+        const sz = (0.2 + 0.1 * hash01(`${key}/s`)) * u;
+        const pt = (ox, oy) => [round4(x + ox * sz), round4(y + oy * sz)];
+        out.trees.push([pt(0, -1), pt(0.5, -0.55), pt(0.55, -0.05), pt(0, 0.2), pt(-0.55, -0.05), pt(-0.5, -0.55), pt(0, -1)], [pt(0, 0.2), pt(0, 0.7)]);    // a crown and a trunk
+    };
+    // A wood by the border is as large as the land has room for there.
+    for (const c of homes('wood', count('woods'), { size: () => 0.75 * u, apart: 1.5 * u, bar: (c) => inBed(c.x, c.y, 0.4 * u) })) {
+        const r = Math.min((0.9 + 0.8 * hash01(`${c.key}/r`)) * (plan.wood || 1) * u, (edgeDistance(outline, c.x, c.y) - 0.1 * u) / 1.2);
+        out.woods.push(regionOutline(`${c.key}/wood`, c, r, 22));
+        const n = Math.round(6 + (r / u) * (r / u) * 6);
+        for (let i = 0; i < n; i++) {
+            const t = hash01(`${c.key}/t${i}/a`) * Math.PI * 2;
+            const d = r * 0.86 * Math.sqrt(hash01(`${c.key}/t${i}/d`));
+            const x = c.x + d * Math.cos(t), y = c.y + d * Math.sin(t);
+            if (inLake(x, y, 0.22 * u) || onPeak(x, y, 0.18 * u) || !clearOf(x, y, 0.8 * u, 0.36 * u)) continue;
+            tree(`${c.key}/t${i}`, x, y);
+        }
+    }
+
+    // A forest is wooded all over, and a swamp has trees here and there: one tree to a square of the land, in as many
+    // of the squares as the terrain is wooded.
+    if (plan.cover > 0) {
+        for (let ix = Math.floor((box.minX - site.x) / TREE_GRID); ix <= Math.ceil((box.maxX - site.x) / TREE_GRID); ix++) {
+            for (let iy = Math.floor((box.minY - site.y) / TREE_GRID); iy <= Math.ceil((box.maxY - site.y) / TREE_GRID); iy++) {
+                const key = `${id}/tree/${ix},${iy}`;
+                if (hash01(`${key}/p`) >= plan.cover) continue;
+                const x = site.x + (ix + 0.1 + 0.8 * hash01(`${key}/x`)) * TREE_GRID, y = site.y + (iy + 0.1 + 0.8 * hash01(`${key}/y`)) * TREE_GRID;
+                if (!insideBy(outline, x, y, 0.4 * u) || inLake(x, y, 0.22 * u) || onPeak(x, y, 0.18 * u) || !clearOf(x, y, 0.8 * u, 0.36 * u)) continue;
+                tree(key, x, y);
+            }
+        }
+    }
+
+    // A desert's dunes and a swamp's reeds, in fields.
+    for (const c of homes('field', count('fields'), { size: () => 0.9 * u, apart: 2 * u, bar: (c) => inBed(c.x, c.y, 0.3 * u) })) {
+        const n = 6 + Math.floor(hash01(`${c.key}/n`) * 3);
+        for (let i = 0; i < n; i++) {
+            const t = hash01(`${c.key}/m${i}/a`) * Math.PI * 2;
+            const d = 1.15 * u * Math.sqrt(hash01(`${c.key}/m${i}/d`));
+            const x = c.x + d * Math.cos(t), y = c.y + d * Math.sin(t);
+            if (!insideBy(outline, x, y, 0.35 * u) || inLake(x, y, 0.3 * u) || onPeak(x, y, 0.2 * u) || !clearOf(x, y, 0.8 * u, 0.36 * u)) continue;
+            out.marks.push(...glyphAt(terrain, x, y, 0.2 * u));
+        }
+    }
+    out.lakes = lakes.map(l => l.shore);
+    return out;
+}
+
+/** Where a neighbour's name stands on a shared border (D168): the border's middle, the way the border runs there (in degrees, as the screen turns: x right, y down; between -90 and 90). */
+function borderMark(points) {
+    const lens = [0];
+    for (let i = 1; i < points.length; i++) lens.push(lens[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+    const total = lens[lens.length - 1];
+    const at = (f) => {
+        const want = total * f;
+        let i = 1;
+        while (i < lens.length - 1 && lens[i] < want) i++;
+        const t = lens[i] > lens[i - 1] ? (want - lens[i - 1]) / (lens[i] - lens[i - 1]) : 0;
+        return [points[i - 1][0] + (points[i][0] - points[i - 1][0]) * t, points[i - 1][1] + (points[i][1] - points[i - 1][1]) * t];
+    };
+    const a = at(0.3), b = at(0.7);
+    let angle = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+    if (angle > 90) angle -= 180;
+    if (angle <= -90) angle += 180;
+    return { at: at(0.5), angle, length: total };
 }
 
 /**
@@ -1106,15 +1381,60 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         routes.push(roadOf(ma, mb, false, hours));
     }
 
-    let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
-    for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
-    for (const t of territories) for (const [x, y] of t.outline) { minX = Math.min(minX, x - 3); minY = Math.min(minY, y - 3); maxX = Math.max(maxX, x + 3); maxY = Math.max(maxY, y + 3); }    // the lands reach past their spots
-    const bounds = { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) };
     const kindOfId = (id) => (live.get(id).kind || guessKind(live.get(id).label));
     const up = chain(cur);
     const lastRegion = up.map(kindOfId).lastIndexOf('region');
     const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0, kind: cur ? kindOfId(cur) : '' });
     const ground = groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
+
+    // Inside a region (D168): the land it has on the map above is the land of its own map, the lands it borders
+    // lie around it, and its terrain is drawn across it. Only on open country (a region the player gave streets or a
+    // shore is drawn as they said), and not when it holds regions of its own: their lands are its map.
+    let realm = null;
+    let terrain = null;
+    if (cur && kindOfId(cur) === 'region' && ground === 'country' && !territories.length) {
+        const above = par.get(cur) || '';
+        const spots = [];    // the regions on the map above, in the order that map draws them
+        for (const c of live.values()) {
+            if ((par.get(c.id) || '') !== above || kindOfId(c.id) !== 'region') continue;
+            const sp = spotOf(c);
+            if (sp) spots.push({ id: c.id, label: c.label, loose: c.loose === true, x: sp.x, y: sp.y });
+        }
+        const upCells = territoryCells(spots, TERRITORY_RADIUS, above || 'top');
+        const cell = upCells.get(cur);
+        const site = spots.find(sp => sp.id === cur);
+        if (site && cell && cell.outline.length >= 3) {
+            const upShades = territoryShades(spots.map(sp => ({ id: sp.id, terrain: guessTerrain(sp.label), neighbours: (upCells.get(sp.id) || { neighbours: [] }).neighbours })));
+            const f = landFrame(cell.outline, markers);
+            const to = ([x, y]) => [round4(x * f.k + f.dx), round4(y * f.k + f.dy)];           // from the map above to this one
+            const back = (x, y) => [(x - f.dx) / f.k, (y - f.dy) / f.k];                       // and from this one to the map above
+            const fillOf = (id) => (upShades.get(id) || { css: '' }).css;
+            const here = to([site.x, site.y]);
+            const neighbours = [];
+            for (const b of cell.borders) {
+                const o = spots.find(sp => sp.id === b.id);
+                const oc = upCells.get(b.id);
+                if (!o || !oc || oc.outline.length < 3 || b.points.length < 2) continue;
+                const mark = borderMark(b.points.map(to));
+                // The name stands on the neighbour's side of the border: the side its spot is on.
+                const t = mark.angle * Math.PI / 180;
+                const away = (o.x - site.x) * -Math.sin(t) + (o.y - site.y) * Math.cos(t);
+                neighbours.push({ id: o.id, label: o.label, terrain: guessTerrain(o.label), fill: fillOf(o.id), loose: o.loose, outline: oc.outline.map(to), border: b.points.map(to), at: mark.at.map(round4), angle: round4(mark.angle), side: away < 0 ? -1 : 1 });
+            }
+            const kindOfLand = guessTerrain(site.label);
+            realm = { id: cur, label: site.label, terrain: kindOfLand, fill: fillOf(cur), loose: site.loose, x: here[0], y: here[1], k: f.k, dx: f.dx, dy: f.dy, outline: cell.outline.map(to), neighbours };
+            const drawn = landTerrain({ id: cur, site, outline: cell.outline, terrain: kindOfLand, spots: markers.map(m => { const [x, y] = back(m.x, m.y); return { x, y }; }), roads: routes.map(r => r.points.map(([x, y]) => back(x, y))) });
+            const lines = (list) => list.map(line => line.map(to));
+            terrain = { lines: [], sea: null, ripples: [], woods: lines(drawn.woods), trees: lines(drawn.trees), ponds: lines(drawn.lakes), peaks: drawn.peaks.map(lines), marks: lines(drawn.marks), look: kindOfLand, unit: round4(drawn.unit * f.k) };
+        }
+    }
+
+    // The canvas: the empty map's own reach, or a region's land; and room around everything that stands on it.
+    let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
+    if (realm) { minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity; for (const [x, y] of realm.outline) { minX = Math.min(minX, x - 2.5); minY = Math.min(minY, y - 2.5); maxX = Math.max(maxX, x + 2.5); maxY = Math.max(maxY, y + 2.5); } }
+    for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
+    for (const t of territories) for (const [x, y] of t.outline) { minX = Math.min(minX, x - 3); minY = Math.min(minY, y - 3); maxX = Math.max(maxX, x + 3); maxY = Math.max(maxY, y + 3); }    // the lands reach past their spots
+    const bounds = { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) };
     return {
         layer: cur, layerLabel: labelOfLayer(cur), depth,
         trail: chain(cur).map(id => ({ id, label: labelOfLayer(id) })),
@@ -1122,7 +1442,8 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         party: partyOn && markers.some(m => m.id === partyOn) ? partyOn : '',
         partyInTray: partyOn && tray.some(m => m.id === partyOn) ? partyOn : '',
         partyId, partyLayer: partyId ? (par.get(partyId) || '') : '',
-        bounds, measure, ground, territories, decor: groundDecor(ground, cur || 'top', bounds, markers, territories.map(t => t.outline)),
+        bounds, measure, ground, territories, realm,
+        decor: terrain || groundDecor(ground, cur || 'top', bounds, markers, territories.map(t => t.outline)),
         empty: live.size === 0,
     };
 }
@@ -1139,11 +1460,15 @@ export function suggestSpots(model) {
     const taken = (model && model.markers ? model.markers : []).map(m => ({ x: m.x, y: m.y, wide: m.kind === 'region' }));
     const free = (at, wide) => taken.every(t => dist(t, at) >= (wide || t.wide ? TERRITORY_RADIUS * 1.3 : 1.3));    // a region needs room for its land
     const out = new Map();
-    let n = 0;
+    // On a region's own map (D168) the spiral starts from the region's spot and keeps to its land, while there is room on it.
+    const realm = model && model.realm ? model.realm : null;
+    const mid = realm ? { x: realm.x, y: realm.y } : { x: 0, y: 0 };
+    let n = 0, wide = 0;
     for (const t of (model && model.tray ? model.tray : [])) {
         if (t.here === false) continue;
         let at = null;
-        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral({ x: 0, y: 0 }, n++, 1.7, 0.1); if (free(s, t.kind === 'region')) at = s; }
+        if (realm) for (let guard = 0; !at && guard < 600; guard++) { const s = spiral(mid, n++, 1.7, 0.1); if (free(s, t.kind === 'region') && insideBy(realm.outline, s.x, s.y, 0.6)) at = s; }
+        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral(mid, realm ? wide++ : n++, 1.7, 0.1); if (free(s, t.kind === 'region')) at = s; }
         if (!at) continue;
         taken.push({ ...at, wide: t.kind === 'region' });
         out.set(t.id, at);

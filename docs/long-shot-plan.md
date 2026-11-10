@@ -314,11 +314,11 @@ out; the region they lie in is landlocked. Three steps were agreed; step
 | --- | --- | --- |
 | D163 | A region is a land with borders (the owner) | A place whose kind is Region is drawn as a territory, not a pin: its own blob around its spot, cut along the line halfway to every other region on the map, so neighbours meet at one border and the lands tile into one country (`territoryOutlines`). A border between two lands is waved the same from both sides. A land is tinted by its terrain, else by one of six parchment hues; it names itself under the pointer; **a click enters it**. Its card is behind its small standard on the land, or a right-click. With a marker waiting to be put down, a click on a land puts it there. **Group into a region** (Places, on a map of pins with no region yet) puts everything on the map inside a new region standing where they stood, each keeping its spot on the region's own map (`wrapInRegion`). A map that holds regions is a world's by default, a region's own map a region's, a city in a region a town's. Fill out this map on a map of regions suggests neighbouring regions, not canon; the set-up is told to put regions on the top map when the story reaches beyond one settlement. Regions stand further apart than pins when laid out, so their lands have room. Outside the lands the ground is the map's own: open country for a landlocked world, the sea with Islands. |
 
-Step 2 (not built): inside a region, the land takes the outline it has on
-the map above, with its neighbours named along the borders they share, and
-terrain drawn across it (ranges, lakes, forests, roads). Step 3 (not
-built): the set-up and the fill say what each region's land is like, so
-the terrain follows the story. A picture of the player's own under any
+Step 2 (built: §15, D168): inside a region, the land takes the outline it
+has on the map above, with its neighbours named along the borders they
+share, and terrain drawn across it (ranges, lakes, forests, roads). Step 3
+(not built): the set-up and the fill say what each region's land is like,
+so the terrain follows the story. A picture of the player's own under any
 map, not only the top one, is the way to a painted look.
 
 | D164 | Roads are the player's to draw (the owner: "I am moving it but I can't add new roads") | The map still joins each place to its nearest by itself. The Roads tool (the road button among the tools): while it is on, a place clicked is picked, a second place clicked makes a road between the two, or takes away the one that was there, whether the player drew it (`book.roads`) or the map did (`book.cut`); Esc ends. A road follows its places when they are moved; one to a place that is deleted, merged away or on another map is not drawn. Roads are still drawn, never measured (D141). |
@@ -369,3 +369,24 @@ which makes the path focusable) and the browser drew a box round it; no
 box is drawn now, and the keyboard's own focus thickens the border.
 `territoryCells` returns each land with the regions it borders, which
 step 2 (a region's neighbours named along its borders) will read.
+
+## 15. Inside a region (2026-11-10, D168)
+
+The owner, after the list of what was next: "alright lets go with step 2".
+Built in "Atlas 13".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D168 | A region's own map is its land (the owner's step 2) | **The land:** entering a region shows the land it has on the map above: the same outline, the same colour (paler, so its terrain reads), under a heavier border (`atlasModel().realm`). Its places stand on it as pins, joined by their roads. **The same spots on both maps:** while every place of the region stands on the land as it lies on the map above, nothing is moved (`landFrame`: k 1): a place dropped on the land from above is at that spot of it inside. When one does not, the land is drawn wider, a step at a time (1.25, 1.6, 2 ... up to 64), until it holds them all: about its own middle when that takes little (a place put just past the border), else laid under its places, its middle on theirs (places laid out before the land was there, as a set-up's are). A land always holds its places. A place dropped on a land from the map above goes to the matching spot of the land inside (`spotOnLand`), wherever the land is laid there. **The neighbours:** the lands it borders lie around it, dimmed, in their own colours; each is named along the border it shares, the name turned the way the border runs and set on the neighbour's side (`territoryCells` gives every land its shared borders, one run of points a neighbour, the same line from both sides). A neighbour's name, or its land, is clicked to go there; under the pointer a neighbour names itself as a land does on the map above. With a marker waiting, the click puts it down instead. **The terrain** (`landTerrain`): mountain ranges (a wandering line of peaks, the tallest in its middle, foothills beside it; each peak a shape of the paper's colour so a nearer one hides a farther), woods (a patch of green with its trees) and lakes; by what the region's name tells (`guessTerrain`): a forest is wooded all over, mountains have three or four ranges, a swamp is full of meres and reeds with a tree here and there, a desert has dunes, one range and no woods, snow has ranges and few woods, anything else is open country with a few woods, a lake or two and perhaps a range. A larger land has larger terrain, not more of it. Everything is read from the region's id and from where on the land it is, counted from the region's spot: the same land has the same terrain every time, a land moved takes its terrain with it, a border that moves changes only what stood by it. Nothing is moved to make room: a peak or a tree that would stand on a place or a road is left out (a pass, a clearing, a way cut through a wood), and so is a lake; what a place changes is what is next to it. **When there is no land of its own:** a region the player gave another ground (streets, a shore, an island) is drawn as they said; a region that holds regions shows their lands; a city, a building or a dungeon is no land of the map above. **The view:** a fit shows the whole land and little else; no start panel is laid over a region's land (a line says nothing stands on it yet); Place all starts from the region's spot and keeps to its land while there is room, and Fill out lays its places from there. |
+
+Found on the way and fixed: entering a map smaller than the one left
+started a glide of the zoom to the new map's limit, which ended after the
+fit and undid it, so the view came to rest zoomed all the way out. A view
+outside the new limits is now put inside them at once.
+
+Known limits. The land is as wide inside as on the map above only while
+both maps are at one scale (they are by default: D166); the player who
+sets them apart gets the same drawing at two scales. Terrain is told by
+the region's name alone until step 3. No rivers. A region that holds
+regions shows no neighbours. The picture of the owner's own is still only
+under the top map.

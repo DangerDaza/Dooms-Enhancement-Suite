@@ -87,11 +87,11 @@ function draw() {
     const ui = window.__ui;
     root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
     const hint = root.querySelector('.dooms-atlas-hint');
-    const word = m.markers.length ? '' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
+    const word = m.markers.length ? '' : m.realm ? 'Nothing stands in ' + m.layerLabel + ' yet. Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
     const start = root.querySelector('.dooms-atlas-start');
     const waiting = m.tray.filter(t => t.here !== false).length;
-    start.hidden = m.markers.length > 0; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting, loose: m.tray.length - waiting, picture: !!ui.picture, layerLabel: m.layerLabel });
+    start.hidden = m.markers.length > 0 || !!m.realm; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting, loose: m.tray.length - waiting, picture: !!ui.picture, layerLabel: m.layerLabel });
     const trail = root.querySelector('.dooms-atlas-trail');
     trail.hidden = !m.layer; trail.innerHTML = atlasTrailHtml({ world: pack.name, trail: m.trail });
     if (window.__board) window.__board.update({ model: m, picture: ui.layer ? null : ui.picture, hidden: ui.hidden, query: ui.query, moving: ui.moving });
@@ -121,7 +121,7 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
         road: (r) => { const m = window.__model; const cur = m.routes.find(x => (x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a)) || r; const len = (cur.units || 0) * m.measure.per; const name = (id) => (m.markers.find(x => x.id === id) || {}).label || id; return atlasRoadHtml({ a: { id: cur.a, label: name(cur.a) }, b: { id: cur.b, label: name(cur.b) }, drawn: A.describeLength(len, m.measure.unit) + ', ' + A.describeTime(A.travelHours(len, m.measure)) + ' on foot', hours: cur.hours || 0, unit: m.measure.scale === 'world' || m.measure.scale === 'region' ? 'days' : 'minutes' }); },
         on: {
             open: (id) => window.__events.push(['open', id]), close: () => { window.__events.push(['close']); window.__ui.cardMode = 'view'; },
-            drop: (id, at) => { const into = (() => { const it = [...window.__model.tray, ...window.__model.markers].find(x => x.id === id); return it && it.kind === 'region' ? '' : A.territoryAt(window.__model, at.x, at.y); })(); window.__events.push(['drop', id, at, into]); window.__book = A.placeAt(window.__book, id, at, into || window.__ui.layer); draw(); },
+            drop: (id, at) => { const into = (() => { const it = [...window.__model.tray, ...window.__model.markers].find(x => x.id === id); return it && it.kind === 'region' ? '' : A.territoryAt(window.__model, at.x, at.y); })(); window.__events.push(['drop', id, at, into]); const spot = into ? A.spotOnLand(A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: into }).realm, at) : at; window.__book = A.placeAt(window.__book, id, spot, into || window.__ui.layer); draw(); },
             enter: (id) => { window.__events.push(['enter', id]); window.__layer(id); },
             pick: (id) => { window.__events.push(['pick', id]); const ui = window.__ui; if (!ui.first || ui.first === id) { ui.first = ui.first === id ? '' : id; window.__board.update({ picked: ui.first }); return; } const a = ui.first; ui.first = ''; window.__board.update({ picked: '' }); window.__book = A.toggleRoad(window.__book, a, id, window.__model); draw(); },
             tap: (at) => { window.__events.push(['tap', at]); const ui = window.__ui; if (ui.armed === '+') { ui.armed = ''; const made = A.addPin(window.__book, { label: 'New place', x: at.x, y: at.y, layer: ui.layer }); window.__book = made.book; draw(); window.__board.open(made.id); ui.cardMode = 'edit'; window.__board.redrawCard(); } else if (ui.armed) { window.__book = A.placeAt(window.__book, ui.armed, at, ui.layer); ui.armed = ''; draw(); } },
@@ -208,6 +208,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 let failures = 0;
 const check = (name, cond, detail = '') => { if (cond) console.log(`pass  ${name}`); else { failures++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ''}`); } };
 const near = (a, b, tol) => Math.abs(a - b) <= tol;
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const browser = await pw.chromium.launch();
 const VIEW = { width: 1600, height: 900 };
@@ -235,7 +236,7 @@ const layout = () => page.evaluate(() => {
         shore: q('path.dooms-atlas-shore'), coast: q('path.dooms-atlas-coast'), ripples: q('path.dooms-atlas-ripple'), regions: q('path.dooms-atlas-land'), glyphs: q('path.dooms-atlas-glyph'), routes: q('path.dooms-atlas-route'), regionNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-region-name')].map(x => x.textContent),
         images: q('.leaflet-pane img') + q('canvas'),
         zoom: document.querySelector('.dooms-atlas-map').getAttribute('data-zoom'),
-        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), lands: q('path.dooms-atlas-territory'), looseLands: q('path.dooms-atlas-territory.is-loose'), hits: q('path.dooms-atlas-route-hit'), setRoads: q('path.dooms-atlas-route.is-set'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
+        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), lands: q('path.dooms-atlas-territory'), realm: q('path.dooms-atlas-realm'), beyond: q('path.dooms-atlas-beyond'), beyondNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-beyond-name')].map(x => x.textContent), peaks: q('path.dooms-atlas-peak'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), woods: q('path.dooms-atlas-wood'), startShown: (() => { const st = document.querySelector('.dooms-atlas-start'); return !!st && !st.hidden; })(), looseLands: q('path.dooms-atlas-territory.is-loose'), hits: q('path.dooms-atlas-route-hit'), setRoads: q('path.dooms-atlas-route.is-set'), woods: q('path.dooms-atlas-wood'), trees: q('path.dooms-atlas-tree'), ponds: q('path.dooms-atlas-pond'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
         kinds: [...document.querySelectorAll('.dooms-atlas-kind')].map(k => ({ id: k.getAttribute('data-kind'), count: Number(k.querySelector('.dooms-atlas-kind-count').textContent), off: k.classList.contains('is-off') })),
         tray: [...document.querySelectorAll('.dooms-atlas-tray-row')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         rows: q('.dooms-atlas-results .dooms-atlas-row'),
@@ -854,6 +855,123 @@ console.log('\n§5e regions always border one another; Fill out with regions; a 
     l = await layout();
     const dropped = await page.evaluate(() => window.__events.filter(e => e[0] === 'drop').pop());
     check('a place dropped on a land goes inside that region, not onto the map of regions', !!row && dropped[3] === target.id && l.count === 5 && !l.tray.includes(row) && (await page.evaluate((nm) => { const it = window.__model.all.find(x => x.label === nm); return !!it && it.layer; }, row)) === target.id, `${row} ${JSON.stringify(dropped)}`);
+}
+
+console.log('\n§5f inside a region: its land, its neighbours named on the borders, its terrain (D168)');
+{
+    // The owner's world, a step on: his city and castle in their region, and the regions a fill put around it.
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 3.2, 1.2], ['Mirefen Ferry', 'water', -2.4, -1.6]]) b = window.A.addPin(b, { label, kind, x, y }).book;
+        const g = window.A.wrapInRegion(b, window.A.atlasModel({ pack: window.__pack || null, book: b }), { label: 'The Haskmarch' });
+        b = g.book;
+        window.__lands = {};
+        for (const [label, x, y] of [['The Amber Waste', 10, -5], ['The Salt Fens', -3, 10], ['Kessel Vale', -11, -3], ['Redfall Heights', 3, -10], ['The Greywood Forest', 11, 6], ['Iron Peaks', -9, 8]]) { const r = window.A.addPin(b, { label, kind: 'region', x, y, loose: true }); b = r.book; window.__lands[label] = r.id; }
+        window.__home = g.id;
+        return window.__open({ world: 'campaign', book: b });
+    });
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    const topFill = await page.evaluate(() => window.__model.territories.find(t => t.id === window.__home).fill);
+    // The land clicked on the map of regions (clear of its standard): the map inside it.
+    const at = await page.evaluate(() => { const t = window.__model.territories.find(x => x.id === window.__home); const p = window.__board.map.latLngToContainerPoint([-(t.y + 1.6), t.x + 1.4]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y }; });
+    await page.mouse.click(at.x, at.y);
+    await settle();
+    let l = await layout();
+    const seen = () => page.evaluate(() => {
+        const m = window.__model, map = window.__board.map;
+        const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect();
+        const path = document.querySelector('path.dooms-atlas-realm');
+        const r = path ? path.getBoundingClientRect() : null;
+        const names = [...document.querySelectorAll('#dooms-atlas .dooms-atlas-beyond-name')].map(el => { const b = el.getBoundingClientRect(); const n = m.realm.neighbours.find(x => x.label === el.textContent); const p = n ? map.latLngToContainerPoint([-n.at[1], n.at[0]]) : null; return { text: el.textContent, off: p ? Math.hypot(b.left + b.width / 2 - box.left - p.x, b.top + b.height / 2 - box.top - p.y) : 999, turned: getComputedStyle(el).transform !== 'none' }; });
+        return {
+            realm: m.realm ? { id: m.realm.id, k: m.realm.k, n: m.realm.neighbours.map(x => x.label).sort() } : null,
+            fill: path ? path.getAttribute('fill') : '', box: r ? { w: r.width, h: r.height, in: r.left >= box.left - 1 && r.right <= box.right + 1 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1 } : null, map: { w: box.width, h: box.height },
+            zoom: map.getZoom(), min: map.getMinZoom(), names, peaks: m.decor.peaks ? m.decor.peaks.length : -1,
+            onLand: m.markers.every(x => window.A.pointInPolygon(m.realm ? m.realm.outline : [], x.x, x.y)),
+        };
+    });
+    let v = await seen();
+    check('the land clicked is entered: one land drawn in the shape and the colour it has on the map above, no map of lands', (await page.evaluate(() => window.__events.some(e => e[0] === 'enter' && e[1] === window.__home))) && /The Haskmarch/.test(l.trail) && l.realm === 1 && l.lands === 0 && v.realm.id === (await page.evaluate(() => window.__home)) && v.realm.k === 1 && v.fill === topFill && l.ground === 'country', JSON.stringify(v.realm));
+    check('the view is fitted to the land: all of it on screen, filling most of the map', v.box.in && Math.max(v.box.w / v.map.w, v.box.h / v.map.h) > 0.6 && v.zoom > v.min, JSON.stringify([v.box, v.map, v.zoom, v.min]));
+    check('its places stand on it as pins, where they were, joined by their roads', l.count === 3 && !!l.markers['Hask'] && !!l.markers['Redfall Castle'] && !!l.markers['Mirefen Ferry'] && v.onLand && l.routes === 2);
+    check('the six lands it borders lie around it, dimmed, each named on the border it shares', l.beyond === 6 && same(v.realm.n, ['Iron Peaks', 'Kessel Vale', 'Redfall Heights', 'The Amber Waste', 'The Greywood Forest', 'The Salt Fens']) && same([...l.beyondNames].sort(), v.realm.n) && v.names.every(n => n.off < 26), JSON.stringify(v.names));
+    check('a name runs the way its border runs', v.names.filter(n => n.turned).length >= 4);
+    check('its terrain is drawn across it: woods with their trees, and each peak a shape of its own', l.woods >= 2 && l.trees === 1 && l.peaks === v.peaks && l.groundLines === 0, JSON.stringify([l.woods, l.trees, l.peaks, v.peaks]));
+    check('no panel is laid over a region\'s land', !l.startShown);
+    await shot('7r-inside-region');
+
+    // A neighbour under the pointer names itself; its name on the border is clicked to go there.
+    const beside = (label, px) => page.evaluate(({ label, px }) => { const m = window.__model, map = window.__board.map; const n = m.realm.neighbours.find(x => x.label === label); const rad = n.angle * Math.PI / 180; const p = map.latLngToContainerPoint([-n.at[1], n.at[0]]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x - Math.sin(rad) * n.side * px, y: box.top + p.y + Math.cos(rad) * n.side * px, id: n.id }; }, { label, px });
+    const fens = await beside('The Salt Fens', 70);
+    await page.mouse.move(fens.x, fens.y);
+    await page.waitForTimeout(250);
+    check('a neighbouring land under the pointer names itself', (await page.evaluate(() => (document.querySelector('.dooms-atlas-territory-name') || {}).textContent || '')) === 'The Salt Fens');
+    await shot('7s-neighbour-hover');
+    await page.evaluate(() => { window.__events.length = 0; });
+    await page.locator('#dooms-atlas .dooms-atlas-beyond-name', { hasText: 'Iron Peaks' }).click();
+    await settle();
+    l = await layout();
+    v = await seen();
+    check('a neighbour\'s name clicked goes there: its own land, the region left behind now one of its neighbours', (await page.evaluate(() => window.__events.some(e => e[0] === 'enter' && e[1] === window.__lands['Iron Peaks']))) && /Iron Peaks/.test(l.trail) && !/Haskmarch/.test(l.trail) && l.realm === 1 && v.realm.n.includes('The Haskmarch') && l.beyondNames.includes('The Haskmarch'));
+    check('a land of mountains is drawn with its ranges; nothing stands on it yet, and the line says so with no panel over the land', l.peaks >= 12 && l.count === 0 && !l.startShown && /Nothing stands in Iron Peaks yet/.test(l.hint), `${l.peaks} ${l.hint}`);
+    check('the view is fitted to the new land', v.box.in && Math.max(v.box.w / v.map.w, v.box.h / v.map.h) > 0.6, JSON.stringify(v.box));
+    await shot('7t-mountains');
+    // A neighbouring land itself is clicked to go there too.
+    const wood = await beside('The Haskmarch', 60);
+    await page.evaluate(() => { window.__events.length = 0; });
+    await page.mouse.click(wood.x, wood.y);
+    await settle();
+    l = await layout();
+    check('a neighbouring land clicked goes there', (await page.evaluate(() => window.__events.some(e => e[0] === 'enter' && e[1] === window.__home))) && /The Haskmarch/.test(l.trail) && l.count === 3);
+    // While something waits to be put down, a click on a neighbour puts it down on this map and goes nowhere.
+    const waste = await beside('The Amber Waste', 60);
+    await page.evaluate(() => { window.__events.length = 0; window.__set({ armed: '+' }); document.getElementById('dooms-atlas').classList.add('is-armed'); });
+    await page.mouse.click(waste.x, waste.y);
+    await settle();
+    const armed = await page.evaluate(() => { document.getElementById('dooms-atlas').classList.remove('is-armed'); return window.__events.map(e => e[0]); });
+    v = await seen();
+    check('with a marker waiting, a click on a neighbour puts it down and goes nowhere; the land is drawn wider to hold it', armed.includes('tap') && !armed.includes('enter') && (await page.evaluate(() => window.__model.layer === window.__home && window.__model.markers.some(m => m.label === 'New place'))) && v.realm.k > 1 && v.onLand, JSON.stringify(v.realm));
+    await page.evaluate(() => window.__board.closeCard());
+
+    // The other terrains, each its own land.
+    for (const [name, file, test] of [['The Greywood Forest', '7u-forest', (m) => m.trees > 160 && m.woods >= 5], ['The Salt Fens', '7v-fens', (m) => m.ponds >= 3 && m.marks > 20], ['The Amber Waste', '7w-desert', (m) => m.marks >= 10 && m.woods === 0]]) {
+        await page.evaluate((nm) => window.__layer(window.__lands[nm]), name);
+        await settle();
+        const m = await page.evaluate(() => { const d = window.__model.decor; return { trees: d.trees.length, woods: d.woods.length, ponds: d.ponds.length, marks: d.marks.length, peaks: d.peaks.length, look: d.look, paths: document.querySelectorAll('.dooms-atlas-map svg path').length }; });
+        check(`${name}: drawn as its name tells (${m.look}), in few shapes`, test(m) && m.paths < 120, JSON.stringify(m));
+        await shot(file);
+    }
+
+    // A region whose places were laid out before its land was there, and wider than it: the land is laid under them.
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        const made = {};
+        for (const [label, x, y] of [['The Haskmarch', 14, -3], ['Kessel Vale', 3, -4], ['The Salt Fens', 12, 8], ['Redfall Heights', 22, 4]]) { const r = window.A.addPin(b, { label, kind: 'region', x, y }); b = r.book; made[label] = r.id; }
+        for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 9, 3], ['Mirefen Ferry', 'water', -8, -5], ['The Ashwood', 'wild', -3, 6], ['Tollgate', 'landmark', 5, -7]]) b = window.A.addPin(b, { label, kind, x, y, layer: made['The Haskmarch'] }).book;
+        const lost = window.A.addPin(b, { label: 'Reedcutters\' Landing' }); b = window.A.unplace(lost.book, lost.id);
+        window.__home = made['The Haskmarch'];
+        return window.__open({ world: 'campaign', book: b });
+    });
+    await page.evaluate(() => window.__layer(window.__home));
+    await settle();
+    l = await layout();
+    v = await seen();
+    check('places laid out off the land and wider than it: the land is laid under them and drawn wide enough to hold them all', v.realm.k > 1 && v.onLand && l.count === 5 && l.beyond === 3 && v.box.in, JSON.stringify(v.realm));
+    await shot('7x-land-laid-under');
+    // From the map above, a place dropped on that land goes to the matching spot of it inside.
+    await page.evaluate(() => window.__layer(''));
+    await settle();
+    const drop = await page.evaluate(() => { const t = window.__model.territories.find(x => x.id === window.__home); const p = window.__board.map.latLngToContainerPoint([-(t.y + 1.5), t.x - 1]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y, at: [t.x - 1, t.y + 1.5] }; });
+    await page.evaluate(({ x, y }) => {
+        const r = [...document.querySelectorAll('.dooms-atlas-tray-row')].find(el => /Reedcutters/.test(el.textContent));
+        const dt = new DataTransfer();
+        r.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        document.querySelector('.dooms-atlas-map').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, drop);
+    await settle();
+    const landed = await page.evaluate((at) => { const inner = window.A.atlasModel({ pack: window.__pack, book: window.__book, layer: window.__home }); const m = inner.markers.find(x => /Reedcutters/.test(x.label)); if (!m) return null; const back = [(m.x - inner.realm.dx) / inner.realm.k, (m.y - inner.realm.dy) / inner.realm.k]; return { on: window.A.pointInPolygon(inner.realm.outline, m.x, m.y), off: Math.hypot(back[0] - at[0], back[1] - at[1]), k: inner.realm.k, same: m.x === at[0] && m.y === at[1] }; }, drop.at);
+    check('a place dropped on a land that is laid wider inside lands on the matching spot of it, not on the same numbers', !!landed && landed.on && landed.k > 1 && landed.off < 0.6 && !landed.same, JSON.stringify(landed));
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

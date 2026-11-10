@@ -19,7 +19,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -307,6 +307,105 @@ console.log('\n§6c territories (D163)');
     check('the bounds hold the lands', two.territories.every(t => t.outline.every(([x, y]) => x > two.bounds.minX && x < two.bounds.maxX && y > two.bounds.minY && y < two.bounds.maxY)));
     check('open country keeps its woods and ponds off the lands', (() => { const d = two.decor; const off = (pts) => pts.every(([x, y]) => territoryAt(two, x, y) === ''); return d.woods.length > 0 && d.woods.every(off) && d.ponds.every(off) && d.trees.every(off); })());
     check('Place all gives regions room for their lands', (() => { const m = atlasModel({ pack, state: st, book: { ...normalizeBook(null), made: [{ id: 'pin:a', label: 'A', kind: 'region' }, { id: 'pin:b', label: 'B', kind: 'region' }, { id: 'pin:c', label: 'C', kind: 'region' }] } }); const sp = [...suggestSpots(m).values()]; return sp.length === 3 && sp.every((a, i) => sp.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= TERRITORY_RADIUS * 1.29)); })());
+}
+
+console.log('\n§6c2 inside a region: its land, its neighbours, its terrain (D168)');
+{
+    const all = (lines) => lines.flat();
+    const within = (poly, pts, by = 0) => pts.every(([x, y]) => pointInPolygon(poly, x, y) || edgeDistance(poly, x, y) <= by);
+    const square = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    check('how far a point is from a land\'s edge', near(edgeDistance(square, 5, 5), 5) && near(edgeDistance(square, 1, 6), 1) && near(edgeDistance(square, 12, 5), 2) && edgeDistance([], 1, 1) === Infinity);
+
+    // The borders a land shares: one run of points for every neighbour, the same run from both sides.
+    const sites = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 9, y: 0 }, { id: 'c', x: 4, y: 8 }, { id: 'd', x: -7, y: 6 }];
+    const cells = territoryCells(sites);
+    check('a land comes with the border it shares with each neighbour', [...cells].every(([, c]) => same(c.borders.map(b => b.id), c.neighbours) && c.borders.every(b => b.points.length >= 2 && b.points.every(([x, y]) => edgeDistance(c.outline, x, y) < 1e-6))));
+    check('a border is the same line from both sides', [...cells].every(([id, c]) => c.borders.every(b => { const back = cells.get(b.id).borders.find(o => o.id === id); return !!back && back.points.length === b.points.length && b.points.every(([x, y], i) => { const q = back.points[back.points.length - 1 - i]; return near(x, q[0]) && near(y, q[1]); }); })));
+
+    // How a land lies on its own map.
+    const landA = cells.get('a').outline;
+    const still = { k: 1, dx: 0, dy: 0 };
+    check('a land with nothing on it, or with its places on it, lies as it does on the map above', same(landFrame(landA, []), still) && same(landFrame(landA, [{ x: 0, y: 0 }, { x: 1.5, y: -1 }, { x: -1, y: 1.2 }]), still) && same(landFrame([], [{ x: 3, y: 3 }]), still) && same(landFrame(null, null), still));
+    const away = [{ x: 40, y: 40 }, { x: 42, y: 41 }, { x: 39.4, y: 42 }];
+    const fa = landFrame(landA, away);
+    const onLand = (f, pts, by = 0.4) => pts.every(p => pointInPolygon(landA, (p.x - f.dx) / f.k, (p.y - f.dy) / f.k) && edgeDistance(landA, (p.x - f.dx) / f.k, (p.y - f.dy) / f.k) >= by);
+    check('places laid out away from the land: the land is laid under them, no wider than it was', fa.k === 1 && (fa.dx !== 0 || fa.dy !== 0) && onLand(fa, away), JSON.stringify(fa));
+    const wide = [{ x: -14, y: -9 }, { x: 15, y: 8 }, { x: 0, y: 0 }, { x: 6, y: -11 }];
+    const fw = landFrame(landA, wide);
+    check('places spread wider than the land: the land is drawn wider, a step at a time, until it holds them all', fw.k > 1 && [1.25, 1.6, 2, 2.5, 3.2, 4, 5, 6.4, 8].includes(fw.k) && onLand(fw, wide) && !onLand({ ...fw, k: fw.k / 1.25 }, wide, 0.45), JSON.stringify(fw));
+    check('a place moved a little inside the others leaves the land where it was; the same places, the same land', same(landFrame(landA, [...wide.slice(0, 2), { x: 0.4, y: 0.3 }, wide[3]]), fw) && same(landFrame(landA, wide), fw));
+    check('one place put a little past the border of a land that held the rest: the land grows where it lies, about its own middle', (() => { const edge = landA.reduce((m, p) => (p[0] > m[0] ? p : m), landA[0]); const pts = [{ x: 0, y: 0 }, { x: 1.5, y: -1 }, { x: edge[0] + 0.5, y: edge[1] }]; const f = landFrame(landA, pts); return f.k > 1 && f.k <= 1.6 && onLand(f, pts) && pointInPolygon(landA, f.dx / (1 - f.k), f.dy / (1 - f.k)) && edgeDistance(landA, f.dx / (1 - f.k), f.dy / (1 - f.k)) > 1.5; })());
+    check('one place put far off: the land is laid under its places instead of growing to reach them', (() => { const pts = [{ x: 0, y: 0 }, { x: 1.5, y: -1 }, { x: 30, y: 0 }]; const f = landFrame(landA, pts); return !same(f, still) && onLand(f, pts) && f.k < 8; })());
+    check('a spot of the map above, where it is on the region\'s own map', same(spotOnLand(null, { x: 2, y: 3 }), { x: 2, y: 3 }) && same(spotOnLand({ k: 2, dx: 10, dy: -4 }, { x: 2, y: 3 }), { x: 14, y: 2 }) && same(spotOnLand({ k: 1, dx: 0, dy: 0 }, { x: 2, y: 3 }), { x: 2, y: 3 }));
+
+    // The terrain drawn across a land.
+    const lone = territoryCells([{ id: 'r', x: 3, y: -2 }]).get('r').outline;
+    const draw = (terrain, extra = {}) => landTerrain({ id: `land-${terrain}`, site: { x: 3, y: -2 }, outline: lone, terrain, ...extra });
+    const kinds = ['plains', 'forest', 'mountains', 'snow', 'desert', 'swamp'].map(t => [t, draw(t)]);
+    const t = Object.fromEntries(kinds);
+    check('the same land has the same terrain every time', kinds.every(([name, d]) => same(d, draw(name))));
+    check('everything drawn is on the land: the woods, the lakes, the peaks, the trees, the dunes and the reeds', kinds.every(([, d]) => d.woods.every(w => within(lone, w)) && d.lakes.every(w => within(lone, w)) && within(lone, all(d.trees), 0.01) && within(lone, d.peaks.flat(2), 0.01) && within(lone, all(d.marks), 0.01)));
+    check('a land of mountains has ranges of peaks, more than open country; a forest is wooded all over; a swamp is full of meres', t.mountains.peaks.length >= 12 && t.mountains.peaks.length > t.plains.peaks.length && t.forest.trees.length > t.plains.trees.length * 1.8 && t.forest.woods.length >= 5 && t.swamp.lakes.length >= 3 && t.swamp.lakes.length > t.plains.lakes.length, JSON.stringify(kinds.map(([n, d]) => [n, d.peaks.length, d.trees.length / 2, d.woods.length, d.lakes.length, d.marks.length])));
+    check('open country has woods and water; a desert has dunes and no woods, a swamp reeds; nothing else is marked with either', t.plains.woods.length >= 3 && t.plains.lakes.length >= 1 && t.desert.woods.length === 0 && t.desert.trees.length === 0 && t.desert.marks.length >= 10 && t.swamp.marks.length >= 10 && t.plains.marks.length === 0 && t.forest.marks.length === 0 && t.mountains.marks.length === 0);
+    check('a range is drawn from the far side to the near: a peak is its shape first, then its ridge and its shaded side', t.mountains.peaks.every(p => p.length === 4 && p[0].length === 5) && t.mountains.peaks.every((p, i, list) => i === 0 || p[0][0][1] >= list[i - 1][0][0][1]));
+    check('a land of another terrain is drawn as open country; no land, no terrain', draw('coast').woods.length >= 3 && draw('town').marks.length === 0 && same(landTerrain({ id: 'x', outline: [] }), { unit: 1, woods: [], trees: [], lakes: [], peaks: [], marks: [] }) && landTerrain().woods.length === 0);
+    // A place and a road: the terrain makes way, and nothing else of it moves.
+    const lake = t.plains.lakes[0];
+    const lakeMid = { x: lake.reduce((n, p) => n + p[0], 0) / lake.length, y: lake.reduce((n, p) => n + p[1], 0) / lake.length };
+    const wood = t.forest.woods[0];
+    const woodMid = { x: wood.reduce((n, p) => n + p[0], 0) / wood.length, y: wood.reduce((n, p) => n + p[1], 0) / wood.length };
+    const drowned = draw('plains', { spots: [lakeMid] });
+    check('a place put where a lake was: the lake is gone, the other lakes and the woods are where they were', drowned.lakes.length === t.plains.lakes.length - 1 && drowned.lakes.every(l => t.plains.lakes.some(o => same(o, l))) && same(drowned.woods, t.plains.woods));
+    const cleared = draw('forest', { spots: [woodMid] });
+    const treeAt = (tr) => tr[0][3];    // where a tree's crown meets its trunk
+    const crowns = (d) => d.trees.filter((_, i) => i % 2 === 0);
+    check('a place put in a wood: a clearing around it, the rest of the forest as it was', crowns(cleared).every(tr => Math.hypot(tr[3][0] - woodMid.x, tr[3][1] - woodMid.y) >= 0.55) && crowns(cleared).length < crowns(t.forest).length && crowns(cleared).every(tr => crowns(t.forest).some(o => same(o, tr))) && same(cleared.woods, t.forest.woods) && crowns(t.forest).filter(tr => Math.hypot(tr[3][0] - woodMid.x, tr[3][1] - woodMid.y) > 1.6).every(tr => crowns(cleared).some(o => same(o, tr))), String(treeAt));
+    const peak = t.mountains.peaks[Math.floor(t.mountains.peaks.length / 2)][0];
+    const road = [[peak[0][0] - 6, peak[0][1] - 0.3], [peak[4][0] + 6, peak[0][1] - 0.3]];
+    const pass = draw('mountains', { roads: [road] });
+    const footOf = (p) => [(p[0][0][0] + p[0][4][0]) / 2, p[0][0][1]];
+    check('a road through the mountains: no peak stands on it, the peaks away from it stand where they stood', pass.peaks.length < t.mountains.peaks.length && pass.peaks.every(p => t.mountains.peaks.some(o => same(o, p))) && pass.peaks.every(p => { const [x, y] = footOf(p); return !(x > road[0][0] && x < road[1][0] && y - 0.15 > road[0][1] && y - 0.75 < road[0][1] && Math.abs(y - 0.4 - road[0][1]) < 0.12); }));
+    const roadW = [[woodMid.x - 5, woodMid.y], [woodMid.x + 5, woodMid.y]];
+    check('a road through a wood: a way cut through the trees', crowns(draw('forest', { roads: [roadW] })).every(tr => !(tr[3][0] > roadW[0][0] && tr[3][0] < roadW[1][0] && Math.abs(tr[3][1] - woodMid.y) < 0.2)) && crowns(draw('forest', { roads: [roadW] })).length < crowns(t.forest).length);
+    // A land moved takes its terrain with it.
+    const shifted = landTerrain({ id: 'land-plains', site: { x: 3 + 20, y: -2 - 7 }, outline: lone.map(([x, y]) => [x + 20, y - 7]), terrain: 'plains' });
+    check('a land moved takes its terrain with it', shifted.woods.length === t.plains.woods.length && shifted.woods.every((w, i) => w.every(([x, y], j) => near(x - 20, t.plains.woods[i][j][0], 2e-3) && near(y + 7, t.plains.woods[i][j][1], 2e-3))) && shifted.lakes.length === t.plains.lakes.length && shifted.trees.length === t.plains.trees.length);
+    check('a larger land has larger terrain, not more of it', (() => { const big = landTerrain({ id: 'land-plains', site: { x: 6, y: -4 }, outline: lone.map(([x, y]) => [x * 2, y * 2]), terrain: 'plains' }); return big.unit > t.plains.unit && big.unit <= 1.5 && big.woods.length <= t.plains.woods.length + 4; })());
+
+    // The model: a region entered.
+    const pack = blankPack('The Eld');
+    const st = seedWorldState(pack, { name: 'The Eld' });
+    let book = withScale(null, 'region');
+    for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 3.2, 1.2], ['Mirefen Ferry', 'water', -2.4, -1.6]]) book = addPin(book, { label, kind, x, y }).book;
+    const g = wrapInRegion(book, atlasModel({ pack, state: st, book }), { label: 'The Haskmarch' });
+    book = g.book;
+    const ids = {};
+    for (const [label, x, y] of [['The Amber Waste', 10, -5], ['The Salt Fens', -3, 10], ['Iron Peaks', -11, -3]]) { const r = addPin(book, { label, kind: 'region', x, y, loose: true }); book = r.book; ids[label] = r.id; }
+    const top = atlasModel({ pack, state: st, book });
+    const inside = atlasModel({ pack, state: st, book, layer: g.id });
+    const land = top.territories.find(x => x.id === g.id);
+    check('the top map has no land of its own: it is the map of the lands', top.realm === null && top.territories.length === 4);
+    check('inside a region: the land it has on the map above, in the same shape, at the same spots, in the same colour', !!inside.realm && inside.realm.k === 1 && same(inside.realm.outline, land.outline) && inside.realm.fill === land.fill && inside.realm.label === 'The Haskmarch' && inside.realm.x === land.x && inside.realm.y === land.y && inside.ground === 'country');
+    check('its places stand on it where they were put', inside.markers.length === 3 && inside.markers.every(m => pointInPolygon(inside.realm.outline, m.x, m.y)) && same(inside.markers.map(m => [m.label, m.x, m.y]), [['Hask', 0, 0], ['Redfall Castle', 3.2, 1.2], ['Mirefen Ferry', -2.4, -1.6]]));
+    check('the lands it borders lie around it as on the map above, each in its own colour', same(inside.realm.neighbours.map(n => n.id).sort(), [...land.neighbours].sort()) && inside.realm.neighbours.length === 3 && inside.realm.neighbours.every(n => { const o = top.territories.find(x => x.id === n.id); return same(n.outline, o.outline) && n.fill === o.fill && n.label === o.label && n.loose === true; }));
+    check('a neighbour is named at the middle of the border shared with it, the name turned the way the border runs and set on the neighbour\'s side', inside.realm.neighbours.every(n => { const rad = n.angle * Math.PI / 180; const nx = -Math.sin(rad) * n.side, ny = Math.cos(rad) * n.side; return edgeDistance(inside.realm.outline, n.at[0], n.at[1]) < 1e-3 && n.angle > -90 && n.angle <= 90 && (n.side === 1 || n.side === -1) && pointInPolygon(n.outline, n.at[0] + nx * 0.5, n.at[1] + ny * 0.5) && !pointInPolygon(inside.realm.outline, n.at[0] + nx * 0.5, n.at[1] + ny * 0.5) && n.border.length >= 2; }));
+    check('its terrain is drawn across it and clear of its places and its roads', inside.decor.woods.length >= 2 && inside.decor.look === 'plains' && Array.isArray(inside.decor.peaks) && within(inside.realm.outline, all(inside.decor.trees), 0.01) && inside.decor.trees.filter((_, i) => i % 2 === 0).every(tr => inside.markers.every(m => Math.hypot(tr[3][0] - m.x, tr[3][1] - m.y) >= 0.5)) && inside.decor.sea === null && inside.decor.lines.length === 0);
+    check('the canvas is the land and a margin, not the empty map\'s', inside.realm.outline.every(([x, y]) => x > inside.bounds.minX + 2 && x < inside.bounds.maxX - 2 && y > inside.bounds.minY + 2 && y < inside.bounds.maxY - 2) && inside.bounds.maxX - inside.bounds.minX < 2 * CANVAS + 6);
+    const fens = atlasModel({ pack, state: st, book, layer: ids['The Salt Fens'] });
+    check('a region with nothing in it yet is its land all the same, with its own terrain: a fen has meres and reeds, mountains peaks', !!fens.realm && fens.markers.length === 0 && fens.realm.loose === true && fens.decor.look === 'swamp' && fens.decor.ponds.length >= 3 && fens.decor.marks.length > 0 && atlasModel({ pack, state: st, book, layer: ids['Iron Peaks'] }).decor.peaks.length >= 8);
+    check('Place all puts what waits for a region on its land', (() => { let b = book; for (const label of ['Reed Hall', 'The Sluice', 'Eelmarket', 'Drowned Chapel']) { const r = addPin(b, { label, layer: ids['The Salt Fens'] }); b = unplace(r.book, r.id); b = moveInto(b, r.id, ids['The Salt Fens']); } const m = atlasModel({ pack, state: st, book: b, layer: ids['The Salt Fens'] }); const sp = [...suggestSpots(m).values()]; const placed = atlasModel({ pack, state: st, book: placeAll(b, m), layer: ids['The Salt Fens'] }); return m.tray.filter(x => x.here).length === 4 && sp.length === 4 && sp.every(p => pointInPolygon(m.realm.outline, p.x, p.y)) && placed.markers.length === 4 && placed.realm.k === 1 && same(placed.realm.outline, m.realm.outline); })());
+    // Places that were laid out before the land was there: the land is laid under them.
+    const far = atlasModel({ pack, state: st, book: placeAt(placeAt(book, 'pin:hask', { x: 60, y: 60 }, g.id), 'pin:redfall-castle', { x: 75, y: 52 }, g.id), layer: g.id });
+    check('places that do not stand on the land as it is above: the land is laid under them and drawn as wide as they need, the neighbours and the terrain with it', !!far.realm && far.realm.k > 1 && far.markers.every(m => pointInPolygon(far.realm.outline, m.x, m.y)) && far.realm.neighbours.length === 3 && far.realm.neighbours.every(n => edgeDistance(far.realm.outline, n.at[0], n.at[1]) < 1e-2) && within(far.realm.outline, all(far.decor.trees), 0.05) && far.decor.unit > inside.decor.unit && far.bounds.maxX > 75);
+    // What is no land of the map above is drawn as it was.
+    const haskIn = atlasModel({ pack, state: st, book: addPin(book, { label: 'The Temple', kind: 'sacred', x: 0, y: 0, layer: 'pin:hask' }).book, layer: 'pin:hask' });
+    check('a city has no land on the map above: its map is its own streets', haskIn.realm === null && haskIn.ground === 'city' && haskIn.decor.lines.length > 0 && !('peaks' in haskIn.decor));
+    const streets = atlasModel({ pack, state: st, book: withGround(book, 'island', g.id), layer: g.id });
+    check('a region the player gave a shore of its own is drawn as they said', streets.realm === null && streets.ground === 'island');
+    const nested = (() => { let b = book; b = addPin(b, { label: 'The North Riding', kind: 'region', x: 0, y: -3, layer: g.id }).book; b = addPin(b, { label: 'The South Riding', kind: 'region', x: 0, y: 4, layer: g.id }).book; return atlasModel({ pack, state: st, book: b, layer: g.id }); })();
+    check('a region that holds regions of its own shows their lands, not its own', nested.realm === null && nested.territories.length === 2);
+    const alone = atlasModel({ pack, state: st, book: g.book, layer: g.id });
+    check('a region alone on the map above has its land and no neighbours', !!alone.realm && alone.realm.neighbours.length === 0 && same(alone.realm.outline, atlasModel({ pack, state: st, book: g.book }).territories[0].outline));
 }
 
 console.log('\n§6d roads the player draws (D164)');

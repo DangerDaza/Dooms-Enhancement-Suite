@@ -532,9 +532,11 @@ export function layoutFill(model, places, { home = false } = {}) {
     const byId = new Map(fixed.map(f => [f.id, f]));
     const at = new Map();
     const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-    const cx = fixed.length ? fixed.reduce((n, f) => n + f.x, 0) / fixed.length : 0;
-    const cy = fixed.length ? fixed.reduce((n, f) => n + f.y, 0) / fixed.length : 0;
-    const reach = fixed.length ? Math.max(...fixed.map(f => Math.hypot(f.x - cx, f.y - cy))) : 0;
+    // On a region's own map with nothing on it yet, the new places are laid out from the region's spot: on its land (D168).
+    const land = !fixed.length && model && model.realm ? model.realm : null;
+    const cx = fixed.length ? fixed.reduce((n, f) => n + f.x, 0) / fixed.length : land ? land.x : 0;
+    const cy = fixed.length ? fixed.reduce((n, f) => n + f.y, 0) / fixed.length : land ? land.y : 0;
+    const reach = fixed.length ? Math.max(...fixed.map(f => Math.hypot(f.x - cx, f.y - cy))) : land ? -1.4 : 0;    // from the spot itself, not a ring around it
     const list = Array.isArray(places) ? places : [];
     for (let round = 0; round < list.length + 1; round++) {
         let any = false;
