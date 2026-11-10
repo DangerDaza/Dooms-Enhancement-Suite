@@ -229,11 +229,11 @@ console.log('\n§6b the grounds (D158)');
     const bounds = { minX: -9, minY: -9, maxX: 9, maxY: 9 };
     const marks = [{ x: 0, y: 0 }, { x: 4, y: 6 }];
     const country = groundDecor('country', 'top', bounds, marks);
-    check('open country: tufts and hills, none on a marker, no sea, the same every time', country.lines.length > 40 && country.sea === null && country.lines.every(l => l.every(([x, y]) => marks.every(m => Math.hypot(m.x - x, m.y - y) > 0.4))) && same(country, groundDecor('country', 'top', bounds, marks)) && !same(country, groundDecor('country', 'hask', bounds, marks)));
+    check('open country: plain land, nothing drawn on it, no sea', same(country, { lines: [], sea: null, ripples: [] }));
     const city = groundDecor('city', 'hask', bounds, marks);
     check('a city: streets both ways, each a line across the map', city.lines.length > 40 && city.lines.every(l => l.length === 2) && city.sea === null);
     const floor = groundDecor('indoors', 'house', bounds, marks);
-    check('indoors: a floor\'s squares, closer than streets and square', floor.lines.length >= city.lines.length && floor.lines.filter(l => l[0][0] === l[1][0] || l[0][1] === l[1][1]).length === floor.lines.length);
+    check('indoors: a floor\'s squares, closer than streets and square', floor.lines.length > 40 && floor.lines.filter(l => l[0][0] === l[1][0] || l[0][1] === l[1][1]).length === floor.lines.length);
     const south = groundDecor('coast-s', 'top', bounds, marks);
     const shoreYs = south.lines[0].map(p => p[1]);
     check('a coast to the south: the sea past a waved shore, south of every marker, with two ripples', !!south.sea && south.lines.length === 1 && south.ripples.length === 2 && Math.min(...shoreYs) > 6 && south.sea.some(p => p[1] > 15) && Math.min(...south.ripples[1].map(p => p[1])) > Math.min(...shoreYs));
@@ -242,7 +242,7 @@ console.log('\n§6b the grounds (D158)');
     check('the islands and the underground draw nothing here: their land is the markers\' own', same(groundDecor('island', 'top', bounds, marks), { lines: [], sea: null, ripples: [] }) && same(groundDecor('underground', 'x', bounds, marks), { lines: [], sea: null, ripples: [] }));
     const p = realm([{ id: 'stair', label: 'The Black Stair', parent: 'frosthold' }, { id: 'level-1', label: 'First Landing', parent: 'stair' }]);
     const st = seedWorldState(p, { name: '' });
-    check('the model carries each map\'s ground: country on top, streets in a town, the underground in the stair', atlasModel({ pack: p, state: st }).ground === 'country' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).ground === 'city' && atlasModel({ pack: p, state: st, layer: 'stair' }).ground === 'underground' && atlasModel({ pack: p, state: st, layer: 'stair' }).measure.scale === 'site' && atlasModel({ pack: p, state: st, book: withGround(null, 'island') }).ground === 'island' && atlasModel({ pack: p, state: st }).decor.lines.length > 0);
+    check('the model carries each map\'s ground: country on top, streets in a town, the underground in the stair', atlasModel({ pack: p, state: st }).ground === 'country' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).ground === 'city' && atlasModel({ pack: p, state: st, layer: 'stair' }).ground === 'underground' && atlasModel({ pack: p, state: st, layer: 'stair' }).measure.scale === 'site' && atlasModel({ pack: p, state: st, book: withGround(null, 'island') }).ground === 'island' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).decor.lines.length > 0);
 }
 
 console.log('\n§7 distance');

@@ -256,3 +256,10 @@ the focus off its selects when the wheel turns over them.
 Also (2026-11-10, the owner: "names only show when moused over"): a marker's
 name shows under the pointer or the keyboard's focus and nowhere else, at
 every zoom, the party's included. On a phone the card names the place.
+
+Also (2026-11-10, the owner: "what are all the marks? why does the camera
+keep snapping to the center"): open country draws nothing now (the tufts and
+hills read as stray marks); the view is never pulled back to the middle (the
+canvas the map can be panned over is three times what a fit shows, its edge
+stops a drag instead of springing back, and the zoom goes one step further
+out). tools/atlas-browser-test.mjs drags the map and checks it stays.

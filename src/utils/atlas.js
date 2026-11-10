@@ -516,7 +516,7 @@ function glyphAt(terrain, x, y, s) {
  * shapes in layout units over the bounds and a margin past them (the map
  * can be panned a little past its bounds). The same map draws the same
  * ground every time: everything is hashed from the layer's id.
- *   country      tufts and low hills scattered over the land
+ *   country      nothing: the land is the paper itself
  *   city         blocks: streets a unit apart, a little askew
  *   indoors      a floor's squares, half a unit apart
  *   coast-n/e/s/w  the sea past a waved shore on that side, with two ripples off it
@@ -525,27 +525,19 @@ function glyphAt(terrain, x, y, s) {
  */
 export function groundDecor(ground, seed, bounds, markers = []) {
     const out = { lines: [], sea: null, ripples: [] };
-    const padX = (bounds.maxX - bounds.minX) * 0.5;
-    const padY = (bounds.maxY - bounds.minY) * 0.5;
+    const padX = (bounds.maxX - bounds.minX) * 2;    // the map can be panned well past its bounds (atlasMap.js)
+    const padY = (bounds.maxY - bounds.minY) * 2;
     const x0 = bounds.minX - padX, x1 = bounds.maxX + padX, y0 = bounds.minY - padY, y1 = bounds.maxY + padY;
     const clear = (x, y, r) => markers.every(m => Math.hypot(m.x - x, m.y - y) >= r);
     if (ground === 'country') {
-        const count = Math.min(140, Math.round((x1 - x0) * (y1 - y0) / 9));
-        for (let i = 0; i < count; i++) {
-            const x = round4(x0 + hash01(`${seed}/c${i}/x`) * (x1 - x0));
-            const y = round4(y0 + hash01(`${seed}/c${i}/y`) * (y1 - y0));
-            if (!clear(x, y, 0.9)) continue;
-            const s = 0.16 + 0.08 * hash01(`${seed}/c${i}/s`);
-            if (hash01(`${seed}/c${i}/k`) < 0.3) out.lines.push([[x - s * 1.6, y + s * 0.4], [x - s * 0.8, y - s * 0.3], [x, y - s * 0.5], [x + s * 0.8, y - s * 0.3], [x + s * 1.6, y + s * 0.4]].map(([a, b]) => [round4(a), round4(b)]));    // a low hill
-            else out.lines.push([[x - s * 0.5, y - s * 0.5], [x, y + s * 0.3], [x + s * 0.5, y - s * 0.5]].map(([a, b]) => [round4(a), round4(b)]));    // a tuft
-        }
+        // Plain land: the paper is the ground. (Tufts and hills were scattered here once; they read as stray marks.)
     } else if (ground === 'city' || ground === 'indoors') {
         const step = ground === 'city' ? 1 : 0.5;
         const tilt = ground === 'city' ? (hash01(`${seed}/tilt`) - 0.5) * 0.5 : 0;    // a city's blocks sit a little askew; a floor's squares are square
         const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        const half = Math.max(x1 - x0, y1 - y0) * 0.75;
+        const half = Math.max(x1 - x0, y1 - y0) * 0.6;
         const turn = ([x, y]) => [round4(cx + x * Math.cos(tilt) - y * Math.sin(tilt)), round4(cy + x * Math.sin(tilt) + y * Math.cos(tilt))];
-        const n = Math.min(60, Math.ceil(half / step));
+        const n = Math.min(ground === 'city' ? 70 : 120, Math.ceil(half / step));
         for (let i = -n; i <= n; i++) {
             const off = i * step + (ground === 'city' ? (hash01(`${seed}/s${i}`) - 0.5) * 0.3 : 0);
             out.lines.push([turn([off, -half]), turn([off, half])]);

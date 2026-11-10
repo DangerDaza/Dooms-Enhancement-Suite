@@ -76,6 +76,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
         keyboard: true,
         fadeAnimation: false,
         markerZoomAnimation: true,
+        maxBoundsViscosity: 1,    // the edge of the canvas stops a drag; nothing springs back after it
         renderer: L.svg({ padding: 0.6 }),
     });
     const shapes = L.layerGroup().addTo(map);
@@ -214,8 +215,10 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
         map.setMaxBounds(null);
         const z = map.getBoundsZoom(all, false);
         if (show) map.fitBounds(rectBounds(content()), { animate: false, maxZoom: Math.log2(SHOW_PX) });
-        map.setMaxBounds(all.pad(0.35));
-        map.setMinZoom(z - 0.25);
+        // The view is the player's: it is never pulled back to the middle. The limits only stop the map being lost
+        // (a canvas three times as wide as what a fit shows, held firmly at its edge rather than sprung back from it).
+        map.setMaxBounds(all.pad(1.5));
+        map.setMinZoom(z - 1);
         map.setMaxZoom(Math.max(z + 2, Math.log2(MAX_PX)));
     }
 
