@@ -323,7 +323,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         <ul class="dooms-atlas-parts">
             ${part('recap', 'The record', 'kept with the scene', true, '')}
             ${part('canon', 'The ledger', canonOn ? (prep && prep.canonDone ? 'already read for the last reply' : 'Canon reads the whole scene') : 'Canon is off', canonOn, 'dooms-atlas-end-skip-canon')}
-            ${part('world', 'The world', worldOn ? 'moves on by the time the scene took' : 'Live World has no world here', worldOn, 'dooms-atlas-end-skip-world')}
+            ${part('world', 'The world', worldOn ? 'the clocks tick and people move, by the time the scene took' : 'Live World has no world here', worldOn, 'dooms-atlas-end-skip-world')}
             ${part('snapshot', 'The memory', 'everything this chat knows, with the map, kept for the next scene', true, '')}
         </ul>
         ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. The map shows the world as it stands now: open a place to start the next scene.</p>` : ''}

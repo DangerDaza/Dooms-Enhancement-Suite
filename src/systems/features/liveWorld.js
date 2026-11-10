@@ -39,6 +39,7 @@ import { renderImage, sourceProblem } from './imageGen.js';
 import { imageGenConfig } from '../../utils/imageGen.js';
 import { parseCaptionReply } from '../../utils/scenePictures.js';
 import { visitPlace, reconcileVisited, placesRow, buildPlacePrompt } from '../../utils/worldMap.js';
+import { readMark, markIsOfFile } from '../../utils/hub.js';
 import { worldToRaw, worldSummary, worldFromState, buildWorldDraftPrompt, parseWorldDraft, rebindStateToPack, DRAFT_LIMITS } from '../../utils/worldBuilder.js';
 import {
     WORLD_SLOT,
@@ -107,6 +108,18 @@ function reservedIdError(id) {
     if (id === BLANK_PACK_ID) return '"blank" is the blank world\'s own id; give this world another name.';
     if (BUILTIN_PACKS.includes(id)) return `"${id}" is the template's own id; give this world another name.`;
     return '';
+}
+
+/**
+ * The chat in front is a scene of a world played as scenes (the hub's
+ * mark, under its own file's name). A scene holds the world still
+ * (docs/long-shot-plan.md D178): the party is in the scene and hears
+ * nothing of what moves elsewhere, so the world moves when the scene
+ * ends (the hub's End) and when time passes before the next, not every
+ * few replies as in a long chat. Moving it by hand stays possible.
+ */
+export function inScene() {
+    try { const mark = readMark(chat_metadata); return !!mark && markIsOfFile(mark, chatId()); } catch (e) { return false; }
 }
 
 /** The master switch and DES's own. */
@@ -784,7 +797,7 @@ export function onWorldMessageReceived(messageId, type) {
     if (!r.counted && next === state) return;
     commit(next, { source: 'count', counted: r.counted });
     drawNewPlaceIfAsked();
-    if (r.counted && advanceDue(next, cfg().every)) {
+    if (r.counted && advanceDue(next, cfg().every) && !inScene()) {    // a scene holds the world: it moves at the scene's end (D178)
         if (trackerRequestExpected()) waitFor('count', 'tracker');    // the tracker's own request first (D46), the advance after it
         else scheduleAdvance('count');
     }
@@ -923,6 +936,7 @@ export async function advanceNow({ reason = 'manual' } = {}) {
     if (!ready()) return { ok: false, reason: 'off' };
     if (advancing) return { ok: false, reason: 'running' };
     if (reason === 'count' && !advanceDue(state, cfg().every)) return { ok: false, reason: 'not-due' };    // the count that armed it was withdrawn, or a manual run went first
+    if (reason === 'count' && inScene()) return { ok: false, reason: 'scene' };    // armed in a long chat, due in a scene: a scene holds the world (D178)
     const manual = reason !== 'count';
     if (mainGenerationBusy({ manual })) {
         waitFor(reason, 'generation');

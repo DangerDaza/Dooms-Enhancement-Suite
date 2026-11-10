@@ -109,6 +109,20 @@ function saveTheBook(next) {
     return 'The map could not be saved: this world has no memory yet.';
 }
 
+/**
+ * When the world last moved and when it moves next (D178). In a long chat: by the count of replies, as ever. In a
+ * scene the world is held and moves when the scene ends; between scenes it has moved, and moves again with the next.
+ */
+function statusLine(state, cfg) {
+    const full = statusText(state, cfg);
+    let cur = null;
+    try { cur = currentScene(); } catch (e) { cur = null; }
+    if (!cur && !between()) return full;
+    const last = full.split(' · ')[0];
+    if (cur && !cur.ended) return `${last} · held while scene ${sceneNumber(cur.mark.scene)} is played: the clocks tick when it ends.`;
+    return `${last} · the clocks tick when a scene ends, and for the time that passes before the next.`;
+}
+
 const sceneNumber = (id) => { const m = /^s(\d+)$/.exec(String(id || '')); return m ? m[1] : '?'; };
 
 function sceneFacts() {
@@ -299,7 +313,7 @@ function renderSide(ctx) {
         facts: sceneFacts(),
         tab,
         body: empty ? '' : tabBody(ctx),
-        status: empty ? '' : `${statusText(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}`,
+        status: empty ? '' : `${statusLine(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}`,
         result,
         canAdvance: !empty && !between(),
         advancing: isAdvancing(),

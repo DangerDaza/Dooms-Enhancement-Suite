@@ -666,5 +666,47 @@ console.log('\n§12 the openings are written with the people\'s lorebook entries
     hub.__setOpenersTransport(null);
 }
 
+console.log('\n§13 a scene holds the world still: it moves when the scene ends (D178)');
+{
+    const W = 'first-descent';
+    const every = extensionSettings.liveWorld.every;
+    extensionSettings.liveWorld.every = 2;
+    let runs = 0;
+    lw.__setWorldTransport(async () => { runs++; return '{"now":{"date":"Day 60","time":"noon"},"clocks":[],"moved":[],"news":[]}'; });
+    const reply = async (text) => { chat.push(user('And then?')); chat.push(ai(text)); lw.onWorldMessageReceived(chat.length - 1); };
+    // A long chat: the world moves every few replies, as it always has.
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - long three');
+    await reply('One.');
+    await reply('Two.');
+    await wait(700);
+    check('in a long chat the world still moves by the count of replies', lw.inScene() === false && runs === 1, `runs ${runs}`);
+    // A scene: the same count is reached and nothing moves.
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 61","time":"morning"},"openers":[{"title":"a","text":"First.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: [], gap: { id: 'now' } });
+    const r = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p;
+    runs = 0;
+    await reply('One.');
+    await reply('Two.');
+    await reply('Three.');
+    await wait(700);
+    check('in a scene the replies are counted and the world is held: the party is in the scene, and nothing of what moves elsewhere reaches it', r.ok && lw.inScene() === true && runs === 0 && lw.getWorldState().sinceLast >= 2, JSON.stringify([r.ok, r.reason, runs, lw.getWorldState() && lw.getWorldState().sinceLast]));
+    check('an advance armed by the count is refused in a scene; one asked for by hand still runs', (await lw.advanceNow({ reason: 'count' })).reason === 'scene' && (await lw.advanceNow({ reason: 'manual' })).ok !== undefined && runs === 1, `runs ${runs}`);
+    // End: this is when the world moves.
+    let gapRuns = 0;
+    hub.__setGapTransport(async () => { gapRuns++; return '{"elapsed":"a day","now":{"date":"Day 61","time":"dusk"},"clocks":{},"moved":[],"blurb":"Word of the assay court reaches the lane.","heard":[]}'; });
+    hub.__setRecapTransport(async () => '{"recap":"A day in Hask."}');
+    const pe = await hub.prepareEnd();
+    const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true });
+    check('the world moves when the scene ends: one run, over the world\'s memory, and what moved is there to be read between scenes', pe.ok && ce.ok && ce.world === 'ok' && gapRuns === 1 && hub.atlasSource().kind === 'world' && hub.atlasSource().memory.stores.dooms_world.blurb === 'Word of the assay court reaches the lane.', JSON.stringify([pe.ok, ce.ok, ce.world, gapRuns]));
+    check('an ended scene\'s chat is still a scene\'s: nothing moves by the count there either', lw.inScene() === true);
+    extensionSettings.liveWorld.every = every;
+    lw.__setWorldTransport(null);
+    hub.__setGapTransport(null);
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

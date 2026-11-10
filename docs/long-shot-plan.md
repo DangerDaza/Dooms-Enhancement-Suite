@@ -556,3 +556,20 @@ character's. Not changed here: the entries themselves (they describe a
 voice but hold no lines of speech, and carry "RUN 3" state beside what
 they contradict: §16); what DES keeps of where each person stands now is
 step 5.
+
+## 23. A scene holds the world; the clocks tick when it ends (2026-11-10, D178)
+
+The owner: "at the end of a scene is when I think the clocks in the world
+should tick. Because you've been in the scene: unless you sought
+information on something on a clock you wouldn't know." Built in
+"Atlas 21".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D178 | In a scene the world is held (the owner) | Live World moved the world every few replies in any chat, a scene's included: clocks ticked and people moved while the party stood in a room, and a scene of sixty messages cost up to ten background requests for it. Now a chat that is a scene (`inScene`: the hub's mark under its own file's name) is never advanced by the count of replies; the replies are still counted and the scene's place and people still recorded. **The world moves when the scene ends** (the End sheet's "The world: the clocks tick and people move, by the time the scene took", which can be left out) and for the time that passes before the next scene starts (the Start sheet's when). Between scenes the Atlas shows what moved: the news, the rumours, the clocks as they stand. Moving the world by hand (Advance now, `/advance`) still works in a scene, for the player who wants it. A long chat is as it was. The Atlas's status line says which it is: by the count in a long chat; "held while scene N is played: the clocks tick when it ends"; between scenes, "the clocks tick when a scene ends, and for the time that passes before the next". |
+
+Open, asked of the owner: the narrator still reads the visible clocks as
+they stood when the scene opened (the world's line in every generation
+says they are "facts as they stand, not instructions to the scene").
+Whether a scene's narrator should also be told that the party learns a
+clock's state only by seeking it out is his to say.
