@@ -125,5 +125,52 @@ console.log('\n§2 the clean-up pass');
     book.__setTidyTransport(null);
 }
 
+console.log('\n§3 setting up the world (D143, D159)');
+{
+    const S = await import(`${DES}/src/utils/atlasSetup.js`);
+    const chat = globalThis.__DES_CHAT__;
+    chat.length = 0;
+    for (let i = 0; i < 40; i++) chat.push({ is_user: i % 2 === 0, name: i % 2 === 0 ? 'Jordan' : 'Narrator', mes: `Scene ${i}: ${'the lane above the temple in Hask '.repeat(40)}` });
+    const pack = LW.blankPack('The Eld');
+    const ws = LW.seedWorldState(pack, { name: 'The Eld' });
+    ws.visited = ['Hask', 'the black stair'].map((label, i) => ({ id: LW.locPlaceId(label), label, packId: '', path: '', visits: [i + 1] }));
+    const model = A.atlasModel({ pack, state: ws });
+    const cost = book.setupReach();
+    check('the whole chat\'s cost is told before it is read: its messages and its parts', cost.messages === 40 && cost.parts >= 3 && cost.skipped === 0, JSON.stringify(cost));
+    const draftReply = JSON.stringify({ scale: 'region', places: [{ name: 'Hask', kind: 'settlement', inside: '', was: [1] }, { name: 'The Temple', kind: 'sacred', inside: 'Hask' }, { name: 'The Black Stair', kind: 'ruin', inside: 'The Temple', was: [2] }], drop: [] });
+    const asked = [];
+    book.__setSetupTransport(async (p) => { asked.push(p); return p.kind === 'scan' ? '{"places":[{"name":"The Temple","inside":"Hask","note":"cold stone"}]}' : draftReply; });
+    const before = JSON.stringify(meta);
+    const steps = [];
+    const recent = await book.draftSetup({ notes: 'Hask is landlocked.', reach: 'recent', model, world: 'The Eld', onProgress: (p) => steps.push(p.word) });
+    check('the recent reach: one request, the notes first in it', recent.ok && asked.length === 1 && asked[0].kind === 'draft' && asked[0].user.indexOf("THE PLAYER'S NOTES") === 0 && asked[0].user.includes('Hask is landlocked.') && asked[0].user.includes('Scene 39') && same(steps, ['Drafting the places']));
+    check('the draft comes back read: the places, what is inside what, the known places taken over', recent.draft.places.length === 3 && recent.draft.places[2].inside === 'temple' && recent.draft.places[0].was[0].label === 'Hask' && recent.draft.scale === 'region');
+    asked.length = 0; steps.length = 0;
+    const full = await book.draftSetup({ notes: '', reach: 'full', model, world: 'The Eld', onProgress: (p) => steps.push(`${p.done}/${p.total}`) });
+    check('the whole chat: a request for each part, then the draft, the progress told', full.ok && asked.length === cost.parts + 1 && asked.slice(0, -1).every(p => p.kind === 'scan') && asked[asked.length - 1].kind === 'draft' && full.parts === cost.parts && steps.length === cost.parts + 1 && steps[0] === `0/${cost.parts + 1}`, `${asked.length} ${JSON.stringify(steps)}`);
+    check('every part of the chat is read once, oldest first', asked[0].user.includes('Scene 0:') && asked[cost.parts - 1].user.includes('Scene 39:') && /Part 1 of/.test(asked[0].user));
+    check('what the scans found is in the draft\'s request', asked[asked.length - 1].user.includes('- The Temple (in Hask): cold stone'));
+    check('drafting changes nothing in the chat', JSON.stringify(meta) === before && !book.isSettingUp());
+    asked.length = 0;
+    let n = 0;
+    book.__setSetupTransport(async (p) => { asked.push(p); if (p.kind === 'scan' && ++n === 2) throw new Error('the connection dropped'); return p.kind === 'scan' ? '{"places":[]}' : draftReply; });
+    const holed = await book.draftSetup({ reach: 'full', model });
+    check('a part that fails is left out and the rest is still read', holed.ok && holed.parts === cost.parts - 1 && asked.length === cost.parts + 1);
+    asked.length = 0;
+    book.__setSetupTransport(async (p) => { asked.push(p); if (asked.length === 1) book.stopSetup(); return '{"places":[]}'; });
+    const stopped = await book.draftSetup({ reach: 'full', model });
+    check('stopped while reading: the part in hand finishes, no more are asked for, nothing is drafted', stopped.ok === false && stopped.reason === 'stopped' && asked.length === 1 && !book.isSettingUp());
+    book.__setSetupTransport(async () => 'I would rather not.');
+    const bad = await book.draftSetup({ reach: 'recent', model });
+    check('a reply that is no list is said', bad.ok === false && bad.reason === 'invalid' && !!bad.error);
+    book.__setSetupTransport(async () => draftReply);
+    const again = await book.draftSetup({ reach: 'recent', model });
+    const applied = S.applySetup(again.draft, book.getBook());
+    check('applied, the draft is the chat\'s book: saved, three markers, the stair inside the temple inside Hask', book.setBook(applied.book) === true && meta.dooms_atlas.made.length === 3 && meta.dooms_atlas.inside[applied.ids.get('black stair')] === applied.ids.get('temple') && meta.dooms_atlas.merged[LW.locPlaceId('the black stair')] === applied.ids.get('black stair'));
+    book.__setSetupTransport(null);
+    chat.length = 0;
+    delete meta.dooms_atlas;
+}
+
 console.log(failures ? `\n${failures} failure(s)` : '\nall pass');
 process.exit(failures ? 1 : 0);

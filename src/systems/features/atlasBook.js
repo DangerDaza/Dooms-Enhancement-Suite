@@ -14,6 +14,9 @@ import { extensionSettings, addDebugLog } from '../../core/state.js';
 import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { normalizeBook, buildTidyPrompt, parseTidy } from '../../utils/atlas.js';
+import { stripSceneNoise } from '../../utils/liveWorld.js';
+import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS } from '../../utils/atlasSetup.js';
+import { chatArray, cardOfTheChat, loreOfTheChat, playerNames } from './liveWorld.js';
 
 const META_KEY = 'dooms_atlas';
 export const ATLAS_BOOK_CHANGED_EVENT = 'dooms:atlas-book-changed';
@@ -76,5 +79,99 @@ export async function proposeTidy(model, { world = '' } = {}) {
         return { ok: false, reason: 'error', items: [], error: String(e && e.message || e) };
     } finally {
         tidying = false;
+    }
+}
+
+// ─── Setting up a world's map (D143, D159) ──────────────────────────────────
+
+let settingUp = false;
+let setupStop = false;
+let setupTransport = null;    // test hook: ({ system, user, kind: 'scan' | 'draft' }) => Promise<string>
+
+/** Test hook: the requests' transport, or null for the real one. */
+export function __setSetupTransport(fn) {
+    setupTransport = typeof fn === 'function' ? fn : null;
+}
+
+export function isSettingUp() {
+    return settingUp;
+}
+
+/** Stops a set-up that is reading the chat: the part in hand finishes, no more are asked for, and nothing is drafted. */
+export function stopSetup() {
+    if (settingUp) setupStop = true;
+}
+
+/** What the whole chat would cost to read: its messages, and the parts it would be read in (one request each, and one more for the draft). */
+export function setupReach() {
+    const lines = chatLines(chatArray(), { strip: stripSceneNoise });
+    const { chunks, skipped } = chunkLines(lines);
+    return { messages: lines.length, parts: chunks.length, skipped, max: SETUP_LIMITS.chunks };
+}
+
+async function ask(prompt, kind, label) {
+    const external = extensionSettings.generationMode === 'external';
+    const messages = [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
+    const run = async () => {
+        if (setupTransport) return setupTransport({ ...prompt, kind });
+        if (external) return generateWithExternalAPI(messages);
+        return safeGenerateRaw({ prompt: messages, quietToLoud: false });
+    };
+    const result = await withBackgroundProfile(run, { external, label });
+    if (result === BACKGROUND_BUSY) throw new Error('Another request is running; try again in a moment.');
+    return typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
+}
+
+/**
+ * Drafts the world's places for the map (D143): with `reach` 'full' the
+ * whole chat is read first, part by part (one request each, `onProgress`
+ * told after each), for the places it names; then one request drafts the
+ * places around the player's notes from the card, the lore, the recent
+ * scenes, what the scans found and the places the map already knows.
+ * Nothing is stored and nothing is changed: the draft goes to the player.
+ * @param {object} o
+ * @param {string} o.notes
+ * @param {'recent'|'full'} o.reach
+ * @param {object} o.model        the Atlas's model (the known places)
+ * @param {string} o.world        the world's name
+ * @param {Function} o.onProgress ({ done, total, word }) => void
+ * @returns {Promise<{ ok: boolean, reason: string, draft: object|null, error: string, parts: number, skipped: number }>}
+ */
+export async function draftSetup({ notes = '', reach = 'recent', model = null, world = '', onProgress = () => {} } = {}) {
+    if (settingUp) return { ok: false, reason: 'running', draft: null, error: 'A set-up is already running.', parts: 0, skipped: 0 };
+    settingUp = true;
+    setupStop = false;
+    let parts = 0;
+    let skipped = 0;
+    try {
+        const players = playerNames();
+        const lines = chatLines(chatArray(), { strip: stripSceneNoise, persona: players[0] || 'Player' });
+        let found = [];
+        if (reach === 'full') {
+            const cut = chunkLines(lines);
+            skipped = cut.skipped;
+            const scans = [];
+            for (let i = 0; i < cut.chunks.length; i++) {
+                if (setupStop) return { ok: false, reason: 'stopped', draft: null, error: 'Stopped: nothing was changed.', parts, skipped };
+                try { onProgress({ done: i, total: cut.chunks.length + 1, word: `Reading the chat: part ${i + 1} of ${cut.chunks.length}` }); } catch (e) { /* the window is gone */ }
+                // A part that fails is left out: the rest of the chat is still worth reading.
+                try { scans.push(parseScan(await ask(buildScanPrompt(cut.chunks[i], { part: i + 1, parts: cut.chunks.length }), 'scan', 'atlas-scan'))); parts++; } catch (e) { try { addDebugLog(`[Atlas] set-up: part ${i + 1} could not be read`, String(e && e.message || e)); } catch (x) { /* no log */ } }
+            }
+            found = mergeScans(scans);
+            if (setupStop) return { ok: false, reason: 'stopped', draft: null, error: 'Stopped: nothing was changed.', parts, skipped };
+            try { onProgress({ done: cut.chunks.length, total: cut.chunks.length + 1, word: 'Drafting the places' }); } catch (e) { /* gone */ }
+        } else {
+            try { onProgress({ done: 0, total: 1, word: 'Drafting the places' }); } catch (e) { /* gone */ }
+        }
+        const prompt = buildSetupPrompt({ notes, world, card: cardOfTheChat(), lore: await loreOfTheChat(), recent: recentLines(lines), found, model, players });
+        const text = await ask(prompt, 'draft', 'atlas-setup');
+        const r = parseSetup(text, model);
+        try { addDebugLog(`[Atlas] set-up: ${r.ok ? `${r.draft.places.length} place(s) drafted` : r.error}`, r.ok ? null : { reply: text.slice(0, 400) }); } catch (e) { /* no log */ }
+        return { ok: r.ok, reason: r.ok ? '' : 'invalid', draft: r.draft, error: r.error, parts, skipped };
+    } catch (e) {
+        return { ok: false, reason: 'error', draft: null, error: String(e && e.message || e), parts, skipped };
+    } finally {
+        settingUp = false;
+        setupStop = false;
     }
 }

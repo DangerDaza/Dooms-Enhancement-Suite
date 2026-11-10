@@ -14,7 +14,8 @@ import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
 import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
-import { getBook, setBook, proposeTidy } from '../features/atlasBook.js';
+import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach } from '../features/atlasBook.js';
+import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
@@ -22,7 +23,7 @@ import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml } from './atlasViews.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -52,6 +53,8 @@ let tidy = { busy: false, items: [], error: '', asked: false };    // the clean-
 let tidyChat = null;      // the chat the proposals are about: another chat's are dropped
 let layer = '';           // the place whose map is drawn; '' for the top map (D156)
 let layerWorld = '';      // the world that layer belongs to: another world opens on its top map
+let setup = null;         // the set-up in hand (D159): { step, notes, reach, cost, progress, draft, error, note, world }, or null
+let undoBook = null;      // the book as it was before a set-up was applied, with its world: one Undo, until the Atlas closes
 let startDismissed = '';   // the world whose Start panel was waved away this session
 let brokenPicture = '';   // a world's picture that would not load: the drawn land stands in
 
@@ -202,6 +205,7 @@ function renderSide(ctx) {
     }));
     $(`${root()} .dooms-atlas-body`).scrollTop(scroll);
     $(`${root()} [data-act="edit"]`).prop('disabled', !state || !pack);
+    if (undoBook && undoBook.world === worldKey()) $(`${root()} .dooms-atlas-foot-actions`).append('<button type="button" class="dooms-atlas-btn" data-act="setup-undo" title="Put the map back as it was before the set-up was applied"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>Undo set-up</span></button>');
 }
 
 function setScale({ px, length, unit }) {
@@ -259,6 +263,8 @@ async function mount(ctx) {
 function render() {
     if (!isOpen) return;
     const ctx = read();
+    if (setup && setup.world !== worldKey()) { setup = null; renderSetup(); }
+    if (undoBook && undoBook.world !== worldKey()) undoBook = null;
     if (tidyChat !== null && tidyChat !== worldKey()) { tidy = { busy: false, items: [], error: '', asked: false }; tidyChat = null; }    // another chat's proposals are not this one's
     renderSide(ctx);
     const $empty = $(`${root()} .dooms-atlas-empty`);
@@ -276,7 +282,7 @@ function render() {
     // An empty map says how it is made: nothing lands on it by itself (D151). The panel until it is waved away, then a line.
     const bare = model.markers.length === 0;
     const waiting = model.tray.filter(t => t.here !== false).length;
-    const showStart = bare && !armed && startDismissed !== `${world}|${layer}`;
+    const showStart = bare && !armed && !setup && startDismissed !== `${world}|${layer}`;
     $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
     $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
     if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
@@ -308,6 +314,54 @@ function showMarker(id) {
     cardMode = 'view';
     board.show(id);
     try { if (window.matchMedia('(max-width: 720px)').matches) setFolded(true); } catch (e) { /* no matchMedia */ }
+}
+
+/** The set-up's panel drawn (or put away). */
+function renderSetup() {
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    if (!setup) { $p.prop('hidden', true).empty(); return; }
+    const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
+    $p.prop('hidden', false).html(atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
+}
+
+function openSetup() {
+    if (board) board.closeCard();
+    arm(null);
+    let cost = { messages: 0, parts: 0, skipped: 0 };
+    try { cost = setupReach(); } catch (e) { /* no chat */ }
+    setup = { step: 'notes', notes: setup && setup.notes ? setup.notes : '', reach: 'recent', cost, progress: { done: 0, total: 1, word: '' }, draft: null, error: '', note: '', world: worldKey() };
+    $(`${root()} .dooms-atlas-start`).prop('hidden', true);
+    renderSetup();
+}
+
+async function runSetup() {
+    if (!setup || !model) return;
+    const world = setup.world;
+    const notes = String($(`${root()} .dooms-atlas-setup-notes`).val() || '');
+    const reach = String($(`${root()} input[name="dooms-atlas-reach"]:checked`).val() || 'recent') === 'full' ? 'full' : 'recent';
+    setup = { ...setup, step: 'busy', notes, reach, error: '', progress: { done: 0, total: reach === 'full' ? setup.cost.parts + 1 : 1, word: reach === 'full' ? 'Reading the chat…' : 'Drafting the places' } };
+    renderSetup();
+    // The draft is asked for from the top map's model: every place on every map is in its list whatever map is shown.
+    const r = await draftSetup({ notes, reach, model, world: (getWorldState() || {}).name || '', onProgress: (p) => { if (setup && setup.step === 'busy') { setup = { ...setup, progress: p }; renderSetup(); } } });
+    if (!setup || setup.world !== world || worldKey() !== world) return;    // closed, or the chat changed while the AI read
+    if (!r.ok) { setup = { ...setup, step: 'notes', error: r.reason === 'stopped' ? '' : (r.error || 'The draft could not be made.') }; renderSetup(); return; }
+    const missed = reach === 'full' ? setup.cost.parts - r.parts : 0;
+    setup = { ...setup, step: 'review', draft: r.draft, error: '', note: [missed > 0 ? `${missed} ${missed === 1 ? 'part' : 'parts'} of the chat could not be read and ${missed === 1 ? 'was' : 'were'} left out.` : '', r.skipped ? `The oldest ${r.skipped} messages were left out: the chat is longer than can be read.` : ''].filter(Boolean).join(' ') };
+    renderSetup();
+}
+
+function applyDraft() {
+    if (!setup || !setup.draft || setup.world !== worldKey()) return;
+    const before = getBook();
+    const r = applySetup(setup.draft, before);
+    undoBook = { world: worldKey(), book: before };
+    setup = null;
+    layer = '';
+    startDismissed = '';
+    renderSetup();
+    if (!commit(r.book, `The world is set up: ${r.placed} ${r.placed === 1 ? 'place' : 'places'} on ${r.placed === 1 ? 'its map' : 'their maps'}${r.merged ? `, ${r.merged} old ${r.merged === 1 ? 'entry' : 'entries'} merged in` : ''}${r.dropped ? `, ${r.dropped} deleted` : ''}. Double-click a place to enter it; turn on moving to drag things where they belong.`)) return;
+    if (board) board.fit();
 }
 
 /** Another map shown (D156): the place's own, or '' for the top map. The cards and what waited for a tap are let go; the new map is fitted. */
@@ -406,6 +460,15 @@ function build() {
             const id = this.getAttribute('data-id') || '';
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
             if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
+            // Setting up the world (D159).
+            if (act === 'setup') { openSetup(); return; }
+            if (act === 'setup-close') { setup = null; renderSetup(); render(); return; }
+            if (act === 'setup-draft') { await runSetup(); return; }
+            if (act === 'setup-stop') { stopSetup(); if (setup) { setup = { ...setup, progress: { ...setup.progress, word: 'Stopping after this part…' } }; renderSetup(); } return; }
+            if (act === 'setup-back') { if (setup) { setup = { ...setup, step: 'notes', error: '' }; renderSetup(); } return; }
+            if (act === 'setup-remove') { if (setup && setup.draft) { setup = { ...setup, draft: removeDraftPlace(setup.draft, this.getAttribute('data-key') || '') }; renderSetup(); } return; }
+            if (act === 'setup-apply') { applyDraft(); return; }
+            if (act === 'setup-undo') { if (undoBook && undoBook.world === worldKey()) { const b = undoBook.book; undoBook = null; layer = ''; commit(b, 'The set-up is undone: the map is as it was.'); if (board) board.fit(); } return; }
             if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }
             if (act === 'base') { const b = getBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
             if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
@@ -514,6 +577,16 @@ function build() {
         ev.dataTransfer.setData('text/plain', row.getAttribute('data-id') || '');
         ev.dataTransfer.effectAllowed = 'move';
     });
+    // The review's own fields: a name typed (kept without drawing the list again, so the caret stays), a kind, what a place is inside of.
+    $(document).on('change', `${root()} .dooms-atlas-setup-row [data-field]`, function () {
+        if (!setup || !setup.draft) return;
+        const key = String($(this).closest('.dooms-atlas-setup-row').attr('data-key') || '');
+        const field = this.getAttribute('data-field');
+        const value = String($(this).val() || '');
+        if (field === 'inside') { setup = { ...setup, draft: setDraftInside(setup.draft, key, value) }; renderSetup(); return; }
+        setup = { ...setup, draft: editDraftPlace(setup.draft, key, field === 'name' ? { name: value } : { kind: value }) };
+        if (field === 'kind') renderSetup();
+    });
     $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(getBook(), String($(this).val() || ''), layer)); });
     // The wheel over a select that has the focus steps its value in some browsers: the sidebar scrolled past one would change the map's scale unasked.
     document.addEventListener('wheel', (ev) => { const t = ev.target; if (t && t.matches && t.matches(`${root()} .dooms-atlas-scale-pick select`) && document.activeElement === t) t.blur(); }, { capture: true, passive: true });
@@ -530,6 +603,7 @@ function build() {
     });
     $(document).on('keydown', (ev) => {
         if (!isOpen || isFacePopoverOpen() || !takesEscape('atlas', ev)) return;
+        if (setup) { if (setup.step === 'busy') return; setup = null; renderSetup(); render(); return; }    // the set-up's panel closes first (not while it reads)
         if (armed) { arm(null); render(); return; }    // what waited for a tap is let go first
         if (board && board.opened()) { board.closeCard(); return; }    // a card on top closes first
         closeAtlas();
@@ -566,6 +640,10 @@ export function closeAtlas() {
     unmount();    // the view is kept with its world: the Atlas opened again shows the map where it was left
     armed = null;
     cardMode = 'view';
+    if (setup && setup.step === 'busy') stopSetup();
+    setup = null;
+    undoBook = null;
+    $(`${root()} .dooms-atlas-setup`).prop('hidden', true).empty();
     $(root()).removeClass('is-open is-armed').css('display', 'none');
 }
 

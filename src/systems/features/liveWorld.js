@@ -124,7 +124,7 @@ function ready() {
 
 const isToolRecord = (m) => !!(m && m.extra && Array.isArray(m.extra.tool_invocations));
 
-function chatArray() {
+export function chatArray() {
     if (Array.isArray(chat)) return chat;
     try { const c = getContext().chat; return Array.isArray(c) ? c : null; } catch (e) { return null; }
 }
@@ -379,7 +379,7 @@ export function isDrafting() {
 }
 
 /** The chat's character card(s): the one character, or every member of the group, each field under the member's name. */
-function cardOfTheChat() {
+export function cardOfTheChat() {
     try {
         const ctx = getContext();
         const list = Array.isArray(ctx.characters) ? ctx.characters : [];
@@ -398,7 +398,7 @@ function cardOfTheChat() {
 }
 
 /** The lore the chat carries: the entries of the lorebooks active for it (the global ones, the character's own, the chat's), cut to length. '' when none can be read. */
-async function loreOfTheChat() {
+export async function loreOfTheChat() {
     let api = null;
     try { api = await import('../lorebook/lorebookAPI.js'); } catch (e) { return ''; }
     const names = new Set();
@@ -681,7 +681,7 @@ function turnIdBefore(list, index) {
 }
 
 /** The player under every name the chat may carry: DES's persona name, SillyTavern's, and the name on their last message. */
-function playerNames() {
+export function playerNames() {
     const names = [];
     const add = (v) => { const t = String(v || '').trim(); if (t && !names.some(n => n.toLowerCase() === t.toLowerCase())) names.push(t); };
     try { add(resolvePersonaName()); } catch (e) { /* none */ }

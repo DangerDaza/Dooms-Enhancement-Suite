@@ -11,6 +11,7 @@
 import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
+import { draftRows, draftChain } from '../../utils/atlasSetup.js';
 
 export const ATLAS_ID = 'dooms-atlas';
 
@@ -48,6 +49,7 @@ export function atlasShellHtml() {
             ${COMPASS}
             <div class="dooms-atlas-empty" hidden></div>
             <div class="dooms-atlas-start" hidden></div>
+            <div class="dooms-atlas-setup" role="dialog" aria-label="Set up this world" hidden></div>
             <nav class="dooms-atlas-trail" aria-label="Where this map is" hidden></nav>
             <p class="dooms-atlas-hint" role="status" hidden></p>
             <div class="dooms-atlas-tools">
@@ -108,7 +110,86 @@ export function atlasStartHtml({ waiting = 0, loose = 0, picture = false, layerL
                <button type="button" class="dooms-atlas-btn is-primary" data-act="add"><i class="fa-solid fa-map-pin" aria-hidden="true"></i> <span>Add a place by hand</span></button>
                <button type="button" class="dooms-atlas-btn" data-act="start-dismiss">Not now</button>
            </div>`;
-    return `<div class="dooms-atlas-start-card"><h3>${layerLabel ? `Inside ${e(layerLabel)}` : 'Start your map'}</h3><p>${lead}</p>${how}</div>`;
+    const setup = layerLabel ? '' : `<div class="dooms-atlas-start-setup"><button type="button" class="dooms-atlas-btn is-primary" data-act="setup"><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button><p class="dooms-atlas-start-note">The AI drafts the places from your notes, the lore and the chat: what is inside what, placed for you. You check it first.</p><p class="dooms-atlas-start-or">or do it by hand:</p></div>`;
+    return `<div class="dooms-atlas-start-card"><h3>${layerLabel ? `Inside ${e(layerLabel)}` : 'Start your map'}</h3><p>${lead}</p>${setup}${how}</div>`;
+}
+
+/**
+ * Setting up a world's map (D143, D159), a panel over the map in three
+ * steps: the player's notes and how much of the chat to read; the reading
+ * and the drafting, with how far it is; the draft as a tree to correct,
+ * and Apply.
+ * @param {object} o
+ * @param {'notes'|'busy'|'review'} o.step
+ * @param {string} o.notes
+ * @param {'recent'|'full'} o.reach
+ * @param {{ messages: number, parts: number, skipped: number }} o.cost  what the whole chat would take to read
+ * @param {{ done: number, total: number, word: string }} o.progress
+ * @param {object|null} o.draft   parseSetup's draft
+ * @param {string} o.error
+ * @param {number} o.onMap        the markers and tray places the map has now (Apply replaces the map)
+ * @param {string} o.note         a word above the review (parts that could not be read, messages left out)
+ */
+export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', cost = { messages: 0, parts: 0, skipped: 0 }, progress = { done: 0, total: 1, word: '' }, draft = null, error = '', onMap = 0, note = '' } = {}) {
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    if (step === 'busy') {
+        const pct = Math.max(4, Math.min(100, Math.round(100 * (progress.done + 0.5) / Math.max(1, progress.total))));
+        return `<div class="dooms-atlas-setup-card is-busy">
+            <h3>Setting up the world</h3>
+            <p>${e(progress.word || 'Working…')}</p>
+            <div class="dooms-atlas-setup-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width: ${pct}%"></span></div>
+            <p class="dooms-atlas-start-note">Nothing on your map changes until you press Apply at the end.</p>
+            <div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="setup-stop">Stop</button></div>
+        </div>`;
+    }
+    if (step === 'review' && draft) {
+        const rows = draftRows(draft);
+        const kinds = (cur) => ATLAS_KINDS.map(k => `<option value="${k.id}"${k.id === cur ? ' selected' : ''}>${e(k.label)}</option>`).join('');
+        const insides = (p) => [`<option value=""${p.inside ? '' : ' selected'}>The top map</option>`, ...draft.places.filter(o => o.key !== p.key && !draftChain(draft, o.key).includes(p.key)).map(o => `<option value="${attr(o.key)}"${o.key === p.inside ? ' selected' : ''}>${e(o.name)}</option>`)].join('');
+        const row = (p) => `<li class="dooms-atlas-setup-row${p.guess ? ' is-guess' : ''}" data-key="${attr(p.key)}" style="--depth: ${Math.min(5, p.depth)}">
+                <span class="dooms-atlas-setup-name">
+                    <input type="text" class="dooms-atlas-input" data-field="name" maxlength="80" value="${attr(p.name)}" aria-label="Name" />
+                    ${p.guess ? '<span class="dooms-atlas-setup-guess" title="Nothing in your notes, the lore or the chat says this: the AI added it">guessed</span>' : ''}
+                    ${p.was.length ? `<span class="dooms-atlas-setup-was" title="${attr(`Takes over: ${p.was.map(k => k.label).join(', ')}`)}">${p.was.length} merged in</span>` : ''}
+                </span>
+                <select class="dooms-atlas-input" data-field="kind" aria-label="Kind">${kinds(p.kind)}</select>
+                <select class="dooms-atlas-input" data-field="inside" aria-label="Inside" title="Whose map this place is on">${insides(p)}</select>
+                <button type="button" class="dooms-atlas-icon-btn" data-act="setup-remove" data-key="${attr(p.key)}" title="Leave ${attr(p.name)} out" aria-label="Leave ${attr(p.name)} out"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </li>`;
+        const guesses = draft.places.filter(p => p.guess).length;
+        return `<div class="dooms-atlas-setup-card is-review">
+            <h3>Check the draft</h3>
+            <p>${draft.places.length} ${draft.places.length === 1 ? 'place' : 'places'}${guesses ? `, ${guesses} of them guessed (marked)` : ''}. Fix a name, change what a place is inside of, or leave one out. Notes and positions can be changed on the map afterwards.</p>
+            ${note ? `<p class="dooms-atlas-start-note">${e(note)}</p>` : ''}
+            ${err}
+            <div class="dooms-atlas-setup-head"><span>Place</span><span>Kind</span><span>Inside</span><span></span></div>
+            <ul class="dooms-atlas-setup-list">${rows.map(row).join('')}</ul>
+            ${draft.drop.length ? `<p class="dooms-atlas-start-note">Not places, to be deleted: ${e(draft.drop.map(k => k.label).join(', '))}.</p>` : ''}
+            <p class="dooms-atlas-setup-warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Apply replaces the map this chat has now${onMap ? ` (${onMap} ${onMap === 1 ? 'place' : 'places'})` : ''}: every marker, where it was put, and what was merged or deleted. One Undo is kept until you close the Atlas.</p>
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-apply"${draft.places.length ? '' : ' disabled'}><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Apply: replace the map</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="setup-back"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>Back to my notes</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+            </div>
+        </div>`;
+    }
+    const requests = cost.parts + 1;
+    return `<div class="dooms-atlas-setup-card">
+        <h3>Set up this world</h3>
+        <p>First, what matters to you. The AI drafts the world's places around this, then you check the draft before anything changes.</p>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Your notes (optional, and they outrank the lore and the chat)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-setup-notes" maxlength="3000" rows="7" placeholder="The places that matter, and what is inside what: &quot;Hask is a landlocked city. The house on the lane and the temple are in Hask. The black stair is a dungeon under the temple with many levels.&quot;&#10;Who is where. What must be true. What to leave out.">${e(notes)}</textarea></label>
+        <fieldset class="dooms-atlas-setup-reach">
+            <legend class="dooms-atlas-card-label">How much of the chat to read</legend>
+            <label><input type="radio" name="dooms-atlas-reach" value="recent"${reach === 'full' ? '' : ' checked'} /> <span><strong>The recent scenes</strong> · one request. Good for a new chat, or when the lore and your notes carry the world.</span></label>
+            <label><input type="radio" name="dooms-atlas-reach" value="full"${reach === 'full' ? ' checked' : ''} /> <span><strong>The whole chat</strong> · ${cost.messages} ${cost.messages === 1 ? 'message' : 'messages'}, ${requests} ${requests === 1 ? 'request' : 'requests'}. Finds every place the story has named; slower, and it costs that many requests.${cost.skipped ? ` The chat is longer than can be read: the oldest ${cost.skipped} messages are left out.` : ''}</span></label>
+        </fieldset>
+        ${err}
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-draft"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Draft the world</span></button>
+            <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+        </div>
+    </div>`;
 }
 
 /** A kind's switch: the icon, the name, the count; struck through while off. */
@@ -179,7 +260,8 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
  */
 export function atlasTidyHtml(tidy, { count = 0 } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
-    if (count < 2 && !t.items.length) return '';
+    const setup = `<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
+    if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy">${setup}</section>`;
     const item = (x, i) => `<li class="dooms-atlas-tidy-item is-${attr(x.kind)}">
             <span class="dooms-atlas-tidy-text">${x.kind === 'merge' ? `Merge <strong>${e(x.label)}</strong> into <strong>${e(x.toLabel)}</strong>` : `Delete <strong>${e(x.label)}</strong>`}${x.why ? `<span class="dooms-atlas-tidy-why">${e(x.why)}</span>` : ''}</span>
             <button type="button" class="dooms-atlas-icon-btn is-yes" data-act="tidy-yes" data-i="${i}" title="Do it" aria-label="Do it"><i class="fa-solid fa-check" aria-hidden="true"></i></button>
@@ -188,8 +270,8 @@ export function atlasTidyHtml(tidy, { count = 0 } = {}) {
     const body = t.items.length
         ? `<ul>${t.items.map(item).join('')}</ul><div class="dooms-atlas-tidy-all"><button type="button" class="dooms-atlas-link" data-act="tidy-all">Do all ${t.items.length}</button><button type="button" class="dooms-atlas-link" data-act="tidy-none">Leave them all</button></div>`
         : (t.error ? `<p class="dooms-atlas-none is-error">${e(t.error)}</p>` : (t.asked && !t.busy ? '<p class="dooms-atlas-none">Nothing to tidy: no duplicates were found.</p>' : ''));
-    return `<section class="dooms-atlas-tidy" aria-label="Clean up the places">
-        <button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button>
+    return `<section class="dooms-atlas-tidy" aria-label="Set up and clean up the places">
+        <div class="dooms-atlas-tidy-buttons">${setup}<button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button></div>
         ${body}
     </section>`;
 }

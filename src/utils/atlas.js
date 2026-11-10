@@ -608,13 +608,37 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         if (norm(p.label) !== norm(c.label) && !c.rooms.includes(p.label)) c.rooms.push(p.label || p.id);
         c.ids.push(p.id);
     }
-    const story = storyPlaces(pack, state);
+    // A location the story names that carries the name of a marker made by hand (the set-up's places, D159) is that
+    // marker: "Hask, the house on the lane, the bedroom wall" is the house. The deepest marker named wins.
+    const pinDepth = (id) => { let d = 0; let cur = bk.inside[id]; for (let i = 0; cur && i < 20; i++) { d++; cur = bk.inside[cur]; } return d; };
+    const pins = bk.made.map(m => ({ id: m.id, key: norm(m.label), depth: pinDepth(m.id) })).filter(x => x.key.length >= 3);
+    const pinFor = (label) => {
+        const segs = labelSegments(label).map(sg => ` ${norm(sg)} `);
+        let best = null;
+        for (const pk of pins) {
+            if (!segs.some(sg => sg.includes(` ${pk.key} `))) continue;
+            if (!best || pk.depth > best.depth || (pk.depth === best.depth && pk.key.length > best.key.length)) best = pk;
+        }
+        return best ? best.id : '';
+    };
+    const named = new Map();    // a marker made by hand -> the story's locations that are it
+    const story = [];
+    for (const sp of storyPlaces(pack, state)) {
+        const pin = bk.merged[sp.id] ? '' : pinFor(sp.label);    // what the player (or the set-up) merged by hand stands as merged
+        if (!pin) { story.push(sp); continue; }
+        alias.set(sp.id, pin);
+        if (!named.has(pin)) named.set(pin, []);
+        named.get(pin).push(sp);
+    }
     for (const g of foldPlaces(story)) {
         const c = make(g.id, { label: g.label, rooms: [...g.rooms], image: (story.find(s => g.members.some(m => m.id === s.id) && s.image) || {}).image || '' });
         c.ids = [...new Set([g.id, ...g.members.map(m => m.id)])];
         for (const m of g.members) if (m.id !== g.id) alias.set(m.id, g.id);
     }
-    for (const m of bk.made) make(m.id, { label: m.label, kind: m.kind, note: m.note, source: 'pin' });
+    for (const m of bk.made) {
+        const c = make(m.id, { label: m.label, kind: m.kind, note: m.note, source: 'pin' });
+        for (const sp of named.get(m.id) || []) { c.ids.push(sp.id); if (!c.image && sp.image) c.image = sp.image; }
+    }
 
     // Deleted, merged, renamed.
     const gone = new Set(bk.gone);

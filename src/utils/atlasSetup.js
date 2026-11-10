@@ -1,0 +1,349 @@
+/**
+ * Setting up a world's map (docs/long-shot-plan.md D143, D144, D159), the
+ * pure parts. The player writes what matters to them; the chat is read
+ * (its recent scenes in one go, or the whole of it in parts, each part
+ * scanned for the places it names); one request drafts the places around
+ * the notes: what is inside what, a kind and a note for each, what is
+ * near what, which of the places already known each one is; the player
+ * corrects the draft; the draft becomes the chat's book, every place on
+ * its own map at a spot solved from what is near what. The AI never
+ * writes a coordinate (D144).
+ *
+ * The requests are in src/systems/features/atlasBook.js; the window's
+ * steps in src/systems/ui/atlasViews.js. tools/atlas-setup-test.mjs.
+ */
+import { ATLAS_KINDS, ATLAS_SCALES, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList } from './atlas.js';
+
+const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
+const norm = (t) => clean(t, 120).toLowerCase().replace(/^the\s+/, '').replace(/[’]/g, "'");
+const round4 = (n) => Math.round(n * 10000) / 10000;
+
+export const SETUP_LIMITS = Object.freeze({
+    notes: 3000,        // what the player wrote
+    card: 3000,
+    lore: 6000,
+    recent: 12000,      // the recent scenes, sent whole
+    chunk: 14000,       // one part of the whole chat
+    chunks: 60,         // parts read at most: the oldest are left out past this, and the player is told
+    found: 160,         // places kept from the scans
+    places: 80,         // places a draft may hold
+    message: 1800,      // one message, cut to this
+});
+export const SETUP_REACHES = Object.freeze(['recent', 'full']);
+const DIRS = Object.freeze({ n: [0, -1], ne: [0.707, -0.707], e: [1, 0], se: [0.707, 0.707], s: [0, 1], sw: [-0.707, 0.707], w: [-1, 0], nw: [-0.707, -0.707] });
+const FARS = Object.freeze({ close: 1.5, near: 2.6, far: 4.4 });
+const KIND_LIST = ATLAS_KINDS.map(k => k.id).join(', ');
+
+/** A chat's messages as lines, "Name: what was said", each cut to length; the empty ones left out. `strip` cleans a message (the tracker blocks, the thinking). */
+export function chatLines(chat, { strip = (t) => String(t || ''), persona = 'Player' } = {}) {
+    const out = [];
+    for (const m of Array.isArray(chat) ? chat : []) {
+        if (!m || m.is_system) continue;
+        const text = clean(strip(m.mes), SETUP_LIMITS.message);
+        if (!text) continue;
+        out.push(`${clean(m.name, 60) || (m.is_user ? persona : 'Narrator')}: ${text}`);
+    }
+    return out;
+}
+
+/** The lines in parts of about `size` characters, oldest first; `skipped` counts the lines left out when the chat is longer than `max` parts (the oldest go). */
+export function chunkLines(lines, { size = SETUP_LIMITS.chunk, max = SETUP_LIMITS.chunks } = {}) {
+    const chunks = [];
+    let cur = [];
+    let len = 0;
+    for (const line of Array.isArray(lines) ? lines : []) {
+        if (len + line.length > size && cur.length) { chunks.push(cur); cur = []; len = 0; }
+        cur.push(line);
+        len += line.length + 1;
+    }
+    if (cur.length) chunks.push(cur);
+    const kept = chunks.length > max ? chunks.slice(chunks.length - max) : chunks;
+    const skipped = chunks.slice(0, chunks.length - kept.length).reduce((n, c) => n + c.length, 0);
+    return { chunks: kept.map(c => c.join('\n')), skipped };
+}
+
+/** The last lines that fit `size` characters, in order: the recent scenes. */
+export function recentLines(lines, size = SETUP_LIMITS.recent) {
+    const out = [];
+    let len = 0;
+    for (let i = (Array.isArray(lines) ? lines.length : 0) - 1; i >= 0; i--) {
+        if (len + lines[i].length > size && out.length) break;
+        out.unshift(lines[i]);
+        len += lines[i].length + 1;
+    }
+    return out.join('\n');
+}
+
+/** The first JSON object in a reply (fenced, bare, with words around it), or null. */
+export function jsonIn(text) {
+    const raw = String(text ?? '');
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try { const v = JSON.parse(raw.slice(start, end + 1)); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
+}
+
+/** The request that scans one part of the chat for the places it names. */
+export function buildScanPrompt(chunk, { part = 1, parts = 1 } = {}) {
+    const system = [
+        'You read one part of a long role-play story and list the places it names. A place is somewhere a scene can happen: a city, a district, a building, a wilderness, a dungeon or one of its levels. Not a room, not a piece of furniture, not a mood.',
+        'Reply with one JSON object and nothing else: {"places":[{"name":"<the place\'s proper name>","inside":"<the larger place it is in, or empty>","note":"<a few words on what it is>"}]}',
+        'Use the name the story uses. List each place once. If this part names no place, reply {"places":[]}.',
+    ].join('\n');
+    return { system, user: `Part ${part} of ${parts} of the story:\n\n${chunk}` };
+}
+
+/** A scan's reply read: the places with a name, cleaned. */
+export function parseScan(text) {
+    const obj = jsonIn(text);
+    const out = [];
+    for (const p of obj && Array.isArray(obj.places) ? obj.places : []) {
+        const name = clean(p && p.name, 80);
+        if (name) out.push({ name, inside: clean(p.inside, 80), note: clean(p.note, 160) });
+    }
+    return out;
+}
+
+/** The scans joined: one entry per name (the article and the case apart), the first fuller word on each kept. */
+export function mergeScans(lists) {
+    const byKey = new Map();
+    for (const list of Array.isArray(lists) ? lists : []) {
+        for (const p of Array.isArray(list) ? list : []) {
+            const key = norm(p.name);
+            if (!key) continue;
+            const have = byKey.get(key);
+            if (!have) { if (byKey.size < SETUP_LIMITS.found) byKey.set(key, { ...p }); continue; }
+            if (!have.inside && p.inside) have.inside = p.inside;
+            if (!have.note && p.note) have.note = p.note;
+        }
+    }
+    return [...byKey.values()];
+}
+
+/**
+ * The request that drafts the world's places (D143, D144).
+ * @param {object} o
+ * @param {string} o.notes     what the player wrote: it outranks everything else
+ * @param {string} o.world     the world's name
+ * @param {{description?:string,scenario?:string}} o.card
+ * @param {string} o.lore      the lorebooks' entries, cut to length
+ * @param {string} o.recent    the recent scenes, whole
+ * @param {Array} o.found      the places the scans found in the whole chat ([] for the recent reach)
+ * @param {object} o.model     the Atlas's model: the places already known are numbered from it (tidyList)
+ * @param {string[]} o.players the player's names: never a place, never moved
+ */
+export function buildSetupPrompt({ notes = '', world = '', card = {}, lore = '', recent = '', found = [], model = null, players = [] } = {}) {
+    const known = tidyList(model);
+    const system = [
+        'You set up the map of a role-play story\'s world. From what you are given, write the list of its places: what each is, what is inside what, and what is near what. You never write coordinates.',
+        'Reply with one JSON object and nothing else:',
+        '{"scale":"town|region|world","places":[{"name":"<proper name>","kind":"<one kind>","note":"<one sentence>","inside":"<name of the place it is inside, or empty for the top map>","was":[<numbers of the known places this one is>],"guess":<true if nothing you were given says this, false otherwise>,"near":[{"to":"<name of another place on the same map>","dir":"n|ne|e|se|s|sw|w|nw","far":"close|near|far"}]}],"drop":[<numbers of known places that are not places>]}',
+        `Kinds: ${KIND_LIST}.`,
+        'Rules:',
+        '- THE PLAYER\'S NOTES OUTRANK EVERYTHING. If they name a place, it is in the list as they named it. If they say something is true, it is true.',
+        '- "inside" builds layers: a city is on the top map; a house, a temple, a dungeon\'s entrance are inside the city; a dungeon\'s levels are inside the dungeon. A place has at most one "inside", and it names another place of your list exactly. Do not list rooms, furniture or corners: they are part of their building.',
+        '- "near" only between places with the same "inside". "dir" is the way you would walk from this place to reach the other ("dir":"n" means the other place lies to the north). Give what the sources say; when they say nothing, leave it empty rather than invent it.',
+        '- "was": every known place you are given is the same as one of your places (put its number in that place\'s "was"), or is a room or part of one (put its number in the building\'s "was"), or is not a place at all (put its number in "drop"). Use each number once.',
+        '- "scale" is what the top map shows: a town when the whole story is in one town, a region for a few settlements and the land between, a world for more.',
+        `- At most ${SETUP_LIMITS.places} places. Prefer the places the story has been to and the ones the notes name over a full gazetteer. Mark "guess": true on anything you added to make the world hang together.`,
+        players.length ? `- ${players.join(' and ')} is the player: not a place.` : '',
+    ].filter(Boolean).join('\n');
+    const parts = [];
+    if (clean(notes, 10)) parts.push(`THE PLAYER'S NOTES (these outrank everything below):\n${String(notes).trim().slice(0, SETUP_LIMITS.notes)}`);
+    if (world) parts.push(`The world is called: ${clean(world, 120)}`);
+    const cardText = [card.description, card.scenario].filter(Boolean).join('\n').trim().slice(0, SETUP_LIMITS.card);
+    if (cardText) parts.push(`The character card:\n${cardText}`);
+    if (lore) parts.push(`The lore:\n${String(lore).slice(0, SETUP_LIMITS.lore)}`);
+    if (found.length) parts.push(`Places named across the whole story (name, what it is inside, what it is):\n${found.map(p => `- ${p.name}${p.inside ? ` (in ${p.inside})` : ''}${p.note ? `: ${p.note}` : ''}`).join('\n')}`);
+    if (recent) parts.push(`The recent scenes:\n${String(recent).slice(-SETUP_LIMITS.recent)}`);
+    parts.push(known.length
+        ? `The known places, numbered (the map as it stands; gathered automatically, so it holds duplicates and things that are not places):\n${known.map(p => `${p.n}. ${p.label}${p.layerLabel ? ` [in ${p.layerLabel}]` : ''}${p.rooms.length ? ` (inside it: ${p.rooms.slice(0, 6).join('; ')})` : ''}`).join('\n')}`
+        : 'There are no known places yet.');
+    return { system, user: parts.join('\n\n'), known: known.length };
+}
+
+/**
+ * The draft read from the reply and made safe. Each place gets a key (its
+ * name, the article and the case apart); "inside" and "near" are turned
+ * into keys, and one that names no place of the list is dropped; a place
+ * inside itself, or in a loop, stands on the top map; a known place's
+ * number is used once.
+ * @returns {{ ok: boolean, draft: { scale: string, places: Array, drop: string[] }|null, error: string }}
+ */
+export function parseSetup(text, model = null) {
+    const obj = jsonIn(text);
+    if (!obj || !Array.isArray(obj.places)) return { ok: false, draft: null, error: 'The reply was not the list of places asked for.' };
+    const known = tidyList(model);
+    const byN = new Map(known.map(p => [p.n, p]));
+    const num = (v) => { const n = typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : v; return Number.isInteger(n) ? n : 0; };
+    const places = [];
+    const keys = new Set();
+    for (const p of obj.places) {
+        const name = clean(p && p.name, 80);
+        const key = norm(name);
+        if (!key || keys.has(key)) continue;
+        keys.add(key);
+        places.push({ key, name, kind: cleanKind(p.kind) || guessKind(name), note: clean(p.note, 300), inside: norm(p.inside), was: Array.isArray(p.was) ? p.was : [], guess: p.guess === true, near: Array.isArray(p.near) ? p.near : [] });
+        if (places.length >= SETUP_LIMITS.places) break;
+    }
+    if (!places.length) return { ok: false, draft: null, error: 'The reply listed no places.' };
+    const used = new Set();
+    for (const p of places) {
+        if (!keys.has(p.inside) || p.inside === p.key) p.inside = '';
+        p.was = p.was.map(n => byN.get(num(n))).filter(k => k && !used.has(k.id) && used.add(k.id)).map(k => ({ id: k.id, label: k.label }));
+    }
+    const byKey = new Map(places.map(p => [p.key, p]));
+    for (const p of places) {    // a loop of "inside" is broken at the place that closes it
+        let cur = p.inside;
+        for (let i = 0; cur && i <= places.length; i++) { if (cur === p.key) { p.inside = ''; break; } cur = byKey.get(cur).inside; }
+    }
+    for (const p of places) {
+        const seen = new Set();
+        p.near = p.near.map(r => ({ to: norm(r && r.to), dir: typeof (r && r.dir) === 'string' && DIRS[r.dir.trim().toLowerCase()] ? r.dir.trim().toLowerCase() : '', far: FARS[String(r && r.far || '').trim().toLowerCase()] ? String(r.far).trim().toLowerCase() : 'near' }))
+            .filter(r => r.dir && r.to !== p.key && byKey.has(r.to) && byKey.get(r.to).inside === p.inside && !seen.has(r.to) && seen.add(r.to));
+    }
+    const drop = [];
+    for (const n of Array.isArray(obj.drop) ? obj.drop : []) { const k = byN.get(num(n)); if (k && !used.has(k.id)) { used.add(k.id); drop.push({ id: k.id, label: k.label }); } }
+    return { ok: true, draft: { scale: ATLAS_SCALES[obj.scale] && obj.scale !== 'site' ? obj.scale : '', places, drop }, error: '' };
+}
+
+// ─── The player's corrections (the review) ──────────────────────────────────
+
+const copy = (draft) => ({ scale: draft.scale, places: draft.places.map(p => ({ ...p, was: [...p.was], near: [...p.near] })), drop: [...draft.drop] });
+
+/** A place's name or kind changed. The name is its word; its key stays, so what points at it still does. */
+export function editDraftPlace(draft, key, { name, kind } = {}) {
+    const d = copy(draft);
+    const p = d.places.find(x => x.key === key);
+    if (!p) return d;
+    if (clean(name, 80)) p.name = clean(name, 80);
+    if (kind !== undefined && cleanKind(kind)) p.kind = cleanKind(kind);
+    p.guess = false;    // the player touched it: it is theirs now
+    return d;
+}
+
+/** The keys a place is inside of, nearest first. */
+export function draftChain(draft, key) {
+    const byKey = new Map(draft.places.map(p => [p.key, p]));
+    const out = [];
+    let cur = byKey.get(key) ? byKey.get(key).inside : '';
+    for (let i = 0; cur && i <= draft.places.length; i++) { out.push(cur); cur = byKey.get(cur) ? byKey.get(cur).inside : ''; }
+    return out;
+}
+
+/** A place put inside another ('' = the top map). Inside itself, or inside something that is inside it, is refused. What it was near is let go: that was on its old map. */
+export function setDraftInside(draft, key, inside) {
+    const d = copy(draft);
+    const p = d.places.find(x => x.key === key);
+    if (!p || inside === key || (inside && (!d.places.some(x => x.key === inside) || draftChain(d, inside).includes(key)))) return d;
+    p.inside = inside || '';
+    p.near = [];
+    for (const o of d.places) o.near = o.near.filter(r => r.to !== key);
+    p.guess = false;
+    return d;
+}
+
+/** A place taken out of the draft: what was inside it moves up to where it stood; the known places it was are left as they are. */
+export function removeDraftPlace(draft, key) {
+    const d = copy(draft);
+    const p = d.places.find(x => x.key === key);
+    if (!p) return d;
+    for (const o of d.places) { if (o.inside === key) { o.inside = p.inside; o.near = []; } o.near = o.near.filter(r => r.to !== key); }
+    d.places = d.places.filter(x => x.key !== key);
+    return d;
+}
+
+/** The draft as rows for the review: each place with how deep it is, in the order a tree reads (a place, then what is inside it). */
+export function draftRows(draft) {
+    const kids = new Map();
+    for (const p of draft.places) { if (!kids.has(p.inside)) kids.set(p.inside, []); kids.get(p.inside).push(p); }
+    const out = [];
+    const walk = (key, depth) => { for (const p of kids.get(key) || []) { out.push({ ...p, depth, holds: (kids.get(p.key) || []).length }); walk(p.key, depth + 1); } };
+    walk('', 0);
+    return out;
+}
+
+// ─── The spots: what is near what, solved (D144) ────────────────────────────
+
+/**
+ * A spot for every place of the draft, each map laid out on its own. A
+ * map's first place stands in the middle; a place said to be near one
+ * already placed stands in that direction at that distance; the rest go
+ * on a spiral; then anything too close to another is pushed apart. The
+ * same draft gives the same spots.
+ * @returns {Map<string, { x: number, y: number }>}
+ */
+export function layoutDraft(draft) {
+    const out = new Map();
+    const layers = new Map();
+    for (const p of draft.places) { if (!layers.has(p.inside)) layers.set(p.inside, []); layers.get(p.inside).push(p); }
+    const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+    for (const list of layers.values()) {
+        const at = new Map();
+        // "dir" is the way from the place to the other one. Both ways of every relation: "B lies north of A" also places A south of B.
+        const rel = new Map(list.map(p => [p.key, []]));
+        for (const p of list) for (const r of p.near) { if (!rel.has(r.to)) continue; const [dx, dy] = DIRS[r.dir]; const d = FARS[r.far] || FARS.near; rel.get(p.key).push({ to: r.to, dx: dx * d, dy: dy * d }); rel.get(r.to).push({ to: p.key, dx: -dx * d, dy: -dy * d }); }
+        let spare = 0;
+        const next = () => { const i = spare++; const r = 2.2 * Math.sqrt(i + 0.5); return { x: r * Math.cos(i * GOLDEN + 0.6), y: r * Math.sin(i * GOLDEN + 0.6) }; };
+        for (const start of list) {
+            if (at.has(start.key)) continue;
+            at.set(start.key, at.size ? next() : { x: 0, y: 0 });
+            const queue = [start.key];
+            while (queue.length) {
+                const cur = queue.shift();
+                const from = at.get(cur);
+                for (const r of rel.get(cur)) { if (at.has(r.to)) continue; at.set(r.to, { x: from.x + r.dx, y: from.y + r.dy }); queue.push(r.to); }
+            }
+        }
+        // Apart: any two closer than a marker's own land are pushed along the line between them (or sideways when they coincide).
+        const keys = list.map(p => p.key);
+        for (let pass = 0; pass < 60; pass++) {
+            let moved = false;
+            for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+                const a = at.get(keys[i]), b = at.get(keys[j]);
+                let dx = b.x - a.x, dy = b.y - a.y;
+                let d = Math.hypot(dx, dy);
+                if (d >= 1.35) continue;
+                if (d < 1e-6) { dx = Math.cos(j * GOLDEN); dy = Math.sin(j * GOLDEN); d = 1; }
+                const push = (1.4 - Math.min(d, 1.4)) / 2 + 0.01;
+                a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push;
+                moved = true;
+            }
+            if (!moved) break;
+        }
+        for (const [key, p] of at) out.set(key, { x: round4(p.x), y: round4(p.y) });
+    }
+    return out;
+}
+
+// ─── The draft made the map (D159) ──────────────────────────────────────────
+
+/**
+ * The chat's book made from the draft, replacing the one it had: every
+ * place a marker made by hand, on the map of the place it is inside, at
+ * its solved spot; the known places it was merged into it (so the people
+ * and the visits there count at it, and the story naming them again goes
+ * to it); the ones that are not places deleted. A map's scale follows its
+ * depth unless the draft named the top map's. Known places the draft did
+ * not mention are left as they are, to be placed by hand. `drawn` and the
+ * top map's ground are kept from the old book.
+ * @returns {{ book: object, ids: Map<string,string>, placed: number, merged: number, dropped: number }}
+ */
+export function applySetup(draft, previous = null) {
+    const old = normalizeBook(previous);
+    let book = normalizeBook({ drawn: old.drawn, ground: old.ground });
+    const ids = new Map();
+    const spots = layoutDraft(draft);
+    // A place before what is inside it, so a holder's id is known when its places are made.
+    for (const row of draftRows(draft)) {
+        const at = spots.get(row.key) || { x: 0, y: 0 };
+        const made = addPin(book, { label: row.name, kind: row.kind, note: row.note, x: at.x, y: at.y, layer: row.inside ? (ids.get(row.inside) || '') : '' });
+        book = made.book;
+        ids.set(row.key, made.id);
+    }
+    let merged = 0;
+    for (const p of draft.places) for (const k of p.was) { if (k.id !== ids.get(p.key)) { book = mergeInto(book, k.id, ids.get(p.key)); merged++; } }
+    for (const k of draft.drop) book = removeMarker(book, k.id);
+    if (draft.scale) book = withScale(book, draft.scale);
+    return { book, ids, placed: draft.places.length, merged, dropped: draft.drop.length };
+}

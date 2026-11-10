@@ -53,7 +53,8 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml } from '/src/systems/ui/atlasViews.js';
+import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
 import * as A from '/src/utils/atlas.js';
@@ -129,6 +130,27 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
     });
     return true;
 };
+window.S = S;
+// The set-up's panel with a fixture draft (the controller's own lines, here).
+window.__setup = (step) => {
+    const panel = root.querySelector('.dooms-atlas-setup');
+    if (!step) { panel.hidden = true; panel.innerHTML = ''; return true; }
+    const reply = JSON.stringify({ scale: 'region', places: [
+        { name: 'Hask', kind: 'settlement', note: 'A landlocked walled city.', inside: '', was: [1], near: [{ to: 'The Old Road', dir: 's', far: 'near' }] },
+        { name: 'The Old Road', kind: 'wild', inside: '', guess: true },
+        { name: 'The House on the Lane', kind: 'home', inside: 'Hask', was: [2, 3], near: [{ to: 'The Temple', dir: 'n', far: 'close' }] },
+        { name: 'The Temple', kind: 'sacred', inside: 'Hask' },
+        { name: 'The Counting Room', kind: 'shop', inside: 'Hask', near: [{ to: 'The Temple', dir: 'w', far: 'far' }] },
+        { name: 'The Black Stair', kind: 'ruin', inside: 'The Temple' },
+        { name: 'First Landing', kind: 'ruin', inside: 'The Black Stair' }, { name: 'Second Landing', kind: 'ruin', inside: 'The Black Stair', guess: true },
+    ], drop: [4] });
+    const draft = S.parseSetup(reply, window.__model).draft;
+    window.__draft = draft;
+    panel.hidden = false;
+    panel.innerHTML = atlasSetupHtml({ step, notes: step === 'notes' ? '' : 'Hask is a landlocked city.', reach: step === 'notes' ? 'recent' : 'full', cost: { messages: 412, parts: 9, skipped: 0 }, progress: { done: 3, total: 10, word: 'Reading the chat: part 4 of 9' }, draft, error: '', onMap: window.__model.all.length, note: '' });
+    return true;
+};
+window.__applySetup = () => { const r = S.applySetup(window.__draft, window.__book); window.__book = r.book; window.__ids = Object.fromEntries(r.ids); window.__setup(''); window.__ui.layer = ''; draw(); window.__board.fit(); return true; };
 window.__layer = (id) => { window.__board.closeCard(); window.__ui.layer = id; window.__ui.cardMode = 'view'; draw(); window.__board.fit(); return true; };
 window.__set = (next) => { Object.assign(window.__ui, next); draw(); return true; };
 window.__edit = (fn) => { window.__book = fn(window.__book, window.__model, window.__pack); draw(); return true; };
@@ -208,7 +230,7 @@ console.log('\n§1 a long campaign: nothing lands by itself');
     check('the map is empty: no marker, no land', l.count === 0 && l.shore === 0 && l.routes === 0);
     check('the map says how it fills', /Drag a place/.test(l.hint));
     const start = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-start-card'); if (!c) return null; const b = c.getBoundingClientRect(); const map = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' '), buttons: [...c.querySelectorAll('button')].map(x => x.getAttribute('data-act')), centred: Math.abs((b.left + b.width / 2) - (map.left + map.width / 2)) < 4, inside: b.top >= 0 && b.bottom <= innerHeight }; });
-    check('an empty map shows Start your map in its middle: place them all, or place them yourself', !!start && /Start your map/.test(start.text) && /8 places are waiting/.test(start.text) && /Place all 8 for me/.test(start.text) && start.buttons.join() === 'place-all,start-dismiss' && start.centred && start.inside, JSON.stringify(start));
+    check('an empty map shows Start your map in its middle: place them all, or place them yourself', !!start && /Start your map/.test(start.text) && /8 places are waiting/.test(start.text) && /Place all 8 for me/.test(start.text) && start.buttons.join() === 'setup,place-all,start-dismiss' && start.centred && start.inside, JSON.stringify(start));
     check('fifteen wordings are eight places in the tray: the rooms folded into their buildings', l.tray.length === 8 && l.tray.includes("Jordan's House") && l.tray.includes('Bedroom') && l.tray.includes('The Rusty Anchor') && l.tray.includes('Harbour Market') && !l.tray.some(t => /wall|window|Kitchen|back room|stalls/.test(t)), JSON.stringify(l.tray));
     check('the party\'s place is first in the tray', l.tray[0] === "Jordan's House");
     check('the paper lies over the map and the compass is drawn', l.paper && l.compass);
@@ -474,6 +496,50 @@ console.log('\n§5b the grounds (D158)');
     await settle();
     l = await layout();
     check('indoors: a floor\'s squares', l.ground === 'indoors' && l.groundLines === 1 && l.walls === 0);
+}
+
+console.log('\n§5c setting up the world (D159)');
+{
+    await page.evaluate(() => window.__open({ world: 'campaign' }));
+    await settle();
+    const start = await page.evaluate(() => (document.querySelector('.dooms-atlas-start-card') || {}).textContent || '');
+    check('an empty top map offers Set up this world first, then placing by hand', /Set up this world/.test(start) && start.indexOf('Set up this world') < start.indexOf('Place all'));
+    check('the Places tab offers it too, beside the clean-up', await page.evaluate(() => !!document.querySelector('.dooms-atlas-tidy [data-act="setup"]') && !!document.querySelector('.dooms-atlas-tidy [data-act="tidy"]')));
+    const panel = () => page.evaluate(() => {
+        const c = document.querySelector('.dooms-atlas-setup-card'); if (!c) return null;
+        const b = c.getBoundingClientRect(); const stage = document.querySelector('.dooms-atlas-stage').getBoundingClientRect();
+        const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; };
+        return { text: c.textContent.replace(/\s+/g, ' '), inStage: b.left >= stage.left && b.right <= stage.right && b.top >= 0 && b.bottom <= innerHeight, acts: [...c.querySelectorAll('button[data-act]')].map(x => x.getAttribute('data-act')), rows: c.querySelectorAll('.dooms-atlas-setup-row').length, fit: [...c.querySelectorAll('input, select, textarea, button')].every(inside), depths: [...c.querySelectorAll('.dooms-atlas-setup-row')].map(r => Math.round(r.querySelector('.dooms-atlas-setup-name input').getBoundingClientRect().left - b.left)), guesses: c.querySelectorAll('.dooms-atlas-setup-guess').length, radios: [...c.querySelectorAll('input[type=radio]')].map(x => `${x.value}:${x.checked}`), bar: (c.querySelector('.dooms-atlas-setup-bar span') || { style: {} }).style.width || '' };
+    });
+    await page.evaluate(() => window.__setup('notes'));
+    let p = await panel();
+    check('the first step: the notes, how much of the chat to read with what the whole of it costs, Draft', /Your notes/.test(p.text) && /412 messages, 10 requests/.test(p.text) && p.radios.join() === 'recent:true,full:false' && p.acts.join() === 'setup-draft,setup-close' && p.inStage && p.fit, JSON.stringify(p));
+    await shot('7e-setup-notes');
+    await page.evaluate(() => window.__setup('busy'));
+    p = await panel();
+    check('while it reads: which part, how far, that nothing changes yet, Stop', /part 4 of 9/.test(p.text) && /Nothing on your map changes/.test(p.text) && p.acts.join() === 'setup-stop' && parseFloat(p.bar) > 20 && parseFloat(p.bar) < 60, JSON.stringify(p));
+    await page.evaluate(() => window.__setup('review'));
+    p = await panel();
+    check('the review: every place a row, indented under what it is inside, the guesses marked', p.rows === 8 && p.guesses === 2 && p.depths[1] > p.depths[0] && p.depths[3] > p.depths[2] && p.depths[4] > p.depths[3] && p.depths[7] === p.depths[0] && /8 places, 2 of them guessed/.test(p.text), JSON.stringify(p.depths));
+    check('it says Apply replaces the map and how much is on it, and offers Apply, Back and Cancel', /Apply replaces the map this chat has now \(8 places\)/.test(p.text) && /Not places, to be deleted/.test(p.text) && p.acts.filter(a => a !== 'setup-remove').join() === 'setup-apply,setup-back,setup-close' && p.inStage && p.fit);
+    await shot('7f-setup-review');
+    await page.evaluate(() => window.__applySetup());
+    await settle();
+    let l = await layout();
+    check('applied: the top map holds Hask and the road, placed, nothing waiting', l.count === 2 && !!l.markers['Hask'] && !!l.markers['The Old Road'] && l.tray.length <= 5 && l.ground === 'country');
+    const road = await spotOf(await page.evaluate(() => window.__ids['old road']));
+    const hask = await spotOf(await page.evaluate(() => window.__ids['hask']));
+    check('the road lies south of Hask, as the draft said', road.sy > hask.sy + 40 && Math.abs(road.sx - hask.sx) < 30);
+    await page.evaluate(() => window.__layer(window.__ids['hask']));
+    await settle();
+    l = await layout();
+    check('inside Hask: its three places on streets, already placed', l.count === 3 && l.ground === 'city' && !!l.markers['The Temple'] && /Hask/.test(l.trail));
+    await shot('7g-setup-applied-hask');
+    await page.evaluate(() => window.__layer(window.__ids['black stair']));
+    await settle();
+    l = await layout();
+    check('inside the stair: its landings, underground', l.count === 2 && l.ground === 'underground' && /Hask.*The Temple.*The Black Stair/.test(l.trail));
+    await shot('7h-setup-applied-stair');
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');
