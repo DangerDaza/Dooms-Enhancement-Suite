@@ -23,7 +23,8 @@ import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHA
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
+import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn } from '../features/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -264,6 +265,7 @@ function renderSide(ctx) {
         canAdvance: !empty,
         advancing: isAdvancing(),
         editLabel: blank ? 'Make this a world' : 'Edit this world',
+        scenes: !empty && isHubOn() && !isScene(),    // a chat that is no scene can be taken as where a world's scenes begin (D172)
     }));
     $(`${root()} .dooms-atlas-body`).scrollTop(scroll);
     $(`${root()} [data-act="edit"]`).prop('disabled', !state || !pack);
@@ -385,8 +387,46 @@ function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
-    $p.prop('hidden', false).html(setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.prop('hidden', false).html(setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
+}
+
+// ─── Playing the story as scenes (D172) ─────────────────────────────────────
+
+/** The panel opened: what playing this chat as scenes would do, or why it cannot be. Nothing is asked for yet. */
+function openScenes() {
+    if (board) board.closeCard();
+    arm(null);
+    setup = { scenes: true, step: 'ask', plan: scenesPlan(), recap: '', error: '', replace: false, result: null, messages: 0, world: worldKey() };
+    $(`${root()} .dooms-atlas-start`).prop('hidden', true);
+    renderSetup();
+}
+
+/** The record of the chat so far asked for; the panel shows it for the player to read and correct. */
+async function prepareScenes() {
+    if (!setup || !setup.scenes) return;
+    setup = { ...setup, step: 'busy', error: '' };
+    renderSetup();
+    const r = await prepareAdopt();
+    if (!setup || !setup.scenes) return;    // the panel was closed meanwhile
+    if (!r.ok) { setup = { ...setup, step: 'ask', plan: r.reason === 'busy' || r.reason === 'changed' ? setup.plan : r, error: r.reason === 'busy' || r.reason === 'changed' ? scenesRefusalText(r) : '' }; renderSetup(); return; }
+    setup = { ...setup, step: 'review', plan: r.plan, recap: r.recap, messages: r.messages, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
+    renderSetup();
+}
+
+/** The chat taken: the world made or found, the chat carried over, its stores the world's memory. */
+async function commitScenes() {
+    if (!setup || !setup.scenes || setup.step !== 'review') return;
+    const recap = String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap);
+    const replace = $(`${root()} .dooms-atlas-scenes-replace`).is(':checked');
+    setup = { ...setup, recap, replace };
+    const r = await commitAdopt({ recap, replace });
+    if (!setup || !setup.scenes) return;
+    if (!r.ok) { setup = { ...setup, error: r.reason === 'has-memory' ? 'Tick the box to replace what it remembers.' : scenesRefusalText(r) }; renderSetup(); return; }
+    result = `${r.worldName} is played as scenes now.`;
+    render();    // the chat is on the world now: the name, the map and the lists are read again
+    setup = { ...setup, step: 'done', result: r, error: '', world: worldKey() };
+    renderSetup();
 }
 
 function openSetup() {
@@ -570,6 +610,16 @@ function build() {
             if (act === 'add') { if (roading) setRoading(false); arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
             // Setting up the world (D159).
             if (act === 'setup') { openSetup(); return; }
+            if (act === 'scenes') { openScenes(); return; }
+            if (act === 'scenes-prepare' || act === 'scenes-again') { await prepareScenes(); return; }
+            if (act === 'scenes-go') { await commitScenes(); return; }
+            if (act === 'scenes-hub') {
+                const id = setup && setup.result ? setup.result.worldId : '';
+                setup = null; renderSetup();
+                closeAtlas();
+                import('./hub.js').then(m => m.openHub({ worldId: id })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+                return;
+            }
             if (act === 'setup-close') { setup = null; renderSetup(); render(); return; }
             if (act === 'setup-draft') { await runSetup(); return; }
             if (act === 'setup-stop') { stopSetup(); if (setup) { setup = { ...setup, progress: { ...setup.progress, word: 'Stopping after this part…' } }; renderSetup(); } return; }
@@ -727,6 +777,12 @@ function build() {
         const value = String($(this).val() || '').trim();
         if (!value) return;
         setup = { ...setup, places: setup.places.map(p => (p.key === key ? { ...p, [field === 'name' ? 'name' : 'kind']: value } : p)) };
+    });
+    // The tick that a world's memory may be replaced lights Play as scenes; what was typed in the record is kept.
+    $(document).on('change', `${root()} .dooms-atlas-scenes-replace`, function () {
+        if (!setup || !setup.scenes) return;
+        setup = { ...setup, replace: $(this).is(':checked'), recap: String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap), error: '' };
+        renderSetup();
     });
     $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(getBook(), String($(this).val() || ''), layer)); });
     // The wheel over a select that has the focus steps its value in some browsers: the sidebar scrolled past one would change the map's scale unasked.

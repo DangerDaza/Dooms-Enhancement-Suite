@@ -193,6 +193,94 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
     </div>`;
 }
 
+/** Why a chat cannot be played as scenes, in words (D172). */
+export function scenesRefusalText(plan) {
+    const p = plan && typeof plan === 'object' ? plan : {};
+    if (p.reason === 'group') return 'Scenes are played with one narrator card, and this is a group chat.';
+    if (p.reason === 'no-chat') return 'Open a chat first: its story so far is what the scenes begin from.';
+    if (p.reason === 'no-world') return 'This chat has no world yet. Switch Live World on for it and send a message, then come back.';
+    if (p.reason === 'no-card') return 'This chat has no character card to narrate the scenes.';
+    if (p.reason === 'scene') return 'This chat is a scene already. End it from the strip above the chat; the next one starts from where it stopped.';
+    if (p.reason === 'off') return 'Live World is off. Scenes are played on a living world: switch it on in Settings, under Live World.';
+    if (p.reason === 'busy') return 'A reply is still being written. Try again when it is done.';
+    if (p.reason === 'changed') return 'The chat changed while this was being prepared. Nothing was changed; start again.';
+    if (p.reason === 'running') return 'This is already being done.';
+    if (p.reason === 'bound-elsewhere') return `${(p.card && p.card.name) || 'This chat\'s card'} already narrates another world (${p.boundTo || 'one of yours'}), and a card narrates one world. Open this story with a card of its own, or free the card in Settings, under Live World, The Hub.`;
+    if (p.reason === 'world' || p.reason === 'error') return `It could not be done: ${(Array.isArray(p.errors) ? p.errors.join(' ') : '') || 'the world could not be made'}.`;
+    return 'This chat cannot be played as scenes.';
+}
+
+/**
+ * Playing a story as scenes (D172), a panel over the map: what it will
+ * do; the record of the chat so far, written for the player to read and
+ * correct; then the word that it is done.
+ * @param {object} o
+ * @param {'ask'|'busy'|'review'|'done'} o.step
+ * @param {object} o.plan      scenesPlan(): the world, the campaign, the card, whether a memory is replaced
+ * @param {string} o.recap     the record of the chat so far
+ * @param {string} o.error     why the record could not be written, or why the last try failed
+ * @param {boolean} o.replace  the player ticked that the memory may be replaced
+ * @param {object|null} o.result  commitAdopt()'s answer, for the last step
+ */
+export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0 } = {}) {
+    const p = plan && typeof plan === 'object' ? plan : { ok: false, reason: '' };
+    const close = '<button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>';
+    if (!p.ok && step !== 'done') return `<div class="dooms-atlas-setup-card is-scenes"><h3>Play this story as scenes</h3><p class="dooms-atlas-setup-error" role="alert">${e(scenesRefusalText(p))}</p><div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button></div></div>`;
+    const world = (p.world && p.world.name) || 'this world';
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy is-scenes"><h3>Play ${e(world)} as scenes</h3><p>Writing the record of the chat so far…</p><div class="dooms-atlas-setup-bar" role="progressbar" aria-label="Writing the record"><span style="width:60%"></span></div></div>`;
+    if (step === 'done') {
+        const r = result && typeof result === 'object' ? result : {};
+        return `<div class="dooms-atlas-setup-card is-scenes">
+            <h3><i class="fa-solid fa-check" aria-hidden="true"></i> ${e(r.worldName || world)} is played as scenes</h3>
+            <p>${r.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(r.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
+            <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-hub"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Start a scene</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button>
+            </div>
+            <p class="dooms-atlas-start-note">Start a scene opens the Hub for now, where a scene is started and ended.</p>
+        </div>`;
+    }
+    const made = p.world && p.world.made;
+    const warn = p.replaces ? `<p class="dooms-atlas-setup-error" role="alert">${e(world)} is already played as scenes${p.scenes ? ` (${p.scenes} played)` : ''}. Taking this chat replaces what it remembers with this chat as it stands; the scenes already played stay in its list.</p>` : '';
+    if (step === 'review') {
+        return `<div class="dooms-atlas-setup-card is-scenes">
+            <h3>Play ${e(world)} as scenes</h3>
+            <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What has happened so far (the first scene is told this)</span>
+                <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-scenes-recap" maxlength="1500" placeholder="A few lines on where the story stands. It can be left empty.">${e(recap)}</textarea></label>
+            ${err}
+            ${warn}
+            ${p.replaces ? `<label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-replace"${replace ? ' checked' : ''} /> <span>Replace what ${e(world)} remembers with this chat</span></label>` : ''}
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-go"${p.replaces && !replace ? ' disabled' : ''}><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scenes-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Write it again</span></button>
+                ${close}
+            </div>
+        </div>`;
+    }
+    const worldLine = made
+        ? `A world named <strong>${e(world)}</strong> is made for ${p.campaign ? `the campaign ${e(p.campaign.name)}` : 'this chat'}. It has no places of its own: your map and the places the story has named stay exactly as they are.`
+        : p.campaign && !p.replaces ? `<strong>${e(world)}</strong> is this story's world already.` : `<strong>${e(world)}</strong> is the world.`;
+    return `<div class="dooms-atlas-setup-card is-scenes">
+        <h3>Play ${e(world)} as scenes</h3>
+        <p>A story played as scenes is many short chats instead of one long one. Every scene starts fresh, on your map, knowing what happened before it.</p>
+        <ul class="dooms-atlas-scenes-list">
+            <li>${worldLine}</li>
+            <li><strong>${e((p.card && p.card.name) || 'This chat\'s card')}</strong> narrates its scenes.</li>
+            <li>This chat as it stands becomes its memory: the tracker, the inventory, the quests, the world, the canon, the hooks and the map.</li>
+            <li>This chat is kept as scene 0 and stays an ordinary chat you can go on playing.</li>
+        </ul>
+        ${warn}
+        ${err}
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-prepare"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write the record of this chat so far</span></button>
+            ${close}
+        </div>
+        <p class="dooms-atlas-start-note">One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands. You read and correct them before anything is changed.</p>
+    </div>`;
+}
+
 /**
  * Filling out a map (D160, D166), in the set-up's panel: what to add
  * (places on this map, or regions around it), what the player wants more
@@ -383,7 +471,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
  * the tab's body (`body` is the tab's HTML: Places from atlasPlacesHtml,
  * the others from Live World's own views), the foot.
  */
-export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world' } = {}) {
+export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false } = {}) {
     const active = ATLAS_TABS.some(t => t.id === tab) ? tab : ATLAS_TABS[0].id;
     const when = [facts.date, facts.time].filter(Boolean).join(', ');
     const tabs = ATLAS_TABS.map(t => `<button type="button" class="dooms-atlas-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}" title="${attr(t.label)}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i><span>${e(t.label)}</span></button>`).join('');
@@ -400,6 +488,7 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
             <div class="dooms-atlas-foot-actions">
                 <button type="button" class="dooms-atlas-btn" data-act="advance"${canAdvance && !advancing ? '' : ' disabled'} title="Move the world on now: the people, the clocks, the news"><i class="fa-solid fa-forward" aria-hidden="true"></i> <span>${advancing ? 'Advancing…' : 'Advance now'}</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="edit" title="Open this chat's world in the World Builder"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>${e(editLabel)}</span></button>
+                ${scenes ? '<button type="button" class="dooms-atlas-btn" data-act="scenes" title="Play this story as many short chats that each start fresh and know what happened before"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes</span></button>' : ''}
             </div>
         </footer>`;
 }

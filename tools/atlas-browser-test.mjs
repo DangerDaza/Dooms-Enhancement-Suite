@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
@@ -85,7 +85,7 @@ const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker:
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: true });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : m.realm ? 'Nothing stands in ' + m.layerLabel + ' yet. Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
@@ -181,6 +181,9 @@ window.__fillRegions = (step, reply) => {
     return fo;
 };
 window.__applyFillRegions = () => { const home = S.fillOptions(window.__model).home ? (document.querySelector('.dooms-atlas-fill-home') || {}).value || window.__fillHome : ''; const r = S.applyFill(window.__book, window.__model, window.__fillPlaces, { home }); window.__book = r.book; window.__homeId = r.homeId; window.__setup(''); draw(); window.__board.fit(); return r; };
+// Playing the story as scenes (D172): the panel at a step, with a plan as the scene engine would give it.
+window.__scenes = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasScenesHtml(o); return true; };
+window.__refusal = (plan) => scenesRefusalText(plan);
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
 window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
@@ -972,6 +975,46 @@ console.log('\n§5f inside a region: its land, its neighbours named on the borde
     await settle();
     const landed = await page.evaluate((at) => { const inner = window.A.atlasModel({ pack: window.__pack, book: window.__book, layer: window.__home }); const m = inner.markers.find(x => /Reedcutters/.test(x.label)); if (!m) return null; const back = [(m.x - inner.realm.dx) / inner.realm.k, (m.y - inner.realm.dy) / inner.realm.k]; return { on: window.A.pointInPolygon(inner.realm.outline, m.x, m.y), off: Math.hypot(back[0] - at[0], back[1] - at[1]), k: inner.realm.k, same: m.x === at[0] && m.y === at[1] }; }, drop.at);
     check('a place dropped on a land that is laid wider inside lands on the matching spot of it, not on the same numbers', !!landed && landed.on && landed.k > 1 && landed.off < 0.6 && !landed.same, JSON.stringify(landed));
+}
+
+console.log('\n§5g playing the story as scenes: the way in and its panel (D172)');
+{
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 3.2, 1.2]]) b = window.A.addPin(b, { label, kind, x, y }).book;
+        return window.__open({ world: 'campaign', book: b });
+    });
+    await settle();
+    const foot = await page.evaluate(() => { const b = document.querySelector('.dooms-atlas-foot [data-act="scenes"]'); const f = document.querySelector('.dooms-atlas-foot'); const r = b ? b.getBoundingClientRect() : null; const fr = f.getBoundingClientRect(); return b ? { text: b.textContent.trim(), in: r.left >= fr.left && r.right <= fr.right + 1 && r.bottom <= innerHeight + 1 } : null; });
+    check('the sidebar\'s foot offers Play as scenes, inside the sidebar', !!foot && foot.text === 'Play as scenes' && foot.in, JSON.stringify(foot));
+    const plan = { ok: true, reason: '', world: { id: 'first-descent', name: 'First Descent', made: true }, campaign: { id: 'camp1', name: 'First Descent' }, card: { avatar: 'The Redward.png', name: 'The Redward' }, replaces: false, scenes: 0 };
+    const panel = () => page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); if (!c) return null; const b = c.getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' ').trim(), acts: [...c.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}${x.disabled ? ':off' : ''}`), inside: b.top >= 0 && b.bottom <= innerHeight && b.left >= 0 && b.right <= innerWidth, recap: (c.querySelector('.dooms-atlas-scenes-recap') || {}).value, tick: !!c.querySelector('.dooms-atlas-scenes-replace') }; });
+    await page.evaluate((p) => window.__scenes({ step: 'ask', plan: p, messages: 412 }), plan);
+    let v = await panel();
+    check('the panel says what will happen before anything does: the world made under the campaign\'s name, the narrator, what becomes the memory, the chat kept', /Play First Descent as scenes/.test(v.text) && /A world named First Descent is made for the campaign First Descent/.test(v.text) && /your map and the places the story has named stay exactly as they are/.test(v.text) && /The Redward narrates its scenes/.test(v.text) && /the canon, the hooks and the map/.test(v.text) && /kept as scene 0/.test(v.text) && /last forty messages of 412/.test(v.text) && v.acts.join() === 'scenes-prepare,setup-close' && v.inside, JSON.stringify(v));
+    await shot('7y-scenes-ask');
+    await page.evaluate((p) => window.__scenes({ step: 'busy', plan: p }), plan);
+    v = await panel();
+    check('while the record is written the panel says so and offers nothing to press', /Writing the record of the chat so far/.test(v.text) && v.acts.length === 0);
+    await page.evaluate((p) => window.__scenes({ step: 'review', plan: p, recap: 'The company came up from the Fourth Landing with the inkstone; Kiyoha walked out on her own feet.' }), plan);
+    v = await panel();
+    check('the record is shown to read and correct, with Play as scenes', v.recap.startsWith('The company came up') && /the first scene is told this/.test(v.text) && v.acts.join() === 'scenes-go,scenes-again,setup-close' && !v.tick && v.inside, JSON.stringify(v.acts));
+    await shot('7z-scenes-review');
+    await page.evaluate((p) => window.__scenes({ step: 'review', plan: { ...p, world: { ...p.world, made: false }, replaces: true, scenes: 3 }, recap: 'x', error: 'The record could not be written (the connection dropped). Write a few lines yourself, or leave it empty.' }), plan);
+    v = await panel();
+    check('a world already played as scenes: the panel warns that its memory is replaced and holds Play as scenes until the box is ticked; a record that failed says so', /already played as scenes \(3 played\)/.test(v.text) && /replaces what it remembers/.test(v.text) && v.tick && v.acts[0] === 'scenes-go:off' && /could not be written \(the connection dropped\)/.test(v.text));
+    await page.evaluate((p) => window.__scenes({ step: 'review', plan: { ...p, replaces: true, scenes: 3 }, recap: 'x', replace: true }), plan);
+    check('ticked, it can be pressed', (await panel()).acts[0] === 'scenes-go');
+    await page.evaluate((p) => window.__scenes({ step: 'done', plan: p, result: { ok: true, worldId: 'first-descent', worldName: 'First Descent', made: true, card: 'The Redward', replaced: false } }), plan);
+    v = await panel();
+    check('done: it says so, and offers to start a scene', /First Descent is played as scenes/.test(v.text) && /kept as scene 0/.test(v.text) && /each scene opens on your map/.test(v.text) && v.acts.join() === 'scenes-hub,setup-close' && v.inside);
+    await shot('7za-scenes-done');
+    await page.evaluate(() => window.__scenes({ step: 'ask', plan: { ok: false, reason: 'bound-elsewhere', boundTo: 'harbourside', card: { name: 'Mara Vane' }, world: { name: 'Mara Vane', made: true } } }));
+    v = await panel();
+    check('a chat that cannot be played as scenes says why and what to do, and only closes', /Mara Vane already narrates another world \(harbourside\)/.test(v.text) && v.acts.join() === 'setup-close');
+    const words = await page.evaluate(() => ['group', 'no-chat', 'no-world', 'no-card', 'scene', 'off', 'busy', 'changed'].map(r => window.__refusal({ reason: r })));
+    check('every refusal has its own words', new Set(words).size === words.length && words.every(w => w.length > 30) && /group chat/.test(words[0]) && /scene already/.test(words[4]) && /Live World is off/.test(words[5]));
+    await page.evaluate(() => window.__setup(''));
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

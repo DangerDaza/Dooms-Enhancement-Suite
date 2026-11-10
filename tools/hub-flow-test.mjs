@@ -139,6 +139,7 @@ const check = (label, cond, extra = '') => {
 const user = (mes) => ({ is_user: true, name: 'Jordan', mes, extra: {} });
 const ai = (mes) => ({ is_user: false, name: 'Mara Vane', mes, swipe_id: 0, swipes: [mes], extra: {} });
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const resetMeta = () => { for (const k of Object.keys(meta)) delete meta[k]; };
 
 /** The loaders a chat change runs, in index.js's order. */
@@ -446,6 +447,104 @@ console.log('\n§8 hooks and Start, the review\'s cases');
     const mem = hub.worldEntry('elsewhere').memory;
     check('a world with no memory yet: the hooks round makes one from the seed (takenAt 0) and a Start "later" does not move it before its first scene', noMemory && first.ok && !!mem && mem.takenAt === 0 && hub.hubHooks('elsewhere').proposed.length === 1 && p3.ok && gapCalls === 0, JSON.stringify({ noMemory, first, takenAt: mem && mem.takenAt, p3, gapCalls }));
     hub.cancelStart();
+}
+
+console.log('\n§9 a chat already played, taken as where a campaign\'s scenes begin (D131, D172)');
+{
+    // A long chat on the blank world, with a card of its own, a map the player made, and a Lore Library campaign switched on.
+    ctxTarget.characters.push({ name: 'The Redward', avatar: 'The Redward.png', chat: 'The Redward - long' }, { name: 'Third', avatar: 'Third.png', chat: 'Third - plain' });
+    const redward = ctxTarget.characters.findIndex(c => c.avatar === 'The Redward.png');
+    ctxTarget.characterId = redward;
+    ctxTarget.name2 = 'The Redward';
+    extensionSettings.lorebook = { enabled: true, campaigns: { camp1: { name: 'First Descent', books: ['FD - Campaign Complete', 'FD - Continuity'] } }, campaignOrder: ['camp1'], activeCampaignId: 'camp1' };
+    const long = 'The Redward - long';
+    files.set(long, { header: { chat_metadata: {} }, messages: [], avatar: 'The Redward.png', chName: 'The Redward' });
+    resetMeta();
+    chat.length = 0;
+    chat.push(ai('The stair goes down.'));
+    ctxTarget.chatId = long;
+    await loaders();
+    for (let i = 0; i < 4; i++) { chat.push(user(`We go on, landing ${i + 1}.`)); chat.push(ai(`Kiyoha takes the front on landing ${i + 1}. Lysandra reads what is left on her skin.`)); }
+    const box = JSON.stringify({ date: { value: 'Day 41' }, time: { start: 'dusk', end: 'night' }, location: { value: 'Hask, the house on the lane' }, weather: { emoji: '🌫', forecast: 'fog off the fells' } });
+    state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+    state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+    lw.recordCurrentScene();
+    meta.dooms_atlas = { scale: 'region', spots: { 'pin:hask': { x: 1, y: 1 } }, made: [{ id: 'pin:hask', label: 'Hask', kind: 'settlement' }] };
+    await persistence.saveChatData({ immediate: true });
+    const before = lw.getWorldState();
+    const storyPlaces = before.visited.map(v => v.id);
+    check('the chat as it is: on the blank world named after its card, its places the story\'s own', before.pack === 'blank' && before.name === 'The Redward' && storyPlaces.length >= 1 && storyPlaces.every(id => id.startsWith('loc:')) && !hub.isScene(), JSON.stringify([before.pack, before.name, storyPlaces]));
+
+    const plan = hub.scenesPlan();
+    check('what playing it as scenes would do: a new world under the campaign\'s name, the chat\'s card its narrator, nothing replaced', plan.ok && plan.world.made === true && plan.world.id === 'first-descent' && plan.world.name === 'First Descent' && plan.campaign.id === 'camp1' && plan.card.avatar === 'The Redward.png' && plan.replaces === false && plan.scenes === 0, JSON.stringify(plan));
+    let asked = null;
+    hub.__setRecapTransport(async (p) => { asked = p; return '{"recap":"The company came up from the Fourth Landing with the inkstone; Kiyoha walked out on her own feet."}'; });
+    const prep = await hub.prepareAdopt();
+    check('the record of the chat so far is written from its last messages, by one request, and nothing is changed yet', prep.ok && prep.recap.startsWith('The company came up') && prep.error === '' && prep.messages === 9 && asked && asked.user.includes('landing 4') && lw.getWorldState().pack === 'blank' && !('first-descent' in extensionSettings.liveWorld.customPacks) && hub.worldEntry('first-descent') === null, JSON.stringify([prep.ok, prep.error, prep.messages]));
+    const done = await hub.commitAdopt({ recap: prep.recap });
+    const now = lw.getWorldState();
+    const pack = lw.getActivePack();
+    const entry = hub.worldEntry('first-descent');
+    check('taken: the world made under the campaign\'s name with no places of its own, and the chat carried over to it under that name', done.ok && done.made === true && done.worldId === 'first-descent' && done.card === 'The Redward' && done.replaced === false && now.pack === 'first-descent' && now.name === '' && pack.name === 'First Descent' && pack.places.length === 0 && JSON.parse(extensionSettings.liveWorld.customPacks['first-descent']).name === 'First Descent', JSON.stringify(done));
+    check('the places the story named stay the story\'s, so the map made of them stands', same(now.visited.map(v => v.id), storyPlaces));
+    check('the world\'s entry: narrated by the chat\'s card, the campaign it is the scenes of, the hub can play it', entry.card === 'The Redward.png' && entry.campaign === 'camp1' && hub.hubWorldIds().includes('first-descent') && hub.cardOf('first-descent').name === 'The Redward');
+    check('the chat\'s stores as they stand are the world\'s memory, sealed: the world, the map, where the story stopped', entry.memory.scene === 's0' && entry.memory.takenAt > 0 && entry.memory.stores.dooms_world.pack === 'first-descent' && same(entry.memory.stores.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 1 } }) && entry.memory.stores.dooms_atlas.made[0].label === 'Hask' && entry.memory.facts.location === 'Hask, the house on the lane' && entry.memory.facts.date === 'Day 41' && entry.memory.stores.dooms_world.visited.every(v => v.visits.length === 0));
+    check('the chat is kept as scene 0, ended, with its record; it stays an ordinary chat', entry.scenes.length === 1 && entry.scenes[0].id === 's0' && entry.scenes[0].status === 'ended' && entry.scenes[0].chat === long && entry.scenes[0].card === 'The Redward.png' && entry.scenes[0].recap.startsWith('The company came up') && entry.scenes[0].endDate === 'Day 41' && !hub.isScene() && !meta.dooms_hub && hub.currentScene() === null);
+
+    await hub.refreshScenes('first-descent');
+    check('the hub\'s look over the chats finds scene 0\'s chat where it is', hub.worldEntry('first-descent').scenes[0].gone === false);
+    // The first scene started from it: told what happened, and opening on the player's map.
+    let openers = null;
+    hub.__setOpenersTransport(async (prompt) => { openers = prompt; return '{"when":{"date":"Day 42","time":"morning"},"openers":[{"title":"The gate","text":"Fog lies on the lane. Kiyoha is already at the gate.","who":["Kiyoha"]},{"title":"The walk","text":"Scrivener\'s Walk is quiet.","who":[]},{"title":"The court","text":"The assay court has sent word.","who":[]}]}'; });
+    const p = await hub.prepareScene({ worldId: 'first-descent', place: { id: storyPlaces[0], label: 'Hask' }, cast: ['Kiyoha'], gap: { id: 'now' } });
+    const r = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p;
+    const saved = r.ok ? files.get(r.file) : null;
+    check('a first scene starts from it: scene 1 on the narrator\'s card, told what happened last time', p.ok && r.ok && r.scene.id === 's1' && saved.avatar === 'The Redward.png' && openers.user.includes('Last scene: The company came up from the Fourth Landing') && saved.header.chat_metadata.dooms_hub.brief.includes('Last time: The company came up'), JSON.stringify([p.ok, p.reason, r.ok, r.reason]));
+    check('the scene opens on the player\'s map: the book rides the scene\'s header', !!saved && same(saved.header.chat_metadata.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 1 } }) && saved.header.chat_metadata.dooms_atlas.made[0].label === 'Hask' && saved.header.chat_metadata.dooms_world.pack === 'first-descent');
+    check('a scene chat cannot itself be taken', hub.isScene() && hub.scenesPlan().reason === 'scene' && (await hub.commitAdopt({ recap: 'x' })).reason === 'scene');
+    // A marker placed during the scene is the world's once the scene ends.
+    meta.dooms_atlas = { ...meta.dooms_atlas, spots: { ...meta.dooms_atlas.spots, 'pin:redfall-castle': { x: 4, y: 2 } }, made: [...meta.dooms_atlas.made, { id: 'pin:redfall-castle', label: 'Redfall Castle', kind: 'stronghold' }] };
+    chat.push(user('We walk to the gate.'));
+    chat.push(ai('Kiyoha laughs and shoulders the axe.'));
+    hub.__setRecapTransport(async () => '{"recap":"They met at the gate in the fog."}');
+    const pe = await hub.prepareEnd();
+    const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true });
+    check('what a scene adds to the map is kept when it ends', pe.ok && ce.ok && Object.keys(hub.worldEntry('first-descent').memory.stores.dooms_atlas.spots).length === 2 && hub.worldEntry('first-descent').memory.stores.dooms_atlas.made.some(x => x.label === 'Redfall Castle'), JSON.stringify([pe.ok, pe.reason, ce.ok, ce.reason]));
+
+    // The long chat played on and taken again: the memory is replaced, and only with the player's word.
+    await openFile(long);
+    const again = hub.scenesPlan();
+    check('the long chat is on the campaign\'s world now; taking it again would replace what the scenes remember, and says so', again.ok && again.world.id === 'first-descent' && again.world.made === false && again.replaces === true && again.scenes === 1, JSON.stringify(again));
+    const refused = await hub.commitAdopt({ recap: 'The long chat went on.' });
+    const mid = hub.worldEntry('first-descent');
+    check('without the player\'s word nothing is replaced', refused.ok === false && refused.reason === 'has-memory' && refused.scenes === 1 && mid.memory.scene === 's1' && mid.scenes[0].recap.startsWith('The company came up'));
+    const replaced = await hub.commitAdopt({ recap: 'The long chat went on.', replace: true });
+    const after = hub.worldEntry('first-descent');
+    check('with it: the memory is the long chat\'s again, scene 0 is rewritten, the scene played since stays in the list', replaced.ok && replaced.replaced === true && replaced.made === false && after.memory.scene === 's0' && Object.keys(after.memory.stores.dooms_atlas.spots).length === 1 && same(after.scenes.map(x => x.id), ['s0', 's1']) && after.scenes[0].recap === 'The long chat went on.' && after.scenes[1].recap === 'They met at the gate in the fog.' && after.card === 'The Redward.png' && after.campaign === 'camp1');
+
+    // The refusals.
+    ctxTarget.groupId = 'g1';
+    check('a group chat cannot be played as scenes', hub.scenesPlan().reason === 'group');
+    ctxTarget.groupId = null;
+    extensionSettings.lorebook.activeCampaignId = null;
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - another');
+    const elsewhereBound = hub.scenesPlan();
+    check('a card that narrates another world is not taken for a second one, and the world it narrates is named', elsewhereBound.ok === false && elsewhereBound.reason === 'bound-elsewhere' && elsewhereBound.boundTo === 'harbourside' && elsewhereBound.world.made === true, JSON.stringify(elsewhereBound));
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Third.png');
+    ctxTarget.name2 = 'Third';
+    await openPlain('Third - plain');
+    const own = hub.scenesPlan();
+    check('with no campaign switched on, the world is named after the chat\'s own', own.ok && own.campaign === null && own.world.made === true && own.world.name === 'Third' && own.world.id === 'third' && own.card.avatar === 'Third.png', JSON.stringify(own));
+    extensionSettings.lorebook.activeCampaignId = 'camp1';
+    const joins = hub.scenesPlan();
+    check('with the campaign on, another chat of it is taken into the campaign\'s world, which keeps its narrator', joins.ok && joins.world.id === 'first-descent' && joins.world.made === false && joins.card.avatar === 'The Redward.png' && joins.replaces === true, JSON.stringify(joins));
+    extensionSettings.liveWorld.enabled = false;
+    check('with Live World off there is nothing to play as scenes', hub.scenesPlan().reason === 'off' && (await hub.prepareAdopt()).reason === 'off');
+    extensionSettings.liveWorld.enabled = true;
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

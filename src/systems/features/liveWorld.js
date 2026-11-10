@@ -355,14 +355,18 @@ export function worldFromThisChat({ name = '' } = {}) {
  * The open chat carries over to a world (D96): its pack id, the row's
  * story-named places re-keyed to the world's, everyone at such a place
  * standing at the world's place, the clocks clamped. Nothing re-seeded.
+ * With `ownName` the chat stops carrying a name for its world (the blank
+ * world's, after the chat's character) and goes by the world's own, as a
+ * chat seeded from that world does: for a world not named after the chat
+ * (docs/long-shot-plan.md D172).
  * @returns {Promise<{ ok: boolean, error?: string, rebound?: number }>}
  */
-export async function adoptWorld(id) {
+export async function adoptWorld(id, { ownName = false } = {}) {
     if (!ready()) return { ok: false, error: 'This chat has no world to carry over.' };
     const r = await loadPack(id, { fresh: true });
     if (!r.ok) return { ok: false, error: r.errors.join(' ') };
     const bound = rebindStateToPack(state, r.pack);
-    const next = clampClocksToPack({ ...bound.state, pack: r.pack.id, packVersion: r.pack.version || 1 }, r.pack).state;
+    const next = clampClocksToPack({ ...bound.state, pack: r.pack.id, packVersion: r.pack.version || 1, ...(ownName ? { name: '' } : {}) }, r.pack).state;
     activePack = r.pack;
     missingWorld = '';
     commit(next, { source: 'world' }, { immediate: true });

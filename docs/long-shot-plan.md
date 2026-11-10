@@ -453,3 +453,22 @@ recap is asked for with the scene's brief, which it never got (it was read
 from a scenario the scene chat does not have; the brief is on the mark).
 Hooks and the hand-drawn place picture have the same gap as the Atlas had
 and are not changed here.
+
+## 17. The scenes build, step 1: a campaign becomes a world (2026-11-10, D172)
+
+The owner, to the build order of §16's findings (a campaign becomes a
+world; the map lives with the world; start and end from the Atlas; openers
+with the characters' entries; End as his chat-to-canon run; the count, the
+nudge and End and continue here; the old windows removed; terrain that
+follows the story): one world of scenes for a Lore Library campaign,
+"yes"; the chat is with a single card; "go". Built in "Atlas 15".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D172 | Play as scenes: a chat already played is where a campaign's scenes begin (the owner; hub-plan D131 built, and widened) | The Atlas's foot has **Play as scenes** on a chat that is no scene. Its panel says what will happen, asks for the record of the chat so far (one request over as many of the last forty messages as a page holds, `prepareAdopt`), shows it to be read and corrected, and only then changes anything (`commitAdopt`). **The world:** the chat's own when it has one of the player's; else the one the campaign that is switched on already has; else a new one under the campaign's name (under the chat's world's name when no campaign is on). A new world is made **empty of places**: the places the story named stay the story's (`loc:` ids), so the map made of them, and every deletion and merge on it, stands; the existing Make this a world turns them into the world's own places under new ids and would have orphaned the book. The chat is carried over to the world (`adoptWorld`, now with `ownName`: the chat goes by the world's name, not the blank world's). **The narrator:** the chat's card, unless the world has one; a card that narrates another world is refused with that world named (one card, one world, hub-plan D114). **The memory:** the chat's stores as they stand, sealed, the world's entry keeping the campaign it is the scenes of (`campaign`). **Scene 0:** the chat is kept in the world's list as "Before the scenes" (`adoptScene`, id `s0`, ended, first), its record what the first scene is told happened last time; the chat itself gets no mark and stays an ordinary chat. Taken again (the chat went on, or another chat of the campaign is taken), the memory is replaced, only with the tick that says so; the scenes played since stay listed. A chat kept under a card that is not the narrator's is not called gone when the narrator's chats are looked over. Refused, each with its own words: a group chat, a scene chat, no chat, no world, no card, Live World off, a reply being written. **The map is carried:** `dooms_atlas` is among the stores a scene carries (`HUB_KEYS`), made safe by `normalizeBook`, so a scene opens on the player's map and what it adds is the world's when it ends. Done, the panel offers Start a scene, which opens the old Hub until its sheets move to the Atlas (step 3). |
+
+Not in this step: the map is saved to the world when a scene ends, not as
+it is edited; the Atlas still reads the chat in front, so after an End it
+shows the world as that chat left it (both are step 2). The hub's own
+tests cover the engine in the sandbox; the panel is rendered in the
+browser test; nothing here was run in a real SillyTavern.

@@ -18,7 +18,7 @@ import {
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
     sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
-    hubStatusLine, describeStartResult, describeEndResult,
+    hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -81,6 +81,7 @@ const meta = {
     dooms_world: world,
     dooms_canon: canon,
     dooms_hooks: hooks,
+    dooms_atlas: { scale: 'region', spots: { 'pin:hask': { x: 1, y: 2 }, 'loc:the-anchor': { x: -3, y: 0.5 } }, made: [{ id: 'pin:hask', label: 'Hask', kind: 'settlement' }], gone: ['loc:bedroom'], roads: [['pin:hask', 'loc:the-anchor']], junk: { not: 'kept' } },
     dooms_quest_cut: { quest: 'x' },
     dooms_scene: { count: 3 },
     world_info: 'Something else',
@@ -90,7 +91,8 @@ console.log('\n§2 the snapshot taken and sealed');
 let memory;
 {
     memory = takeSnapshot(meta, { scene: 's4', takenAt: 99 });
-    check('the snapshot carries the six stores and nothing else', same(Object.keys(memory.stores).sort(), [...HUB_KEYS].sort()) && memory.scene === 's4' && memory.takenAt === 99, Object.keys(memory.stores).join(','));
+    check('the snapshot carries the chat\'s stores (the map among them) and nothing else', same(Object.keys(memory.stores).sort(), [...HUB_KEYS].sort()) && HUB_KEYS.includes('dooms_atlas') && memory.scene === 's4' && memory.takenAt === 99, Object.keys(memory.stores).join(','));
+    check('the map is carried as the player made it, made safe: the spots, the markers made by hand, what was deleted, the roads; what is no part of a book left out (D172)', same(memory.stores.dooms_atlas.spots, { 'pin:hask': { x: 1, y: 2 }, 'loc:the-anchor': { x: -3, y: 0.5 } }) && memory.stores.dooms_atlas.made.length === 1 && memory.stores.dooms_atlas.made[0].label === 'Hask' && same(memory.stores.dooms_atlas.gone, ['loc:bedroom']) && memory.stores.dooms_atlas.roads.length === 1 && memory.stores.dooms_atlas.scale === 'region' && !('junk' in memory.stores.dooms_atlas) && same(sealStores(memory.stores).dooms_atlas, memory.stores.dooms_atlas) && !('dooms_atlas' in takeSnapshot({ dooms_tracker: {} }, {}).stores));
     check('the facts come from the committed tracker data', same(memory.facts, { date: 'Day 12', time: 'dusk → evening', location: 'The Anchor', weather: '🌧 rain over the harbour' }), JSON.stringify(memory.facts));
     const w = memory.stores.dooms_world;
     check('Live World sealed: no reply id on the log, the runs, the last run; the count empty; the visits empty; the picture kept; seeded and the clocks and places as they were', w.log.every(e => e.msgId === null) && w.runs.every(r => r.msgId === null) && w.last && w.last.msgId === null && w.counted.length === 0 && w.sinceLast === 0 && w.visited.every(v => v.visits.length === 0) && w.visited[0].image === '/user/images/anchor.png' && w.seeded === true && w.clocks[clock.id] === clock.start + 1 && w.where['Old Marit'].endsWith('back-room') && w.known['The governor'] === 'heard', JSON.stringify({ log: w.log, visited: w.visited.map(v => [v.id, v.visits]) }));
@@ -180,7 +182,7 @@ console.log('\n§6 the file');
     const ended = markEnded(mark, { endedAt: 9, endDate: 'Day 13, noon' });
     check('the mark ended, and read back from a chat\'s metadata; a chat without one is not a scene', ended.endedAt === 9 && readMark({ [HUB_META_KEY]: ended }).endDate === 'Day 13, noon' && readMark({ [HUB_META_KEY]: { world: 'w' } }) === null && readMark({}) === null);
     const header = sceneHeader({ stores: seedStores(memory, { chatId: 'Mara - Scene 5', place: 'Customs house', cast: ['Captain Reyes'] }).stores, mark, scenario: '[SCENE BRIEF…]', worldInfo: 'Canon of Harbourside', integrity: 'abc-123', persona: 'jordan.png' });
-    check('the header: SillyTavern\'s two unused names, the six stores, the mark, the brief as the scenario, the world\'s book, the integrity id, tainted', header.user_name === 'unused' && header.character_name === 'unused' && HUB_KEYS.every(k => k in header.chat_metadata) && header.chat_metadata[HUB_META_KEY].scene === 's5' && header.chat_metadata.scenario === '[SCENE BRIEF…]' && header.chat_metadata.world_info === 'Canon of Harbourside' && header.chat_metadata.integrity === 'abc-123' && header.chat_metadata.tainted === true && header.chat_metadata.persona === 'jordan.png', Object.keys(header.chat_metadata).join(','));
+    check('the header: SillyTavern\'s two unused names, the stores (the map with them), the mark, the brief as the scenario, the world\'s book, the integrity id, tainted', header.user_name === 'unused' && header.character_name === 'unused' && HUB_KEYS.every(k => k in header.chat_metadata) && header.chat_metadata[HUB_META_KEY].scene === 's5' && header.chat_metadata.scenario === '[SCENE BRIEF…]' && header.chat_metadata.world_info === 'Canon of Harbourside' && header.chat_metadata.integrity === 'abc-123' && header.chat_metadata.tainted === true && header.chat_metadata.persona === 'jordan.png', Object.keys(header.chat_metadata).join(','));
     check('no persona, no lock; the mark keeps the brief', !('persona' in sceneHeader({ stores: {}, mark }).chat_metadata) && hubMark({ world: 'w', scene: 's1', brief: '[SCENE BRIEF: W.]' }).brief === '[SCENE BRIEF: W.]' && readMark({ [HUB_META_KEY]: hubMark({ world: 'w', scene: 's1', brief: 'b' }) }).brief === 'b');
     const marked = hubMark({ world: 'harbourside', scene: 's5', file: 'Scene 5 - The queue' });
     check('the mark names its file; a mark under another file is a branch, not the scene; a mark from before the file was recorded is trusted', marked.file === 'Scene 5 - The queue' && markIsOfFile(marked, 'Scene 5 - The queue.jsonl') && !markIsOfFile(marked, 'Scene 5 - The queue (branch)') && markIsOfFile(hubMark({ world: 'w', scene: 's1' }), 'anything'));
@@ -250,6 +252,25 @@ console.log('\n§8 the scene records');
     check('a renamed scene (its mark naming a file that is gone) is the scene under its new name: the record follows, nothing doubled', renamed.changed >= 1 && renamed.entry.scenes.length === 2 && renamed.entry.scenes[1].chat === 'Scene 9 - Found again' && renamed.entry.scenes[1].gone === false && renamed.entry.scenes[1].status === 'ended', JSON.stringify(renamed.entry.scenes.map(s => [s.id, s.chat, s.gone])));
     const mem = { takenAt: 100 };
     check('a scene is stale when the memory was written after it began', isStaleScene({ startedAt: 50 }, mem) && !isStaleScene({ startedAt: 150 }, mem) && !isStaleScene({ startedAt: 50 }, null) && !isStaleScene({ startedAt: 0 }, mem));
+}
+
+console.log('\n§8b a chat taken as where the scenes of a world begin (D131, D172)');
+{
+    let entry = normalizeWorldEntry({ card: 'Narrator.png', campaign: 'camp_first-descent' });
+    check('a world\'s entry keeps the campaign it is the scenes of; a world of its own has none', entry.campaign === 'camp_first-descent' && normalizeWorldEntry({}).campaign === '' && normalizeHub({ worlds: { w: { campaign: 'c1' } } }).worlds.w.campaign === 'c1');
+    let r = adoptScene(entry, { chat: 'First Descent - 2026-10-01', card: 'Narrator.png', recap: 'The company went down to the Fourth Landing and came back with the inkstone.', place: { label: 'Hask' }, endDate: 'Day 41', endedAt: 500 });
+    entry = r.entry;
+    check('the chat is scene 0: ended, named, with its record, its chat and where it stopped; no scene is counted for it', r.scene.id === ADOPTED_ID && r.scene.id === 's0' && r.scene.status === 'ended' && r.scene.title === ADOPTED_TITLE && r.scene.chat === 'First Descent - 2026-10-01' && r.scene.place.label === 'Hask' && r.scene.endDate === 'Day 41' && r.scene.noRecap === false && entry.scenes.length === 1 && entry.seq === 0 && openSceneOf(entry) === null);
+    check('its record is what the first scene is told happened last time', same(lastRecaps(entry), ['The company went down to the Fourth Landing and came back with the inkstone.']));
+    r = openScene(entry, { title: 'The gate at dusk', chat: 'Scene 1 - The gate at dusk' });
+    entry = endSceneRecord(r.entry, 's1', { endedAt: 900, endDate: 'Day 42', recap: 'They argued at the gate.' }).entry;
+    check('the first scene after it is scene 1', r.scene.id === 's1' && entry.seq === 1 && same(entry.scenes.map(x => x.id), ['s0', 's1']));
+    r = adoptScene(entry, { chat: 'First Descent - 2026-10-01', card: 'Narrator.png', recap: 'Longer now: the company also met the assay court.', endDate: 'Day 44', endedAt: 1200 });
+    check('taken again, scene 0 is replaced where it stood and the scenes played since stay', same(r.entry.scenes.map(x => x.id), ['s0', 's1']) && r.entry.scenes[0].recap.startsWith('Longer now') && r.entry.scenes[0].endDate === 'Day 44' && r.entry.scenes[1].recap === 'They argued at the gate.' && r.entry.seq === 1 && r.entry.campaign === 'camp_first-descent' && r.entry.card === 'Narrator.png');
+    check('a chat taken with no record written says so and gives the next scene nothing to be told', (() => { const e = adoptScene(normalizeWorldEntry({}), { chat: 'x' }).entry; return e.scenes[0].noRecap === true && lastRecaps(e).length === 0; })());
+    check('the entry survives being stored and read back', same(normalizeWorldEntry(JSON.parse(JSON.stringify(r.entry))), r.entry));
+    const other = adoptScene(normalizeWorldEntry({ card: 'Narrator.png' }), { chat: 'A side chat', card: 'Someone Else.png', recap: 'x' }).entry;
+    check('a chat taken from a card that is not the narrator\'s is not called gone when the narrator\'s chats are looked over; under the narrator\'s own card it is', reconcileScenesWithChats(other, [{ file: 'Scene 1 - x' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === false && reconcileScenesWithChats(r.entry, [{ file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === true && reconcileScenesWithChats(r.entry, [{ file: 'First Descent - 2026-10-01.jsonl' }, { file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).changed === 0);
 }
 
 console.log('\n§9 the lines');

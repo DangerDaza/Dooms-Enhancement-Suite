@@ -26,7 +26,7 @@ import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import {
     BLANK_PACK_ID, seedWorldState, normalizeWorldState, buildGapPrompt, validateGap, applyGap, parseAdvanceReply, recentChanges,
-    placeLabel, placeChain, resolvePlace, liveWorldConfig, sameName,
+    placeLabel, placeChain, resolvePlace, liveWorldConfig, sameName, normalizePack,
 } from '../../utils/liveWorld.js';
 import { buildCanonBlock, normalizeCanon } from '../../utils/canon.js';
 import { buildHooksPrompt, parseHooksReply, validateHooks, proposeRound, failRound, setAside as setAsidePureHook, normalizeHooks, emptyHooks, takeHook as takeHookPure, recordTaken } from '../../utils/questHooks.js';
@@ -36,11 +36,12 @@ import {
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
+    adoptScene, ADOPTED_ID,
 } from '../../utils/hub.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
-import { isLiveWorldOn, loadPack, getWorldState } from './liveWorld.js';
+import { isLiveWorldOn, loadPack, getWorldState, getActivePack, saveWorld, adoptWorld } from './liveWorld.js';
 import { isCanonOn, updateCanon } from './canon.js';
 import { resolvePersonaName } from './diceRolls.js';
 
@@ -892,6 +893,163 @@ export function isEnding() {
     return ending;
 }
 
+// ─── A chat taken as where a world's scenes begin (D131, D172) ──────────
+
+const ADOPT_MESSAGES = 40;    // how far back the record of the chat so far reads
+let adopting = false;
+
+export function isAdopting() {
+    return adopting;
+}
+
+/** The Lore Library campaign that is switched on, or null (plain data: the lorebook cluster is not loaded for it). */
+function activeCampaign() {
+    const lb = extensionSettings.lorebook;
+    const id = lb && typeof lb.activeCampaignId === 'string' ? lb.activeCampaignId : '';
+    const c = id && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[id] : null;
+    return c && typeof c === 'object' ? { id, name: String(c.name || '').trim() } : null;
+}
+
+/** The character the chat in front is with: its index, avatar and name; null in a group or with none. */
+function chatCard() {
+    const b = bridge();
+    if (b.groupId()) return null;
+    const i = b.characterId();
+    const list = b.characters();
+    const c = i !== undefined && i !== null && list[Number(i)] ? list[Number(i)] : null;
+    return c && c.avatar ? { index: Number(i), avatar: String(c.avatar), name: String(c.name || '') } : null;
+}
+
+/**
+ * What playing the chat in front as scenes would do (D172), nothing
+ * changed: the world it would be (the chat's own when it has one of the
+ * player's; else the one the active campaign already has; else a new one
+ * named after the campaign, or after the chat's world when no campaign is
+ * on), the card that narrates it, and whether a memory would be replaced.
+ * @returns {{ ok: boolean, reason: string, world?: { id: string, name: string, made: boolean }, campaign?: { id: string, name: string }|null, card?: { avatar: string, name: string }, replaces?: boolean, scenes?: number, boundTo?: string }}
+ */
+export function scenesPlan() {
+    if (!isHubOn()) return { ok: false, reason: 'off' };
+    if (chatId() === undefined || !meta()) return { ok: false, reason: 'no-chat' };
+    if (bridge().groupId()) return { ok: false, reason: 'group' };
+    if (currentScene()) return { ok: false, reason: 'scene' };
+    const state = getWorldState();
+    if (!state) return { ok: false, reason: 'no-world' };
+    const card = chatCard();
+    if (!card) return { ok: false, reason: 'no-card' };
+    const campaign = activeCampaign();
+    const packs = liveWorldConfig(extensionSettings).customPacks || {};
+    const mine = (id) => !!id && id !== BLANK_PACK_ID && Object.prototype.hasOwnProperty.call(packs, id);
+    const worlds = store().worlds;
+    const pack = getActivePack();
+    let world;
+    if (mine(state.pack)) world = { id: state.pack, name: (pack && pack.name) || state.pack, made: false };
+    else {
+        const had = campaign ? Object.keys(worlds).find(id => worlds[id].campaign === campaign.id && mine(id)) : '';
+        if (had) {
+            let name = had;
+            try { const raw = typeof packs[had] === 'string' ? JSON.parse(packs[had]) : packs[had]; if (raw && raw.name) name = String(raw.name); } catch (e) { /* its id stands */ }
+            world = { id: had, name, made: false };
+        } else {
+            const name = (campaign && campaign.name) || state.name || (pack && pack.name) || 'The world';
+            const base = normalizePack({ id: name, name }).pack.id || 'world';
+            const taken = (id) => id === BLANK_PACK_ID || Object.prototype.hasOwnProperty.call(packs, id) || Object.prototype.hasOwnProperty.call(worlds, id);
+            let id = base;
+            for (let n = 2; taken(id) && n < 500; n++) id = `${base}-${n}`;
+            world = { id, name, made: true };
+        }
+    }
+    const entry = worlds[world.id] || null;
+    // One card, one world (D114): a world that has its narrator keeps it; else the chat's card is the narrator, unless it narrates another world.
+    const bound = entry && entry.card ? cardOf(world.id) : null;
+    const other = bound ? '' : worldOfCard(card.avatar);
+    if (other && other !== world.id) return { ok: false, reason: 'bound-elsewhere', boundTo: other, world, campaign, card: { avatar: card.avatar, name: card.name } };
+    const narrator = bound ? { avatar: bound.avatar, name: bound.name } : { avatar: card.avatar, name: card.name };
+    return { ok: true, reason: '', world, campaign, card: narrator, replaces: !!(entry && entry.memory && entry.memory.takenAt), scenes: entry ? entry.scenes.filter(x => x.id !== ADOPTED_ID).length : 0 };
+}
+
+/**
+ * The first half of playing a chat as scenes: the record of the chat so
+ * far, written by one background request over its last messages (as many
+ * of the last forty as one page holds), for the player to read and edit.
+ * Nothing is changed. Waits for the main generation and the background line.
+ */
+export async function prepareAdopt() {
+    const plan = scenesPlan();
+    if (!plan.ok) return plan;
+    const idle = await whenIdle();
+    if (!idle) return { ok: false, reason: 'busy' };
+    const token = { meta: meta(), id: chatId() };
+    const players = playerNames();
+    const pages = sceneTranscriptPages((chatArray() || []).slice(-ADOPT_MESSAGES), { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
+    let recap = '';
+    let error = '';
+    if (pages.length) {
+        try {
+            const prompt = buildRecapPrompt({ transcript: pages[pages.length - 1], brief: '', player: players[0] || '', maxChars: cfg().recapChars, soFar: '', last: true });
+            const r = await request(prompt, { transport: recapTransport, label: 'recap' });
+            if (r.busy) error = 'Another request holds the line.';
+            else { const p = parseRecapReply(r.text, { maxChars: cfg().recapChars }); if (p.ok) recap = p.recap; else error = p.errors.join(' '); }
+        } catch (e) { error = String(e && e.message || e); }
+    }
+    if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
+    return { ok: true, reason: '', plan: scenesPlan(), recap, error, messages: (chatArray() || []).length };
+}
+
+/**
+ * The chat in front becomes where a world's scenes begin (D131, D172).
+ * The world is made when the chat has none of the player's (an empty one
+ * under the campaign's name: the places the story named stay the story's,
+ * so the map made of them stands), the chat is carried over to it, the
+ * chat's card narrates it, the chat's stores as they stand are the world's
+ * memory, sealed, and the chat is kept as scene 0 with its record. The
+ * chat itself stays an ordinary chat and can go on being played; taken
+ * again, the memory is replaced (`replace` says the player knows).
+ * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, worldName?: string, made?: boolean, card?: string, replaced?: boolean, recap?: string }>}
+ */
+export async function commitAdopt({ recap = '', replace = false } = {}) {
+    if (adopting) return { ok: false, reason: 'running' };
+    const plan = scenesPlan();
+    if (!plan.ok) return plan;
+    if (plan.replaces && !replace) return { ok: false, reason: 'has-memory', world: plan.world, scenes: plan.scenes };
+    if (ST.is_send_press === true) return { ok: false, reason: 'busy' };
+    adopting = true;
+    try {
+        const token = { meta: meta(), id: chatId() };
+        const worldId = plan.world.id;
+        if (plan.world.made) {
+            const saved = await saveWorld({ id: worldId, name: plan.world.name, version: 1, description: '', places: [], clocks: [], cast: [], blurb: '' });
+            if (!saved.ok) return { ok: false, reason: 'world', errors: saved.errors };
+        }
+        const state = getWorldState();
+        if (!state) return { ok: false, reason: 'no-world' };
+        if (state.pack !== worldId) {
+            const moved = await adoptWorld(worldId, { ownName: true });
+            if (!moved.ok) return { ok: false, reason: 'world', errors: [moved.error || 'The chat could not be carried over to the world.'] };
+        }
+        if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
+        await flushChat();
+        const m = meta();
+        if (!m || m !== token.meta) return { ok: false, reason: 'changed' };
+        const now = Date.now();
+        const players = playerNames();
+        const memory = takeSnapshot(m, { scene: ADOPTED_ID, takenAt: now, player: players[0] || '' });
+        const facts = factsNow();
+        const card = chatCard();
+        const base = { ...entryOf(worldId) };
+        if (!base.card || !cardOf(worldId)) base.card = plan.card.avatar;    // none yet, or the one it had is gone
+        if (plan.campaign) base.campaign = plan.campaign.id;
+        const r = adoptScene({ ...base, memory }, { chat: String(chatId() || ''), card: card ? card.avatar : '', recap, place: { label: facts.location || '' }, endDate: facts.date || '', endedAt: now });
+        putEntry(worldId, r.entry, { source: 'adopt', world: worldId });
+        log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '' });
+        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap };
+    } catch (e) {
+        return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
+    } finally {
+        adopting = false;
+    }
+}
+
 // ─── The scene chat's own events ────────────────────────────────────────
 
 const OPENER = (m) => !!(m && !m.is_user && m.extra && m.extra[HUB_META_KEY] && m.extra[HUB_META_KEY].opener);
@@ -1086,7 +1244,7 @@ export async function refreshScenes(worldId) {
     if (!e || !card) return { ok: false, reason: card ? 'no-world' : 'card-gone' };
     try {
         const chats = await bridge().listChats(card.avatar, { metadata: true });
-        const r = reconcileScenesWithChats(e, chats.map(c => ({ file: c.file_name || c.file_id || '', meta: c.chat_metadata || null })), id);
+        const r = reconcileScenesWithChats(e, chats.map(c => ({ file: c.file_name || c.file_id || '', meta: c.chat_metadata || null })), id, { card: card.avatar });
         if (r.changed) putEntry(id, r.entry, { source: 'refresh', world: id });
         return { ok: true, changed: r.changed, scenes: JSON.parse(JSON.stringify(r.entry.scenes)) };
     } catch (err) {

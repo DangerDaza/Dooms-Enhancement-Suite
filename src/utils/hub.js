@@ -17,10 +17,15 @@ import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock } from './canon.js';
 import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
+import { normalizeBook } from './atlas.js';
 
 export const HUB_META_KEY = 'dooms_hub';
 /** The per-chat stores a snapshot carries, by the keys the chat keeps them under (D115). */
-export const HUB_KEYS = Object.freeze(['dooms_tracker', 'dooms_inventory', 'dooms_quests_done', 'dooms_world', 'dooms_canon', 'dooms_hooks']);
+// The chat's stores a scene carries. The Atlas's book is one of them (docs/long-shot-plan.md D172): the map a
+// player made is the world's, so every scene opens on it and what a scene adds to it is kept.
+export const HUB_KEYS = Object.freeze(['dooms_tracker', 'dooms_inventory', 'dooms_quests_done', 'dooms_world', 'dooms_canon', 'dooms_hooks', 'dooms_atlas']);
+export const ADOPTED_ID = 's0';        // the chat a world's scenes began from (D131, D172): "scene 0"
+export const ADOPTED_TITLE = 'Before the scenes';
 export const OPENERS = 3;
 export const MAX_OPENER_TITLE = 60;
 export const MAX_OPENER_TEXT = 1500;
@@ -91,7 +96,7 @@ export function gapMoves(gap) {
 // ─── The store ──────────────────────────────────────────────────────────
 
 export function emptyWorldEntry() {
-    return { card: '', memory: null, scenes: [], seq: 0 };
+    return { card: '', campaign: '', memory: null, scenes: [], seq: 0 };
 }
 
 function cleanSeed(raw) {
@@ -157,6 +162,7 @@ export function normalizeWorldEntry(raw) {
     const r = isObj(raw) ? raw : {};
     const e = emptyWorldEntry();
     e.card = clean(r.card, 200);
+    e.campaign = clean(r.campaign, 80);    // the Lore Library campaign this world is the scenes of (D172); '' for a world of its own
     e.memory = normalizeMemory(r.memory);
     e.seq = isInt(r.seq) && r.seq >= 0 ? r.seq : 0;
     const seen = new Set();
@@ -260,6 +266,7 @@ export function sealStores(stores) {
         out.dooms_inventory = inv;
     }
     if (Array.isArray(src.dooms_quests_done)) out.dooms_quests_done = copy(src.dooms_quests_done);
+    if (isObj(src.dooms_atlas)) out.dooms_atlas = normalizeBook(src.dooms_atlas);    // the map: nothing in it is tied to a reply, so it is made safe and no more
     if (isObj(src.dooms_tracker)) {
         const t = copy(src.dooms_tracker);
         t.syncedExpressionPortraits = {};
@@ -752,6 +759,20 @@ export function endSceneRecord(entry, id, { endedAt = 0, endDate = '', recap = '
     return { ...r, entry: capScenes(r.entry) };
 }
 
+/**
+ * A chat already played, taken as where a world's scenes begin (D131,
+ * D172): kept as "scene 0", ended, first in the list, with the record of
+ * what happened in it. Taken again (the chat went on, or another chat is
+ * taken), the record is replaced; the scenes played since stay.
+ */
+export function adoptScene(entry, { title = ADOPTED_TITLE, chat = '', card = '', recap = '', place = null, startDate = '', endDate = '', endedAt = 0 } = {}) {
+    const next = touch(normalizeWorldEntry(entry));
+    const text = clean(recap, 1500);
+    const scene = normalizeScene({ id: ADOPTED_ID, title: title || ADOPTED_TITLE, seed: { kind: 'anywhere' }, place, cast: [], gap: null, chat, card, startedAt: 0, endedAt: Number.isFinite(endedAt) ? endedAt : 0, startDate, endDate, status: 'ended', recap: text, noRecap: !text }, 0);
+    next.scenes = [scene, ...next.scenes.filter(s => s.id !== ADOPTED_ID)];
+    return { entry: capScenes(next), scene };
+}
+
 /** Reopen: an ended scene back to open (others aside), marked reopened. */
 export function reopenScene(entry, id) {
     return withScene(entry, id, (s, next) => {
@@ -799,13 +820,16 @@ export function removeGoneScene(entry, id) {
  * @param {object} entry
  * @param {{ file: string, meta?: object }[]} chats - the card's chats, names with or without .jsonl, each with its header's metadata when listed with it
  * @param {string} worldId
+ * @param {{ card?: string }} [o] - the card whose chats were listed: a record kept under another card (a chat taken
+ *   as scene 0 from a card that is not the narrator's, D172) is not in that list and is left as it is
  */
-export function reconcileScenesWithChats(entry, chats, worldId) {
+export function reconcileScenesWithChats(entry, chats, worldId, { card = '' } = {}) {
     const next = touch(normalizeWorldEntry(entry));
     const list = (Array.isArray(chats) ? chats : []).map(c => ({ file: String(c && (c.file ?? c.file_name ?? c.file_id) || '').replace(/\.jsonl$/i, ''), meta: c && isObj(c.meta) ? c.meta : (c && isObj(c.chat_metadata) ? c.chat_metadata : null) })).filter(c => c.file);
     const files = new Set(list.map(c => c.file.toLowerCase()));
     let changed = 0;
     next.scenes = next.scenes.map(s => {
+        if (card && s.card && s.card !== card) return s;
         const present = s.chat && files.has(s.chat.toLowerCase());
         if (s.chat && !present && !s.gone) { changed++; return { ...s, gone: true, status: s.status === 'open' ? 'aside' : s.status }; }
         if (present && s.gone) { changed++; return { ...s, gone: false }; }
