@@ -774,7 +774,8 @@ export async function prepareEnd() {
     if (!idle) return { ok: false, reason: 'busy' };
     const token = { meta: meta(), id: chatId() };
     const players = playerNames();
-    const brief = token.meta && typeof token.meta.scenario === 'string' ? token.meta.scenario : '';
+    // The scene's brief is kept on the mark (D120: it rides the brief slot, the chat has no scenario of its own).
+    const brief = g.cur.mark && typeof g.cur.mark.brief === 'string' ? g.cur.mark.brief : '';
     // A scene longer than one page is read in passes, oldest first, each pass carrying the record so far (§5.2).
     const pages = sceneTranscriptPages(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     let recap = '';

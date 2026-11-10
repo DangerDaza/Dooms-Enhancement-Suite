@@ -122,6 +122,24 @@ console.log('\n§2 the clean-up pass');
     book.__setTidyTransport(async () => { asked++; return '{}'; });
     const few = await book.proposeTidy(A.atlasModel({ pack, state: { ...ws, visited: ws.visited.slice(0, 1) } }));
     check('one place is not asked about', few.ok && few.reason === 'few' && asked === 0);
+    // While the player's own message is being answered nothing is asked: the request would switch the connection
+    // profile under that reply. It waits for the reply to end, and gives up when the wait runs out.
+    const st = await import(`${SANDBOX}/script.js`);
+    book.__setAtlasIdleTiming({ stepMs: 5, maxMs: 40 });
+    asked = 0;
+    st.__setSendPress(true);
+    const held = await book.proposeTidy(model);
+    check('while a reply is being written the clean-up is not asked for, and says why', held.ok === false && held.reason === 'busy' && /reply is still being written/.test(held.error) && asked === 0 && !book.isTidying());
+    book.__setAtlasIdleTiming({ stepMs: 5, maxMs: 2000 });
+    setTimeout(() => st.__setSendPress(false), 30);
+    const waited = await book.proposeTidy(model);
+    check('it waits for the reply to end, then asks', waited.ok === true && asked === 1);
+    st.__setSendPress(true);
+    book.__setAtlasIdleTiming({ stepMs: 5, maxMs: 40 });
+    const heldSetup = await book.draftSetup({ notes: 'Hask is a city.', reach: 'recent', model, world: 'The Eld' });
+    check('the set-up waits the same way', heldSetup.ok === false && /reply is still being written/.test(heldSetup.error || '') && !book.isSettingUp(), JSON.stringify(heldSetup).slice(0, 200));
+    st.__setSendPress(false);
+    book.__setAtlasIdleTiming({ stepMs: 250, maxMs: 120000 });
     book.__setTidyTransport(null);
 }
 

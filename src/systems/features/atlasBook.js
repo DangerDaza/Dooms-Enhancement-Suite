@@ -10,8 +10,9 @@
  * open.
  */
 import { chat_metadata, saveChatDebounced } from '../../../../../../../script.js';
+import * as ST from '../../../../../../../script.js';    // is_send_press read by name: a build without it reads undefined, not a link error
 import { extensionSettings, addDebugLog } from '../../core/state.js';
-import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI } from '../generation/apiClient.js';
+import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, backgroundHolder } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { normalizeBook, buildTidyPrompt, parseTidy } from '../../utils/atlas.js';
 import { stripSceneNoise } from '../../utils/liveWorld.js';
@@ -34,6 +35,28 @@ export function setBook(book) {
     try { saveChatDebounced(); } catch (e) { /* no chat open */ }
     try { window.dispatchEvent(new CustomEvent(ATLAS_BOOK_CHANGED_EVENT)); } catch (e) { /* no window (tests) */ }
     return true;
+}
+
+// ─── Waiting for the line ───────────────────────────────────────────────────
+
+// A background request runs on the tracker's connection profile: started while the player's own message is being
+// answered, it would switch the profile under that reply. So every request here waits until no reply is being
+// written and no other background request holds the line (as the Hub's and Live World's do), and gives up after a while.
+let idleTiming = { stepMs: 250, maxMs: 120000 };
+const WAITING = 'A reply is still being written. Try again when it is done.';
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/** Test hook: how often the line is looked at and how long it is waited for. */
+export function __setAtlasIdleTiming(t) { idleTiming = { ...idleTiming, ...(t || {}) }; }
+
+/** True once nothing is being generated; false when the wait ran out. */
+async function whenIdle() {
+    const started = Date.now();
+    for (;;) {
+        if (ST.is_send_press !== true && !backgroundHolder()) return true;
+        if (Date.now() - started >= idleTiming.maxMs) return false;
+        await sleep(idleTiming.stepMs);
+    }
 }
 
 // ─── The clean-up pass (D155) ───────────────────────────────────────────────
@@ -69,6 +92,7 @@ export async function proposeTidy(model, { world = '' } = {}) {
             if (external) return generateWithExternalAPI(messages);
             return safeGenerateRaw({ prompt: messages, quietToLoud: false });
         };
+        if (!(await whenIdle())) return { ok: false, reason: 'busy', items: [], error: WAITING };
         const result = await withBackgroundProfile(run, { external, label: 'atlas-tidy' });
         if (result === BACKGROUND_BUSY) return { ok: false, reason: 'busy', items: [], error: 'Another request is running; try again in a moment.' };
         const text = typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));
@@ -117,6 +141,7 @@ async function ask(prompt, kind, label) {
         if (external) return generateWithExternalAPI(messages);
         return safeGenerateRaw({ prompt: messages, quietToLoud: false });
     };
+    if (!(await whenIdle())) throw new Error(WAITING);    // before every part of a long set-up: a message sent meanwhile is answered first
     const result = await withBackgroundProfile(run, { external, label });
     if (result === BACKGROUND_BUSY) throw new Error('Another request is running; try again in a moment.');
     return typeof result === 'string' ? result : (result && typeof result === 'object' && typeof result.text === 'string' ? result.text : String(result ?? ''));

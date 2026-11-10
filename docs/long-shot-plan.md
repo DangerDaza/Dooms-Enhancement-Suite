@@ -390,3 +390,66 @@ sets them apart gets the same drawing at two scales. Terrain is told by
 the region's name alone until step 3. No rivers. A region that holds
 regions shows no neighbours. The picture of the owner's own is still only
 under the top map.
+
+## 16. The review of DES as a whole, and what scenes are for (2026-11-10)
+
+The owner, before going on: "take the time to look at DES as a whole
+before we continue and make sure our current plan works with the current
+system", and on the purpose: characters are strongest at the start of a
+chat, flatten into one voice around message 100, and the chat breaks
+around 300; many small chats are how a story goes on for a thousand
+messages with that first strength kept. And on what it replaces: "FD
+continuity is something I have you do on a local chat. You basically pull
+apart a chat, add it to canon and create a new chat. This is an attempt
+to put that system in DES." That run (his chat-to-canon instructions)
+writes a canon of hard facts and rulings with a section a character, a
+ledger of what is settled and what is open, a count of the phrases the
+narrator leans on turned into style law, and a lorebook that is always
+on, built from them.
+
+What the review found, each checked in the code:
+
+- The scene engine (`features/hub.js`, `utils/hub.js`) is built and is
+  what the Atlas should start scenes with: D142 is reversed and D149
+  settled (the engine stays; its window goes once its sheets have a home).
+- The Atlas reads the chat in front (`getWorldState`, `getActivePack`,
+  `getBook`); the engine keeps a world's memory in `extensionSettings.hub`
+  and moves the world there at End, so the chat left open shows the world
+  as it was. The book (`dooms_atlas`) is not among the stores a scene
+  carries (`HUB_KEYS`).
+- Only a world the player made (a custom pack) with a narrator card bound
+  can be played as scenes, never the blank world, never a group chat; and
+  nothing takes a chat already played as a world's first memory (hub-plan
+  D131, not built). The owner's worlds are not World Builder worlds.
+- A background request holds only what DES puts in it: the openers get one
+  line a person (200 characters of the Workshop's description) and no
+  lorebook. The owner's characters are keyword entries in a campaign's
+  book (Lore Library), kept on by the campaign, not by the auto-link (which
+  switches on a book named exactly as someone the chat has ever met).
+- Nothing counts a scene's length, and there is no way from one scene
+  straight into the next at the same place with no time passed: End always
+  moves the world.
+- The Start sheet, the opener picker, the End sheet and the strip live in
+  the old Hub window's modules; the World Builder's Map tab uses its board;
+  the Atlas's sidebar is styled by the old Map window's block of
+  `style.css`. The old windows cannot be removed before those have moved.
+- Against the owner's own run, End lacks: the count of repeated phrases
+  (his "highest-value part", and the one aimed at characters flattening),
+  where each character stands now, open threads, and contradictions put
+  to the player instead of the later one winning unseen.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D169 | Scenes are for fresh character performance, and End is the owner's chat-to-canon run done by DES (the owner) | The measure of the scene work is his: a new chat as strong as message one, the story carried whole. What End writes is modelled on his run (above), not on a recap alone. |
+| D170 | The continuity is a real lorebook (the owner: yes) | What DES carries from scene to scene is written as a book in the Lore Library, read and edited as his hand-made Continuity book is now, and it takes that book's place for a campaign played as scenes (hub-plan D126 is the start of it). |
+| D171 | Completed quests stay; drawing a place by hand waits (the owner) | The Atlas's Hooks tab lists the quests completed in the chat under the hooks (built). Drawing a place's picture by hand is kept but set aside until it fits the Atlas. |
+
+Fixed with the review ("Atlas 14"): the Atlas's requests (clean-up, set-up,
+fill) now wait until no reply is being written and no other background
+request holds the line, before every request of a long set-up (they ran
+on the tracker's connection profile whatever the chat was doing, so a
+message sent meanwhile could be answered on that profile); and a scene's
+recap is asked for with the scene's brief, which it never got (it was read
+from a scenario the scene chat does not have; the brief is on the mark).
+Hooks and the hand-drawn place picture have the same gap as the Atlas had
+and are not changed here.

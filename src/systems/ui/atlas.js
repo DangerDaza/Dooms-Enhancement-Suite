@@ -19,9 +19,9 @@ import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
-import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
+import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHANGED_EVENT } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
-import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
+import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
 
@@ -243,7 +243,8 @@ function tabBody({ state, pack, cfg }) {
     if (tab === 'people') return peopleHtml({ state, pack, portraits: portraitOf, present: presentNamesFromTracker(), sceneText: sceneFacts().location || '' });
     if (tab === 'news') return newsHtml({ state, pack, cfg, feed: feedLimit });
     if (tab === 'rumours') return rumoursHtml({ state, pack, cfg });
-    if (tab === 'hooks') return hooksHtml({ hooks: getHooks(), busy: isProposing() });
+    // Under the hooks, the quests completed in this chat (the old Map window's own panel; the owner kept it, 2026-11-10).
+    if (tab === 'hooks') return hooksHtml({ hooks: getHooks(), busy: isProposing() }) + doneHtml({ done: getCompletedQuests() });
     return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '', ground: model ? model.ground : 'country' });
 }
 
@@ -751,6 +752,7 @@ function build() {
     });
     window.addEventListener(WORLD_CHANGED_EVENT, () => { if (isOpen) render(); });
     window.addEventListener(HOOKS_CHANGED_EVENT, () => { if (isOpen && tab === 'hooks') render(); });
+    window.addEventListener(QUESTS_DONE_CHANGED_EVENT, () => { if (isOpen && tab === 'hooks') render(); });
     window.addEventListener('resize', () => { if (isOpen && board) board.size(); });
 }
 
