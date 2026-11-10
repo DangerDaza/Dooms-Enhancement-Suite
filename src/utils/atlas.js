@@ -321,7 +321,7 @@ export function normalizeBook(raw) {
         if (typeof e.note === 'string') one.note = clean(e.note, 300);
         if (Object.keys(one).length) edits[id] = one;
     }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', spots, gone, merged, made, edits };
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', drawn: r.drawn === true, spots, gone, merged, made, edits };
 }
 
 /** A marker put at a spot (or moved there). */
@@ -397,6 +397,12 @@ export function editMarker(book, id, { label, kind, note } = {}) {
     if (kind !== undefined) { if (cleanKind(kind)) one.kind = cleanKind(kind); else delete one.kind; }
     if (note !== undefined) one.note = clean(note, 300);
     return { ...b, edits: { ...b.edits, [id]: one } };
+}
+
+/** The drawn map chosen over the world's own picture (D154), or the picture again. */
+export function withDrawn(book, drawn) {
+    const b = normalizeBook(book);
+    return { ...b, drawn: drawn === true };
 }
 
 /** The map's scale chosen by hand ('' = the world's own, or a guess). */

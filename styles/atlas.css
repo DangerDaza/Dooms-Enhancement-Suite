@@ -120,6 +120,16 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-empty { position: absolute; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; padding: 30px; text-align: center; background: var(--atlas-bg); color: var(--atlas-muted); }
 .dooms-atlas-empty[hidden] { display: none; }
 .dooms-atlas-empty p { max-width: 460px; margin: 0; font-size: 1em; line-height: 1.5; }
+.dooms-atlas-start { position: absolute; inset: 0; z-index: 815; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
+.dooms-atlas-start[hidden] { display: none; }
+.dooms-atlas-start-card { pointer-events: auto; max-width: 460px; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 10px; }
+.dooms-atlas-start-card h3 { margin: 0; font-size: 1.3em; font-family: var(--atlas-display); color: var(--atlas-text); }
+.dooms-atlas-start-card p { margin: 0; font-size: 0.92em; line-height: 1.45; }
+.dooms-atlas-start-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0; }
+.dooms-atlas-start-actions .dooms-atlas-btn { font-size: 0.92em; padding: 8px 14px; }
+.dooms-atlas-start-card .dooms-atlas-start-note { font-size: 0.8em; color: var(--atlas-muted); }
+.dooms-atlas-tool.is-base { display: none; }
+#dooms-atlas.has-picture .dooms-atlas-tool.is-base { display: inline-flex; }
 .dooms-atlas-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 820; margin: 0; max-width: min(560px, 60%); padding: 8px 16px; border-radius: 999px; background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); font-size: 0.86em; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
 .dooms-atlas-hint[hidden] { display: none; }
 #dooms-atlas.is-armed .dooms-atlas-hint { border-color: var(--atlas-accent); }

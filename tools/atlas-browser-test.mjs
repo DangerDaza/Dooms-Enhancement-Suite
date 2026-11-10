@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml } from '/src/systems/ui/atlasViews.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
 import * as A from '/src/utils/atlas.js';
@@ -88,6 +88,8 @@ function draw() {
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
+    const start = root.querySelector('.dooms-atlas-start');
+    start.hidden = m.markers.length > 0; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting: m.tray.length, picture: !!ui.picture });
     if (window.__board) window.__board.update({ model: m, picture: ui.picture, hidden: ui.hidden, query: ui.query, moving: ui.moving });
 }
 window.__draw = draw;
@@ -197,6 +199,8 @@ console.log('\n§1 a long campaign: nothing lands by itself');
     check('the Atlas fills the screen, the sidebar on the left, the map in the rest', near(l.atlas.width, VIEW.width, 1) && near(l.atlas.height, VIEW.height, 1) && l.side.left === 0 && near(l.side.width, 340, 1) && near(l.stage.left, 340, 1) && near(l.stage.right, VIEW.width, 1) && near(l.map.height, VIEW.height, 1));
     check('the map is empty: no marker, no land', l.count === 0 && l.shore === 0 && l.routes === 0);
     check('the map says how it fills', /Drag a place/.test(l.hint));
+    const start = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-start-card'); if (!c) return null; const b = c.getBoundingClientRect(); const map = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' '), buttons: [...c.querySelectorAll('button')].map(x => x.getAttribute('data-act')), centred: Math.abs((b.left + b.width / 2) - (map.left + map.width / 2)) < 4, inside: b.top >= 0 && b.bottom <= innerHeight }; });
+    check('an empty map shows Start your map in its middle: place them all, or place them yourself', !!start && /Start your map/.test(start.text) && /8 places are waiting/.test(start.text) && /Place all 8 for me/.test(start.text) && start.buttons.join() === 'place-all,start-dismiss' && start.centred && start.inside, JSON.stringify(start));
     check('fifteen wordings are eight places in the tray: the rooms folded into their buildings', l.tray.length === 8 && l.tray.includes("Jordan's House") && l.tray.includes('Bedroom') && l.tray.includes('The Rusty Anchor') && l.tray.includes('Harbour Market') && !l.tray.some(t => /wall|window|Kitchen|back room|stalls/.test(t)), JSON.stringify(l.tray));
     check('the party\'s place is first in the tray', l.tray[0] === "Jordan's House");
     check('the paper lies over the map and the compass is drawn', l.paper && l.compass);
@@ -220,6 +224,7 @@ console.log('\n§2 placing: a drag, a tap, Place all');
     let l = await layout();
     const house = l.markers["Jordan's House"];
     check('a place dragged from the tray lands where it was dropped', !!house && near(house.pin.cx, drop.x, 3) && near(house.pin.cy, drop.y, 3), JSON.stringify(house && house.pin));
+    check('with something on the map the Start panel is gone', await page.evaluate(() => document.querySelector('.dooms-atlas-start').hidden === true));
     check('it leaves the tray, and the land is drawn under it', l.tray.length === 7 && !l.tray.includes("Jordan's House") && l.shore === 1 && l.coast === 1 && l.ripples === 2 && l.hint === '');
     check('the party is marked on its place', /is-player/.test(house.cls) && house.label === true);
     // A tray row tapped, then the map tapped.

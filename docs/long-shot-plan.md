@@ -191,3 +191,19 @@ or the clean-up pass; the book is the chat's, so two chats of one world
 do not share a map (a world's own spots, `pack.atlas.spots`, are read but
 nothing writes them yet); the tracker's weather is not in the sidebar's
 head yet.
+
+## 8. After the second look (2026-11-10)
+
+The owner: "it opened to the map I had left over from short fuse. I
+removed that map but don't see a way to create the new style map." Two
+gaps, both closed in "Atlas 4":
+
+- **Start your map.** A map with nothing on it shows a panel in its
+  middle saying how the map is made (the land draws itself around the
+  places) with Place all N for me and I'll place them myself, or Add a
+  place by hand for a world with none. Waved away, a line across the top
+  says the same. (`atlasStartHtml`.)
+- **The picture tool.** A world that has a picture gets a button among
+  the tools that switches between the picture and the drawn map
+  (`book.drawn`, `withDrawn`); the picture is kept. Nothing has to be
+  removed in the World Builder to see the drawn map.

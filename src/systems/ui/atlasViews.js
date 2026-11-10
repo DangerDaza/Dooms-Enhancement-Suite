@@ -47,11 +47,13 @@ export function atlasShellHtml() {
             <div class="dooms-atlas-paper" aria-hidden="true"></div>
             ${COMPASS}
             <div class="dooms-atlas-empty" hidden></div>
+            <div class="dooms-atlas-start" hidden></div>
             <p class="dooms-atlas-hint" role="status" hidden></p>
             <div class="dooms-atlas-tools">
                 ${tool('fold', 'fa-bars', 'Hide or show the sidebar')}
                 ${tool('add', 'fa-map-pin', 'Add a marker: click this, then the map', ' is-edit')}
                 ${tool('move', 'fa-up-down-left-right', 'Move markers: while this is on, drag a marker to where it belongs', ' is-edit')}
+                ${tool('base', 'fa-image', 'Switch between this world\'s picture and the drawn map', ' is-base')}
                 ${tool('party', 'fa-location-crosshairs', 'Find the party')}
                 ${tool('fit', 'fa-expand', 'The whole map')}
                 ${tool('close', 'fa-xmark', 'Close (Esc)', ' is-close')}
@@ -59,6 +61,33 @@ export function atlasShellHtml() {
             <div class="dooms-atlas-scale" aria-hidden="true"><span class="dooms-atlas-scale-bar"></span><span class="dooms-atlas-scale-text"></span></div>
         </div>
     </div>`;
+}
+
+/**
+ * The panel in the middle of a map with nothing on it (D151): how the map
+ * is made. The drawn map is not generated up front: the land draws itself
+ * around the places as they are put down.
+ * @param {object} o
+ * @param {number} o.waiting   the places in the tray
+ * @param {boolean} o.picture  the world's own picture is showing
+ */
+export function atlasStartHtml({ waiting = 0, picture = false } = {}) {
+    const lead = picture
+        ? 'This world\'s picture is the map. Put the places on it.'
+        : 'The map draws itself around your places: land appears wherever you put one, and the paths join them.';
+    const how = waiting
+        ? `<p>${waiting === 1 ? 'One place is' : `${waiting} places are`} waiting in the list on the left.</p>
+           <div class="dooms-atlas-start-actions">
+               <button type="button" class="dooms-atlas-btn is-primary" data-act="place-all"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Place ${waiting === 1 ? 'it' : `all ${waiting}`} for me</span></button>
+               <button type="button" class="dooms-atlas-btn" data-act="start-dismiss"><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> <span>I'll place them myself</span></button>
+           </div>
+           <p class="dooms-atlas-start-note">Placed for you, they land at free spots and you drag them to where they belong (the arrows button, top right). Placing them yourself: drag a place from the list onto the map.</p>`
+        : `<p>This world has no places yet. They appear in the list on the left as the story names them.</p>
+           <div class="dooms-atlas-start-actions">
+               <button type="button" class="dooms-atlas-btn is-primary" data-act="add"><i class="fa-solid fa-map-pin" aria-hidden="true"></i> <span>Add a place by hand</span></button>
+               <button type="button" class="dooms-atlas-btn" data-act="start-dismiss">Not now</button>
+           </div>`;
+    return `<div class="dooms-atlas-start-card"><h3>Start your map</h3><p>${lead}</p>${how}</div>`;
 }
 
 /** A kind's switch: the icon, the name, the count; struck through while off. */

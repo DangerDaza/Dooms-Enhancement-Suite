@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy } from '../features/atlasBook.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -22,7 +22,7 @@ import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml } from './atlasViews.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -50,6 +50,7 @@ let armed = null;         // what waits for a tap on the map: { kind: 'place', i
 let cardMode = 'view';    // the open card: 'view' | 'edit' | 'merge'
 let tidy = { busy: false, items: [], error: '', asked: false };    // the clean-up pass: what it proposed, to be approved (D155)
 let tidyChat = null;      // the chat the proposals are about: another chat's are dropped
+let startDismissed = '';   // the world whose Start panel was waved away this session
 let brokenPicture = '';   // a world's picture that would not load: the drawn land stands in
 
 function readTab() {
@@ -128,7 +129,7 @@ function cardFor(marker) {
 /** The world's own picture, when it has one that loads (D154). */
 function pictureOf(pack) {
     const m = pack && pack.map;
-    if (!m || !m.image || m.image === brokenPicture) return null;
+    if (!m || !m.image || m.image === brokenPicture || getBook().drawn) return null;
     const image = safeImageUrl(m.image);
     return image && m.width > 0 && m.height > 0 ? { image, width: m.width, height: m.height } : null;
 }
@@ -266,9 +267,15 @@ function render() {
     if (board && boardWorld !== world) unmount({ keepView: false });
     if (board) board.update({ model, picture: pictureOf(ctx.pack), hidden, query, moving });
     else mount(ctx);
-    // An empty map says how it fills: nothing lands on it by itself (D145).
-    const word = model.markers.length ? '' : (model.tray.length ? 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.' : 'This world has no places yet. They appear in the list as the story names them; the pin button above adds one by hand.');
-    if (!armed) setHint(word);
+    // An empty map says how it is made: nothing lands on it by itself (D151). The panel until it is waved away, then a line.
+    const bare = model.markers.length === 0;
+    const showStart = bare && !armed && startDismissed !== world;
+    $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting: model.tray.length, picture: !!pictureOf(ctx.pack) }) : '');
+    if (!armed) setHint(bare && !showStart ? (model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
+    // The picture tool shows for a world that has a picture, lit while the picture is the map.
+    const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
+    $(root()).toggleClass('has-picture', hasPicture);
+    $(`${root()} .dooms-atlas-tool[data-act="base"]`).toggleClass('is-on', hasPicture && !getBook().drawn);
     $(root()).toggleClass('is-armed', !!armed);
     $(`${root()} .dooms-atlas-tool[data-act="move"]`).toggleClass('is-on', moving);
 }
@@ -362,7 +369,9 @@ function build() {
             // The markers (D145, D151): placed, made, moved, edited, merged, taken off, deleted, brought back.
             const id = this.getAttribute('data-id') || '';
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
-            if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); return; }
+            if (act === 'add') { arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
+            if (act === 'start-dismiss') { startDismissed = worldKey(); render(); return; }
+            if (act === 'base') { const b = getBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
             if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
             if (act === 'place-all') { if (model) commit(placeAll(getBook(), model, getActivePack()), 'Everything is on the map. Turn on moving (the arrows above the map) to drag a marker to where it belongs.'); if (board) board.fit(); return; }
             if (act === 'delete') { ev.stopPropagation(); const label = labelOf(id); if (board) board.closeCard(); commit(removeMarker(getBook(), id), `${label} is deleted. It is under Deleted at the foot of Places if you want it back.`); return; }

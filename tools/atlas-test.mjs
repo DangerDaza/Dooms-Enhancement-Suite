@@ -18,7 +18,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     layoutAtlas, atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -102,9 +102,9 @@ console.log('\n§4 rooms fold into their building (D152)');
 
 console.log('\n§5 the book (D151)');
 {
-    check('nothing: an empty book', same(normalizeBook(null), { scale: '', spots: {}, gone: [], merged: {}, made: [], edits: {} }));
+    check('nothing: an empty book', same(normalizeBook(null), { scale: '', drawn: false, spots: {}, gone: [], merged: {}, made: [], edits: {} }));
     const dirty = normalizeBook({ scale: 'galaxy', spots: { a: { x: 1.23456, y: 2 }, b: { x: 'no', y: 1 } }, gone: ['x', 'x', 7], merged: { a: 'a', b: 'c' }, made: [{ id: 'pin:a', label: ' The Well ', kind: 'WATER' }, { id: 'nope', label: 'x' }, { id: 'pin:a', label: 'twice' }], edits: { q: { label: ' New ', kind: 'spaceship', note: 'n' }, z: {} } });
-    check('a book made safe', same(dirty, { scale: '', spots: { a: { x: 1.2346, y: 2 } }, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
+    check('a book made safe', same(dirty, { scale: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
     let b = placeAt(null, 'loc:the-quay', { x: 2, y: -3 });
     check('a marker placed, moved, taken off', same(b.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && same(placeAt(b, 'loc:the-quay', { x: 5, y: 5 }).spots['loc:the-quay'], { x: 5, y: 5 }) && same(unplace(b, 'loc:the-quay').spots, {}) && same(placeAt(b, 'x', { x: NaN, y: 1 }), b));
     const p1 = addPin(b, { label: 'The Old Well', kind: 'water', note: 'Dry.', x: 1, y: 1 });
@@ -121,6 +121,7 @@ console.log('\n§5 the book (D151)');
     check('a merge undone; deleting the target lets go of what was merged in', same(unmerge(m, 'loc:b').merged, {}) && same(removeMarker(m, 'loc:the-quay').merged, {}));
     const e = editMarker(b, 'loc:the-quay', { label: 'The Long Quay', kind: 'water', note: 'Tarred planks.' });
     check('a name, a kind and a note changed', same(e.edits['loc:the-quay'], { label: 'The Long Quay', kind: 'water', note: 'Tarred planks.' }) && !editMarker(e, 'loc:the-quay', { kind: '' }).edits['loc:the-quay'].kind && editMarker(p1.book, p1.id, { label: 'The Dry Well' }).made[0].label === 'The Dry Well');
+    check('the drawn map chosen over the picture, and back', withDrawn(b, true).drawn === true && withDrawn(withDrawn(b, true), false).drawn === false && normalizeBook({ drawn: 'yes' }).drawn === false);
     check('the scale chosen by hand', withScale(b, 'world').scale === 'world' && withScale(b, 'galaxy').scale === '');
     check('the book is never changed in place', same(b.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && b.made.length === 0);
 }
