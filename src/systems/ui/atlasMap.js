@@ -155,7 +155,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             const lands = current.territories || [];
             if (ground === 'island') for (const t of lands) poly(t.outline, 'dooms-atlas-shore');
             for (const t of lands) {
-                const land = L.polygon(t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain} hue-${t.hue}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
+                const land = L.polygon(t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, fillColor: t.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });    // each land its own shade (D167)
                 land.bindTooltip(t.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
                 // While something waits to be put down, a click on a land puts it there (the map's own tap); else it enters the land.
                 land.on('click', (ev) => { if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; } if (!picking && typeof on.enter === 'function') on.enter(t.id); });

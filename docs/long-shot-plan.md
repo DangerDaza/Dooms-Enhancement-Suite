@@ -351,3 +351,21 @@ For a map already in the state the owner's was (places and regions side
 by side): the regions now border one another as soon as the Atlas opens;
 Group into a region puts the places inside a land of their own, which
 takes its place among the others.
+
+## 14. Lands that look like lands; a colour for each (2026-11-10, D167)
+
+The owner, with a screenshot of nine regions tiling an oval: "this looks
+better. But I want each region to be less of a circle blob and be more
+realistic to how regions form. And I want each region to be its own shade
+of a color", then: "I meant just each being a different color." Built in
+"Atlas 12".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D167 | The lands are bent, uneven and each its own colour (the owner) | **The bend:** every outline of a map's lands is drawn through one smooth push of the map's points, read from the map's id (`bendOf`: two waves, 18 and 8 units long, its slope kept under 1 so it never folds the map over itself). Straight borders come out curved and the round shore lumpy; borders that were shared stay shared, since both lands are pushed alike; the lands are cut around the spots as they are before the bend, so a region's spot is always on its own land. **Uneven ground:** a border between two regions is not always halfway: a region holds a little more or less ground than its neighbour, by its id, within a part of the way to its nearest neighbour (so no spot can fall on the wrong side). **Borders that wander:** a shared border is waved along its length by three waves, more for a long border than a short one, dying away at its ends where three lands meet; the shore by four. **A colour each** (`territoryShades`): twelve hues right round the wheel in three strengths, muted to sit on the paper. A land takes the colour it likes best (by its id; the hue nearest its terrain when its name tells one: a forest green, a desert sand) that no land made before it has and that is well apart on the wheel from its neighbours': so no two lands are the same colour, neighbours are clearly different, and a land added later changes no colour already there. The colour is set on the land's path from the model; `territories[i].fill`, `territories[i].neighbours`. |
+
+Also: a land clicked kept the keyboard's focus (its name is a tooltip,
+which makes the path focusable) and the browser drew a box round it; no
+box is drawn now, and the keyboard's own focus thickens the border.
+`territoryCells` returns each land with the regions it borders, which
+step 2 (a region's neighbours named along its borders) will read.

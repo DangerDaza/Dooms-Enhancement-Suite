@@ -657,7 +657,6 @@ export function groundDecor(ground, seed, bounds, markers = [], lands = []) {
 // ─── Territories (D163): regions drawn as lands that share borders ─────────
 
 export const TERRITORY_RADIUS = 4.2;    // how far a region's land reaches from its spot when no neighbour is nearer
-const HUES = 6;
 
 /** A polygon cut by a half-plane: the part where a*x + b*y <= c (Sutherland–Hodgman). */
 function clipHalf(poly, a, b, c) {
@@ -682,16 +681,34 @@ export function pointInPolygon(poly, x, y) {
 }
 
 /**
- * The landmass the regions of one map share (D166): the ground around
- * all their spots and `margin` further, its shore waved. One region gives
- * a round land; more give the land that holds them all, so regions far
- * apart are still one country. The wave is read from where a point of the
- * shore is, not from which regions there are, so a region added at one
- * end leaves the far shore as it was.
+ * The bend a map's lands are drawn through (D167): a smooth push of every
+ * point of the map, a little this way and that, read from the map's own
+ * id. Straight borders come out curved and a round shore comes out
+ * lumpy, the way lands lie along rivers and ridges rather than along
+ * rulers; and since every outline is pushed by the same bend, borders
+ * that were shared stay shared. The push never folds the map over itself
+ * (its slope stays under 1), so no two points land on one.
  */
-export function landmassOutline(sites, margin = TERRITORY_RADIUS, seed = 'land') {
-    const list = (Array.isArray(sites) ? sites : []).filter(s => s && finite(s.x) && finite(s.y));
-    if (!list.length) return [];
+function bendOf(seed) {
+    const terms = [[18, 1.1], [8, 0.28]].map(([wave, amp], i) => {
+        const t1 = hash01(`${seed}/bend${i}/t1`) * Math.PI * 2, t2 = hash01(`${seed}/bend${i}/t2`) * Math.PI * 2;
+        return { k: Math.PI * 2 / wave, amp, c1: Math.cos(t1), s1: Math.sin(t1), c2: Math.cos(t2), s2: Math.sin(t2), p1: hash01(`${seed}/bend${i}/p1`) * Math.PI * 2, p2: hash01(`${seed}/bend${i}/p2`) * Math.PI * 2 };
+    });
+    const push = (x, y) => {
+        let dx = 0, dy = 0;
+        for (const t of terms) { dx += t.amp * Math.sin((x * t.c1 + y * t.s1) * t.k + t.p1); dy += t.amp * Math.sin((x * t.c2 + y * t.s2) * t.k + t.p2); }
+        return [dx, dy];
+    };
+    return {
+        /** A point of the unbent map, where the bend puts it. */
+        to: (x, y) => { const [dx, dy] = push(x, y); return [x + dx, y + dy]; },
+        /** The point of the unbent map that the bend puts at (x, y). */
+        from: (x, y) => { let ux = x, uy = y; for (let i = 0; i < 40; i++) { const [dx, dy] = push(ux, uy); const nx = x - dx, ny = y - dy; if (Math.abs(nx - ux) + Math.abs(ny - uy) < 1e-7) { ux = nx; uy = ny; break; } ux = nx; uy = ny; } return [ux, uy]; },
+    };
+}
+
+/** The landmass before the bend: the ground around the (unbent) spots and `margin` further, its shore waved. */
+function landmassRaw(list, margin, seed) {
     const reach = margin * 3;
     const minX = Math.min(...list.map(s => s.x)) - reach, maxX = Math.max(...list.map(s => s.x)) + reach;
     const minY = Math.min(...list.map(s => s.y)) - reach, maxY = Math.max(...list.map(s => s.y)) + reach;
@@ -703,72 +720,156 @@ export function landmassOutline(sites, margin = TERRITORY_RADIUS, seed = 'land')
         poly = clipHalf(poly, dx, dy, Math.max(...list.map(s => s.x * dx + s.y * dy)) + margin);
     }
     const cx = list.reduce((n, s) => n + s.x, 0) / list.length, cy = list.reduce((n, s) => n + s.y, 0) / list.length;
-    const p1 = hash01(`${seed}/shore1`) * Math.PI * 2, p2 = hash01(`${seed}/shore2`) * Math.PI * 2, p3 = hash01(`${seed}/shore3`) * Math.PI * 2;
+    const ph = [1, 2, 3, 4].map(i => hash01(`${seed}/shore${i}`) * Math.PI * 2);
     const out = [];
     for (let i = 0; i < poly.length; i++) {
         const p = poly[i], q = poly[(i + 1) % poly.length];
-        const steps = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.6));
+        const steps = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.5));
         for (let k = 0; k < steps; k++) {
             const x = p[0] + (q[0] - p[0]) * k / steps, y = p[1] + (q[1] - p[1]) * k / steps;
             const d = Math.hypot(x - cx, y - cy) || 1;
-            const f = 0.3 * Math.sin(x * 0.83 + p1) * Math.cos(y * 0.71 + p2) + 0.16 * Math.sin((x + y) * 1.9 + p3);
-            out.push([round4(x + (x - cx) / d * f), round4(y + (y - cy) / d * f)]);
+            const f = 0.4 * Math.sin(x * 0.83 + ph[0]) * Math.cos(y * 0.71 + ph[1]) + 0.2 * Math.sin((x + y) * 1.9 + ph[2]) + 0.1 * Math.sin((x - y) * 3.7 + ph[3]);
+            out.push([x + (x - cx) / d * f, y + (y - cy) / d * f]);
         }
     }
     return out;
 }
 
 /**
- * The lands of the regions on one map (D163, D166): the landmass they
- * share, cut along the line halfway between every two regions. Every
- * region borders its neighbours however far apart their spots are, and
- * the lands tile the landmass with nothing left over. A border between
- * two regions is waved the same from both sides. The same spots give the
- * same lands.
- * @param {Array<{ id: string, x: number, y: number }>} sites
- * @returns {Map<string, number[][]>}  a region's id -> its outline
+ * The landmass the regions of one map share (D166, D167): the ground
+ * around all their spots and `margin` further, its shore waved, drawn
+ * through the map's bend. One region gives a lumpy round land; more give
+ * the land that holds them all, so regions far apart are still one
+ * country. The shore is read from where each point of it is, not from
+ * which regions there are, so a region added at one end leaves the far
+ * shore as it was.
  */
-export function territoryOutlines(sites, radius = TERRITORY_RADIUS, seed = 'land') {
-    const out = new Map();
+export function landmassOutline(sites, margin = TERRITORY_RADIUS, seed = 'land') {
     const list = (Array.isArray(sites) ? sites : []).filter(s => s && finite(s.x) && finite(s.y));
-    const land = landmassOutline(list, radius, seed);
+    if (!list.length) return [];
+    const bend = bendOf(seed);
+    const raw = landmassRaw(list.map(s => { const [x, y] = bend.from(s.x, s.y); return { x, y }; }), margin, seed);
+    return raw.map(([x, y]) => bend.to(x, y).map(round4));
+}
+
+/**
+ * The lands of the regions on one map, each with the regions it borders
+ * (D163, D166, D167). The landmass they share is cut between every two
+ * regions along a line across the way from one to the other: not always
+ * halfway, since a region holds a little more or less ground than its
+ * neighbour (by its id), so the lands come out uneven as real ones are.
+ * A border is waved along its length, the same from both sides. Then
+ * everything is drawn through the map's bend. The lands tile the
+ * landmass with nothing left over; every region borders its neighbours
+ * however far apart their spots are; a region's spot is always on its
+ * own land. The same spots give the same lands.
+ * @param {Array<{ id: string, x: number, y: number }>} sites
+ * @returns {Map<string, { outline: number[][], neighbours: string[] }>}
+ */
+export function territoryCells(sites, radius = TERRITORY_RADIUS, seed = 'land') {
+    const out = new Map();
+    const given = (Array.isArray(sites) ? sites : []).filter(s => s && finite(s.x) && finite(s.y));
+    if (!given.length) return out;
+    const bend = bendOf(seed);
+    const list = given.map(s => { const [x, y] = bend.from(s.x, s.y); return { id: s.id, x, y, w: 0 }; });    // the spots as they are before the bend
+    // How much ground a region holds beyond the line halfway: by its id, and never so much that a neighbour's spot
+    // (or its own) would fall on the wrong side: within a part of the way to the nearest region.
+    for (const s of list) {
+        let near = Infinity;
+        for (const o of list) if (o !== s) near = Math.min(near, Math.hypot(o.x - s.x, o.y - s.y));
+        s.w = near === Infinity ? 0 : (hash01(`${s.id}/ground`) * 2 - 1) * 0.18 * near * near;
+    }
+    const pd = (pt, s) => (pt[0] - s.x) * (pt[0] - s.x) + (pt[1] - s.y) * (pt[1] - s.y) - s.w;    // how far a point is from a region, its ground counted
+    const land = landmassRaw(list, radius, seed);
     for (const s of list) {
         let poly = land;
         for (const o of list) {
             if (o === s) continue;
             const a = o.x - s.x, b = o.y - s.y;
             if (Math.hypot(a, b) < 1e-6) continue;
-            poly = clipHalf(poly, a, b, (o.x * o.x + o.y * o.y - s.x * s.x - s.y * s.y) / 2);    // nearer to s than to o
+            poly = clipHalf(poly, a, b, (o.x * o.x + o.y * o.y - s.x * s.x - s.y * s.y + s.w - o.w) / 2);    // the side of the line that is s's
             if (poly.length < 3) break;
         }
-        if (poly.length < 3) { out.set(s.id, []); continue; }
+        if (poly.length < 3) { out.set(s.id, { outline: [], neighbours: [] }); continue; }
         // A border shared with a neighbour is waved along its own line, the wave read from the pair (not from who asks),
         // so both lands draw the same border; the wave dies away toward the border's ends, where three lands meet.
         const waved = [];
+        const neighbours = new Set();
         for (let i = 0; i < poly.length; i++) {
             const p = poly[i], q = poly[(i + 1) % poly.length];
             waved.push(p);
             const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-            if (len < 0.8) continue;
-            const on = (pt, o) => Math.abs(Math.hypot(pt[0] - s.x, pt[1] - s.y) - Math.hypot(pt[0] - o.x, pt[1] - o.y)) < 1e-3;
+            const on = (pt, o) => Math.abs(pd(pt, s) - pd(pt, o)) < 1e-6;
             const o = list.find(x => x !== s && on(p, x) && on(q, x));
             if (!o) continue;
+            neighbours.add(o.id);
+            if (len < 0.8) continue;
             const [lo, hi] = s.id < o.id ? [s, o] : [o, s];
             const nd = Math.hypot(hi.x - lo.x, hi.y - lo.y);
             const nx = (hi.x - lo.x) / nd, ny = (hi.y - lo.y) / nd;       // across the border, the same for both lands
             const mx = (lo.x + hi.x) / 2, my = (lo.y + hi.y) / 2;
-            const ph1 = hash01(`${lo.id}|${hi.id}/1`) * Math.PI * 2, ph2 = hash01(`${lo.id}|${hi.id}/2`) * Math.PI * 2;
-            const steps = Math.ceil(len / 0.4);
+            const ph = [1, 2, 3].map(n => hash01(`${lo.id}|${hi.id}/${n}`) * Math.PI * 2);
+            const amp = 0.42 * Math.min(1, len / 5);                      // a short border has little room to wander
+            const steps = Math.ceil(len / 0.3);
             for (let k = 1; k < steps; k++) {
                 const t = k / steps;
                 const x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t;
                 const u = (x - mx) * -ny + (y - my) * nx;                     // along the border, from the pair's midpoint
-                const taper = Math.min(1, Math.min(t, 1 - t) * len / 0.7);
-                const f = 0.2 * taper * (Math.sin(u * 1.7 + ph1) + 0.6 * Math.sin(u * 3.9 + ph2)) / 1.6;
+                const taper = Math.min(1, Math.min(t, 1 - t) * len / 0.9);
+                const f = amp * taper * (Math.sin(u * 0.9 + ph[0]) + 0.55 * Math.sin(u * 2.3 + ph[1]) + 0.3 * Math.sin(u * 4.9 + ph[2])) / 1.85;
                 waved.push([x + nx * f, y + ny * f]);
             }
         }
-        out.set(s.id, waved.map(([x, y]) => [round4(x), round4(y)]));
+        out.set(s.id, { outline: waved.map(([x, y]) => bend.to(x, y).map(round4)), neighbours: [...neighbours] });
+    }
+    return out;
+}
+
+/** The lands' outlines alone: a region's id -> its outline (territoryCells). */
+export function territoryOutlines(sites, radius = TERRITORY_RADIUS, seed = 'land') {
+    return new Map([...territoryCells(sites, radius, seed)].map(([id, c]) => [id, c.outline]));
+}
+
+// The colours a land can be (D167): twelve hues right round the wheel, thirty degrees apart, in three strengths. The
+// first strength is used up before the second, so the first twelve lands of a map are twelve different colours; they
+// are muted, to sit on the paper. A land whose name tells a terrain likes the hue nearest that terrain best.
+const LAND_HUES = 12;
+const LAND_TIERS = Object.freeze([{ s: 46, l: 67 }, { s: 40, l: 55 }, { s: 52, l: 78 }]);
+const TERRAIN_HUE = Object.freeze({ forest: 105, mountains: 25, desert: 45, snow: 200, swamp: 80, coast: 170, town: 10 });
+const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+
+/**
+ * A colour of its own for every land of a map (D167): no two lands the
+ * same, and a land well apart on the wheel from the lands it borders. A
+ * land has colours it likes best (by its id; by its terrain when its name
+ * tells one) and takes the first of them that no land made before it has
+ * and that is not too like a neighbour's: so a land added later changes
+ * no colour already there.
+ * @param {Array<{ id: string, terrain: string, neighbours: string[] }>} lands  in the order they were made
+ * @returns {Map<string, { h: number, s: number, l: number, css: string }>}
+ */
+export function territoryShades(lands) {
+    const out = new Map();
+    const used = new Set();
+    for (const land of Array.isArray(lands) ? lands : []) {
+        const likes = TERRAIN_HUE[land.terrain];
+        const cands = [];
+        LAND_TIERS.forEach((tier, ti) => {
+            for (let hi = 0; hi < LAND_HUES; hi++) {
+                const h = (10 + hi * 360 / LAND_HUES) % 360;
+                const chance = hash01(`${land.id}/colour/${ti}/${hi}`);
+                cands.push({ h, s: tier.s, l: tier.l, css: `hsl(${h} ${tier.s}% ${tier.l}%)`, liking: ti + (likes === undefined ? chance * 0.9 : hueGap(h, likes) / 180 * 0.85 + chance * 0.04) });
+            }
+        });
+        cands.sort((a, b) => a.liking - b.liking);
+        const beside = (land.neighbours || []).map(id => out.get(id)).filter(Boolean);
+        // How far a colour is from the nearest neighbour's: by hue, and a little by how light it is (the same hue lighter is no different colour).
+        const room = (c) => (beside.length ? Math.min(...beside.map(b => hueGap(c.h, b.h) + Math.abs(c.l - b.l) * 0.6)) : Infinity);
+        const free = cands.filter(c => !used.has(c.css));
+        const pool = free.length ? free : cands;    // more lands than colours: one is used again, as far from the neighbours as can be
+        const pick = pool.find(c => room(c) >= 55) || pool.find(c => room(c) >= 28) || [...pool].sort((a, b) => room(b) - room(a))[0];
+        used.add(pick.css);
+        out.set(land.id, { h: pick.h, s: pick.s, l: pick.l, css: pick.css });
     }
     return out;
 }
@@ -979,8 +1080,9 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     // The land: a blob under every marker; drawn as one shore (atlasMap.js).
     // The regions on this map are lands that share borders (D163); what a land shows of itself comes with it.
     const sites = markers.filter(m => m.kind === 'region');
-    const cells = territoryOutlines(sites, TERRITORY_RADIUS, cur || 'top');
-    const territories = sites.map(m => ({ id: m.id, label: m.label, terrain: guessTerrain(m.label), hue: Math.floor(hash01(`${m.id}/hue`) * HUES), x: m.x, y: m.y, outline: cells.get(m.id) || [], loose: m.loose, player: m.player, visited: m.visited, holds: m.holds })).filter(t => t.outline.length >= 3);
+    const cells = territoryCells(sites, TERRITORY_RADIUS, cur || 'top');
+    const shades = territoryShades(sites.map(m => ({ id: m.id, terrain: guessTerrain(m.label), neighbours: (cells.get(m.id) || { neighbours: [] }).neighbours })));
+    const territories = sites.map(m => { const c = cells.get(m.id) || { outline: [], neighbours: [] }; return { id: m.id, label: m.label, terrain: guessTerrain(m.label), fill: (shades.get(m.id) || { css: '' }).css, x: m.x, y: m.y, outline: c.outline, neighbours: c.neighbours, loose: m.loose, player: m.player, visited: m.visited, holds: m.holds }; }).filter(t => t.outline.length >= 3);
     for (const m of markers) m.territory = territories.some(t => t.id === m.id);
 
     const land = markers.map(m => ({ id: m.id, x: m.x, y: m.y, radius: m.territory ? TERRITORY_RADIUS : LAND_RADIUS }))

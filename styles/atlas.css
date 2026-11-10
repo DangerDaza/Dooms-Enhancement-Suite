@@ -258,21 +258,12 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-leaflet[data-ground="underground"] ~ .dooms-atlas-scale .dooms-atlas-scale-bar { border-color: #e8dcbd; }
 .dooms-atlas-scale-pick + .dooms-atlas-scale-pick { margin-top: -4px; }
 
-/* Territories (D163): the regions of a map as lands that share borders. A land is tinted by its terrain, or by one of
-   six parchment hues when its name tells none; it lights under the pointer and is clicked to enter. */
-.dooms-atlas-territory { fill: #e3c98a; fill-opacity: 0.92; stroke: var(--atlas-ink); stroke-width: 1.8; stroke-opacity: 0.85; stroke-linejoin: round; cursor: pointer; transition: fill-opacity 0.12s; }
-.dooms-atlas-territory.hue-0 { fill: #e6cf8f; }
-.dooms-atlas-territory.hue-1 { fill: #dcc27a; }
-.dooms-atlas-territory.hue-2 { fill: #e0b872; }
-.dooms-atlas-territory.hue-3 { fill: #cfc487; }
-.dooms-atlas-territory.hue-4 { fill: #d9ad6c; }
-.dooms-atlas-territory.hue-5 { fill: #c9c992; }
-.dooms-atlas-territory.is-forest { fill: #b9c58a; }
-.dooms-atlas-territory.is-mountains { fill: #c9b79a; }
-.dooms-atlas-territory.is-desert { fill: #ecc878; }
-.dooms-atlas-territory.is-snow { fill: #ece6d4; }
-.dooms-atlas-territory.is-swamp { fill: #b3b98f; }
-.dooms-atlas-territory.is-coast { fill: #c4cfae; }
+/* Territories (D163, D167): the regions of a map as lands that share borders. Each land has a shade of its own (set on
+   the path from the model: a stylesheet's fill would override it); it lights under the pointer and is clicked to enter. */
+.dooms-atlas-territory { fill-opacity: 0.9; stroke: var(--atlas-ink); stroke-width: 1.8; stroke-opacity: 0.85; stroke-linejoin: round; cursor: pointer; transition: fill-opacity 0.12s; }
+/* A land clicked keeps the keyboard's focus (its name is a tooltip): no box is drawn round it for that; the keyboard's own focus thickens its border. */
+.dooms-atlas-leaflet path:focus { outline: none; }
+.dooms-atlas-leaflet path.dooms-atlas-territory:focus-visible { outline: none; stroke-width: 3.2; stroke-opacity: 1; }
 .dooms-atlas-territory.is-loose { stroke-dasharray: 6 5; fill-opacity: 0.7; }
 .dooms-atlas-territory.is-player { stroke-width: 2.6; }
 .dooms-atlas-territory:hover { fill-opacity: 1; stroke-opacity: 1; stroke-width: 2.8; filter: brightness(1.08); }

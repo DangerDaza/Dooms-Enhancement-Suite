@@ -740,9 +740,9 @@ console.log('\n§5d territories: regions as lands that share borders, clicked to
         const inside = (poly, [x, y]) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
         const own = t.every(a => inside(a.outline, [a.x, a.y]) && t.every(b => a === b || !inside(a.outline, [b.x, b.y])));
         const fills = new Set([...document.querySelectorAll('path.dooms-atlas-territory')].map(p => getComputedStyle(p).fill));
-        return { own, fills: fills.size, shared: t.filter(a => t.some(b => a !== b && Math.hypot(a.x - b.x, a.y - b.y) < 8.4)).length };
+        return { own, fills: fills.size, shared: t.filter(a => a.neighbours.length > 0).length };
     });
-    check('each land holds its own spot and no other\'s; the lands border one another and are tinted apart', geo.own && geo.shared === 6 && geo.fills >= 3, JSON.stringify(geo));
+    check('each land holds its own spot and no other\'s; the lands border one another, each in a shade of its own', geo.own && geo.shared === 6 && geo.fills === 6, JSON.stringify(geo));
     await shot('7k-territories');
     // Hover names the land; a click enters it.
     const mid = await page.evaluate(() => { const t = window.__model.territories.find(x => x.label === 'The Salt Fens'); const p = window.__board.map.latLngToContainerPoint([-(t.y - 1.2), t.x + 1.2]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y }; });
@@ -794,8 +794,11 @@ console.log('\n§5e regions always border one another; Fill out with regions; a 
     await page.evaluate(() => window.__board.fit());
     await settle();
     let l = await layout();
-    const touching = () => page.evaluate(() => { const t = window.__model.territories; const d = (pt, a) => Math.hypot(pt[0] - a.x, pt[1] - a.y); return t.length > 1 && t.every(a => t.some(b => a !== b && a.outline.some(pt => Math.abs(d(pt, a) - d(pt, b)) < 0.3))); });
+    const touching = () => page.evaluate(() => { const t = window.__model.territories; return t.length > 1 && t.every(a => a.neighbours.length >= 1 && a.neighbours.every(n => t.find(o => o.id === n).neighbours.includes(a.id))); });
+    const shades = () => page.evaluate(() => { const fills = [...document.querySelectorAll('path.dooms-atlas-territory')].map(p => getComputedStyle(p).fill); return { each: new Set(fills).size === fills.length, n: fills.length, model: window.__model.territories.every(t => t.neighbours.every(n => window.__model.territories.find(o => o.id === n).fill !== t.fill)) }; });
     check('four regions that stood far apart now border one another: no land stands alone', l.lands === 4 && (await touching()));
+    check('each land is drawn in a shade of its own, and no land shares its neighbour\'s (D167)', (await shades()).each && (await shades()).model && (await shades()).n === 4, JSON.stringify(await shades()));
+    check('a land clicked is not left with a box drawn round it', await page.evaluate(() => { const p = document.querySelector('path.dooms-atlas-territory'); p.focus(); const o = getComputedStyle(p); return o.outlineStyle === 'none' || o.outlineWidth === '0px'; }));
     const mixedWord = await page.evaluate(() => (document.querySelector('.dooms-atlas-mixed') || {}).textContent || '');
     check('with regions and places side by side, the Places tab says so and offers Group into a region', /regions and places side by side/.test(mixedWord) && (await page.evaluate(() => !!document.querySelector('.dooms-atlas-tidy [data-act="group"]'))));
     await shot('7m-mixed-before');
