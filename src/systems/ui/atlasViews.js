@@ -265,6 +265,82 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
     </div>`;
 }
 
+const sceneNoOf = (id) => String(id || '').replace(/^s/, '');
+
+/**
+ * Ending a scene from the Atlas (D176), a panel over the map: the record
+ * of the scene to read and correct, what ending it will do (each part
+ * can be left out), and each part's state while it runs.
+ * @param {object} o
+ * @param {object|null} o.prep     prepareEnd(): the recap, the scene, its dates, the parts that are on, whether the world has moved past it
+ * @param {boolean} o.busy         the record is being written
+ * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
+ * @param {object|null} o.result   commitEnd()'s answer once it has run
+ */
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '' } = {}) {
+    const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
+    const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
+    const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
+    const running = Object.values(states).includes('running');
+    const done = !!(result && result.ok);
+    const word = { waiting: 'waiting', running: 'running…', ok: 'done', failed: 'failed', skipped: 'left out', off: 'off', kept: 'kept as it was' };
+    const part = (key, label, hint, on, skipClass) => {
+        const st = states[key] || (on ? 'waiting' : 'off');
+        return `<li class="dooms-atlas-part is-${attr(st)}">
+            <span class="dooms-atlas-part-label"><strong>${e(label)}</strong> <span>${e(hint)}</span></span>
+            ${skipClass && on && !done && !running ? `<label class="dooms-atlas-part-skip"><input type="checkbox" class="${attr(skipClass)}" /> leave out</label>` : ''}
+            <span class="dooms-atlas-part-state">${e(word[st] || st)}</span>
+        </li>`;
+    };
+    const canonOn = !!(prep && prep.steps && prep.steps.canon);
+    const worldOn = !!(prep && prep.steps && prep.steps.world);
+    const stale = prep && prep.stale && !done
+        ? `<div class="dooms-atlas-stale"><p class="dooms-atlas-setup-error" role="alert">This scene began before a later one ended, so the world remembers more than it does. Ending it keeps the world's memory as it is: the record is kept and the ledger reads the scene, and nothing of the later scene is lost.</p>
+            <label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-end-replace" /> <span>Replace the world's memory with this scene's instead</span></label></div>`
+        : '';
+    return `<div class="dooms-atlas-setup-card is-scene is-end">
+        <h3>End ${title}</h3>
+        ${when ? `<p>${when}</p>` : ''}
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
+            <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
+        ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
+        ${stale}
+        <ul class="dooms-atlas-parts">
+            ${part('recap', 'The record', 'kept with the scene', true, '')}
+            ${part('canon', 'The ledger', canonOn ? (prep && prep.canonDone ? 'already read for the last reply' : 'Canon reads the whole scene') : 'Canon is off', canonOn, 'dooms-atlas-end-skip-canon')}
+            ${part('world', 'The world', worldOn ? 'moves on by the time the scene took' : 'Live World has no world here', worldOn, 'dooms-atlas-end-skip-world')}
+            ${part('snapshot', 'The memory', 'everything this chat knows, with the map, kept for the next scene', true, '')}
+        </ul>
+        ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. The map shows the world as it stands now: open a place to start the next scene.</p>` : ''}
+        ${error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : ''}
+        <div class="dooms-atlas-setup-actions">
+            ${done
+                ? '<button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>'
+                : `<button type="button" class="dooms-atlas-btn is-primary" data-act="end-go"${busy || running || !prep ? ' disabled' : ''}><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>${running ? 'Ending…' : 'End scene'}</span></button>
+                   <button type="button" class="dooms-atlas-btn" data-act="setup-close"${running ? ' disabled' : ''}>Keep playing</button>`}
+        </div>
+    </div>`;
+}
+
+/**
+ * The strip across the top of a scene's chat (hub-plan D121, D176): the
+ * scene's number, its place and date, the Atlas and End scene; ended: the
+ * Atlas and Reopen. Drawn with the strip's own classes (style.css).
+ * @param {{ mark: object, scene?: object|null, ended: boolean }} o
+ */
+export function atlasStripHtml({ mark = null, scene = null, ended = false } = {}) {
+    const id = (scene && scene.id) || (mark && mark.scene) || '';
+    const title = (scene && scene.title) || (mark && mark.title) || '';
+    const place = mark && mark.place && mark.place.label ? mark.place.label : (scene && scene.place ? scene.place.label : '');
+    const date = mark && mark.startDate ? mark.startDate : (scene && scene.startDate ? scene.startDate : '');
+    const text = [`Scene ${sceneNoOf(id)}${title ? `: ${title}` : ''}`, ended ? 'ended' : place, ended ? (mark && mark.endDate ? mark.endDate : '') : date].filter(Boolean).join(' · ');
+    const atlas = `<button type="button" class="rpg-accordion-action-btn" data-act="atlas" title="${ended ? 'The world as it stands now: start the next scene from the map' : 'The map of this scene\'s world'}"><i class="fa-solid fa-map" aria-hidden="true"></i> Atlas</button>`;
+    const actions = ended
+        ? `${atlas}<button type="button" class="rpg-accordion-action-btn" data-act="reopen" title="Play on; ending it again replaces its record and the memory"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen</button>`
+        : `${atlas}<button type="button" class="rpg-accordion-action-btn" data-act="end" title="Write the record of this scene and remember it"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> End scene</button>`;
+    return `<div class="dooms-strip-text"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>${e(text)}</span></div><div class="dooms-strip-actions">${actions}</div>`;
+}
+
 /** Why a chat cannot be played as scenes, in words (D172). */
 export function scenesRefusalText(plan) {
     const p = plan && typeof plan === 'object' ? plan : {};
@@ -309,11 +385,10 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <p>${r.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(r.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
             <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
             ${r.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(r.backup)}</strong>.</p>` : ''}
+            <p>To start the first scene, open a place on the map and press <strong>Start scene 1 here</strong>.</p>
             <div class="dooms-atlas-setup-actions">
-                <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-hub"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Start a scene</span></button>
-                <button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button>
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>
             </div>
-            <p class="dooms-atlas-start-note">Start a scene opens the Hub for now, where a scene is started and ended.</p>
         </div>`;
     }
     const made = p.world && p.world.made;
@@ -546,7 +621,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
  * the tab's body (`body` is the tab's HTML: Places from atlasPlacesHtml,
  * the others from Live World's own views), the foot.
  */
-export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null } = {}) {
+export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null, ending = null } = {}) {
     const active = ATLAS_TABS.some(t => t.id === tab) ? tab : ATLAS_TABS[0].id;
     const when = [facts.date, facts.time].filter(Boolean).join(', ');
     const tabs = ATLAS_TABS.map(t => `<button type="button" class="dooms-atlas-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}" title="${attr(t.label)}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i><span>${e(t.label)}</span></button>`).join('');
@@ -564,6 +639,7 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
             <div class="dooms-atlas-foot-actions">
                 <button type="button" class="dooms-atlas-btn" data-act="advance"${canAdvance && !advancing ? '' : ' disabled'} title="Move the world on now: the people, the clocks, the news"><i class="fa-solid fa-forward" aria-hidden="true"></i> <span>${advancing ? 'Advancing…' : 'Advance now'}</span></button>
                 <button type="button" class="dooms-atlas-btn" data-act="edit" title="Open this chat's world in the World Builder"><i class="fa-solid fa-pen" aria-hidden="true"></i> <span>${e(editLabel)}</span></button>
+                ${ending ? `<button type="button" class="dooms-atlas-btn" data-act="end-scene" title="Write the record of this scene and remember it; the next one starts from the map"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>End scene ${e(ending.number || '')}</span></button>` : ''}
                 ${scenes ? '<button type="button" class="dooms-atlas-btn" data-act="scenes" title="Play this story as many short chats that each start fresh and know what happened before"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes</span></button>' : ''}
             </div>
         </footer>`;

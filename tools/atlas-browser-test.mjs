@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasStripHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
@@ -85,7 +85,7 @@ const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker:
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: !ui.between, between: ui.between || null });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: !ui.between && !ui.ending, between: ui.between || null, ending: ui.ending || null });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : m.realm ? 'Nothing stands in ' + m.layerLabel + ' yet. Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
@@ -185,6 +185,9 @@ window.__applyFillRegions = () => { const home = S.fillOptions(window.__model).h
 window.__scenes = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasScenesHtml(o); return true; };
 window.__refusal = (plan) => scenesRefusalText(plan);
 // Starting a scene from a marker (D174): the sheet at a step.
+// Ending a scene (D176): the sheet in a state; the strip that stands above a scene's chat, in a box with the strip's own id.
+window.__endScene = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasEndSceneHtml(o); return true; };
+window.__strip = (o) => { let el = document.getElementById('dooms-scene-strip'); if (!el) { document.body.insertAdjacentHTML('afterbegin', '<div id="dooms-scene-strip" class="dooms-scene-strip" style="position:fixed;left:0;top:0;width:900px;z-index:99999"></div>'); el = document.getElementById('dooms-scene-strip'); } el.innerHTML = o ? atlasStripHtml(o) : ''; if (!o) el.remove(); return true; };
 window.__sceneStart = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasStartSceneHtml(o); return true; };
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
@@ -1009,7 +1012,7 @@ console.log('\n§5g playing the story as scenes: the way in and its panel (D172)
     check('ticked, it can be pressed', (await panel()).acts[0] === 'scenes-go');
     await page.evaluate((p) => window.__scenes({ step: 'done', plan: p, result: { ok: true, worldId: 'first-descent', worldName: 'First Descent', made: true, card: 'The Redward', replaced: false, backup: 'The Redward - 2026-10-01@20h00m - before scenes' } }), plan);
     v = await panel();
-    check('done: it says so, names the copy that was saved of the chat as it was, and offers to start a scene', /First Descent is played as scenes/.test(v.text) && /kept as scene 0/.test(v.text) && /each scene opens on your map/.test(v.text) && /A copy of the chat as it was is saved beside it as The Redward - 2026-10-01@20h00m - before scenes\./.test(v.text) && v.acts.join() === 'scenes-hub,setup-close' && v.inside, v.text);
+    check('done: it says so, names the copy that was saved of the chat as it was, and says how the first scene is started', /First Descent is played as scenes/.test(v.text) && /kept as scene 0/.test(v.text) && /each scene opens on your map/.test(v.text) && /A copy of the chat as it was is saved beside it as The Redward - 2026-10-01@20h00m - before scenes\./.test(v.text) && /open a place on the map and press Start scene 1 here/.test(v.text) && v.acts.join() === 'setup-close' && v.inside, v.text);
     check('a copy that could not be saved has its own words', /could not be saved first \(the disk is full\), so nothing was changed/.test(await page.evaluate(() => window.__refusal({ reason: 'backup', errors: ['the disk is full'] }))));
     await shot('7za-scenes-done');
     await page.evaluate(() => window.__scenes({ step: 'ask', plan: { ok: false, reason: 'bound-elsewhere', boundTo: 'harbourside', card: { name: 'Mara Vane' }, world: { name: 'Mara Vane', made: true } } }));
@@ -1067,6 +1070,47 @@ console.log('\n§5h starting a scene from a place (D174)');
     await page.evaluate((o) => window.__sceneStart({ ...o, step: 'opening' }), form);
     check('while the scene is opened the sheet says so', /Opening the scene/.test((await panel()).text));
     await page.evaluate(() => window.__setup(''));
+}
+
+console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s chat (D176)');
+{
+    await page.evaluate(() => window.__set({ ending: { number: '3' } }));
+    const foot = await page.evaluate(() => { const b = document.querySelector('.dooms-atlas-foot [data-act="end-scene"]'); return { end: b ? b.textContent.trim() : '', play: !!document.querySelector('.dooms-atlas-foot [data-act="scenes"]') }; });
+    check('in a scene being played the sidebar\'s foot offers End scene 3, and Play as scenes is not there', foot.end === 'End scene 3' && !foot.play, JSON.stringify(foot));
+    const panel = () => page.evaluate(() => { const el = document.querySelector('.dooms-atlas-setup-card'); if (!el) return null; const b = el.getBoundingClientRect(); const ta = el.querySelector('.dooms-atlas-end-recap'); return { text: el.textContent.replace(/\s+/g, ' ').trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => x.getAttribute('data-act') + (x.disabled ? ':off' : '')), inside: b.top >= 0 && b.bottom <= innerHeight, recap: ta ? ta.value : '', readonly: ta ? ta.readOnly : false, parts: [...el.querySelectorAll('.dooms-atlas-part')].map(x => x.className.replace('dooms-atlas-part ', '') + '=' + x.querySelector('.dooms-atlas-part-state').textContent), skips: el.querySelectorAll('.dooms-atlas-part-skip input').length, replace: !!el.querySelector('.dooms-atlas-end-replace') }; });
+    const scene = { id: 's3', title: 'The gate at dusk' };
+    await page.evaluate((sc) => window.__endScene({ prep: { scene: sc }, busy: true }), scene);
+    let v = await panel();
+    check('opened, the sheet names the scene and says the record is being written; End waits for it', /End scene 3: The gate at dusk/.test(v.text) && /What happened \(being written…\)/.test(v.text) && v.readonly && v.acts.join() === 'end-go:off,setup-close', JSON.stringify(v.acts));
+    const prep = { ok: true, scene, recap: 'They met at the gate in the fog; Kiyoha carried the new healer\'s pack and said nothing about it.', from: 'Day 42', to: 'Day 42, night', stale: false, canonDone: false, steps: { canon: true, world: true } };
+    await page.evaluate((p) => window.__endScene({ prep: p }), prep);
+    v = await panel();
+    check('the record is shown to be corrected, with what ending will do: the record, the ledger, the world, the memory; the ledger and the world can each be left out', v.recap.startsWith('They met at the gate') && !v.readonly && /From Day 42 to Day 42, night\./.test(v.text) && /Canon reads the whole scene/.test(v.text) && /moves on by the time the scene took/.test(v.text) && /with the map, kept for the next scene/.test(v.text) && v.parts.join() === 'is-waiting=waiting,is-waiting=waiting,is-waiting=waiting,is-waiting=waiting' && v.skips === 2 && !v.replace && v.acts.join() === 'end-go,setup-close' && v.inside, JSON.stringify(v.parts));
+    await shot('7zf-end-sheet');
+    await page.evaluate((p) => window.__endScene({ prep: { ...p, stale: true, steps: { canon: false, world: true } } }), prep);
+    v = await panel();
+    check('a scene the world has moved past: the sheet says its End keeps the newer memory, with the tick to replace it; Canon off is shown as off', /began before a later one ended/.test(v.text) && v.replace && /Canon is off/.test(v.text) && v.parts[1] === 'is-off=off' && v.skips === 1);
+    await page.evaluate((p) => window.__endScene({ prep: p, states: { recap: 'ok', canon: 'running', world: 'waiting', snapshot: 'waiting' } }), prep);
+    v = await panel();
+    check('while it runs each part shows its state, and neither button can be pressed', v.parts.join() === 'is-ok=done,is-running=running…,is-waiting=waiting,is-waiting=waiting' && v.skips === 0 && v.acts.join() === 'end-go:off,setup-close:off' && /Ending…/.test(v.text));
+    await page.evaluate((p) => window.__endScene({ prep: p, states: { recap: 'ok', canon: 'ok', world: 'skipped', snapshot: 'ok' }, result: { ok: true } }), prep);
+    v = await panel();
+    check('ended: it says so and what the map shows now, the record can no longer be changed, and the one button goes to the map', /The scene is ended and remembered\. The map shows the world as it stands now: open a place to start the next scene\./.test(v.text) && v.readonly && v.parts.join() === 'is-ok=done,is-ok=done,is-skipped=left out,is-ok=done' && v.acts.join() === 'setup-close' && /To the map/.test(v.text));
+    await shot('7zg-end-done');
+    await page.evaluate(() => window.__endScene({ prep: null, error: 'The scene is not open.' }));
+    v = await panel();
+    check('a chat whose scene cannot be ended says why, and End cannot be pressed', /The scene is not open\./.test(v.text) && v.acts.join() === 'end-go:off,setup-close');
+    await page.evaluate(() => window.__setup(''));
+    await page.evaluate(() => window.__set({ ending: null }));
+
+    // The strip above a scene's chat: the scene, its place and date, the Atlas and End scene; ended, the Atlas and Reopen.
+    await page.evaluate(() => window.__strip({ mark: { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask' }, startDate: 'Day 42' }, scene: null, ended: false }));
+    let st = await page.evaluate(() => { const el = document.getElementById('dooms-scene-strip'); return { text: el.querySelector('.dooms-strip-text').textContent.trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}=${x.textContent.trim()}`) }; });
+    check('the strip of a scene being played: the scene, its place and its date; the Atlas and End scene', st.text === 'Scene 3: The gate at dusk · Hask · Day 42' && st.acts.join() === 'atlas=Atlas,end=End scene', JSON.stringify(st));
+    await page.evaluate(() => window.__strip({ mark: { scene: 's3', title: 'The gate at dusk', place: { label: 'Hask' }, startDate: 'Day 42', endDate: 'Day 42, night', endedAt: 9 }, scene: null, ended: true }));
+    st = await page.evaluate(() => { const el = document.getElementById('dooms-scene-strip'); return { text: el.querySelector('.dooms-strip-text').textContent.trim(), acts: [...el.querySelectorAll('[data-act]')].map(x => `${x.getAttribute('data-act')}=${x.textContent.trim()}`) }; });
+    check('the strip of a scene that has ended: says so, with the Atlas (where the next one starts) and Reopen', st.text === 'Scene 3: The gate at dusk · ended · Day 42, night' && st.acts.join() === 'atlas=Atlas,reopen=Reopen', JSON.stringify(st));
+    await page.evaluate(() => window.__strip(null));
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

@@ -519,3 +519,18 @@ What the copy does not hold: the world made for the scenes and its entry
 in the hub's store live in the settings, not in the chat. They change
 nothing in the copy, and a world that is not wanted is removed in the
 World Builder.
+
+## 21. The scenes build, step 3b: a scene ended from the Atlas (2026-11-10, D176)
+
+Built in "Atlas 19".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D176 | End scene is the Atlas's | In a scene being played the Atlas's foot has **End scene N**; the strip above a scene's chat is the Atlas's own (`atlasStripHtml`: the scene, its place and date, **Atlas** and **End scene**; ended: Atlas and Reopen), and its buttons and the D menu's End scene open the Atlas (`openAtlasEnd`), not the old Hub. **The sheet** (a panel over the map, `atlasEndSceneHtml`): the record of the scene, written when the sheet opens (the scene engine's `prepareEnd`) and shown to be corrected; what ending will do, a part a row with its state (the record, the ledger, the world, the memory), the ledger and the world each with "leave out"; for a scene the world has moved past, the word that its End keeps the newer memory and the tick to replace it. End scene runs the engine's `commitEnd`, each part's state shown as it runs, neither button pressable meanwhile. Ended, the sheet says so and the Atlas behind it shows the world as it stands (D173): To the map, and a place's card starts the next scene (D174). After Play as scenes the panel now says how the first scene is started on the map; it no longer sends the player to the old Hub. |
+
+With this a story is played as scenes without the old Hub window: Play as
+scenes, Start scene here, the strip's End scene, and the map between
+scenes. Still only in the old Hub (step 3c): the list of scenes (resume,
+set aside, continue from one), starting from a person, a rumour, a piece
+of news or a hook, choosing a world when no scene chat is in front, the
+hooks offered over a world's memory. `/endscene` is unchanged.

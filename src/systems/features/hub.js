@@ -1331,11 +1331,11 @@ function mountStrip() {
     const existing = document.getElementById(STRIP_DOM_ID);
     if (!cur) { if (existing && typeof existing.remove === 'function') existing.remove(); return; }
     const token = ++stripToken;
-    Promise.all([ensureCss('modals').catch(() => {}), import('../ui/hubViews.js')]).then(([, v]) => {
+    Promise.all([ensureCss('modals').catch(() => {}), import('../ui/atlasViews.js')]).then(([, v]) => {
         if (token !== stripToken) return;
         const again = currentScene();
         if (!again) return;
-        const html = v.stripHtml({ mark: again.mark, scene: again.scene, ended: again.ended });
+        const html = v.atlasStripHtml({ mark: again.mark, scene: again.scene, ended: again.ended });    // the Atlas is the scenes' window (D176)
         let el = document.getElementById(STRIP_DOM_ID);
         if (!el) {
             chatEl.insertAdjacentHTML('beforebegin', `<div id="${STRIP_DOM_ID}" class="dooms-scene-strip" role="region" aria-label="This scene"></div>`);
@@ -1403,9 +1403,9 @@ export function initHub() {
             const act = this.getAttribute('data-act');
             ev.preventDefault();
             if (act === 'reopen') { const r = await reopenCurrentScene(); if (!r.ok) log('reopen refused', r.reason); return; }
-            const m = await import('../ui/hub.js');
-            if (act === 'end') await m.openEndSheet();
-            else await m.openHub();
+            const m = await import('../ui/atlas.js');
+            if (act === 'end') await m.openAtlasEnd();
+            else await m.openAtlas();
         });
     } catch (e) { /* no jQuery (tests) */ }
 }

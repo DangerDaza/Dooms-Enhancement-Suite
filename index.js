@@ -3984,9 +3984,9 @@ async function initUI() {
                 label: 'End scene',
                 iconClass: 'fa-solid fa-flag-checkered',
                 action: () => {
-                    import('./src/systems/ui/hub.js')
-                        .then(m => m.openEndSheet())
-                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+                    import('./src/systems/ui/atlas.js')
+                        .then(m => m.openAtlasEnd())
+                        .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
                 },
             });
             items.push({
