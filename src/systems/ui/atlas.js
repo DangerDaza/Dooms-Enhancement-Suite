@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy } from '../features/atlasBook.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
@@ -180,7 +180,7 @@ function tabBody({ state, pack, cfg }) {
     if (tab === 'news') return newsHtml({ state, pack, cfg, feed: feedLimit });
     if (tab === 'rumours') return rumoursHtml({ state, pack, cfg });
     if (tab === 'hooks') return hooksHtml({ hooks: getHooks(), busy: isProposing() });
-    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '' });
+    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '', ground: model ? model.ground : 'country' });
 }
 
 function renderSide(ctx) {
@@ -514,6 +514,9 @@ function build() {
         ev.dataTransfer.setData('text/plain', row.getAttribute('data-id') || '');
         ev.dataTransfer.effectAllowed = 'move';
     });
+    $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(getBook(), String($(this).val() || ''), layer)); });
+    // The wheel over a select that has the focus steps its value in some browsers: the sidebar scrolled past one would change the map's scale unasked.
+    document.addEventListener('wheel', (ev) => { const t = ev.target; if (t && t.matches && t.matches(`${root()} .dooms-atlas-scale-pick select`) && document.activeElement === t) t.blur(); }, { capture: true, passive: true });
     $(document).on('change', `${root()} .dooms-atlas-scale-select`, function () { commit(withScale(getBook(), String($(this).val() || ''), layer)); });
     $(document).on('input', `${root()} .dooms-atlas-query`, function () { query = String($(this).val() || ''); searched(); });
     $(document).on('keydown', `${root()} .dooms-atlas-query`, function (ev) {

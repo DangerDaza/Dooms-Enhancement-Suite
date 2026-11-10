@@ -18,7 +18,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -102,9 +102,9 @@ console.log('\n§4 rooms fold into their building (D152)');
 
 console.log('\n§5 the book (D151)');
 {
-    check('nothing: an empty book', same(normalizeBook(null), { scale: '', drawn: false, spots: {}, inside: {}, scales: {}, gone: [], merged: {}, made: [], edits: {} }));
+    check('nothing: an empty book', same(normalizeBook(null), { scale: '', ground: '', drawn: false, spots: {}, inside: {}, scales: {}, grounds: {}, gone: [], merged: {}, made: [], edits: {} }));
     const dirty = normalizeBook({ scale: 'galaxy', spots: { a: { x: 1.23456, y: 2 }, b: { x: 'no', y: 1 } }, gone: ['x', 'x', 7], merged: { a: 'a', b: 'c' }, made: [{ id: 'pin:a', label: ' The Well ', kind: 'WATER' }, { id: 'nope', label: 'x' }, { id: 'pin:a', label: 'twice' }], edits: { q: { label: ' New ', kind: 'spaceship', note: 'n' }, z: {} } });
-    check('a book made safe', same(dirty, { scale: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
+    check('a book made safe', same(dirty, { scale: '', ground: '', drawn: false, spots: { a: { x: 1.2346, y: 2 } }, inside: {}, scales: {}, grounds: {}, gone: ['x'], merged: { b: 'c' }, made: [{ id: 'pin:a', label: 'The Well', kind: 'water', note: '' }], edits: { q: { label: 'New', note: 'n' } } }));
     let b = placeAt(null, 'loc:the-quay', { x: 2, y: -3 });
     check('a marker placed, moved, taken off', same(b.spots, { 'loc:the-quay': { x: 2, y: -3 } }) && same(placeAt(b, 'loc:the-quay', { x: 5, y: 5 }).spots['loc:the-quay'], { x: 5, y: 5 }) && same(unplace(b, 'loc:the-quay').spots, {}) && same(placeAt(b, 'x', { x: NaN, y: 1 }), b));
     const p1 = addPin(b, { label: 'The Old Well', kind: 'water', note: 'Dry.', x: 1, y: 1 });
@@ -219,6 +219,30 @@ console.log('\n§6 the model: nothing lands by itself (D151), and the maps are l
     check('the blank world: the story\'s place in the tray, the party with it, a town\'s scale', bm.tray.length === 1 && bm.partyInTray === 'loc:the-quay' && bm.measure.scale === 'town');
     check('nothing at all is said', atlasModel({ pack: blankPack('Nothing'), state: null }).empty === true);
     check('the example world reads', atlasModel({ pack: harbour, state: seedWorldState(harbour, { name: '' }) }).tray.length > 0);
+}
+
+console.log('\n§6b the grounds (D158)');
+{
+    check('the ground by the map\'s scale: open country, streets, and for a site the underground when its name tells of one', groundOf(null, '', { scale: 'region' }) === 'country' && groundOf(null, '', { scale: 'world' }) === 'country' && groundOf(null, 'x', { scale: 'town' }) === 'city' && groundOf(null, 'x', { scale: 'site', label: 'the black stair' }) === 'underground' && groundOf(null, 'x', { scale: 'site', label: 'The Old Crypt' }) === 'underground' && groundOf(null, 'x', { scale: 'site', kind: 'ruin', label: 'Greyhall' }) === 'underground' && groundOf(null, 'x', { scale: 'site', label: "Mara's House" }) === 'indoors');
+    check('the ground chosen by hand wins, for the top map and for a place\'s own; an unknown one is the default again', groundOf(withGround(null, 'island'), '', { scale: 'region' }) === 'island' && groundOf(withGround(null, 'coast-s', 'hask'), 'hask', { scale: 'town' }) === 'coast-s' && groundOf(withGround(null, 'coast-s', 'hask'), '', { scale: 'region' }) === 'country' && withGround(withGround(null, 'island'), 'lava').ground === '' && same(withGround(withGround(null, 'city', 'x'), '', 'x').grounds, {}));
+    check('the grounds have a label each, ids apart', ATLAS_GROUNDS.every(g => g.id && g.label) && new Set(ATLAS_GROUNDS.map(g => g.id)).size === ATLAS_GROUNDS.length);
+    const bounds = { minX: -9, minY: -9, maxX: 9, maxY: 9 };
+    const marks = [{ x: 0, y: 0 }, { x: 4, y: 6 }];
+    const country = groundDecor('country', 'top', bounds, marks);
+    check('open country: tufts and hills, none on a marker, no sea, the same every time', country.lines.length > 40 && country.sea === null && country.lines.every(l => l.every(([x, y]) => marks.every(m => Math.hypot(m.x - x, m.y - y) > 0.4))) && same(country, groundDecor('country', 'top', bounds, marks)) && !same(country, groundDecor('country', 'hask', bounds, marks)));
+    const city = groundDecor('city', 'hask', bounds, marks);
+    check('a city: streets both ways, each a line across the map', city.lines.length > 40 && city.lines.every(l => l.length === 2) && city.sea === null);
+    const floor = groundDecor('indoors', 'house', bounds, marks);
+    check('indoors: a floor\'s squares, closer than streets and square', floor.lines.length >= city.lines.length && floor.lines.filter(l => l[0][0] === l[1][0] || l[0][1] === l[1][1]).length === floor.lines.length);
+    const south = groundDecor('coast-s', 'top', bounds, marks);
+    const shoreYs = south.lines[0].map(p => p[1]);
+    check('a coast to the south: the sea past a waved shore, south of every marker, with two ripples', !!south.sea && south.lines.length === 1 && south.ripples.length === 2 && Math.min(...shoreYs) > 6 && south.sea.some(p => p[1] > 15) && Math.min(...south.ripples[1].map(p => p[1])) > Math.min(...shoreYs));
+    const west = groundDecor('coast-w', 'top', bounds, marks);
+    check('a coast to the west: the shore west of every marker', Math.max(...west.lines[0].map(p => p[0])) < 0 && west.sea.some(p => p[0] < -15));
+    check('the islands and the underground draw nothing here: their land is the markers\' own', same(groundDecor('island', 'top', bounds, marks), { lines: [], sea: null, ripples: [] }) && same(groundDecor('underground', 'x', bounds, marks), { lines: [], sea: null, ripples: [] }));
+    const p = realm([{ id: 'stair', label: 'The Black Stair', parent: 'frosthold' }, { id: 'level-1', label: 'First Landing', parent: 'stair' }]);
+    const st = seedWorldState(p, { name: '' });
+    check('the model carries each map\'s ground: country on top, streets in a town, the underground in the stair', atlasModel({ pack: p, state: st }).ground === 'country' && atlasModel({ pack: p, state: st, layer: 'northmarch' }).ground === 'city' && atlasModel({ pack: p, state: st, layer: 'stair' }).ground === 'underground' && atlasModel({ pack: p, state: st, layer: 'stair' }).measure.scale === 'site' && atlasModel({ pack: p, state: st, book: withGround(null, 'island') }).ground === 'island' && atlasModel({ pack: p, state: st }).decor.lines.length > 0);
 }
 
 console.log('\n§7 distance');

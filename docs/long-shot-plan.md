@@ -236,3 +236,19 @@ map; Find the party goes to the party's map.
 Known limits: a room named alone still needs Merge or Move; a place whose
 holder is deleted keeps the spot it had on the inner map; distances
 across maps (a house in one city to a house in another) are not told.
+
+## 10. Grounds (2026-11-10, D158)
+
+The owner, with a screenshot of Hask alone on the top map: "Hask is just a
+city, and right now this looks like an island. What do we do with the
+space around Hask?" Hask is landlocked. Built in "Atlas 6".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D158 | Every map has a ground (the owner) | What the empty space of a map is: Open country (land all over, tufts and low hills), City streets (blocks, a little askew; the paths drawn as streets), Underground (dark rock, a chamber around every place, passages between them), Indoors (a floor's squares), Coast with the sea to the north, east, south or west (the land everywhere else), Islands (phase 1's shore around every place). The default follows the map's scale: a world or a region is open country, a town is streets, a site is the underground when the place is a ruin or its name tells of one (a stair, a cave, a crypt), else indoors. The select under the scale changes this map's alone (`book.ground`, `book.grounds`, `withGround`, `groundOf`, `groundDecor`). All of it is vectors hashed from the map's id: the same map draws the same ground. |
+
+Also: the wheel over a focused select steps its value in some browsers,
+so the sidebar scrolled past the scale's select could change a map's
+scale unasked (the owner's top map read "A building or dungeon" without
+his choosing it; no other path to that was found). The Atlas now takes
+the focus off its selects when the wheel turns over them.

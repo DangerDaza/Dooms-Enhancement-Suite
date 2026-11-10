@@ -9,7 +9,7 @@
  * browser; src/systems/ui/atlas.js puts them on the page and acts on them.
  */
 import { escapeHtml } from '../../utils/html.js';
-import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES } from '../../utils/atlas.js';
+import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 
 export const ATLAS_ID = 'dooms-atlas';
@@ -201,7 +201,7 @@ function deletedHtml(deleted) {
 }
 
 /** The Places tab: the tray, the search, Show all and Hide all, the visited count, the kinds, the list, the scale, what was deleted. */
-export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null, all = [], layer = '', layerLabel = '' } = {}) {
+export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null, all = [], layer = '', layerLabel = '', ground = 'country' } = {}) {
     const counts = kindCounts(markers);
     const off = new Set(hidden);
     const visited = markers.filter(m => m.visited).length;
@@ -220,6 +220,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
         <div class="dooms-atlas-kinds">${counts.map(k => kindHtml(k, off.has(k.id))).join('')}</div>
         <div class="dooms-atlas-results">${atlasResultsHtml({ markers, query, hidden, all, layer })}</div>
         <label class="dooms-atlas-scale-pick" title="How far apart the places on this map are: it sets its distances and travel times. Every map has its own.">This map is of <select class="dooms-atlas-scale-select" aria-label="What this map is of">${scales}</select></label>
+        <label class="dooms-atlas-scale-pick" title="What the empty space of this map is. Every map has its own.">The ground is <select class="dooms-atlas-ground-select" aria-label="What the empty space of this map is">${ATLAS_GROUNDS.map(g => `<option value="${g.id}"${g.id === ground ? ' selected' : ''}>${e(g.label)}</option>`).join('')}</select></label>
         ${deletedHtml(deleted)}`;
 }
 

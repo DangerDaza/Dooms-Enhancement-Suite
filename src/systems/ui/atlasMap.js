@@ -119,20 +119,36 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             overlay.on('error', () => { if (typeof on.pictureError === 'function') on.pictureError(); });
             overlay.addTo(map);
         } else {
-            // One shore: each ring's line for every blob, then that ring filled with sea for every blob (so the lines
-            // inside a neighbour's ring are covered), from the outer ripple in; last the land itself.
-            for (const b of current.land) poly(b.ripple2, 'dooms-atlas-ripple is-outer');
-            for (const b of current.land) poly(b.ripple2, 'dooms-atlas-water');
-            for (const b of current.land) poly(b.ripple1, 'dooms-atlas-ripple');
-            for (const b of current.land) poly(b.ripple1, 'dooms-atlas-water');
-            for (const b of current.land) poly(b.outline, 'dooms-atlas-shore');
-            for (const b of current.land) poly(b.outline, 'dooms-atlas-coast');
+            const ground = current.ground || 'island';
+            const decor = current.decor || { lines: [], sea: null, ripples: [] };
+            const lines = (list, className) => { if (list.length) L.polyline(list.map(line => line.map(([x, y]) => ll(x, y))), { className, interactive: false, smoothFactor: 0.3 }).addTo(shapes); };
+            if (ground === 'island') {
+                // One shore: each ring's line for every blob, then that ring filled with sea for every blob (so the lines
+                // inside a neighbour's ring are covered), from the outer ripple in; last the land itself.
+                for (const b of current.land) poly(b.ripple2, 'dooms-atlas-ripple is-outer');
+                for (const b of current.land) poly(b.ripple2, 'dooms-atlas-water');
+                for (const b of current.land) poly(b.ripple1, 'dooms-atlas-ripple');
+                for (const b of current.land) poly(b.ripple1, 'dooms-atlas-water');
+                for (const b of current.land) poly(b.outline, 'dooms-atlas-shore');
+                for (const b of current.land) poly(b.outline, 'dooms-atlas-coast');
+            } else if (ground === 'underground') {
+                // Chambers hewn from the rock around every place, joined by passages: the walls first, the floors over them.
+                for (const b of current.land) poly(b.outline, 'dooms-atlas-wall');
+                lines(current.routes.map(r => r.points), 'dooms-atlas-passage is-wall');
+                for (const b of current.land) poly(b.outline, 'dooms-atlas-floor');
+                lines(current.routes.map(r => r.points), 'dooms-atlas-passage');
+            } else {
+                // The land is everywhere (D158): what the ground draws over it, and the sea past a coast's shore.
+                if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
+                else lines(decor.lines, `dooms-atlas-ground is-${ground}`);
+            }
             for (const r of current.regions) {
                 poly(r.outline, `dooms-atlas-land is-${r.terrain}`);
                 if (r.glyphs.length) L.polyline(r.glyphs.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-glyph is-${r.terrain}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
             }
         }
-        for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}`, interactive: false }).addTo(shapes);
+        el.setAttribute('data-ground', pic ? 'picture' : (current.ground || 'island'));
+        if (pic || current.ground !== 'underground') for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}`, interactive: false }).addTo(shapes);
         for (const r of current.regions) {
             if (!r.label) continue;
             L.marker(ll(r.x, r.y - r.radius * 0.72), { icon: L.divIcon({ className: 'dooms-atlas-region', html: atlasRegionHtml(r), iconSize: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(names);
@@ -269,6 +285,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             markers.clear();
             el.classList.remove('dooms-atlas-leaflet');
             el.removeAttribute('data-zoom');
+            el.removeAttribute('data-ground');
             for (const c of [...el.classList]) if (c.startsWith('leaflet-')) el.classList.remove(c);    // Leaflet leaves its container classes behind
             el.innerHTML = '';
         },

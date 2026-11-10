@@ -41,6 +41,20 @@ export const ATLAS_SCALES = Object.freeze({
     region: { per: 15, label: 'A region' },
     world: { per: 60, label: 'A world' },
 });
+/** What the empty space of a map is (D158), in the select's order. */
+export const ATLAS_GROUNDS = Object.freeze([
+    { id: 'country', label: 'Open country' },
+    { id: 'city', label: 'City streets' },
+    { id: 'underground', label: 'Underground' },
+    { id: 'indoors', label: 'Indoors' },
+    { id: 'coast-n', label: 'Coast, sea to the north' },
+    { id: 'coast-e', label: 'Coast, sea to the east' },
+    { id: 'coast-s', label: 'Coast, sea to the south' },
+    { id: 'coast-w', label: 'Coast, sea to the west' },
+    { id: 'island', label: 'Islands' },
+]);
+const GROUND_IDS = new Set(ATLAS_GROUNDS.map(g => g.id));
+const UNDER_RE = /\b(stairs?|cave|cavern|crypt|tomb|catacombs?|mine|dungeon|cellar|tunnels?|sewers?|under\w*|depths?|deep|pit|vault|warren|barrow|below|descent|level|landing)\b/i;
 export const ATLAS_UNITS = Object.freeze({ mi: 1, km: 1.609344, league: 1 / 3 });    // one mile in each unit
 export const DEFAULT_PACE_MILES = 24;     // a day on foot
 export const TRAVEL_HOURS_A_DAY = 8;
@@ -292,9 +306,11 @@ export function normalizeBook(raw) {
     }
     const inside = {};    // a place -> the place whose map it is on ('' = the top map, said outright)
     if (r.inside && typeof r.inside === 'object') for (const [id, to] of Object.entries(r.inside)) { if (idOk(id) && typeof to === 'string' && to.length <= 160 && to !== id) inside[id] = to; }
+    const grounds = {};   // a layer's own ground
+    if (r.grounds && typeof r.grounds === 'object') for (const [id, g] of Object.entries(r.grounds)) { if (idOk(id) && GROUND_IDS.has(g)) grounds[id] = g; }
     const scales = {};    // a layer's own scale
     if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', drawn: r.drawn === true, spots, inside, scales, gone, merged, made, edits };
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, gone, merged, made, edits };
 }
 
 /** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
@@ -395,6 +411,29 @@ export function withScale(book, scale, layer = '') {
     return { ...b, scales: ATLAS_SCALES[scale] ? { ...rest, [layer]: scale } : rest };
 }
 
+/** A layer's ground chosen by hand ('' for the ground = the default again; `layer` '' = the top map). */
+export function withGround(book, ground, layer = '') {
+    const b = normalizeBook(book);
+    if (!layer) return { ...b, ground: GROUND_IDS.has(ground) ? ground : '' };
+    const { [layer]: _old, ...rest } = b.grounds;
+    return { ...b, grounds: GROUND_IDS.has(ground) ? { ...rest, [layer]: ground } : rest };
+}
+
+/**
+ * The ground in force on a layer (D158): the one the player chose for it,
+ * else by the map's scale: open country for a world or a region, streets
+ * for a town, and for a site the underground when the place is a ruin or
+ * its name tells of one (a stair, a cave, a crypt), else indoors.
+ */
+export function groundOf(book, layer = '', { scale = 'town', label = '', kind = '' } = {}) {
+    const b = book && typeof book === 'object' ? book : null;
+    if (!layer && b && GROUND_IDS.has(b.ground)) return b.ground;
+    if (layer && b && b.grounds && GROUND_IDS.has(b.grounds[layer])) return b.grounds[layer];
+    if (scale === 'world' || scale === 'region') return 'country';
+    if (scale === 'town') return 'city';
+    return kind === 'ruin' || UNDER_RE.test(String(label || '')) ? 'underground' : 'indoors';
+}
+
 // ─── The model ──────────────────────────────────────────────────────────────
 
 export const LAND_RADIUS = 1.5;     // the land a lone marker stands on, in layout units
@@ -470,6 +509,67 @@ function glyphAt(terrain, x, y, s) {
     if (terrain === 'desert') return [[p(-1, 0.2), p(-0.5, -0.25), p(0, -0.35), p(0.5, -0.25), p(1, 0.2)]];
     if (terrain === 'swamp') return [[p(-0.8, 0.3), p(0.8, 0.3)], [p(-0.4, 0.3), p(-0.5, -0.5)], [p(0, 0.3), p(0, -0.7)], [p(0.4, 0.3), p(0.5, -0.5)]];
     return [[p(-0.35, -0.4), p(0, 0.3), p(0.35, -0.4)]];
+}
+
+/**
+ * What a ground draws in the empty space of a map (D158), as lines and
+ * shapes in layout units over the bounds and a margin past them (the map
+ * can be panned a little past its bounds). The same map draws the same
+ * ground every time: everything is hashed from the layer's id.
+ *   country      tufts and low hills scattered over the land
+ *   city         blocks: streets a unit apart, a little askew
+ *   indoors      a floor's squares, half a unit apart
+ *   coast-n/e/s/w  the sea past a waved shore on that side, with two ripples off it
+ *   underground, island  nothing here: the chambers and the shores are the land's own blobs
+ * @returns {{ lines: number[][][], sea: number[][]|null, ripples: number[][][] }}
+ */
+export function groundDecor(ground, seed, bounds, markers = []) {
+    const out = { lines: [], sea: null, ripples: [] };
+    const padX = (bounds.maxX - bounds.minX) * 0.5;
+    const padY = (bounds.maxY - bounds.minY) * 0.5;
+    const x0 = bounds.minX - padX, x1 = bounds.maxX + padX, y0 = bounds.minY - padY, y1 = bounds.maxY + padY;
+    const clear = (x, y, r) => markers.every(m => Math.hypot(m.x - x, m.y - y) >= r);
+    if (ground === 'country') {
+        const count = Math.min(140, Math.round((x1 - x0) * (y1 - y0) / 9));
+        for (let i = 0; i < count; i++) {
+            const x = round4(x0 + hash01(`${seed}/c${i}/x`) * (x1 - x0));
+            const y = round4(y0 + hash01(`${seed}/c${i}/y`) * (y1 - y0));
+            if (!clear(x, y, 0.9)) continue;
+            const s = 0.16 + 0.08 * hash01(`${seed}/c${i}/s`);
+            if (hash01(`${seed}/c${i}/k`) < 0.3) out.lines.push([[x - s * 1.6, y + s * 0.4], [x - s * 0.8, y - s * 0.3], [x, y - s * 0.5], [x + s * 0.8, y - s * 0.3], [x + s * 1.6, y + s * 0.4]].map(([a, b]) => [round4(a), round4(b)]));    // a low hill
+            else out.lines.push([[x - s * 0.5, y - s * 0.5], [x, y + s * 0.3], [x + s * 0.5, y - s * 0.5]].map(([a, b]) => [round4(a), round4(b)]));    // a tuft
+        }
+    } else if (ground === 'city' || ground === 'indoors') {
+        const step = ground === 'city' ? 1 : 0.5;
+        const tilt = ground === 'city' ? (hash01(`${seed}/tilt`) - 0.5) * 0.5 : 0;    // a city's blocks sit a little askew; a floor's squares are square
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const half = Math.max(x1 - x0, y1 - y0) * 0.75;
+        const turn = ([x, y]) => [round4(cx + x * Math.cos(tilt) - y * Math.sin(tilt)), round4(cy + x * Math.sin(tilt) + y * Math.cos(tilt))];
+        const n = Math.min(60, Math.ceil(half / step));
+        for (let i = -n; i <= n; i++) {
+            const off = i * step + (ground === 'city' ? (hash01(`${seed}/s${i}`) - 0.5) * 0.3 : 0);
+            out.lines.push([turn([off, -half]), turn([off, half])]);
+            const off2 = i * step + (ground === 'city' ? (hash01(`${seed}/t${i}`) - 0.5) * 0.3 : 0);
+            out.lines.push([turn([-half, off2]), turn([half, off2])]);
+        }
+    } else if (ground.startsWith('coast-')) {
+        const side = ground.slice(6);
+        const along = side === 'n' || side === 's';
+        // The shore stands past the farthest marker on that side, and no nearer the middle than a third of the canvas.
+        const far = markers.length ? (side === 'n' ? Math.min(...markers.map(m => m.y)) : side === 's' ? Math.max(...markers.map(m => m.y)) : side === 'w' ? Math.min(...markers.map(m => m.x)) : Math.max(...markers.map(m => m.x))) : 0;
+        const sign = side === 'n' || side === 'w' ? -1 : 1;
+        const base = sign * Math.max(CANVAS * 0.35, sign * far + 2.6);
+        const a0 = along ? x0 : y0, a1 = along ? x1 : y1;
+        const edge = along ? (sign < 0 ? y0 : y1) : (sign < 0 ? x0 : x1);
+        const p1 = hash01(`${seed}/sea1`) * Math.PI * 2, p2 = hash01(`${seed}/sea2`) * Math.PI * 2;
+        const wave = (t, d) => base + sign * d + 0.55 * Math.sin(t * 0.55 + p1) + 0.28 * Math.sin(t * 1.3 + p2);
+        const line = (d) => { const pts = []; for (let i = 0; i <= 80; i++) { const t = a0 + (a1 - a0) * i / 80; const v = round4(wave(t, d)); pts.push(along ? [round4(t), v] : [v, round4(t)]); } return pts; };
+        const shore = line(0);
+        out.sea = [...shore, along ? [round4(a1), round4(edge)] : [round4(edge), round4(a1)], along ? [round4(a0), round4(edge)] : [round4(edge), round4(a0)]];
+        out.lines.push(shore);
+        out.ripples = [line(0.25), line(0.55)];
+    }
+    return out;
 }
 
 /**
@@ -640,6 +740,9 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
     for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
+    const bounds = { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) };
+    const measure = measureOf(pack, bk, cur, { depth, layered: holds.size > 0 });
+    const ground = groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
     return {
         layer: cur, layerLabel: labelOfLayer(cur), depth,
         trail: chain(cur).map(id => ({ id, label: labelOfLayer(id) })),
@@ -647,8 +750,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         party: partyOn && markers.some(m => m.id === partyOn) ? partyOn : '',
         partyInTray: partyOn && tray.some(m => m.id === partyOn) ? partyOn : '',
         partyId, partyLayer: partyId ? (par.get(partyId) || '') : '',
-        bounds: { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) },
-        measure: measureOf(pack, bk, cur, { depth, layered: holds.size > 0 }),
+        bounds, measure, ground, decor: groundDecor(ground, cur || 'top', bounds, markers),
         empty: live.size === 0,
     };
 }

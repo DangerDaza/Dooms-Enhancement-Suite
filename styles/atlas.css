@@ -182,6 +182,27 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-route { fill: none; stroke: var(--atlas-ink-soft); stroke-width: 1.6; stroke-opacity: 1; stroke-dasharray: 5 6; stroke-linecap: round; }
 .dooms-atlas-picture { image-rendering: auto; }
 
+/* The grounds (D158): what the empty space of a map is. Every ground but the islands is land all over. */
+.dooms-atlas-leaflet[data-ground="country"], .dooms-atlas-leaflet[data-ground^="coast"] { background: var(--atlas-land); }
+.dooms-atlas-leaflet[data-ground="city"] { background: color-mix(in srgb, var(--atlas-land) 82%, #a89a86); }
+.dooms-atlas-leaflet[data-ground="indoors"] { background: color-mix(in srgb, var(--atlas-land) 90%, #c9b79a); }
+.dooms-atlas-leaflet[data-ground="underground"] { background: #4a433c; }
+.dooms-atlas-ground { fill: none; stroke: var(--atlas-ink-faint); stroke-width: 1; stroke-opacity: 1; stroke-linecap: round; stroke-linejoin: round; }
+.dooms-atlas-ground.is-city { stroke: rgba(255, 250, 235, 0.75); stroke-width: 5; }
+.dooms-atlas-ground.is-indoors { stroke: rgba(75, 55, 35, 0.14); stroke-width: 1; }
+.dooms-atlas-water.is-sea { fill: var(--atlas-sea); }
+.dooms-atlas-shore.is-line { stroke-width: 3; }
+.dooms-atlas-leaflet[data-ground="city"] .dooms-atlas-route { stroke: var(--atlas-ink-soft); stroke-width: 2.4; stroke-dasharray: none; }
+.dooms-atlas-wall { fill: none; stroke: #1f1a16; stroke-width: 5; stroke-opacity: 1; stroke-linejoin: round; }
+.dooms-atlas-floor { fill: #b7a88c; fill-opacity: 1; stroke: none; }
+.dooms-atlas-passage { fill: none; stroke: #b7a88c; stroke-width: 16; stroke-opacity: 1; stroke-linecap: round; }
+.dooms-atlas-passage.is-wall { stroke: #1f1a16; stroke-width: 21; }
+.dooms-atlas-leaflet[data-ground="underground"] .dooms-atlas-label { color: #f3e9d0; text-shadow: 0 0 3px #1f1a16, 0 0 3px #1f1a16, 0 0 6px #1f1a16; }
+.dooms-atlas-leaflet[data-ground="underground"] ~ .dooms-atlas-compass { color: #e8dcbd; }
+.dooms-atlas-leaflet[data-ground="underground"] ~ .dooms-atlas-scale { color: #e8dcbd; }
+.dooms-atlas-leaflet[data-ground="underground"] ~ .dooms-atlas-scale .dooms-atlas-scale-bar { border-color: #e8dcbd; }
+.dooms-atlas-scale-pick + .dooms-atlas-scale-pick { margin-top: -4px; }
+
 /* The markers: a seal of the kind's colour, ringed in ink; the name in the map's hand under it */
 .dooms-atlas-marker { background: none; border: 0; }
 .dooms-atlas-marker.is-dim { opacity: 0.25; }
@@ -263,8 +284,8 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-icon-btn { appearance: none; cursor: pointer; flex: 0 0 26px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--atlas-radius); background: none; color: var(--atlas-muted); font-size: 0.8em; }
 .dooms-atlas-icon-btn:hover, .dooms-atlas-icon-btn:focus-visible { color: #e0524d; background: var(--atlas-panel2); }
 .dooms-atlas-scale-pick { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; font-size: 0.78em; color: var(--atlas-muted); }
-#dooms-atlas .dooms-atlas-scale-select { width: auto; margin: 0; font: inherit; padding: 3px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
-#dooms-atlas .dooms-atlas-scale-select option { background: var(--atlas-panel); color: var(--atlas-text); }
+#dooms-atlas .dooms-atlas-scale-select, #dooms-atlas .dooms-atlas-ground-select { width: auto; margin: 0; font: inherit; padding: 3px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+#dooms-atlas .dooms-atlas-scale-select option, #dooms-atlas .dooms-atlas-ground-select option { background: var(--atlas-panel); color: var(--atlas-text); }
 .dooms-atlas-deleted { flex: 0 0 auto; font-size: 0.8em; color: var(--atlas-muted); }
 .dooms-atlas-deleted summary { cursor: pointer; }
 .dooms-atlas-deleted ul { list-style: none; margin: 4px 0 0; padding: 0; }

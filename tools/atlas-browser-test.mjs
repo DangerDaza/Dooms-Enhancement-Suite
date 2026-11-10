@@ -84,7 +84,7 @@ const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker:
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world' });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
@@ -180,6 +180,7 @@ const layout = () => page.evaluate(() => {
         shore: q('path.dooms-atlas-shore'), coast: q('path.dooms-atlas-coast'), ripples: q('path.dooms-atlas-ripple'), regions: q('path.dooms-atlas-land'), glyphs: q('path.dooms-atlas-glyph'), routes: q('path.dooms-atlas-route'), regionNames: [...document.querySelectorAll('#dooms-atlas .dooms-atlas-region-name')].map(x => x.textContent),
         images: q('.leaflet-pane img') + q('canvas'),
         zoom: document.querySelector('.dooms-atlas-map').getAttribute('data-zoom'),
+        ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), groundLines: q('path.dooms-atlas-ground'), walls: q('path.dooms-atlas-wall'), passages: q('path.dooms-atlas-passage'), sea: q('path.dooms-atlas-water.is-sea'), mapBg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor, groundPick: (document.querySelector('.dooms-atlas-ground-select') || {}).value || '',
         kinds: [...document.querySelectorAll('.dooms-atlas-kind')].map(k => ({ id: k.getAttribute('data-kind'), count: Number(k.querySelector('.dooms-atlas-kind-count').textContent), off: k.classList.contains('is-off') })),
         tray: [...document.querySelectorAll('.dooms-atlas-tray-row')].map(x => x.querySelector('.dooms-atlas-row-name').textContent),
         rows: q('.dooms-atlas-results .dooms-atlas-row'),
@@ -232,7 +233,7 @@ console.log('\n§2 placing: a drag, a tap, Place all');
     const house = l.markers["Jordan's House"];
     check('a place dragged from the tray lands where it was dropped', !!house && near(house.pin.cx, drop.x, 3) && near(house.pin.cy, drop.y, 3), JSON.stringify(house && house.pin));
     check('with something on the map the Start panel is gone', await page.evaluate(() => document.querySelector('.dooms-atlas-start').hidden === true));
-    check('it leaves the tray, and the land is drawn under it', l.tray.length === 7 && !l.tray.includes("Jordan's House") && l.shore === 1 && l.coast === 1 && l.ripples === 2 && l.hint === '');
+    check('it leaves the tray; a town\'s map is streets all over, not an island', l.tray.length === 7 && !l.tray.includes("Jordan's House") && l.ground === 'city' && l.shore === 0 && l.groundLines === 1 && l.hint === '');
     check('the party is marked on its place', /is-player/.test(house.cls) && house.label === true);
     // A tray row tapped, then the map tapped.
     await page.evaluate(() => { const id = window.__model.tray.find(t => t.label === 'The Rusty Anchor').id; window.__set({ armed: id }); });
@@ -247,7 +248,7 @@ console.log('\n§2 placing: a drag, a tap, Place all');
     await settle();
     l = await layout();
     check('Place all puts the rest on the map and keeps what was placed where it was', l.count === 8 && l.tray.length === 0 && (await page.evaluate(() => { const m = window.__model.markers; return m.every((a, i) => m.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.29)); })));
-    check('the map is vectors: the shore, its ripples, the paths, and no picture', l.shore === 8 && l.ripples === 16 && l.routes === 7 && l.images === 0);
+    check('the map is vectors: the streets, the paths, and no picture', l.groundLines === 1 && l.routes === 7 && l.images === 0);
     await shot('2-campaign-placed');
 }
 
@@ -401,7 +402,7 @@ console.log('\n§5 the zoom');
     const a = before.markers['The Iron Inn'].pin;
     const z = after.markers['The Iron Inn'].pin;
     check('a marker keeps its size after a zoom', near(a.width, z.width, 0.5) && near(a.width, 30, 1) && before.markers['The Iron Inn'].label === true, `${a.width} → ${z.width}`);
-    check('the land is still vectors after a zoom (nothing to pixelate)', after.shore === 3 && after.images === 0);
+    check('the ground is still vectors after a zoom (nothing to pixelate)', after.groundLines === 1 && after.images === 0);
     check('the scale bar follows the zoom', near(after.scale.perPx * 4, before.scale.perPx, before.scale.perPx * 0.01));
     await page.evaluate(() => { const b = window.__board; b.map.setView(b.map.getCenter(), 3.5, { animate: false }); });
     await settle();
@@ -411,6 +412,44 @@ console.log('\n§5 the zoom');
     await page.evaluate(() => window.__draw());
     const kept = await page.evaluate(() => { const v = window.__board.view(); return { lat: v.center.lat, lng: v.center.lng, zoom: v.zoom }; });
     check('an update keeps the view (to within a pixel)', near(view.lat, kept.lat, 0.2) && near(view.lng, kept.lng, 0.2) && view.zoom === kept.zoom, `${JSON.stringify(view)} → ${JSON.stringify(kept)}`);
+}
+
+console.log('\n§5b the grounds (D158)');
+{
+    await page.evaluate(() => window.__open({ world: 'realm' }));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    let l = await layout();
+    const sea = await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-stage')).backgroundColor);
+    check('the top map of a region is open country: land all over, no shore, no island', l.ground === 'country' && l.shore === 0 && l.ripples === 0 && l.groundLines === 1 && l.mapBg !== sea && l.groundPick === 'country', `${l.ground} ${l.mapBg} ${sea}`);
+    await shot('7a-ground-country');
+    await page.evaluate(() => window.__edit((b) => window.A.withGround(b, 'coast-s')));
+    await settle();
+    l = await layout();
+    check('a coast: the sea past one shore, the land everywhere else', l.ground === 'coast-s' && l.sea === 1 && l.ripples === 1 && l.groundPick === 'coast-s');
+    await shot('7b-ground-coast');
+    await page.evaluate(() => window.__edit((b) => window.A.withGround(b, 'island')));
+    await settle();
+    l = await layout();
+    check('the islands: a shore around every place, as before', l.ground === 'island' && l.shore === 5 && l.ripples === 10 && l.mapBg === sea);
+    await page.evaluate(() => window.__edit((b) => window.A.withGround(b, '')));
+    await page.evaluate(() => window.__layer('northmarch'));
+    await page.evaluate(() => window.__edit((b, m) => window.A.placeAll(b, m)));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    l = await layout();
+    check('inside a place, a town: streets', l.ground === 'city' && l.groundLines === 1 && l.shore === 0);
+    await shot('7c-ground-city');
+    await page.evaluate(() => window.__edit((b) => window.A.withGround(window.A.withScale(b, 'site', 'northmarch'), 'underground', 'northmarch')));
+    await settle();
+    l = await layout();
+    check('the underground: chambers around the places joined by passages, in the dark', l.ground === 'underground' && l.walls === 4 && l.passages === 2 && l.routes === 0 && /rgb\(74, 67, 60\)/.test(l.mapBg), `${l.walls} ${l.passages} ${l.mapBg}`);
+    await shot('7d-ground-underground');
+    await page.evaluate(() => window.__edit((b) => window.A.withGround(b, 'indoors', 'northmarch')));
+    await settle();
+    l = await layout();
+    check('indoors: a floor\'s squares', l.ground === 'indoors' && l.groundLines === 1 && l.walls === 0);
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');
@@ -447,7 +486,7 @@ console.log('\n§7 the sidebar folds; the looks; a phone');
         await settle();
         l = await layout();
         sides[look || 'default'] = await page.evaluate(() => getComputedStyle(document.querySelector('.dooms-atlas-side')).backgroundColor);
-        check(`the look "${look || 'default'}": the window, the markers and the land`, near(l.atlas.width, VIEW.width, 1) && l.count === 5 && l.shore === 5 && !l.overflowX && !l.sideOverflow);
+        check(`the look "${look || 'default'}": the window, the markers and the land`, near(l.atlas.width, VIEW.width, 1) && l.count === 5 && l.ground === 'country' && l.groundLines === 1 && !l.overflowX && !l.sideOverflow);
         await shot(`8-look-${look || 'default'}`);
     }
     check('the looks colour the sidebar their own way', new Set(Object.values(sides)).size >= 3, JSON.stringify(sides));
