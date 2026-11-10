@@ -708,5 +708,35 @@ console.log('\n§13 a scene holds the world still: it moves when the scene ends 
     hub.__setOpenersTransport(null);
 }
 
+console.log('\n§14 the style law: what the narrator leaned on is held against the next scenes (D179)');
+{
+    const W = 'first-descent';
+    hub.__setOpenersTransport(async (p) => { openersAsked = p; return '{"when":{"date":"Day 62","time":"morning"},"openers":[{"title":"a","text":"The lane, again.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}'; });
+    let openersAsked = null;
+    hub.__setRecapTransport(async () => '{"recap":"A scene of habits."}');
+    const start = async () => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: ['Kiyoha', 'Lysandra'], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 0 }) : p; };
+    const s1 = await start();
+    check('a world with no law yet starts a scene with none in its brief or its openings', s1.ok && !meta.dooms_hub.brief.includes('Style law') && !/Style law/.test(openersAsked.system), JSON.stringify([s1.ok, s1.reason]));
+    const who = ['Kiyoha', 'Lysandra'];
+    const stock = ['turns with a slight knowing smile', 'answers with a slight knowing smile', 'hides a slight knowing smile', 'wears a slight knowing smile'];
+    for (let i = 0; i < 8; i++) { chat.push(user(`Go on, ${i}.`)); chat.push(ai(`${who[i % 2]} ${stock[i % 4]}. "Step ${['up', 'down', 'back', 'in', 'out', 'over', 'aside', 'through'][i]}, sweetheart," she says.`)); }
+    const pe = await hub.prepareEnd();
+    const counted = Object.fromEntries(pe.style.phrases.map(p => [p.phrase, p]));
+    check('End counts what the narrator leaned on in the scene, in code: the pet name everyone uses and the stock gesture, both chosen by themselves', pe.ok && pe.style.messages === 9 && counted.sweetheart && counted.sweetheart.kind === 'address' && counted.sweetheart.count === 8 && counted.sweetheart.ticked && counted['slight knowing smile'] && counted['slight knowing smile'].count === 8 && counted['slight knowing smile'].ticked && !pe.style.phrases.some(p => /kiyoha|lysandra/.test(p.phrase)), JSON.stringify(pe.style));
+    const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true, bans: [{ phrase: 'sweetheart', kind: 'address', count: 8 }] });
+    const law = hub.worldEntry(W).style;
+    check('the phrases ticked on the sheet are the world\'s law; one left unticked is not', ce.ok && ce.style === 1 && same(law.bans.map(b => [b.phrase, b.kind, b.count, b.idle]), [['sweetheart', 'address', 8, 0]]), JSON.stringify(law));
+    const s2 = await start();
+    check('the next scene is told: its brief carries the law, and so does the request for its openings', s2.ok && meta.dooms_hub.brief.includes('Style law: the narration leaned on these and does not use them again: "sweetheart" as a way of addressing anyone.') && openersAsked.system.includes('"sweetheart" as a way of addressing anyone') && /no pet name or gesture is shared between them/.test(openersAsked.system), meta.dooms_hub && meta.dooms_hub.brief.slice(-260));
+    for (let i = 0; i < 4; i++) { chat.push(user(`And ${i}?`)); chat.push(ai(`${who[i % 2]} ${stock[i % 4]} and says nothing.`)); }
+    const pe2 = await hub.prepareEnd();
+    const ce2 = await hub.commitEnd({ recap: pe2.recap, skipCanon: true, skipWorld: true });    // no sheet: End chooses by itself
+    const law2 = hub.worldEntry(W).style;
+    check('ended with no sheet, End chooses by itself: the stock gesture joins the law, whole and once; the pet name, not used this scene, has been idle one', ce2.ok && law2.bans.length === 2 && /slight knowing smile/.test(law2.bans[0].phrase) && law2.bans[0].idle === 0 && same([law2.bans[1].phrase, law2.bans[1].idle], ['sweetheart', 1]), JSON.stringify(law2));
+    check('the law is the narrator\'s habit, not the world\'s memory: it is kept on the world\'s entry and no chat carries it', !('style' in hub.worldEntry(W).memory.stores) && !meta.dooms_style);
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

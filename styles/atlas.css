@@ -167,6 +167,12 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-part.is-off, .dooms-atlas-part.is-skipped { opacity: 0.6; }
 .dooms-atlas-setup-card p.dooms-atlas-end-done { color: #5fb878; }
 .dooms-atlas-stale { display: flex; flex-direction: column; gap: 6px; }
+/* The style law on the End sheet (D179): the phrases counted, each a tick. */
+.dooms-atlas-habits { display: flex; flex-wrap: wrap; gap: 6px; max-height: 118px; overflow: auto; }
+.dooms-atlas-habit { display: inline-flex; align-items: center; gap: 6px; font-size: 0.86em; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--atlas-line); cursor: pointer; }
+.dooms-atlas-habit:has(input:checked) { border-color: var(--atlas-accent); background: color-mix(in srgb, var(--atlas-accent) 12%, transparent); }
+.dooms-atlas-habit input { margin: 0; }
+.dooms-atlas-habit-count { color: var(--atlas-muted); font-size: 0.9em; font-variant-numeric: tabular-nums; }
 /* Playing a story as scenes (D172): what it will do, as a short list; the tick that a memory may be replaced. */
 .dooms-atlas-scenes-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.92em; line-height: 1.45; }
 .dooms-atlas-check { display: flex; align-items: flex-start; gap: 8px; font-size: 0.9em; line-height: 1.4; cursor: pointer; }

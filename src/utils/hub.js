@@ -18,6 +18,7 @@ import { normalizeCanon, buildCanonBlock } from './canon.js';
 import { normalizeHooks, takeHook as takeHookPure, recordTaken, questFromHook } from './questHooks.js';
 import { sceneFactsFrom, cleanWhen } from './questCut.js';
 import { normalizeBook } from './atlas.js';
+import { normalizeStyle, styleLawText } from './styleLaw.js';
 
 export const HUB_META_KEY = 'dooms_hub';
 /** The per-chat stores a snapshot carries, by the keys the chat keeps them under (D115). */
@@ -96,7 +97,7 @@ export function gapMoves(gap) {
 // ─── The store ──────────────────────────────────────────────────────────
 
 export function emptyWorldEntry() {
-    return { card: '', campaign: '', memory: null, scenes: [], seq: 0 };
+    return { card: '', campaign: '', memory: null, scenes: [], seq: 0, style: { bans: [] } };
 }
 
 function cleanSeed(raw) {
@@ -163,6 +164,7 @@ export function normalizeWorldEntry(raw) {
     const e = emptyWorldEntry();
     e.card = clean(r.card, 200);
     e.campaign = clean(r.campaign, 80);    // the Lore Library campaign this world is the scenes of (D172); '' for a world of its own
+    e.style = normalizeStyle(r.style);     // the phrases held against the next scenes (D179)
     e.memory = normalizeMemory(r.memory);
     e.seq = isInt(r.seq) && r.seq >= 0 ? r.seq : 0;
     const seen = new Set();
@@ -517,7 +519,7 @@ export function personLine(name, { description = '', line = '', tier = '' } = {}
  * characters, the older parts cut first: before that, then since last
  * time, then last time, then the people's lines, then the seed.
  */
-export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', date = '', time = '', weather = '', gapWords = '', cast = [], seed = '', since = [], lastRecap = '', beforeRecap = '', player = '', note = '' } = {}) {
+export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', date = '', time = '', weather = '', gapWords = '', cast = [], seed = '', since = [], lastRecap = '', beforeRecap = '', player = '', note = '', style = null } = {}) {
     const head = `[SCENE BRIEF: ${clean(world, 80) || 'the world'}${sceneNo ? `, scene ${sceneNo}` : ''}.`;
     const whereParts = [];
     if (place) whereParts.push(`Where: ${clean(place, 80)}${region && !sameName(region, place) ? ` (${clean(region, 80)})` : ''}.`);
@@ -534,7 +536,8 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
         note: note ? `${clean(player, 60) || 'The player'} wants: ${clean(note, MAX_NOTE)}` : '',
     };
     const end = (s) => (s && !/[.!?…"”\]]$/.test(s) ? `${s}.` : s);
-    const assemble = () => [head, parts.where, parts.who, end(parts.seed), parts.since, end(parts.last), end(parts.before), end(parts.note)].filter(Boolean).join('\n') + ']';
+    const law = styleLawText(style, { max: 500 });    // the style law (D179): short, and never cut to make room
+    const assemble = () => [head, parts.where, parts.who, end(parts.seed), parts.since, end(parts.last), end(parts.before), end(parts.note), law].filter(Boolean).join('\n') + ']';
     const order = ['before', 'since', 'last', 'who', 'seed', 'note'];
     let text = assemble();
     for (const key of order) {
@@ -557,16 +560,17 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '' } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '', style = null } = {}) {
     const name = clean(world.name, 80) || 'the world';
     const who = clean(player, 60) || 'the player';
     const n = Math.min(OPENERS, Math.max(1, count | 0));
     // The people's own notes and the story's standing notes, from the lorebooks (D177): a background request sees no lorebook unless it is put in.
     const notes = (Array.isArray(lore) ? lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) }));
     const standingText = clean(standing, LORE_STANDING + 400);
+    const law = styleLawText(style, { max: 500 });
     const system = `You are the narrator of ${name}. A new scene is about to open and you write its first message: how the scene opens, before ${who} has done anything. You answer with one JSON object and nothing else, in exactly this shape:
 {"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, "openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
-Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${law ? `${law} ` : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}

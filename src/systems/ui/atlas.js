@@ -551,13 +551,18 @@ async function endSceneGo() {
     const skipCanon = $p.find('.dooms-atlas-end-skip-canon').is(':checked');
     const skipWorld = $p.find('.dooms-atlas-end-skip-world').is(':checked');
     const replaceMemory = $p.find('.dooms-atlas-end-replace').is(':checked');
+    // The phrases ticked on the sheet are the ones held against the next scenes (D179); with no count on the sheet, End chooses by itself.
+    const counted = setup.prep.style && Array.isArray(setup.prep.style.phrases) ? setup.prep.style.phrases : null;
+    const bans = counted ? [] : null;
+    if (counted) $p.find('.dooms-atlas-end-ban:checked').each(function () { bans.push({ phrase: String($(this).val() || ''), kind: this.getAttribute('data-kind') === 'address' ? 'address' : 'phrase', count: Number(this.getAttribute('data-count')) || 0 }); });
+    const chosen = new Set((bans || []).map(b => b.phrase));
     const keep = !!setup.prep.stale && !replaceMemory;
     const steps = setup.prep.steps || {};
     const states = { recap: recap ? 'ok' : 'skipped', canon: steps.canon ? (skipCanon ? 'skipped' : 'waiting') : 'off', world: steps.world ? (keep ? 'kept' : skipWorld ? 'skipped' : 'waiting') : 'off', snapshot: keep ? 'kept' : 'waiting' };
-    setup = { ...setup, prep: { ...setup.prep, recap }, states, error: '' };
+    setup = { ...setup, prep: { ...setup.prep, recap, ...(counted ? { style: { ...setup.prep.style, phrases: counted.map(h => ({ ...h, ticked: chosen.has(h.phrase) })) } } : {}) }, states, error: '' };
     renderSetup();
     const onStep = (name, state) => { if (setup && setup.end) { setup = { ...setup, states: { ...setup.states, [name]: state } }; renderSetup(); } };
-    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep });
+    const r = await commitEnd({ recap, skipRecap: !recap, skipCanon, skipWorld, replaceMemory, onStep, bans });
     if (!setup || !setup.end) return;
     if (!r.ok) { setup = { ...setup, states: { ...setup.states, snapshot: 'failed' }, error: describeEndResult(r) }; renderSetup(); return; }
     setup = { ...setup, result: r, states: { ...setup.states, canon: r.canon === 'ok' ? 'ok' : r.canon === 'failed' ? 'failed' : setup.states.canon, world: ['ok', 'failed', 'kept', 'skipped'].includes(r.world) ? r.world : setup.states.world, snapshot: r.snapshot === 'kept' ? 'kept' : 'ok' } };

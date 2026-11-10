@@ -313,6 +313,14 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         ? `<div class="dooms-atlas-stale"><p class="dooms-atlas-setup-error" role="alert">This scene began before a later one ended, so the world remembers more than it does. Ending it keeps the world's memory as it is: the record is kept and the ledger reads the scene, and nothing of the later scene is lost.</p>
             <label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-end-replace" /> <span>Replace the world's memory with this scene's instead</span></label></div>`
         : '';
+    // The style law (D179): what the narration leaned on in this scene, counted. The ticked phrases are held against the next scenes.
+    const counted = prep && prep.style && Array.isArray(prep.style.phrases) ? prep.style.phrases : [];
+    const habits = counted.length
+        ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-habits-field"><legend class="dooms-atlas-card-label">Phrases the narration leaned on (${prep.style.messages} ${prep.style.messages === 1 ? 'message' : 'messages'} counted)</legend>
+            <div class="dooms-atlas-habits">${counted.map(h => `<label class="dooms-atlas-habit"><input type="checkbox" class="dooms-atlas-end-ban" value="${attr(h.phrase)}" data-kind="${attr(h.kind)}" data-count="${attr(h.count)}"${h.ticked ? ' checked' : ''}${done || running ? ' disabled' : ''} /> <span>“${e(h.phrase)}”</span><span class="dooms-atlas-habit-count">${e(h.count)}×${h.kind === 'address' ? ' · said to someone' : ''}</span></label>`).join('')}</div>
+            <p class="dooms-atlas-start-note">The ticked ones are held against the next scenes: the narrator is told not to use them. One that stops turning up drops off the list by itself.</p>
+        </fieldset>`
+        : '';
     return `<div class="dooms-atlas-setup-card is-scene is-end">
         <h3>End ${title}</h3>
         ${when ? `<p>${when}</p>` : ''}
@@ -320,6 +328,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${stale}
+        ${habits}
         <ul class="dooms-atlas-parts">
             ${part('recap', 'The record', 'kept with the scene', true, '')}
             ${part('canon', 'The ledger', canonOn ? (prep && prep.canonDone ? 'already read for the last reply' : 'Canon reads the whole scene') : 'Canon is off', canonOn, 'dooms-atlas-end-skip-canon')}

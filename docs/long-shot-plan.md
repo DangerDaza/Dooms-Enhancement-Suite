@@ -568,8 +568,27 @@ information on something on a clock you wouldn't know." Built in
 | --- | --- | --- |
 | D178 | In a scene the world is held (the owner) | Live World moved the world every few replies in any chat, a scene's included: clocks ticked and people moved while the party stood in a room, and a scene of sixty messages cost up to ten background requests for it. Now a chat that is a scene (`inScene`: the hub's mark under its own file's name) is never advanced by the count of replies; the replies are still counted and the scene's place and people still recorded. **The world moves when the scene ends** (the End sheet's "The world: the clocks tick and people move, by the time the scene took", which can be left out) and for the time that passes before the next scene starts (the Start sheet's when). Between scenes the Atlas shows what moved: the news, the rumours, the clocks as they stand. Moving the world by hand (Advance now, `/advance`) still works in a scene, for the player who wants it. A long chat is as it was. The Atlas's status line says which it is: by the count in a long chat; "held while scene N is played: the clocks tick when it ends"; between scenes, "the clocks tick when a scene ends, and for the time that passes before the next". |
 
-Open, asked of the owner: the narrator still reads the visible clocks as
-they stood when the scene opened (the world's line in every generation
-says they are "facts as they stand, not instructions to the scene").
-Whether a scene's narrator should also be told that the party learns a
-clock's state only by seeking it out is his to say.
+Asked of the owner and answered: the narrator still reads the visible
+clocks as they stood when the scene opened (the world's line in every
+generation says they are "facts as they stand, not instructions to the
+scene"). Whether a scene's narrator should also be told that the party
+learns a clock's state only by seeking it out: "no, don't add that". The
+world's line is unchanged.
+
+## 24. The scenes build, step 5a: the style law (2026-11-10, D179)
+
+The owner, asked how the three open choices of step 5 should go: "what's
+best for ease of use and performance". So: the continuity is a lorebook
+DES owns in the campaign, little of it always on and each person's state
+an entry that fires on their name; the phrase count is applied by itself,
+with a way to overrule it; and what End learns more of a scene is asked
+for in the request that already writes its record. This section is the
+phrase count; the rest follows. Built in "Atlas 22".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D179 | The style law: what the narrator leaned on is counted and held against the next scenes | The owner's own run counts the narrator's repeated phrases by script ("sweetheart" 71 times across every woman) and calls it the part of most worth: it is the measure of characters flattening into one voice. **Counted in code** (`src/utils/styleLaw.js`, no AI, at once): over the narrator's messages of the scene (`mes` only, never swipes; thinking, tracker blocks and markup out), the ways of addressing someone that recur in speech (a word or two after a comma inside quotes: "Careful, sweetheart"; a call or a warning before the comma is none) and the phrases of two to six words that recur (none beginning or ending with a function word, none holding a name; a run of words repeated whole is reported once, whole). Too often is at least three times, and a tenth of the narrator's messages for a two-word phrase, a sixteenth for a longer one or a way of addressing someone. **Applied by itself:** the End sheet lists up to twelve, each with its count, the worst ticked already (every recurring way of addressing someone; a phrase half as often again as the mark or in three messages of every eight; six at the most); pressing End scene holds the ticked ones against the next scenes, and a tick can be taken off. `/endscene`, which has no sheet, chooses the same by itself. **The law** is kept on the world's entry (`style.bans`, ten at the most; it is the narrator's habit, not the world's memory, so it is kept even when a stale scene's memory is not): a phrase that turns up again despite it stays with its new count, one not seen for three scenes drops off by itself. **Told to the narrator** in one line that is never cut to make room: in every scene's brief and in the request for its openings ("Style law: the narration leaned on these and does not use them again: "sweetheart" as a way of addressing anyone; … Each person speaks in their own way; no pet name or gesture is shared between them."). |
+
+What it cannot do: a count finds words, not sameness of manner; two
+people who sound alike without sharing a phrase are not caught. A long
+chat has no End and so no count yet.
