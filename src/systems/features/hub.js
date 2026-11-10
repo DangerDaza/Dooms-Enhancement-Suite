@@ -38,6 +38,7 @@ import {
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
     adoptScene, ADOPTED_ID,
 } from '../../utils/hub.js';
+import { normalizeBook } from '../../utils/atlas.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
@@ -891,6 +892,58 @@ export async function endScene(opts = {}) {
 
 export function isEnding() {
     return ending;
+}
+
+// ─── The world's map (D172, D173) ───────────────────────────────────────
+
+/**
+ * What the Atlas should show for the chat in front (D173). A scene that
+ * has ended is a chat the world has moved on from: End moves the world in
+ * the memory, and later scenes change it further, so the Atlas reads the
+ * world's memory there, not the chat. Any other chat (a long chat, a
+ * scene still being played, one set aside) is read as it is.
+ * @returns {{ kind: 'chat' } | { kind: 'world', worldId: string, scene: string, open: object|null, memory: object }}
+ *   `open` is the world's open scene's record when there is one (its chat holds the live map), else null
+ */
+export function atlasSource() {
+    const cur = currentScene();
+    if (!cur || !cur.ended) return { kind: 'chat' };
+    const entry = store().worlds[cur.worldId];
+    if (!entry || !entry.memory) return { kind: 'chat' };
+    const open = openSceneOf(entry);
+    return { kind: 'world', worldId: cur.worldId, scene: cur.mark.scene, open: open && !open.gone ? JSON.parse(JSON.stringify(open)) : null, memory: JSON.parse(JSON.stringify(entry.memory)) };
+}
+
+/**
+ * The world's own copy of the map replaced (D173): the Atlas edited
+ * between scenes. Refused while a scene is open: that scene's chat holds
+ * the live map and its End would write over this one. The memory's date
+ * is not moved, so no scene becomes stale by it.
+ */
+export function setWorldBook(worldId, book) {
+    const id = String(worldId || '').trim();
+    const entry = id ? store().worlds[id] : null;
+    if (!entry || !entry.memory) return { ok: false, reason: 'no-memory' };
+    const open = openSceneOf(entry);
+    if (open && !open.gone) return { ok: false, reason: 'scene-open', scene: JSON.parse(JSON.stringify(open)) };
+    putEntry(id, { ...entry, memory: { ...entry.memory, stores: { ...entry.memory.stores, dooms_atlas: normalizeBook(book) } } }, { source: 'map', world: id });
+    return { ok: true, reason: '' };
+}
+
+/**
+ * A map edit made in the scene being played is the world's at once
+ * (D173): the chat's book is copied into the world's memory, so a scene
+ * left without an End loses no map work. Only for the world's open scene,
+ * and not for one the memory has already moved past (its End keeps the
+ * newer memory, D123). False when nothing was carried.
+ */
+export function carrySceneBook(book) {
+    const cur = currentScene();
+    if (!cur || cur.ended || !cur.scene || cur.scene.status !== 'open') return false;
+    const entry = store().worlds[cur.worldId];
+    if (!entry || !entry.memory || isStaleScene(cur.scene, entry.memory)) return false;
+    putEntry(cur.worldId, { ...entry, memory: { ...entry.memory, stores: { ...entry.memory.stores, dooms_atlas: normalizeBook(book) } } }, { source: 'map', world: cur.worldId });
+    return true;
 }
 
 // ─── A chat taken as where a world's scenes begin (D131, D172) ──────────

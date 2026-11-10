@@ -85,7 +85,7 @@ const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker:
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: true });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: !ui.between, between: ui.between || null });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : m.realm ? 'Nothing stands in ' + m.layerLabel + ' yet. Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
@@ -1015,6 +1015,15 @@ console.log('\n§5g playing the story as scenes: the way in and its panel (D172)
     const words = await page.evaluate(() => ['group', 'no-chat', 'no-world', 'no-card', 'scene', 'off', 'busy', 'changed'].map(r => window.__refusal({ reason: r })));
     check('every refusal has its own words', new Set(words).size === words.length && words.every(w => w.length > 30) && /group chat/.test(words[0]) && /scene already/.test(words[4]) && /Live World is off/.test(words[5]));
     await page.evaluate(() => window.__setup(''));
+    // Between scenes (D173): the sidebar says the world's memory is shown, names the scene being played and offers the way to it.
+    await page.evaluate(() => window.__set({ between: { open: null } }));
+    let b = await page.evaluate(() => { const el = document.querySelector('.dooms-atlas-between'); const side = document.querySelector('.dooms-atlas-side').getBoundingClientRect(); const r = el ? el.getBoundingClientRect() : null; return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), go: !!el.querySelector('[data-act="scene-go"]'), in: r.left >= side.left && r.right <= side.right + 1, play: !!document.querySelector('.dooms-atlas-foot [data-act="scenes"]') } : null; });
+    check('between scenes the sidebar says so under the world\'s name, and Play as scenes is not offered', !!b && /Between scenes: the world as it stands now, not as this chat left it\./.test(b.text) && !b.go && b.in && !b.play, JSON.stringify(b));
+    await page.evaluate(() => window.__set({ between: { open: { id: 's3', number: '3', title: 'The gate at dusk' } } }));
+    b = await page.evaluate(() => { const el = document.querySelector('.dooms-atlas-between'); const go = el ? el.querySelector('[data-act="scene-go"]') : null; return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), id: go ? go.getAttribute('data-id') : '' } : null; });
+    check('with a scene being played it is named, with the way to it', !!b && /Scene 3 \(The gate at dusk\) is being played, and the map is changed there\./.test(b.text) && /Go to it/.test(b.text) && b.id === 's3', JSON.stringify(b));
+    await shot('7zb-between-scenes');
+    await page.evaluate(() => window.__set({ between: null }));
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

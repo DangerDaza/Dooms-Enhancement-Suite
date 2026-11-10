@@ -547,5 +547,61 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     hub.__setOpenersTransport(null);
 }
 
+console.log('\n§10 the world\'s map: carried as it is edited, and edited between scenes (D173)');
+{
+    const atlasBook = await import(`${DES}/src/systems/features/atlasBook.js`);
+    const A = await import(`${DES}/src/utils/atlas.js`);
+    const W = 'first-descent';
+    const mem = () => hub.worldEntry(W).memory;
+    check('an ordinary chat is read as it is', hub.atlasSource().kind === 'chat');
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 45","time":"morning"},"openers":[{"title":"The lane","text":"The lane is quiet.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}');
+    hub.__setRecapTransport(async () => '{"recap":"A quiet scene on the lane."}');
+    const start = async () => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: [], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 0 }) : p; };
+    const s2 = await start();
+    const taken = mem().takenAt;
+    check('a scene being played is read as it is, too', s2.ok && s2.scene.id === 's2' && hub.atlasSource().kind === 'chat' && same(atlasBook.getBook().spots, mem().stores.dooms_atlas.spots), JSON.stringify([s2.ok, s2.reason]));
+    atlasBook.setBook(A.placeAt(atlasBook.getBook(), 'pin:hask', { x: 5, y: 5 }));
+    check('a marker moved in the scene being played is the world\'s at once; the memory\'s date does not move, so no scene goes stale by it', same(mem().stores.dooms_atlas.spots['pin:hask'], { x: 5, y: 5 }) && same(meta.dooms_atlas.spots['pin:hask'], { x: 5, y: 5 }) && mem().takenAt === taken && mem().scene === 's0');
+    const held = hub.setWorldBook(W, A.placeAt(null, 'pin:hask', { x: 9, y: 9 }));
+    check('while a scene is open the world\'s own copy is not edited from outside it: the scene\'s chat holds the live map', held.ok === false && held.reason === 'scene-open' && held.scene.id === 's2' && same(mem().stores.dooms_atlas.spots['pin:hask'], { x: 5, y: 5 }));
+    hub.setSceneAside(W, 's2');
+    atlasBook.setBook(A.placeAt(atlasBook.getBook(), 'pin:hask', { x: 6, y: 6 }));
+    check('a scene set aside keeps its edits to itself', same(mem().stores.dooms_atlas.spots['pin:hask'], { x: 5, y: 5 }) && same(meta.dooms_atlas.spots['pin:hask'], { x: 6, y: 6 }));
+    await hub.resumeScene(W, 's2');
+    atlasBook.setBook(A.placeAt(atlasBook.getBook(), 'pin:hask', { x: 7, y: 7 }));
+    check('resumed, they are the world\'s again', same(mem().stores.dooms_atlas.spots['pin:hask'], { x: 7, y: 7 }));
+
+    chat.push(user('We wait on the lane.'));
+    chat.push(ai('Nothing stirs.'));
+    const pe = await hub.prepareEnd();
+    const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true });
+    const src = hub.atlasSource();
+    check('ended: the chat in front is one the world has moved on from, and the Atlas is to read the world\'s memory', pe.ok && ce.ok && src.kind === 'world' && src.worldId === W && src.scene === 's2' && src.open === null && src.memory.scene === 's2' && same(src.memory.stores.dooms_atlas.spots['pin:hask'], { x: 7, y: 7 }), JSON.stringify([pe.ok, ce.ok, src.kind]));
+    const between = A.placeAt(mem().stores.dooms_atlas, 'pin:redfall-castle', { x: -4, y: 3 });
+    const before = mem().takenAt;
+    const put = hub.setWorldBook(W, { ...between, junk: 1 });
+    check('between scenes the world\'s own map is edited: made safe, the memory\'s date unmoved, the ended chat\'s copy left as it was', put.ok && same(mem().stores.dooms_atlas.spots['pin:redfall-castle'], { x: -4, y: 3 }) && !('junk' in mem().stores.dooms_atlas) && mem().takenAt === before && !meta.dooms_atlas.spots['pin:redfall-castle']);
+    check('a world with no memory has no map of its own to edit', hub.setWorldBook('harbourside-x', {}).reason === 'no-memory' && hub.setWorldBook('', {}).reason === 'no-memory');
+    const ended2 = ctxTarget.chatId;
+    const s3 = await start();
+    check('the next scene opens on the map as it was left between scenes', s3.ok && s3.scene.id === 's3' && same(files.get(s3.file).header.chat_metadata.dooms_atlas.spots['pin:redfall-castle'], { x: -4, y: 3 }) && same(atlasBook.getBook().spots['pin:hask'], { x: 7, y: 7 }));
+    await openFile(ended2);
+    const behind = hub.atlasSource();
+    check('an ended scene\'s chat, with a later scene open: the memory is shown and the open scene named, and the map is that scene\'s to edit', behind.kind === 'world' && behind.open && behind.open.id === 's3' && hub.setWorldBook(W, {}).reason === 'scene-open');
+    // A scene the memory has moved past keeps its edits to itself (its End would keep the newer memory, D123).
+    await openFile(s3.file);
+    chat.push(user('On.'));
+    chat.push(ai('On.'));
+    const pe3 = await hub.prepareEnd();
+    await hub.commitEnd({ recap: pe3.recap, skipCanon: true, skipWorld: true });
+    await openFile(ended2);
+    await hub.reopenCurrentScene();
+    const spot = mem().stores.dooms_atlas.spots['pin:hask'];
+    atlasBook.setBook(A.placeAt(atlasBook.getBook(), 'pin:hask', { x: -9, y: -9 }));
+    check('a scene reopened after the world moved past it does not write its map over the world\'s', hub.currentScene().scene.status === 'open' && hub.atlasSource().kind === 'chat' && same(mem().stores.dooms_atlas.spots['pin:hask'], spot) && same(meta.dooms_atlas.spots['pin:hask'], { x: -9, y: -9 }));
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

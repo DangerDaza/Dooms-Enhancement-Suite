@@ -471,7 +471,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
  * the tab's body (`body` is the tab's HTML: Places from atlasPlacesHtml,
  * the others from Live World's own views), the foot.
  */
-export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false } = {}) {
+export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', body = '', status = '', result = '', canAdvance = false, advancing = false, editLabel = 'Edit this world', scenes = false, between = null } = {}) {
     const active = ATLAS_TABS.some(t => t.id === tab) ? tab : ATLAS_TABS[0].id;
     const when = [facts.date, facts.time].filter(Boolean).join(', ');
     const tabs = ATLAS_TABS.map(t => `<button type="button" class="dooms-atlas-tab${t.id === active ? ' is-active' : ''}" data-act="tab" data-tab="${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}" title="${attr(t.label)}"><i class="fa-solid ${t.icon}" aria-hidden="true"></i><span>${e(t.label)}</span></button>`).join('');
@@ -479,6 +479,7 @@ export function atlasSideHtml({ name = 'The world', facts = {}, tab = 'places', 
             <h2 class="dooms-atlas-title">${e(name || 'The world')}</h2>
             <p class="dooms-atlas-sub">${when ? e(when) : 'No date in the tracker yet'}${facts.weather ? ` · ${e(facts.weather)}` : ''}</p>
             ${facts.location ? `<p class="dooms-atlas-sub is-place"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> ${e(facts.location)}</p>` : ''}
+            ${between ? `<p class="dooms-atlas-between" role="status"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> <span>Between scenes: the world as it stands now, not as this chat left it.${between.open ? ` Scene ${e(between.open.number)}${between.open.title ? ` (${e(between.open.title)})` : ''} is being played, and the map is changed there.` : ''}</span>${between.open ? ` <button type="button" class="dooms-atlas-link" data-act="scene-go" data-id="${attr(between.open.id)}">Go to it</button>` : ''}</p>` : ''}
         </header>
         <nav class="dooms-atlas-tabs" role="tablist" aria-label="The world">${tabs}</nav>
         <div class="dooms-atlas-body" role="tabpanel" data-tab="${active}">${body}</div>

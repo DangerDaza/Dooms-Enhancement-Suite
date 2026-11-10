@@ -18,6 +18,7 @@ import { normalizeBook, buildTidyPrompt, parseTidy } from '../../utils/atlas.js'
 import { stripSceneNoise } from '../../utils/liveWorld.js';
 import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS, buildFillPrompt, parseFill } from '../../utils/atlasSetup.js';
 import { chatArray, cardOfTheChat, loreOfTheChat, playerNames } from './liveWorld.js';
+import { carrySceneBook } from './hub.js';
 
 const META_KEY = 'dooms_atlas';
 export const ATLAS_BOOK_CHANGED_EVENT = 'dooms:atlas-book-changed';
@@ -33,6 +34,7 @@ export function setBook(book) {
     if (!chat_metadata || typeof chat_metadata !== 'object') return false;
     chat_metadata[META_KEY] = normalizeBook(book);
     try { saveChatDebounced(); } catch (e) { /* no chat open */ }
+    try { carrySceneBook(chat_metadata[META_KEY]); } catch (e) { /* not a scene, or the hub is away: the chat keeps it */ }    // in a scene being played, the world has it at once (D173)
     try { window.dispatchEvent(new CustomEvent(ATLAS_BOOK_CHANGED_EVENT)); } catch (e) { /* no window (tests) */ }
     return true;
 }

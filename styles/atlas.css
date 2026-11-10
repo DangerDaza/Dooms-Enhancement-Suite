@@ -44,6 +44,9 @@
 .dooms-atlas-title { margin: 0; font-size: 1.35em; font-weight: 700; font-family: var(--atlas-display); color: var(--atlas-text); overflow-wrap: anywhere; }
 .dooms-atlas-sub { margin: 4px 0 0; font-size: 0.8em; color: var(--atlas-muted); overflow-wrap: anywhere; }
 .dooms-atlas-sub.is-place { color: var(--atlas-accent2); }
+/* Between scenes (D173): the Atlas shows the world's memory, and says so under the world's name. */
+.dooms-atlas-between { margin: 8px 0 0; padding: 7px 9px; font-size: 0.78em; line-height: 1.4; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-between > i { color: var(--atlas-accent2); margin-right: 3px; }
 .dooms-atlas-tabs { flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--atlas-line); }
 .dooms-atlas-tab { flex: 1 1 0; min-width: 0; appearance: none; font: inherit; font-size: 0.68em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 2px 7px; color: var(--atlas-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .dooms-atlas-tab i { font-size: 1.45em; }

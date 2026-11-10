@@ -472,3 +472,19 @@ it is edited; the Atlas still reads the chat in front, so after an End it
 shows the world as that chat left it (both are step 2). The hub's own
 tests cover the engine in the sandbox; the panel is rendered in the
 browser test; nothing here was run in a real SillyTavern.
+
+## 18. The scenes build, step 2: the map lives with the world (2026-11-10, D173)
+
+Built in "Atlas 16".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D173 | The map is the world's as it is edited, and the Atlas shows the world between scenes | **In a scene being played** a map edit is the world's at once: `setBook` copies the chat's book into the world's memory (`carrySceneBook`), so a scene left without an End loses no map work. Only the world's open scene does this: one set aside keeps its edits to itself, and so does one the memory has moved past (its End keeps the newer memory, hub-plan D123). The memory's date is not moved by it, so no scene goes stale. **Between scenes**: a scene that has ended is a chat the world has moved on from (End moves the world in the memory only, and later scenes change it further), so in such a chat the Atlas reads the world's memory, not the chat (`atlasSource`): the world's state, the map, the date and the place, the hooks and the completed quests. The sidebar says so under the world's name. The map can be edited there, into the world's own copy (`setWorldBook`), and the next scene opens on it; unless a scene is being played, whose chat then holds the live map: the notice names that scene and has Go to it, and an edit is refused with those words. What needs a chat waits for a scene: Travel here, Advance now, the AI's set-up, fill and clean-up, offering and taking hooks are off between scenes. Any other chat (a long chat, a scene being played, one set aside) is read as it is, as before. The Atlas draws itself again when the hub's store changes under it (a scene ended or started). |
+
+The controller's part of this (`atlas.js`: every read and write of the
+book and the world through one source) is load-checked and its views are
+rendered in the browser test; the source itself and both writes are
+tested in the hub's sandbox (`tools/hub-flow-test.mjs` §10). Not yet: the
+Atlas with no scene chat in front at all (another chat, or none) cannot
+show a world of scenes; choosing one comes with starting scenes from the
+Atlas (step 3).
