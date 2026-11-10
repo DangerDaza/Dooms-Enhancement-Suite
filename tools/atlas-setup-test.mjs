@@ -13,10 +13,10 @@
  * Exit:   0 = pass, 1 = failure
  */
 import { blankPack, seedWorldState, locPlaceId } from '../src/utils/liveWorld.js';
-import { atlasModel, placeAt, addPin, tidyList, setCanon, normalizeBook } from '../src/utils/atlas.js';
+import { atlasModel, placeAt, addPin, tidyList, setCanon, normalizeBook, withScale, territoryAt } from '../src/utils/atlas.js';
 import {
     SETUP_LIMITS, chatLines, chunkLines, recentLines, jsonIn, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup,
-    editDraftPlace, setDraftInside, removeDraftPlace, draftRows, draftChain, layoutDraft, applySetup, FILL_COUNTS, buildFillPrompt, parseFill, layoutFill, applyFill,
+    editDraftPlace, setDraftInside, removeDraftPlace, draftRows, draftChain, layoutDraft, applySetup, FILL_COUNTS, buildFillPrompt, parseFill, layoutFill, applyFill, fillOptions, fillWhat, HOME_ID,
 } from '../src/utils/atlasSetup.js';
 
 let failures = 0;
@@ -195,6 +195,62 @@ console.log('\n§7 filling out a map (D160)');
     const empty = atlasModel({ pack: blankPack('x'), state: null });
     const es = [...layoutFill(empty, r.places).values()];
     check('an empty map filled: its first places, spread out', es.length === 3 && es.every((a, i) => es.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.3)));
+}
+
+console.log('\n§8 filling out with regions (D166)');
+{
+    // The owner's map: a city, a castle and what a fill of places added, all on the top map at a region's scale.
+    const eld = blankPack('The Eld');
+    let book = withScale(null, 'region');
+    for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 4, 2], ['Mirefen Ferry', 'water', -3, -2], ['The Ashwood', 'wild', -3, 1]]) book = addPin(book, { label, kind, x, y }).book;
+    const top = atlasModel({ pack: eld, book });
+    check('a map of places on top can be filled with places or with regions; regions means a home region for its places', same(fillOptions(top), { options: ['places', 'regions'], home: true, hasRegions: false }) && fillWhat(top, 'regions') === 'regions' && fillWhat(top, '') === 'places' && fillWhat(top, 'lava') === 'places');
+    const inner = atlasModel({ pack: eld, book: addPin(book, { label: 'The Temple', x: 0, y: 0, layer: 'pin:hask' }).book, layer: 'pin:hask' });
+    check('a place\'s own map is filled with places only', same(fillOptions(inner).options, ['places']) && fillWhat(inner, 'regions') === 'places');
+    check('an empty top map can start with either, and needs no home', same(fillOptions(atlasModel({ pack: eld, book: null })), { options: ['places', 'regions'], home: false, hasRegions: false }));
+
+    const pp = buildFillPrompt({ model: top, world: 'The Eld', count: 4, what: 'places' });
+    check('asked for places: no region among the kinds, and regions are ruled out', pp.what === 'places' && pp.home === false && /Kinds: settlement, /.test(pp.system) && !/Kinds:.*\bregion\b/.test(pp.system) && /Do not add regions, lands or countries/.test(pp.system));
+    const places = parseFill(JSON.stringify({ places: [{ name: 'The Amber Waste', kind: 'region', note: 'Dry country.' }, { name: 'Greywater Mill', kind: 'region' }, { name: 'Tollhouse', kind: 'landmark' }] }), top, { what: 'places' });
+    check('asked for places, nothing comes back a region whatever the reply called it', places.ok && places.what === 'places' && places.home === '' && places.places.every(p => p.kind !== 'region') && places.places[2].kind === 'landmark');
+
+    const rp = buildFillPrompt({ model: top, world: 'The Eld', wish: 'cold uplands to the north', count: 4, what: 'regions' });
+    check('asked for regions on a map of places: the places are the home region\'s, which the AI is to name', rp.what === 'regions' && rp.home === true && /"home":"/.test(rp.system) && /Exactly 4 new regions/.test(rp.system) && /their home region, which has no name yet/.test(rp.system) && rp.user.includes('The places of the home region') && rp.user.includes('- Hask (settlement)') && rp.user.includes('cold uplands to the north') && !/Kinds:/.test(rp.system));
+    const reply = JSON.stringify({ home: 'The Haskmarch', places: [
+        { name: 'Redfall Heights', kind: 'wild', note: 'Cold uplands above the castle.', near: [{ to: 'home', dir: 's', far: 'near' }] },
+        { name: 'The Salt Fens', note: 'Brackish marsh.', near: [{ to: 'The Haskmarch', dir: 'n', far: 'near' }] },
+        { name: 'The Amber Waste', note: 'Dry country.', near: [{ to: 'Hask', dir: 'w', far: 'near' }] },
+        { name: 'Kessel Vale', note: 'Farmland.', near: [{ to: 'The Amber Waste', dir: 'n', far: 'near' }] },
+        { name: 'The Haskmarch' }, { name: 'Hask' },
+    ] });
+    const r = parseFill(reply, top, { what: 'regions' });
+    check('the reply read: the home region\'s name, and every new one a region', r.ok && r.home === 'The Haskmarch' && r.what === 'regions' && same(r.places.map(p => p.name), ['Redfall Heights', 'The Salt Fens', 'The Amber Waste', 'Kessel Vale']) && r.places.every(p => p.kind === 'region'));
+    check('"near" to home, to the home\'s name, or to one of its places all mean the home region', r.places.slice(0, 3).every(p => p.near.length === 1 && p.near[0].id === HOME_ID) && same(r.places[3].near, [{ key: 'amber waste', dir: 'n', far: 'near' }]));
+    check('no name given for the home, or one already taken: a stock name', parseFill(JSON.stringify({ places: [{ name: 'A' }] }), top, { what: 'regions' }).home === 'The Heartland' && parseFill(JSON.stringify({ home: 'Hask', places: [{ name: 'A' }] }), top, { what: 'regions' }).home === 'The Heartland');
+
+    const spots = layoutFill(top, r.places, { home: true });
+    const home = { x: (0 + 4 - 3 - 3) / 4, y: (0 + 2 - 2 + 1) / 4 };
+    check('the new regions are laid out around where the home region will stand: uplands north of it, fens south, waste east', spots.get('redfall heights').y < home.y - 5 && spots.get('salt fens').y > home.y + 5 && spots.get('amber waste').x > home.x + 5 && [...spots.values()].every(a => Math.hypot(a.x - home.x, a.y - home.y) >= 5.6));
+    const done = applyFill(book, top, r.places, { home: r.home });
+    const after = atlasModel({ pack: eld, book: done.book });
+    check('added: the top map is five lands, the home region where its places stood, everything not canon', after.markers.length === 5 && after.markers.every(m => m.kind === 'region' && m.loose) && after.territories.length === 5 && done.ids.length === 4 && !!done.homeId && after.markers.find(m => m.id === done.homeId).label === 'The Haskmarch' && Math.abs(after.markers.find(m => m.id === done.homeId).x - home.x) < 1e-3 && after.measure.scale === 'region');
+    check('the places went inside the home region, each where it was', (() => { const m = atlasModel({ pack: eld, book: done.book, layer: done.homeId }); return same(m.markers.map(x => [x.label, x.x, x.y]), [['Hask', 0, 0], ['Redfall Castle', 4, 2], ['Mirefen Ferry', -3, -2], ['The Ashwood', -3, 1]]) && m.measure.scale === 'region' && m.territories.length === 0; })());
+    check('every land borders a neighbour: no land stands apart (the owner\'s report)', (() => { const t = after.territories; const d = (pt, a) => Math.hypot(pt[0] - a.x, pt[1] - a.y); return t.every(a => t.some(b => a !== b && a.outline.some(pt => Math.abs(d(pt, a) - d(pt, b)) < 0.3))); })());
+    check('and the home region\'s land is where its places are', territoryAt(after, home.x, home.y) === done.homeId && territoryAt(after, 0, 0) === done.homeId);
+
+    const again = buildFillPrompt({ model: after, world: 'The Eld', count: 4, what: 'places' });
+    check('a map of regions is filled with regions only, whatever is asked, and needs no new home', same(fillOptions(after), { options: ['regions'], home: false, hasRegions: true }) && again.what === 'regions' && again.home === false && again.user.includes('The regions on this map now') && !/"home"/.test(again.system));
+    const more = parseFill(JSON.stringify({ places: [{ name: 'The Far Reach', near: [{ to: 'Kessel Vale', dir: 'w', far: 'near' }] }] }), after, { what: 'regions' });
+    check('there, "near" names a region on the map', more.ok && more.home === '' && more.places[0].near[0].id === after.markers.find(m => m.label === 'Kessel Vale').id);
+
+    // The state the owner's map is in: regions and places side by side.
+    const mixedBook = addPin(addPin(book, { label: 'The Amber Waste', kind: 'region', x: 14, y: -6 }).book, { label: 'The Salt Fens', kind: 'region', x: -2, y: 13 }).book;
+    const mixed = atlasModel({ pack: eld, book: mixedBook });
+    check('regions and places side by side: only regions can be added, and they bring a home region for the places', same(fillOptions(mixed), { options: ['regions'], home: true, hasRegions: true }) && mixed.territories.length === 2);
+    const mr = parseFill(JSON.stringify({ home: 'The Haskmarch', places: [{ name: 'Kessel Vale', near: [{ to: 'The Amber Waste', dir: 'n', far: 'near' }] }] }), mixed, { what: 'regions' });
+    const md = applyFill(mixedBook, mixed, mr.places, { home: mr.home });
+    const fixed = atlasModel({ pack: eld, book: md.book });
+    check('filled: the places are inside a home region, the two regions that were there stay where they were, and four lands tile the map', fixed.territories.length === 4 && fixed.markers.every(m => m.kind === 'region') && fixed.markers.find(m => m.label === 'The Amber Waste').x === 14 && fixed.markers.find(m => m.label === 'The Salt Fens').y === 13 && !fixed.markers.find(m => m.label === 'The Amber Waste').loose && mr.places[0].near[0].id === mixed.markers.find(m => m.label === 'The Amber Waste').id);
 }
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall pass');

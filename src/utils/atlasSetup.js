@@ -12,7 +12,7 @@
  * The requests are in src/systems/features/atlasBook.js; the window's
  * steps in src/systems/ui/atlasViews.js. tools/atlas-setup-test.mjs.
  */
-import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList, TERRITORY_RADIUS } from './atlas.js';
+import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList, wrapInRegion, TERRITORY_RADIUS } from './atlas.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = (t) => clean(t, 120).toLowerCase().replace(/^the\s+/, '').replace(/[’]/g, "'");
@@ -366,6 +366,33 @@ function whereWords(m) {
     return parts.length ? parts.join(', ') : 'at the middle';
 }
 
+export const HOME_ID = '@home';    // in a fill's "near": the home region the places of the map are about to go inside
+const PLACE_KINDS = ATLAS_KINDS.filter(k => k.id !== 'region').map(k => k.id).join(', ');
+const HOME_NAMES = Object.freeze(['The Heartland', 'The Home Country', 'The Middle Lands']);
+
+/**
+ * What Fill out can add to a map (D166): `places` on a map of places,
+ * `regions` on the top map or on a map that holds regions. `home` says
+ * the map has places of its own that regions would stand beside: choosing
+ * regions puts those places inside a home region first, so the lands
+ * border one another and no place is left between them.
+ */
+export function fillOptions(model) {
+    const markers = model && Array.isArray(model.markers) ? model.markers : [];
+    const hasRegions = markers.some(m => m.kind === 'region');
+    const hasPlaces = markers.some(m => m.kind !== 'region');
+    const options = [];
+    if (!hasRegions) options.push('places');
+    if (hasRegions || !model || !model.layer) options.push('regions');
+    return { options, home: hasPlaces, hasRegions };
+}
+
+/** What a fill adds, of what the map allows: the one asked for, else the first the map offers. */
+export function fillWhat(model, want = '') {
+    const { options } = fillOptions(model);
+    return options.includes(want) ? want : options[0];
+}
+
 /**
  * The request that fills out one map: the places on it now with where
  * they stand, what the map is of, what the player asked for; and what to
@@ -374,28 +401,42 @@ function whereWords(m) {
  * @param {object} o.model   the Atlas's model of the map to fill
  * @param {string} o.world   the world's name
  * @param {string} o.wish    what the player asked for ("more shops", "a rough quarter to the east")
- * @param {number} o.count   how many places to add
+ * @param {number} o.count   how many to add
  * @param {string} o.lore    the lorebooks' entries, cut short
  * @param {{description?:string,scenario?:string}} o.card
+ * @param {'places'|'regions'} o.what  places for this map, or regions around it (fillOptions says which the map allows)
  */
-export function buildFillPrompt({ model = null, world = '', wish = '', count = 8, lore = '', card = {} } = {}) {
+export function buildFillPrompt({ model = null, world = '', wish = '', count = 8, lore = '', card = {}, what = '' } = {}) {
     const markers = model && Array.isArray(model.markers) ? model.markers : [];
     const n = FILL_COUNTS.includes(Number(count)) ? Number(count) : 8;
     const scale = model && model.measure ? (ATLAS_SCALES[model.measure.scale] || {}).label || '' : '';
     const ground = model ? (ATLAS_GROUNDS.find(g => g.id === model.ground) || {}).label || '' : '';
     const other = model && Array.isArray(model.all) ? model.all.filter(x => x.layer !== model.layer).map(x => x.label) : [];
-    const regionsHere = markers.some(m => m.kind === 'region') || (!markers.length && model && model.measure && model.measure.scale === 'world');
+    const w = fillWhat(model, what);
+    const regions = w === 'regions';
+    const home = regions && fillOptions(model).home;
+    const lands = markers.filter(m => m.kind === 'region');
+    const places = markers.filter(m => m.kind !== 'region');
+    const shape = `{${home ? '"home":"<a name for the region the places of this map lie in>",' : ''}"places":[{"name":"<proper name>",${regions ? '' : '"kind":"<one kind>",'}"note":"<one sentence: ${regions ? 'what kind of land it is, and a reason someone might go there' : 'what it is, and a reason someone might go there'}>","near":[{"to":"<${regions ? (home ? '"home", or the name of another region: one already there, or another of yours' : 'the name of a region on this map: one already there, or another of yours') : 'name of a place on this map: one already there, or another of yours'}>","dir":"n|ne|e|se|s|sw|w|nw","far":"close|near|far"}]}]}`;
     const system = [
-        'You fill out one map of a role-play story\'s world: you add places that plausibly belong on it, around the places already there, so the area feels lived in and there is somewhere to go. The story has not named these places; they are suggestions the player can keep, change or remove.',
+        regions
+            ? 'You fill out the map of a role-play story\'s world with regions: lands with borders that lie around the ones already known, so the world has somewhere beyond the edge of what the story has seen. The story has not named these lands; they are suggestions the player can keep, change or remove.'
+            : 'You fill out one map of a role-play story\'s world: you add places that plausibly belong on it, around the places already there, so the area feels lived in and there is somewhere to go. The story has not named these places; they are suggestions the player can keep, change or remove.',
         'Reply with one JSON object and nothing else:',
-        '{"places":[{"name":"<proper name>","kind":"<one kind>","note":"<one sentence: what it is, and a reason someone might go there>","near":[{"to":"<name of a place on this map: one already there, or another of yours>","dir":"n|ne|e|se|s|sw|w|nw","far":"close|near|far"}]}]}',
-        `Kinds: ${KIND_LIST}.`,
+        shape,
+        ...(regions ? [] : [`Kinds: ${PLACE_KINDS}.`]),
         'Rules:',
-        ...(regionsHere ? ['- THIS IS A MAP OF REGIONS. Every new place is a region (kind "region"): a neighbouring land with borders and a character of its own (a march, a vale, a forest, a waste), not a town or a building. Say in its note what kind of land it is.'] : []),
-        `- Exactly ${n} new places. Fit the map: for a city, its districts, markets, inns, temples, gates; for a region, its villages, roads, ruins, wilds; for a dungeon or a building, its halls, chambers, levels.`,
+        ...(regions ? [
+            `- Exactly ${n} new regions. A region is a land with borders and a character of its own: a march, a vale, a forest, a waste, a kingdom's shire. Not a town, a building or a single landmark.`,
+            ...(home ? ['- The places listed below all lie in one region, their home region, which has no name yet. Name it in "home": a name for the land around them, in the style of the world\'s names. Your regions lie around it.'] : []),
+            `- Each region has one "near" ${home ? 'to "home" or to another region' : 'to a region already on the map, or to another of yours'} ("dir" is the way you would travel from the new region to reach the other). Spread them round: not all on one side.`,
+        ] : [
+            `- Exactly ${n} new places. Fit the map: for a city, its districts, markets, inns, temples, gates; for a region, its villages, roads, ruins, wilds; for a dungeon or a building, its halls, chambers, levels.`,
+            '- Do not add regions, lands or countries: this map shows places. Do not add rooms, furniture or people.',
+            '- Each new place has one "near" to a place already on the map when there is one ("dir" is the way you would walk from the new place to reach the other). Spread them: not all on one side, not all "close".',
+        ]),
         '- Fit the world: its tone, its names, its level of magic and technology. Use names in the style of the names already there. Do not contradict the lore.',
-        '- Do not repeat or rename a place already on this map or elsewhere in the world. Do not add rooms, furniture or people.',
-        '- Each new place has one "near" to a place already on the map when there is one ("dir" is the way you would walk from the new place to reach the other). Spread them: not all on one side, not all "close".',
+        '- Do not repeat or rename anything already on this map or elsewhere in the world.',
         '- You never write coordinates.',
     ].join('\n');
     const parts = [];
@@ -404,36 +445,55 @@ export function buildFillPrompt({ model = null, world = '', wish = '', count = 8
     const cardText = [card.description, card.scenario].filter(Boolean).join('\n').trim().slice(0, 1500);
     if (cardText) parts.push(`The character card:\n${cardText}`);
     if (lore) parts.push(`The lore:\n${String(lore).slice(0, 3000)}`);
-    parts.push(markers.length
-        ? `The places on this map now (with where each stands from the map's middle, in steps):\n${markers.map(m => `- ${m.label} (${m.kind}; ${whereWords(m)})${m.note ? `: ${m.note}` : ''}`).join('\n')}`
-        : 'This map has no places yet: yours are its first.');
+    const line = (m) => `- ${m.label} (${m.kind}; ${whereWords(m)})${m.note ? `: ${m.note}` : ''}`;
+    if (regions) {
+        if (lands.length) parts.push(`The regions on this map now (with where each stands from the map's middle, in steps):\n${lands.map(line).join('\n')}`);
+        if (home) parts.push(`The places of the home region (they go inside it; do not repeat them):\n${places.map(m => `- ${m.label} (${m.kind})${m.note ? `: ${m.note}` : ''}`).join('\n')}`);
+        if (!lands.length && !home) parts.push('This map has no regions yet: yours are its first.');
+    } else {
+        parts.push(markers.length ? `The places on this map now (with where each stands from the map's middle, in steps):\n${markers.map(line).join('\n')}` : 'This map has no places yet: yours are its first.');
+    }
     if (other.length) parts.push(`Places elsewhere in the world (do not repeat them): ${other.slice(0, 80).join('; ')}`);
-    return { system, user: parts.join('\n\n'), count: n };
+    return { system, user: parts.join('\n\n'), count: n, what: w, home };
 }
 
 /**
- * The fill's reply read: the new places with a name that no place of the
- * world carries yet, each "near" turned into the marker it names (`id`)
- * or the other new place (`key`).
- * @returns {{ ok: boolean, places: Array<{ key, name, kind, note, near: Array<{ id?: string, key?: string, dir: string, far: string }> }>, error: string }}
+ * The fill's reply read: the new places with a name that nothing in the
+ * world carries yet, each "near" turned into the marker it names (`id`:
+ * a marker's, or HOME_ID for the home region) or the other new place
+ * (`key`). Asked for places, nothing comes back a region; asked for
+ * regions, everything does. With a home region wanted, its name comes
+ * back in `home` (a stock one when the reply gave none that is free).
+ * @returns {{ ok: boolean, places: Array, what: string, home: string, error: string }}
  */
-export function parseFill(text, model = null) {
+export function parseFill(text, model = null, { what = '' } = {}) {
+    const w = fillWhat(model, what);
+    const regions = w === 'regions';
+    const wantsHome = regions && fillOptions(model).home;
     const obj = jsonIn(text);
-    if (!obj || !Array.isArray(obj.places)) return { ok: false, places: [], error: 'The reply was not the list of places asked for.' };
+    if (!obj || !Array.isArray(obj.places)) return { ok: false, places: [], what: w, home: '', error: 'The reply was not the list of places asked for.' };
+    const markers = model && Array.isArray(model.markers) ? model.markers : [];
     const taken = new Set((model && Array.isArray(model.all) ? model.all : []).flatMap(x => [norm(x.label), ...(x.names || []).map(n => norm(n.label))]));
-    const onMap = new Map((model && Array.isArray(model.markers) ? model.markers : []).map(m => [norm(m.label), m.id]));
-    const regionMap = !!(model && Array.isArray(model.markers) && model.markers.some(m => m.kind === 'region'));
+    let home = '';
+    if (wantsHome) {
+        const given = clean(obj.home, 80);
+        home = given && !taken.has(norm(given)) ? given : HOME_NAMES.find(nm => !taken.has(norm(nm))) || 'The Heartland';
+    }
+    // What a "near" can name on the map: asked for regions, the regions there (a place there stands for the home region it goes inside); else every marker.
+    const onMap = new Map(markers.filter(m => !regions || m.kind === 'region').map(m => [norm(m.label), m.id]));
+    if (wantsHome) { onMap.set('home', HOME_ID); onMap.set(norm(home), HOME_ID); for (const m of markers) if (m.kind !== 'region') onMap.set(norm(m.label), HOME_ID); }
     const places = [];
     const keys = new Set();
     for (const p of obj.places) {
         const name = clean(p && p.name, 80);
         const key = norm(name);
-        if (!key || keys.has(key) || taken.has(key)) continue;
+        if (!key || keys.has(key) || taken.has(key) || (home && key === norm(home))) continue;
         keys.add(key);
-        places.push({ key, name, kind: regionMap ? 'region' : (cleanKind(p.kind) || guessKind(name)), note: clean(p.note, 300), near: Array.isArray(p.near) ? p.near : [] });    // on a map of regions a new place is a region, whatever the reply called it
+        const kind = cleanKind(p.kind);
+        places.push({ key, name, kind: regions ? 'region' : (kind && kind !== 'region' ? kind : guessKind(name)), note: clean(p.note, 300), near: Array.isArray(p.near) ? p.near : [] });
         if (places.length >= 16) break;
     }
-    if (!places.length) return { ok: false, places: [], error: 'The reply added no new places.' };
+    if (!places.length) return { ok: false, places: [], what: w, home: '', error: regions ? 'The reply added no new regions.' : 'The reply added no new places.' };
     for (const p of places) {
         p.near = p.near.map(r => {
             const to = norm(r && r.to);
@@ -444,7 +504,13 @@ export function parseFill(text, model = null) {
             return keys.has(to) ? { key: to, dir, far } : null;
         }).filter(Boolean).slice(0, 3);
     }
-    return { ok: true, places, error: '' };
+    return { ok: true, places, what: w, home, error: '' };
+}
+
+/** Where the home region would stand: the middle of the map's own places (wrapInRegion puts it there). */
+function homeSpot(model) {
+    const placed = (model && Array.isArray(model.markers) ? model.markers : []).filter(m => m.kind !== 'region');
+    return placed.length ? { x: placed.reduce((n, m) => n + m.x, 0) / placed.length, y: placed.reduce((n, m) => n + m.y, 0) / placed.length } : { x: 0, y: 0 };
 }
 
 /**
@@ -453,11 +519,16 @@ export function parseFill(text, model = null) {
  * the other way from it at that distance ("dir" is the way from the new
  * place to the other); the rest go on a spiral around the map's places;
  * then a new place too close to anything is pushed off it. Only the new
- * ones move.
+ * ones move. With `home`, the map's own places are about to go inside a
+ * home region: that region, where it will stand, is what the new ones are
+ * laid out around, with the regions already there.
  * @returns {Map<string, { x: number, y: number }>}
  */
-export function layoutFill(model, places) {
-    const fixed = (model && Array.isArray(model.markers) ? model.markers : []).map(m => ({ id: m.id, x: m.x, y: m.y, wide: m.kind === 'region' }));
+export function layoutFill(model, places, { home = false } = {}) {
+    const markers = model && Array.isArray(model.markers) ? model.markers : [];
+    const fixed = home
+        ? [...markers.filter(m => m.kind === 'region').map(m => ({ id: m.id, x: m.x, y: m.y, wide: true })), { id: HOME_ID, ...homeSpot(model), wide: true }]
+        : markers.map(m => ({ id: m.id, x: m.x, y: m.y, wide: m.kind === 'region' }));
     const byId = new Map(fixed.map(f => [f.id, f]));
     const at = new Map();
     const GOLDEN = Math.PI * (3 - Math.sqrt(5));
@@ -510,10 +581,19 @@ export function layoutFill(model, places) {
     return new Map(keys.map(k => [k, { x: round4(at.get(k).x), y: round4(at.get(k).y) }]));
 }
 
-/** The new places added to the chat's book, on the map that was filled, each marked as not canon. Nothing already there is touched. */
-export function applyFill(book, model, places) {
+/**
+ * The new places added to the chat's book, on the map that was filled,
+ * each marked as not canon. Nothing already there is moved. With `home`
+ * (a name): the map's own places go inside a new home region of that
+ * name first (wrapInRegion; not canon, since the name is the AI's), and
+ * the new regions stand around it.
+ * @returns {{ book: object, ids: string[], homeId: string }}
+ */
+export function applyFill(book, model, places, { home = '' } = {}) {
     let b = normalizeBook(book);
-    const spots = layoutFill(model, places);
+    let homeId = '';
+    if (home) { const w = wrapInRegion(b, model, { label: home, loose: true }); b = w.book; homeId = w.id; }
+    const spots = layoutFill(model, places, { home: !!home });
     const ids = [];
     for (const p of Array.isArray(places) ? places : []) {
         const at = spots.get(p.key);
@@ -522,5 +602,5 @@ export function applyFill(book, model, places) {
         b = made.book;
         ids.push(made.id);
     }
-    return { book: b, ids };
+    return { book: b, ids, homeId };
 }

@@ -180,19 +180,20 @@ export async function draftSetup({ notes = '', reach = 'recent', model = null, w
  * Asks the AI to fill out one map (D160): places that plausibly belong on
  * it, around the ones already there. Nothing is stored and nothing is
  * changed: the suggestions go to the player.
- * @returns {Promise<{ ok: boolean, reason: string, places: Array, error: string }>}
+ * `what`: places for the map, or regions around it (D166). With regions asked for on a map of places, `home` is the name for the region those places go inside.
+ * @returns {Promise<{ ok: boolean, reason: string, places: Array, what: string, home: string, error: string }>}
  */
-export async function draftFill({ model = null, world = '', wish = '', count = 8 } = {}) {
+export async function draftFill({ model = null, world = '', wish = '', count = 8, what = '' } = {}) {
     if (settingUp) return { ok: false, reason: 'running', places: [], error: 'A request is already running.' };
     settingUp = true;
     try {
-        const prompt = buildFillPrompt({ model, world, wish, count, lore: await loreOfTheChat(), card: cardOfTheChat() });
+        const prompt = buildFillPrompt({ model, world, wish, count, what, lore: await loreOfTheChat(), card: cardOfTheChat() });
         const text = await ask(prompt, 'fill', 'atlas-fill');
-        const r = parseFill(text, model);
+        const r = parseFill(text, model, { what });
         try { addDebugLog(`[Atlas] fill: ${r.ok ? `${r.places.length} place(s) suggested` : r.error}`, r.ok ? null : { reply: text.slice(0, 400) }); } catch (e) { /* no log */ }
-        return { ok: r.ok, reason: r.ok ? '' : 'invalid', places: r.places, error: r.error };
+        return { ok: r.ok, reason: r.ok ? '' : 'invalid', places: r.places, what: r.what, home: r.home, error: r.error };
     } catch (e) {
-        return { ok: false, reason: 'error', places: [], error: String(e && e.message || e) };
+        return { ok: false, reason: 'error', places: [], what: '', home: '', error: String(e && e.message || e) };
     } finally {
         settingUp = false;
     }

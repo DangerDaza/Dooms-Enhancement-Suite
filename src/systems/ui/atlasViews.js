@@ -194,31 +194,42 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
 }
 
 /**
- * Filling out a map (D160), in the set-up's panel: what the player wants
- * more of and how many; the wait; the suggestions to keep or leave out.
+ * Filling out a map (D160, D166), in the set-up's panel: what to add
+ * (places on this map, or regions around it), what the player wants more
+ * of and how many; the wait; the suggestions to keep or leave out.
  * @param {object} o
  * @param {'ask'|'busy'|'review'} o.step
  * @param {string} o.mapLabel   the map being filled ("Hask", or the world's name for the top map)
+ * @param {string[]} o.options  what this map can be filled with: 'places', 'regions' (fillOptions)
+ * @param {'places'|'regions'} o.what
+ * @param {boolean} o.homeNeeded  regions here means the map's own places go inside a home region first
+ * @param {string} o.home       that region's name, as drafted (the review lets the player change it)
+ * @param {number} o.homeHolds  how many places go inside it
  * @param {string} o.wish
  * @param {number} o.count
  * @param {Array} o.places      parseFill's places
  * @param {string} o.error
  */
-export function atlasFillHtml({ step = 'ask', mapLabel = 'this map', wish = '', count = 8, places = [], error = '' } = {}) {
+export function atlasFillHtml({ step = 'ask', mapLabel = 'this map', options = ['places'], what = 'places', homeNeeded = false, home = '', homeHolds = 0, wish = '', count = 8, places = [], error = '' } = {}) {
     const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
-    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy"><h3>Filling out ${e(mapLabel)}</h3><p>Asking for places that belong here…</p><div class="dooms-atlas-setup-bar" role="progressbar"><span style="width: 55%"></span></div><p class="dooms-atlas-start-note">Nothing is added until you press Add.</p></div>`;
+    const regions = what === 'regions';
+    const noun = (n) => (regions ? (n === 1 ? 'region' : 'regions') : (n === 1 ? 'place' : 'places'));
+    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy"><h3>Filling out ${e(mapLabel)}</h3><p>${regions ? 'Asking for the lands that lie around…' : 'Asking for places that belong here…'}</p><div class="dooms-atlas-setup-bar" role="progressbar"><span style="width: 55%"></span></div><p class="dooms-atlas-start-note">Nothing is added until you press Add.</p></div>`;
     if (step === 'review') {
-        const kinds = (cur) => ATLAS_KINDS.map(k => `<option value="${k.id}"${k.id === cur ? ' selected' : ''}>${e(k.label)}</option>`).join('');
-        const row = (p) => `<li class="dooms-atlas-fill-row" data-key="${attr(p.key)}">
+        const kinds = (cur) => ATLAS_KINDS.filter(k => k.id !== 'region').map(k => `<option value="${k.id}"${k.id === cur ? ' selected' : ''}>${e(k.label)}</option>`).join('');
+        const row = (p) => `<li class="dooms-atlas-fill-row${regions ? ' is-region' : ''}" data-key="${attr(p.key)}">
                 <input type="text" class="dooms-atlas-input" data-field="name" maxlength="80" value="${attr(p.name)}" aria-label="Name" />
-                <select class="dooms-atlas-input" data-field="kind" aria-label="Kind">${kinds(p.kind)}</select>
+                ${regions ? '' : `<select class="dooms-atlas-input" data-field="kind" aria-label="Kind">${kinds(p.kind)}</select>`}
                 <button type="button" class="dooms-atlas-icon-btn" data-act="fill-remove" data-key="${attr(p.key)}" title="Leave ${attr(p.name)} out" aria-label="Leave ${attr(p.name)} out"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                 <p class="dooms-atlas-fill-note">${e(p.note)}</p>
             </li>`;
+        const homeRow = regions && homeNeeded ? `<label class="dooms-atlas-field dooms-atlas-fill-home-row"><span class="dooms-atlas-card-label">The region ${homeHolds === 1 ? 'the place' : `the ${homeHolds} places`} on this map ${homeHolds === 1 ? 'goes' : 'go'} inside (rename it as you like)</span>
+                <input type="text" class="dooms-atlas-input dooms-atlas-fill-home" maxlength="80" value="${attr(home)}" aria-label="The home region's name" /></label>` : '';
         return `<div class="dooms-atlas-setup-card is-review">
-            <h3>Suggestions for ${e(mapLabel)}</h3>
-            <p>${places.length} ${places.length === 1 ? 'place' : 'places'} the story has not named. Keep what fits, rename it, leave the rest out. They go on the map marked as <strong>not canon</strong> (a dashed ring): yours to edit, make canon or delete later, and nothing already on the map moves.</p>
+            <h3>${regions ? `Regions around ${e(homeNeeded ? (home || 'these places') : mapLabel)}` : `Suggestions for ${e(mapLabel)}`}</h3>
+            <p>${places.length} ${noun(places.length)} the story has not named. Keep what fits, rename it, leave the rest out. They go on the map marked as <strong>not canon</strong> (a dashed ${regions ? 'border' : 'ring'}): yours to edit, make canon or delete later${regions ? ', and each one borders its neighbours' : ', and nothing already on the map moves'}.</p>
             ${err}
+            ${homeRow}
             <ul class="dooms-atlas-setup-list">${places.map(row).join('')}</ul>
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="fill-apply"${places.length ? '' : ' disabled'}><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Add ${places.length === 1 ? 'it' : `these ${places.length}`} to the map</span></button>
@@ -227,15 +238,24 @@ export function atlasFillHtml({ step = 'ask', mapLabel = 'this map', wish = '', 
             </div>
         </div>`;
     }
+    const choice = (id, title, text) => `<label><input type="radio" name="dooms-atlas-fill-what" value="${id}"${id === what ? ' checked' : ''} /> <span><strong>${title}</strong> · ${text}</span></label>`;
+    const regionText = `lands with borders that lie around ${homeNeeded ? 'this one' : 'the ones here'}, each bordering its neighbours.${homeNeeded ? ` The ${homeHolds === 1 ? 'place' : `${homeHolds} places`} on this map ${homeHolds === 1 ? 'goes' : 'go'} inside a region of ${homeHolds === 1 ? 'its' : 'their'} own first (the AI names it; you can rename it), and this map becomes the map of the regions.` : ''}`;
+    const whatField = options.length > 1
+        ? `<fieldset class="dooms-atlas-setup-reach"><legend class="dooms-atlas-card-label">What to add</legend>
+            ${options.includes('places') ? choice('places', 'Places on this map', 'towns, landmarks, wilds and the like, around the ones already here.') : ''}
+            ${options.includes('regions') ? choice('regions', 'Neighbouring regions', regionText) : ''}
+        </fieldset>`
+        : (options[0] === 'regions' ? `<p class="dooms-atlas-start-note">This is a map of regions: what is added are ${regionText}</p>` : '');
     return `<div class="dooms-atlas-setup-card">
         <h3>Fill out ${e(mapLabel)}</h3>
-        <p>The AI adds places that plausibly belong on this map, around the ones already here, so there is more to explore. They are suggestions the story has not named: you check them first, and they go on the map marked as not canon.</p>
+        <p>The AI adds what plausibly belongs here, around what is already on the map, so there is more to explore. They are suggestions the story has not named: you check them first, and they go on the map marked as not canon.</p>
+        ${whatField}
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What do you want more of? (optional)</span>
-            <textarea class="dooms-atlas-input dooms-atlas-fill-wish" maxlength="600" rows="3" placeholder="&quot;A rough quarter to the east with a fighting pit.&quot; &quot;More shops and somewhere to hear rumours.&quot; Leave empty for a bit of everything.">${e(wish)}</textarea></label>
-        <label class="dooms-atlas-scale-pick">How many <select class="dooms-atlas-fill-count dooms-atlas-scale-select" aria-label="How many places to add">${FILL_COUNTS.map(n => `<option value="${n}"${n === Number(count) ? ' selected' : ''}>${n} places</option>`).join('')}</select></label>
+            <textarea class="dooms-atlas-input dooms-atlas-fill-wish" maxlength="600" rows="3" placeholder="&quot;A rough quarter to the east with a fighting pit.&quot; &quot;Cold uplands to the north, a marsh to the south.&quot; Leave empty for a bit of everything.">${e(wish)}</textarea></label>
+        <label class="dooms-atlas-scale-pick">How many <select class="dooms-atlas-fill-count dooms-atlas-scale-select" aria-label="How many to add">${FILL_COUNTS.map(n => `<option value="${n}"${n === Number(count) ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
         ${err}
         <div class="dooms-atlas-setup-actions">
-            <button type="button" class="dooms-atlas-btn is-primary" data-act="fill-draft"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Suggest places</span></button>
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="fill-draft"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Suggest</span></button>
             <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
         </div>
     </div>`;
@@ -311,7 +331,7 @@ export function atlasTidyHtml(tidy, { count = 0, canGroup = false } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
     const setup = `<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
     const fill = `<button type="button" class="dooms-atlas-btn" data-act="fill" title="Add places that plausibly belong on this map, around the ones already here. You check them first; they go on the map marked as not canon, and nothing already there moves."><i class="fa-solid fa-seedling" aria-hidden="true"></i> <span>Fill out this map</span></button>`;
-    const group = canGroup ? `<button type="button" class="dooms-atlas-btn" data-act="group" title="Put everything on this map inside a new region that stands where they stood: a land with borders you can click to enter. Each place keeps its spot, on the region's own map."><i class="fa-solid fa-object-group" aria-hidden="true"></i> <span>Group into a region</span></button>` : '';
+    const group = canGroup ? `<button type="button" class="dooms-atlas-btn" data-act="group" title="Put the places on this map inside a new region that stands where they stood: a land with borders you can click to enter. Each place keeps its spot, on the region's own map. Regions already here stay as its neighbours."><i class="fa-solid fa-object-group" aria-hidden="true"></i> <span>Group into a region</span></button>` : '';
     if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy"><div class="dooms-atlas-tidy-buttons">${setup}${fill}${group}</div></section>`;
     const item = (x, i) => `<li class="dooms-atlas-tidy-item is-${attr(x.kind)}">
             <span class="dooms-atlas-tidy-text">${x.kind === 'merge' ? `Merge <strong>${e(x.label)}</strong> into <strong>${e(x.toLabel)}</strong>` : `Delete <strong>${e(x.label)}</strong>`}${x.why ? `<span class="dooms-atlas-tidy-why">${e(x.why)}</span>` : ''}</span>
@@ -340,7 +360,8 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
     const visited = markers.filter(m => m.visited).length;
     const scales = Object.entries(ATLAS_SCALES).map(([id, s]) => `<option value="${id}"${id === scale ? ' selected' : ''}>${e(s.label)}</option>`).join('');
     return `${atlasTrayHtml({ tray, armed, layerLabel })}
-        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length, canGroup: markers.some(m => m.kind !== 'region') && !markers.some(m => m.kind === 'region') })}
+        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length, canGroup: markers.some(m => m.kind !== 'region') })}
+        ${markers.some(m => m.kind === 'region') && markers.some(m => m.kind !== 'region') ? '<p class="dooms-atlas-mixed"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> This map has regions and places side by side. <strong>Group into a region</strong> puts the places inside a land of their own, so every land borders its neighbours and no place is left between them.</p>' : ''}
         <div class="dooms-atlas-search">
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
             <input type="search" class="dooms-atlas-query" placeholder="Search every map" aria-label="Search places and people on every map" value="${attr(query)}" autocomplete="off" />
@@ -437,7 +458,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
             </div>
         </header>`;
     if (mode === 'edit') {
-        const kinds = ATLAS_KINDS.filter(x => x.id !== 'region').map(x => `<option value="${x.id}"${x.id === m.kind ? ' selected' : ''}>${e(x.label)}</option>`).join('');
+        const kinds = ATLAS_KINDS.map(x => `<option value="${x.id}"${x.id === m.kind ? ' selected' : ''}>${e(x.id === 'region' ? 'Region (a land with borders)' : x.label)}</option>`).join('');
         return `<article class="dooms-atlas-card is-editing kind-${attr(m.kind)}" data-id="${id}">
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Name</span><input type="text" class="dooms-atlas-input" data-field="label" maxlength="80" value="${attr(m.label)}" /></label>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Kind</span><select class="dooms-atlas-input" data-field="kind">${kinds}</select></label>

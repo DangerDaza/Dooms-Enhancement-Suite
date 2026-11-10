@@ -12,10 +12,10 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
-import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill } from '../../utils/atlasSetup.js';
+import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
@@ -201,14 +201,28 @@ function pickForRoad(id) {
     setHint('Roads: click a place, then another, to join them. Click two joined places to take their road away. Esc ends.');
 }
 
+/** The region whose land a spot of the shown map is on, or '' (D166). */
+function landAt(at) {
+    return model ? territoryAt(model, at.x, at.y) : '';
+}
+
+/** A place put down at a spot of the shown map: on it, or, when the spot is on a region's land and the place is no region itself, inside that region. */
+function putDown(id, at) {
+    const item = model ? [...model.tray, ...model.markers].find(x => x.id === id) : null;
+    const into = item && item.kind === 'region' ? '' : landAt(at);
+    commit(placeAt(getBook(), id, at, into || layer), into ? `${labelOf(id)} is inside ${labelOf(into)} now: click its land to enter it.` : '');
+}
+
 /** The map tapped: what was waiting lands there. */
 function tapped(at) {
     if (!armed) return;
     const a = armed;
     arm(null);
-    if (a.kind === 'place') { commit(placeAt(getBook(), a.id, at, layer)); return; }
-    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y, layer });
-    if (!commit(made.book)) return;
+    if (a.kind === 'place') { putDown(a.id, at); return; }
+    const into = landAt(at);
+    const made = addPin(getBook(), { label: 'New place', x: at.x, y: at.y, layer: into || layer });
+    if (!commit(made.book, into ? `The new place is inside ${labelOf(into)}: this is its map.` : '')) return;
+    if (into) setLayer(into);    // put down on a region's land, it is inside that region: its map is shown, the new marker open on its name
     if (!board) return;
     board.open(made.id);    // opening closes any other card, which sets the mode back to reading
     cardMode = 'edit';      // the new marker opens on its name
@@ -283,7 +297,7 @@ async function mount(ctx) {
             scale: setScale,
             open: () => { /* the card's mode was set by whoever opened it */ },
             close: () => { closeFacePopover(); cardMode = 'view'; },
-            drop: (id, at) => { arm(null); commit(placeAt(getBook(), id, at, layer)); },    // what is dropped on a map belongs to it
+            drop: (id, at) => { arm(null); putDown(id, at); },    // what is dropped on a map belongs to it; on a region's land, to that region
             enter: (id) => enter(id),
             pick: (id) => pickForRoad(id),
             tap: tapped,
@@ -378,7 +392,8 @@ function openFill() {
     if (!model) return;
     if (board) board.closeCard();
     arm(null);
-    setup = { fill: true, step: 'ask', wish: '', count: 8, places: [], error: '', world: worldKey(), layer, mapLabel: model.layerLabel || (getWorldState() || {}).name || 'this map' };
+    const fo = fillOptions(model);
+    setup = { fill: true, step: 'ask', options: fo.options, what: fo.options[0], homeNeeded: fo.home, homeHolds: model.markers.filter(m => m.kind !== 'region').length + model.tray.filter(t => t.here !== false && t.kind !== 'region').length, home: '', wish: '', count: 8, places: [], error: '', world: worldKey(), layer, mapLabel: model.layerLabel || (getWorldState() || {}).name || 'this map' };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
 }
@@ -386,24 +401,32 @@ function openFill() {
 async function runFill() {
     if (!setup || !setup.fill || !model) return;
     const world = setup.world;
-    const wish = setup.step === 'ask' ? String($(`${root()} .dooms-atlas-fill-wish`).val() || '') : setup.wish;
-    const count = setup.step === 'ask' ? Number($(`${root()} .dooms-atlas-fill-count`).val()) || 8 : setup.count;
-    setup = { ...setup, step: 'busy', wish, count, error: '' };
+    const asking = setup.step === 'ask';
+    const wish = asking ? String($(`${root()} .dooms-atlas-fill-wish`).val() || '') : setup.wish;
+    const count = asking ? Number($(`${root()} .dooms-atlas-fill-count`).val()) || 8 : setup.count;
+    const picked = asking ? String($(`${root()} input[name="dooms-atlas-fill-what"]:checked`).val() || '') : '';
+    const what = picked && setup.options.includes(picked) ? picked : setup.what;
+    setup = { ...setup, step: 'busy', wish, count, what, error: '' };
     renderSetup();
-    const r = await draftFill({ model, world: (getWorldState() || {}).name || '', wish, count });
+    const r = await draftFill({ model, world: (getWorldState() || {}).name || '', wish, count, what });
     if (!setup || !setup.fill || setup.world !== world || worldKey() !== world) return;    // closed, or the chat changed while the AI wrote
-    setup = r.ok ? { ...setup, step: 'review', places: r.places, error: '' } : { ...setup, step: 'ask', error: r.error || 'The suggestions could not be asked for.' };
+    setup = r.ok ? { ...setup, step: 'review', places: r.places, home: r.home || '', error: '' } : { ...setup, step: 'ask', error: r.error || 'The suggestions could not be asked for.' };
     renderSetup();
 }
 
 function applyFillNow() {
     if (!setup || !setup.fill || !setup.places.length || setup.world !== worldKey() || !model) return;
     if (setup.layer !== layer) { setup = { ...setup, error: 'The map shown is not the one these were suggested for. Cancel, and fill out this map again.' }; renderSetup(); return; }
-    const r = applyFill(getBook(), model, setup.places);
+    const regions = setup.what === 'regions';
+    const home = regions && setup.homeNeeded ? (String($(`${root()} .dooms-atlas-fill-home`).val() || '').trim() || setup.home || 'The Heartland') : '';
+    const r = applyFill(getBook(), model, setup.places, { home });
     const n = r.ids.length;
     setup = null;
     renderSetup();
-    if (commit(r.book, `${n} ${n === 1 ? 'place' : 'places'} added, marked as not canon (a dashed ring). Open one to edit it, make it canon or delete it.`) && board) board.fit();
+    const word = regions
+        ? `${n} ${n === 1 ? 'region' : 'regions'} added${home ? ` around ${home}. The places that were on this map are inside ${home} now: click its land to enter it` : ''}. They are not canon (a dashed border): open one by its badge to edit it, make it canon or delete it.`
+        : `${n} ${n === 1 ? 'place' : 'places'} added, marked as not canon (a dashed ring). Open one to edit it, make it canon or delete it.`;
+    if (commit(r.book, word) && board) board.fit();
 }
 
 async function runSetup() {

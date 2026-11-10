@@ -121,7 +121,7 @@ window.__open = async ({ look = '', world = 'realm', book = null, picture = null
         road: (r) => { const m = window.__model; const cur = m.routes.find(x => (x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a)) || r; const len = (cur.units || 0) * m.measure.per; const name = (id) => (m.markers.find(x => x.id === id) || {}).label || id; return atlasRoadHtml({ a: { id: cur.a, label: name(cur.a) }, b: { id: cur.b, label: name(cur.b) }, drawn: A.describeLength(len, m.measure.unit) + ', ' + A.describeTime(A.travelHours(len, m.measure)) + ' on foot', hours: cur.hours || 0, unit: m.measure.scale === 'world' || m.measure.scale === 'region' ? 'days' : 'minutes' }); },
         on: {
             open: (id) => window.__events.push(['open', id]), close: () => { window.__events.push(['close']); window.__ui.cardMode = 'view'; },
-            drop: (id, at) => { window.__events.push(['drop', id, at]); window.__book = A.placeAt(window.__book, id, at, window.__ui.layer); draw(); },
+            drop: (id, at) => { const into = (() => { const it = [...window.__model.tray, ...window.__model.markers].find(x => x.id === id); return it && it.kind === 'region' ? '' : A.territoryAt(window.__model, at.x, at.y); })(); window.__events.push(['drop', id, at, into]); window.__book = A.placeAt(window.__book, id, at, into || window.__ui.layer); draw(); },
             enter: (id) => { window.__events.push(['enter', id]); window.__layer(id); },
             pick: (id) => { window.__events.push(['pick', id]); const ui = window.__ui; if (!ui.first || ui.first === id) { ui.first = ui.first === id ? '' : id; window.__board.update({ picked: ui.first }); return; } const a = ui.first; ui.first = ''; window.__board.update({ picked: '' }); window.__book = A.toggleRoad(window.__book, a, id, window.__model); draw(); },
             tap: (at) => { window.__events.push(['tap', at]); const ui = window.__ui; if (ui.armed === '+') { ui.armed = ''; const made = A.addPin(window.__book, { label: 'New place', x: at.x, y: at.y, layer: ui.layer }); window.__book = made.book; draw(); window.__board.open(made.id); ui.cardMode = 'edit'; window.__board.redrawCard(); } else if (ui.armed) { window.__book = A.placeAt(window.__book, ui.armed, at, ui.layer); ui.armed = ''; draw(); } },
@@ -169,6 +169,18 @@ window.__fill = (step) => {
     return true;
 };
 window.__applyFill = () => { const r = S.applyFill(window.__book, window.__model, window.__fillPlaces); window.__book = r.book; window.__setup(''); draw(); window.__board.fit(); return r.ids; };
+// Fill out with regions (D166): the panel with what the map allows, and the suggestions applied with their home region.
+window.__fillRegions = (step, reply) => {
+    const panel = root.querySelector('.dooms-atlas-setup');
+    const m = window.__model;
+    const fo = S.fillOptions(m);
+    const r = reply ? S.parseFill(reply, m, { what: 'regions' }) : { places: [], home: '' };
+    window.__fillPlaces = r.places; window.__fillHome = r.home;
+    panel.hidden = false;
+    panel.innerHTML = atlasFillHtml({ step, mapLabel: m.layerLabel || pack.name, options: fo.options, what: step === 'ask' ? fo.options[0] : 'regions', homeNeeded: fo.home, homeHolds: m.markers.filter(x => x.kind !== 'region').length + m.tray.filter(t => t.here !== false && t.kind !== 'region').length, home: r.home, places: r.places });
+    return fo;
+};
+window.__applyFillRegions = () => { const home = S.fillOptions(window.__model).home ? (document.querySelector('.dooms-atlas-fill-home') || {}).value || window.__fillHome : ''; const r = S.applyFill(window.__book, window.__model, window.__fillPlaces, { home }); window.__book = r.book; window.__homeId = r.homeId; window.__setup(''); draw(); window.__board.fit(); return r; };
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
 window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
@@ -704,7 +716,7 @@ console.log('\n§5d territories: regions as lands that share borders, clicked to
     await page.evaluate(() => { const r = window.A.wrapInRegion(window.__book, window.__model, { label: 'The Haskmarch' }); window.__book = r.book; window.__region = r.id; window.__draw(); window.__board.fit(); });
     await settle();
     let l = await layout();
-    check('grouped: the top map is one land, the city and the castle inside it', l.lands === 1 && l.count === 1 && /is-territory/.test(Object.values(l.markers)[0].cls) && l.routes === 0 && (await page.evaluate(() => window.__model.measure.scale)) === 'world');
+    check('grouped: the top map is one land, the city and the castle inside it', l.lands === 1 && l.count === 1 && /is-territory/.test(Object.values(l.markers)[0].cls) && l.routes === 0 && (await page.evaluate(() => window.__model.measure.scale)) === 'region');
     check('a map that holds a region no longer offers to group', await page.evaluate(() => !document.querySelector('.dooms-atlas-tidy [data-act="group"]')));
     // Neighbours, as Fill out this map would add them: regions, not canon.
     await page.evaluate(() => {
@@ -768,6 +780,77 @@ console.log('\n§5d territories: regions as lands that share borders, clicked to
     const armedEvents = await page.evaluate(() => { document.getElementById('dooms-atlas').classList.remove('is-armed'); return window.__events.map(e => e[0]); });
     check('with a marker waiting, a click on a land puts it down and does not enter', armedEvents.includes('tap') && !armedEvents.includes('enter') && (await page.evaluate(() => window.__model.markers.some(m => m.label === 'New place'))));
     await page.evaluate(() => window.__board.closeCard());
+}
+
+console.log('\n§5e regions always border one another; Fill out with regions; a place put on a land (D166)');
+{
+    // The owner's map as he reported it: places on the top map, and regions a fill had added standing apart from one another.
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 4, 2], ['Mirefen Ferry', 'water', -3, -2], ['The Ashwood', 'wild', -3, 1]]) b = window.A.addPin(b, { label, kind, x, y }).book;
+        for (const [label, x, y] of [['The Amber Waste', 16, -9], ['The Salt Fens', -4, 15], ['Kessel Vale', -17, -6], ['Redfall Heights', 5, -17]]) b = window.A.addPin(b, { label, kind: 'region', x, y, loose: true }).book;
+        return window.__open({ world: 'campaign', book: b });
+    });
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    let l = await layout();
+    const touching = () => page.evaluate(() => { const t = window.__model.territories; const d = (pt, a) => Math.hypot(pt[0] - a.x, pt[1] - a.y); return t.length > 1 && t.every(a => t.some(b => a !== b && a.outline.some(pt => Math.abs(d(pt, a) - d(pt, b)) < 0.3))); });
+    check('four regions that stood far apart now border one another: no land stands alone', l.lands === 4 && (await touching()));
+    const mixedWord = await page.evaluate(() => (document.querySelector('.dooms-atlas-mixed') || {}).textContent || '');
+    check('with regions and places side by side, the Places tab says so and offers Group into a region', /regions and places side by side/.test(mixedWord) && (await page.evaluate(() => !!document.querySelector('.dooms-atlas-tidy [data-act="group"]'))));
+    await shot('7m-mixed-before');
+    await page.evaluate(() => { const r = window.A.wrapInRegion(window.__book, window.__model, { label: 'The Haskmarch' }); window.__book = r.book; window.__homeId = r.id; window.__draw(); window.__board.fit(); });
+    await settle();
+    l = await layout();
+    check('grouped: five lands and nothing else on the map; every land borders a neighbour; the word and the button are gone', l.lands === 5 && l.count === 5 && Object.values(l.markers).every(m => /is-territory/.test(m.cls)) && (await touching()) && (await page.evaluate(() => !document.querySelector('.dooms-atlas-mixed') && !document.querySelector('.dooms-atlas-tidy [data-act="group"]'))));
+    check('the home region\'s land is where its places were, and they are inside it', (await page.evaluate(() => window.A.territoryAt(window.__model, 0, 0) === window.__homeId)) && (await page.evaluate(() => window.__model.all.filter(x => x.layer === window.__homeId && x.placed).length)) === 4);
+    await shot('7n-regions-bordering');
+
+    // Fill out with regions, from a map of places: the owner's first step done right.
+    await page.evaluate(() => {
+        let b = window.A.withScale(null, 'region');
+        for (const [label, kind, x, y] of [['Hask', 'settlement', 0, 0], ['Redfall Castle', 'stronghold', 4, 2], ['Mirefen Ferry', 'water', -3, -2]]) b = window.A.addPin(b, { label, kind, x, y }).book;
+        return window.__open({ world: 'campaign', book: b });
+    });
+    await settle();
+    const fo = await page.evaluate(() => window.__fillRegions('ask'));
+    let p = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); return { text: c.textContent.replace(/\s+/g, ' '), radios: [...c.querySelectorAll('input[name="dooms-atlas-fill-what"]')].map(x => `${x.value}:${x.checked}`) }; });
+    check('Fill out on a map of places asks what to add: places here, or neighbouring regions', fo.options.join() === 'places,regions' && fo.home === true && p.radios.join() === 'places:true,regions:false' && /Neighbouring regions/.test(p.text) && /go inside a region of their own first/.test(p.text), JSON.stringify(p.radios));
+    await shot('7o-fill-what');
+    await page.evaluate(() => window.__fillRegions('review', JSON.stringify({ home: 'The Haskmarch', places: [
+        { name: 'Redfall Heights', note: 'Cold uplands above the castle.', near: [{ to: 'home', dir: 's', far: 'near' }] },
+        { name: 'The Salt Fens', note: 'Brackish marsh and reed-cutters.', near: [{ to: 'home', dir: 'n', far: 'near' }] },
+        { name: 'The Amber Waste', note: 'Dry country nobody claims.', near: [{ to: 'home', dir: 'w', far: 'near' }] },
+        { name: 'Kessel Vale', note: 'Farmland and a toll road.', near: [{ to: 'home', dir: 'e', far: 'near' }] },
+    ] })));
+    p = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); const b = c.getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' '), home: (c.querySelector('.dooms-atlas-fill-home') || {}).value || '', rows: c.querySelectorAll('.dooms-atlas-fill-row').length, kinds: c.querySelectorAll('.dooms-atlas-fill-row select').length, inside: b.top >= 0 && b.bottom <= innerHeight }; });
+    check('the review names the home region (to rename) and lists the regions around it, with no kind to pick', p.home === 'The Haskmarch' && p.rows === 4 && p.kinds === 0 && /Regions around The Haskmarch/.test(p.text) && /the 11 places on this map go inside/.test(p.text) && /dashed border/.test(p.text) && p.inside, JSON.stringify(p));
+    await shot('7p-fill-regions-review');
+    await page.locator('.dooms-atlas-fill-home').fill('The Hask Marches');
+    await page.evaluate(() => window.__applyFillRegions());
+    await settle();
+    l = await layout();
+    check('added: the map is five lands that border one another, the home region under the name typed', l.lands === 5 && l.count === 5 && l.looseLands === 5 && (await touching()) && (await page.evaluate(() => window.__model.markers.find(m => m.id === window.__homeId).label)) === 'The Hask Marches');
+    check('the places are inside the home region where they were', (await page.evaluate(() => { const m = window.A.atlasModel({ pack: window.__pack, book: window.__book, layer: window.__homeId }); return JSON.stringify(m.markers.map(x => [x.label, x.x, x.y])); })) === JSON.stringify([['Hask', 0, 0], ['Redfall Castle', 4, 2], ['Mirefen Ferry', -3, -2]]));
+    await shot('7q-fill-regions-applied');
+    check('a map of regions is then filled with regions only', (await page.evaluate(() => window.S.fillOptions(window.__model).options.join())) === 'regions');
+
+    // A place from the list dropped on a land goes inside that region.
+    const target = await page.evaluate(() => { const t = window.__model.territories.find(x => x.label === 'The Salt Fens'); const p = window.__board.map.latLngToContainerPoint([-t.y, t.x + 1.5]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { x: box.left + p.x, y: box.top + p.y, id: t.id }; });
+    const hadTray = (await layout()).tray.length;
+    if (hadTray === 0) await page.evaluate(() => { window.__book = window.A.addPin({ ...window.__book }, { label: 'Reedcutters\' Landing', x: NaN, y: NaN }).book; const made = window.__book.made[window.__book.made.length - 1]; delete window.__book.spots[made.id]; window.__draw(); });
+    const row = await page.evaluate(() => (document.querySelector('.dooms-atlas-tray-row .dooms-atlas-row-name') || {}).textContent || '');
+    await page.evaluate(({ x, y }) => {
+        const r = document.querySelector('.dooms-atlas-tray-row');
+        const dt = new DataTransfer();
+        r.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        const map = document.querySelector('.dooms-atlas-map');
+        map.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+    }, target);
+    await settle();
+    l = await layout();
+    const dropped = await page.evaluate(() => window.__events.filter(e => e[0] === 'drop').pop());
+    check('a place dropped on a land goes inside that region, not onto the map of regions', !!row && dropped[3] === target.id && l.count === 5 && !l.tray.includes(row) && (await page.evaluate((nm) => { const it = window.__model.all.find(x => x.label === nm); return !!it && it.layer; }, row)) === target.id, `${row} ${JSON.stringify(dropped)}`);
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

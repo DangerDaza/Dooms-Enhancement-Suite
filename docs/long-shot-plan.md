@@ -332,3 +332,22 @@ along them can shift a little unasked (a set time cannot); roads are
 straight lines; the time told to the story moves the tracker's date and
 time through the reply, not Live World's own clocks; across maps no time
 is told.
+
+## 13. Regions always border one another (2026-11-10, D166)
+
+The owner, with a screenshot: "Fill out this map just added a bunch of
+nodes to the map and added 4 regions, but they are not touching? We need
+region borders." Two faults. A fill on a map of places could come back
+with regions among them, which then stood on the same map as the places.
+And a region's land was its own blob about its spot, cut by a neighbour
+only when the neighbour was near, so regions put down apart did not touch.
+Built in "Atlas 11".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D166 | The lands of a map are cut from one landmass | Supersedes D163's "its own blob around its spot". The regions on a map share a landmass: the ground about all their spots and a margin further, its shore waved by where each point of it is (`landmassOutline`), so a region added at one end leaves the far shore as it was. Each region's land is that landmass cut along the line halfway to every other region (`territoryOutlines`): the lands tile it with nothing left over, and every region borders its neighbours however far apart their spots are. **A place put down on a land goes inside that region** (`territoryAt`): dropped from the tray, tapped down, or made with the pin tool (which then shows the region's map with the new marker open on its name). A region put down stays on the map of regions. **Fill out asks what to add** (`fillOptions`): places, on a map of places; regions, on the top map or a map that holds regions. Asked for places, nothing comes back a region. Asked for regions on a map that has places, those places first go inside a home region where they stood (the AI names it in `home`, the review lets the player rename it; not canon, since the name is the AI's), and the new regions are laid out around it. **Group into a region** is offered wherever a map has places, also when it has regions already, with a word in Places when the two stand side by side. Grouping changes no distance between the places: the region's own map keeps the scale they were on. A map of regions reads at a region's scale by default (not a world's), so a land is as wide on it as it is inside. The card's Edit offers Region among the kinds. |
+
+For a map already in the state the owner's was (places and regions side
+by side): the regions now border one another as soon as the Atlas opens;
+Group into a region puts the places inside a land of their own, which
+takes its place among the others.

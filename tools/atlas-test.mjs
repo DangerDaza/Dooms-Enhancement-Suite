@@ -19,7 +19,7 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
+    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem,
 } from '../src/utils/atlas.js';
 
 let failures = 0;
@@ -257,10 +257,16 @@ console.log('\n§6c territories (D163)');
     check('every region has a land around its own spot', sites.every(s => cells.get(s.id).length >= 3 && inside(cells.get(s.id), [s.x, s.y])));
     check('neighbours meet at a border: neither holds the other\'s spot, and each stops near the line halfway', !inside(cells.get('a'), [6, 0]) && !inside(cells.get('b'), [0, 0]) && cells.get('a').every(([x]) => x < 3.4) && cells.get('b').every(([x]) => x > 2.6));
     check('a point near the border is in one land or the other, not both and not neither', [[2.4, 0.5], [3.6, 0.5], [2.9, 1.8], [1.5, 2.2]].every(pt => ['a', 'b', 'c'].filter(k => inside(cells.get(k), pt)).length === 1));
-    check('a region with no neighbour near keeps its whole land', cells.get('far').every(([x, y]) => Math.hypot(x - 40, y - 40) > TERRITORY_RADIUS * 0.7 && Math.hypot(x - 40, y - 40) < TERRITORY_RADIUS * 1.3));
+    const area = (p) => Math.abs(p.reduce((n, [x, y], k) => { const [x2, y2] = p[(k + 1) % p.length]; return n + x * y2 - x2 * y; }, 0)) / 2;
+    const land = landmassOutline(sites);
+    check('the regions share one landmass: every spot is on it, with room around', sites.every(st => pointInPolygon(land, st.x, st.y) && pointInPolygon(land, st.x + 3, st.y) && pointInPolygon(land, st.x, st.y - 3)) && !pointInPolygon(land, -9, 0) && !pointInPolygon(land, 49, 40));
+    check('the lands tile the landmass with nothing left over and nothing twice', near(['a', 'b', 'c', 'far'].reduce((n, k) => n + area(cells.get(k)), 0), area(land), 0.05), `${['a', 'b', 'c', 'far'].reduce((n, k) => n + area(cells.get(k)), 0)} vs ${area(land)}`);
+    check('a region far from the others still borders them: its land reaches the line halfway (D166)', (() => { const far = cells.get('far'); const d = (pt, st) => Math.hypot(pt[0] - st.x, pt[1] - st.y); return far.some(pt => Math.abs(d(pt, sites[3]) - d(pt, sites[2])) < 0.3) && cells.get('c').some(pt => Math.abs(d(pt, sites[3]) - d(pt, sites[2])) < 0.3); })());
+    check('one region alone is a round land about its spot', (() => { const one = territoryOutlines([{ id: 'a', x: 2, y: 2 }]).get('a'); return one.every(([x, y]) => Math.hypot(x - 2, y - 2) > TERRITORY_RADIUS * 0.85 && Math.hypot(x - 2, y - 2) < TERRITORY_RADIUS * 1.15); })());
     check('the same spots give the same lands; a border is waved, not ruled', same([...cells], [...territoryOutlines(sites)]) && cells.get('a').filter(([x]) => x > 2.6).some(([x]) => Math.abs(x - 3) > 0.03) && cells.get('a').length > 48);
     const moved = territoryOutlines([{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 6, y: 0 }, { id: 'c', x: 3, y: 5 }, { id: 'far', x: 41, y: 40 }]);
-    check('a region moved far away redraws no other land', same(moved.get('a'), cells.get('a')) && same(moved.get('b'), cells.get('b')) && !same(moved.get('far'), cells.get('far')));
+    check('a region added at one end leaves the far shore as it was', (() => { const before = landmassOutline(sites.slice(0, 3)); const after = landmassOutline([...sites.slice(0, 3), { id: 'east', x: 14, y: 0 }]); const west = (pts) => pts.filter(([x, y]) => x < -2 && Math.abs(y) < 2).map(([x, y]) => [Math.round(x * 5), Math.round(y * 5)]); return west(before).length > 3 && west(before).every(pt => west(after).some(q => Math.abs(q[0] - pt[0]) <= 2 && Math.abs(q[1] - pt[1]) <= 2)); })());
+    check('the same spots, the same landmass; a spot that is not a number is left out', same(land, landmassOutline(sites)) && landmassOutline([{ id: 'x', x: NaN, y: 0 }]).length === 0 && moved.get('far').length >= 3);
     check('no regions, no lands', territoryOutlines([]).size === 0 && territoryOutlines(null).size === 0);
 
     // The owner's world: a city and a castle on the top map, grouped into the region they lie in.
@@ -273,14 +279,18 @@ console.log('\n§6c territories (D163)');
     check('before: two pins on the top map, no lands, a region\'s scale', before.markers.length === 2 && before.territories.length === 0 && before.measure.scale === 'region');
     const g = wrapInRegion(book, before, { label: 'The Haskmarch' });
     const top = atlasModel({ pack, state: st, book: g.book });
-    check('grouped: one region on the top map where they stood, drawn as a land; the top map is a world\'s now', g.moved === 2 && top.markers.length === 1 && top.markers[0].kind === 'region' && top.markers[0].territory === true && top.markers[0].x === 1 && top.markers[0].y === 1 && top.territories.length === 1 && top.territories[0].outline.length >= 40 && top.measure.scale === 'world' && top.markers[0].holds === 2 && top.routes.length === 0);
+    check('grouped: one region on the top map where they stood, drawn as a land, at the scale its places were on', g.moved === 2 && top.markers.length === 1 && top.markers[0].kind === 'region' && top.markers[0].territory === true && top.markers[0].x === 1 && top.markers[0].y === 1 && top.territories.length === 1 && top.territories[0].outline.length >= 40 && top.measure.scale === 'region' && top.markers[0].holds === 2 && top.routes.length === 0);
     const region = atlasModel({ pack, state: st, book: g.book, layer: g.id });
+    check('grouping changes no distance between the places: the region\'s own map keeps the scale they were on', near(distanceBetween(region, 'pin:hask', 'pin:redfall-castle'), distanceBetween(before, 'pin:hask', 'pin:redfall-castle')) && g.book.scales[g.id] === 'region' && (() => { const town = wrapInRegion(withScale(book, 'town'), atlasModel({ pack, state: st, book: withScale(book, 'town') })); return atlasModel({ pack, state: st, book: town.book, layer: town.id }).measure.scale === 'town'; })());
     check('inside the region: the city and the castle where they were, at a region\'s scale on open country', same(region.markers.map(m => [m.label, m.x, m.y]), [['Hask', 0, 0], ['Redfall Castle', 2, 2]]) && region.measure.scale === 'region' && region.ground === 'country' && region.territories.length === 0);
     const hask = atlasModel({ pack, state: st, book: g.book, layer: 'pin:hask' });
     check('the city inside the region is still a town, and the stair inside it a site', hask.measure.scale === 'town' && hask.depth === 2 && atlasModel({ pack, state: st, book: g.book, layer: 'pin:the-black-stair' }).measure.scale === 'site');
     const two = atlasModel({ pack, state: st, book: addPin(g.book, { label: 'The Grey Forest', kind: 'region', x: 7, y: 1, loose: true }).book });
     check('a second region beside it: two lands, the new one marked not canon, tinted as a forest', two.territories.length === 2 && two.territories.find(t => t.label === 'The Grey Forest').loose === true && two.territories.find(t => t.label === 'The Grey Forest').terrain === 'forest' && two.territories.every(t => t.hue >= 0 && t.hue < 6));
-    check('open country keeps its woods and ponds off the lands', (() => { const d = two.decor; const off = (pts) => pts.every(([x, y]) => two.markers.every(m => Math.hypot(m.x - x, m.y - y) > TERRITORY_RADIUS)); return d.woods.length > 0 && d.woods.every(off) && d.ponds.every(off); })());
+    check('the region a spot of the map stands on, or none off the lands', territoryAt(two, 1, 1) === g.id && territoryAt(two, 7, 1) === two.territories.find(t => t.label === 'The Grey Forest').id && territoryAt(two, 60, 60) === '' && territoryAt(top, 1.5, 1.5) === g.id && territoryAt(before, 0, 0) === '' && territoryAt(null, 0, 0) === '');
+    check('the two lands meet: a spot halfway between them is on one or the other', (() => { const mx = (two.territories[0].x + two.territories[1].x) / 2, my = (two.territories[0].y + two.territories[1].y) / 2; return [[mx - 0.5, my], [mx + 0.5, my], [mx, my + 1], [mx, my - 1]].every(([x, y]) => territoryAt(two, x, y) !== ''); })());
+    check('the bounds hold the lands', two.territories.every(t => t.outline.every(([x, y]) => x > two.bounds.minX && x < two.bounds.maxX && y > two.bounds.minY && y < two.bounds.maxY)));
+    check('open country keeps its woods and ponds off the lands', (() => { const d = two.decor; const off = (pts) => pts.every(([x, y]) => territoryAt(two, x, y) === ''); return d.woods.length > 0 && d.woods.every(off) && d.ponds.every(off) && d.trees.every(off); })());
     check('Place all gives regions room for their lands', (() => { const m = atlasModel({ pack, state: st, book: { ...normalizeBook(null), made: [{ id: 'pin:a', label: 'A', kind: 'region' }, { id: 'pin:b', label: 'B', kind: 'region' }, { id: 'pin:c', label: 'C', kind: 'region' }] } }); const sp = [...suggestSpots(m).values()]; return sp.length === 3 && sp.every((a, i) => sp.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= TERRITORY_RADIUS * 1.29)); })());
 }
 
@@ -365,7 +375,7 @@ console.log('\n§6e the time is the roads\' (D165)');
     let lands = addPin(null, { label: 'North', kind: 'region', x: 0, y: 0 }).book;
     lands = addPin(lands, { label: 'South', kind: 'region', x: 0, y: 8 }).book;
     const lm = atlasModel({ pack: blankPack('x'), book: lands });
-    check('between two regions: the straight line at the pace, with no cross-country penalty', routeBetween(lm, 'pin:north', 'pin:south').mode === 'open' && near(routeBetween(lm, 'pin:north', 'pin:south').hours, 8 * 60 / 3) && describeDistance(lm, 'pin:north', 'pin:south') === '480 miles, about 20 days on foot');
+    check('between two regions: the straight line at the pace, with no cross-country penalty', routeBetween(lm, 'pin:north', 'pin:south').mode === 'open' && near(routeBetween(lm, 'pin:north', 'pin:south').hours, 8 * 15 / 3) && describeDistance(lm, 'pin:north', 'pin:south') === '120 miles, about 5 days on foot');
     // What the story is told.
     const told = buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan', journey: describeJourney(m2, id('Hask'), id('Redfall Castle')) });
     check('Travel here tells the story how long the map says it takes', told.includes('The map puts the journey at about 2 days by road: it takes that long, no less and no more, and the date and time move on by it.') && !/yours to judge/.test(told));
