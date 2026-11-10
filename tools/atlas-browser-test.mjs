@@ -53,7 +53,7 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
@@ -151,6 +151,22 @@ window.__setup = (step) => {
     return true;
 };
 window.__applySetup = () => { const r = S.applySetup(window.__draft, window.__book); window.__book = r.book; window.__ids = Object.fromEntries(r.ids); window.__setup(''); window.__ui.layer = ''; draw(); window.__board.fit(); return true; };
+// The fill's panel with fixture suggestions.
+window.__fill = (step) => {
+    const panel = root.querySelector('.dooms-atlas-setup');
+    const m = window.__model;
+    const reply = JSON.stringify({ places: [
+        { name: 'The Pit', kind: 'landmark', note: 'A fighting pit where debts are settled; the place to find hired blades.', near: [{ to: 'The Temple', dir: 'w', far: 'far' }] },
+        { name: "Tanner's Row", kind: 'shop', note: 'Stinking yards and cheap leather; someone here always knows who came through the gate.', near: [{ to: 'The Pit', dir: 'n', far: 'close' }] },
+        { name: 'The Gilded Ewer', kind: 'tavern', note: 'A quiet inn with a locked upper room.', near: [{ to: 'The Counting Room', dir: 'e', far: 'near' }] },
+        { name: 'Ashgate', kind: 'landmark', note: 'The north gate, shut at dusk.', near: [{ to: 'The Temple', dir: 's', far: 'far' }] },
+    ] });
+    window.__fillPlaces = S.parseFill(reply, m).places;
+    panel.hidden = false;
+    panel.innerHTML = atlasFillHtml({ step, mapLabel: m.layerLabel || 'the world', wish: '', count: 8, places: window.__fillPlaces, error: '' });
+    return true;
+};
+window.__applyFill = () => { const r = S.applyFill(window.__book, window.__model, window.__fillPlaces); window.__book = r.book; window.__setup(''); draw(); window.__board.fit(); return r.ids; };
 window.__layer = (id) => { window.__board.closeCard(); window.__ui.layer = id; window.__ui.cardMode = 'view'; draw(); window.__board.fit(); return true; };
 window.__set = (next) => { Object.assign(window.__ui, next); draw(); return true; };
 window.__edit = (fn) => { window.__book = fn(window.__book, window.__model, window.__pack); draw(); return true; };
@@ -535,6 +551,28 @@ console.log('\n§5c setting up the world (D159)');
     l = await layout();
     check('inside Hask: its three places on streets, already placed', l.count === 3 && l.ground === 'city' && !!l.markers['The Temple'] && /Hask/.test(l.trail));
     await shot('7g-setup-applied-hask');
+    // Filling out the map inside Hask (D160).
+    check('the Places tab offers Fill out this map', await page.evaluate(() => !!document.querySelector('.dooms-atlas-tidy [data-act="fill"]')));
+    await page.evaluate(() => window.__fill('ask'));
+    p = await panel();
+    check('fill out: what the player wants more of, how many, Suggest', /Fill out Hask/.test(p.text) && /What do you want more of/.test(p.text) && /not canon/.test(p.text) && p.acts.join() === 'fill-draft,setup-close' && p.inStage && p.fit);
+    await page.evaluate(() => window.__fill('review'));
+    p = await panel();
+    const fillRows = await page.evaluate(() => document.querySelectorAll('.dooms-atlas-fill-row').length);
+    check('the suggestions: each with its name, kind and note, to keep or leave out', fillRows === 4 && /Suggestions for Hask/.test(p.text) && /fighting pit/.test(p.text) && p.acts.filter(a => a !== 'fill-remove').join() === 'fill-apply,fill-again,setup-close' && p.inStage && p.fit);
+    await shot('7i-fill-review');
+    const beforeFill = await page.evaluate(() => window.__model.markers.map(m => [m.id, m.x, m.y]));
+    await page.evaluate(() => window.__applyFill());
+    await settle();
+    l = await layout();
+    const afterFill = await page.evaluate(() => window.__model.markers.map(m => [m.id, m.x, m.y]));
+    check('added: four more markers ringed as not canon, the three already there where they were', l.count === 7 && Object.values(l.markers).filter(m => /is-loose/.test(m.cls)).length === 4 && beforeFill.every(b => afterFill.some(a => a[0] === b[0] && a[1] === b[1] && a[2] === b[2])));
+    await page.evaluate(() => window.__board.show(window.__model.markers.find(m => m.label === 'The Pit').id));
+    await page.waitForTimeout(600);
+    l = await layout();
+    check('its card says it is not canon and offers to make it so', /Not canon/.test(l.cardText) && /Make it canon/.test(l.cardText) && /fighting pit/.test(l.cardText));
+    await shot('7j-fill-applied');
+    await page.evaluate(() => window.__board.closeCard());
     await page.evaluate(() => window.__layer(window.__ids['black stair']));
     await settle();
     l = await layout();

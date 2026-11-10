@@ -11,7 +11,7 @@
 import { escapeHtml } from '../../utils/html.js';
 import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
-import { draftRows, draftChain } from '../../utils/atlasSetup.js';
+import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
 
 export const ATLAS_ID = 'dooms-atlas';
 
@@ -192,6 +192,54 @@ export function atlasSetupHtml({ step = 'notes', notes = '', reach = 'recent', c
     </div>`;
 }
 
+/**
+ * Filling out a map (D160), in the set-up's panel: what the player wants
+ * more of and how many; the wait; the suggestions to keep or leave out.
+ * @param {object} o
+ * @param {'ask'|'busy'|'review'} o.step
+ * @param {string} o.mapLabel   the map being filled ("Hask", or the world's name for the top map)
+ * @param {string} o.wish
+ * @param {number} o.count
+ * @param {Array} o.places      parseFill's places
+ * @param {string} o.error
+ */
+export function atlasFillHtml({ step = 'ask', mapLabel = 'this map', wish = '', count = 8, places = [], error = '' } = {}) {
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy"><h3>Filling out ${e(mapLabel)}</h3><p>Asking for places that belong here…</p><div class="dooms-atlas-setup-bar" role="progressbar"><span style="width: 55%"></span></div><p class="dooms-atlas-start-note">Nothing is added until you press Add.</p></div>`;
+    if (step === 'review') {
+        const kinds = (cur) => ATLAS_KINDS.map(k => `<option value="${k.id}"${k.id === cur ? ' selected' : ''}>${e(k.label)}</option>`).join('');
+        const row = (p) => `<li class="dooms-atlas-fill-row" data-key="${attr(p.key)}">
+                <input type="text" class="dooms-atlas-input" data-field="name" maxlength="80" value="${attr(p.name)}" aria-label="Name" />
+                <select class="dooms-atlas-input" data-field="kind" aria-label="Kind">${kinds(p.kind)}</select>
+                <button type="button" class="dooms-atlas-icon-btn" data-act="fill-remove" data-key="${attr(p.key)}" title="Leave ${attr(p.name)} out" aria-label="Leave ${attr(p.name)} out"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                <p class="dooms-atlas-fill-note">${e(p.note)}</p>
+            </li>`;
+        return `<div class="dooms-atlas-setup-card is-review">
+            <h3>Suggestions for ${e(mapLabel)}</h3>
+            <p>${places.length} ${places.length === 1 ? 'place' : 'places'} the story has not named. Keep what fits, rename it, leave the rest out. They go on the map marked as <strong>not canon</strong> (a dashed ring): yours to edit, make canon or delete later, and nothing already on the map moves.</p>
+            ${err}
+            <ul class="dooms-atlas-setup-list">${places.map(row).join('')}</ul>
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="fill-apply"${places.length ? '' : ' disabled'}><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Add ${places.length === 1 ? 'it' : `these ${places.length}`} to the map</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="fill-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+            </div>
+        </div>`;
+    }
+    return `<div class="dooms-atlas-setup-card">
+        <h3>Fill out ${e(mapLabel)}</h3>
+        <p>The AI adds places that plausibly belong on this map, around the ones already here, so there is more to explore. They are suggestions the story has not named: you check them first, and they go on the map marked as not canon.</p>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What do you want more of? (optional)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-fill-wish" maxlength="600" rows="3" placeholder="&quot;A rough quarter to the east with a fighting pit.&quot; &quot;More shops and somewhere to hear rumours.&quot; Leave empty for a bit of everything.">${e(wish)}</textarea></label>
+        <label class="dooms-atlas-scale-pick">How many <select class="dooms-atlas-fill-count dooms-atlas-scale-select" aria-label="How many places to add">${FILL_COUNTS.map(n => `<option value="${n}"${n === Number(count) ? ' selected' : ''}>${n} places</option>`).join('')}</select></label>
+        ${err}
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="fill-draft"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Suggest places</span></button>
+            <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+        </div>
+    </div>`;
+}
+
 /** A kind's switch: the icon, the name, the count; struck through while off. */
 function kindHtml(k, off) {
     return `<button type="button" class="dooms-atlas-kind kind-${attr(k.id)}${off ? ' is-off' : ''}" data-act="kind" data-kind="${attr(k.id)}" aria-pressed="${off ? 'false' : 'true'}" title="${off ? 'Show' : 'Hide'} ${attr(k.label.toLowerCase())}">
@@ -247,7 +295,7 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
     const row = (m, elsewhere) => {
         const k = kindOf(m.kind);
         return `<li><button type="button" class="dooms-atlas-row kind-${attr(m.kind)}${m.visited || elsewhere ? ' is-visited' : ''}" data-act="goto" data-id="${attr(m.id)}"${elsewhere ? ` data-layer="${attr(m.layer)}"` : ''} title="Show ${attr(m.label)} on ${elsewhere ? `the map of ${attr(m.layerLabel || 'the world')}` : 'the map'}">
-            <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name">${e(m.label)}</span>${m.player ? hereChip : ''}${m.holds ? `<span class="dooms-atlas-row-people" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside"><i class="fa-solid fa-door-open" aria-hidden="true"></i> ${m.holds}</span>` : ''}${elsewhere ? `<span class="dooms-atlas-row-people">${e(m.layerLabel || 'top map')}</span>` : peopleChip(m)}
+            <i class="fa-solid ${attr(k.icon)}" aria-hidden="true"></i><span class="dooms-atlas-row-name${m.loose ? ' is-loose' : ''}"${m.loose ? ' title="Not canon"' : ''}>${e(m.label)}</span>${m.player ? hereChip : ''}${m.holds ? `<span class="dooms-atlas-row-people" title="${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside"><i class="fa-solid fa-door-open" aria-hidden="true"></i> ${m.holds}</span>` : ''}${elsewhere ? `<span class="dooms-atlas-row-people">${e(m.layerLabel || 'top map')}</span>` : peopleChip(m)}
         </button></li>`;
     };
     return `${shown.length ? `<section class="dooms-atlas-group"><ul>${shown.map(m => row(m, false)).join('')}</ul></section>` : ''}${far.length ? `<section class="dooms-atlas-group"><span class="dooms-atlas-group-head">On other maps</span><ul>${far.map(m => row(m, true)).join('')}</ul></section>` : ''}`;
@@ -261,7 +309,8 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
 export function atlasTidyHtml(tidy, { count = 0 } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
     const setup = `<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
-    if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy">${setup}</section>`;
+    const fill = `<button type="button" class="dooms-atlas-btn" data-act="fill" title="Add places that plausibly belong on this map, around the ones already here. You check them first; they go on the map marked as not canon, and nothing already there moves."><i class="fa-solid fa-seedling" aria-hidden="true"></i> <span>Fill out this map</span></button>`;
+    if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy"><div class="dooms-atlas-tidy-buttons">${setup}${fill}</div></section>`;
     const item = (x, i) => `<li class="dooms-atlas-tidy-item is-${attr(x.kind)}">
             <span class="dooms-atlas-tidy-text">${x.kind === 'merge' ? `Merge <strong>${e(x.label)}</strong> into <strong>${e(x.toLabel)}</strong>` : `Delete <strong>${e(x.label)}</strong>`}${x.why ? `<span class="dooms-atlas-tidy-why">${e(x.why)}</span>` : ''}</span>
             <button type="button" class="dooms-atlas-icon-btn is-yes" data-act="tidy-yes" data-i="${i}" title="Do it" aria-label="Do it"><i class="fa-solid fa-check" aria-hidden="true"></i></button>
@@ -271,7 +320,7 @@ export function atlasTidyHtml(tidy, { count = 0 } = {}) {
         ? `<ul>${t.items.map(item).join('')}</ul><div class="dooms-atlas-tidy-all"><button type="button" class="dooms-atlas-link" data-act="tidy-all">Do all ${t.items.length}</button><button type="button" class="dooms-atlas-link" data-act="tidy-none">Leave them all</button></div>`
         : (t.error ? `<p class="dooms-atlas-none is-error">${e(t.error)}</p>` : (t.asked && !t.busy ? '<p class="dooms-atlas-none">Nothing to tidy: no duplicates were found.</p>' : ''));
     return `<section class="dooms-atlas-tidy" aria-label="Set up and clean up the places">
-        <div class="dooms-atlas-tidy-buttons">${setup}<button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button></div>
+        <div class="dooms-atlas-tidy-buttons">${setup}${fill}<button type="button" class="dooms-atlas-btn" data-act="tidy"${t.busy ? ' disabled' : ''} title="Ask the AI to look over the places for duplicates and things that are not places. It only proposes: you approve each one."><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>${t.busy ? 'Looking them over…' : 'Clean up with AI'}</span></button></div>
         ${body}
     </section>`;
 }
@@ -347,7 +396,7 @@ export function atlasMarkerHtml(m, { portraits = () => '' } = {}) {
 
 /** A marker's classes: its kind, whether it was visited, whether the party is there. */
 export function atlasMarkerClass(m) {
-    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : ''].filter(Boolean).join(' ');
+    return ['dooms-atlas-marker', `kind-${m.kind}`, m.visited ? 'is-visited' : '', m.player ? 'is-player' : '', m.holds ? 'is-layer' : '', m.loose ? 'is-loose' : ''].filter(Boolean).join(' ');
 }
 
 /** A region's name, written across its land. */
@@ -445,6 +494,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
         ${picture ? `<div class="dooms-atlas-card-picture" style="background-image: url('${attr(picture)}')"></div>` : ''}
         ${head}
         ${m.note ? `<p class="dooms-atlas-card-note">${e(m.note)}</p>` : ''}
+        ${m.loose ? `<p class="dooms-atlas-card-loose"><span><i class="fa-regular fa-circle-question" aria-hidden="true"></i> Not canon: the AI added this and the story has not named it. Edit it to suit, or delete it.</span><button type="button" class="dooms-atlas-btn" data-act="canon" data-id="${id}" title="It is part of the story now: the mark comes off">Make it canon</button></p>` : ''}
         ${rooms}
         ${names}
         ${m.weather && (m.weather.text || m.weather.emoji) ? `<p class="dooms-atlas-card-weather">${e(m.weather.emoji)} ${e(m.weather.text)}</p>` : ''}

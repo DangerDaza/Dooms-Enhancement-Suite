@@ -292,7 +292,7 @@ export function normalizeBook(raw) {
     for (const m of Array.isArray(r.made) ? r.made : []) {
         if (!m || typeof m !== 'object' || !idOk(m.id) || !m.id.startsWith('pin:') || seen.has(m.id)) continue;
         seen.add(m.id);
-        made.push({ id: m.id, label: clean(m.label, 80) || 'New place', kind: cleanKind(m.kind), note: clean(m.note, 300) });
+        made.push({ id: m.id, label: clean(m.label, 80) || 'New place', kind: cleanKind(m.kind), note: clean(m.note, 300), ...(m.loose === true ? { loose: true } : {}) });    // loose: not canon yet (D160)
         if (made.length >= MAX_MADE) break;
     }
     const edits = {};
@@ -337,12 +337,12 @@ export function unplace(book, id) {
 }
 
 /** A marker made by hand at a spot: the book and the new marker's id. */
-export function addPin(book, { label = 'New place', kind = '', note = '', x = 0, y = 0, layer = '' } = {}) {
+export function addPin(book, { label = 'New place', kind = '', note = '', x = 0, y = 0, layer = '', loose = false } = {}) {
     const b = normalizeBook(book);
     const base = `pin:${locSlug(label) || 'place'}`;
     let id = base;
     for (let n = 2; b.made.some(m => m.id === id) || b.gone.includes(id); n++) id = `${base}-${n}`;
-    const next = { ...b, made: [...b.made, { id, label: clean(label, 80) || 'New place', kind: cleanKind(kind), note: clean(note, 300) }] };
+    const next = { ...b, made: [...b.made, { id, label: clean(label, 80) || 'New place', kind: cleanKind(kind), note: clean(note, 300), ...(loose ? { loose: true } : {}) }] };
     return { book: finite(x) && finite(y) ? placeAt(next, id, { x, y }, typeof layer === 'string' ? layer : '') : next, id };
 }
 
@@ -395,6 +395,12 @@ export function editMarker(book, id, { label, kind, note } = {}) {
     if (kind !== undefined) { if (cleanKind(kind)) one.kind = cleanKind(kind); else delete one.kind; }
     if (note !== undefined) one.note = clean(note, 300);
     return { ...b, edits: { ...b.edits, [id]: one } };
+}
+
+/** A place the AI added to fill out a map made canon (D160): it is the story's now, like any other. Or put back as not canon. */
+export function setCanon(book, id, canon = true) {
+    const b = normalizeBook(book);
+    return { ...b, made: b.made.map(m => { if (m.id !== id) return m; const { loose: _l, ...rest } = m; return canon ? rest : { ...rest, loose: true }; }) };
 }
 
 /** The drawn map chosen over the world's own picture (D154), or the picture again. */
@@ -636,7 +642,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         for (const m of g.members) if (m.id !== g.id) alias.set(m.id, g.id);
     }
     for (const m of bk.made) {
-        const c = make(m.id, { label: m.label, kind: m.kind, note: m.note, source: 'pin' });
+        const c = make(m.id, { label: m.label, kind: m.kind, note: m.note, source: 'pin', loose: m.loose === true });
         for (const sp of named.get(m.id) || []) { c.ids.push(sp.id); if (!c.image && sp.image) c.image = sp.image; }
     }
 
@@ -711,7 +717,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         const w = weather && weather[c.id] ? weather[c.id] : null;
         return {
             id: c.id, label: c.label, kind: c.kind || guessKind(c.label), note: c.note, image: c.image, source: c.source,
-            rooms: c.rooms, names: c.names, holds: holds.get(c.id) || 0,
+            rooms: c.rooms, names: c.names, holds: holds.get(c.id) || 0, loose: c.loose === true,
             visited: visitedWithin.has(c.id) || c.ids.some(i => visitedIds.has(i)),
             player: partyOn === c.id, partyInside: partyOn === c.id && partyId !== c.id,
             people: within.get(c.id) || own.get(c.id) || [],
@@ -730,7 +736,7 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     // Every live place, whatever map it is on: for the search, Merge, Move and the clean-up pass.
     const labelOfLayer = (id) => (id && live.has(id) ? live.get(id).label : '');
-    const all = [...live.values()].map(c => ({ id: c.id, label: c.label, kind: c.kind || guessKind(c.label), rooms: c.rooms, names: c.names, people: own.get(c.id) || [], layer: par.get(c.id) || '', layerLabel: labelOfLayer(par.get(c.id) || ''), placed: !!spotOf(c), inside: chain(c.id).slice(0, -1) }));
+    const all = [...live.values()].map(c => ({ id: c.id, label: c.label, kind: c.kind || guessKind(c.label), rooms: c.rooms, names: c.names, loose: c.loose === true, people: own.get(c.id) || [], layer: par.get(c.id) || '', layerLabel: labelOfLayer(par.get(c.id) || ''), placed: !!spotOf(c), inside: chain(c.id).slice(0, -1) }));
 
     // A marker whose name tells a terrain stands on tinted ground with that terrain's drawings (D154).
     const regions = [];

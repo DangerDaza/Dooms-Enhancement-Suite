@@ -15,7 +15,7 @@ import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI } from 
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { normalizeBook, buildTidyPrompt, parseTidy } from '../../utils/atlas.js';
 import { stripSceneNoise } from '../../utils/liveWorld.js';
-import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS } from '../../utils/atlasSetup.js';
+import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS, buildFillPrompt, parseFill } from '../../utils/atlasSetup.js';
 import { chatArray, cardOfTheChat, loreOfTheChat, playerNames } from './liveWorld.js';
 
 const META_KEY = 'dooms_atlas';
@@ -173,5 +173,27 @@ export async function draftSetup({ notes = '', reach = 'recent', model = null, w
     } finally {
         settingUp = false;
         setupStop = false;
+    }
+}
+
+/**
+ * Asks the AI to fill out one map (D160): places that plausibly belong on
+ * it, around the ones already there. Nothing is stored and nothing is
+ * changed: the suggestions go to the player.
+ * @returns {Promise<{ ok: boolean, reason: string, places: Array, error: string }>}
+ */
+export async function draftFill({ model = null, world = '', wish = '', count = 8 } = {}) {
+    if (settingUp) return { ok: false, reason: 'running', places: [], error: 'A request is already running.' };
+    settingUp = true;
+    try {
+        const prompt = buildFillPrompt({ model, world, wish, count, lore: await loreOfTheChat(), card: cardOfTheChat() });
+        const text = await ask(prompt, 'fill', 'atlas-fill');
+        const r = parseFill(text, model);
+        try { addDebugLog(`[Atlas] fill: ${r.ok ? `${r.places.length} place(s) suggested` : r.error}`, r.ok ? null : { reply: text.slice(0, 400) }); } catch (e) { /* no log */ }
+        return { ok: r.ok, reason: r.ok ? '' : 'invalid', places: r.places, error: r.error };
+    } catch (e) {
+        return { ok: false, reason: 'error', places: [], error: String(e && e.message || e) };
+    } finally {
+        settingUp = false;
     }
 }

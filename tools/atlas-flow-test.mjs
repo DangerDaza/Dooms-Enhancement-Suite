@@ -167,6 +167,18 @@ console.log('\n§3 setting up the world (D143, D159)');
     const again = await book.draftSetup({ reach: 'recent', model });
     const applied = S.applySetup(again.draft, book.getBook());
     check('applied, the draft is the chat\'s book: saved, three markers, the stair inside the temple inside Hask', book.setBook(applied.book) === true && meta.dooms_atlas.made.length === 3 && meta.dooms_atlas.inside[applied.ids.get('black stair')] === applied.ids.get('temple') && meta.dooms_atlas.merged[LW.locPlaceId('the black stair')] === applied.ids.get('black stair'));
+    // Filling out a map (D160).
+    const filled = A.atlasModel({ pack, state: ws, book: applied.book, layer: applied.ids.get('hask') });
+    let fillAsked = null;
+    book.__setSetupTransport(async (p) => { fillAsked = p; return JSON.stringify({ places: [{ name: 'The Pit', kind: 'landmark', note: 'A fighting pit.', near: [{ to: 'The Temple', dir: 'w', far: 'near' }] }, { name: 'The Temple' }] }); });
+    const metaBefore = JSON.stringify(meta);
+    const fill = await book.draftFill({ model: filled, world: 'The Eld', wish: 'somewhere rough', count: 4 });
+    check('fill out: one request that names the map, its places and what was asked for', !!fillAsked && fillAsked.kind === 'fill' && fillAsked.user.includes('somewhere rough') && fillAsked.user.includes('inside Hask') && fillAsked.user.includes('The Temple') && /Exactly 4/.test(fillAsked.system));
+    check('the suggestions come back: the new ones only; asking changes nothing', fill.ok && fill.places.length === 1 && fill.places[0].name === 'The Pit' && JSON.stringify(meta) === metaBefore && !book.isSettingUp());
+    const added = S.applyFill(book.getBook(), filled, fill.places);
+    check('added, the suggestion is in the chat\'s book: inside Hask, not canon', book.setBook(added.book) && meta.dooms_atlas.made.length === 4 && meta.dooms_atlas.made[3].loose === true && meta.dooms_atlas.inside[added.ids[0]] === applied.ids.get('hask'));
+    book.__setSetupTransport(async () => 'no thanks');
+    check('a reply that is no list is said', (await book.draftFill({ model: filled })).ok === false);
     book.__setSetupTransport(null);
     chat.length = 0;
     delete meta.dooms_atlas;

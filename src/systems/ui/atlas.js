@@ -12,10 +12,10 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon } from '../../utils/atlas.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
-import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach } from '../features/atlasBook.js';
-import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup } from '../../utils/atlasSetup.js';
+import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
+import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
 import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
@@ -23,7 +23,7 @@ import { startTravelCut, getPendingQuestCut } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml } from './atlasViews.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
 
@@ -321,7 +321,7 @@ function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
-    $p.prop('hidden', false).html(atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.prop('hidden', false).html(setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
 }
 
@@ -333,6 +333,39 @@ function openSetup() {
     setup = { step: 'notes', notes: setup && setup.notes ? setup.notes : '', reach: 'recent', cost, progress: { done: 0, total: 1, word: '' }, draft: null, error: '', note: '', world: worldKey() };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
+}
+
+/** Fill out this map (D160): the panel opened on what the player wants more of. */
+function openFill() {
+    if (!model) return;
+    if (board) board.closeCard();
+    arm(null);
+    setup = { fill: true, step: 'ask', wish: '', count: 8, places: [], error: '', world: worldKey(), layer, mapLabel: model.layerLabel || (getWorldState() || {}).name || 'this map' };
+    $(`${root()} .dooms-atlas-start`).prop('hidden', true);
+    renderSetup();
+}
+
+async function runFill() {
+    if (!setup || !setup.fill || !model) return;
+    const world = setup.world;
+    const wish = setup.step === 'ask' ? String($(`${root()} .dooms-atlas-fill-wish`).val() || '') : setup.wish;
+    const count = setup.step === 'ask' ? Number($(`${root()} .dooms-atlas-fill-count`).val()) || 8 : setup.count;
+    setup = { ...setup, step: 'busy', wish, count, error: '' };
+    renderSetup();
+    const r = await draftFill({ model, world: (getWorldState() || {}).name || '', wish, count });
+    if (!setup || !setup.fill || setup.world !== world || worldKey() !== world) return;    // closed, or the chat changed while the AI wrote
+    setup = r.ok ? { ...setup, step: 'review', places: r.places, error: '' } : { ...setup, step: 'ask', error: r.error || 'The suggestions could not be asked for.' };
+    renderSetup();
+}
+
+function applyFillNow() {
+    if (!setup || !setup.fill || !setup.places.length || setup.world !== worldKey() || !model) return;
+    if (setup.layer !== layer) { setup = { ...setup, error: 'The map shown is not the one these were suggested for. Cancel, and fill out this map again.' }; renderSetup(); return; }
+    const r = applyFill(getBook(), model, setup.places);
+    const n = r.ids.length;
+    setup = null;
+    renderSetup();
+    if (commit(r.book, `${n} ${n === 1 ? 'place' : 'places'} added, marked as not canon (a dashed ring). Open one to edit it, make it canon or delete it.`) && board) board.fit();
 }
 
 async function runSetup() {
@@ -468,6 +501,12 @@ function build() {
             if (act === 'setup-back') { if (setup) { setup = { ...setup, step: 'notes', error: '' }; renderSetup(); } return; }
             if (act === 'setup-remove') { if (setup && setup.draft) { setup = { ...setup, draft: removeDraftPlace(setup.draft, this.getAttribute('data-key') || '') }; renderSetup(); } return; }
             if (act === 'setup-apply') { applyDraft(); return; }
+            // Filling out a map (D160).
+            if (act === 'fill') { openFill(); return; }
+            if (act === 'fill-draft' || act === 'fill-again') { await runFill(); return; }
+            if (act === 'fill-remove') { if (setup && setup.fill) { const k = this.getAttribute('data-key') || ''; setup = { ...setup, places: setup.places.filter(p => p.key !== k).map(p => ({ ...p, near: p.near.filter(r => r.key !== k) })) }; renderSetup(); } return; }
+            if (act === 'fill-apply') { applyFillNow(); return; }
+            if (act === 'canon') { ev.stopPropagation(); commit(setCanon(getBook(), this.getAttribute('data-id') || '', true)); return; }
             if (act === 'setup-undo') { if (undoBook && undoBook.world === worldKey()) { const b = undoBook.book; undoBook = null; layer = ''; commit(b, 'The set-up is undone: the map is as it was.'); if (board) board.fit(); } return; }
             if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }
             if (act === 'base') { const b = getBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
@@ -587,10 +626,18 @@ function build() {
         setup = { ...setup, draft: editDraftPlace(setup.draft, key, field === 'name' ? { name: value } : { kind: value }) };
         if (field === 'kind') renderSetup();
     });
+    $(document).on('change', `${root()} .dooms-atlas-fill-row [data-field]`, function () {
+        if (!setup || !setup.fill) return;
+        const key = String($(this).closest('.dooms-atlas-fill-row').attr('data-key') || '');
+        const field = this.getAttribute('data-field');
+        const value = String($(this).val() || '').trim();
+        if (!value) return;
+        setup = { ...setup, places: setup.places.map(p => (p.key === key ? { ...p, [field === 'name' ? 'name' : 'kind']: value } : p)) };
+    });
     $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(getBook(), String($(this).val() || ''), layer)); });
     // The wheel over a select that has the focus steps its value in some browsers: the sidebar scrolled past one would change the map's scale unasked.
     document.addEventListener('wheel', (ev) => { const t = ev.target; if (t && t.matches && t.matches(`${root()} .dooms-atlas-scale-pick select`) && document.activeElement === t) t.blur(); }, { capture: true, passive: true });
-    $(document).on('change', `${root()} .dooms-atlas-scale-select`, function () { commit(withScale(getBook(), String($(this).val() || ''), layer)); });
+    $(document).on('change', `${root()} .dooms-atlas-scale-select:not(.dooms-atlas-fill-count)`, function () { commit(withScale(getBook(), String($(this).val() || ''), layer)); });
     $(document).on('input', `${root()} .dooms-atlas-query`, function () { query = String($(this).val() || ''); searched(); });
     $(document).on('keydown', `${root()} .dooms-atlas-query`, function (ev) {
         if (ev.key !== 'Enter') return;

@@ -12,7 +12,7 @@
  * The requests are in src/systems/features/atlasBook.js; the window's
  * steps in src/systems/ui/atlasViews.js. tools/atlas-setup-test.mjs.
  */
-import { ATLAS_KINDS, ATLAS_SCALES, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList } from './atlas.js';
+import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList } from './atlas.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = (t) => clean(t, 120).toLowerCase().replace(/^the\s+/, '').replace(/[’]/g, "'");
@@ -337,7 +337,7 @@ export function applySetup(draft, previous = null) {
     // A place before what is inside it, so a holder's id is known when its places are made.
     for (const row of draftRows(draft)) {
         const at = spots.get(row.key) || { x: 0, y: 0 };
-        const made = addPin(book, { label: row.name, kind: row.kind, note: row.note, x: at.x, y: at.y, layer: row.inside ? (ids.get(row.inside) || '') : '' });
+        const made = addPin(book, { label: row.name, kind: row.kind, note: row.note, x: at.x, y: at.y, layer: row.inside ? (ids.get(row.inside) || '') : '', loose: row.guess === true });    // what the AI guessed is not canon until the player says so (D160)
         book = made.book;
         ids.set(row.key, made.id);
     }
@@ -346,4 +346,170 @@ export function applySetup(draft, previous = null) {
     for (const k of draft.drop) book = removeMarker(book, k.id);
     if (draft.scale) book = withScale(book, draft.scale);
     return { book, ids, placed: draft.places.length, merged, dropped: draft.drop.length };
+}
+
+// ─── Filling out a map (D160): the AI adds places around what is there ─────
+
+export const FILL_COUNTS = Object.freeze([4, 8, 12]);
+
+/** Where a marker stands, in words the AI can read: steps east or west, north or south of the map's middle. */
+function whereWords(m) {
+    const ew = Math.round(m.x), ns = Math.round(m.y);
+    const parts = [ew ? `${Math.abs(ew)} ${ew > 0 ? 'east' : 'west'}` : '', ns ? `${Math.abs(ns)} ${ns > 0 ? 'south' : 'north'}` : ''].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'at the middle';
+}
+
+/**
+ * The request that fills out one map: the places on it now with where
+ * they stand, what the map is of, what the player asked for; and what to
+ * send back. The new places are not canon: the story has not named them.
+ * @param {object} o
+ * @param {object} o.model   the Atlas's model of the map to fill
+ * @param {string} o.world   the world's name
+ * @param {string} o.wish    what the player asked for ("more shops", "a rough quarter to the east")
+ * @param {number} o.count   how many places to add
+ * @param {string} o.lore    the lorebooks' entries, cut short
+ * @param {{description?:string,scenario?:string}} o.card
+ */
+export function buildFillPrompt({ model = null, world = '', wish = '', count = 8, lore = '', card = {} } = {}) {
+    const markers = model && Array.isArray(model.markers) ? model.markers : [];
+    const n = FILL_COUNTS.includes(Number(count)) ? Number(count) : 8;
+    const scale = model && model.measure ? (ATLAS_SCALES[model.measure.scale] || {}).label || '' : '';
+    const ground = model ? (ATLAS_GROUNDS.find(g => g.id === model.ground) || {}).label || '' : '';
+    const other = model && Array.isArray(model.all) ? model.all.filter(x => x.layer !== model.layer).map(x => x.label) : [];
+    const system = [
+        'You fill out one map of a role-play story\'s world: you add places that plausibly belong on it, around the places already there, so the area feels lived in and there is somewhere to go. The story has not named these places; they are suggestions the player can keep, change or remove.',
+        'Reply with one JSON object and nothing else:',
+        '{"places":[{"name":"<proper name>","kind":"<one kind>","note":"<one sentence: what it is, and a reason someone might go there>","near":[{"to":"<name of a place on this map: one already there, or another of yours>","dir":"n|ne|e|se|s|sw|w|nw","far":"close|near|far"}]}]}',
+        `Kinds: ${KIND_LIST}.`,
+        'Rules:',
+        `- Exactly ${n} new places. Fit the map: for a city, its districts, markets, inns, temples, gates; for a region, its villages, roads, ruins, wilds; for a dungeon or a building, its halls, chambers, levels.`,
+        '- Fit the world: its tone, its names, its level of magic and technology. Use names in the style of the names already there. Do not contradict the lore.',
+        '- Do not repeat or rename a place already on this map or elsewhere in the world. Do not add rooms, furniture or people.',
+        '- Each new place has one "near" to a place already on the map when there is one ("dir" is the way you would walk from the new place to reach the other). Spread them: not all on one side, not all "close".',
+        '- You never write coordinates.',
+    ].join('\n');
+    const parts = [];
+    if (clean(wish, 4)) parts.push(`WHAT THE PLAYER ASKED FOR (this outranks the rest):\n${String(wish).trim().slice(0, 600)}`);
+    parts.push(`The world: ${clean(world, 120) || 'unnamed'}. This map: ${model && model.layerLabel ? `inside ${model.layerLabel}` : 'the top map'}${scale ? `, ${scale.toLowerCase()}` : ''}${ground ? `, ${ground.toLowerCase()}` : ''}.`);
+    const cardText = [card.description, card.scenario].filter(Boolean).join('\n').trim().slice(0, 1500);
+    if (cardText) parts.push(`The character card:\n${cardText}`);
+    if (lore) parts.push(`The lore:\n${String(lore).slice(0, 3000)}`);
+    parts.push(markers.length
+        ? `The places on this map now (with where each stands from the map's middle, in steps):\n${markers.map(m => `- ${m.label} (${m.kind}; ${whereWords(m)})${m.note ? `: ${m.note}` : ''}`).join('\n')}`
+        : 'This map has no places yet: yours are its first.');
+    if (other.length) parts.push(`Places elsewhere in the world (do not repeat them): ${other.slice(0, 80).join('; ')}`);
+    return { system, user: parts.join('\n\n'), count: n };
+}
+
+/**
+ * The fill's reply read: the new places with a name that no place of the
+ * world carries yet, each "near" turned into the marker it names (`id`)
+ * or the other new place (`key`).
+ * @returns {{ ok: boolean, places: Array<{ key, name, kind, note, near: Array<{ id?: string, key?: string, dir: string, far: string }> }>, error: string }}
+ */
+export function parseFill(text, model = null) {
+    const obj = jsonIn(text);
+    if (!obj || !Array.isArray(obj.places)) return { ok: false, places: [], error: 'The reply was not the list of places asked for.' };
+    const taken = new Set((model && Array.isArray(model.all) ? model.all : []).flatMap(x => [norm(x.label), ...(x.names || []).map(n => norm(n.label))]));
+    const onMap = new Map((model && Array.isArray(model.markers) ? model.markers : []).map(m => [norm(m.label), m.id]));
+    const places = [];
+    const keys = new Set();
+    for (const p of obj.places) {
+        const name = clean(p && p.name, 80);
+        const key = norm(name);
+        if (!key || keys.has(key) || taken.has(key)) continue;
+        keys.add(key);
+        places.push({ key, name, kind: cleanKind(p.kind) || guessKind(name), note: clean(p.note, 300), near: Array.isArray(p.near) ? p.near : [] });
+        if (places.length >= 16) break;
+    }
+    if (!places.length) return { ok: false, places: [], error: 'The reply added no new places.' };
+    for (const p of places) {
+        p.near = p.near.map(r => {
+            const to = norm(r && r.to);
+            const dir = typeof (r && r.dir) === 'string' && DIRS[r.dir.trim().toLowerCase()] ? r.dir.trim().toLowerCase() : '';
+            const far = FARS[String(r && r.far || '').trim().toLowerCase()] ? String(r.far).trim().toLowerCase() : 'near';
+            if (!dir || to === p.key) return null;
+            if (onMap.has(to)) return { id: onMap.get(to), dir, far };
+            return keys.has(to) ? { key: to, dir, far } : null;
+        }).filter(Boolean).slice(0, 3);
+    }
+    return { ok: true, places, error: '' };
+}
+
+/**
+ * A spot for every new place, the markers already on the map left where
+ * they are. A new place said to be near something already placed stands
+ * the other way from it at that distance ("dir" is the way from the new
+ * place to the other); the rest go on a spiral around the map's places;
+ * then a new place too close to anything is pushed off it. Only the new
+ * ones move.
+ * @returns {Map<string, { x: number, y: number }>}
+ */
+export function layoutFill(model, places) {
+    const fixed = (model && Array.isArray(model.markers) ? model.markers : []).map(m => ({ id: m.id, x: m.x, y: m.y }));
+    const byId = new Map(fixed.map(f => [f.id, f]));
+    const at = new Map();
+    const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+    const cx = fixed.length ? fixed.reduce((n, f) => n + f.x, 0) / fixed.length : 0;
+    const cy = fixed.length ? fixed.reduce((n, f) => n + f.y, 0) / fixed.length : 0;
+    const reach = fixed.length ? Math.max(...fixed.map(f => Math.hypot(f.x - cx, f.y - cy))) : 0;
+    const list = Array.isArray(places) ? places : [];
+    for (let round = 0; round < list.length + 1; round++) {
+        let any = false;
+        for (const p of list) {
+            if (at.has(p.key)) continue;
+            for (const r of p.near) {
+                const anchor = r.id ? byId.get(r.id) : at.get(r.key);
+                if (!anchor) continue;
+                const [dx, dy] = DIRS[r.dir];
+                const d = FARS[r.far] || FARS.near;
+                at.set(p.key, { x: anchor.x - dx * d, y: anchor.y - dy * d });
+                any = true;
+                break;
+            }
+        }
+        if (!any) break;
+    }
+    let spare = 0;
+    for (const p of list) {
+        if (at.has(p.key)) continue;
+        const i = spare++;
+        const r = reach + 2 + 0.9 * Math.sqrt(i);
+        at.set(p.key, { x: cx + r * Math.cos(i * GOLDEN + 0.4), y: cy + r * Math.sin(i * GOLDEN + 0.4) });
+    }
+    const keys = list.map(p => p.key);
+    for (let pass = 0; pass < 80; pass++) {
+        let moved = false;
+        for (let i = 0; i < keys.length; i++) {
+            const a = at.get(keys[i]);
+            const others = [...fixed, ...keys.filter((_, j) => j !== i).map(k => at.get(k))];
+            for (const b of others) {
+                let dx = a.x - b.x, dy = a.y - b.y;
+                let d = Math.hypot(dx, dy);
+                if (d >= 1.35) continue;
+                if (d < 1e-6) { dx = Math.cos(i * GOLDEN + 1); dy = Math.sin(i * GOLDEN + 1); d = 1; }
+                const push = 1.42 - Math.min(d, 1.42) + 0.01;
+                a.x += dx / d * push; a.y += dy / d * push;
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+    return new Map(keys.map(k => [k, { x: round4(at.get(k).x), y: round4(at.get(k).y) }]));
+}
+
+/** The new places added to the chat's book, on the map that was filled, each marked as not canon. Nothing already there is touched. */
+export function applyFill(book, model, places) {
+    let b = normalizeBook(book);
+    const spots = layoutFill(model, places);
+    const ids = [];
+    for (const p of Array.isArray(places) ? places : []) {
+        const at = spots.get(p.key);
+        if (!at) continue;
+        const made = addPin(b, { label: p.name, kind: p.kind, note: p.note, x: at.x, y: at.y, layer: model ? model.layer : '', loose: true });
+        b = made.book;
+        ids.push(made.id);
+    }
+    return { book: b, ids };
 }

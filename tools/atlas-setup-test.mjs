@@ -13,10 +13,10 @@
  * Exit:   0 = pass, 1 = failure
  */
 import { blankPack, seedWorldState, locPlaceId } from '../src/utils/liveWorld.js';
-import { atlasModel, placeAt, addPin, tidyList } from '../src/utils/atlas.js';
+import { atlasModel, placeAt, addPin, tidyList, setCanon, normalizeBook } from '../src/utils/atlas.js';
 import {
     SETUP_LIMITS, chatLines, chunkLines, recentLines, jsonIn, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup,
-    editDraftPlace, setDraftInside, removeDraftPlace, draftRows, draftChain, layoutDraft, applySetup,
+    editDraftPlace, setDraftInside, removeDraftPlace, draftRows, draftChain, layoutDraft, applySetup, FILL_COUNTS, buildFillPrompt, parseFill, layoutFill, applyFill,
 } from '../src/utils/atlasSetup.js';
 
 let failures = 0;
@@ -159,6 +159,42 @@ console.log('\n§6 the spots, and the draft made the map');
     check('a wording the story uses later goes to its place too: no new entry, the party at the temple', after.all.length === top.all.length && after.tray.length === 0 && after.markers.find(m => m.label === 'The Temple').player && after.partyId === id('temple'));
     check('a draft with nothing in it makes an empty map', applySetup({ scale: '', places: [], drop: [] }, old).book.made.length === 0);
     check('the limits are what the request and the reading are held to', SETUP_LIMITS.places === 80 && SETUP_LIMITS.chunks === 60);
+}
+
+console.log('\n§7 filling out a map (D160)');
+{
+    const d = removeDraftPlace(removeDraftPlace(removeDraftPlace(parseSetup(REPLY, model).draft, 'loop a'), 'loop b'), 'self');
+    const set = applySetup(d, null);
+    check('what the set-up guessed is not canon; the rest is', set.book.made.find(m => m.label === 'The Old Road').loose === true && !set.book.made.find(m => m.label === 'Hask').loose);
+    const hask = set.ids.get('hask');
+    const inHask = atlasModel({ pack, state, player: 'Jordan', book: set.book, layer: hask });
+    const p = buildFillPrompt({ model: inHask, world: 'The Eld', wish: 'A rough quarter to the east.', count: 4, lore: 'Hask: a walled city.', card: { description: 'A grim land.' } });
+    check('the request: what the player asked for first, the map it is, how many, the kinds', p.user.indexOf('WHAT THE PLAYER ASKED FOR') === 0 && p.user.includes('A rough quarter to the east.') && /inside Hask, a town or city, city streets/.test(p.user) && /Exactly 4 new places/.test(p.system) && p.count === 4 && /never write coordinates/.test(p.system));
+    check('the places on the map are listed with where they stand, the rest of the world named so it is not repeated', /- The Temple \(sacred; .+\)/.test(p.user) && /at the middle|east|west|north|south/.test(p.user) && p.user.includes('Places elsewhere in the world') && p.user.includes('The Old Road') && p.user.includes('Hask: a walled city.'));
+    check('an odd count falls back to eight; an empty map says so', buildFillPrompt({ model: inHask, count: 99 }).count === 8 && same(FILL_COUNTS, [4, 8, 12]) && /no places yet/.test(buildFillPrompt({ model: atlasModel({ pack: blankPack('x'), state: null }) }).user));
+    const reply = JSON.stringify({ places: [
+        { name: 'The Pit', kind: 'landmark', note: 'A fighting pit.', near: [{ to: 'The Temple', dir: 'w', far: 'far' }] },
+        { name: 'Tanner\'s Row', kind: 'shop', note: 'Stinking yards.', near: [{ to: 'the pit', dir: 'n', far: 'close' }, { to: 'Nowhere', dir: 'n', far: 'near' }] },
+        { name: 'the temple', kind: 'sacred' }, { name: 'The Old Road' }, { name: 'The Pit' }, { name: '' },
+        { name: 'Gallows Green', kind: 'spaceship', note: '', near: [{ to: 'Gallows Green', dir: 'n' }] },
+    ] });
+    const r = parseFill('```json\n' + reply + '\n```', inHask);
+    check('the reply read: the new names only (none a place of the world already), each once', r.ok && same(r.places.map(x => x.name), ['The Pit', "Tanner's Row", 'Gallows Green']));
+    check('"near" names a marker on the map or another new place; anything else is dropped', same(r.places[0].near, [{ id: set.ids.get('temple'), dir: 'w', far: 'far' }]) && same(r.places[1].near, [{ key: 'pit', dir: 'n', far: 'close' }]) && r.places[2].near.length === 0 && r.places[2].kind === 'other');
+    check('a reply with nothing new, or no list, is said', parseFill('{"places":[{"name":"The Temple"}]}', inHask).ok === false && parseFill('no', inHask).ok === false);
+    const spots = layoutFill(inHask, r.places);
+    const temple = inHask.markers.find(m => m.label === 'The Temple');
+    check('a new place stands the other way from what it is near: the temple lies far to the west of the pit', spots.get('pit').x > temple.x + 3.5 && Math.abs(spots.get('pit').y - temple.y) < 0.5 && spots.get("tanner's row").y > spots.get('pit').y + 1);
+    const everything = [...inHask.markers.map(m => ({ x: m.x, y: m.y })), ...spots.values()];
+    check('no new place stands on anything, and the same suggestions give the same spots', everything.every((a, i) => everything.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.3)) && same([...spots], [...layoutFill(inHask, r.places)]));
+    const done = applyFill(set.book, inHask, r.places);
+    const after = atlasModel({ pack, state, player: 'Jordan', book: done.book, layer: hask });
+    check('added: on the map that was filled, marked not canon, nothing already there moved', done.ids.length === 3 && after.markers.length === inHask.markers.length + 3 && after.markers.filter(m => m.loose).length === 3 && inHask.markers.every(m => { const n = after.markers.find(x => x.id === m.id); return n.x === m.x && n.y === m.y && !n.loose; }) && atlasModel({ pack, state, book: done.book }).markers.length === 2);
+    const canon = atlasModel({ pack, state, book: setCanon(done.book, done.ids[0]), layer: hask });
+    check('made canon, the mark comes off; put back, it is on again', canon.markers.find(m => m.id === done.ids[0]).loose === false && canon.markers.filter(m => m.loose).length === 2 && normalizeBook(setCanon(setCanon(done.book, done.ids[0]), done.ids[0], false)).made.find(m => m.id === done.ids[0]).loose === true);
+    const empty = atlasModel({ pack: blankPack('x'), state: null });
+    const es = [...layoutFill(empty, r.places).values()];
+    check('an empty map filled: its first places, spread out', es.length === 3 && es.every((a, i) => es.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) >= 1.3)));
 }
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall pass');

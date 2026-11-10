@@ -263,3 +263,37 @@ hills read as stray marks); the view is never pulled back to the middle (the
 canvas the map can be panned over is three times what a fit shows, its edge
 stops a drag instead of springing back, and the zoom goes one step further
 out). tools/atlas-browser-test.mjs drags the map and checks it stays.
+
+## 11. Set up this world, and Fill out this map (2026-11-10, D159, D160)
+
+The owner, on a chat that existed before the Atlas: "this was a
+preexisting chat and this is not set up correctly, how do I run the fresh
+world setup for this? the first step we talked about." His answers: build
+it now; applying it replaces the map; give the choice of how much of the
+chat to read, with a whole-chat option. And while it was being built: "We
+also need a way to fill out the map: I give you what we have and you
+expand the area, and those sections can be non-canon and be edited later
+for the player's story." Built in "Atlas 7" and "Atlas 8".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D159 | Set up this world (the owner; D143 and D144 built) | A panel over the map in three steps. **Notes:** what matters to the player (optional; it outranks the lore and the chat), and how much of the chat to read: the recent scenes (one request) or the whole chat (read in parts of about 14,000 characters, one request each scanning for the places it names, at most 60 parts, the count told beforehand; a part that fails is left out; Stop ends the reading). **The draft:** one request writes the places around the notes from the card, the lore, the recent scenes, what the scans found and the places the map already knows (numbered): what is inside what, a kind and a note each, what is near what by direction and distance, which known places each one is, what it guessed; never a coordinate. **The review:** the draft as a tree; a name, a kind, what a place is inside of, or leave it out; the guesses marked. **Apply** replaces the chat's book: every place a hand-made marker on the map of the place it is inside, at a spot solved from what is near what (`layoutDraft`), the known places merged into it, the non-places deleted, the top map's scale as drafted. One Undo is kept until the Atlas closes. Known places the draft did not mention are left in the tray. |
+| D160 | Fill out this map; not canon (the owner) | One request adds 4, 8 or 12 places that plausibly belong on the map shown, around the ones there, fitted to the world and to what the player asked for. The player keeps, renames or leaves out each; the kept ones are added to that map at spots solved from what they are near, and nothing already there moves. They are **not canon** (`made[i].loose`): a dashed ring on the map, a mark in the list, a line on the card with Make it canon. What the set-up guessed is not canon either. |
+| D161 | A location that carries a marker's name is that marker | A location the story names in which a part is a hand-made marker's name ("Hask, the house on the lane, the bedroom wall") is that marker, the deepest one named: the people and the party there stand at it, and no new entry appears. This is what keeps a set-up world in step with the story after it is applied. |
+
+`src/utils/atlasSetup.js` (pure: `chatLines`, `chunkLines`, `recentLines`,
+`buildScanPrompt`, `parseScan`, `mergeScans`, `buildSetupPrompt`,
+`parseSetup`, `editDraftPlace`, `setDraftInside`, `removeDraftPlace`,
+`draftRows`, `layoutDraft`, `applySetup`, `buildFillPrompt`, `parseFill`,
+`layoutFill`, `applyFill`); the requests in
+`src/systems/features/atlasBook.js` (`draftSetup`, `stopSetup`,
+`setupReach`, `draftFill`); the panels `atlasSetupHtml` and
+`atlasFillHtml`. Tests: `tools/atlas-setup-test.mjs` (pure),
+`tools/atlas-flow-test.mjs` §3 (the requests in the sandbox),
+`tools/atlas-browser-test.mjs` §5c (the panels, and the maps a draft and a
+fill make).
+
+Not done: the lock (D143's last word: nothing stops a later set-up from
+replacing the map but the warning); non-canon places are not told to the
+story (nothing of the Atlas is yet); the notes are not kept after the
+set-up closes.
