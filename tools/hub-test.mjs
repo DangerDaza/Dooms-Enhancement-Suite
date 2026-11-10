@@ -19,6 +19,7 @@ import {
     sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
+    loreEntries, castLore, standingLore, LORE_PER_PERSON, LORE_STANDING,
 } from '../src/utils/hub.js';
 import { normalizePack, seedWorldState, countMessage, applyAdvance, reconcileWithChat, seenInScene } from '../src/utils/liveWorld.js';
 import { visitPlace, reconcileVisited } from '../src/utils/worldMap.js';
@@ -272,6 +273,40 @@ console.log('\n§8b a chat taken as where the scenes of a world begin (D131, D17
     check('the copy saved before a chat is taken is named after the chat, says what it is, and never takes a name in use (D175)', backupFileName('First Descent - 2026-10-01@20h00m') === 'First Descent - 2026-10-01@20h00m - before scenes' && backupFileName('First Descent.jsonl', ['First Descent - before scenes.jsonl']) === 'First Descent - before scenes (2)' && backupFileName('First Descent', ['first descent - BEFORE scenes', 'First Descent - before scenes (2)']) === 'First Descent - before scenes (3)' && backupFileName('a/b:c?', []) === 'a b c - before scenes' && backupFileName('', []) === 'Chat - before scenes');
     const other = adoptScene(normalizeWorldEntry({ card: 'Narrator.png' }), { chat: 'A side chat', card: 'Someone Else.png', recap: 'x' }).entry;
     check('a chat taken from a card that is not the narrator\'s is not called gone when the narrator\'s chats are looked over; under the narrator\'s own card it is', reconcileScenesWithChats(other, [{ file: 'Scene 1 - x' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === false && reconcileScenesWithChats(r.entry, [{ file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).entry.scenes[0].gone === true && reconcileScenesWithChats(r.entry, [{ file: 'First Descent - 2026-10-01.jsonl' }, { file: 'Scene 1 - The gate at dusk' }], 'w', { card: 'Narrator.png' }).changed === 0);
+}
+
+console.log('\n§8c the people\'s own notes, from the lorebooks (D177)');
+{
+    const kiyoha = 'KIYOHA — the company\'s front line, a barbarian of the Redward. An ONI: deep crimson skin, two short polished black horns. Big, loud, quick to laugh and quicker to temper. Blunt, never cruel.';
+    const book = { entries: {
+        0: { uid: 0, key: ['Hask', 'the city'], comment: 'FD: HASK — the city', content: 'Hask is a landlocked walled city.', order: 100 },
+        11: { uid: 11, key: ['Kiyoha', 'oni', 'the axe', 'barbarian'], comment: 'Kiyoha — who she is', content: kiyoha, order: 90 },
+        12: { uid: 12, key: ['Lysandra', 'kitsune', 'ink mage'], comment: 'Lysandra — who she is', content: 'LYSANDRA — the company\'s mage, an INK MAGE. Cool, composed, a slight knowing smile; asks questions like an examiner.', order: 90 },
+        13: { uid: 13, key: ['Nikko', 'Yukine'], comment: 'Nikko & Yukine — the twins', content: 'The twins finish each other\'s sentences.', order: 80 },
+        14: { uid: 14, key: ['the axe'], comment: 'The great axe', content: 'Kiyoha\'s axe has a name she will not say.', order: 70 },
+        15: { uid: 15, key: ['Dagger'], comment: 'Dagger — who she is', content: 'Switched off.', disable: true },
+        16: { uid: 16, key: ['Morzan', 'the healer'], comment: 'FD: MORZAN REDFALL', content: 'Morzan is the company\'s new healer.', order: 100 },
+        17: { uid: 17, key: [], comment: 'Empty', content: '   ' },
+    } };
+    const continuity = { entries: {
+        0: { uid: 0, key: [], comment: 'STORY CANON', content: 'TAILS RULING: she has three. STYLE LAW: "sweetheart" is banned.', constant: true, order: 100 },
+        1: { uid: 1, key: [], comment: 'STORY LEDGER', content: 'Settled: the inkstone is Lysandra\'s. Open: the assay court\'s summons.', constant: true, order: 90 },
+        2: { uid: 2, key: ['Solveig'], comment: 'Solveig — who she is', content: 'Solveig keeps the stair rule.', constant: true, order: 50 },
+    } };
+    const entries = [...loreEntries('FD - Campaign Complete', book), ...loreEntries('FD - Continuity', continuity)];
+    check('a lorebook read as a plain list: the switched-off and the empty left out, each with its book, title, keys, text, whether it is always on, and its order', entries.length === 9 && !entries.some(x => x.title === 'Dagger — who she is' || x.title === 'Empty') && entries[1].book === 'FD - Campaign Complete' && same(entries[1].keys, ['Kiyoha', 'oni', 'the axe', 'barbarian']) && entries[1].constant === false && entries[6].constant === true && entries[6].order === 100 && loreEntries('x', null).length === 0 && loreEntries('x', [{ comment: 'a', content: 'b' }]).length === 1);
+    const cast = castLore(entries, ['Kiyoha', 'Lysandra Vale', 'Dagger', 'Yukine', 'Nikko', 'Solveig', 'A Stranger']);
+    check('each person\'s own entry is the one whose title begins with their name, not one that only mentions them', cast.found[0].name === 'Kiyoha' && cast.found[0].title === 'Kiyoha — who she is' && cast.found[0].text.startsWith('KIYOHA') && cast.found[0].book === 'FD - Campaign Complete');
+    check('a longer name finds the entry by its first word; an entry found by its keys alone is taken; two people who share one get it once', cast.found[1].name === 'Lysandra Vale' && cast.found[1].title === 'Lysandra — who she is' && cast.found[2].name === 'Yukine' && cast.found[2].title === 'Nikko & Yukine — the twins' && cast.found.length === 3);
+    check('who has no entry is said; an entry that is switched off is not theirs; one that is always on counts as found and is left to the standing notes', same(cast.missing, ['Dagger', 'A Stranger']) && !cast.found.some(f => f.name === 'Solveig'));
+    check('an entry is cut to a length, and the people\'s together to a total', (() => { const long = [{ book: 'b', title: 'Ann — who she is', keys: ['Ann'], content: 'x'.repeat(9000), constant: false, order: 1 }, { book: 'b', title: 'Bea — who she is', keys: ['Bea'], content: 'y'.repeat(9000), constant: false, order: 1 }]; const c = castLore(long, ['Ann', 'Bea'], { perPerson: 1000, total: 1500 }); return c.found.length === 2 && c.found[0].text.length <= 1000 && c.found[1].text.length <= 500 && castLore(long, ['Ann']).found[0].text.length <= LORE_PER_PERSON; })());
+    const standing = standingLore(entries);
+    check('the standing notes: the entries that are always on, the weightiest first, within a length', standing.startsWith('STORY CANON: TAILS RULING') && standing.indexOf('STORY LEDGER') > standing.indexOf('STORY CANON') && standing.indexOf('Solveig keeps the stair rule') > standing.indexOf('STORY LEDGER') && !standing.includes('KIYOHA') && standingLore(entries, { max: 260 }).length <= 260 && standingLore([]) === '' && standing.length <= LORE_STANDING);
+    const base = { world: { name: 'First Descent' }, place: 'Hask', cast: ['Kiyoha: the front line', 'Dagger'], player: 'Morzan' };
+    const plain = buildOpenersPrompt(base);
+    const rich = buildOpenersPrompt({ ...base, lore: cast.found.slice(0, 2).map(f => ({ name: f.name, text: f.text })), standing });
+    check('the openings\' request carries each person\'s notes under their name and the standing notes, and is told to write each person as their notes say, no two alike', rich.user.includes('Their own notes:\n[Kiyoha] KIYOHA — the company\'s front line') && rich.user.includes('[Lysandra Vale] LYSANDRA') && rich.user.includes('The story\'s standing notes:\nSTORY CANON: TAILS RULING') && rich.user.indexOf('Their own notes:') > rich.user.indexOf('People here:') && rich.user.indexOf('What brought us here:') > rich.user.indexOf('The story\'s standing notes:') && /their own manner and their own way of speaking, so that no two of them sound alike/.test(rich.system) && /standing notes hold over anything else/.test(rich.system));
+    check('with no lorebook read the request is exactly as it was', !plain.user.includes('Their own notes') && !plain.user.includes('standing notes') && !/own notes/.test(plain.system) && same(buildOpenersPrompt({ ...base, lore: [], standing: '' }), plain));
 }
 
 console.log('\n§9 the lines');

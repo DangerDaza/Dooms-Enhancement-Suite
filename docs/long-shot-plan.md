@@ -534,3 +534,25 @@ scenes. Still only in the old Hub (step 3c): the list of scenes (resume,
 set aside, continue from one), starting from a person, a rumour, a piece
 of news or a hook, choosing a world when no scene chat is in front, the
 hooks offered over a world's memory. `/endscene` is unchanged.
+
+## 22. The scenes build, step 4: the openings are written with the people's lorebook entries (2026-11-10, D177)
+
+The owner's characters are entries in a campaign's lorebook (title
+"Kiyoha — who she is", keys "Kiyoha, oni, the axe, barbarian"), fired by
+keywords in the last four messages; the campaign also keeps a Continuity
+book that is always on (his canon, ledger and style law). The main
+generation of a scene gets these from SillyTavern as any chat does. The
+request that writes a scene's three openings got none of it: a line a
+person, 200 characters of the Workshop's description. Built in "Atlas 20".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D177 | The openings are written with each person's own entry and the campaign's standing notes | Before the openings are asked for, the scene engine reads the lorebooks of the world's campaign (`booksOf`: the Lore Library campaign the world is the scenes of; a world with none reads the books switched on; twelve at the most; a book that cannot be read is passed over) and takes, for each person in the scene, **the entry that is theirs** (`castLore`: the one whose title begins with their name, else one with the name among its keys, else one whose title names them; by the whole name, then by its first word; switched-off entries never; cut to 2,600 characters, the people's together to 10,000), the player's own entry when there is room, and **the entries that are always on**, the weightiest first, to 6,000 characters (`standingLore`). The request carries them ("Their own notes", each under its name; "The story's standing notes") and is told to write each person as their notes say, in their own manner and way of speaking, so that no two sound alike, and that the standing notes hold over anything else. The picker says whose entries were used and who had none, and how an entry is found. With no lorebook read the request is exactly as it was. |
+
+Why it matters: the first message is what a fresh chat imitates most. An
+opening written from one line a person starts every scene in the
+narrator's own voice; written from the entry, it starts in the
+character's. Not changed here: the entries themselves (they describe a
+voice but hold no lines of speech, and carry "RUN 3" state beside what
+they contradict: §16); what DES keeps of where each person stands now is
+step 5.

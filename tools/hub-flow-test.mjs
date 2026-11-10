@@ -637,5 +637,34 @@ console.log('\n§11 where a scene can be started from (D174)');
     hub.__setRecapTransport(null);
 }
 
+console.log('\n§12 the openings are written with the people\'s lorebook entries (D177)');
+{
+    const W = 'first-descent';
+    const books = {
+        'FD - Campaign Complete': { entries: {
+            11: { uid: 11, key: ['Kiyoha', 'oni'], comment: 'Kiyoha — who she is', content: 'KIYOHA — the company\'s front line. Big, loud, quick to laugh and quicker to temper; sings badly on the stair.', order: 90 },
+            12: { uid: 12, key: ['Lysandra'], comment: 'Lysandra — who she is', content: 'LYSANDRA — the company\'s mage. Cool, composed; asks questions like an examiner.', order: 90 },
+            16: { uid: 16, key: ['Jordan'], comment: 'FD: JORDAN — the healer', content: 'Jordan is the company\'s new healer, and nobody wanted him.', order: 100 },
+        } },
+        'FD - Continuity': { entries: { 0: { uid: 0, key: [], comment: 'STORY CANON', content: 'STYLE LAW: "sweetheart" is banned. RULING: the tests are over.', constant: true, order: 100 } } },
+    };
+    const read = [];
+    hub.__setLoreReader(async (book) => { read.push(book); if (book === 'FD - Continuity' && read.filter(b => b === book).length === 2) throw new Error('the file is locked'); return books[book] || null; });
+    let asked = null;
+    hub.__setOpenersTransport(async (prompt) => { asked = prompt; return '{"when":{"date":"Day 46","time":"dawn"},"openers":[{"title":"a","text":"Kiyoha is singing, badly, at the gate.","who":["Kiyoha"]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}'; });
+    const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: ['Kiyoha', 'Dagger'], gap: { id: 'now' } });
+    check('the world\'s campaign\'s books are read, and each person\'s own entry goes to the request under their name, with the player\'s own and the standing notes', p.ok && same(read, ['FD - Campaign Complete', 'FD - Continuity']) && asked.user.includes('[Kiyoha] KIYOHA — the company\'s front line') && asked.user.includes('sings badly on the stair') && asked.user.includes('[Jordan] Jordan is the company\'s new healer') && asked.user.includes('The story\'s standing notes:\nSTORY CANON: STYLE LAW: "sweetheart" is banned') && !asked.user.includes('LYSANDRA') && /no two of them sound alike/.test(asked.system), JSON.stringify([p.ok, p.reason, read]));
+    check('the Start knows whose entries were found and who had none', same(p.lore.found, ['Kiyoha']) && same(p.lore.missing, ['Dagger']) && p.lore.standing === true && same(p.lore.books, ['FD - Campaign Complete', 'FD - Continuity']) && same(hub.pendingStart().lore, p.lore));
+    hub.cancelStart();
+    const p2 = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: ['Lysandra'], gap: { id: 'now' } });
+    check('a book that cannot be read is passed over: the scene still starts, with what the others hold', p2.ok && asked.user.includes('[Lysandra] LYSANDRA') && !asked.user.includes('standing notes') && same(p2.lore.books, ['FD - Campaign Complete']) && p2.lore.standing === false);
+    hub.cancelStart();
+    const p3 = await hub.prepareScene({ worldId: 'harbourside', place: { id: 'the-anchor' }, cast: ['Old Marit'], gap: { id: 'now' } });
+    check('a world that is no campaign\'s reads none here, and its openings are asked for as before', (p3.ok || p3.reason === 'scene-open') && (!p3.ok || (!asked.user.includes('Their own notes') && same(p3.lore.books, []))), JSON.stringify([p3.ok, p3.reason]));
+    hub.cancelStart();
+    hub.__setLoreReader(null);
+    hub.__setOpenersTransport(null);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

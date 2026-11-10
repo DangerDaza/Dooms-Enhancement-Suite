@@ -224,6 +224,7 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
         return `<div class="dooms-atlas-setup-card is-review is-scene">
             <h3>How does ${sceneNo ? `scene ${sceneNo}` : 'the scene'} open?</h3>
             <p>${e(where)}${when ? ` · ${e(when)}` : ''}. Pick one; the other two stay as swipes on the first message.</p>
+            ${loreLine(p.lore)}
             ${err}
             <ul class="dooms-atlas-openers">${openers || '<li class="dooms-atlas-none">No opening was written. Write your own below, or ask again.</li>'}</ul>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Or write the opening yourself</span>
@@ -266,6 +267,20 @@ export function atlasStartSceneHtml({ step = 'form', place = { id: '', label: ''
 }
 
 const sceneNoOf = (id) => String(id || '').replace(/^s/, '');
+const listOf = (names) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+
+/** Whose lorebook entries the openings were written with, and who had none (D177); '' when no lorebook was read. */
+function loreLine(lore) {
+    const l = lore && typeof lore === 'object' ? lore : null;
+    if (!l || !Array.isArray(l.books) || !l.books.length) return '';
+    const found = Array.isArray(l.found) ? l.found : [];
+    const missing = Array.isArray(l.missing) ? l.missing : [];
+    const parts = [];
+    if (found.length) parts.push(`Written with the lorebook ${found.length === 1 ? 'entry' : 'entries'} of ${e(listOf(found))}${l.standing ? " and the story's standing notes" : ''}.`);
+    else if (l.standing) parts.push("Written with the story's standing notes.");
+    if (missing.length) parts.push(`No entry was found for ${e(listOf(missing))}: the opening has only a line about ${missing.length === 1 ? 'them' : 'each'}. An entry whose title begins with the name, or that has the name among its keywords, is found.`);
+    return parts.length ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> ${parts.join(' ')}</p>` : '';
+}
 
 /**
  * Ending a scene from the Atlas (D176), a panel over the map: the record

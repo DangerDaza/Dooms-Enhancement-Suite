@@ -426,6 +426,82 @@ export function seedStores(memory, { chatId = '', place = '', cast = [], player 
     return { stores, facts, cast: names, hookQuest, tracker: { quests: questsJson, infoBox: generated.infoBox || null, characterThoughts: generated.characterThoughts || null, player: generated.player || null } };
 }
 
+// ─── The people's own notes (D177) ──────────────────────────────────────
+
+export const LORE_PER_PERSON = 2600;     // characters of one person's entry an opening is written with
+export const LORE_CAST_TOTAL = 10000;    // of all the people's together
+export const LORE_STANDING = 6000;       // of the entries that are always on
+export const LORE_BOOKS = 12;            // lorebooks read for one scene at the most
+
+const loreName = (t) => clean(t, 200).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
+
+/** A lorebook's entries as a plain list, the switched-off and the empty left out: { book, title, keys, content, constant, order }. */
+export function loreEntries(book, data) {
+    const src = isObj(data) && isObj(data.entries) ? Object.values(data.entries) : Array.isArray(data) ? data : [];
+    return src.filter(x => isObj(x) && x.disable !== true && typeof x.content === 'string' && x.content.trim())
+        .map(x => ({ book: clean(book, 200), title: clean(x.comment, 200), keys: (Array.isArray(x.key) ? x.key : []).map(k => clean(k, 80)).filter(Boolean), content: String(x.content).trim(), constant: x.constant === true, order: Number.isFinite(x.order) ? x.order : 100 }));
+}
+
+/**
+ * The entry that is each person's own, for the people of a scene (D177):
+ * the one whose title begins with their name ("Kiyoha — who she is"),
+ * else one with their name among its keys, else one whose title names
+ * them; by the whole name first, then by its first word. One entry a
+ * person, cut to a length, the whole within a total. An entry that is
+ * always on is not taken here (the standing notes carry it) but counts
+ * as found; two people who share one entry get it once.
+ * @returns {{ found: Array<{ name: string, title: string, book: string, text: string }>, missing: string[] }}
+ */
+export function castLore(entries, names, { perPerson = LORE_PER_PERSON, total = LORE_CAST_TOTAL } = {}) {
+    const list = Array.isArray(entries) ? entries : [];
+    const found = [];
+    const missing = [];
+    const used = new Set();
+    let left = total;
+    for (const raw of Array.isArray(names) ? names : []) {
+        const name = clean(raw, 60);
+        const whole = loreName(name);
+        if (!whole) continue;
+        const first = whole.split(' ')[0];
+        const tries = first !== whole && first.length >= 3 ? [[whole, 0], [first, 3]] : [[whole, 0]];
+        let best = null;
+        for (const x of list) {
+            const title = loreName(x.title);
+            const keys = x.keys.map(loreName);
+            let rank = 99;
+            for (const [n, worse] of tries) {
+                if (title === n || title.startsWith(`${n} `)) rank = Math.min(rank, 1 + worse);
+                else if (keys.includes(n)) rank = Math.min(rank, 2 + worse);
+                else if (` ${title} `.includes(` ${n} `)) rank = Math.min(rank, 3 + worse);
+            }
+            if (rank === 99) continue;
+            if (!best || rank < best.rank || (rank === best.rank && x.content.length > best.x.content.length)) best = { rank, x };
+        }
+        if (!best) { missing.push(name); continue; }
+        if (best.x.constant || used.has(best.x)) continue;    // carried by the standing notes, or given already under another name
+        if (left < 200) continue;
+        used.add(best.x);
+        const text = cutText(best.x.content, Math.min(perPerson, left));
+        left -= text.length;
+        found.push({ name, title: best.x.title, book: best.x.book, text });
+    }
+    return { found, missing };
+}
+
+/** The entries that are always on, the weightiest first (by their order), as one text within a length: a campaign's standing notes (its canon, its ledger, its style law). */
+export function standingLore(entries, { max = LORE_STANDING } = {}) {
+    const on = (Array.isArray(entries) ? entries : []).filter(x => x && x.constant).slice().sort((a, b) => b.order - a.order);
+    const parts = [];
+    let left = max;
+    for (const x of on) {
+        if (left < 200) break;
+        const text = cutText(`${x.title ? `${x.title}: ` : ''}${x.content}`, left);
+        parts.push(text);
+        left -= text.length + 2;
+    }
+    return parts.join('\n\n');
+}
+
 // ─── The brief ──────────────────────────────────────────────────────────
 
 const noStop = (s) => String(s || '').replace(/[.;,\s]+$/, '');
@@ -481,13 +557,16 @@ export function buildBrief({ world = '', sceneNo = 0, place = '', region = '', d
  * the narrator's template; and the exact JSON asked for.
  * @returns {{ system: string, user: string }}
  */
-export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS } = {}) {
+export function buildOpenersPrompt({ world = {}, place = '', region = '', weather = '', date = '', time = '', gapWords = '', cast = [], seed = '', canonBlock = '', recaps = [], quests = { main: 'None', optional: [] }, player = '', note = '', count = OPENERS, lore = [], standing = '' } = {}) {
     const name = clean(world.name, 80) || 'the world';
     const who = clean(player, 60) || 'the player';
     const n = Math.min(OPENERS, Math.max(1, count | 0));
+    // The people's own notes and the story's standing notes, from the lorebooks (D177): a background request sees no lorebook unless it is put in.
+    const notes = (Array.isArray(lore) ? lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) }));
+    const standingText = clean(standing, LORE_STANDING + 400);
     const system = `You are the narrator of ${name}. A new scene is about to open and you write its first message: how the scene opens, before ${who} has done anything. You answer with one JSON object and nothing else, in exactly this shape:
 {"when": {"date": "<the story's date when the scene opens>", "time": "<the time of day>"}, "openers": [{"title": "<four words at most>", "text": "<the opening narration>", "who": ["<names of the people present>"]}]}
-Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
+Write ${n} opener${n > 1 ? 's' : ''} that differ in what happens, not in wording. Each opener: the place as ${who} finds it, who is there, the first thing that happens, and it stops with the first move still ${who}'s; a paragraph or two, plain prose, no markup, no headings, no dice, nothing resolved or decided. Never speak or act for ${who}. Nobody ${who} has not met is named as a friend. ${notes.length ? 'Where a person\'s own notes are given they are who that person is: write each of them as their notes say, in their own manner and their own way of speaking, so that no two of them sound alike. ' : ''}${standingText ? 'The story\'s standing notes hold over anything else you are given. ' : ''}${world.template ? `The narrator's own rules: ${clean(world.template, 1200)}` : ''}`.trim();
     const people = cast.length ? cast.map(c => (typeof c === 'string' ? clean(c, 260) : personLine(c.name, c))).join('\n- ') : 'no one in particular';
     const q = [quests && quests.main && quests.main !== 'None' ? `Main: ${clean(quests.main, 200)}` : '', ...((quests && Array.isArray(quests.optional)) ? quests.optional.map(x => clean(x, 200)).filter(Boolean).slice(0, 6) : [])].filter(Boolean);
     const user = `World: ${name}${world.blurb ? `. ${clean(world.blurb, 600)}` : ''}
@@ -495,7 +574,7 @@ Where the scene opens: ${clean(place, 80) || 'anywhere that fits'}${region && !s
 The story's date at the last scene: ${[date, time].map(s => clean(s, 80)).filter(Boolean).join(', ') || 'unknown'}${gapWords ? `; this scene opens ${clean(gapWords, 80)}` : '; this scene opens right after'}.
 People here:
 - ${people}
-What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
+${notes.length ? `Their own notes:\n${notes.map(l => `[${l.name}] ${l.text}`).join('\n')}\n` : ''}${standingText ? `The story's standing notes:\n${standingText}\n` : ''}What brought us here: ${clean(seed, MAX_SEED) || 'nothing in particular; the world as it is'}
 ${canonBlock ? `What the story has established:\n${clean(canonBlock, 1200)}\n` : ''}${recaps.length ? `Last time:\n${recaps.map(r => clean(r, 700)).filter(Boolean).slice(0, 2).map((r, i) => `${i ? 'Before that' : 'Last scene'}: ${r}`).join('\n')}\n` : ''}${q.length ? `Open quests: ${q.join('; ')}\n` : ''}${note ? `${who} wants from this scene: ${clean(note, MAX_NOTE)}\n` : ''}The player: ${who} (never written for).
 
 Answer with the JSON object only.`;

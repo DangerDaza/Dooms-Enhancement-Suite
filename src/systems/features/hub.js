@@ -36,7 +36,7 @@ import {
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
     lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
-    adoptScene, ADOPTED_ID, backupFileName,
+    adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS,
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 
@@ -406,6 +406,56 @@ function lastReplyId() {
     return '';
 }
 
+// ─── The people's own notes, from the lorebooks (D177) ──────────────────
+
+let loreReader = null;    // test hook: (book) => Promise<the book's data, or null>
+
+/** Test hook: how a lorebook is read, or null for SillyTavern's. With a reader set, a world with no campaign reads no books. */
+export function __setLoreReader(fn) {
+    loreReader = typeof fn === 'function' ? fn : null;
+}
+
+/** The lorebooks a world's scenes take their people from: its campaign's (the Lore Library's), else the books switched on. */
+async function booksOf(worldId) {
+    const e = store().worlds[String(worldId || '')];
+    const lb = extensionSettings.lorebook;
+    const c = e && e.campaign && lb && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[e.campaign] : null;
+    if (c && Array.isArray(c.books) && c.books.length) return c.books.map(String).filter(Boolean).slice(0, LORE_BOOKS);
+    if (loreReader) return [];
+    try { const api = await import('../lorebook/lorebookAPI.js'); return (api.getActiveWorldNames() || []).map(String).filter(Boolean).slice(0, LORE_BOOKS); } catch (e2) { return []; }
+}
+
+/**
+ * What the lorebooks hold for a scene (D177): each person's own entry and
+ * the entries that are always on. A background request sees no lorebook,
+ * so the openings are given these; a book that cannot be read is passed
+ * over, and with none read the openings are written as before.
+ * @returns {Promise<{ lore: Array<{ name: string, text: string }>, standing: string, found: string[], missing: string[], books: string[] }>}
+ */
+async function sceneLore(worldId, names, players = []) {
+    const out = { lore: [], standing: '', found: [], missing: [], books: [] };
+    try {
+        const books = await booksOf(worldId);
+        const entries = [];
+        for (const book of books) {
+            try {
+                const data = loreReader ? await loreReader(book) : await (await import('../lorebook/lorebookAPI.js')).loadWorldData(book, true);
+                if (data) { entries.push(...loreEntries(book, data)); out.books.push(book); }
+            } catch (e) { log(`the lorebook "${book}" could not be read`, String(e && e.message || e)); }
+        }
+        if (!entries.length) return out;
+        const cast = castLore(entries, names);
+        // The player's own entry, when there is room for it: who they are matters to how a scene opens on them.
+        const left = Math.max(0, 10000 - cast.found.reduce((n, f) => n + f.text.length, 0));
+        const mine = players.length && left >= 400 ? castLore(entries.filter(x => !cast.found.some(f => f.title === x.title && f.book === x.book)), players.slice(0, 1), { total: Math.min(left, 2000), perPerson: 2000 }) : { found: [] };
+        out.lore = [...cast.found, ...mine.found].map(f => ({ name: f.name, text: f.text }));
+        out.found = cast.found.map(f => f.name);
+        out.missing = cast.missing;
+        out.standing = standingLore(entries);
+    } catch (e) { log('the lorebooks could not be read for the scene', String(e && e.message || e)); }
+    return out;
+}
+
 // ─── Start (D117, D118, D119) ───────────────────────────────────────────
 
 function guardStart(worldId) {
@@ -524,7 +574,10 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     const weather = label && memory.facts.location && sameName(label, memory.facts.location) ? memory.facts.weather : '';
     const canonBlock = memory.stores.dooms_canon ? buildCanonBlock(normalizeCanon(memory.stores.dooms_canon), { maxChars: 1200 }) : '';
     const quests = memory.stores.dooms_tracker && memory.stores.dooms_tracker.quests ? memory.stores.dooms_tracker.quests : { main: 'None', optional: [] };
-    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note });
+    // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
+    const notesOf = await sceneLore(g.id, names, players);
+    if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
+    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing });
     let openers = [];
     let when = null;
     let errors = [];
@@ -545,8 +598,9 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     pending = {
         token, worldId: g.id, pack, card: g.card, memory, seed: seed && typeof seed === 'object' ? seed : { kind: 'anywhere', text: seedText }, place: { id: placeId, label, region }, cast: names, lines, gap: theGap, note: String(note || ''),
         weather, since, recaps, player: players, openers, when, errors, notes, prompt, movedMemory,
+        lore: { found: notesOf.found, missing: notesOf.missing, standing: !!notesOf.standing, books: notesOf.books },
     };
-    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes };
+    return { ok: true, token, world: { id: g.id, name: pack.name }, place: pending.place, cast: names, gap: theGap, openers, when, errors, notes, lore: pending.lore };
 }
 
 // ─── Hooks over the memory (§4.4) ────────────────────────────────────────
@@ -639,7 +693,7 @@ export function setHubHookAside(worldId, hookId) {
 
 /** The pending Start, for the picker. */
 export function pendingStart() {
-    return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes } : null;
+    return pending ? { token: pending.token, world: { id: pending.worldId, name: pending.pack.name }, place: pending.place, cast: pending.cast, gap: pending.gap, openers: pending.openers, when: pending.when, errors: pending.errors, notes: pending.notes, lore: pending.lore || null } : null;
 }
 
 /** Ask again (D119): three more; the old ones stay until the new land. */
