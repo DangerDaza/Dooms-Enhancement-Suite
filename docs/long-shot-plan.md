@@ -252,3 +252,7 @@ so the sidebar scrolled past the scale's select could change a map's
 scale unasked (the owner's top map read "A building or dungeon" without
 his choosing it; no other path to that was found). The Atlas now takes
 the focus off its selects when the wheel turns over them.
+
+Also (2026-11-10, the owner: "names only show when moused over"): a marker's
+name shows under the pointer or the keyboard's focus and nowhere else, at
+every zoom, the party's included. On a phone the card names the place.

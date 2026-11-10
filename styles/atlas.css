@@ -220,9 +220,12 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 /* A region is its name across its land */
 .dooms-atlas-region { background: none; border: 0; }
 .dooms-atlas-region-name { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); white-space: nowrap; font-family: var(--atlas-map-font); font-size: 19px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--atlas-ink); opacity: 0.62; text-shadow: 0 0 4px var(--atlas-land), 0 0 8px var(--atlas-land); pointer-events: none; }
-/* What the zoom shows (atlasMap.js, by the pixels of one layout unit): far, the places are dots; mid, pins; close,
-   pins with their names. The party's own marker is whole at every zoom. */
-.dooms-atlas-leaflet:not([data-zoom="close"]) .dooms-atlas-marker:not(.is-player) .dooms-atlas-label { display: none; }
+/* What the zoom shows (atlasMap.js, by the pixels of one layout unit): far, the places are dots; nearer, pins.
+   The party's own marker is a pin at every zoom. */
+/* A place's name shows under the pointer (or the keyboard's focus), and nowhere else: the map stays clear. */
+.dooms-atlas-marker .dooms-atlas-label { display: none; }
+.dooms-atlas-marker:hover .dooms-atlas-label, .dooms-atlas-marker:focus-visible .dooms-atlas-label { display: block; }
+.dooms-atlas-marker:hover, .dooms-atlas-marker:focus-visible { z-index: 100000 !important; }
 .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-player) .dooms-atlas-pin { width: 12px; height: 12px; flex-basis: 12px; margin: 9px; border-width: 1.5px; font-size: 0; box-shadow: none; }
 .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-marker:not(.is-player) .dooms-atlas-faces, .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-weather { display: none; }
 .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-glyph { stroke-opacity: 0.5; }
