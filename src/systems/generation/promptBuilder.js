@@ -870,9 +870,9 @@ export function generateRPGPromptText() {
                 promptText += `${committedTrackerData.infoBox}\n\n`;
             }
         }
-        // Include Present Characters data if it exists, regardless of current showCharacterThoughts setting
-        // This ensures existing character data is preserved in context even if the setting is toggled off
-        if (committedTrackerData.characterThoughts) {
+        // Include Present Characters data only when the Present Characters tracker is enabled,
+        // matching quests/infoBox above, so turning it off stops it being sent to the AI
+        if (extensionSettings.showCharacterThoughts && committedTrackerData.characterThoughts) {
             try {
                 let parsed;
                 // Check if it's already a JavaScript object/array (not a JSON string)
