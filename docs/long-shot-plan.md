@@ -857,3 +857,34 @@ told and named, borders along rivers, §5 the paces, the ford and the
 bridge), `tools/atlas-test.mjs` §6f (what is drawn, the wording of a way
 and of a road), `tools/atlas-world-test.mjs` §3 (a plain name's terrain),
 `tools/atlas-browser-test.mjs` §5j (the panel's picture and the map).
+
+## 33. The scenes of a world, in the Atlas (2026-11-11, D193, D194)
+
+The third waiting item is retiring the old Hub and Map windows. Before
+they can go, what only they had has to be in the Atlas: the list of a
+world's scenes, the ways into a scene other than a place's card, hooks
+played as scenes, and choosing which world to look at. Built in
+"Atlas 33". The windows themselves go in the step after (§34).
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D193 | The Atlas lists a world's scenes and starts one from anything | **A sixth tab, Scenes,** for a world that is played as scenes (the scene in front's world, the world of a chat the scenes began from, or a world picked, D194): the scene being played first, then those set aside, then the ended ones newest first, each with its place, its people, its dates, its record, and what its record found against canon (D190). Go to it or Resume opens its chat; End scene opens its chat if it is not in front and then the End sheet; Set aside leaves it for later; Go on from here opens the start sheet at the same place with the same people and the scene's record as what came before; a scene whose chat is gone can be removed. At the top, Start scene N, or the reason one cannot be started. **The start sheet** (D174) is one sheet for every way in: from a place's card it is as it was; from anywhere else it has a Where (any place on any map, "where the story left off", or somewhere new typed in), and says what it comes from. Choosing a place ticks who was last seen there and, when the party and the place are on the map in front, takes the time from the journey. **Ways in:** every line of News and of Rumours is pressed to start a scene with that line as what brings the party (a rumour opens at the place its clock stands at); a face's card has "Start scene N with them", opening where they were last seen; the Scenes tab's own button starts from nothing. They show only while a scene can be started. **Hooks between scenes** are the world's own round, kept in its memory: Offer hooks asks over the memory, Play as a scene opens the sheet with the hook (the scene takes it as its quest), Not this one sets it aside. While a scene of the world is being played its chat holds the live round, so the memory's is only read. In a chat (a scene being played, a long chat) hooks are taken and cut to as before |
+| D194 | The Atlas can show any of the player's worlds, whatever chat is open | **A world picker** under the world's name, when scenes are on and the player has worlds of their own: "This chat", then every such world by name (one with no narrator card says so). A picked world is drawn from its memory, as between scenes: its map, where people stand, its news, rumours, hooks and scenes; a scene of it is started from there and its chat opens on the world's card. A world no scene has ended in is drawn from its pack's beginning. Its map can be made and changed from there (World gen, placing, roads): the first change begins the world's memory with the map in it, as a round of hooks begins one, and the first scene carries that map. While a scene of the world is being played elsewhere the map is that scene's to change, and the Atlas says so with the way to it. What needs a chat to read (set-up, fill, clean-up and naming by the AI, Travel, Advance now) waits for a scene, as between scenes. The pick lasts while the Atlas is open; it opens on the chat in front again. The Atlas can be opened on a world by name (`openAtlas({ worldId })`), which the World Builder and Settings will use when the old windows go |
+
+In the scene engine: `startPlanFor(worldId)` (whether a scene of a world
+can be started, whatever chat is in front), `worldSource(worldId, pack)`
+(a picked world as the Atlas reads it; a copy, nothing written), and
+`setWorldBook(worldId, book, { pack })` (a world with no memory begins
+one, `takenAt` 0, to hold its map).
+
+What it is not: the list does not page (a world keeps its last scenes as
+it always did); a scene's record is not edited from the list; a line of
+news started from is not marked as played; a picked world's people show
+no "here now" (there is no scene in front to say who is present); and
+the old windows are still there until §34.
+
+Tests: `tools/hub-flow-test.mjs` §19 (a world picked: shown, its map
+begun, its first scene started with it), `tools/atlas-browser-test.mjs`
+§5k (the Scenes tab, the ways in, hooks between scenes, the picker, the
+start sheet from each way in). The controller's own lines (which act
+calls which function) are load-checked only, as before.

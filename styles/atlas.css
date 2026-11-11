@@ -47,6 +47,10 @@
 /* Between scenes (D173): the Atlas shows the world's memory, and says so under the world's name. */
 .dooms-atlas-between { margin: 8px 0 0; padding: 7px 9px; font-size: 0.78em; line-height: 1.4; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); overflow-wrap: anywhere; }
 .dooms-atlas-between > i { color: var(--atlas-accent2); margin-right: 3px; }
+/* The world picker (D194): which world the Atlas shows. */
+.dooms-atlas-world-pick { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
+.dooms-atlas-world-pick .dooms-atlas-card-label { flex: 0 0 auto; margin: 0; }
+.dooms-atlas-world-select { flex: 1 1 auto; min-width: 0; appearance: auto; font: inherit; font-size: 0.82em; padding: 4px 6px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
 .dooms-atlas-tabs { flex: 0 0 auto; display: flex; border-bottom: 1px solid var(--atlas-line); }
 .dooms-atlas-tab { flex: 1 1 0; min-width: 0; appearance: none; font: inherit; font-size: 0.68em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 2px 7px; color: var(--atlas-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .dooms-atlas-tab i { font-size: 1.45em; }
@@ -572,3 +576,33 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 @media (prefers-reduced-motion: reduce) {
     .dooms-atlas-marker:hover .dooms-atlas-pin { transform: none; }
 }
+
+/* The Scenes tab (D193): the world's scenes, each with what can be done with it. */
+.dooms-atlas-scenes { display: flex; flex-direction: column; gap: 10px; }
+.dooms-atlas-scenes-top { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.dooms-atlas-scenes-top .dooms-atlas-start-note { margin: 0; }
+.dooms-atlas-scene-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dooms-atlas-scene { padding: 9px 10px; border: 1px solid var(--atlas-line); border-radius: var(--atlas-radius); background: var(--atlas-panel2); }
+.dooms-atlas-scene.is-open { border-color: var(--atlas-accent); }
+.dooms-atlas-scene.is-gone { opacity: 0.65; }
+.dooms-atlas-scene-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.dooms-atlas-scene-no { font-size: 0.72em; letter-spacing: 0.06em; text-transform: uppercase; color: var(--atlas-muted); }
+.dooms-atlas-scene-title { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--atlas-text); overflow-wrap: anywhere; }
+.dooms-atlas-scene-tag { font-size: 0.7em; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--atlas-line); color: var(--atlas-muted); white-space: nowrap; }
+.dooms-atlas-scene.is-open .dooms-atlas-scene-tag:not(.is-against) { border-color: var(--atlas-accent); color: var(--atlas-text); }
+.dooms-atlas-scene-tag.is-against { border-color: var(--atlas-accent2); color: var(--atlas-accent2); }
+.dooms-atlas-scene-meta { margin-top: 3px; font-size: 0.78em; color: var(--atlas-muted); overflow-wrap: anywhere; }
+.dooms-atlas-scene-recap { margin: 6px 0 0; font-size: 0.82em; line-height: 1.45; color: var(--atlas-text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.dooms-atlas-scene-recap:hover { -webkit-line-clamp: unset; }
+.dooms-atlas-scene-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.dooms-atlas-scene-actions .dooms-atlas-btn { font-size: 0.78em; padding: 4px 8px; }
+/* A line of News or Rumours as a way into a scene (D193). */
+.dooms-atlas-ways[data-way="news"] .dooms-map-changes li, .dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li { cursor: pointer; border-radius: 4px; }
+.dooms-atlas-ways[data-way="news"] .dooms-map-changes li:hover, .dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li:hover { background: color-mix(in srgb, var(--atlas-accent) 16%, transparent); }
+.dooms-atlas-ways > .dooms-atlas-start-note { margin-top: 10px; }
+/* The start sheet opened from something other than a place's card: what it comes from, and its Where. */
+.dooms-atlas-scene-from { margin: 0 0 4px; padding: 6px 9px; font-size: 0.85em; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-panel2); color: var(--atlas-text); }
+.dooms-atlas-scene-from > i { color: var(--atlas-accent2); margin-right: 4px; }
+.dooms-atlas-scene-where-new { margin-top: 6px; }
+.dooms-atlas-scene-where-new[hidden] { display: none; }
+.dooms-atlas-scenes-top .dooms-atlas-start-note { font-size: 0.82em; color: var(--atlas-muted); }

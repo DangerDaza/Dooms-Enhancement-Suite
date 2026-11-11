@@ -53,7 +53,8 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasStripHtml, atlasRoadHtml, roadTimeHours, roadTimeParts, atlasWorldGenHtml, atlasNamesHtml } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasStripHtml, atlasRoadHtml, roadTimeHours, roadTimeParts, atlasWorldGenHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from '/src/systems/ui/atlasViews.js';
+import { newsHtml, rumoursHtml, peopleHtml } from '/src/systems/ui/worldViews.js';
 import * as S from '/src/utils/atlasSetup.js';
 import * as W from '/src/utils/atlasWorld.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
@@ -189,6 +190,11 @@ window.__refusal = (plan) => scenesRefusalText(plan);
 // Ending a scene (D176): the sheet in a state; the strip that stands above a scene's chat, in a box with the strip's own id.
 window.__endScene = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasEndSceneHtml(o); return true; };
 window.__strip = (o) => { let el = document.getElementById('dooms-scene-strip'); if (!el) { document.body.insertAdjacentHTML('afterbegin', '<div id="dooms-scene-strip" class="dooms-scene-strip" style="position:fixed;left:0;top:0;width:900px;z-index:99999"></div>'); el = document.getElementById('dooms-scene-strip'); } el.innerHTML = o ? atlasStripHtml(o) : ''; if (!o) el.remove(); return true; };
+// The sidebar with another tab's body, a world picker, the Scenes tab (D193, D194): the controller's own lines, here.
+window.__side = (o) => { root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, ...o }); return true; };
+window.__V = { atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml, newsHtml, rumoursHtml, peopleHtml };
+window.__state = () => state;
+window.__lw = { normalizePack, seedWorldState };
 window.__sceneStart = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasStartSceneHtml(o); return true; };
 // World gen (D182): the panel for a set of choices (the controller's own lines, here), the world applied, the names' sheet.
 window.W = W;
@@ -1371,6 +1377,116 @@ console.log('\n§5j World gen: the land made first, the regions put on it (D182�
     await page.evaluate(() => window.__board.fit());
     await settle();
     await shot('67-world-named');
+}
+
+console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, the world picker (D193, D194)');
+{
+    await page.evaluate(() => window.__open({ world: 'campaign', book: null }));
+    await settle();
+    const scenes = [
+        { id: 's1', title: 'The Fourth Landing', status: 'ended', place: { id: 'pin:hask', label: 'Hask' }, cast: ['Kiyoha', 'Lysandra'], startDate: '9th of Frostfall', endDate: '10th of Frostfall', recap: 'The company came up from the Fourth Landing with the inkstone; Kiyoha walked out on her own feet.' },
+        { id: 's2', title: 'A debt called in', status: 'ended', place: { id: '', label: 'The Anchor' }, cast: ['Old Marit'], startDate: '11th of Frostfall', endDate: '11th of Frostfall', recap: '', conflicts: [{ text: 'x' }, { text: 'y' }] },
+        { id: 's3', title: 'Lost on the moor', status: 'ended', gone: true, place: { id: '', label: '' }, cast: [], recap: 'Gone.' },
+        { id: 's4', title: 'The long watch', status: 'aside', place: { id: 'pin:redfall-castle', label: 'Redfall Castle' }, cast: ['Dagger'], startDate: '12th of Frostfall' },
+        { id: 's5', title: 'Fog on the quay', status: 'open', place: { id: '', label: 'Saltport, the quay' }, cast: ['Kiyoha'], startDate: '14th of Frostfall', reopened: true },
+    ];
+    const side = () => page.evaluate(() => {
+        const el = document.querySelector('.dooms-atlas-side');
+        const body = el.querySelector('.dooms-atlas-body');
+        return {
+            tabs: [...el.querySelectorAll('.dooms-atlas-tab')].map(t => t.getAttribute('data-tab') + (t.classList.contains('is-active') ? '*' : '')),
+            tabsFit: [...el.querySelectorAll('.dooms-atlas-tab')].every(t => t.scrollWidth <= t.clientWidth + 1), fits: body.scrollWidth <= body.clientWidth + 1,
+            rows: [...el.querySelectorAll('.dooms-atlas-scene')].map(li => ({ id: li.getAttribute('data-id'), cls: li.className.replace('dooms-atlas-scene ', ''), tags: [...li.querySelectorAll('.dooms-atlas-scene-tag')].map(x => x.textContent), acts: [...li.querySelectorAll('[data-act]')].map(x => x.getAttribute('data-act') + (x.disabled ? '!' : '')), meta: (li.querySelector('.dooms-atlas-scene-meta') || {}).textContent || '', recap: (li.querySelector('.dooms-atlas-scene-recap') || {}).textContent || '' })),
+            top: (el.querySelector('.dooms-atlas-scenes-top') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(), topActs: [...el.querySelectorAll('.dooms-atlas-scenes-top [data-act]')].map(x => x.getAttribute('data-act')),
+            text: body.textContent.replace(/\s+/g, ' ').trim(),
+        };
+    });
+
+    // The Scenes tab.
+    await page.evaluate(() => window.__side({ tab: 'places', body: '' }));
+    let sd = await side();
+    check('a world not played as scenes has five tabs and no Scenes', same(sd.tabs, ['places*', 'people', 'news', 'rumours', 'hooks']));
+    await page.evaluate((sc) => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: sc, plan: { ok: false, reason: 'scene-open' }, why: 'Scene 5 (Fog on the quay) is open: end it or set it aside first.', front: 's5' }) }), scenes);
+    sd = await side();
+    check('a world played as scenes has a sixth tab, Scenes, and all six fit the sidebar', same(sd.tabs, ['places', 'people', 'news', 'rumours', 'hooks', 'scenes*']) && sd.tabsFit && sd.fits);
+    check('the list: the scene being played first, then the one set aside, then the ended ones newest first', same(sd.rows.map(r => r.id), ['s5', 's4', 's3', 's2', 's1']));
+    const row = (id) => sd.rows.find(r => r.id === id);
+    check('the scene in front is being played: it is ended or set aside from here', same(row('s5').tags, ['being played', 'reopened']) && same(row('s5').acts, ['sc-end', 'sc-aside']) && /is-open/.test(row('s5').cls) && /is-front/.test(row('s5').cls) && row('s5').meta === 'Saltport, the quay · Kiyoha · from 14th of Frostfall');
+    check('one set aside is resumed, or ended; an ended one is read again or gone on from; one whose chat is gone can only be removed', same(row('s4').acts, ['sc-resume', 'sc-end']) && same(row('s1').acts, ['sc-open', 'sc-continue!']) && same(row('s3').acts, ['sc-remove']) && same(row('s3').tags, ['chat gone']));
+    check('an ended scene shows its record, or says none was kept, and what it found against canon', /^The company came up/.test(row('s1').recap) && row('s2').recap === 'No record was kept.' && same(row('s2').tags, ['ended', '2 against canon']) && row('s2').meta === 'The Anchor · Old Marit · from 11th of Frostfall to 11th of Frostfall');
+    check('while a scene is open no other is started, and the list says why', same(sd.topActs, []) && /Scene 5 \(Fog on the quay\) is open: end it or set it aside first\./.test(sd.top));
+    await shot('68-scenes-tab');
+    await page.evaluate((sc) => window.__side({ tab: 'scenes', scenesTab: true, between: { open: null }, body: window.__V.atlasSceneListHtml({ scenes: sc.map(s => (s.id === 's5' ? { ...s, status: 'ended', endDate: '14th of Frostfall', recap: 'Fog, and a boat that did not come.' } : s)), plan: { ok: true, number: 6 }, why: '', front: 's5' }) }), scenes);
+    sd = await side();
+    check('between scenes: Start scene 6 at the top, the ended scene in front is not opened again, and any ended scene can be gone on from', same(sd.topActs, ['scene-new']) && /^Start scene 6/.test(sd.top) && same(row('s5').acts, ['sc-open!', 'sc-continue']) && same(row('s1').acts, ['sc-open', 'sc-continue']) && same(sd.rows.map(r => r.id), ['s4', 's5', 's3', 's2', 's1']));
+    await page.evaluate(() => window.__side({ tab: 'scenes', scenesTab: true, body: window.__V.atlasSceneListHtml({ scenes: [], plan: { ok: true, number: 1 }, why: '' }) }));
+    sd = await side();
+    check('a world with no scene yet says what a scene is, and offers the first', same(sd.topActs, ['scene-new']) && /No scene has been played in this world yet/.test(sd.text) && sd.rows.length === 0);
+
+    // The ways in.
+    const ways = await page.evaluate(() => {
+        // A small world with a clock, so there is something said on the street.
+        const pk = window.__lw.normalizePack({ id: 'quayside', name: 'Quayside', places: [{ id: 'the-docks', label: 'The Docks' }], cast: [{ name: 'Old Marit', tier: 'major', place: 'the-docks' }], clocks: [{ id: 'blockade', label: 'The blockade', place: 'the-docks', start: 1, max: 3, step: 1, effects: { 0: 'Ships come and go as they please.', 1: 'A navy cutter sits at the harbour mouth; captains grumble.', 2: 'Cargo is searched on the quay.', 3: 'The harbour is closed.' } }] }).pack;
+        const st = window.__lw.seedWorldState(pk, { name: 'Quayside' });
+        const cfg = { spoilerFree: false };
+        const V = window.__V;
+        const plainNews = V.atlasWaysHtml({ kind: 'news', on: false, body: V.newsHtml({ state: st, pack: pk, cfg }) });
+        window.__side({ tab: 'rumours', scenesTab: true, between: { open: null }, body: V.atlasWaysHtml({ kind: 'rumour', on: true, number: 6, body: V.rumoursHtml({ state: st, pack: pk, cfg }) }) });
+        const li = document.querySelector('.dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li');
+        const out = { plain: !/dooms-atlas-ways/.test(plainNews), lines: document.querySelectorAll('.dooms-atlas-ways[data-way="rumour"] .dooms-world-effects li').length, cursor: li ? getComputedStyle(li).cursor : '', index: li ? li.getAttribute('data-i') : null, hint: (document.querySelector('.dooms-atlas-ways > .dooms-atlas-start-note') || {}).textContent || '' };
+        const people = V.atlasWaysHtml({ kind: 'person', on: true, number: 6, body: V.peopleHtml({ state: st, pack: pk, portraits: () => '', present: [] }) });
+        out.person = /data-way="person"/.test(people) && /A face is a way in: its card has Start a scene with them \(scene 6\)\./.test(people);
+        return out;
+    });
+    check('a line of Rumours is a way into a scene while one can be started: it is pressed like a button, carries its place in the list, and the tab says so', ways.lines >= 1 && ways.cursor === 'pointer' && ways.index === '0' && /A line is a way in: click one to start scene 6 from it\./.test(ways.hint), JSON.stringify(ways));
+    check('while none can be started the tab is as it was; People says where the way in is', ways.plain && ways.person);
+    await shot('69-rumours-as-ways-in');
+
+    // Hooks between scenes.
+    const hooks = { proposed: [{ id: 'h1', title: 'The cellar door', text: 'See what the Anchor keeps behind its cellar door.', grounds: 'Old Marit' }, { id: 'h2', title: 'The drowned bell', text: 'Find who rang it.', grounds: '' }], taken: [{ id: 'h0', title: 'The inkstone' }], aside: [], last: null };
+    const hk = (o) => page.evaluate((x) => { window.__side({ tab: 'hooks', scenesTab: true, between: { open: null }, body: window.__V.atlasWorldHooksHtml(x) }); const el = document.querySelector('.dooms-atlas-body'); return { acts: [...el.querySelectorAll('[data-act]')].map(b => b.getAttribute('data-act') + (b.disabled ? '!' : '')), ids: [...el.querySelectorAll('[data-act="hook-play"]')].map(b => b.getAttribute('data-hook')), text: el.textContent.replace(/\s+/g, ' '), fits: el.scrollWidth <= el.clientWidth + 1 }; }, o);
+    let hv = await hk({ hooks, busy: false, sceneOpen: false, canStart: true });
+    check('between scenes a hook is played as a scene or set aside, and others are asked for, over the world\'s memory', same(hv.acts, ['hook-play', 'hook-drop', 'hook-play', 'hook-drop', 'hooks-offer']) && same(hv.ids, ['h1', 'h2']) && /Play as a scene/.test(hv.text) && /Offer others/.test(hv.text) && /Played/.test(hv.text) && hv.fits, JSON.stringify(hv.acts));
+    await shot('70-hooks-between-scenes');
+    hv = await hk({ hooks, busy: false, sceneOpen: true, canStart: false, why: 'Scene 5 is open: end it or set it aside first.' });
+    check('while a scene of the world is being played its round is only read: nothing is played, set aside or asked for', same(hv.acts, ['hook-play!', 'hook-drop!', 'hook-play!', 'hook-drop!', 'hooks-offer!']));
+    hv = await hk({ hooks: null, busy: true, sceneOpen: false, canStart: true });
+    check('with no round yet it says so, and while one is asked for the button waits', /Asking the world…/.test(hv.text) && same(hv.acts, ['hooks-offer!']));
+
+    // The world picker.
+    const pick = (o) => page.evaluate((x) => { window.__side({ tab: 'places', body: '', ...x }); const sel = document.querySelector('.dooms-atlas-world-select'); const head = document.querySelector('.dooms-atlas-head'); const b = document.querySelector('.dooms-atlas-between'); return { has: !!sel, options: sel ? [...sel.options].map(op => `${op.value}|${op.textContent.trim()}${op.selected ? '*' : ''}`) : [], fits: head.scrollWidth <= head.clientWidth + 1, between: b ? b.textContent.replace(/\s+/g, ' ').trim() : '', go: b ? !!b.querySelector('[data-act="scene-go"]') : false }; }, o);
+    let pk = await pick({});
+    check('with no world played as scenes there is nothing to pick', !pk.has);
+    pk = await pick({ worlds: [{ id: 'first-descent', name: 'First Descent', card: 'The Redward' }, { id: 'newland', name: 'Newland', card: '' }], chatWorld: 'Harbourside Nights' });
+    check('the picker: this chat\'s world first, then every world of the player\'s own; one with no narrator card says so', pk.has && same(pk.options, ['|This chat: Harbourside Nights*', 'first-descent|First Descent', 'newland|Newland (no narrator card)']) && pk.fits, JSON.stringify(pk.options));
+    pk = await pick({ worlds: [{ id: 'first-descent', name: 'First Descent', card: 'The Redward' }], picked: 'first-descent', chatWorld: 'Harbourside Nights', between: { open: { id: 's5', number: '5', title: 'Fog on the quay' }, picked: true, fresh: false } });
+    check('a world picked is shown as it stands between scenes, whatever chat is open; a scene of it being played is named, with the way to it', same(pk.options, ['|This chat: Harbourside Nights', 'first-descent|First Descent*']) && /^This world as it stands between scenes, whatever chat is open\. Scene 5 \(Fog on the quay\) is being played, and the map is changed there\./.test(pk.between) && pk.go && pk.fits, pk.between);
+    await shot('71-world-picker');
+    pk = await pick({ worlds: [{ id: 'newland', name: 'Newland', card: 'Narrator' }], picked: 'newland', chatWorld: '', between: { open: null, picked: true, fresh: true } });
+    check('a world no scene has ended in says this is where it begins; with no chat\'s world the first choice is just "This chat"', /^No scene of this world has ended yet: this is where it begins\.$/.test(pk.between) && pk.options[0] === '|This chat' && !pk.go, pk.between);
+    pk = await pick({ between: { open: null } });
+    check('between scenes in the chat\'s own world the word is as it was', /^Between scenes: the world as it stands now, not as this chat left it\.$/.test(pk.between));
+    await page.evaluate(() => window.__draw());
+
+    // The sheet opened from something other than a place's card.
+    const sheet = (o) => page.evaluate((x) => { window.__sceneStart(x); const el = document.querySelector('.dooms-atlas-setup-card'); const sel = el.querySelector('.dooms-atlas-scene-where'); const typed = el.querySelector('.dooms-atlas-scene-where-new'); const b = el.getBoundingClientRect(); return { title: el.querySelector('h3').textContent, from: (el.querySelector('.dooms-atlas-scene-from') || {}).textContent ? el.querySelector('.dooms-atlas-scene-from').textContent.replace(/\s+/g, ' ').trim() : '', where: sel ? [...sel.options].map(op => `${op.value}|${op.textContent.trim()}${op.selected ? '*' : ''}`) : null, typedShown: typed ? !typed.hidden && typed.getBoundingClientRect().height > 0 : false, typed: typed ? typed.value : '', seed: el.querySelector('.dooms-atlas-scene-seed').value, ticked: [...el.querySelectorAll('input[name="dooms-atlas-cast"]:checked')].map(i => i.value), extra: el.querySelector('.dooms-atlas-scene-who').value, text: el.textContent.replace(/\s+/g, ' '), inside: b.top >= 0 && b.bottom <= innerHeight && b.right <= innerWidth, overflow: el.scrollWidth > el.clientWidth + 1 }; }, o);
+    const places = [{ id: 'pin:hask', label: 'Hask', where: '' }, { id: 'pin:redfall-castle', label: 'Redfall Castle', where: 'The Redward' }, { id: 'pin:saltport', label: 'Saltport', where: '' }];
+    const people = [{ name: 'Kiyoha', here: true }, { name: 'Dagger', here: false }, { name: 'Lysandra', here: false }];
+    const base = { step: 'form', sceneNo: 6, card: 'The Redward', people, gap: { id: 'later', words: '' }, journey: '', note: '' };
+    let sv = await sheet({ ...base, place: { id: '', label: '' }, places, cast: [], seedText: '' });
+    check('started from nothing: the sheet has a Where to choose, opening where the story left off; it is "Scene 6" until a place is chosen', sv.title === 'Scene 6' && same(sv.where, ['|Where the story left off*', 'pin:hask|Hask', 'pin:redfall-castle|Redfall Castle (The Redward)', 'pin:saltport|Saltport', '__new__|Somewhere new…']) && !sv.typedShown && sv.from === '' && /What brings the party there/.test(sv.text) && sv.inside && !sv.overflow, JSON.stringify(sv.where));
+    sv = await sheet({ ...base, place: { id: 'pin:redfall-castle', label: 'Redfall Castle' }, places, cast: ['Kiyoha'], seed: { kind: 'person', label: 'Kiyoha' }, from: { kind: 'person', label: 'Kiyoha' }, seedText: '' });
+    check('from a person: the place they were last seen chosen, they ticked, and the sheet says who it is with', sv.title === 'Scene 6 at Redfall Castle' && sv.where.includes('pin:redfall-castle|Redfall Castle (The Redward)*') && same(sv.ticked, ['Kiyoha']) && /^With Kiyoha: the sheet opens where they were last seen\.$/.test(sv.from) && /What brings the party here/.test(sv.text), sv.from);
+    sv = await sheet({ ...base, place: { id: '', label: '' }, places, cast: [], from: { kind: 'rumour' }, seedText: 'They say the harbour chain was cut from the inside.' });
+    check('from a rumour: what it says is what brings the party, to change as you like', /^From a rumour: it is what brings the party, below\. Change it as you like\.$/.test(sv.from) && sv.seed === 'They say the harbour chain was cut from the inside.');
+    sv = await sheet({ ...base, place: { id: '', label: '' }, places, cast: [], from: { kind: 'hook', label: 'The cellar door' }, seedText: 'See what the Anchor keeps behind its cellar door.' });
+    check('from a hook: the sheet names it and says the scene takes it as a quest', /^From the hook “The cellar door”: the scene takes it as a quest\.$/.test(sv.from) && /^See what the Anchor keeps/.test(sv.seed));
+    sv = await sheet({ ...base, place: { id: '', label: 'The Anchor' }, whereNew: 'The Anchor', places, cast: [], extra: 'Old Marit', from: { kind: 'scene', label: 'scene 2, A debt called in' }, seedText: 'The scene before: none.' });
+    check('going on from a scene at a place that is on no map: Somewhere new, its name typed in, its people named; the sheet says which scene', sv.where.includes('__new__|Somewhere new…*') && sv.typedShown && sv.typed === 'The Anchor' && sv.title === 'Scene 6 at The Anchor' && sv.extra === 'Old Marit' && /^Going on from scene 2, A debt called in: the same place and the same people, to change as you like\.$/.test(sv.from) && sv.inside && !sv.overflow, JSON.stringify([sv.where, sv.typed, sv.from]));
+    await shot('72-scene-from-a-scene');
+    sv = await sheet({ ...base, place: { id: 'pin:hask', label: 'Hask' }, cast: [], seedText: '' });
+    check('from a place\'s own card the sheet is as it was: the place given, no Where to choose', sv.where === null && sv.title === 'Scene 6 at Hask' && sv.from === '');
+    await page.evaluate(() => { const p = document.querySelector('.dooms-atlas-setup'); p.hidden = true; p.innerHTML = ''; });
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

@@ -1354,6 +1354,17 @@ export function sceneStartPlan() {
     return { ok: true, reason: '', worldId, number: g.entry.seq + 1, card: g.card.name };
 }
 
+/**
+ * Whether a scene of a world can be started whatever chat is in front
+ * (D194): the Atlas showing a world that was picked, not the chat's.
+ * @returns {{ ok: boolean, reason: string, worldId?: string, number?: number, card?: string, scene?: object }}
+ */
+export function startPlanFor(worldId) {
+    const g = guardStart(worldId);
+    if (!g.ok) return { ok: false, reason: g.reason, scene: g.scene };
+    return { ok: true, reason: '', worldId: g.id, number: g.entry.seq + 1, card: g.card.name };
+}
+
 // ─── The world's map (D172, D173) ───────────────────────────────────────
 
 /**
@@ -1375,18 +1386,38 @@ export function atlasSource() {
 }
 
 /**
+ * A world as the Atlas shows it when it is picked there (D194), whatever
+ * chat is in front: its memory, as between scenes; before its first scene
+ * has ended, the pack's own beginning (nothing is written by the look).
+ * @returns {null | { kind: 'world', worldId: string, scene: string, picked: true, open: object|null, memory: object }}  null when the hub has no such world
+ */
+export function worldSource(worldId, pack) {
+    const id = String(worldId || '').trim();
+    const entry = id ? store().worlds[id] : null;
+    if (!entry || !pack) return null;
+    const open = openSceneOf(entry);
+    return { kind: 'world', worldId: id, scene: '', picked: true, open: open && !open.gone ? JSON.parse(JSON.stringify(open)) : null, memory: JSON.parse(JSON.stringify(memoryFor(entry, pack, id))) };
+}
+
+/**
  * The world's own copy of the map replaced (D173): the Atlas edited
  * between scenes. Refused while a scene is open: that scene's chat holds
  * the live map and its End would write over this one. The memory's date
- * is not moved, so no scene becomes stale by it.
+ * is not moved, so no scene becomes stale by it. A world no scene has
+ * ended in has no memory yet: given its `pack`, one is begun from the
+ * pack's seed to hold the map (D194), as a round of hooks begins one; it
+ * is not one an End wrote (takenAt 0), so the first scene starts as ever.
  */
-export function setWorldBook(worldId, book) {
+export function setWorldBook(worldId, book, { pack = null } = {}) {
     const id = String(worldId || '').trim();
     const entry = id ? store().worlds[id] : null;
-    if (!entry || !entry.memory) return { ok: false, reason: 'no-memory' };
+    if (!entry) return { ok: false, reason: 'no-memory' };
+    const has = !!(entry.memory && entry.memory.stores && entry.memory.stores.dooms_world);
+    if (!has && !pack) return { ok: false, reason: 'no-memory' };
     const open = openSceneOf(entry);
     if (open && !open.gone) return { ok: false, reason: 'scene-open', scene: JSON.parse(JSON.stringify(open)) };
-    putEntry(id, { ...entry, memory: { ...entry.memory, stores: { ...entry.memory.stores, dooms_atlas: normalizeBook(book) } } }, { source: 'map', world: id });
+    const memory = has ? entry.memory : memoryFor(entry, pack, id);
+    putEntry(id, normalizeWorldEntry({ ...entry, memory: { ...memory, stores: { ...memory.stores, dooms_atlas: normalizeBook(book) } } }), { source: 'map', world: id });
     return { ok: true, reason: '' };
 }
 

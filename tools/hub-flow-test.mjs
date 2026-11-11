@@ -1173,5 +1173,62 @@ console.log('\n§18 what a scene contradicts, and one Undo of End (D190)');
     await openPlain('Mara Vane - plain eight');
 }
 
+console.log('\n§19 a world picked in the Atlas: shown and started whatever chat is in front (D194)');
+{
+    const A = await import(`${DES}/src/utils/atlas.js`);
+    const W = 'first-descent';
+    // §18 left a plain chat of another card in front, and no scene of the world open.
+    const wpack = (await lw.loadPack(W)).pack;
+    const free = hub.startPlanFor(W);
+    check('from a chat that is no scene of it, a scene of the world can be started: numbered next, on the world\'s narrator card', hub.currentScene() === null && free.ok && free.worldId === W && free.number === hub.worldEntry(W).seq + 1 && free.card === 'The Redward', JSON.stringify(free));
+    const src = hub.worldSource(W, wpack);
+    check('the world is shown from its memory, as between scenes', !!src && src.kind === 'world' && src.picked === true && src.worldId === W && src.open === null && src.memory.takenAt > 0 && src.memory.stores.dooms_world.pack === W);
+    check('a world the scenes do not know, or one whose pack is not loaded, is not shown', hub.worldSource('nowhere', wpack) === null && hub.worldSource(W, null) === null && hub.worldSource('', wpack) === null);
+    check('what is shown is a copy: changing it changes nothing kept', (() => { src.memory.facts.date = 'never'; return hub.worldEntry(W).memory.facts.date !== 'never'; })());
+    check('its map can be changed from here', hub.setWorldBook(W, hub.worldEntry(W).memory.stores.dooms_atlas || null, { pack: wpack }).ok === true);
+    // A scene of it started from here, then another chat in front: the world has a scene open, named, and its map is that scene's.
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 9","time":"noon"},"openers":[{"title":"On","text":"The road again.","who":[]},{"title":"Two","text":"Two.","who":[]},{"title":"Three","text":"Three.","who":[]}]}');
+    hub.__setGapTransport(async () => '{}');
+    const p0 = await hub.prepareScene({ worldId: W, seed: { kind: 'news', text: 'The bridge is out.' }, place: null, cast: [], gap: { id: 'now' } });
+    const c0 = p0.ok ? await hub.commitScene(p0.token, { choice: 0 }) : p0;
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain picked');
+    const held = hub.startPlanFor(W);
+    check('a world with a scene open starts no other, whatever chat is in front; the plan names the scene', c0.ok && hub.currentScene() === null && held.ok === false && held.reason === 'scene-open' && !!held.scene && held.scene.id === c0.scene.id, JSON.stringify(held));
+    check('it is shown with the open scene named, and its map is that scene\'s to change', hub.worldSource(W, wpack).open.id === c0.scene.id && hub.setWorldBook(W, A.placeAt(null, 'pin:x', { x: 1, y: 1 }), { pack: wpack }).reason === 'scene-open');
+    hub.setSceneAside(W, c0.scene.id);
+    check('set aside, the world is free again', hub.startPlanFor(W).ok && hub.worldSource(W, wpack).open === null);
+    check('no world, or one with no narrator card, starts none', hub.startPlanFor('').reason === 'no-world' && hub.startPlanFor('nowhere').reason === 'no-card');
+
+    // A world no scene has been played in: shown from its pack's own beginning; its map begins its memory, and the first scene carries it.
+    extensionSettings.liveWorld.customPacks.newland = JSON.stringify({ ...example, id: 'newland', name: 'Newland' });
+    const made = await hub.makeNarratorCard('newland');
+    const npack = (await lw.loadPack('newland')).pack;
+    const fresh = hub.worldSource('newland', npack);
+    check('a world no scene was played in is shown from its pack\'s beginning, and nothing is written by the look', made.ok && !!fresh && fresh.memory.takenAt === 0 && fresh.open === null && fresh.memory.stores.dooms_world.pack === 'newland' && Object.keys(fresh.memory.stores.dooms_world.known || {}).length > 0 && hub.worldEntry('newland').memory === null, JSON.stringify([made.ok, fresh && fresh.memory.takenAt, hub.worldEntry('newland').memory]));
+    check('with no pack given, a world with no memory has no map to change', hub.setWorldBook('newland', {}).reason === 'no-memory');
+    const drawn = A.withWorld(A.placeAt(A.addPin(null, { label: 'Landfall', kind: 'settlement', x: 2, y: 3 }).book, 'pin:landfall', { x: 2, y: 3 }), { seed: 'newland', shape: 'islands', size: 'small' });
+    const put = hub.setWorldBook('newland', drawn, { pack: npack });
+    const nmem = hub.worldEntry('newland').memory;
+    check('its map changed from the Atlas begins its memory: the map kept, the world as the pack begins it, and not a memory an End wrote', put.ok && !!nmem && nmem.takenAt === 0 && same(nmem.stores.dooms_atlas.world.seed, 'newland') && same(nmem.stores.dooms_atlas.spots['pin:landfall'], { x: 2, y: 3 }) && nmem.stores.dooms_world.pack === 'newland', JSON.stringify(put));
+    check('the world is then shown with that map', same(hub.worldSource('newland', npack).memory.stores.dooms_atlas.spots['pin:landfall'], { x: 2, y: 3 }));
+    let gaps = 0;
+    hub.__setGapTransport(async () => { gaps++; return '{}'; });
+    hub.__setOpenersTransport(async () => '{"when":{"date":"Day 1","time":"dawn"},"openers":[{"title":"Landfall","text":"The boat grounds on shingle.","who":[]},{"title":"Fog","text":"Fog on the water.","who":[]},{"title":"Gulls","text":"Gulls wheel.","who":[]}]}');
+    const plan = hub.startPlanFor('newland');
+    const p = await hub.prepareScene({ worldId: 'newland', seed: { kind: 'anywhere', text: 'A first landing.' }, place: { label: 'Landfall' }, cast: [], gap: { id: 'later', words: 'three days later' } });
+    const c = p.ok ? await hub.commitScene(p.token, { choice: 0 }) : p;
+    const file = c.ok ? files.get(c.file) : null;
+    check('its first scene is started from there: scene 1 on its card, at a place named in the sheet, the world not moved before it', plan.ok && plan.number === 1 && p.ok && c.ok && c.scene.id === 's1' && c.scene.place.label === 'Landfall' && gaps === 0, JSON.stringify([plan, p.ok, c.ok, gaps]));
+    check('and the scene\'s chat carries the map that was made', !!file && same(file.header.chat_metadata.dooms_atlas.spots['pin:landfall'], { x: 2, y: 3 }) && file.header.chat_metadata.dooms_atlas.world.seed === 'newland');
+    check('the scene in front is then the world\'s own: nothing else is started for it', hub.currentScene() && hub.currentScene().worldId === 'newland' && hub.startPlanFor('newland').reason === 'scene-open');
+    hub.__setGapTransport(null);
+    hub.__setOpenersTransport(null);
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain nine');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');
 process.exit(failures ? 1 : 0);

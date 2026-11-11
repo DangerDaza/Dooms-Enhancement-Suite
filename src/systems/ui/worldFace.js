@@ -48,11 +48,14 @@ export function closeFacePopover() {
 /**
  * Opens the trail of `name` by `anchor`. `onBoard(name)` is what "Show the
  * place" does; left out, the window opens with the character's place selected.
+ * `onStart(name)`, when given, adds a button that starts a scene with them
+ * (docs/long-shot-plan.md D193), labelled `startLabel`. `state` and `pack`
+ * are the world shown when it is not the chat's own (D194).
  */
-export function openFacePopover(anchor, name, { onBoard } = {}) {
+export function openFacePopover(anchor, name, { onBoard, onStart = null, startLabel = '', state: shownState = null, pack: shownPack = null } = {}) {
     closeFacePopover();
-    const state = getWorldState();
-    const pack = getActivePack();
+    const state = shownState || getWorldState();
+    const pack = shownPack || getActivePack();
     if (!anchor || !name || !state || !pack || typeof document === 'undefined') return false;
     const el = document.createElement('div');
     el.id = POP_ID;
@@ -63,6 +66,7 @@ export function openFacePopover(anchor, name, { onBoard } = {}) {
         <div class="dooms-inv-editor-actions">
             <span class="dooms-inv-editor-spacer"></span>
             <button type="button" class="dooms-inv-btn" data-act="close">Close</button>
+            ${typeof onStart === 'function' ? `<button type="button" class="dooms-inv-btn" data-act="start" title="A fresh chat with ${escapeHtml(name)} in it, where they were last seen"><i class="fa-solid fa-play" aria-hidden="true"></i> ${escapeHtml(startLabel || 'Start a scene with them')}</button>` : ''}
             <button type="button" class="dooms-inv-btn is-primary" data-act="board" title="The row, with the place ${escapeHtml(name)} stands in selected">Show the place</button>
         </div>`;
     document.body.appendChild(el);
@@ -73,6 +77,7 @@ export function openFacePopover(anchor, name, { onBoard } = {}) {
         e.stopPropagation();
         const act = btn.dataset.act;
         closeFacePopover();
+        if (act === 'start') { if (typeof onStart === 'function') onStart(name); return; }
         if (act === 'board') {
             if (typeof onBoard === 'function') onBoard(name);
             else import('./worldDashboard.js').then(m => m.openWorldDashboard({ name })).catch(err => console.error('[Dooms Tracker] Live World: the Map window failed to load', err));
