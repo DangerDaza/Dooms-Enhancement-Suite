@@ -20,7 +20,7 @@
  *     the story reaches it.
  *
  * The pure parts are src/utils/liveWorld.js and src/utils/worldMap.js; the
- * window is src/systems/ui/worldDashboard.js (lazy).
+ * window is the Atlas, src/systems/ui/atlas.js (lazy).
  */
 import { getContext } from '../../../../../../extensions.js';
 import { saveBase64AsFile } from '../../../../../../utils.js';
@@ -1195,14 +1195,14 @@ function registerWorldCommands() {
             name: 'liveworld',
             callback: async () => {
                 try {
-                    const m = await import('../ui/worldDashboard.js');
-                    m.openWorldDashboard();
+                    const m = await import('../ui/atlas.js');    // the Map window went (docs/long-shot-plan.md D195): the Atlas has what it had
+                    m.openAtlas();
                     return '';
                 } catch (e) {
                     return `The window could not open: ${e && e.message ? e.message : e}`;
                 }
             },
-            helpString: 'Live World: opens the Map window (the places the story has been to as pictures, Travel here, the news, rumours, people and completed quests).',
+            helpString: 'Live World: opens the Atlas (the same as /atlas): the world\'s map, Travel here, the people, news, rumours, hooks and completed quests.',
             returns: 'nothing',
         }));
     } catch (e) {

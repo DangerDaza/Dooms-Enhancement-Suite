@@ -56,21 +56,21 @@ window.__mount = async (opts) => {
     return true;
 };
 </script></body></html>`;
-// The hub's own window: the shell and the views, the board in its frame, the backdrop bound through the window stack's helper
-// (no SillyTavern: the controller is not loaded; the helper and the shell are the real ones).
+// A window with a board in it, on the settings popup's shell (the World Builder's Map tab is one; the old Hub window was
+// another, docs/long-shot-plan.md D195): the board in its frame, the backdrop bound through the window stack's helper
+// (no SillyTavern: no controller is loaded; the helper, the shell's classes and the board are the real ones).
 const windowHarness = `<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="/lib/leaflet/leaflet.css"><link rel="stylesheet" href="/styles/modals.css"><link rel="stylesheet" href="/style.css">
-<style>html, body { margin: 0; background: #222; }</style></head>
+<style>html, body { margin: 0; background: #222; } .dooms-test-map { height: 460px; }</style></head>
 <body>
 <script type="module">
-import { hubShellHtml, hubHtml, POPUP_ID } from '/src/systems/ui/hubViews.js';
 import { mountBoard } from '/src/systems/ui/hubBoard.js';
 import { closeOnBackdrop } from '/src/systems/ui/windowStack.js';
-import { normalizePack, seedWorldState, liveWorldConfig } from '/src/utils/liveWorld.js';
-import { normalizeWorldEntry } from '/src/utils/hub.js';
+import { normalizePack, seedWorldState } from '/src/utils/liveWorld.js';
 import { boardModel } from '/src/utils/worldPicture.js';
+const POPUP_ID = 'dooms-test-popup';
 window.__closes = 0;
-document.body.insertAdjacentHTML('beforeend', hubShellHtml());
+document.body.insertAdjacentHTML('beforeend', '<div id="' + POPUP_ID + '" class="rpg-settings-popup" role="dialog" aria-modal="true" style="display: none;"><div class="rpg-settings-popup-content"><header class="rpg-settings-popup-header"><h3>A window with a board</h3></header><div class="rpg-settings-popup-body"><div class="dooms-test-map"></div></div></div></div>');
 closeOnBackdrop(POPUP_ID, () => { window.__closes++; });
 window.__open = async (picture) => {
     const raw = await (await fetch('/worldpacks/example.json')).json();
@@ -78,11 +78,9 @@ window.__open = async (picture) => {
     const pack = normalizePack({ ...raw, id: 'harbourside', map: { ...picture, source: 'upload' }, places: placed }).pack;
     const state = seedWorldState(pack, { name: '' });
     const model = boardModel({ pack, state, player: 'Jordan' });
-    const entry = normalizeWorldEntry({ card: 'Mara Vane.png', memory: { stores: { dooms_world: state }, facts: {} }, scenes: [] });
     const popup = document.getElementById(POPUP_ID);
-    popup.querySelector('.dooms-hub-body').innerHTML = hubHtml({ worlds: [{ id: 'harbourside', name: 'Harbourside', card: 'Mara Vane.png', cardName: 'Mara Vane' }], worldId: 'harbourside', pack, entry, card: { name: 'Mara Vane' }, liveWorldOn: true, board: { mode: 'picture', model, tree: null }, panel: 'news', world: { state, pack, cfg: liveWorldConfig(null) } });
     popup.style.display = 'flex';
-    const host = popup.querySelector('.dooms-hub-map');
+    const host = popup.querySelector('.dooms-test-map');
     host.innerHTML = '';
     window.__board = await mountBoard(host, { picture, nodes: model.nodes, mode: 'hub', on: { node: () => {} } });
     return true;
@@ -136,7 +134,7 @@ const expectAt = (lay, label, x, y, tol = 3) => {
     return !!n && near(n.cx, lay.img.left + x * lay.img.width, tol) && near(n.cy, lay.img.top + y * lay.img.height, tol);
 };
 
-console.log('\n§1 the hub\'s board');
+console.log('\n§1 the board, read only (the old Hub window\'s mode: no window uses it now, the board itself is the same)');
 {
     await page.evaluate((o) => window.__mount(o), { picture, nodes, mode: 'hub' });
     await page.waitForTimeout(150);
@@ -236,8 +234,8 @@ console.log('\n§4 the window\'s backdrop: a pan let go past the window\'s edge 
     await win.waitForTimeout(300);
     const rects = await win.evaluate(() => {
         const r = (sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height }; };
-        const nodes = [...document.querySelectorAll('#rpg-hub-popup .dooms-node')].map(el => { const b = el.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; });
-        return { content: r('#rpg-hub-popup .rpg-settings-popup-content'), host: r('#rpg-hub-popup .dooms-hub-map'), nodes };
+        const nodes = [...document.querySelectorAll('#dooms-test-popup .dooms-node')].map(el => { const b = el.getBoundingClientRect(); return { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; });
+        return { content: r('#dooms-test-popup .rpg-settings-popup-content'), host: r('#dooms-test-popup .dooms-test-map'), nodes };
     });
     const band = Math.max(2, Math.floor(rects.content.left / 2));    // the backdrop's band left of the window
     const press = { x: rects.host.left + 30, y: rects.host.bottom - 30 };

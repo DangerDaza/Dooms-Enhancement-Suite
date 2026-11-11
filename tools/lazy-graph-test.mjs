@@ -36,14 +36,10 @@ const MUST_BE_LAZY = [
     'src/systems/ui/voicesSettingsUI.js',
     // The shelf's Inventory and Quests pages load on the first flip.
     'src/systems/ui/shelfPages.js',
-    // Live World's board loads on first open; its views and the face popover with the shelf's pages or the board.
-    'src/systems/ui/worldDashboard.js',
+    // Live World's shared views and the face popover load with the Atlas (the Map and Hub windows that also used them went, D195).
     'src/systems/ui/worldViews.js',
     'src/systems/ui/worldFace.js',
-    // The Hub's window and its views load on first open (the strip loads the views on the first scene chat).
-    'src/systems/ui/hub.js',
-    'src/systems/ui/hubViews.js',
-    // The board (Leaflet's host) loads with the hub's views, which draw its nodes; Leaflet itself only when a board mounts, by a dynamic import inside it.
+    // The board (Leaflet's host) loads with the World Builder's Map tab; Leaflet itself only when a board mounts, by a dynamic import inside it.
     'src/systems/ui/hubBoard.js',
     // The Atlas (docs/long-shot-plan.md): the window, its views and its map load on first open; Leaflet only when the map mounts.
     'src/systems/ui/atlas.js',

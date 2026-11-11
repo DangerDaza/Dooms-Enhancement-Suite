@@ -12,7 +12,7 @@
  * No SillyTavern imports: tools/live-world-test.mjs imports this directly.
  * The store, the request, the injection and the slash command live in
  * src/systems/features/liveWorld.js; the dashboard in
- * src/systems/ui/worldDashboard.js.
+ * the Atlas (src/systems/ui/atlas.js).
  */
 import { normalizeAtlas, cleanKind } from './atlas.js';
 

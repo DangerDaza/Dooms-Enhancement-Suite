@@ -9754,21 +9754,8 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 
 /* The strip's scroll arrows have nothing to scroll on a page */
 .dooms-pb-on-page .dooms-pb-arrow { display: none; }
-
-/* ── The Map window (docs/map-window-plan.md D88), Live World's face: the
-   world's name across the top, the places as a row of circles (newest on the
-   left), the strip for the selected place, the bottom panel with its buttons,
-   the face popover (a character's trail, on the inventory editor's shell).
-   In the eager sheet, as the window's shell is. ── */
-#rpg-world-popup .rpg-settings-popup-content { max-width: min(95vw, 960px); max-height: min(92vh, 760px); }
-#rpg-world-popup .rpg-settings-popup-body { padding: 12px 16px 14px; display: flex; flex-direction: column; }
-#rpg-world-popup .dooms-world-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .dooms-map { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
-/* The head, the row and the strip keep their height; only the panel gives, and the window's body scrolls past that. */
-.dooms-map-head, .dooms-map-row-wrap, .dooms-map-strip { flex: 0 0 auto; }
-.dooms-map-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
-.dooms-map-title { font-size: 1.15em; font-weight: 600; color: #fff; margin-right: auto; }
-.dooms-world-date, .dooms-world-status, .dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
+.dooms-world-muted { font-size: 0.72em; color: #8d8d9a; }
 .dooms-world-blurb { margin: 0 2px 6px; font-style: italic; font-size: 0.98em; line-height: 1.35; color: #e6e6f0; }
 .dooms-world-effects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.86em; line-height: 1.4; color: #d4d4de; }
 .dooms-world-effects li { position: relative; padding-left: 14px; }
@@ -9776,42 +9763,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-world-error { margin: 6px 2px 0; font-size: 0.74em; color: #e5a84d; }
 .dooms-world-empty { margin: 6px 2px; font-size: 0.85em; color: #8d8d9a; }
 .dooms-world-empty.is-error { color: #e5a84d; }
-/* The row of places */
-.dooms-map-row-wrap { display: flex; align-items: center; gap: 6px; min-height: 60px; }
-.dooms-map-row-wrap.is-empty { justify-content: center; }
-.dooms-map-empty { margin: 0; padding: 14px; font-size: 0.85em; color: #8d8d9a; text-align: center; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; }
-.dooms-map-row { flex: 1 1 auto; min-width: 0; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 14px; scroll-snap-type: x proximity; scrollbar-width: thin; }
-.dooms-map-place { flex: 0 0 auto; width: 150px; appearance: none; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; color: inherit; font: inherit; scroll-snap-align: center; text-align: center; }
-.dooms-map-art { position: relative; width: 150px; height: 150px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 2.4em; color: #6d6d80; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
-.dooms-map-place:hover .dooms-map-art, .dooms-map-place:focus-visible .dooms-map-art { border-color: rgba(255, 255, 255, 0.45); transform: translateY(-2px); }
-.dooms-map-place.has-image .dooms-map-art > i:not(.dooms-map-spin) { display: none; }
-.dooms-map-place.is-here .dooms-map-art { border-color: var(--rpg-highlight, #e94560); box-shadow: 0 0 0 4px rgba(233, 69, 96, 0.25), 0 6px 18px rgba(0, 0, 0, 0.35); }
-.dooms-map-place.is-selected .dooms-map-art { border-color: #fff; transform: scale(1.04); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22), 0 8px 22px rgba(0, 0, 0, 0.45); }
-.dooms-map-place.is-drawing .dooms-map-art::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.45); }
-.dooms-map-spin { position: absolute; z-index: 1; font-size: 0.8em; color: #fff; }
-.dooms-map-here { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); z-index: 1; padding: 2px 8px; border-radius: 999px; background: var(--rpg-highlight, #e94560); color: #fff; font-size: 0.3em; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; text-transform: uppercase; }
-.dooms-map-name { font-size: 0.9em; font-weight: 600; color: #eaeaea; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dooms-map-place.is-here .dooms-map-name { color: #fff; }
-.dooms-map-arrow { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #ddd; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.dooms-map-arrow:hover, .dooms-map-arrow:focus-visible { background: rgba(255, 255, 255, 0.14); color: #fff; }
-/* The strip under the row */
-.dooms-map-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); min-height: 44px; box-sizing: border-box; }
-.dooms-map-strip.is-idle { justify-content: center; }
-.dooms-map-strip-name { font-size: 0.92em; color: #eaeaea; min-width: 0; }
-.dooms-map-strip-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-/* The strip's and the foot's buttons size to their text: the action button's full width is for one standing alone in a card. */
-.dooms-map-strip-actions .rpg-accordion-action-btn, .rpg-world-actions .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
-.dooms-map-strip-here { font-size: 0.85em; font-weight: 600; color: var(--rpg-highlight, #e94560); padding: 4px 8px; border-radius: 999px; background: rgba(233, 69, 96, 0.14); }
-.dooms-map-when { width: 190px; font-size: 0.82em; }
-/* The panel */
-.dooms-map-panel { flex: 1 1 auto; display: flex; min-height: 220px; max-height: 360px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; background: rgba(0, 0, 0, 0.14); overflow: hidden; }
-.dooms-map-panel-body { flex: 1 1 auto; min-width: 0; overflow: auto; padding: 10px 12px; }
-.dooms-map-panel-nav { flex: 0 0 auto; display: flex; flex-direction: column; border-left: 1px solid rgba(255, 255, 255, 0.12); }
-.dooms-map-nav-btn { appearance: none; flex: 1 1 auto; min-width: 96px; background: rgba(255, 255, 255, 0.03); border: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #bbb; padding: 10px 12px; cursor: pointer; font: inherit; font-size: 0.78em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
-.dooms-map-nav-btn:last-child { border-bottom: 0; }
-.dooms-map-nav-btn i { font-size: 1.25em; }
-.dooms-map-nav-btn:hover, .dooms-map-nav-btn:focus-visible { background: rgba(255, 255, 255, 0.09); color: #fff; }
-.dooms-map-nav-btn.is-active { background: rgba(233, 69, 96, 0.18); color: #fff; box-shadow: inset 3px 0 0 var(--rpg-highlight, #e94560); }
 /* People */
 .dooms-world-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
 .dooms-world-card { appearance: none; padding: 0; margin: 0; font: inherit; text-align: center; color: inherit; cursor: pointer; }
@@ -9846,18 +9797,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-map-done-list { margin: 0; padding: 0 0 0 20px; font-size: 0.86em; line-height: 1.45; color: #d4d4de; display: flex; flex-direction: column; gap: 4px; }
 .dooms-map-done-list li { display: flex; flex-direction: column; gap: 1px; }
 .dooms-map-done-text { color: #eaeaea; }
-.rpg-world-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.dooms-world-result { font-size: 0.8em; color: #8d8d9a; margin-left: auto; }
-@media (max-width: 600px) {
-    .dooms-map-place, .dooms-map-name { width: 110px; max-width: 110px; }
-    .dooms-map-art { width: 110px; height: 110px; font-size: 1.8em; }
-    .dooms-map-here { font-size: 0.34em; }
-    .dooms-map-arrow { display: none; }
-    .dooms-map-panel { min-height: 180px; max-height: 300px; }
-    .dooms-map-nav-btn { min-width: 52px; padding: 10px 6px; }
-    .dooms-map-nav-btn span { display: none; }
-    .dooms-map-when { width: 100%; }
-}
 
 /* The quest menu: the shelf's menu look, its own items */
 .dooms-quest-menu-item {
@@ -14254,115 +14193,9 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
     .dooms-canon-line { grid-template-columns: minmax(0, 1fr) auto; }
     .dooms-canon-text { grid-column: 1 / -1; }
 }
-
-/* ── The Hub (docs/hub-plan.md D116, D117, D119, D122, D129): the world's window on the settings popup's
-   shell, most of the screen; the head, the Scenes panel, the foot; the Start sheet, the opener picker and the
-   End sheet in its body; the strip across the top of a scene chat. In the eager sheet, as the Map's are. ── */
-#rpg-hub-popup .rpg-settings-popup-content { width: min(96vw, 1400px); max-width: min(96vw, 1400px); height: min(94vh, 900px); max-height: min(94vh, 900px); }
-#rpg-hub-popup .rpg-settings-popup-body { padding: 12px 16px 14px; display: flex; flex-direction: column; min-height: 0; }
-#rpg-hub-popup .dooms-hub-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .dooms-hub { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
-.dooms-hub-head { flex: 0 0 auto; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
-.dooms-hub-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.dooms-hub-title { font-size: 1.15em; font-weight: 600; color: #fff; }
-.dooms-hub-sub { font-size: 0.74em; color: #8d8d9a; }
-.dooms-hub-head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.dooms-hub-head-actions .rpg-accordion-action-btn, .dooms-hub-foot .rpg-accordion-action-btn, .dooms-hub-sheet-actions .rpg-accordion-action-btn, .dooms-hub-card-actions .rpg-accordion-action-btn, .dooms-hub-scene-actions .rpg-accordion-action-btn { width: auto; flex: 0 0 auto; }
-.dooms-hub-head-actions .rpg-accordion-select { width: auto; max-width: 220px; }
-.dooms-hub-main { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
-.dooms-hub-empty { margin: 0; padding: 18px 16px; font-size: 0.9em; line-height: 1.45; color: #c9c9d6; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; }
-.dooms-hub-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px 2px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
-.dooms-hub-status { font-size: 0.8em; color: #8d8d9a; margin-right: auto; min-width: 0; }
-.dooms-hub-panel-title { font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; margin: 2px 2px 0; }
-/* The board (D124) beside the panels; on a phone, tabs and one at a time */
-.dooms-hub-main.is-board { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 12px; overflow: hidden; padding: 0; }
-.dooms-hub-tabs { display: none; }
-.dooms-hub-board-wrap { min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.dooms-hub-map { position: relative; flex: 1 1 auto; min-height: 240px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: #0b0b12; overflow: hidden; }
-.dooms-hub-map-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; text-align: center; pointer-events: none; }
-.dooms-hub-board-notes { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; font-size: 0.78em; color: #c9c9d6; line-height: 1.45; }
-.dooms-hub-board-note-label { font-weight: 600; color: #8d8d9a; text-transform: uppercase; font-size: 0.84em; letter-spacing: 0.06em; margin-right: 4px; }
-.dooms-hub-link { appearance: none; font: inherit; background: none; border: 0; padding: 0; color: #eaeaea; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-.dooms-hub-link:hover, .dooms-hub-link:focus-visible { color: #fff; text-decoration-style: solid; }
-.dooms-hub-side { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding: 2px; }
-.dooms-hub-side-nav { flex: 0 0 auto; display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
-.dooms-hub-side-tab { appearance: none; font: inherit; font-size: 0.78em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 5px 9px; color: #bbb; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; }
-.dooms-hub-side-tab:hover, .dooms-hub-side-tab:focus-visible { color: #fff; }
-.dooms-hub-side-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
-.dooms-hub-side-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
-.dooms-hub-ways { display: flex; flex-direction: column; gap: 8px; }
-.dooms-hub-ways .dooms-map-changes li, .dooms-hub-ways .dooms-world-effects li { cursor: pointer; border-radius: 4px; }
-.dooms-hub-ways .dooms-map-changes li:hover, .dooms-hub-ways .dooms-world-effects li:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
-.dooms-hub-ways .dooms-map-feed-label { display: none; }
-.dooms-hub-hooks .dooms-map-hook-actions .rpg-accordion-action-btn, .dooms-hub-hooks .dooms-map-hook-foot .rpg-accordion-action-btn { width: auto; }
 /* The tree board: regions as groups, each place a node like the picture's */
 .dooms-tree { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px; }
-.dooms-tree-hint { margin: 0 2px; }
-.dooms-tree-group { padding: 8px 10px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
-.dooms-tree-group.is-elsewhere { border-style: dashed; }
-.dooms-tree-title { font-size: 0.7em; letter-spacing: 0.1em; text-transform: uppercase; color: #8d8d9a; margin-bottom: 8px; }
-.dooms-tree-places { display: flex; flex-wrap: wrap; gap: 18px 10px; align-items: flex-start; }
-.dooms-tree-place { appearance: none; font: inherit; background: none; border: 0; padding: 4px 0 44px; margin: 0; cursor: pointer; width: 104px; min-width: 0; display: flex; justify-content: center; color: inherit; }
-.dooms-tree-place:focus-visible { outline: 2px solid var(--rpg-highlight, #e94560); outline-offset: 2px; border-radius: 10px; }
-.dooms-tree-head { position: relative; display: block; width: 48px; height: 48px; }
-.dooms-tree-head .dooms-node-label { width: 100px; max-width: 100px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.15; text-align: center; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-/* The place sheet */
-.dooms-hub-place-head { display: flex; gap: 14px; align-items: flex-start; }
-.dooms-hub-place-pic { flex: 0 0 auto; width: 112px; height: 112px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(20, 20, 30, 0.9) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: #8d8d9a; font-size: 2em; }
-.dooms-hub-place-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.dooms-hub-place-you { color: var(--rpg-highlight, #e94560); }
-.dooms-hub-place-people, .dooms-hub-place-rumours, .dooms-hub-place-scenes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.88em; color: #d4d4de; }
-.dooms-hub-place-people li { display: flex; align-items: center; gap: 8px; }
-.dooms-hub-place-people .dooms-node-face { position: static; margin: 0; width: 24px; height: 24px; flex: 0 0 24px; font-size: 0.7em; transform: none; }
-.dooms-hub-place-rumours li { padding-left: 12px; border-left: 2px solid rgba(255, 255, 255, 0.18); line-height: 1.4; }
-.dooms-hub-place-scenes li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-/* The Scenes panel */
-.dooms-hub-scenes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.dooms-hub-scene { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; background: rgba(0, 0, 0, 0.14); }
-.dooms-hub-scene.is-open { border-color: var(--rpg-highlight, #e94560); }
-.dooms-hub-scene.is-gone { opacity: 0.7; }
-.dooms-hub-scene-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.dooms-hub-scene-no { font-size: 0.74em; color: #8d8d9a; text-transform: uppercase; letter-spacing: 0.06em; }
-.dooms-hub-scene-title { font-weight: 600; color: #eaeaea; }
-.dooms-hub-scene-tag { font-size: 0.68em; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: #ccc; text-transform: uppercase; letter-spacing: 0.04em; }
-.dooms-hub-scene.is-open .dooms-hub-scene-tag { background: rgba(233, 69, 96, 0.18); color: #fff; }
-.dooms-hub-scene-meta { font-size: 0.76em; color: #8d8d9a; }
-.dooms-hub-scene-recap { font-size: 0.86em; color: #d4d4de; line-height: 1.4; margin: 0; }
-.dooms-hub-scene-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
-/* The sheets: the Start sheet, the picker, the End sheet */
-.dooms-hub-sheet { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
-.dooms-hub-sheet-title { font-size: 1.05em; font-weight: 600; color: #fff; margin: 0; }
-.dooms-hub-field { display: flex; flex-direction: column; gap: 5px; }
-.dooms-hub-field > label, .dooms-hub-field-label { font-size: 0.78em; font-weight: 600; color: #cfcbe6; letter-spacing: 0.02em; }
-.dooms-hub-field .rpg-accordion-input, .dooms-hub-field .rpg-accordion-select, .dooms-hub-field textarea.rpg-accordion-input { width: 100%; max-width: 100%; box-sizing: border-box; }
-.dooms-hub-field textarea.rpg-accordion-input { min-height: 64px; resize: vertical; font: inherit; font-size: 0.9em; line-height: 1.4; }
-.dooms-hub-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.dooms-hub-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.05); font-size: 0.84em; color: #ddd; cursor: pointer; user-select: none; }
-.dooms-hub-chip input { margin: 0; }
-.dooms-hub-chip.is-on { border-color: var(--rpg-highlight, #e94560); color: #fff; background: rgba(233, 69, 96, 0.12); }
-.dooms-hub-chip-here { color: var(--rpg-highlight, #e94560); font-size: 0.7em; }
-.dooms-hub-sheet-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 4px; }
-.dooms-hub-note { font-size: 0.8em; color: #e5a84d; margin: 0; }
-.dooms-hub-hint { font-size: 0.8em; color: #8d8d9a; margin: 0; }
-.dooms-hub-done { font-size: 0.9em; color: #7bd88f; margin: 0; }
-/* The picker */
-.dooms-hub-openers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
-.dooms-hub-openers.is-busy { opacity: 0.55; }
-.dooms-hub-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; background: rgba(255, 255, 255, 0.04); min-width: 0; }
-.dooms-hub-card-title { font-weight: 600; color: #fff; }
-.dooms-hub-card-text { font-size: 0.88em; line-height: 1.45; color: #e6e6f0; white-space: pre-wrap; margin: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
-.dooms-hub-card-who { font-size: 0.74em; color: #8d8d9a; }
-.dooms-hub-card-actions { display: flex; gap: 6px; justify-content: flex-end; }
-/* The End sheet */
-.dooms-hub-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.dooms-hub-step { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; font-size: 0.86em; color: #d4d4de; }
-.dooms-hub-step-label { min-width: 0; }
-.dooms-hub-skip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.86em; color: #8d8d9a; }
-.dooms-hub-step-state { margin-left: auto; font-size: 0.8em; color: #8d8d9a; }
-.dooms-hub-step.is-ok .dooms-hub-step-state { color: #7bd88f; }
-.dooms-hub-step.is-failed .dooms-hub-step-state { color: #e5a84d; }
-.dooms-hub-step.is-running .dooms-hub-step-state { color: #fff; }
-.dooms-hub-step.is-off, .dooms-hub-step.is-skipped { opacity: 0.6; }
 /* The strip across the top of a scene chat (D121) */
 #dooms-scene-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 12px; margin: 0 0 4px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; background: rgba(20, 20, 30, 0.85); color: #eaeaea; font-size: 0.86em; box-sizing: border-box; }
 #dooms-scene-strip .dooms-strip-text { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -14376,24 +14209,6 @@ body.dooms-perf-mode .dooms-dice-btn.is-called { animation: none; text-shadow: 0
 #dooms-scene-strip .rpg-accordion-action-btn:disabled { opacity: 0.5; cursor: default; }
 #dooms-scene-strip .dooms-strip-note { flex: 1 1 100%; color: #f2c14e; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
-    /* Full screen on a phone, the Workshop's rule: the containing block can collapse, so the viewport is named. */
-    #rpg-hub-popup { padding: 0; width: 100vw; height: 100vh; height: 100dvh; }
-    #rpg-hub-popup::before { background: #000; }
-    #rpg-hub-popup .rpg-settings-popup-content { width: 100%; max-width: 100%; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; margin: 0; border-radius: 0; }
-    .dooms-hub-head-actions { margin-left: 0; width: 100%; }
-    .dooms-hub-openers { grid-template-columns: 1fr; }
-    /* The board and the panels one at a time, under tabs */
-    .dooms-hub-main.is-board { display: flex; flex-direction: column; gap: 8px; }
-    .dooms-hub-tabs { display: flex; gap: 2px; flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.12); scrollbar-width: none; }
-    .dooms-hub-tab { appearance: none; font: inherit; font-size: 0.84em; cursor: pointer; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 10px; color: #bbb; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; flex: 0 0 auto; white-space: nowrap; }    /* a touch target (docs/hub-plan.md §4.2) */
-    .dooms-hub-tab.is-active { color: #fff; border-bottom-color: var(--rpg-highlight, #e94560); }
-    .dooms-hub-side-nav { display: none; }
-    .dooms-hub-side { overflow: auto; }
-    .dooms-hub-main.is-board[data-panel="map"] .dooms-hub-side { display: none; }
-    .dooms-hub-main.is-board:not([data-panel="map"]) .dooms-hub-board-wrap { display: none; }
-    .dooms-hub-board-wrap { flex: 1 1 auto; overflow: auto; }    /* the notes under the map scroll into view rather than sit under the foot */
-    .dooms-hub-map { min-height: 50vh; }
-    .dooms-hub-place-head { flex-direction: column; }
     #dooms-scene-strip .dooms-strip-actions { margin-left: 0; width: 100%; }
     #dooms-scene-strip .dooms-strip-text span { white-space: normal; }
 }

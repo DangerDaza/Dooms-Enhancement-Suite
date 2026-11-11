@@ -563,7 +563,6 @@ function renderHubSettings() {
     $card.html([`<option value="">${worldId ? '— no narrator card —' : '—'}</option>`, ...chars.map(c => { const other = worldOfCard(c.avatar); const taken = other && other !== worldId; return `<option value="${escapeHtml(c.avatar)}"${taken ? ' disabled' : ''}>${escapeHtml(c.name)}${taken ? ` (narrates ${escapeHtml(other)})` : ''}</option>`; })].join('')).val(bound ? bound.avatar : '');
     $('#rpg-hub-make, #rpg-hub-open, #rpg-hub-start').prop('disabled', !worldId);
     $('#rpg-hub-start').prop('disabled', !worldId || !bound);
-    $('#rpg-hub-close').prop('checked', hubConfig(extensionSettings).closeOnStart);
     $('#rpg-hub-style-law').prop('checked', hubConfig(extensionSettings).styleLaw);
     $('#rpg-hub-nudge').val(hubConfig(extensionSettings).nudgeAt);
     renderHubStatus();
@@ -2256,15 +2255,15 @@ function bindSettingsUI() {
             renderHubSettings();
         }
     });
+    // The world's scenes are the Atlas's (docs/long-shot-plan.md D193–D195): it opens on the world chosen above, whatever chat is in front.
     $(document).on('click', '#rpg-hub-open', function () {
         const worldId = String($('#rpg-hub-world').val() || '');
-        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+        import('./src/systems/ui/atlas.js').then(m => m.openAtlas({ worldId, tab: 'scenes' })).catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
     });
     $(document).on('click', '#rpg-hub-start', function () {
         const worldId = String($('#rpg-hub-world').val() || '');
-        import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId, start: true })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+        import('./src/systems/ui/atlas.js').then(m => m.openAtlas({ worldId, tab: 'scenes', start: true })).catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
     });
-    $(document).on('change', '#rpg-hub-close', function () { _hubRules().closeOnStart = $(this).prop('checked'); saveSettings(); });
     // The count of repeated phrases at a scene's end (docs/long-shot-plan.md D179): off until switched on (D180).
     $(document).on('change', '#rpg-hub-style-law', function () { _hubRules().styleLaw = $(this).prop('checked'); saveSettings(); });
     // The length from which a scene's strip suggests a fresh chat (docs/long-shot-plan.md D181); the field shows what is in force (0 to 500).
@@ -2274,7 +2273,7 @@ function bindSettingsUI() {
         import('./src/systems/ui/worldBuilder.js').then(m => m.openWorldBuilder()).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));
     });
     $(document).on('click', '#rpg-world-dashboard', function () {
-        import('./src/systems/ui/worldDashboard.js').then(m => m.openWorldDashboard()).catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
+        import('./src/systems/ui/atlas.js').then(m => m.openAtlas()).catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
     });
     $(document).on('click', '#rpg-world-advance', async function () {
         const $b = $(this);
@@ -3946,13 +3945,12 @@ async function initUI() {
                     }).catch(() => {});
                 },
             });
-            // The Map window (docs/map-window-plan.md), listed whatever Live
-            // World's switch says: the window itself says when Live World is
-            // off, and the entry sits in the hide-toggles below like the rest.
             // (Roll a check left the fly-out on 2026-10-29: the player's card
             // menu and the chip by the message box keep it.)
-            // The Atlas (docs/long-shot-plan.md D138, D147): the world's map, the whole screen. Listed whatever
-            // Live World's switch says, like Map: the window itself says when Live World is off.
+            // The Atlas (docs/long-shot-plan.md D138, D147): the world's map, the whole screen, and the window of a
+            // world's scenes. Listed whatever Live World's switch says: the window itself says when Live World is
+            // off, and the entry sits in the hide-toggles below like the rest. The Map and Hub entries went with
+            // their windows (D195): what they had is in the Atlas.
             items.push({
                 id: 'atlas',
                 label: 'Atlas',
@@ -3963,28 +3961,7 @@ async function initUI() {
                         .catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
                 },
             });
-            items.push({
-                id: 'live-world',
-                label: 'Map',
-                iconClass: 'fa-solid fa-map',
-                action: () => {
-                    import('./src/systems/ui/worldDashboard.js')
-                        .then(m => m.openWorldDashboard())
-                        .catch(err => console.error('[Dooms Tracker] Live World window failed to load:', err));
-                },
-            });
-            // The Hub (docs/hub-plan.md D127): the world's window, and End scene for the scene in front; listed
-            // whatever Live World's switch says, like Map (the window itself says when the hub is off).
-            items.push({
-                id: 'hub',
-                label: 'Hub',
-                iconClass: 'fa-solid fa-compass',
-                action: () => {
-                    import('./src/systems/ui/hub.js')
-                        .then(m => m.openHub())
-                        .catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
-                },
-            });
+            // End scene for the scene in front (docs/hub-plan.md D127), listed whatever Live World's switch says.
             items.push({
                 id: 'end-scene',
                 label: 'End scene',

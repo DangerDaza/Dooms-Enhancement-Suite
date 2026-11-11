@@ -1,27 +1,18 @@
 /**
- * The Map window's views (docs/map-window-plan.md D85, D88): the world's
- * name across the top, the row of places as circles (newest on the left),
- * the strip for the selected place (Travel here, Draw), the bottom panel
- * that swaps between News, Rumours, People and Completed quests, and a
- * face's trail (the popover), as HTML. Pure apart from `portraits`, so
- * tests render them without the portrait store; the modules that mount
- * them (worldDashboard.js, worldFace.js) own the events. Never a clock's
- * number: the effect text is all anyone sees.
+ * Live World's shared views (docs/map-window-plan.md D85, D88): the People,
+ * News, Rumours, Hooks and Completed quests bodies, the word for a chat
+ * with nothing to show, the status line, and a face's trail (the popover),
+ * as HTML. They were the Map window's panels; that window went
+ * (docs/long-shot-plan.md D195) and they are the Atlas's tabs now. Pure
+ * apart from `portraits`, so tests render them without the portrait
+ * store; the modules that mount them (atlas.js, worldFace.js) own the
+ * events. Never a clock's number: the effect text is all anyone sees.
  */
 import { escapeHtml } from '../../utils/html.js';
 import { publicEffects, recentChanges, groupChangesByDate, characterTimeline } from '../../utils/liveWorld.js';
 import { facesOfTheWorld } from '../../utils/worldBoard.js';
 
 export const FEED_LIMITS = Object.freeze([12, 50, 0]);    // 0: everything the log holds
-
-/** The bottom panel's functions, in order; the first is the one the window opens on. */
-export const MAP_PANELS = Object.freeze([
-    { id: 'news', label: 'News', icon: 'fa-newspaper', title: 'What moved lately: people and clocks, under their dates' },
-    { id: 'rumours', label: 'Rumours', icon: 'fa-comments', title: 'Word on the street: what people say' },
-    { id: 'hooks', label: 'Hooks', icon: 'fa-signs-post', title: 'What the world offers to do next; take one and it is a quest' },
-    { id: 'people', label: 'People', icon: 'fa-users', title: 'The faces last seen, and where' },
-    { id: 'done', label: 'Completed quests', icon: 'fa-check-double', title: 'The quests completed in this chat' },
-]);
 
 /** The first grapheme of each of the first two words (an emoji or a flag stays whole); a letter is upper-cased when that keeps it one letter. */
 export function initials(name) {
@@ -178,86 +169,6 @@ export function doneHtml({ done = [] } = {}) {
         <div class="dooms-inv-head"><span class="dooms-inv-label">✅ Completed quests</span><span class="dooms-inv-fill" title="Completed">${(done || []).length}</span></div>
         ${items ? `<ol class="dooms-map-done-list">${items}</ol>` : '<p class="dooms-world-muted">None yet. Complete a quest on the shelf\'s Quests page (the ✓ on its box) and it lands here.</p>'}
     </section>`;
-}
-
-/**
- * The row of circles: the places newest on the left, each the picture of
- * the place (or a glyph), the name under it, "You are here" on the current
- * place, the selected one ringed, the one being drawn marked.
- */
-export function placesRowHtml({ row = [], selected = '', drawing = '' } = {}) {
-    if (!row.length) return '<div class="dooms-map-row-wrap is-empty"><p class="dooms-map-empty">No places yet: as the story moves, the tracker\'s Location line fills this row, the most recent place first.</p></div>';
-    const circles = row.map(p => {
-        const classes = ['dooms-map-place'];
-        if (p.here) classes.push('is-here');
-        if (p.id === selected) classes.push('is-selected');
-        if (p.image) classes.push('has-image');
-        if (p.id === drawing) classes.push('is-drawing');
-        const art = p.image ? ` style="background-image:url(&quot;${escapeHtml(p.image)}&quot;)"` : '';
-        const title = `${p.label}${p.parent ? `, ${p.parent}` : ''}${p.here ? ' (you are here)' : ''}`;
-        return `<button type="button" class="${classes.join(' ')}" role="option" aria-selected="${p.id === selected ? 'true' : 'false'}" data-place="${escapeHtml(p.id)}" title="${escapeHtml(title)}">
-            <span class="dooms-map-art"${art}><i class="fa-solid fa-mountain-sun" aria-hidden="true"></i>${p.id === drawing ? '<i class="fa-solid fa-spinner fa-spin dooms-map-spin" aria-hidden="true"></i>' : ''}${p.here ? '<span class="dooms-map-here">You are here</span>' : ''}</span>
-            <span class="dooms-map-name">${escapeHtml(p.label)}</span>
-        </button>`;
-    }).join('');
-    return `<div class="dooms-map-row-wrap">
-        <button type="button" class="dooms-map-arrow is-left" data-dir="-1" aria-label="More recent places" title="More recent"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
-        <div class="dooms-map-row" role="listbox" aria-label="Places visited, the most recent first">${circles}</div>
-        <button type="button" class="dooms-map-arrow is-right" data-dir="1" aria-label="Earlier places" title="Earlier"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
-    </div>`;
-}
-
-/**
- * The strip under the row: the selected place's name and parent, when it
- * was last visited, Travel here with "arriving when…" (or You are here),
- * Draw or Redraw. A hint when nothing is selected.
- */
-export function placeStripHtml({ place = null, drawing = '', travelling = false, canDraw = true, drawProblem = '' } = {}) {
-    if (!place) return '<div class="dooms-map-strip is-idle"><span class="dooms-world-muted">Click a place: Travel here takes the story there with a montage of the road; Draw gives it a picture.</span></div>';
-    const when = place.lastDate ? `last there ${escapeHtml(place.lastDate)}${place.lastTime ? `, ${escapeHtml(place.lastTime)}` : ''}` : '';
-    const isDrawing = drawing === place.id;
-    const travel = place.here
-        ? '<span class="dooms-map-strip-here"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> You are here</span>'
-        : `<button type="button" class="rpg-accordion-action-btn dooms-map-travel" data-act="travel"${travelling ? ' disabled' : ''} title="The next reply is the journey: a short montage of the road, then the arrival, the first move yours"><i class="fa-solid fa-person-walking" aria-hidden="true"></i> Travel here</button>
-           <input type="text" class="rpg-accordion-input dooms-map-when" id="dooms-map-when" placeholder="arriving when… (optional)" maxlength="80" title="When you arrive, as you would say it: by nightfall, in three days…" />`;
-    const drawBtn = `<button type="button" class="rpg-accordion-action-btn dooms-map-draw" data-act="draw"${isDrawing || !!drawing || !canDraw ? ' disabled' : ''} title="${drawProblem ? escapeHtml(`Cannot draw: ${drawProblem}`) : (place.drawn ? 'Draw it again: the AI describes the place afresh from the scenes there and the picture is replaced' : 'The AI describes the place from the scenes there and your image source draws it (Settings → Image Generation → Places)')}"><i class="fa-solid ${isDrawing ? 'fa-spinner fa-spin' : 'fa-paintbrush'}" aria-hidden="true"></i> ${isDrawing ? 'Drawing…' : (place.drawn ? 'Redraw' : 'Draw')}</button>`;
-    return `<div class="dooms-map-strip" data-place="${escapeHtml(place.id)}">
-        <span class="dooms-map-strip-name"><strong>${escapeHtml(place.label)}</strong>${place.parent ? `<span class="dooms-world-muted">, ${escapeHtml(place.parent)}</span>` : ''}${when ? `<span class="dooms-world-muted"> · ${when}</span>` : ''}</span>
-        <span class="dooms-map-strip-actions">${travel}${drawBtn}</span>
-    </div>`;
-}
-
-/**
- * The Map window's body: the world's name with the tracker's date and the
- * run status; the row; the strip; the panel with its buttons.
- */
-export function mapWindowHtml({ state, pack, cfg, facts = {}, portraits = () => '', masterOn = true, packError = '', row = [], selected = '', drawing = '', panel = MAP_PANELS[0].id, feed = FEED_LIMITS[0], present = [], done = [], hooks = null, hooksBusy = false, travelling = false, canDraw = true, drawProblem = '' } = {}) {
-    const empty = worldEmptyMessage({ state, pack, cfg, packError, masterOn });
-    if (empty) return `<div class="dooms-map">${empty}</div>`;
-    const date = [facts.date, facts.time].filter(Boolean).join(', ');
-    const where = facts.location ? ` · at ${escapeHtml(facts.location)}` : '';
-    const active = MAP_PANELS.some(p => p.id === panel) ? panel : MAP_PANELS[0].id;
-    const place = row.find(p => p.id === selected) || null;
-    let body = '';
-    if (active === 'people') body = peopleHtml({ state, pack, portraits, present, sceneText: facts.location || '' });
-    else if (active === 'rumours') body = rumoursHtml({ state, pack, cfg });
-    else if (active === 'done') body = doneHtml({ done });
-    else if (active === 'hooks') body = hooksHtml({ hooks, busy: hooksBusy });
-    else body = newsHtml({ state, pack, cfg, feed });
-    const nav = MAP_PANELS.map(p => `<button type="button" class="dooms-map-nav-btn${p.id === active ? ' is-active' : ''}" data-panel="${p.id}" role="tab" aria-selected="${p.id === active ? 'true' : 'false'}" title="${escapeHtml(p.title)}"><i class="fa-solid ${p.icon}" aria-hidden="true"></i><span>${escapeHtml(p.label)}</span></button>`).join('');
-    return `<div class="dooms-map" data-panel="${active}">
-        <div class="dooms-map-head">
-            <span class="dooms-map-title"><i class="fa-solid fa-globe" aria-hidden="true"></i> ${escapeHtml(pack.name || 'The world')}</span>
-            <span class="dooms-world-date">${date ? escapeHtml(date) : 'No date in the tracker yet'}${where}</span>
-            <span class="dooms-world-status">${statusText(state, cfg)}${cfg.spoilerFree ? ' Spoiler-free.' : ''}</span>
-        </div>
-        ${placesRowHtml({ row, selected, drawing })}
-        ${placeStripHtml({ place, drawing, travelling, canDraw, drawProblem })}
-        <div class="dooms-map-panel">
-            <div class="dooms-map-panel-body" role="tabpanel" data-panel="${active}">${body}</div>
-            <div class="dooms-map-panel-nav" role="tablist" aria-label="The panel">${nav}</div>
-        </div>
-    </div>`;
 }
 
 /**

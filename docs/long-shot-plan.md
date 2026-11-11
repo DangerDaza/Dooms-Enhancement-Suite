@@ -888,3 +888,40 @@ begun, its first scene started with it), `tools/atlas-browser-test.mjs`
 §5k (the Scenes tab, the ways in, hooks between scenes, the picker, the
 start sheet from each way in). The controller's own lines (which act
 calls which function) are load-checked only, as before.
+
+## 34. The old Hub and Map windows are retired (2026-11-11, D195)
+
+With the scenes list, the ways in and the world picker in the Atlas
+(§33), nothing was left that only the old windows could do except
+drawing a place's picture, which the owner had said to keep. That moved
+to the place's card, and the two windows went. Built in "Atlas 34".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D195 | One window for the world: the Atlas | **Draw** is on a place's card in the Atlas, for a place the story has been to in the chat in front (or a room of it): Draw, or Redraw once it has a picture, through Settings → Image Generation as before; the card shows the picture. Not between scenes, where there is no chat to describe the place from. **Every way in opens the Atlas:** the D menu has Atlas and End scene (Map and Hub are gone from it); `/liveworld` opens the Atlas (as `/atlas` does), `/hub` opens it on the Scenes tab; Settings → Live World's "Open the Atlas", and under The Hub "Open its scenes" and "Start a scene", which open the Atlas on the world chosen there whatever chat is in front (`openAtlas({ worldId, tab, start })`); the World Builder's "Play in the Atlas"; a face's "Show the place" where no Atlas is open. **Gone:** `src/systems/ui/hub.js`, `hubViews.js` and `worldDashboard.js`; the Map window's own markup in `worldViews.js` (its row of circles, its strip, its frame; the People, News, Rumours, Hooks and Completed quests bodies stay, as the Atlas's tabs); the tree board's model (`treeModel`), which only a world with no picture in the Hub window drew; the setting "the hub closes when a scene opens" (the Atlas always makes way for the scene it starts); the two windows' own tests; and their styles: 302 selectors (199 whole rules) in `style.css` and `styles/overhaul.css` that could only match their markup, found by class and id names no code mentions any more |
+
+What stays, and why: `hubBoard.js` (the picture board) is the World
+Builder's Map tab's, in its edit mode; its read-only mode has no window
+now and is kept with the board's own tests. The pure helpers in
+`worldPicture.js` that the board's model is built from stay with it.
+`docs/hub-plan.md` and `docs/map-window-plan.md` are kept as the record
+of how the scene engine and Live World's panels were designed, each
+with a line at its top saying its window is gone. Comments in the code
+that tell where a rule came from ("the Map window's row") were left
+where they explain the rule.
+
+How the styles were checked: the Atlas's People, News, Rumours and Hooks
+tabs, which borrow the Map window's classes, were pictured before and
+after the rules went and compared pixel for pixel: no difference. The
+Atlas's browser suite and the board's browser test pass as before.
+
+What a player with the old habits will notice: Map and Hub are no longer
+in the D menu (an entry hidden there by name is simply no longer
+listed); the Map window's row of place pictures is not anywhere as a
+row, each picture is on its place's card; a world with a picture of its
+own shows that picture as the Atlas's top map, as it has since D154.
+
+Tests: `tools/live-world-flow-test.mjs` §6 and §10 (the tabs' bodies
+read as the Atlas shows them; Draw on a place's card), `tools/hub-test.mjs`
+§1, `tools/hub-board-test.mjs`, `tools/hub-board-browser-test.mjs`,
+`tools/lazy-graph-test.mjs`. Not run in a real SillyTavern.

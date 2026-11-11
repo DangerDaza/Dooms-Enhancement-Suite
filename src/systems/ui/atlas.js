@@ -12,7 +12,7 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects, normalizeWorldState } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, ATLAS_SCALES, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap, withWorld, describeRoad } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, ATLAS_SCALES, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap, withWorld, describeRoad , labelSegments } from '../../utils/atlas.js';
 import { worldGenState, worldGenDefaults, planWorldGen, applyWorldGen, worldReach, landsToName, applyNames } from '../../utils/atlasWorld.js';
 import { randomSeed, WORLD_SHAPES } from '../../utils/worldGen.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
@@ -20,7 +20,8 @@ import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draft
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
-import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, loadPack, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { recordCurrentScene, getWorldState, getActivePack, getPackError, advanceNow, describeAdvanceResult, isAdvancing, presentNamesFromTracker, isLiveWorldOn, loadPack, getPlacesRow, drawPlace, isDrawingPlace, describeDrawResult, WORLD_CHANGED_EVENT } from '../features/liveWorld.js';
+import { sourceProblem } from '../features/imageGen.js';
 import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHANGED_EVENT } from '../features/questCut.js';
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
@@ -34,7 +35,7 @@ const MOVE_KEY = 'dooms-atlas-moving';
 const TAB_KEY = 'dooms-atlas-tab';
 const HIDDEN_KEY = 'dooms-atlas-hidden';
 const FOLD_KEY = 'dooms-atlas-folded';
-const FEED_KEY = 'dooms-world-feed';    // the Map window's own: one choice for both while both exist
+const FEED_KEY = 'dooms-world-feed';    // the key the Map window used: the choice made there is kept (D195)
 
 let built = false;
 let isOpen = false;
@@ -202,7 +203,31 @@ function cardFor(marker) {
         travelling: travelling || !!(pending && pending.kind === 'travel'),
         rumours: said.rumours, news: said.news, portraits: portraitOf,
         canStart: startPlan.ok, sceneNo: startPlan.ok ? startPlan.number : 0,
+        draw: drawFor(m),
     });
+}
+
+/**
+ * Whether a place's picture can be drawn from its card (D195, the old Map
+ * window's Draw): a place the story has been to in the chat in front (the
+ * picture is described from the scenes there). Not between scenes, where
+ * there is no chat to read. null when there is nothing to draw from.
+ */
+function drawFor(m) {
+    if (between() || cardMode !== 'view') return null;
+    let row = null;
+    try {
+        // The place itself; else the room of it the story was last in (the map folds "House - Bedroom" into the house; the row is newest first).
+        const rows = getPlacesRow();
+        const low = String(m.label || '').toLowerCase();
+        row = rows.find(p => p.id === m.id) || rows.find(p => { const first = labelSegments(p.label)[0]; return !!first && first.toLowerCase() === low; }) || null;
+    } catch (e) { row = null; }
+    if (!row) return null;
+    let busy = '';
+    let problem = '';
+    try { busy = isDrawingPlace() || ''; } catch (e) { busy = ''; }
+    try { problem = sourceProblem() || ''; } catch (e) { problem = ''; }
+    return { id: row.id, drawn: !!row.drawn, busy: !!busy, mine: busy === row.id, problem };
 }
 
 /** A road's card (D165): the places it joins, what it is as drawn, its set time. */
@@ -1360,6 +1385,21 @@ function build() {
                 return;
             }
             if (act === 'travel') { ev.stopPropagation(); await travel(this.getAttribute('data-id') || ''); return; }
+            if (act === 'draw') {
+                // The place's picture (D195): the card follows the run, and the picture is on it when it lands.
+                ev.stopPropagation();
+                const pid = this.getAttribute('data-place') || this.getAttribute('data-id') || '';
+                if (!pid || isDrawingPlace()) return;
+                const label = labelOf(this.getAttribute('data-id') || pid);
+                result = `Drawing ${label}…`;
+                const pending = drawPlace(pid, { reason: 'manual' });
+                render();
+                if (board) board.update({});
+                try { result = describeDrawResult(await pending, label); } catch (e) { result = `The picture failed: ${e && e.message ? e.message : e}`; }
+                render();
+                if (board) board.update({});
+                return;
+            }
             if (act === 'person') { ev.stopPropagation(); openFace(this, this.getAttribute('data-name') || ''); return; }
             if (act === 'advance') {
                 const pending = advanceNow({ reason: 'atlas' });    // takes the running flag before its first await: the render keeps the button disabled
@@ -1378,7 +1418,7 @@ function build() {
                 import('./worldBuilder.js').then(m => m.openWorldBuilder(fromChat ? { fromChat: true } : { id: s.pack })).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));
                 return;
             }
-            // Hooks (docs/hooks-canon-plan.md D104), as the Map window offers them.
+            // Hooks in the chat in front (docs/hooks-canon-plan.md D104): asked for, taken, cut to, set aside.
             if (act === 'hooks-propose') {
                 result = 'Asking the world for hooks…';
                 render();
@@ -1490,7 +1530,7 @@ function build() {
  * open. `place` opens it on that place's card; `name` on the place that
  * character stands at.
  */
-export async function openAtlas({ place = '', name = '', worldId = '', tab: openTab = '' } = {}) {
+export async function openAtlas({ place = '', name = '', worldId = '', tab: openTab = '', start = false } = {}) {
     try { await ensureCss('atlas'); } catch (e) { /* the sheet failed to load: the window still opens */ }
     build();
     isOpen = true;
@@ -1511,6 +1551,8 @@ export async function openAtlas({ place = '', name = '', worldId = '', tab: open
     }
     // The records against the card's chats (D128): a chat deleted outside is marked gone, one the list lost is brought back.
     { const w = hubWorld(); if (w && !picked) refreshScenes(w).catch(() => {}); }
+    // Opened to start a scene (Settings → Start a scene): the sheet at once, or the reason there can be none.
+    if (start && isOpen) { if (startPlan.ok) openSceneStart({}); else { result = whyNoStart(); render(); } }
     if (place || name) {
         const wait = (n) => { if (!isOpen) return; if (board) { if (name) showPlaceOf(name); else showMarker(place); } else if (n > 0) setTimeout(() => wait(n - 1), 60); };
         wait(40);

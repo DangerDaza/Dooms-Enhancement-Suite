@@ -474,12 +474,12 @@ function build() {
         if (act === 'export') { exportFile(); return; }
         if (act === 'delete') { await remove(); return; }
         if (act === 'use') { useForNewChats(); return; }
-        if (act === 'play') {    // the hub on this world (docs/hub-plan.md D127)
+        if (act === 'play') {    // the Atlas on this world, whatever chat is in front (docs/long-shot-plan.md D194)
             const id = selectedId;
             if (!id || id === 'new' || !discardOk()) return;
             if (dirty) await openWorld(id, { force: true });    // the edits let go: the world as saved is what the builder holds when it opens again
             close();
-            import('./hub.js').then(m => m.openHub({ worldId: id })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
+            import('./atlas.js').then(m => m.openAtlas({ worldId: id, tab: 'scenes' })).catch(err => console.error('[Dooms Tracker] The Atlas failed to load:', err));
             return;
         }
         if (act === 'tab') { const t = this.getAttribute('data-tab'); if (WB_TABS.some(x => x.id === t)) { tab = t; mapPicked = ''; render(); } return; }

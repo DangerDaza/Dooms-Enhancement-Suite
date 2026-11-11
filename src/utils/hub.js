@@ -11,7 +11,7 @@
  * and the file name, the recap's request and reading, the scene records.
  * No SillyTavern: tools/hub-test.mjs imports this directly. The store, the
  * chat bridge, the requests and the commands live in
- * src/systems/features/hub.js; the window in src/systems/ui/hub.js.
+ * src/systems/features/hub.js; the window is the Atlas (src/systems/ui/atlas.js).
  */
 import { normalizeWorldState, jsonObjectsIn, sameName } from './liveWorld.js';
 import { normalizeCanon, buildCanonBlock } from './canon.js';
@@ -66,7 +66,6 @@ const isObj = (o) => !!o && typeof o === 'object' && !Array.isArray(o);
 const CONFIG_DEFAULTS = Object.freeze({
     gap: 'later',          // the Start sheet's first choice
     recapChars: RECAP_CHARS,
-    closeOnStart: true,    // the hub closes when a scene opens
     styleLaw: false,       // the count of repeated phrases at a scene's end and the list held against the next (D179): off until switched on (the owner, D180)
     nudgeAt: 60,           // messages after which a scene's strip suggests going on in a fresh chat (D181); 0 never
 });
@@ -82,7 +81,6 @@ export function hubConfig(settings) {
     return {
         gap: GAPS.some(g => g.id === h.gap && g.id !== 'when') ? h.gap : CONFIG_DEFAULTS.gap,
         recapChars: int(h.recapChars, 200, 1500, CONFIG_DEFAULTS.recapChars),
-        closeOnStart: h.closeOnStart !== false,
         styleLaw: h.styleLaw === true,
         nudgeAt: h.nudgeAt === undefined || h.nudgeAt === null || h.nudgeAt === '' ? CONFIG_DEFAULTS.nudgeAt : int(h.nudgeAt, 0, 500, CONFIG_DEFAULTS.nudgeAt),
     };

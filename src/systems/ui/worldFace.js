@@ -1,10 +1,11 @@
 /**
  * Live World's face popover (docs/map-window-plan.md D85): a character's
- * trail, opened from a card in the Map window's People panel. The shelf's
- * own small dialog (the inventory editor's shell, so the looks restyle
- * it): the name and where they stand now, their moves newest first, "Show
- * the place" (their place selected in the row). Closes on a click outside,
- * Escape, or when its host asks.
+ * trail, opened from a face in the Atlas (the People tab, a place's card).
+ * The shelf's own small dialog (the inventory editor's shell, so the looks
+ * restyle it): the name and where they stand now, their moves newest
+ * first, "Show the place" (the map, at their place), and a scene started
+ * with them while one can be (docs/long-shot-plan.md D193). Closes on a
+ * click outside, Escape, or when its host asks.
  */
 import { escapeHtml } from '../../utils/html.js';
 import { resolvePortrait } from './portraitBar.js';
@@ -47,7 +48,7 @@ export function closeFacePopover() {
 
 /**
  * Opens the trail of `name` by `anchor`. `onBoard(name)` is what "Show the
- * place" does; left out, the window opens with the character's place selected.
+ * place" does; left out, the Atlas opens on the character's place.
  * `onStart(name)`, when given, adds a button that starts a scene with them
  * (docs/long-shot-plan.md D193), labelled `startLabel`. `state` and `pack`
  * are the world shown when it is not the chat's own (D194).
@@ -67,7 +68,7 @@ export function openFacePopover(anchor, name, { onBoard, onStart = null, startLa
             <span class="dooms-inv-editor-spacer"></span>
             <button type="button" class="dooms-inv-btn" data-act="close">Close</button>
             ${typeof onStart === 'function' ? `<button type="button" class="dooms-inv-btn" data-act="start" title="A fresh chat with ${escapeHtml(name)} in it, where they were last seen"><i class="fa-solid fa-play" aria-hidden="true"></i> ${escapeHtml(startLabel || 'Start a scene with them')}</button>` : ''}
-            <button type="button" class="dooms-inv-btn is-primary" data-act="board" title="The row, with the place ${escapeHtml(name)} stands in selected">Show the place</button>
+            <button type="button" class="dooms-inv-btn is-primary" data-act="board" title="The map, at the place ${escapeHtml(name)} stands in">Show the place</button>
         </div>`;
     document.body.appendChild(el);
     el.addEventListener('click', (e) => {
@@ -80,7 +81,7 @@ export function openFacePopover(anchor, name, { onBoard, onStart = null, startLa
         if (act === 'start') { if (typeof onStart === 'function') onStart(name); return; }
         if (act === 'board') {
             if (typeof onBoard === 'function') onBoard(name);
-            else import('./worldDashboard.js').then(m => m.openWorldDashboard({ name })).catch(err => console.error('[Dooms Tracker] Live World: the Map window failed to load', err));
+            else import('./atlas.js').then(m => m.openAtlas({ name })).catch(err => console.error('[Dooms Tracker] Live World: the Atlas failed to load', err));
         }
     });
     el.addEventListener('keydown', (e) => {

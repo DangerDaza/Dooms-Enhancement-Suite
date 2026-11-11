@@ -83,6 +83,19 @@ const check = (label, cond, extra = '') => {
     if (cond) { console.log(`pass  ${label}`); }
     else { console.error(`FAIL  ${label}${extra ? '\n      ' + extra : ''}`); failures++; }
 };
+/**
+ * What the Atlas shows in a tab (docs/long-shot-plan.md D195: the old Map
+ * window went, and its panels are the Atlas's tabs): the word for nothing
+ * to show, or the tab's body, from the views both always shared.
+ */
+const makeTab = (V) => ({ state, pack, cfg, panel = 'news', feed, portraits = () => '', present = [], done = [], facts = {}, packError = '', masterOn = true } = {}) => {
+    const empty = V.worldEmptyMessage({ state, pack, cfg, packError, masterOn });
+    if (empty) return empty;
+    if (panel === 'people') return V.peopleHtml({ state, pack, portraits, present, sceneText: facts.location || '' });
+    if (panel === 'rumours') return V.rumoursHtml({ state, pack, cfg });
+    if (panel === 'done') return V.doneHtml({ done });
+    return V.newsHtml({ state, pack, cfg, feed });
+};
 const user = (mes) => ({ is_user: true, name: 'Jordan', mes, extra: {} });
 const ai = (mes) => ({ is_user: false, name: 'Narrator', mes, swipe_id: 0, swipes: [mes], extra: {} });
 const resetMeta = () => { for (const k of Object.keys(meta)) delete meta[k]; };
@@ -221,7 +234,7 @@ extensionSettings.liveWorld.enabled = true;
 await lw.onWorldChatChanged();
 check('the master switch off drops the world and clears the line without a generation; on brings it back', (slots['dooms-world-state'].value = 'stale', extensionSettings.enabled = false, await lw.onWorldChatChanged(), lw.getWorldState() === null && slots['dooms-world-state'].value === '') && (extensionSettings.enabled = true, await lw.onWorldChatChanged(), lw.getWorldState() !== null && lw.getWorldState().clocks.blockade === 1));
 
-console.log('\n§6 the views\' reading (docs/map-window-plan.md: the Map window, a face)');
+console.log('\n§6 the views\' reading: the Atlas\'s tabs, a place\'s Draw, a face (docs/map-window-plan.md, docs/long-shot-plan.md D195)');
 {
     const M = await import(`${DES}/src/utils/liveWorld.js`);
     const W = await import(`${DES}/src/utils/worldMap.js`);
@@ -235,41 +248,41 @@ console.log('\n§6 the views\' reading (docs/map-window-plan.md: the Map window,
     st = W.visitPlace(st, pack, { location: 'the quay', msgId: 'm1', gameDate: 'Thursday', gameTime: 'dawn' }).state;
     const row = W.placesRow(st, pack);
     const facts = { date: 'Thursday', time: 'dawn', location: 'the quay' };
-    const win = V.mapWindowHtml({ state: st, pack, cfg, facts, portraits: () => '', row });
-    check('the window: the world\'s name, the date and the run status in the head; the row newest first with You are here; the strip\'s hint; the panel on News with four buttons', win.includes('class="dooms-map" data-panel="news"') && win.includes('dooms-map-title') && win.includes('Harbourside') && win.includes('Thursday, dawn · at the quay') && win.includes('Last advanced on Thursday') && win.indexOf('data-place="loc:the-quay"') < win.indexOf('data-place="the-anchor"') && win.includes('You are here') && win.includes('dooms-map-strip is-idle') && win.includes('data-panel="rumours"') && win.includes('data-panel="people"') && win.includes('data-panel="done"') && win.includes('dooms-map-changes') && !win.includes('dooms-world-cards'), win.slice(0, 800));
-    check('an unknown panel falls back to News', V.mapWindowHtml({ state: st, pack, cfg, row, panel: 'nope' }).includes('data-panel="news"'));
-    const sel = V.mapWindowHtml({ state: st, pack, cfg, facts, row, selected: 'the-anchor' });
-    check('a selected place: ringed in the row; the strip names it with its parent and when, offers Travel here with arriving when… and Draw', sel.includes('dooms-map-place is-selected') && /<strong>The Anchor[^<]*<\/strong>/.test(sel) && sel.includes('last there Wednesday') && sel.includes('data-act="travel"') && sel.includes('id="dooms-map-when"') && sel.includes('data-act="draw"') && sel.includes('> Draw<'), sel.slice(sel.indexOf('dooms-map-strip'), sel.indexOf('dooms-map-strip') + 900));
-    const here = V.mapWindowHtml({ state: st, pack, cfg, facts, row, selected: 'loc:the-quay' });
-    check('the current place selected: You are here instead of Travel here', here.includes('dooms-map-strip-here') && !here.includes('data-act="travel"') && here.includes('data-act="draw"'));
+    const tab = makeTab(V);    // the old Map window's panels are the Atlas's tabs (docs/long-shot-plan.md D195): each body is read as the Atlas shows it
+    const win = tab({ state: st, pack, cfg });
+    check('the status line says when the world last moved; the row of places is newest first, with where the party is and when each was last visited', V.statusText(st, cfg).includes('Last advanced on Thursday') && row[0].id === 'loc:the-quay' && row[0].here === true && row[1].id === 'the-anchor' && row[1].here === false && row[1].lastDate === 'Wednesday', JSON.stringify(row));
+    // A place's picture is drawn from its card in the Atlas (D195): Draw for a place the story has been to, Redraw once it has one.
+    const AV = await import(`${DES}/src/systems/ui/atlasViews.js`);
+    const cardOf = (draw) => AV.atlasCardHtml({ marker: { id: 'the-anchor', label: 'The Anchor', kind: 'tavern', people: [], rooms: [], names: [] }, draw });
+    const sel = cardOf({ id: 'the-anchor', drawn: false, busy: false, mine: false, problem: '' });
+    check('a place the story has been to offers Draw on its card, for the place visited; a place there is nothing to draw from offers none', /data-act="draw" data-id="the-anchor" data-place="the-anchor" title="The AI describes the place/.test(sel) && sel.includes('<span>Draw</span>') && !/data-act="draw"[^>]*disabled/.test(sel) && !cardOf(null).includes('data-act="draw"'), sel.slice(sel.indexOf('data-act="draw"') - 80, sel.indexOf('data-act="draw"') + 400));
     const drawnRow = W.placesRow({ ...st, visited: st.visited.map(e => e.id === 'the-anchor' ? { ...e, image: 'https://x/anchor.png' } : e) }, pack);
-    const withArt = V.mapWindowHtml({ state: st, pack, cfg, facts, row: drawnRow, selected: 'the-anchor', drawing: 'loc:the-quay' });
-    check('a drawn place wears its picture and offers Redraw; the place being drawn is marked and Draw waits', withArt.includes('dooms-map-place is-selected has-image') && withArt.includes('url(&quot;https://x/anchor.png&quot;)') && withArt.includes('> Redraw<') && withArt.includes('dooms-map-place is-here is-drawing') && withArt.includes('dooms-map-spin') && withArt.includes('data-act="draw" disabled'), withArt.slice(withArt.indexOf('dooms-map-row'), withArt.indexOf('dooms-map-row') + 1200));
-    check('a source that cannot draw: Draw is disabled and says why', V.mapWindowHtml({ state: st, pack, cfg, facts, row, selected: 'the-anchor', canDraw: false, drawProblem: 'no ComfyUI workflow is chosen' }).includes('Cannot draw: no ComfyUI workflow is chosen'));
-    check('travelling: Travel here waits', V.mapWindowHtml({ state: st, pack, cfg, facts, row, selected: 'the-anchor', travelling: true }).includes('data-act="travel" disabled'));
-    check('no places yet: the row says so', V.mapWindowHtml({ state: lw.getWorldState(), pack, cfg, row: [] }).includes('No places yet'));
-    const people = V.mapWindowHtml({ state: st, pack, cfg, facts, portraits: () => '', row, panel: 'people' });
+    const withArt = cardOf({ id: 'the-anchor', drawn: true, busy: true, mine: false, problem: '' });
+    check('a drawn place carries its picture in the row and its card offers Redraw; while another picture is being made Draw waits, and the one being drawn says so', drawnRow.find(x => x.id === 'the-anchor').image === 'https://x/anchor.png' && drawnRow.find(x => x.id === 'the-anchor').drawn === true && row.find(x => x.id === 'the-anchor').drawn === false && withArt.includes('<span>Redraw</span>') && /data-act="draw"[^>]*disabled/.test(withArt) && (() => { const mine = cardOf({ id: 'the-anchor', drawn: false, busy: true, mine: true, problem: '' }); return mine.includes('<span>Drawing…</span>') && mine.includes('fa-spinner') && /data-act="draw"[^>]*disabled/.test(mine); })());
+    check('a source that cannot draw: Draw is disabled and says why', (() => { const c = cardOf({ id: 'the-anchor', drawn: false, busy: false, mine: false, problem: 'no ComfyUI workflow is chosen' }); return c.includes('Cannot draw: no ComfyUI workflow is chosen') && /data-act="draw"[^>]*disabled/.test(c); })());
+    check('a world just begun has no places in its row yet', W.placesRow(M.seedWorldState(pack), pack).length === 0);
+    const people = tab({ state: st, pack, cfg, facts, portraits: () => '', row, panel: 'people' });
     check('People: a card per known character with the place under the name and the date of the last move', people.includes('class="dooms-portrait-card dooms-world-card" data-name="Old Marit"') && people.includes("The Anchor&#39;s back room, The Anchor, a tavern") && people.includes('class="dooms-world-when" title="Last moved Thursday, dawn">Thursday'), people);
     check('People: heard-of names in the dashed box, not as cards', people.includes('dooms-world-heard') && people.includes('Maeve') && !people.includes('data-name="Maeve"'));
-    check('People: a portrait when the store has one, initials otherwise', V.mapWindowHtml({ state: st, pack, cfg, row, panel: 'people', portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img src="data:image/png;base64,x" alt="" />') && people.includes('>OM</div>'));
-    const rumours = V.mapWindowHtml({ state: st, pack, cfg, facts, row, panel: 'rumours' });
+    check('People: a portrait when the store has one, initials otherwise', tab({ state: st, pack, cfg, row, panel: 'people', portraits: (n) => n === 'Old Marit' ? 'data:image/png;base64,x' : '' }).includes('<img src="data:image/png;base64,x" alt="" />') && people.includes('>OM</div>'));
+    const rumours = tab({ state: st, pack, cfg, facts, row, panel: 'rumours' });
     check('Rumours: the blurb, the effect text, never the number, the clock\'s name only as a title', rumours.includes('The quay is quiet.') && rumours.includes('Cargo is searched on the quay') && !rumours.includes('2/6') && rumours.includes('title="The blockade"') && !rumours.includes('dooms-map-changes'));
-    check('spoiler-free: the clock names go and the head says so', (() => { const sf = V.mapWindowHtml({ state: st, pack, cfg: { ...cfg, spoilerFree: true }, row, panel: 'rumours' }); return !sf.includes('title="The blockade"') && sf.includes('Spoiler-free.'); })());
-    check('News: the move and the step under their date, the filter remembering its choice', win.includes('class="dooms-map-feed-date">Thursday') && win.includes('<option value="12" selected>Latest 12</option>') && win.includes('<li class="is-clock">The blockade: Cargo is searched on the quay') && win.includes('<li class="is-move">Old Marit:'), win.slice(win.indexOf('dooms-map-panel-body'), win.indexOf('dooms-map-panel-body') + 600));
-    const done = V.mapWindowHtml({ state: st, pack, cfg, row, panel: 'done', done: [{ text: 'Find the warden', at: 1, gameDate: 'Thursday' }, { text: '<b>x</b>', at: 0, gameDate: '' }] });
-    check('Completed quests: the list with the date, newest first, escaped; none says so', done.includes('dooms-map-done-text">Find the warden<') && done.includes('>Thursday<') && done.includes('&lt;b&gt;x&lt;/b&gt;') && done.indexOf('Find the warden') < done.indexOf('&lt;b&gt;') && V.mapWindowHtml({ state: st, pack, cfg, row, panel: 'done' }).includes('None yet'));
-    check('off, a pack problem, no world, the master switch: each says so', V.mapWindowHtml({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && V.mapWindowHtml({ cfg, packError: 'No pack named "x".' }).includes('No pack named') && V.mapWindowHtml({ cfg }).includes('no world yet') && V.mapWindowHtml({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
+    check('spoiler-free: the clock names go', !tab({ state: st, pack, cfg: { ...cfg, spoilerFree: true }, panel: 'rumours' }).includes('title="The blockade"'));
+    check('News: the move and the step under their date, the filter remembering its choice', win.includes('class="dooms-map-feed-date">Thursday') && win.includes('<option value="12" selected>Latest 12</option>') && win.includes('<li class="is-clock">The blockade: Cargo is searched on the quay') && win.includes('<li class="is-move">Old Marit:'), win.slice(0, 600));
+    const done = tab({ state: st, pack, cfg, row, panel: 'done', done: [{ text: 'Find the warden', at: 1, gameDate: 'Thursday' }, { text: '<b>x</b>', at: 0, gameDate: '' }] });
+    check('Completed quests: the list with the date, newest first, escaped; none says so', done.includes('dooms-map-done-text">Find the warden<') && done.includes('>Thursday<') && done.includes('&lt;b&gt;x&lt;/b&gt;') && done.indexOf('Find the warden') < done.indexOf('&lt;b&gt;') && tab({ state: st, pack, cfg, row, panel: 'done' }).includes('None yet'));
+    check('off, a pack problem, no world, the master switch: each says so', tab({ cfg: { ...cfg, enabled: false } }).includes('Live World is off') && tab({ cfg, packError: 'No pack named "x".' }).includes('No pack named') && tab({ cfg }).includes('no world yet') && tab({ state: st, pack, cfg, masterOn: false }).includes('Enhancement Suite is off'));
     const failed = M.failAdvance(st, { error: 'The clock "blockade" moved by 3, more than 1.' });
-    check('a discarded attempt is said among the rumours, the rule kept out when spoiler-free', V.mapWindowHtml({ state: failed, pack, cfg, row, panel: 'rumours' }).includes('Last attempt discarded: The clock') && !V.mapWindowHtml({ state: failed, pack, cfg: { ...cfg, spoilerFree: true }, row, panel: 'rumours' }).includes('blockade'));
+    check('a discarded attempt is said among the rumours, the rule kept out when spoiler-free', tab({ state: failed, pack, cfg, row, panel: 'rumours' }).includes('Last attempt discarded: The clock') && !tab({ state: failed, pack, cfg: { ...cfg, spoilerFree: true }, row, panel: 'rumours' }).includes('blockade'));
     const broken = M.failAdvance(st, { error: 'network down', kind: 'error' });
-    check('a request that failed says so, spoiler-free or not, and that it runs again', V.mapWindowHtml({ state: broken, pack, cfg: { ...cfg, spoilerFree: true }, row, panel: 'rumours' }).includes('The last advance failed: network down') && V.mapWindowHtml({ state: broken, pack, cfg, row, panel: 'rumours' }).includes('runs again on the next reply'));
-    check('model-written text is escaped in the window', V.mapWindowHtml({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg, row, panel: 'rumours' }).includes('&lt;img src=x onerror=alert(1)&gt;'));
+    check('a request that failed says so, spoiler-free or not, and that it runs again', tab({ state: broken, pack, cfg: { ...cfg, spoilerFree: true }, row, panel: 'rumours' }).includes('The last advance failed: network down') && tab({ state: broken, pack, cfg, row, panel: 'rumours' }).includes('runs again on the next reply'));
+    check('model-written text is escaped in the window', tab({ state: { ...st, blurb: '<img src=x onerror=alert(1)>' }, pack, cfg, row, panel: 'rumours' }).includes('&lt;img src=x onerror=alert(1)&gt;'));
     const hostilePack = M.normalizePack({ ...JSON.parse(packJson), places: [{ id: 'h', label: '<b>Hall</b> & "co"', image: 'javascript:alert(1)' }, { id: 'ok', label: 'The Okay Inn', parent: 'h', image: 'https://x/y.png' }] }).pack;
     let hs = M.seedWorldState(hostilePack);
     hs = W.visitPlace(hs, hostilePack, { location: 'The Okay Inn', msgId: 'h1' }).state;
     hs = W.visitPlace(hs, hostilePack, { location: '<b>Hall</b> & "co"', msgId: 'h2' }).state;
-    const hostile = V.mapWindowHtml({ state: hs, pack: hostilePack, cfg, row: W.placesRow(hs, hostilePack), selected: 'ok' });
-    check('labels are escaped, a scripted image is dropped and a plain one fills the circle', hostile.includes('&lt;b&gt;Hall&lt;/b&gt; &amp; &quot;co&quot;') && !hostile.includes('javascript:') && hostile.includes('url(&quot;https://x/y.png&quot;)') && hostile.includes('has-image') && hostile.includes('data-place="h"'), hostile.slice(hostile.indexOf('dooms-map-row'), hostile.indexOf('dooms-map-row') + 900));
+    const hostile = W.placesRow(hs, hostilePack);
+    check('a scripted image is dropped from the row and a plain one kept; the row carries the label as it is (the views escape it)', hostile.find(x => x.id === 'h').image === '' && hostile.find(x => x.id === 'h').label === '<b>Hall</b> & "co"' && hostile.find(x => x.id === 'ok').image === 'https://x/y.png' && !JSON.stringify(hostile).includes('javascript:'), JSON.stringify(hostile));
     // a face
     const face = V.faceTrailHtml({ state: st, pack, name: 'Old Marit', portraits: () => '' });
     check('the face: the name, where now, the move with its date and reason, where the story found them', face.includes('class="dooms-face-name">Old Marit<') && face.includes("Now at The Anchor&#39;s back room") && face.includes('Thursday, dawn · hiding') && face.includes('Where the story found them') && face.includes('1 move on record'), face);
@@ -281,11 +294,11 @@ console.log('\n§6 the views\' reading (docs/map-window-plan.md: the Map window,
     let busy = st;
     // three movers: the log keeps twenty moves per character, so two could never pass fifty
     for (let i = 0; i < 25; i++) busy = M.applyAdvance(busy, { clocks: {}, moved: [{ who: 'Old Marit', to: i % 2 ? 'the-hill' : 'back-room' }, { who: 'Captain Reyes', to: i % 2 ? 'the-docks' : 'the-hill' }, { who: 'The governor', to: i % 2 ? 'old-town' : 'the-docks' }], heard: [], blurb: '' }, pack, { msgId: `b${i}` });
-    const news = (feed) => V.mapWindowHtml({ state: busy, pack, cfg, row, feed });
+    const news = (feed) => tab({ state: busy, pack, cfg, row, feed });
     check('the filter bounds the news: twelve, fifty, everything', busy.log.length > 50 && (news(12).match(/<li class="is-/g) || []).length === 12 && (news(50).match(/<li class="is-/g) || []).length === 50 && (news(0).match(/<li class="is-/g) || []).length === busy.log.length);
-    check('entries with no date get their own heading when dated ones exist', V.mapWindowHtml({ state: M.applyAdvance(st, { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' }), pack, cfg, row }).includes('class="dooms-map-feed-date">No date'));
+    check('entries with no date get their own heading when dated ones exist', tab({ state: M.applyAdvance(st, { clocks: {}, moved: [{ who: 'Captain Reyes', to: 'the-hill' }], heard: [], blurb: '' }, pack, { msgId: 'u' }), pack, cfg, row }).includes('class="dooms-map-feed-date">No date'));
     const flags = (() => { const s2 = M.markKnown(M.seedWorldState(pack), ['🇬🇧 Bill', 'ßen Low']); s2.where['🇬🇧 Bill'] = 'harbourside/the-hill'; s2.where['ßen Low'] = 'harbourside'; return s2; })();
-    const flagCards = V.mapWindowHtml({ state: flags, pack, cfg, row: [], panel: 'people' });
+    const flagCards = tab({ state: flags, pack, cfg, row: [], panel: 'people' });
     check('a flag or a letter with no single upper case opens a name as one initial on its card', flagCards.includes('>🇬🇧B</div>') && flagCards.includes('>ßL</div>'), flagCards);
 }
 
@@ -508,8 +521,9 @@ console.log('\n§10 the window and the shelf');
     extensionSettings.liveWorld.enabled = true;
     extensionSettings.liveWorld.pack = 'harbourside';
     await lw.onWorldChatChanged();
-    const win = V.mapWindowHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow(), panel: 'people' });
-    check('the window renders the live chat\'s world: the People panel with the faces; a fresh chat has no places yet', win.includes('data-name="Captain Reyes"') && win.includes('data-name="Old Marit"') && !win.includes('data-name="The governor"') && win.includes('The governor') && V.mapWindowHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow() }).includes('No places yet'), win.slice(0, 300));
+    const tab = makeTab(V);
+    const win = tab({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow(), panel: 'people' });
+    check('the People tab renders the live chat\'s world, with the faces; a fresh chat has no places yet', win.includes('data-name="Captain Reyes"') && win.includes('data-name="Old Marit"') && !win.includes('data-name="The governor"') && win.includes('The governor') && lw.getPlacesRow().length === 0, win.slice(0, 300));
     pb.setShelfPage('world');
     check('the shelf no longer offers World (nor Map): it stays on Characters', pb.getShelfPage() === 'characters');
     // D70: the scene places people. The tracker lists who is present and where the scene is.
@@ -520,7 +534,7 @@ console.log('\n§10 the window and the shelf');
     const placed = lw.getWorldState();
     check('a newcomer in the scene is known and standing where the scene is, logged on the reply', placed.known.Wanderer === 'known' && placed.where.Wanderer === 'harbourside/old-town/the-anchor' && placed.log.some(e => e.who === 'Wanderer' && e.reason === 'in the scene' && e.gameDate === 'Tuesday' && e.msgId), JSON.stringify(placed.where));
     check('…and the scene\'s place is the row\'s first, where the party is', lw.getPlacesRow()[0].id === 'the-anchor' && lw.getPlacesRow()[0].here && placed.visited[0].visits.join() === chat[1].dooms_world_id, JSON.stringify(lw.getPlacesRow()));
-    const winNow = V.mapWindowHtml({ state: placed, pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow(), present: ['Old Marit', 'Wanderer'], panel: 'people' });
+    const winNow = tab({ state: placed, pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow(), present: ['Old Marit', 'Wanderer'], panel: 'people' });
     check('the window shows the newcomer at the Anchor', winNow.includes('data-name="Wanderer"') && winNow.includes('The Anchor, a tavern, The old town'));
     lastGeneratedData.infoBox = '{"date":"Tuesday","time":"night","location":"the archive"}';
     lastGeneratedData.characterThoughts = JSON.stringify({ characters: [{ name: 'Scribe', thoughts: 'z' }] });
@@ -528,8 +542,8 @@ console.log('\n§10 the window and the shelf');
     lw.onWorldMessageReceived();
     const archive = lw.getWorldState();
     check('a scene the pack does not name makes the newcomer known but leaves them unplaced', archive.known.Scribe === 'known' && archive.where.Scribe === undefined);
-    const winScribe = V.mapWindowHtml({ state: archive, pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), facts: { location: 'the archive' }, row: lw.getPlacesRow(), present: ['Scribe'], panel: 'people' });
-    check('…and the window says "in the scene", not "nowhere yet", with the scene named on hover; the archive is a place of its own in the row', winScribe.includes('📍 in the scene') && winScribe.includes('In the scene: the archive (not a place the pack names)') && !winScribe.includes('nowhere yet') && lw.getPlacesRow()[0].id === 'loc:the-archive' && winScribe.includes('data-place="loc:the-archive"'), winScribe.slice(winScribe.indexOf('data-name="Scribe"') - 50, winScribe.indexOf('data-name="Scribe"') + 400));
+    const winScribe = tab({ state: archive, pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), facts: { location: 'the archive' }, row: lw.getPlacesRow(), present: ['Scribe'], panel: 'people' });
+    check('…and the window says "in the scene", not "nowhere yet", with the scene named on hover; the archive is a place of its own in the row', winScribe.includes('📍 in the scene') && winScribe.includes('In the scene: the archive (not a place the pack names)') && !winScribe.includes('nowhere yet') && lw.getPlacesRow()[0].id === 'loc:the-archive', winScribe.slice(winScribe.indexOf('data-name="Scribe"') - 50, winScribe.indexOf('data-name="Scribe"') + 400));
     chat.pop(); chat.pop();
     lw.onWorldMessageDeleted();
     check('deleting the reply takes the scene\'s placement back with it, and its visit', !(lw.getWorldState().log || []).some(e => e.who === 'Scribe') && lw.getWorldState().where.Wanderer === 'harbourside/old-town/the-anchor' && lw.getPlacesRow()[0].id === 'the-anchor' && !lw.getPlacesRow().some(p => p.id === 'loc:the-archive'));
@@ -537,7 +551,7 @@ console.log('\n§10 the window and the shelf');
     lastGeneratedData.characterThoughts = null;
     extensionSettings.liveWorld.enabled = false;
     await lw.onWorldChatChanged();
-    check('off: the window says so', V.mapWindowHtml({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow() }).includes('Live World is off'));
+    check('off: the window says so', tab({ state: lw.getWorldState(), pack: lw.getActivePack(), cfg: M.liveWorldConfig(extensionSettings), row: lw.getPlacesRow() }).includes('Live World is off'));
     extensionSettings.liveWorld.enabled = true;
     await lw.onWorldChatChanged();
     pb.setShelfPage('characters');

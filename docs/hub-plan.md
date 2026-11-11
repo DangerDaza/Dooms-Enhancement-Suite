@@ -1,5 +1,7 @@
 # The Hub (Live World, fourth pass: many small chats)
 
+> **2026-11-11:** the Hub window described here was retired (docs/long-shot-plan.md §34, D195). The scene engine it drove is unchanged; its window is the Atlas now: the Scenes tab, the start sheet, the End sheet, the world picker. This document is kept as the record of how the engine was designed.
+
 The owner (2026-11-02): "I am thinking of a feature that the map can become.
 We are throwing the long chat style out and going to many small chats. I
 want a hub panel that takes up most of the screen. It has a map and every

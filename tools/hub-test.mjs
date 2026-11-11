@@ -39,12 +39,12 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the hub closes on Start, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, closeOnStart: true, styleLaw: false, nudgeAt: 60 }));
+    check('defaults: later that day, 600 characters, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, styleLaw: false, nudgeAt: 60 }));
     check('a fresh chat is suggested after sixty messages unless the player says otherwise: any number from 0 (never) to 500', hubConfig({}).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: 0 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: '80' } }).nudgeAt === 80 && hubConfig({ hub: { nudgeAt: 9999 } }).nudgeAt === 500 && hubConfig({ hub: { nudgeAt: -5 } }).nudgeAt === 0 && hubConfig({ hub: { nudgeAt: 'soon' } }).nudgeAt === 60 && hubConfig({ hub: { nudgeAt: '' } }).nudgeAt === 60);
     check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
     check('no settings: the defaults', same(hubConfig(null), defaultHubConfig()) && same(hubConfig({ hub: 'x' }), defaultHubConfig()));
     const c = hubConfig({ hub: { gap: 'when', recapChars: 9999, closeOnStart: false } });
-    check('clamps: when is not a default gap, the recap within range, the switch read', c.gap === 'later' && c.recapChars === 1500 && c.closeOnStart === false);
+    check('clamps: when is not a default gap, the recap within range; a rule of the old window\'s (closing on Start) is not kept', c.gap === 'later' && c.recapChars === 1500 && !('closeOnStart' in c));
     check('six gaps, Right after first, When… last', GAPS.length === 6 && GAPS[0].id === 'now' && GAPS[5].id === 'when');
     check('a gap by id carries its words; When… takes the player\'s; empty When… is Right after', gapOf('days').words === 'some days later' && gapOf('when', '  three  winters later. ').words === 'three winters later' && gapOf('when', '').id === 'now' && gapOf('nonsense').id === 'now');
     check('the world moves for anything but Right after', !gapMoves(gapOf('now')) && gapMoves(gapOf('later')) && gapMoves(gapOf('when', 'a year on')));

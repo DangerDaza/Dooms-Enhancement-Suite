@@ -1121,7 +1121,7 @@ export function atlasBeyondHtml(n) {
  * @param {string[]} o.news       the changes that name the place
  * @param {Function} o.portraits  name -> a portrait URL or ''
  */
-export function atlasCardHtml({ marker = null, mode = 'view', others = [], distance = '', canTravel = false, travelling = false, rumours = [], news = [], portraits = () => '', canStart = false, sceneNo = 0 } = {}) {
+export function atlasCardHtml({ marker = null, mode = 'view', others = [], distance = '', canTravel = false, travelling = false, rumours = [], news = [], portraits = () => '', canStart = false, sceneNo = 0, draw = null } = {}) {
     const m = marker;
     if (!m) return '';
     const k = kindOf(m.kind);
@@ -1192,6 +1192,10 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
     // A world played as scenes (D174): a scene is started here, in a chat of its own. Between scenes it is the way to go anywhere.
     const start = canStart ? `<div class="dooms-atlas-card-scene"><button type="button" class="dooms-atlas-btn${canTravel && !m.player ? '' : ' is-primary'}" data-act="scene-start" data-id="${id}" title="A fresh chat that opens here, knowing what happened before"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Start ${sceneNo ? `scene ${sceneNo}` : 'a scene'} here</span></button></div>` : '';
     const tool = (act, icon, label, title) => `<button type="button" class="dooms-atlas-card-tool" data-act="${act}" data-id="${id}" title="${attr(title)}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
+    // The place's picture drawn, or drawn again (D195): for a place the story has been to in this chat, through Settings → Image Generation.
+    // `draw` is null where there is nothing to draw from; else { id (the place visited: this one, or a room of it), drawn, busy (a picture is being made), mine (this one), problem }.
+    const d = draw && typeof draw === 'object' ? draw : null;
+    const drawTool = d ? `<button type="button" class="dooms-atlas-card-tool" data-act="draw" data-id="${id}" data-place="${attr(d.id || m.id)}"${d.busy || d.problem ? ' disabled' : ''} title="${attr(d.problem ? `Cannot draw: ${d.problem}` : d.drawn ? 'Draw it again: the AI describes the place afresh from the scenes there and the picture is replaced' : 'The AI describes the place from the scenes there and its picture is drawn (Settings → Image Generation)')}"><i class="fa-solid ${d.mine ? 'fa-spinner fa-spin' : 'fa-image'}" aria-hidden="true"></i><span>${d.mine ? 'Drawing…' : d.drawn ? 'Redraw' : 'Draw'}</span></button>` : '';
     return `<article class="dooms-atlas-card kind-${attr(m.kind)}" data-id="${id}">
         ${picture ? `<div class="dooms-atlas-card-picture" style="background-image: url('${attr(picture)}')"></div>` : ''}
         ${head}
@@ -1209,6 +1213,7 @@ export function atlasCardHtml({ marker = null, mode = 'view', others = [], dista
         <button type="button" class="dooms-atlas-btn dooms-atlas-enter" data-act="enter" data-id="${id}" title="Open the map inside ${attr(m.label)}: its own places, at its own scale. Double-clicking the marker does the same."><i class="fa-solid fa-door-open" aria-hidden="true"></i> <span>${m.holds ? `Enter (${m.holds} ${m.holds === 1 ? 'place' : 'places'} inside)` : 'Enter: give it a map of its own'}</span></button>
         <div class="dooms-atlas-card-tools">
             ${tool('card-edit', 'fa-pen', 'Edit', 'Change the name, the kind or the note')}
+            ${drawTool}
             ${tool('card-merge', 'fa-code-merge', 'Merge', 'Merge this into another place')}
             ${tool('card-move', 'fa-right-to-bracket', 'Move', 'Move it onto another place\'s map: a house into its city')}
             ${tool('unplace', 'fa-arrow-right-from-bracket', 'Take off', 'Take it off the map: it waits in the tray again')}

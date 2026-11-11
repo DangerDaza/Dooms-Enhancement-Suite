@@ -7,7 +7,7 @@
  * requests (the gap run, the openers, the recap), Start (the file written
  * whole, then opened), End (the recap, Canon over the scene, the advancer,
  * the snapshot), the scene records' moves, /hub and /endscene. The pure
- * parts are src/utils/hub.js; the window is src/systems/ui/hub.js.
+ * parts are src/utils/hub.js; the window is the Atlas (src/systems/ui/atlas.js).
  */
 import { getContext } from '../../../../../../extensions.js';
 import { chat, chat_metadata, getRequestHeaders, saveChatConditional, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, user_avatar } from '../../../../../../../script.js';
@@ -1970,11 +1970,11 @@ export function initHub() {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'hub',
             callback: async () => {
-                try { const m = await import('../ui/hub.js'); await m.openHub(); return ''; } catch (e) { log('the hub window failed to load', String(e && e.message || e)); }
+                try { const m = await import('../ui/atlas.js'); await m.openAtlas({ tab: 'scenes' }); return ''; } catch (e) { log('the Atlas failed to load', String(e && e.message || e)); }
                 const lines = await hubStatusLines();
                 return lines.length ? lines.map(l => l.line).join('\n') : 'No world of your own yet: build one in the World Builder, then pick its narrator card in Settings → Live World → The Hub.';
             },
-            helpString: 'The Hub: opens the world\'s window (Settings → Live World → The Hub).',
+            helpString: 'Scenes: opens the Atlas on the world\'s scenes (Settings → Live World → The Hub).',
         }));
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'endscene',

@@ -125,7 +125,7 @@ function editorHtml({ draft, selectedId, dirty, tab, note, adoptOnSave, where, w
         <button type="button" class="rpg-accordion-action-btn" data-act="copy"${errors.length ? ' disabled' : ''} title="Keep it under a new name as well"><i class="fa-solid fa-copy" aria-hidden="true"></i> Save as copy</button>
         <button type="button" class="rpg-accordion-action-btn" data-act="export"${errors.length ? ' disabled' : ''} title="Download the world as a JSON file"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Export</button>
         ${!isNew && !isTemplate ? `<button type="button" class="rpg-accordion-action-btn" data-act="use"${usedForNew ? ' disabled' : ''} title="New chats start in this world">${usedForNew ? 'Used for new chats' : 'Use for new chats'}</button>` : ''}
-        ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn" data-act="play" title="This world in the Hub: its map, its news, its scenes (docs/hub-plan.md)"><i class="fa-solid fa-compass" aria-hidden="true"></i> Play from the hub</button>' : ''}
+        ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn" data-act="play" title="This world in the Atlas: its map, its news, its scenes; a scene of it is started from there"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> Play in the Atlas</button>' : ''}
         ${!isNew && !isTemplate ? '<button type="button" class="rpg-accordion-action-btn is-danger" data-act="delete" title="Remove the world; a chat in it goes on in the blank world until it is imported back"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>' : ''}
     </div>`;
     return `${head}<nav class="dooms-wb-tabs" role="tablist" aria-label="The world's parts">${tabs}</nav><div class="dooms-wb-pane" data-tab="${active}">${pane}</div><div class="dooms-wb-status">${statusHtml(errors, warnings, note)}</div>${foot}`;
@@ -201,7 +201,7 @@ function placesPane(d) {
         <span class="dooms-wb-id" title="The id the advancer uses">${e(place.id)}</span>
         <button type="button" class="dooms-wb-remove" data-act="remove" data-kind="places" data-i="${i}" title="Remove this place" aria-label="Remove ${attr(place.label)}">&times;</button>
     </div>`).join('');
-    return `<p class="dooms-wb-hint">The places the story moves through, as a tree: a region, its districts, the rooms the story uses. "Inside" nests a place; the Map window shows a place's parent under its name. A place the story names that is not here is kept by the Map all the same.</p>
+    return `<p class="dooms-wb-hint">The places the story moves through, as a tree: a region, its districts, the rooms the story uses. "Inside" nests a place; the Atlas shows what is inside a place on that place's own map. A place the story names that is not here is kept by the Atlas all the same.</p>
     <div class="dooms-wb-rows">${rows || '<p class="dooms-world-muted">No places yet.</p>'}</div>
     <button type="button" class="rpg-accordion-action-btn" data-act="add-place"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add a place</button>`;
 }

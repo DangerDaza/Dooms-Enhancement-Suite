@@ -231,13 +231,13 @@ export function questFromHook(hook) {
     return clean(hook && (hook.text || hook.title), MAX_QUEST);
 }
 
-/** One line for the Map window's foot after a round was asked for. */
+/** One line for the Atlas's foot after a round was asked for. */
 export function describeHooksResult(r) {
     if (!r) return 'Nothing happened.';
     if (r.ok) return `${r.hooks.length} hook${r.hooks.length === 1 ? '' : 's'} on offer.`;
     if (r.reason === 'off') return 'Live World is off, or this chat has no world.';
     if (r.reason === 'running') return 'Hooks are already being asked for.';
-    if (r.reason === 'scene-open') return 'A scene is open: its hooks are the Map window\'s until you end it or set it aside.';
+    if (r.reason === 'scene-open') return 'A scene is open: its hooks are in its own chat until you end it or set it aside.';
     if (r.reason === 'busy') return 'Another request is running; try again in a moment.';
     if (r.reason === 'waiting') return 'A reply is still being written. Try again when it is done.';
     if (r.reason === 'stale') return 'The chat changed while the hooks were asked for.';

@@ -83,7 +83,7 @@ window.__ui = { hidden: [], query: '', moving: false, armed: '', cardMode: 'view
 window.__book = null;
 let pack = null, state = null;
 const model = () => A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: window.__ui.layer, weather: pack.id === 'realm' ? { greywood: { emoji: '🌧️', text: 'Steady rain' } } : {} });
-const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: mod.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: !window.__ui.between, canStart: !!window.__ui.canStart, sceneNo: 4, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
+const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker: mod.markers.find(x => x.id === m.id) || m, mode: window.__ui.cardMode, others: mod.all.filter(x => x.id !== m.id).map(x => ({ id: x.id, label: x.label, layerLabel: x.layerLabel, inside: x.inside })), distance: A.describeDistance(mod, mod.party, m.id), canTravel: !window.__ui.between, canStart: !!window.__ui.canStart, sceneNo: 4, draw: window.__ui.draw || null, rumours: m.id === 'saltport' ? ['The harbour chain has been raised at Saltport.'] : [], news: [] }); };
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
@@ -1487,6 +1487,31 @@ console.log('\n§5k the scenes of a world in the Atlas: the list, the ways in, t
     sv = await sheet({ ...base, place: { id: 'pin:hask', label: 'Hask' }, cast: [], seedText: '' });
     check('from a place\'s own card the sheet is as it was: the place given, no Where to choose', sv.where === null && sv.title === 'Scene 6 at Hask' && sv.from === '');
     await page.evaluate(() => { const p = document.querySelector('.dooms-atlas-setup'); p.hidden = true; p.innerHTML = ''; });
+
+    // A place's picture is drawn from its card (D195, the old Map window's Draw).
+    await page.evaluate(() => window.__open({ world: 'campaign', book: window.A.normalizeBook({ gone: window.A.atlasModel({ pack: window.__pack || null, state: null, book: null }).all.map(x => x.id) }) }));
+    await page.evaluate(() => window.__edit((b, m) => window.A.addPin(window.A.normalizeBook({ gone: [...m.tray, ...m.markers].map(x => x.id) }), { label: 'Hask', kind: 'settlement', x: 0, y: 0 }).book));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    const tools = async (draw) => {
+        await page.evaluate((d) => { window.__board.closeCard(); window.__set({ draw: d }); }, draw);
+        await page.locator('#dooms-atlas .dooms-atlas-marker', { hasText: 'Hask' }).first().locator('.dooms-atlas-pin').click();
+        await settle();
+        return page.evaluate(() => { const card = document.querySelector('.dooms-atlas-card'); const row = card.querySelector('.dooms-atlas-card-tools'); const d = row.querySelector('[data-act="draw"]'); const acts = [...row.querySelectorAll('[data-act]')].map(x => x.getAttribute('data-act')); return { acts, draw: d ? { text: d.textContent.trim(), off: d.disabled, title: d.getAttribute('title'), place: d.getAttribute('data-place'), spin: !!d.querySelector('.fa-spinner') } : null, fits: row.scrollWidth <= row.clientWidth + 1 && card.scrollWidth <= card.clientWidth + 1, oneRow: new Set([...row.children].map(x => Math.round(x.getBoundingClientRect().top))).size === 1 }; });
+    };
+    let tl = await tools(null);
+    const plainTools = tl.acts.length;
+    check('a place the story has not been to in this chat has no Draw on its card', !tl.draw && !tl.acts.includes('draw') && tl.fits);
+    tl = await tools({ id: 'pin:hask', drawn: false, busy: false, mine: false, problem: '' });
+    check('a place the story has been to has Draw among its card\'s tools, for that place, and the tools still fit on one row', !!tl.draw && tl.draw.text === 'Draw' && !tl.draw.off && tl.draw.place === 'pin:hask' && /Settings → Image Generation/.test(tl.draw.title) && tl.acts.length === plainTools + 1 && tl.acts[1] === 'draw' && tl.fits && tl.oneRow, JSON.stringify(tl));
+    await shot('73-card-draw');
+    tl = await tools({ id: 'pin:hask', drawn: true, busy: false, mine: false, problem: '' });
+    check('one that has a picture offers Redraw', tl.draw.text === 'Redraw' && !tl.draw.off && /Draw it again/.test(tl.draw.title));
+    tl = await tools({ id: 'pin:hask', drawn: false, busy: true, mine: true, problem: '' });
+    check('while its picture is being made the tool says so and waits', tl.draw.text === 'Drawing…' && tl.draw.off && tl.draw.spin && tl.fits);
+    tl = await tools({ id: 'pin:hask', drawn: false, busy: false, mine: false, problem: 'no ComfyUI workflow is chosen on Settings → Image Generation' });
+    check('with no way to draw the tool is off and says why', tl.draw.off && /^Cannot draw: no ComfyUI workflow is chosen/.test(tl.draw.title));
+    await page.evaluate(() => { window.__board.closeCard(); window.__set({ draw: null }); });
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

@@ -1,5 +1,7 @@
 # The Map window (Live World's face, second pass)
 
+> **2026-11-11:** the Map window described here was retired (docs/long-shot-plan.md §34, D195). Its panels are the Atlas's tabs, Travel here and Draw are on a place's card there, and /liveworld opens the Atlas. This document is kept as the record of how those parts were designed.
+
 The owner's sketch (2026-10-28): a window with the world's name across the
 top; a row of circles, each the picture of a place, the most recent place
 on the left and older ones to the right, scrollable; a News panel across
