@@ -564,6 +564,7 @@ function renderHubSettings() {
     $('#rpg-hub-make, #rpg-hub-open, #rpg-hub-start').prop('disabled', !worldId);
     $('#rpg-hub-start').prop('disabled', !worldId || !bound);
     $('#rpg-hub-close').prop('checked', hubConfig(extensionSettings).closeOnStart);
+    $('#rpg-hub-style-law').prop('checked', hubConfig(extensionSettings).styleLaw);
     renderHubStatus();
 }
 
@@ -2263,6 +2264,8 @@ function bindSettingsUI() {
         import('./src/systems/ui/hub.js').then(m => m.openHub({ worldId, start: true })).catch(err => console.error('[Dooms Tracker] The Hub failed to load:', err));
     });
     $(document).on('change', '#rpg-hub-close', function () { _hubRules().closeOnStart = $(this).prop('checked'); saveSettings(); });
+    // The count of repeated phrases at a scene's end (docs/long-shot-plan.md D179): off until switched on (D180).
+    $(document).on('change', '#rpg-hub-style-law', function () { _hubRules().styleLaw = $(this).prop('checked'); saveSettings(); });
     window.addEventListener('dooms:hub-changed', () => { try { renderHubStatus(); } catch (e) { /* not mounted */ } });
     $(document).on('click', '#rpg-world-builder', function () {
         import('./src/systems/ui/worldBuilder.js').then(m => m.openWorldBuilder()).catch(err => console.error('[Dooms Tracker] World Builder failed to load:', err));

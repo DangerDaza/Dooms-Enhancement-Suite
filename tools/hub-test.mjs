@@ -39,7 +39,8 @@ const clock = pack.clocks[0];
 
 console.log('\n§1 the rules');
 {
-    check('defaults: later that day, 600 characters, the hub closes on Start', same(defaultHubConfig(), { gap: 'later', recapChars: 600, closeOnStart: true }));
+    check('defaults: later that day, 600 characters, the hub closes on Start, the count of repeated phrases off', same(defaultHubConfig(), { gap: 'later', recapChars: 600, closeOnStart: true, styleLaw: false }));
+    check('the count of repeated phrases is on only when switched on, by exactly that', hubConfig({}).styleLaw === false && hubConfig({ hub: { styleLaw: true } }).styleLaw === true && hubConfig({ hub: { styleLaw: 'yes' } }).styleLaw === false && hubConfig({ hub: { styleLaw: 1 } }).styleLaw === false);
     check('no settings: the defaults', same(hubConfig(null), defaultHubConfig()) && same(hubConfig({ hub: 'x' }), defaultHubConfig()));
     const c = hubConfig({ hub: { gap: 'when', recapChars: 9999, closeOnStart: false } });
     check('clamps: when is not a default gap, the recap within range, the switch read', c.gap === 'later' && c.recapChars === 1500 && c.closeOnStart === false);

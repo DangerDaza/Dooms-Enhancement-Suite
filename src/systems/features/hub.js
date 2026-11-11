@@ -578,7 +578,7 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
     const notesOf = await sceneLore(g.id, names, players);
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
-    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: g.entry.style });
+    const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null });
     let openers = [];
     let when = null;
     let errors = [];
@@ -755,7 +755,7 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     if (moved) memoryNow = { ...memoryNow, stores: { ...memoryNow.stores, dooms_world: moved.stores.dooms_world }, facts: moved.facts };
     const hooked = p.seed && p.seed.kind === 'hook' && p.seed.id ? { id: p.seed.id, title: p.seed.label || '', text: p.seed.text || '' } : null;
     const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
-    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: g.entry.style });
+    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null });
     const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
@@ -820,6 +820,11 @@ function guardEnd() {
     return { ok: true, cur, entry, record };
 }
 
+/** The style law is switched on (D180): off, nothing is counted, nothing is held against a scene and the narrator is told nothing of it. */
+export function isStyleLawOn() {
+    return cfg().styleLaw === true;
+}
+
 /** The names no phrase of a scene is made of: its people's, the player's, and everyone the world knows. */
 function sceneNames() {
     const names = [...playerNames()];
@@ -867,7 +872,7 @@ export async function prepareEnd() {
     const facts = factsNow();
     const stale = isStaleScene(g.cur.scene, g.entry.memory);
     const canonDone = !!(g.cur.mark.end && g.cur.mark.end.canonAt && g.cur.mark.end.canonAt === lastReplyId());
-    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: sceneStyle() };
+    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null };
 }
 
 /**
@@ -938,7 +943,7 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         // chosen on the End sheet; with no sheet (/endscene), the ones the count chose by itself. It is the narrator's
         // habit, not the world's memory, so it is kept whatever becomes of the memory.
         let style = entry.style;
-        try {
+        if (isStyleLawOn()) try {
             const texts = narratorTexts(chatArray() || []);
             const chosen = Array.isArray(bans) ? bans : countStyle(texts, { names: sceneNames() }).phrases.filter(x => x.ticked);
             style = applyStyle(entry.style, { texts, chosen, scene: sceneId });

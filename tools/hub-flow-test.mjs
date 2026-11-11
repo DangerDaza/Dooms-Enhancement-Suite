@@ -715,6 +715,15 @@ console.log('\n§14 the style law: what the narrator leaned on is held against t
     let openersAsked = null;
     hub.__setRecapTransport(async () => '{"recap":"A scene of habits."}');
     const start = async () => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast: ['Kiyoha', 'Lysandra'], gap: { id: 'now' } }); return p.ok ? hub.commitScene(p.token, { choice: 0 }) : p; };
+    // Off, as it is until switched on (D180): nothing is counted, nothing is held, the narrator is told nothing.
+    check('the count of repeated phrases is off until it is switched on', hub.isStyleLawOn() === false);
+    const s0 = await start();
+    for (let i = 0; i < 4; i++) { chat.push(user(`Well, ${i}?`)); chat.push(ai(`"Step ${['up', 'down', 'back', 'in'][i]}, sweetheart," she says, with a slight knowing smile.`)); }
+    const pe0 = await hub.prepareEnd();
+    const ce0 = await hub.commitEnd({ recap: pe0.recap, skipCanon: true, skipWorld: true, bans: [{ phrase: 'sweetheart', kind: 'address', count: 4 }] });
+    check('off: End counts nothing and shows no list, and holds nothing against the next scene even when handed phrases', s0.ok && pe0.ok && pe0.style === null && ce0.ok && ce0.style === undefined && hub.worldEntry(W).style.bans.length === 0, JSON.stringify([pe0.style, ce0.style, hub.worldEntry(W).style]));
+    extensionSettings.hub.styleLaw = true;
+    check('switched on in the settings, it is on', hub.isStyleLawOn() === true);
     const s1 = await start();
     check('a world with no law yet starts a scene with none in its brief or its openings', s1.ok && !meta.dooms_hub.brief.includes('Style law') && !/Style law/.test(openersAsked.system), JSON.stringify([s1.ok, s1.reason]));
     const who = ['Kiyoha', 'Lysandra'];
@@ -734,6 +743,13 @@ console.log('\n§14 the style law: what the narrator leaned on is held against t
     const law2 = hub.worldEntry(W).style;
     check('ended with no sheet, End chooses by itself: the stock gesture joins the law, whole and once; the pet name, not used this scene, has been idle one', ce2.ok && law2.bans.length === 2 && /slight knowing smile/.test(law2.bans[0].phrase) && law2.bans[0].idle === 0 && same([law2.bans[1].phrase, law2.bans[1].idle], ['sweetheart', 1]), JSON.stringify(law2));
     check('the law is the narrator\'s habit, not the world\'s memory: it is kept on the world\'s entry and no chat carries it', !('style' in hub.worldEntry(W).memory.stores) && !meta.dooms_style);
+    // Switched off again: the list it made is kept where it is, and no scene is told of it.
+    extensionSettings.hub.styleLaw = false;
+    const s3 = await start();
+    check('switched off again: the next scene is told nothing of the list, in its brief or its openings; the list itself is left as it was', s3.ok && !meta.dooms_hub.brief.includes('Style law') && !/Style law/.test(openersAsked.system) && same(hub.worldEntry(W).style, law2), JSON.stringify([s3.ok, s3.reason]));
+    const pe3 = await hub.prepareEnd();
+    await hub.commitEnd({ recap: pe3.recap, skipCanon: true, skipWorld: true });
+    check('and ending a scene while it is off neither counts nor ages the list', pe3.style === null && same(hub.worldEntry(W).style, law2));
     hub.__setRecapTransport(null);
     hub.__setOpenersTransport(null);
 }

@@ -65,6 +65,7 @@ const CONFIG_DEFAULTS = Object.freeze({
     gap: 'later',          // the Start sheet's first choice
     recapChars: RECAP_CHARS,
     closeOnStart: true,    // the hub closes when a scene opens
+    styleLaw: false,       // the count of repeated phrases at a scene's end and the list held against the next (D179): off until switched on (the owner, D180)
 });
 
 export function defaultHubConfig() {
@@ -79,6 +80,7 @@ export function hubConfig(settings) {
         gap: GAPS.some(g => g.id === h.gap && g.id !== 'when') ? h.gap : CONFIG_DEFAULTS.gap,
         recapChars: int(h.recapChars, 200, 1500, CONFIG_DEFAULTS.recapChars),
         closeOnStart: h.closeOnStart !== false,
+        styleLaw: h.styleLaw === true,
     };
 }
 

@@ -592,3 +592,20 @@ phrase count; the rest follows. Built in "Atlas 22".
 What it cannot do: a count finds words, not sameness of manner; two
 people who sound alike without sharing a phrase are not caught. A long
 chat has no End and so no count yet.
+
+## 25. The style law is behind a switch, off (2026-11-10, D180)
+
+The owner had not known what "the phrase count" was: it was a step of his
+chat-to-canon compile, done by Claude in a local chat, never a part of
+DES, and D179 put it into DES under a name that was not explained to him.
+Told what it is: "I have wanted to turn this into a full fledged feature
+for a long time, but this is not the form I want it to take. Keep it
+behind a switch for now." Built in "Atlas 23".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D180 | The count of repeated phrases is off until switched on (the owner) | `extensionSettings.hub.styleLaw`, off by default (`hubConfig`), with a row in Settings, Live World, The Hub: "Count repeated phrases when a scene ends". Off: End counts nothing and its sheet shows no list, nothing is held against a scene (not even phrases handed to `commitEnd`), and no scene's brief or openings are told of a list. A list made while it was on is left where it is, neither aged nor told; switched on again it is in force again. On: as D179. |
+
+The form the owner wants for it is not this one and is not yet said. D179
+stands as a working first form behind the switch; nothing more is built
+on it until he says what it should be.
