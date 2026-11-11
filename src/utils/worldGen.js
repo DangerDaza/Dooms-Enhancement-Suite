@@ -1,9 +1,11 @@
 /**
- * World gen (docs/long-shot-plan.md D182–D186): a whole world made from a
- * seed, before anything is placed on it.
+ * World gen (docs/long-shot-plan.md D182–D186, D192): a whole world made
+ * from a seed, before anything is placed on it.
  *
  *   generateWorld(spec)        the geography: land and sea in one of four
- *                              shapes, mountain ranges, lakes and forests.
+ *                              shapes, mountain ranges, lakes, rivers,
+ *                              forests, and the ground of three climates
+ *                              (desert, snow, marsh).
  *                              The same seed and choices give the same
  *                              world every time, so only those are kept in
  *                              the map's book, never the shapes.
@@ -11,13 +13,15 @@
  *                              over the land.
  *   divideWorld(world, sites)  the land divided between the regions that
  *                              stand on it: each spreads from its own spot,
- *                              slower over the mountains, so borders tend
- *                              to run along the ranges. Move a region, add
+ *                              slower over the mountains and across a river,
+ *                              so borders tend to run along the ranges and
+ *                              the rivers. Move a region, add
  *                              one or take one away and the borders follow;
  *                              the geography never changes.
  *   travelField / roadCost     how long the way is over that ground:
- *                              slower through forest and much slower over
- *                              mountains; water is crossed by boat, which
+ *                              slower through forest, desert, snow and
+ *                              marsh, much slower over mountains; a river
+ *                              is waded; water is crossed by boat, which
  *                              costs a wait before it saves any time.
  *
  * Made on a grid of half-unit squares, then traced into outlines along
@@ -41,12 +45,13 @@ export const WORLD_SIZES = Object.freeze({
 export const WORLD_LIMITS = Object.freeze({ minW: 24, minH: 16, maxW: 160, maxH: 110 });
 export const WORLD_REGIONS = Object.freeze({ min: 0, max: 24, default: 9 });
 export const WORLD_CELL = 0.5;        // a grid square's side, in layout units
-export const WORLD_KINDS = Object.freeze({ sea: 0, plain: 1, forest: 2, mountain: 3, lake: 4 });
-const KIND_NAMES = ['sea', 'plain', 'forest', 'mountain', 'lake'];
-const { sea: SEA, plain: PLAIN, forest: FOREST, mountain: MOUNTAIN, lake: LAKE } = WORLD_KINDS;
+export const WORLD_KINDS = Object.freeze({ sea: 0, plain: 1, forest: 2, mountain: 3, lake: 4, desert: 5, snow: 6, swamp: 7 });
+const KIND_NAMES = ['sea', 'plain', 'forest', 'mountain', 'lake', 'desert', 'snow', 'swamp'];
+const { sea: SEA, plain: PLAIN, forest: FOREST, mountain: MOUNTAIN, lake: LAKE, desert: DESERT, snow: SNOW, swamp: SWAMP } = WORLD_KINDS;
 /** How many times as long a stretch takes as the same stretch over open ground. Water is crossed by boat. */
-export const TERRAIN_PACE = Object.freeze({ plain: 1, forest: 1.25, mountain: 2.5, water: 0.5 });
-export const ROAD_PACE = Object.freeze({ plain: 1, forest: 1, mountain: 1.5, water: 0.5 });    // a road through a wood is a road; over the mountains it is a pass
+export const TERRAIN_PACE = Object.freeze({ plain: 1, forest: 1.25, mountain: 2.5, desert: 1.3, snow: 1.6, swamp: 1.8, water: 0.5 });
+export const ROAD_PACE = Object.freeze({ plain: 1, forest: 1, mountain: 1.5, desert: 1, snow: 1.25, swamp: 1.25, water: 0.5 });    // a road through a wood is a road; over the mountains it is a pass; snow and marsh slow even a road
+export const FORD = 0.12;    // wading a river where no road bridges it, as a part of the wait to take ship
 const ADRIFT = 12;    // land no region can walk to goes with a region this near across the water, else it is nobody's
 
 const round4 = (n) => Math.round(n * 10000) / 10000;
@@ -339,8 +344,11 @@ const made = new Map();    // what was asked for (as text) -> the world made of 
  * @returns {null | {
  *   spec: object, key: string, cell: number, bounds: { minX: number, minY: number, maxX: number, maxY: number },
  *   coasts: number[][][][], masses: Array<{ id: number, area: number }>, landArea: number,
- *   peaks: Array<{ x: number, y: number, s: number, lines: number[][][] }>, ranges: number[][][],
+ *   peaks: Array<{ x: number, y: number, s: number, snowy: boolean, lines: number[][][] }>, ranges: number[][][],
  *   lakes: number[][][][], forests: number[][][][], trees: Array<{ x: number, y: number, lines: number[][][] }>,
+ *   deserts: number[][][][], snows: number[][][][], swamps: number[][][][],
+ *   dunes: Array<{ x: number, y: number, lines: number[][][] }>, reeds: Array<{ x: number, y: number, lines: number[][][] }>,
+ *   rivers: Array<{ id: number, big: boolean, points: number[][] }>,
  *   kindAt: (x: number, y: number) => string, isLand: (x: number, y: number) => boolean,
  *   grid: object }}
  *   `coasts`, `lakes` and `forests` are shapes: each [outer, ...holes], rings of [x, y].
@@ -544,28 +552,110 @@ function build(spec, key) {
         }
     }
 
-    // 5. Forest: where the ground is damp, off the mountains and the water; a patch too small to be a forest is let go.
-    for (const s of landCells) {
-        if (kind[s] !== PLAIN) continue;
-        const i = s % cols, j = (s - i) / cols;
-        if (fbm(i / 13 + 7, j / 13 + 3, salt + 101) > 0.55) kind[s] = FOREST;
-    }
+    // 5. Rivers (D192): from the foot of the ranges and the high ground down to a lake or the sea. Every square of land
+    //    knows the next square on its way down to water (found from the water outward, the low ground cheapest, so a
+    //    river keeps to the valleys and round the ranges); a river follows that way from its source and stops where it
+    //    meets another, which is the greater for it. `river` is the squares a river lies on, with the square at each
+    //    corner it cuts, so nothing gets from one bank to the other without stepping on it.
+    const river = new Uint8Array(N);
+    const course = new Uint8Array(N);    // the squares a river's own line runs through, by which river
+    const rivers = [];
     {
+        const height = new Float32Array(N);
+        for (const s of landCells) { const i = s % cols, j = (s - i) / cols; height[s] = Math.min(shore[s], 16) * 0.35 + (kind[s] === MOUNTAIN ? 7 : 0) + fbm(i / 8 + 3, j / 8 + 9, salt + 150) * 4 + fbm(i / 2.6 + 11, j / 2.6 + 5, salt + 151) * 6; }    // the fine grain is what makes a river wind
+        const down = new Int32Array(N).fill(-1);
+        const far = new Float64Array(N).fill(Infinity);
+        const heap = heapOf();
+        for (let s = 0; s < N; s++) if (!land[s] || kind[s] === LAKE) { far[s] = 0; heap.push([0, s]); }
+        const settled = new Uint8Array(N);
+        while (heap.size) {
+            const [d, k] = heap.pop();
+            if (settled[k] || d > far[k]) continue;
+            settled[k] = 1;
+            const i = k % cols, j = (k - i) / cols;
+            for (const [di, dj] of STEPS8) {
+                const a = i + di, b = j + dj;
+                if (!inGrid(a, b)) continue;
+                const t = idx(a, b);
+                if (settled[t] || !land[t] || kind[t] === LAKE) continue;
+                const step = (di && dj ? 1.414 : 1) * (1 + height[t]);
+                if (d + step < far[t]) { far[t] = d + step; down[t] = k; heap.push([d + step, t]); }
+            }
+        }
+        for (let m = 0; m < massCells.length; m++) {
+            const area = massCells[m] * c * c;
+            const want = area < 60 ? 0 : clamp(Math.round(area / 110), 1, 12);
+            // Sources: high ground far from any water, the farthest first, well apart from one another.
+            const springs = landCells.filter(s => mass[s] === m && kind[s] !== LAKE && shore[s] >= 4 && far[s] !== Infinity).sort((p, q) => far[q] - far[p]);
+            const taken = [];
+            for (const s of springs) {
+                if (taken.length >= want) break;
+                const x = xOf(s), y = yOf(s);
+                if (taken.some(t => Math.hypot(t.x - x, t.y - y) < 6)) continue;
+                taken.push({ s, x, y });
+            }
+            for (const t of taken) {
+                const path = [t.s];
+                let joined = -1;
+                for (let k = down[t.s], guard = 0; k >= 0 && guard < N; k = down[k], guard++) {
+                    path.push(k);
+                    if (!land[k] || kind[k] === LAKE) break;                     // the water
+                    if (course[k]) { joined = course[k] - 1; break; }            // another river: this one is its tributary
+                }
+                if (path.length < 9) continue;                                   // too short to be a river
+                const id = rivers.length;
+                const dry = (k) => land[k] && kind[k] !== LAKE;
+                path.forEach((k, n) => {
+                    if (!dry(k)) return;
+                    if (!course[k]) course[k] = id + 1;
+                    river[k] = 1;
+                    const next = path[n + 1];
+                    if (next === undefined) return;
+                    const i = k % cols, j = (k - i) / cols, a = next % cols, b = (next - a) / cols;
+                    if (i !== a && j !== b) { const p = idx(a, j), q = idx(i, b); const corner = dry(p) && (!dry(q) || height[p] <= height[q]) ? p : dry(q) ? q : -1; if (corner >= 0) river[corner] = 1; }
+                });
+                if (joined >= 0 && rivers[joined]) rivers[joined].big = true;
+                rivers.push({ cells: path, big: false });
+            }
+        }
+    }
+    const beside = (s, test, reach = 1) => { const i = s % cols, j = (s - i) / cols; for (let dj = -reach; dj <= reach; dj++) for (let di = -reach; di <= reach; di++) { const a = i + di, b = j + dj; if (inGrid(a, b) && test(idx(a, b))) return true; } return false; };
+
+    // 6. Climates (D192): how warm the ground is by how far north it lies (in a world like ours, by how far from the
+    //    middle), and how damp. Snow where it is cold; desert where it is hot and dry, away from the rivers; marsh where
+    //    it is wet beside still or slow water; forest where it is damp. A patch too small to be told is let go.
+    const earthLike = spec.shape === 'earth';
+    const warmth = new Float32Array(N);
+    for (const s of landCells) {
+        const i = s % cols, j = (s - i) / cols;
+        const v = ((j + 0.5) / rows) * 2 - 1;
+        const base = earthLike ? 1 - Math.pow(Math.abs(v), 1.15) : (v + 1) / 2;
+        warmth[s] = base + (fbm(i / 16 + 21, j / 16 + 4, salt + 160) - 0.5) * 0.24;
+        if (kind[s] !== PLAIN) continue;
+        const wet = fbm(i / 13 + 7, j / 13 + 3, salt + 101);
+        const cold = earthLike ? 0.3 : 0.2, hot = earthLike ? 0.78 : 0.72;
+        if (warmth[s] < cold) kind[s] = SNOW;
+        else if (wet > 0.6 && warmth[s] > cold + 0.12 && (shore[s] <= 2 || beside(s, k => kind[k] === LAKE, 2) || beside(s, k => river[k] > 0, 1)) && fbm(i / 6 + 40, j / 6 + 2, salt + 170) > 0.5) kind[s] = SWAMP;
+        else if (wet > 0.55) kind[s] = FOREST;
+        else if (warmth[s] > hot && wet < 0.47 && shore[s] >= 2 && !beside(s, k => river[k] > 0, 1)) kind[s] = DESERT;
+    }
+    for (const [k0, least] of [[FOREST, 10], [DESERT, 12], [SNOW, 8], [SWAMP, 6]]) {
         const seen = new Uint8Array(N);
         for (const s of landCells) {
-            if (kind[s] !== FOREST || seen[s]) continue;
+            if (kind[s] !== k0 || seen[s]) continue;
             const patch = [s];
             seen[s] = 1;
             for (let n = 0; n < patch.length; n++) {
                 const k = patch[n];
                 const i = k % cols, j = (k - i) / cols;
-                for (const [di, dj] of STEPS4) { const a = i + di, b = j + dj; if (inGrid(a, b) && kind[idx(a, b)] === FOREST && !seen[idx(a, b)]) { seen[idx(a, b)] = 1; patch.push(idx(a, b)); } }
+                for (const [di, dj] of STEPS4) { const a = i + di, b = j + dj; if (inGrid(a, b) && kind[idx(a, b)] === k0 && !seen[idx(a, b)]) { seen[idx(a, b)] = 1; patch.push(idx(a, b)); } }
             }
-            if (patch.length < 10) for (const k of patch) kind[k] = PLAIN;
+            if (patch.length < least) for (const k of patch) kind[k] = PLAIN;
         }
     }
 
-    // 6. The outlines: the coast, the lakes' shores, the forests' edges; then the trees and the peaks that stand on them.
+    // 7. The outlines: the coast, the lakes' shores, the edges of the forests and of each climate's ground; the rivers'
+    //    lines; then the trees, the dunes, the reeds and the peaks that stand on them.
     const kindIs = (k) => (i, j) => inGrid(i, j) && kind[idx(i, j)] === k;
     const shapes = (rings, pos) => partsOf(rings.map(r => r.map(v => { const p = pos.get(v); return [round4(ox + p[0] * c), round4(oy + p[1] * c)]; })));
     const coastRings = traceRings(cols, rows, (i, j) => inGrid(i, j) && land[idx(i, j)] === 1);
@@ -575,6 +665,35 @@ function build(spec, key) {
     const lakes = shapes(lakeRings, easeCorners(lakeRings, cols, salt + 200, { nudge: 0.4 }));
     const forestRings = traceRings(cols, rows, kindIs(FOREST));
     const forests = shapes(forestRings, easeCorners(forestRings, cols, salt + 300, { nudge: 0.5, passes: 4 }));
+    const ground = (k, n) => { const rings = traceRings(cols, rows, kindIs(k)); return shapes(rings, easeCorners(rings, cols, salt + n, { nudge: 0.5, passes: 4 })); };
+    const deserts = ground(DESERT, 310), snows = ground(SNOW, 320), swamps = ground(SWAMP, 330);
+    // A river's line: through the middles of its squares, each nudged a little, the corners cut so it winds.
+    const riverLines = rivers.map((r, n) => {
+        let pts = r.cells.map((k, at) => { const i = k % cols, j = (k - i) / cols; const still = at === r.cells.length - 1; return [wx(i) + (still ? 0 : (lattice(i, j, salt + 350) - 0.5) * c * 0.7), wy(j) + (still ? 0 : (lattice(i, j, salt + 351) - 0.5) * c * 0.7)]; });
+        for (let pass = 0; pass < 2; pass++) {
+            const next = [pts[0]];
+            for (let i = 0; i < pts.length - 1; i++) { const [ax, ay] = pts[i], [bx, by] = pts[i + 1]; next.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25], [ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]); }
+            next.push(pts[pts.length - 1]);
+            pts = next;
+        }
+        return { id: n, big: r.big, points: pts.map(([x, y]) => [round4(x), round4(y)]) };
+    });
+    // The marks a climate's ground is told by: a dune to each stretch of desert, reeds to each stretch of marsh.
+    const marksOn = (k, step, n, draw) => {
+        const out = [];
+        for (let my = oy + step / 2; my < oy + spec.h; my += step) for (let mx = ox + step / 2; mx < ox + spec.w; mx += step) {
+            const a = Math.round(mx * 5), b = Math.round(my * 5);
+            if (lattice(a, b, salt + n) < 0.3) continue;
+            const x = mx + (lattice(a, b, salt + n + 1) - 0.5) * step * 0.6, y = my + (lattice(a, b, salt + n + 2) - 0.5) * step * 0.6;
+            const at = cellOf(x, y);
+            if (at < 0 || kind[at] !== k || river[at]) continue;
+            out.push({ x: round4(x), y: round4(y), lines: draw(x, y, 0.26 + lattice(a, b, salt + n + 3) * 0.1) });
+        }
+        return out;
+    };
+    const mark = (x, y, sz) => (dx, dy) => [round4(x + dx * sz), round4(y + dy * sz)];
+    const dunes = marksOn(DESERT, 1.5, 360, (x, y, sz) => { const p = mark(x, y, sz); return [[p(-1.2, 0.25), p(-0.6, -0.3), p(0, -0.42), p(0.6, -0.3), p(1.2, 0.25)]]; });
+    const reeds = marksOn(SWAMP, 1.1, 370, (x, y, sz) => { const p = mark(x, y, sz); return [[p(-0.9, 0.35), p(0.9, 0.35)], [p(-0.45, 0.35), p(-0.55, -0.55)], [p(0, 0.35), p(0, -0.8)], [p(0.45, 0.35), p(0.55, -0.55)]]; });
     const trees = [];
     {
         const step = 1.15;
@@ -590,7 +709,7 @@ function build(spec, key) {
     const peaks = peakSpots
         .filter(p => { const k = cellOf(p.x, p.y - p.s * 0.4); return k >= 0 && land[k] && kind[k] !== LAKE && shore[k] >= 2; })
         .sort((a, b) => a.y - b.y)    // the farthest first, so a nearer one is drawn in front of it
-        .map(p => ({ x: round4(p.x), y: round4(p.y - p.s * 0.4), s: round4(p.s), lines: peakLines(p.key, round4(p.x), round4(p.y), p.s) }));
+        .map(p => { const k = cellOf(p.x, p.y - p.s * 0.4); return { x: round4(p.x), y: round4(p.y - p.s * 0.4), s: round4(p.s), snowy: warmth[k] < (earthLike ? 0.4 : 0.32), lines: peakLines(p.key, round4(p.x), round4(p.y), p.s) }; });    // a peak in the cold is capped with snow
 
     const masses = massCells.map((n, id) => ({ id, area: round4(n * c * c) })).sort((a, b) => b.area - a.area);
     return {
@@ -598,9 +717,10 @@ function build(spec, key) {
         bounds: { minX: round4(ox), minY: round4(oy), maxX: round4(ox + spec.w), maxY: round4(oy + spec.h) },
         coasts, masses, landArea: round4(landCells.length * c * c),
         peaks, ranges, lakes, forests, trees,
+        deserts, snows, swamps, dunes, reeds, rivers: riverLines,
         kindAt: (x, y) => { const k = cellOf(x, y); return KIND_NAMES[k >= 0 ? kind[k] : SEA]; },
         isLand: (x, y) => { const k = cellOf(x, y); return k >= 0 && land[k] === 1 && kind[k] !== LAKE; },
-        grid: { cols, rows, cell: c, ox, oy, N, salt, land, kind, mass, shore, landCells, coastPos, cellOf, xOf, yOf, idx, inGrid },
+        grid: { cols, rows, cell: c, ox, oy, N, salt, land, kind, mass, shore, river, landCells, coastPos, cellOf, xOf, yOf, idx, inGrid },
         cache: { divisions: new Map(), fields: new Map() },
         toJSON: () => ({ world: key }),    // a world written out is what it is made from, never its squares
     };
@@ -649,7 +769,7 @@ function spread(world, starts) {
             const t = idx(a, b);
             if (!land[t] || label[t] >= 0) continue;
             if (di && dj && (!land[idx(a, j)] || !land[idx(i, b)])) continue;    // not through a gap between two corners of sea
-            const step = (di && dj ? 1.414 : 1) * (kind[t] === MOUNTAIN ? 3.6 : kind[t] === LAKE ? 1.8 : 1) * (0.5 + fbm(a / 7, b / 7, g.salt + 55));    // the ground is not even: borders wander
+            const step = (di && dj ? 1.414 : 1) * (kind[t] === MOUNTAIN ? 3.6 : kind[t] === LAKE ? 1.8 : g.river[t] ? 5 : 1) * (0.5 + fbm(a / 7, b / 7, g.salt + 55));    // the ground is not even: borders wander, and tend along the ranges and the rivers
             if (d + step < cost[t]) { cost[t] = d + step; heap.push([d + step, t, l]); }
         }
     }
@@ -780,7 +900,7 @@ export function landSpotNear(world, at, { taken = [], gap = 0 } = {}) {
 }
 
 const WHERE_WORDS = { north: 'Northern', south: 'Southern', east: 'Eastern', west: 'Western', northeast: 'Northeastern', northwest: 'Northwestern', southeast: 'Southeastern', southwest: 'Southwestern', middle: 'Central' };
-const LAND_WORDS = { mountains: ['Highlands', 'Peaks', 'Heights'], forest: ['Woods', 'Wilds', 'Weald'], coast: ['Coast', 'Shore', 'Strand'], plains: ['Plains', 'Reach', 'March', 'Vale'] };
+const LAND_WORDS = { mountains: ['Highlands', 'Peaks', 'Heights'], forest: ['Woods', 'Wilds', 'Weald'], coast: ['Coast', 'Shore', 'Strand'], plains: ['Plains', 'Reach', 'March', 'Vale'], desert: ['Sands', 'Waste', 'Dunes'], snow: ['Snows', 'Frostlands', 'Tundra'], swamp: ['Fens', 'Marshes', 'Mire'] };
 
 const STAND_IN_RE = new RegExp(`^(?:The Heartland|(?:${Object.values(WHERE_WORDS).join('|')}) (?:${[...new Set(Object.values(LAND_WORDS).flat())].join('|')})(?: \\d+)?)$`);
 /** Whether a name is one of the plain names a land is given to stand in until it has its own ("Northern Highlands", "The Heartland"). */
@@ -841,20 +961,28 @@ export function divideWorld(world, sites) {
         const parts = partsOf(traceRings(cols, rows, (i, j) => labelAt(i, j) === l).map(r => r.map(at)));
         if (!parts.length) return;
         let cells = 0, coastal = false, sumX = 0, sumY = 0;
-        const count = [0, 0, 0, 0, 0];
+        const count = [0, 0, 0, 0, 0, 0, 0, 0];
+        let watered = 0;
         for (const k of landCells) {
             if (label[k] !== l) continue;
             cells++;
             count[kind[k]]++;
+            if (g.river[k]) watered++;
             sumX += g.xOf(k); sumY += g.yOf(k);
             if (shore[k] === 1) coastal = true;
         }
         const share = (k) => (cells ? count[k] / cells : 0);
-        const terrain = share(MOUNTAIN) > 0.2 ? 'mountains' : share(FOREST) > 0.4 ? 'forest' : coastal && cells * c * c < 60 ? 'coast' : 'plains';
+        // What the land mostly is: its ranges first, then the climate or the forest that covers the most of it.
+        const cover = [[SNOW, 'snow', 0.35], [DESERT, 'desert', 0.35], [SWAMP, 'swamp', 0.25], [FOREST, 'forest', 0.4]].filter(([k, , least]) => share(k) > least).sort((p, q) => share(q[0]) - share(p[0]));
+        const terrain = share(MOUNTAIN) > 0.2 ? 'mountains' : cover.length ? cover[0][1] : coastal && cells * c * c < 60 ? 'coast' : 'plains';
         const words = [];
         if (share(MOUNTAIN) > 0.2) words.push('mountainous'); else if (share(MOUNTAIN) > 0.06) words.push('a mountain range');
+        if (share(SNOW) > 0.35) words.push('under snow'); else if (share(SNOW) > 0.12) words.push('snow in the north of it');
+        if (share(DESERT) > 0.35) words.push('desert'); else if (share(DESERT) > 0.12) words.push('a stretch of desert');
+        if (share(SWAMP) > 0.25) words.push('marshland'); else if (share(SWAMP) > 0.06) words.push('a marsh');
         if (share(FOREST) > 0.4) words.push('heavily wooded'); else if (share(FOREST) > 0.15) words.push('woods');
         if (count[LAKE]) words.push(count[LAKE] * c * c > 12 ? 'a great lake' : 'a lake');
+        if (watered >= 8) words.push('a river');
         if (!words.length) words.push('open country');
         const u = cells ? (sumX / cells - midX) / (cols * c / 2) : 0, v = cells ? (sumY / cells - midY) / (rows * c / 2) : 0;
         const where = `${v < -0.3 ? 'north' : v > 0.3 ? 'south' : ''}${u < -0.3 ? 'west' : u > 0.3 ? 'east' : ''}` || 'middle';
@@ -901,7 +1029,8 @@ export function divideWorld(world, sites) {
 
 // ─── How long the way is ────────────────────────────────────────────────────
 
-const paceOf = (k, table) => (k === SEA || k === LAKE ? table.water : k === MOUNTAIN ? table.mountain : k === FOREST ? table.forest : table.plain);
+const paceOf = (k, table) => (k === SEA || k === LAKE ? table.water : k === MOUNTAIN ? table.mountain : k === FOREST ? table.forest : k === DESERT ? table.desert : k === SNOW ? table.snow : k === SWAMP ? table.swamp : table.plain);
+const ROUGH = Object.freeze({ [MOUNTAIN]: 'mountain', [FOREST]: 'forest', [DESERT]: 'desert', [SNOW]: 'snow', [SWAMP]: 'swamp' });    // the grounds a way is told by
 const isWater = (k) => k === SEA || k === LAKE;
 
 /**
@@ -909,21 +1038,24 @@ const isWater = (k) => k === SEA || k === LAKE;
  * (D185), over the ground as it is: forest slower, mountains much
  * slower, water crossed by boat (quicker under way, but taking ship
  * costs `embark`, half of it on leaving the land and half on reaching it,
- * so a boat is worth it for a long crossing and never for a pond). All in
- * layout units of open ground: a `cost` of 10 is as long as ten units
- * walked across a plain.
- * @returns {{ to: (x: number, y: number) => ({ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number }|null) }}
- *   `length` the way's own length; `water`, `mountain`, `forest` how much of it is over each; `afloat` the part of the cost spent by boat, the wait for it counted
+ * so a boat is worth it for a long crossing and never for a pond). Desert,
+ * snow and marsh are slower each in its measure, and a river in the way
+ * is waded (D192): a small part of the wait for a boat, once for each
+ * river crossed. All in layout units of open ground: a `cost` of 10 is as
+ * long as ten units walked across a plain.
+ * @returns {{ to: (x: number, y: number) => ({ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number, desert: number, snow: number, swamp: number, fords: number }|null) }}
+ *   `length` the way's own length; `water`, `mountain`, `forest`, `desert`, `snow`, `swamp` how much of it is over each; `afloat` the part of the cost spent by boat, the wait for it counted; `fords` the rivers waded
  */
 export function travelField(world, from, { embark = 0 } = {}) {
     const none = { to: () => null };
     if (!world || !from || !finite(from.x) || !finite(from.y)) return none;
     const g = world.grid;
-    const { cols, N, kind, idx, inGrid } = g;
+    const { cols, N, kind, river, idx, inGrid } = g;
     const c = g.cell;
     const start = g.cellOf(from.x, from.y);
     if (start < 0) return none;
     const half = Math.max(0, embark) / 2;
+    const ford = Math.max(0, embark) * FORD;
     const key = `${start}|${round4(half)}`;
     const kept = world.cache.fields;
     let field = kept.get(key);
@@ -946,7 +1078,7 @@ export function travelField(world, from, { embark = 0 } = {}) {
                 if (!inGrid(a, b)) continue;
                 const t = idx(a, b);
                 if (done[t]) continue;
-                const step = (di && dj ? 1.41421356 : 1) * c * (pk + paceOf(kind[t], TERRAIN_PACE)) / 2 + (wk !== isWater(kind[t]) ? half : 0);
+                const step = (di && dj ? 1.41421356 : 1) * c * (pk + paceOf(kind[t], TERRAIN_PACE)) / 2 + (wk !== isWater(kind[t]) ? half : 0) + (river[t] && !river[k] && !wk ? ford : 0);
                 if (d + step < cost[t]) { cost[t] = d + step; prev[t] = k; heap.push([d + step, t]); }
             }
         }
@@ -969,25 +1101,28 @@ export function travelField(world, from, { embark = 0 } = {}) {
                 const both = isWater(ks) && isWater(ke);
                 const p = both ? TERRAIN_PACE.water : wet ? 1 : Math.max(paceOf(ks, TERRAIN_PACE), paceOf(ke, TERRAIN_PACE));
                 const cost = straight * p + (wet ? half : 0);
-                return { cost, afloat: both ? cost : wet ? half : 0, length: straight, water: both ? straight : 0, mountain: !both && !wet && (ks === MOUNTAIN || ke === MOUNTAIN) ? straight : 0, forest: ks === FOREST && ke === FOREST ? straight : 0 };
+                const same = (kd) => (ks === kd && ke === kd ? straight : 0);
+                return { cost, afloat: both ? cost : wet ? half : 0, length: straight, water: both ? straight : 0, mountain: !both && !wet && (ks === MOUNTAIN || ke === MOUNTAIN) ? straight : 0, forest: same(FOREST), desert: same(DESERT), snow: same(SNOW), swamp: same(SWAMP), fords: 0 };
             }
             // Walk the way back: its length and what it crosses.
-            let length = 0, water = 0, mountain = 0, forest = 0, boats = 0;
+            let length = 0, water = 0, boats = 0, fords = 0;
+            const over = { mountain: 0, forest: 0, desert: 0, snow: 0, swamp: 0 };
             for (let k = end, guard = 0; field.prev[k] >= 0 && guard < N; guard++) {
                 const p = field.prev[k];
                 const diag = (k % cols) !== (p % cols) && Math.floor(k / cols) !== Math.floor(p / cols);
                 const step = (diag ? 1.41421356 : 1) * c;
                 length += step;
-                for (const q of [k, p]) { const kq = kind[q]; if (isWater(kq)) water += step / 2; else if (kq === MOUNTAIN) mountain += step / 2; else if (kq === FOREST) forest += step / 2; }
+                for (const q of [k, p]) { const kq = kind[q]; if (isWater(kq)) water += step / 2; else if (ROUGH[kq]) over[ROUGH[kq]] += step / 2; }
                 if (isWater(kind[k]) !== isWater(kind[p])) boats++;
+                else if (river[k] && !river[p] && !isWater(kind[p])) fords++;
                 k = p;
             }
             // A way along the grid's squares is longer than the same way as the crow flies: by what the grid adds to a straight line between the two.
             const octile = (Math.max(di, dj) + 0.41421356 * Math.min(di, dj)) * c;
             const r = clamp(straight / octile, 0.5, 1.15);
-            const fees = boats * half;
+            const fees = boats * half + fords * ford;
             const cost = (field.cost[end] - fees) * r + fees;
-            return { cost, afloat: Math.min(cost, water * r * TERRAIN_PACE.water + fees), length: length * r, water: water * r, mountain: mountain * r, forest: forest * r };
+            return { cost, afloat: Math.min(cost, water * r * TERRAIN_PACE.water + boats * half), length: length * r, water: water * r, mountain: over.mountain * r, forest: over.forest * r, desert: over.desert * r, snow: over.snow * r, swamp: over.swamp * r, fords };
         },
     };
 }
@@ -995,28 +1130,30 @@ export function travelField(world, from, { embark = 0 } = {}) {
 /**
  * How long a road between two points of a world is (D185), in the same
  * units as travelField: the straight line it is drawn as, over the
- * ground under it. A road through a forest is a road; over the mountains
- * it is a pass; over water it is a crossing by boat.
- * @returns {{ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number }}
+ * ground under it. A road through a forest or a desert is a road; over
+ * the mountains it is a pass; snow and marsh slow it a little; over water
+ * it is a crossing by boat; a river it bridges, for nothing.
+ * @returns {{ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number, desert: number, snow: number, swamp: number, fords: number }}
  */
 export function roadCost(world, a, b, { embark = 0 } = {}) {
     const length = Math.hypot(b.x - a.x, b.y - a.y);
-    const flat = { cost: length, afloat: 0, length, water: 0, mountain: 0, forest: 0 };
+    const flat = { cost: length, afloat: 0, length, water: 0, mountain: 0, forest: 0, desert: 0, snow: 0, swamp: 0, fords: 0 };
     if (!world || !(length > 0)) return flat;
     const g = world.grid;
     const n = Math.max(1, Math.ceil(length / (g.cell / 2)));
     const step = length / n;
     const half = Math.max(0, embark) / 2;
-    let cost = 0, water = 0, mountain = 0, forest = 0, was = null, fees = 0;
+    let cost = 0, water = 0, was = null, fees = 0;
+    const over = { mountain: 0, forest: 0, desert: 0, snow: 0, swamp: 0 };
     for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
         const k = g.cellOf(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
         const kd = k >= 0 ? g.kind[k] : SEA;
         const wet = isWater(kd);
         cost += step * paceOf(kd, ROAD_PACE);
-        if (wet) water += step; else if (kd === MOUNTAIN) mountain += step; else if (kd === FOREST) forest += step;
+        if (wet) water += step; else if (ROUGH[kd]) over[ROUGH[kd]] += step;
         if (was !== null && was !== wet) { cost += half; fees += half; }
         was = wet;
     }
-    return { cost, afloat: water * ROAD_PACE.water + fees, length, water, mountain, forest };
+    return { cost, afloat: water * ROAD_PACE.water + fees, length, water, ...over, fords: 0 };
 }

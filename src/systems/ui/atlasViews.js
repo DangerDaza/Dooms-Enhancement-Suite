@@ -113,7 +113,7 @@ export function atlasStartHtml({ waiting = 0, loose = 0, picture = false, layerL
                <button type="button" class="dooms-atlas-btn is-primary" data-act="add"><i class="fa-solid fa-map-pin" aria-hidden="true"></i> <span>Add a place by hand</span></button>
                <button type="button" class="dooms-atlas-btn" data-act="start-dismiss">Not now</button>
            </div>`;
-    const setup = layerLabel ? '' : `<div class="dooms-atlas-start-setup"><button type="button" class="dooms-atlas-btn is-primary" data-act="worldgen"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>Generate a world</span></button><p class="dooms-atlas-start-note">The land first: sea and coasts, mountains, lakes and forests, made here in a moment. Then you put your regions and places on it.</p><button type="button" class="dooms-atlas-btn is-primary" data-act="setup"><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button><p class="dooms-atlas-start-note">The AI drafts the places from your notes, the lore and the chat: what is inside what, placed for you. You check it first.</p><p class="dooms-atlas-start-or">or do it by hand:</p></div>`;
+    const setup = layerLabel ? '' : `<div class="dooms-atlas-start-setup"><button type="button" class="dooms-atlas-btn is-primary" data-act="worldgen"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>Generate a world</span></button><p class="dooms-atlas-start-note">The land first: sea and coasts, mountains, rivers and lakes, forests, deserts, snow and marsh, made here in a moment. Then you put your regions and places on it.</p><button type="button" class="dooms-atlas-btn is-primary" data-act="setup"><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button><p class="dooms-atlas-start-note">The AI drafts the places from your notes, the lore and the chat: what is inside what, placed for you. You check it first.</p><p class="dooms-atlas-start-or">or do it by hand:</p></div>`;
     return `<div class="dooms-atlas-start-card"><h3>${layerLabel ? `Inside ${e(layerLabel)}` : 'Start your map'}</h3><p>${lead}</p>${setup}${how}</div>`;
 }
 
@@ -576,7 +576,9 @@ export function worldPreviewSvg(plan) {
     const b = w.bounds;
     const font = two((b.maxX - b.minX) / 46);
     const lands = plan.lands.map((l, i) => `<path class="dooms-wg-land${l.added ? ' is-added' : ''}" fill="${LAND_TINTS[i % LAND_TINTS.length]}" fill-rule="evenodd" d="${shapePath(l.parts)}"/>`).join('');
-    const peaks = w.peaks.map(p => `<path class="dooms-wg-peak" d="M${p.lines[0].map(q => `${two(q[0])},${two(q[1])}`).join('L')}"/>`).join('');
+    const peaks = w.peaks.map(p => `<path class="dooms-wg-peak${p.snowy ? ' is-capped' : ''}" d="M${p.lines[0].map(q => `${two(q[0])},${two(q[1])}`).join('L')}"/>`).join('');
+    const rivers = (w.rivers || []).map(r => `<path class="dooms-wg-river${r.big ? ' is-big' : ''}" d="M${r.points.map(q => `${two(q[0])},${two(q[1])}`).join('L')}"/>`).join('');
+    const clime = (list, name) => (list && list.length ? `<path class="dooms-wg-clime is-${name}" fill-rule="evenodd" d="${shapePath(list)}"/>` : '');
     const names = plan.lands.map(l => `<text class="dooms-wg-name${l.added ? ' is-added' : ''}" x="${two(l.x)}" y="${two(l.y + font * 1.25)}" font-size="${font}" text-anchor="middle">${e(l.label)}</text>`).join('');
     const dots = [
         ...plan.lands.map(l => `<circle class="dooms-wg-region${l.added ? ' is-added' : ''}" cx="${two(l.x)}" cy="${two(l.y)}" r="${two(font * 0.3)}"/>`),
@@ -586,7 +588,9 @@ export function worldPreviewSvg(plan) {
         <path class="dooms-wg-shallows" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
         <path class="dooms-wg-wild" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
         ${lands}
+        ${clime(w.deserts, 'desert')}${clime(w.snows, 'snow')}${clime(w.swamps, 'swamp')}
         <path class="dooms-wg-forest" fill-rule="evenodd" d="${shapePath(w.forests)}"/>
+        ${rivers}
         <path class="dooms-wg-lake" fill-rule="evenodd" d="${shapePath(w.lakes)}"/>
         ${peaks}
         <path class="dooms-wg-coast" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
@@ -634,7 +638,7 @@ export function atlasWorldGenHtml({ shape = 'pangea', size = 'medium', seed = ''
     const own = st.regions + st.waitingRegions;
     return `<div class="dooms-atlas-setup-card is-worldgen">
         <h3>${st.had ? 'Change the world' : 'Generate a world'}</h3>
-        <p>The land first: sea and coasts, mountains, lakes and forests, made here in a moment from a seed, with no AI request. Your regions and places are then put on it. A region holds the land around where it stands, its borders tending along the mountains: move a region and its borders follow.</p>
+        <p>The land first: sea and coasts, mountains, rivers and lakes, forests, deserts, snow and marsh, made here in a moment from a seed, with no AI request. Your regions and places are then put on it. A region holds the land around where it stands, its borders tending along the mountains and the rivers: move a region and its borders follow.</p>
         <div class="dooms-atlas-worldgen">
             <div class="dooms-atlas-worldgen-form">
                 <fieldset class="dooms-atlas-setup-reach"><legend class="dooms-atlas-card-label">Shape</legend>${shapes}</fieldset>
@@ -842,7 +846,7 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
 export function atlasTidyHtml(tidy, { count = 0, canGroup = false, top = false, world = null, toName = 0 } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
     // World gen (D182) is the top map's: the land made first, before anything is put on it. Naming its lands (D186) is one request.
-    const gen = top ? `<button type="button" class="dooms-atlas-btn" data-act="worldgen" title="${world ? 'Make the world again: another shape, another seed, or take it away. Your regions and places are kept.' : 'Make the land first: sea and coasts, mountains, lakes and forests, from a seed, in a moment and with no AI request. Then your regions and places are put on it.'}"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>${world ? 'Change the world' : 'Generate a world'}</span></button>` : '';
+    const gen = top ? `<button type="button" class="dooms-atlas-btn" data-act="worldgen" title="${world ? 'Make the world again: another shape, another seed, or take it away. Your regions and places are kept.' : 'Make the land first: sea and coasts, mountains, rivers and lakes, forests, deserts, snow and marsh, from a seed, in a moment and with no AI request. Then your regions and places are put on it.'}"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>${world ? 'Change the world' : 'Generate a world'}</span></button>` : '';
     const names = top && world && toName ? `<button type="button" class="dooms-atlas-btn" data-act="names" title="Ask the AI to name the ${toName === 1 ? 'land' : `${toName} lands`} that still ${toName === 1 ? 'has' : 'have'} a plain name, from the world's lore, each to fit its ground and its neighbours. You check the names first."><i class="fa-solid fa-signature" aria-hidden="true"></i> <span>Name the lands · ${toName}</span></button>` : '';
     const setup = `${gen}${names}<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
     const fill = `<button type="button" class="dooms-atlas-btn" data-act="fill" title="Add places that plausibly belong on this map, around the ones already here. You check them first; they go on the map marked as not canon, and nothing already there moves."><i class="fa-solid fa-seedling" aria-hidden="true"></i> <span>Fill out this map</span></button>`;
@@ -890,7 +894,7 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
         <div class="dooms-atlas-results">${atlasResultsHtml({ markers, query, hidden, all, layer })}</div>
         <label class="dooms-atlas-scale-pick" title="How far apart the places on this map are: it sets its distances and travel times. Every map has its own.">This map is of <select class="dooms-atlas-scale-select" aria-label="What this map is of">${scales}</select></label>
         ${world
-        ? `<p class="dooms-atlas-scale-pick dooms-atlas-world-line" title="This map is drawn on a generated world: its land, sea, mountains, lakes and forests come from the seed.">The ground is a generated world: ${e((WORLD_SHAPES.find(sh => sh.id === world.shape) || { label: 'a world' }).label)}, seed <code>${e(world.seed)}</code>. <button type="button" class="dooms-atlas-link" data-act="worldgen">Change</button></p>`
+        ? `<p class="dooms-atlas-scale-pick dooms-atlas-world-line" title="This map is drawn on a generated world: its land, sea, mountains, rivers, lakes, forests and climates come from the seed.">The ground is a generated world: ${e((WORLD_SHAPES.find(sh => sh.id === world.shape) || { label: 'a world' }).label)}, seed <code>${e(world.seed)}</code>. <button type="button" class="dooms-atlas-link" data-act="worldgen">Change</button></p>`
         : `<label class="dooms-atlas-scale-pick" title="What the empty space of this map is. Every map has its own.">The ground is <select class="dooms-atlas-ground-select" aria-label="What the empty space of this map is">${ATLAS_GROUNDS.map(g => `<option value="${g.id}"${g.id === ground ? ' selected' : ''}>${e(g.label)}</option>`).join('')}</select></label>`}
         ${deletedHtml(deleted)}`;
 }

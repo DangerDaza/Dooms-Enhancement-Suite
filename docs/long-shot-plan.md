@@ -825,3 +825,35 @@ was doing. Built in "Atlas 31".
 | D191 | Offer hooks and Draw a place wait until the line is free | `waitForIdleLine()` in `apiClient.js` (one helper, with a test hook for its timing): no reply to the player's own message is being written and no other background request holds the flag; it gives up after two minutes. `proposeHooks` and `drawPlace` wait on it before their request: asked for while a reply is being written, the request goes once the reply is done; when the wait runs out nothing is sent and the button's line says "A reply is still being written. Try again when it is done." The Atlas's own requests (D159, D160, D186) and the scene engine's have waited this way since "Atlas 14"; these two were the last that did not |
 
 Tests: `tools/map-flow-test.mjs` §8.
+
+## 32. World gen: rivers and climates (2026-11-11, D192)
+
+The second waiting item: the world gen made land, sea, mountains, lakes
+and forests, and nothing else. A world now also has rivers, and three
+climates' ground: desert, snow and marsh. Built in "Atlas 32".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D192 | A generated world has rivers and climates, and both count | **Rivers.** Every square of land knows the next square on its way down to water (found from the sea and the lakes outward, low ground cheapest, the ranges dearest, a fine grain so the way winds). A river starts on the high ground farthest from any water, well apart from the next (none on an islet, then about one to every 110 square units of a landmass, up to twelve), follows that way down and ends in the sea, a lake, or another river, which is then drawn the wider. **Climates.** How warm the ground is goes by how far north it lies (in "Like our world", by how far from the middle: cold at the top and the bottom), how damp by the noise the forests already used. Open ground that is cold is snow; damp ground beside the sea, a lake or a river may be marsh; damp ground is forest as before; hot, dry ground off the shore with no river through it is desert. A patch too small to be told is let go. A peak in the cold wears snow. **What they change.** Travel: desert 1.3 times as long as open ground, snow 1.6, marsh 1.8 (mountains stay 2.5); a road is as quick over desert as anywhere and a quarter slower over snow and marsh; a river in the way is waded, for about an eighth of the wait to take ship (roughly an hour), and a road bridges it for nothing. A way that is mostly over one of them says so: "across the desert", "through the snow", "through the marshes" (the mountains still come first). Borders: a river is a line a region's land tends to stop at, as a range is (in the test world 9% of the ground beside a border is a river's against 4% of all the land). Regions: a land that is mostly snow, desert or marsh is told so in its summary (what the AI names it from), takes that terrain's shade, and gets a plain name to match ("Northern Snows", "Southwestern Sands", "Eastern Fens"); a land with a river through it says so. A land under a plain name takes its terrain from its ground, not from the word "Northern" in it. **Drawn** on the top map, inside a region and in World gen's picture: the ground of each climate as a tint under the forests, dunes on the desert, reeds in the marsh, the rivers as lines under the lakes |
+
+A world made before this is the same world with these added: its coasts,
+ranges, lakes and forests are where they were (some forest in the cold
+is now snow, some by the water marsh), since the spec in the book is
+only the seed and the shape. Its regions' borders shift a little where a
+river now runs, and its journeys take longer where they cross the new
+ground.
+
+What it is not: there are no rivers out of a lake (a lake is where a
+river ends), no rain shadow behind a range, and no climate chosen by the
+player (a world cannot be asked to be all desert); a river does not
+carry a boat (the boat is still for the sea and the lakes); a road is
+not drawn along a valley or to a ford, it still runs straight; and a
+world about another middle (made around places already on the map) has
+its lake shores, and so some rivers, a little different from the same
+seed about the middle of the map, as it always had its trees.
+
+Tests: `tools/world-gen-test.mjs` (§2 climates and rivers, §4 the lands
+told and named, borders along rivers, §5 the paces, the ford and the
+bridge), `tools/atlas-test.mjs` §6f (what is drawn, the wording of a way
+and of a road), `tools/atlas-world-test.mjs` §3 (a plain name's terrain),
+`tools/atlas-browser-test.mjs` §5j (the panel's picture and the map).

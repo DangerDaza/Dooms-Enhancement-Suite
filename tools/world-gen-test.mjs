@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * World gen (docs/long-shot-plan.md D182–D185), pure: a world made from
- * a seed (land and sea in four shapes, mountains, lakes, forests), where
- * regions would stand on it, the land divided between the regions that
- * do, and how long the way is over its ground.
+ * World gen (docs/long-shot-plan.md D182–D185, D192), pure: a world made
+ * from a seed (land and sea in four shapes, mountains, lakes, forests,
+ * rivers, and the climates: desert, snow, marsh), where regions would
+ * stand on it, the land divided between the regions that do, and how
+ * long the way is over its ground.
  *
  * Usage:  node tools/world-gen-test.mjs     (from the repo root)
  * Exit:   0 = pass, 1 = failure
  */
 import {
-    WORLD_SHAPES, WORLD_SIZES, WORLD_LIMITS, WORLD_KINDS, TERRAIN_PACE,
+    WORLD_SHAPES, WORLD_SIZES, WORLD_LIMITS, WORLD_KINDS, TERRAIN_PACE, ROAD_PACE, FORD,
     normalizeWorldSpec, sizeOfWorld, randomSeed, worldSpecFor, generateWorld, suggestSites, divideWorld, travelField, roadCost,
 } from '../src/utils/worldGen.js';
 
@@ -54,7 +55,7 @@ for (const shape of WORLD_SHAPES) worlds[shape.id] = generateWorld({ seed: 'alph
         check(`${id}: there is land and there is sea (${Math.round(share * 100)}% land)`, share > 0.12 && share < 0.6);
         check(`${id}: the sea is all round it`, [[-31.9, -21.9], [31.9, 21.9], [0, -21.9], [-31.9, 0]].every(([x, y]) => world.kindAt(x, y) === 'sea') && world.kindAt(999, 999) === 'sea');
         check(`${id}: the coast is drawn round the land, to the grid's own count`, Math.abs(shapeArea(world.coasts) - world.landArea) < world.landArea * 0.04, `${shapeArea(world.coasts)} vs ${world.landArea}`);
-        check(`${id}: no ring of the coast, a lake or a forest is a sliver or runs the wrong way`, [world.coasts, world.lakes, world.forests].every(list => list.every(p => p[0].length >= 4 && areaOf(p[0]) > 0 && p.slice(1).every(h => areaOf(h) < 0))));
+        check(`${id}: no ring of the coast, a lake, a forest or a climate's ground is a sliver or runs the wrong way`, [world.coasts, world.lakes, world.forests, world.deserts, world.snows, world.swamps].every(list => list.every(p => p[0].length >= 4 && areaOf(p[0]) > 0 && p.slice(1).every(h => areaOf(h) < 0))));
     }
     check('Pangea is one great landmass (islets aside)', worlds.pangea.masses[0].area > worlds.pangea.landArea * 0.9);
     check('Like our world has several continents', worlds.earth.masses.filter(m => m.area > 60).length >= 3, JSON.stringify(worlds.earth.masses));
@@ -75,9 +76,62 @@ for (const shape of WORLD_SHAPES) worlds[shape.id] = generateWorld({ seed: 'alph
     check('there is land under everything the world was made around, and no lake', worlds.divide.kindAt(0, 0) === 'sea' && anchored.isLand(0, 0) && anchored.isLand(0.5, 14));
     const far = generateWorld({ seed: 'alpha', shape: 'pangea', w: 64, h: 44, cx: 200, cy: -90 });
     check('a world about another middle is the same world, moved', far.bounds.minX === 168 && far.bounds.minY === -112 && far.landArea === w.landArea && far.kindAt(200, -90) === w.kindAt(0, 0));
+    // Climates (D192).
+    {
+        const g = w.grid;
+        const mean = (k, of) => { let n = 0, sum = 0; for (const c of g.landCells) if (g.kind[c] === k) { n++; sum += of(c); } return n ? sum / n : NaN; };
+        check('there is snow, desert and marsh, each with ground of its own', w.snows.length >= 1 && w.deserts.length >= 1 && w.swamps.length >= 1 && kindCells(w, WORLD_KINDS.snow) > 40 && kindCells(w, WORLD_KINDS.desert) > 40 && kindCells(w, WORLD_KINDS.swamp) > 12, JSON.stringify([kindCells(w, WORLD_KINDS.snow), kindCells(w, WORLD_KINDS.desert), kindCells(w, WORLD_KINDS.swamp)]));
+        check('the snow lies in the north and the desert in the south', mean(WORLD_KINDS.snow, c => g.yOf(c)) < -8 && mean(WORLD_KINDS.desert, c => g.yOf(c)) > 8, `${mean(WORLD_KINDS.snow, c => g.yOf(c))} ${mean(WORLD_KINDS.desert, c => g.yOf(c))}`);
+        const e = worlds.earth, eg = e.grid;
+        const off = (k) => { let n = 0, sum = 0; for (const c of eg.landCells) if (eg.kind[c] === k) { n++; sum += Math.abs(eg.yOf(c)); } return n ? sum / n : NaN; };
+        check('in a world like ours the snow is at the top and the bottom, the desert about the middle', kindCells(e, WORLD_KINDS.snow) > 10 && off(WORLD_KINDS.snow) > 13 && off(WORLD_KINDS.desert) < 9, `${off(WORLD_KINDS.snow)} ${off(WORLD_KINDS.desert)}`);
+        check('each ground has its name, and a place can stand on any of them', ['desert', 'snow', 'swamp'].every(name => { const c = g.landCells.find(k => g.kind[k] === WORLD_KINDS[name]); return w.kindAt(g.xOf(c), g.yOf(c)) === name && w.isLand(g.xOf(c), g.yOf(c)); }));
+        const beside = (c, test) => { const i = c % g.cols, j = (c - i) / g.cols; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if (g.inGrid(i + di, j + dj) && test(g.idx(i + di, j + dj))) return true; return false; };
+        check('a marsh is beside water: the sea, a lake or a river', g.landCells.filter(c => g.kind[c] === WORLD_KINDS.swamp).every(c => beside(c, k => !g.land[k] || g.kind[k] === WORLD_KINDS.lake || g.river[k])));
+        check('a desert is not on the shore, nor has a river through it', g.landCells.filter(c => g.kind[c] === WORLD_KINDS.desert).every(c => g.shore[c] >= 2 && !g.river[c]));
+        check('dunes stand on desert, reeds in a marsh; a peak in the cold is capped with snow', w.dunes.length >= 5 && w.dunes.every(d => w.kindAt(d.x, d.y) === 'desert') && w.reeds.length >= 3 && w.reeds.every(d => w.kindAt(d.x, d.y) === 'swamp') && w.peaks.some(pk => pk.snowy) && w.peaks.some(pk => !pk.snowy) && Math.max(...w.peaks.filter(pk => pk.snowy).map(pk => pk.y)) < Math.max(...w.peaks.filter(pk => !pk.snowy).map(pk => pk.y)));
+        check('what was a forest where it is neither cold nor marsh is a forest still', kindCells(w, WORLD_KINDS.forest) > 400);
+    }
+    // Rivers (D192).
+    for (const [id, world] of Object.entries(worlds)) {
+        const g = world.grid;
+        const ends = world.rivers.map(r => r.points[r.points.length - 1]);
+        const joins = (pt, n) => world.rivers.some((o, m) => m !== n && o.points.some(q => Math.hypot(q[0] - pt[0], q[1] - pt[1]) < 0.8));
+        check(`${id}: there are rivers (${world.rivers.length}), each from dry land down to the sea, a lake or another river`, world.rivers.length >= 2 && world.rivers.every((r, n) => r.points.length >= 12 && world.isLand(r.points[0][0], r.points[0][1]) && (!world.isLand(ends[n][0], ends[n][1]) || joins(ends[n], n))), JSON.stringify(world.rivers.map((r, n) => [r.points.length, world.kindAt(ends[n][0], ends[n][1])])));
+        check(`${id}: a river keeps to the land until its end (a corner cut along a shore aside), and is long enough to be one`, world.rivers.every(r => { let len = 0; for (let i = 1; i < r.points.length; i++) len += Math.hypot(r.points[i][0] - r.points[i - 1][0], r.points[i][1] - r.points[i - 1][1]); return len >= 3 && r.points.slice(0, Math.floor(r.points.length / 2)).filter(q => world.kindAt(q[0], q[1]) === 'sea').length <= 2 && r.points.filter(q => world.kindAt(q[0], q[1]) === 'sea').length <= Math.max(6, r.points.length * 0.12); }));
+        check(`${id}: one river that another runs into is the greater`, world.rivers.every((r, n) => !!r.big === world.rivers.some((o, m) => m !== n && world.isLand(o.points[o.points.length - 1][0], o.points[o.points.length - 1][1]) && r.points.some(q => Math.hypot(q[0] - o.points[o.points.length - 1][0], q[1] - o.points[o.points.length - 1][1]) < 0.8))), JSON.stringify(world.rivers.map(r => r.big)));
+        // The river's squares lie under its line: no point of it on dry land is more than a square from one of them.
+        let stray = 0;
+        for (const r of world.rivers) for (const [x, y] of r.points) {
+            const k = g.cellOf(x, y);
+            if (k < 0 || !g.land[k] || g.kind[k] === WORLD_KINDS.lake) continue;
+            const i = k % g.cols, j = (k - i) / g.cols;
+            let near = false;
+            for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (g.inGrid(i + di, j + dj) && g.river[g.idx(i + di, j + dj)]) near = true;
+            if (!near) stray++;
+        }
+        check(`${id}: the river's squares lie under its line`, stray === 0, String(stray));
+        // Nothing gets from one bank to the other without stepping on the river: two of its squares that touch only at a corner have one beside both, or water there.
+        let gaps = 0;
+        for (const c of g.landCells) {
+            if (!g.river[c]) continue;
+            const i = c % g.cols, j = (c - i) / g.cols;
+            for (const [di, dj] of [[1, 1], [-1, 1]]) {
+                if (!g.inGrid(i + di, j + dj) || !g.river[g.idx(i + di, j + dj)]) continue;
+                const p = g.idx(i + di, j), q = g.idx(i, j + dj);
+                const shut = (k) => g.river[k] || !g.land[k] || g.kind[k] === WORLD_KINDS.lake;
+                if (!shut(p) && !shut(q)) gaps++;
+            }
+        }
+        check(`${id}: a river has no gap to slip through between two of its squares`, gaps <= 1, String(gaps));    // two rivers that only pass corner to corner are not one river
+    }
     const t = Date.now();
     const big = generateWorld({ seed: 'timing', shape: 'earth', size: 'large' });
     check(`a large world is made in well under a second (${Date.now() - t} ms)`, big && Date.now() - t < 1500);
+    // Made again from nothing (the worlds kept are few: enough others push this one out), the same asking gives the same world.
+    for (let n = 0; n < 7; n++) generateWorld({ seed: `other ${n}`, shape: 'islands', size: 'small' });
+    const fresh = generateWorld({ seed: 'alpha', shape: 'pangea', size: 'medium' });
+    check('made again from nothing, the same asking gives the same rivers, climates and marks', fresh !== w && same(fresh.rivers, w.rivers) && same(fresh.deserts, w.deserts) && same(fresh.snows, w.snows) && same(fresh.swamps, w.swamps) && same(fresh.dunes, w.dunes) && same(fresh.reeds, w.reeds) && same(fresh.peaks, w.peaks) && same(fresh.coasts, w.coasts));
 }
 
 console.log('\n§3 where regions would stand');
@@ -118,7 +172,15 @@ console.log('\n§4 the land divided');
     }
     check('the same regions give the same lands (and the division already made)', divideWorld(w, sites) === div && same([...divideWorld(w, sites.map(s => ({ ...s }))).lands.values()].map(l => l.outline), lands.map(l => l.outline)));
     check('each land is told in words, and has a plain name of its own to stand in', lands.every(l => /^(on the coast|landlocked), in the \w+ of the world: /.test(l.summary) && l.name.length > 3) && new Set(lands.map(l => l.name)).size === lands.length, JSON.stringify(lands.map(l => `${l.name} | ${l.summary}`)));
-    check('a land\'s terrain is one the map knows', lands.every(l => ['plains', 'forest', 'mountains', 'coast'].includes(l.terrain)));
+    check('a land\'s terrain is one the map knows', lands.every(l => ['plains', 'forest', 'mountains', 'coast', 'desert', 'snow', 'swamp'].includes(l.terrain)));
+    {
+        // A land that is mostly under snow, or mostly desert, is told so, and named for it (D192).
+        const many = divideWorld(w, suggestSites(w, 16).map((s, i) => ({ id: `m${i}`, ...s })));
+        const list = [...many.lands.values()];
+        const snowy = list.find(l => l.terrain === 'snow'), sandy = list.find(l => l.terrain === 'desert');
+        check('a land under snow and a land of desert are told as such, and named for it', !!snowy && /under snow/.test(snowy.summary) && /(Snows|Frostlands|Tundra)$/.test(snowy.name) && !!sandy && /desert/.test(sandy.summary) && /(Sands|Waste|Dunes)$/.test(sandy.name), JSON.stringify(list.map(l => `${l.name} | ${l.terrain} | ${l.summary}`)));
+        check('a land with a river through it says so', list.some(l => /a river/.test(l.summary)) && list.some(l => !/a river/.test(l.summary)));
+    }
 
     // The geography stays; the borders follow the regions.
     const fewer = divideWorld(w, sites.slice(0, 8));
@@ -149,6 +211,21 @@ console.log('\n§4 the land divided');
         }
         const all = kindCells(w, WORLD_KINDS.mountain) / g.landCells.length;
         check(`borders tend to run along the mountains (${Math.round(edgeM / edge * 100)}% of the ground beside a border is mountain, ${Math.round(all * 100)}% of all the land)`, edgeM / edge > all * 1.5);
+        // And along the rivers (D192), over many divisions of the same land.
+        let rEdge = 0, rEdgeOn = 0;
+        for (const n of [6, 9, 12, 16]) {
+            const d = divideWorld(w, suggestSites(w, n).map((s, i) => ({ id: `q${i}`, ...s })));
+            for (const c of g.landCells) {
+                const i = c % g.cols, j = (c - i) / g.cols;
+                const me = d.at(g.xOf(c), g.yOf(c));
+                if (![[1, 0], [0, 1], [-1, 0], [0, -1]].some(([di, dj]) => { const o = g.inGrid(i + di, j + dj) ? d.at(g.xOf(g.idx(i + di, j + dj)), g.yOf(g.idx(i + di, j + dj))) : ''; return o && o !== me; })) continue;
+                rEdge++;
+                if (g.river[c]) rEdgeOn++;
+            }
+        }
+        let onRiver = 0;
+        for (const c of g.landCells) if (g.river[c]) onRiver++;
+        check(`and along the rivers (${Math.round(rEdgeOn / rEdge * 100)}% of the ground beside a border is a river's, ${Math.round(onRiver / g.landCells.length * 100)}% of all the land)`, rEdgeOn / rEdge > onRiver / g.landCells.length * 1.3);
     }
     // Islands: a landmass no region stands on goes whole to one region, or is nobody's.
     {
@@ -194,7 +271,8 @@ console.log('\n§5 how long the way is');
     const dear = travelField(w, west, { embark: 6 }).to(east.x, east.y);
     check('between the continents the way is by sea', free.water > 3 && free.water < free.length);
     check('a boat is quicker under way than walking', free.cost < free.length);
-    check('taking ship costs its wait, once for the whole crossing', Math.abs(dear.cost - free.cost - 6) < 0.5, `${dear.cost} vs ${free.cost}`);
+    const dearer = travelField(w, west, { embark: 12 }).to(east.x, east.y);
+    check('taking ship costs its wait, once for the whole crossing', dear.cost > free.cost + 6 - 0.5 && Math.abs(dearer.cost - dear.cost - 6 - (dearer.fords - dear.fords) * 6 * FORD - dear.fords * 6 * FORD) < 0.5, `${free.cost} ${dear.cost} ${dearer.cost}`);
 
     // Round a lake rather than over it, when the wait for a boat is long.
     const p = worlds.pangea, pg = p.grid;
@@ -223,13 +301,54 @@ console.log('\n§5 how long the way is');
     const hard = across ? travelField(p, across.s).to(across.e.x, across.e.y) : null;
     check('over or round a range takes longer than the same way over open ground', across && hard.cost > 6 * 1.15, JSON.stringify(hard));
     check(`mountains are ${TERRAIN_PACE.mountain} times as slow, forest ${TERRAIN_PACE.forest}, a boat ${TERRAIN_PACE.water}`, TERRAIN_PACE.mountain > TERRAIN_PACE.forest && TERRAIN_PACE.forest > 1 && TERRAIN_PACE.water < 1);
+
+    // Desert, snow and marsh (D192): slower than open ground, none as slow as the mountains; a road helps on each.
+    check(`desert is ${TERRAIN_PACE.desert} times as slow, snow ${TERRAIN_PACE.snow}, marsh ${TERRAIN_PACE.swamp}; a road is quicker over each, and is slowed only by snow and marsh`, ['desert', 'snow', 'swamp'].every(k => TERRAIN_PACE[k] > 1 && TERRAIN_PACE[k] < TERRAIN_PACE.mountain && ROAD_PACE[k] < TERRAIN_PACE[k]) && ROAD_PACE.desert === 1 && ROAD_PACE.snow > 1 && ROAD_PACE.swamp > 1);
+    for (const name of ['desert', 'snow']) {
+        // Two points a few squares apart in a row, with nothing but that ground between them.
+        const k0 = WORLD_KINDS[name];
+        let s = null, e = null;
+        for (const c of pg.landCells) {
+            if (s) break;
+            const i = c % pg.cols, j = (c - i) / pg.cols;
+            let clear = true;
+            for (let dj = -1; dj <= 1 && clear; dj++) for (let d = -1; d <= 5 && clear; d++) if (!pg.inGrid(i + d, j + dj) || pg.kind[pg.idx(i + d, j + dj)] !== k0) clear = false;
+            if (clear) { s = { x: pg.xOf(c), y: pg.yOf(c) }; e = { x: pg.xOf(c) + 2, y: pg.yOf(c) }; }
+        }
+        const way = s ? travelField(p, s).to(e.x, e.y) : null;
+        check(`over ${name} the way takes ${TERRAIN_PACE[name]} times as long, and says what it is over`, !!way && Math.abs(way.cost - 2 * TERRAIN_PACE[name]) < 0.05 && Math.abs(way[name] - 2) < 0.05 && way.mountain === 0 && way.forest === 0, JSON.stringify(way));
+        const laid = s ? roadCost(p, s, e) : null;
+        check(`a road over ${name} is ${ROAD_PACE[name]} times its length`, !!laid && Math.abs(laid.cost - 2 * ROAD_PACE[name]) < 1e-6 && Math.abs(laid[name] - 2) < 1e-6);
+    }
+    {
+        // A river in the way is waded: a small part of the wait for a boat, once. A road bridges it for nothing.
+        let ford = null;
+        for (const c of pg.landCells) {
+            if (ford) break;
+            if (!pg.river[c]) continue;
+            const i = c % pg.cols, j = (c - i) / pg.cols;
+            for (const [di, dj] of [[1, 0], [0, 1]]) {
+                const dry = (n) => { const k = pg.inGrid(i + di * n, j + dj * n) ? pg.idx(i + di * n, j + dj * n) : -1; return k >= 0 && pg.kind[k] === WORLD_KINDS.plain && !pg.river[k] ? k : -1; };
+                const u = dry(-3), v = dry(3);
+                if (u < 0 || v < 0) continue;
+                const from = { x: pg.xOf(u), y: pg.yOf(u) }, to = { x: pg.xOf(v), y: pg.yOf(v) };
+                const none = travelField(p, from).to(to.x, to.y), paid = travelField(p, from, { embark: 10 }).to(to.x, to.y);
+                if (none.fords === 1 && paid.fords === 1 && none.water === 0 && paid.water === 0) { ford = { from, to, none, paid }; break; }
+            }
+        }
+        check('a river in the way is waded, for a small part of the wait for a boat', !!ford && Math.abs(ford.paid.cost - ford.none.cost - 10 * FORD) < 0.05 && ford.paid.afloat === 0, JSON.stringify(ford));
+        check('a road bridges a river for nothing', !!ford && roadCost(p, ford.from, ford.to, { embark: 10 }).cost === roadCost(p, ford.from, ford.to).cost && roadCost(p, ford.from, ford.to, { embark: 10 }).fords === 0);
+    }
     check('off the world there is no way', travelField(p, { x: 999, y: 0 }).to(0, 0) === null && travelField(p, a).to(999, 0) === null && travelField(null, a).to(0, 0) === null);
 
     // Roads.
     const road = roadCost(w, a, b);
     check('a road over open ground is its own length', Math.abs(road.cost - 6) < 1e-6 && road.length === 6 && road.water === 0);
     const lane = roadCost(w, west, east, { embark: 6 });
-    check('a road over the sea is a crossing: quicker under way, with the wait to take ship', lane.water > 3 && Math.abs(lane.cost - (lane.length - lane.water) - lane.water * 0.5 - 6) < 1.6, JSON.stringify(lane));
+    const dryLane = ['mountain', 'forest', 'desert', 'snow', 'swamp'].reduce((n, k) => n + lane[k] * (ROAD_PACE[k] - 1), lane.length - lane.water);    // the road's dry part, at the pace of the ground under it
+    let ships = 0;    // how many times the road's line takes to the water or leaves it: half the wait each
+    for (let n = Math.ceil(lane.length / 0.25), i = 0, was = null; i < n; i++) { const t = (i + 0.5) / n; const kd = w.kindAt(west.x + (east.x - west.x) * t, west.y + (east.y - west.y) * t); const wet = kd === 'sea' || kd === 'lake'; if (was !== null && was !== wet) ships++; was = wet; }
+    check('a road over the sea is a crossing: quicker under way, with the wait to take ship each time it does', lane.water > 3 && ships >= 2 && Math.abs(lane.cost - dryLane - lane.water * 0.5 - ships * 3) < 0.01, `${ships} ${JSON.stringify(lane)}`);
     check('a road over the mountains is a pass: slower than a road, quicker than no road', across && (() => { const r = roadCost(p, across.s, across.e); return r.mountain > 0 && r.cost > r.length && r.cost < r.length - r.mountain + r.mountain * TERRAIN_PACE.mountain; })());
     check('with no world a road is its drawn length', roadCost(null, { x: 0, y: 0 }, { x: 3, y: 4 }).cost === 5);
 }

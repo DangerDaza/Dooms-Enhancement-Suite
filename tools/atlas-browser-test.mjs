@@ -1239,6 +1239,7 @@ console.log('\nÂ§5j World gen: the land made first, the regions put on it (D182â
             modes: [...p.querySelectorAll('input[name="dooms-atlas-wg-mode"]')].map(i => [i.value, i.checked]),
             regions: (p.querySelector('.dooms-atlas-wg-regions') || {}).value, seed: (p.querySelector('.dooms-atlas-wg-seed') || {}).value,
             lands: p.querySelectorAll('.dooms-wg-land').length, added: p.querySelectorAll('.dooms-wg-land.is-added').length, names: [...p.querySelectorAll('.dooms-wg-name')].map(t => t.textContent), places: p.querySelectorAll('.dooms-wg-place').length, peaks: p.querySelectorAll('.dooms-wg-peak').length,
+            rivers: p.querySelectorAll('.dooms-wg-river').length, climes: [...p.querySelectorAll('.dooms-wg-clime')].map(x => x.getAttribute('class').replace('dooms-wg-clime is-', '')), capped: p.querySelectorAll('.dooms-wg-peak.is-capped').length,
             caption: (p.querySelector('figcaption') || {}).textContent || '', acts: [...p.querySelectorAll('.dooms-atlas-setup-actions [data-act]')].map(x => [x.getAttribute('data-act'), x.disabled]),
             text: card ? card.textContent.replace(/\s+/g, ' ') : '', overflow: card ? card.scrollWidth > card.clientWidth + 1 : false,
         };
@@ -1249,6 +1250,7 @@ console.log('\nÂ§5j World gen: the land made first, the regions put on it (D182â
         return {
             ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), bg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor,
             wild: q('path.dooms-atlas-wild'), shallows: q('path.dooms-atlas-shallows'), coastline: q('path.dooms-atlas-coastline'), forest: q('path.dooms-atlas-wood.is-forest'), lake: q('path.dooms-atlas-pond.is-lake'), peaks: q('path.dooms-atlas-peak'), trees: q('path.dooms-atlas-tree'),
+            rivers: q('path.dooms-atlas-river'), climes: q('path.dooms-atlas-clime'), capped: q('path.dooms-atlas-peak.is-capped'), dunes: q('path.dooms-atlas-glyph.is-desert'), reeds: q('path.dooms-atlas-glyph.is-swamp'),
             lands: q('path.dooms-atlas-territory'), loose: q('path.dooms-atlas-territory.is-loose'), realm: q('path.dooms-atlas-realm'), beyond: q('path.dooms-atlas-beyond'), rocks: q('path.dooms-atlas-coast'),
             start: !document.querySelector('.dooms-atlas-start').hidden, tray: document.querySelectorAll('.dooms-atlas-tray-row').length, markers: m.markers.length, territories: m.territories.length, world: m.world,
             buttons: [...document.querySelectorAll('.dooms-atlas-tidy-buttons [data-act]')].map(x => `${x.getAttribute('data-act')}:${x.textContent.trim()}`), line: (document.querySelector('.dooms-atlas-world-line') || {}).textContent || '', groundSelect: !!document.querySelector('.dooms-atlas-ground-select'),
@@ -1266,6 +1268,7 @@ console.log('\nÂ§5j World gen: the land made first, the regions put on it (D182â
     check('the panel: four shapes, three sizes, the regions to add, the seed, and the world they make drawn beside them', pn.shown && pn.title === 'Generate a world' && same(pn.shapes, [['pangea', true], ['earth', false], ['islands', false], ['divide', false]]) && same(pn.sizes, [['small', false], ['medium', true], ['large', false]]) && pn.regions === '9' && pn.seed === 'alpha' && pn.svg && pn.svg.w > 400 && pn.svg.h > 250 && pn.lands === 9 && pn.added === 9 && pn.peaks > 10, JSON.stringify({ ...pn, text: '' }));
     check('an empty map is asked nothing about what is on it; nothing to remove yet', pn.modes.length === 0 && same(pn.acts, [['worldgen-apply', false], ['setup-close', false]]));
     check('the picture says what the world is: its landmasses, its size at the map\'s scale, its regions', /^1 landmass Â· about 3850 by 2650 miles Â· 9 regions$/.test(pn.caption) && pn.names.length === 9 && pn.names.includes('The Heartland'), pn.caption);
+    check('the picture draws the world\'s rivers and climates: desert, snow and marsh, the peaks in the cold capped (D192)', pn.rivers >= 5 && same(pn.climes, ['desert', 'snow', 'swamp']) && pn.capped >= 1 && pn.capped < pn.peaks && /rivers and lakes, forests, deserts, snow and marsh/.test(pn.text), JSON.stringify([pn.rivers, pn.climes, pn.capped, pn.peaks]));
     check('the panel fits the window: the choices beside the picture, nothing cut off', !pn.overflow && pn.card.w <= VIEW.width && pn.card.bottom <= VIEW.height + 1 && pn.form.right <= pn.svg.left + 1 && /no AI request/.test(pn.text));
     await shot('60-worldgen-panel');
     for (const shape of ['earth', 'islands', 'divide']) {
@@ -1284,6 +1287,11 @@ console.log('\nÂ§5j World gen: the land made first, the regions put on it (D182â
     await settle();
     let mp = await mapOf();
     check('applied: the map is the world, the sea its ground, the land on it with shallows, forests, lakes, peaks and its coast', done.added.length === 9 && mp.ground === 'world' && mp.wild === 1 && mp.shallows === 2 && mp.coastline === 1 && mp.forest === 1 && mp.lake === 1 && mp.peaks > 10 && mp.trees === 1 && !mp.start && /205, 210, 189/.test(mp.bg), JSON.stringify(mp));
+    check('with its rivers, the ground of its desert, snow and marsh, its dunes and reeds, and snow on the peaks in the cold (D192)', mp.rivers >= 1 && mp.rivers <= 2 && mp.climes === 3 && mp.dunes === 1 && mp.reeds === 1 && mp.capped >= 1 && mp.capped < mp.peaks, JSON.stringify([mp.rivers, mp.climes, mp.dunes, mp.reeds, mp.capped, mp.peaks]));
+    {
+        const river = await page.evaluate(() => { const r = document.querySelector('path.dooms-atlas-river'); const c = document.querySelector('path.dooms-atlas-clime.is-snow'); const cs = getComputedStyle(r); return { fill: cs.fill, stroke: cs.stroke, width: parseFloat(cs.strokeWidth), long: r.getTotalLength(), snow: getComputedStyle(c).fill, snowStroke: getComputedStyle(c).stroke }; });
+        check('a river is a line of water, not a shape; the snow a ground with no edge of its own', river.fill === 'none' && river.stroke !== 'none' && river.width >= 1 && river.long > 100 && /^rgba?\(/.test(river.snow) && river.snowStroke === 'none', JSON.stringify(river));
+    }
     check('the nine regions stand on it, each a land with a dashed border: not canon yet', mp.lands === 9 && mp.loose === 9 && mp.territories === 9 && mp.markers === 9);
     const labels = await page.evaluate(() => [...document.querySelectorAll('.dooms-atlas-land-label .dooms-atlas-region-name')].map(x => ({ text: x.textContent, shown: getComputedStyle(x.parentElement).display !== 'none' && x.getBoundingClientRect().width > 0 })));
     check('each land carries its name on the map', labels.length === 9 && labels.every(x => x.shown) && labels.some(x => x.text === 'The Heartland'), JSON.stringify(labels));
@@ -1309,7 +1317,7 @@ console.log('\nÂ§5j World gen: the land made first, the regions put on it (D182â
     await page.evaluate((id) => window.__layer(id), land.id);
     await settle();
     mp = await mapOf();
-    check('inside a region of the world: its own land, its neighbours around it, the world\'s terrain across it, the sea past the coast', mp.ground === 'world' && mp.realm === 1 && mp.beyond >= 2 && mp.wild === 1 && mp.coastline === 1 && mp.peaks > 10 && mp.forest === 1 && mp.markers === 3 && mp.world === null && mp.groundSelect, JSON.stringify(mp));
+    check('inside a region of the world: its own land, its neighbours around it, the world\'s terrain across it, the sea past the coast', mp.ground === 'world' && mp.realm === 1 && mp.beyond >= 2 && mp.wild === 1 && mp.coastline === 1 && mp.peaks > 10 && mp.forest === 1 && mp.rivers >= 1 && mp.climes === 3 && mp.markers === 3 && mp.world === null && mp.groundSelect, JSON.stringify(mp));
     check('the region\'s places stand on its land as the world\'s map has it', await page.evaluate(() => { const m = window.__model; return m.realm.k === 1 && m.markers.every(x => window.A.pointInPolygon(m.realm.outline, x.x, x.y)); }));
     await shot('63-world-inside-a-region');
     const card = await page.evaluate(async () => { const m = window.__model; const a = m.markers.find(x => x.label === 'Hask'), b = m.markers.find(x => x.label === 'Redfall Castle'); return { way: window.A.describeDistance(m, a.id, b.id), route: window.A.routeBetween(m, a.id, b.id) }; });

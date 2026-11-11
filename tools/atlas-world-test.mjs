@@ -88,6 +88,12 @@ console.log('\n§3 a world made again');
     const am = top(again.book);
     check('made again: the three that were taken up stay where they are, the rest are replaced', again.replaced === 3 && again.added.length === 4 && am.territories.length === 7 && first.added.slice(0, 3).every(id => am.territories.some(t => t.id === id)) && first.added.slice(3).every(id => !am.all.some(x => x.id === id)) && am.world.seed === 'beta');
     check('the replaced regions are forgotten, not kept as deleted', am.deleted.length === 0);
+    {
+        // A land under a plain name has the terrain of its own ground (D192): its name was made from it.
+        const WORD = { Woods: 'forest', Wilds: 'forest', Weald: 'forest', Snows: 'snow', Frostlands: 'snow', Tundra: 'snow', Highlands: 'mountains', Peaks: 'mountains', Heights: 'mountains', Sands: 'desert', Waste: 'desert', Dunes: 'desert', Fens: 'swamp', Marshes: 'swamp', Mire: 'swamp', Coast: 'coast', Shore: 'coast', Strand: 'coast', Plains: 'plains', Reach: 'plains', March: 'plains', Vale: 'plains' };
+        const many = top(applyWorldGen(null, top(null), { seed: 'alpha', shape: 'pangea', size: 'medium', regions: 14, mode: 'clean' }).book).territories;
+        check('a land under a plain name has the terrain of its own ground: the Woods a forest, the Snows under snow, and "Northern" alone tells no snow', many.length === 14 && many.every(t => t.label === 'The Heartland' || WORD[t.label.split(' ').pop()] === t.terrain) && many.some(t => t.terrain === 'snow') && many.some(t => /^North/.test(t.label) && t.terrain !== 'snow'), JSON.stringify(many.map(t => `${t.label}: ${t.terrain}`)));
+    }
     check('a new land\'s plain name is clear of the names already there', new Set(am.territories.map(t => t.label)).size === 7);
 }
 

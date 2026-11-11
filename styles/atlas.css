@@ -180,6 +180,14 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-wg-land.is-added { stroke-dasharray: 0.5 0.4; }
 .dooms-wg-forest { fill: rgba(86, 122, 70, 0.34); stroke: none; }
 .dooms-wg-lake { fill: color-mix(in srgb, var(--atlas-sea) 80%, #8fb3bd); stroke: var(--atlas-ink); stroke-width: 0.07; stroke-opacity: 0.6; }
+/* Climates and rivers (D192): the ground of a desert, of the snow, of a marsh; a river's line, wider where others join it. */
+.dooms-wg-clime { stroke: none; }
+.dooms-wg-clime.is-desert { fill: rgba(214, 170, 92, 0.5); }
+.dooms-wg-clime.is-snow { fill: rgba(250, 250, 246, 0.8); }
+.dooms-wg-clime.is-swamp { fill: rgba(92, 112, 84, 0.42); }
+.dooms-wg-river { fill: none; stroke: color-mix(in srgb, var(--atlas-sea) 25%, #4d8597); stroke-width: 0.16; stroke-linecap: round; stroke-linejoin: round; }
+.dooms-wg-river.is-big { stroke-width: 0.28; }
+.dooms-wg-peak.is-capped { fill: #f6f5ee; }
 .dooms-wg-peak { fill: color-mix(in srgb, var(--atlas-land) 86%, #8a7a66); stroke: var(--atlas-ink); stroke-width: 0.08; stroke-opacity: 0.85; stroke-linejoin: round; }
 .dooms-wg-coast { fill: none; stroke: var(--atlas-ink); stroke-width: 0.2; stroke-linejoin: round; }
 .dooms-wg-region { fill: var(--atlas-ink); }
@@ -403,6 +411,18 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-coastline { fill: none; stroke: var(--atlas-ink); stroke-width: 2.6; stroke-opacity: 1; stroke-linejoin: round; }
 .dooms-atlas-wood.is-forest { fill: rgba(86, 122, 70, 0.3); }
 .dooms-atlas-pond.is-lake { fill: color-mix(in srgb, var(--atlas-sea) 80%, #8fb3bd); }
+/* A generated world's climates and rivers (D192). */
+.dooms-atlas-clime { fill-opacity: 1; stroke: none; }
+.dooms-atlas-clime.is-desert { fill: rgba(214, 170, 92, 0.46); }
+.dooms-atlas-clime.is-snow { fill: rgba(250, 250, 246, 0.78); }
+.dooms-atlas-clime.is-swamp { fill: rgba(92, 112, 84, 0.38); }
+.dooms-atlas-river { fill: none; stroke: color-mix(in srgb, var(--atlas-sea) 25%, #4d8597); stroke-width: 2.8; stroke-opacity: 1; stroke-linecap: round; stroke-linejoin: round; }
+.dooms-atlas-river.is-big { stroke-width: 4.4; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-river { stroke-width: 2; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-river.is-big { stroke-width: 3.2; }
+.dooms-atlas-leaflet[data-zoom="close"] .dooms-atlas-river { stroke-width: 4; }
+.dooms-atlas-leaflet[data-zoom="close"] .dooms-atlas-river.is-big { stroke-width: 6.5; }
+.dooms-atlas-peak.is-capped { fill: #f6f5ee; }
 .dooms-atlas-leaflet[data-ground="world"] .dooms-atlas-territory { fill-opacity: 0.78; }
 .dooms-atlas-leaflet[data-ground="world"] .dooms-atlas-territory:hover { fill-opacity: 0.95; }
 .dooms-atlas-leaflet[data-ground="world"][data-zoom="far"] .dooms-atlas-tree { stroke-width: 0.8; stroke-opacity: 0.7; }

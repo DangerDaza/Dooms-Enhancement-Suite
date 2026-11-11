@@ -139,18 +139,24 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             // Shapes that can have holes and be in several parts (a generated world's): each part [outer, ...holes].
             const shapeOf = (parts) => parts.map(part => part.map(ring => ring.map(([x, y]) => ll(x, y))));
             const onWorld = ground === 'world' || !!(current.realm && current.realm.world);    // a generated world's map, or a region of one (D184)
-            /** What the ground draws over the land: woods, trees, water, a terrain's own marks, the peaks; on a generated world its forests, lakes and the line of its coast. */
+            /** What the ground draws over the land: woods, trees, water, a terrain's own marks, the peaks; on a generated world its climates' grounds, its forests, rivers, lakes and the line of its coast. */
             const drawTerrain = () => {
                 if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
                 else lines(decor.lines || [], `dooms-atlas-ground is-${ground}`);
+                // A generated world's climates (D192): the ground of each lies under everything else that is drawn on it.
+                for (const [list, name] of [[decor.deserts, 'desert'], [decor.snows, 'snow'], [decor.swamps, 'swamp']]) if (list && list.length) L.polygon(shapeOf(list), { className: `dooms-atlas-clime is-${name}`, interactive: false, smoothFactor: 0.3 }).addTo(shapes);
                 if (decor.forests && decor.forests.length) L.polygon(shapeOf(decor.forests), { className: 'dooms-atlas-wood is-forest', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
                 for (const w of decor.woods || []) poly(w, 'dooms-atlas-wood');
+                lines(decor.dunes || [], 'dooms-atlas-glyph is-desert');
+                lines(decor.reeds || [], 'dooms-atlas-glyph is-swamp');
                 lines(decor.trees || [], 'dooms-atlas-tree');
+                // Rivers (D192): under the lakes they run into; one that others join is drawn the wider.
+                for (const big of [false, true]) lines((decor.rivers || []).filter(r => !!r.big === big).map(r => r.points), `dooms-atlas-river${big ? ' is-big' : ''}`);
                 if (decor.lakes && decor.lakes.length) L.polygon(shapeOf(decor.lakes), { className: 'dooms-atlas-pond is-lake', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
                 for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
                 lines(decor.marks || [], `dooms-atlas-glyph is-${decor.look || 'plains'}`);
-                // A peak is one shape of its own, the farthest drawn first, so a nearer one stands in front of it.
-                for (const peak of decor.peaks || []) L.polyline(peak.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-peak is-${decor.look || 'plains'}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
+                // A peak is one shape of its own, the farthest drawn first, so a nearer one stands in front of it. One in the cold wears snow.
+                (decor.peaks || []).forEach((peak, n) => L.polyline(peak.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-peak is-${decor.look || 'plains'}${decor.capped && decor.capped[n] ? ' is-capped' : ''}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes));
                 if (onWorld && decor.coasts && decor.coasts.length) L.polygon(shapeOf(decor.coasts), { className: 'dooms-atlas-coastline', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
             };
             if (ground === 'island') {

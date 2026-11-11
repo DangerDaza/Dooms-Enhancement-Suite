@@ -13,7 +13,7 @@
  * over its ground. Pure: liveWorld.js reads `normalizeAtlas` for the
  * pack. tools/atlas-test.mjs.
  */
-import { normalizeWorldSpec, generateWorld, divideWorld, suggestSites, sizeOfWorld, travelField, roadCost } from './worldGen.js';
+import { normalizeWorldSpec, generateWorld, divideWorld, suggestSites, sizeOfWorld, travelField, roadCost, isStandInName } from './worldGen.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const round4 = (n) => Math.round(n * 10000) / 10000;
@@ -1193,27 +1193,37 @@ function borderMark(points) {
 
 /** A land's terrain: the one its name tells, else (on a generated world) the one its own ground is. */
 function terrainOfLand(label, cell) {
+    const ground = cell && typeof cell.terrain === 'string' && ATLAS_TERRAINS.includes(cell.terrain) ? cell.terrain : '';
+    if (ground && isStandInName(label)) return ground;    // a plain name was made from the ground itself (D192): "Northern Woods" is a forest, not the snow its "North" would tell
     const told = guessTerrain(label);
-    return told === 'plains' && cell && typeof cell.terrain === 'string' && ATLAS_TERRAINS.includes(cell.terrain) ? cell.terrain : told;
+    return told === 'plains' && ground ? ground : told;
 }
 
 /**
- * What a generated world draws on a map (D184): its coasts, forests and
- * lakes as shapes (each [outer, ...holes]), its trees as lines and its
- * peaks each as its own lines, laid on the map by `to` (a region's own
- * map lays the world's land wider, or elsewhere). A peak or a tree that
- * would stand on a marker is left out, so the marker can be read.
+ * What a generated world draws on a map (D184, D192): its coasts,
+ * forests, lakes, deserts, snows and marshes as shapes (each
+ * [outer, ...holes]), its rivers as lines (`big` for one that others run
+ * into), its trees, dunes and reeds as lines and its peaks each as its
+ * own lines (`capped` says, peak for peak, which stand in the cold and
+ * wear snow), laid on the map by `to` (a region's own map lays the
+ * world's land wider, or elsewhere). A peak, a tree, a dune or a reed
+ * that would stand on a marker is left out, so the marker can be read.
  */
 function worldDecor(world, { to = null, k = 1, markers = [] } = {}) {
     const at = to || ((p) => p);
     const ring = (r) => (to ? r.map(at) : r);
     const shapes = (list) => (to ? list.map(parts => parts.map(ring)) : list);
     const near = (x, y, r) => markers.some(m => Math.hypot(m.x - x, m.y - y) < r);
-    const peaks = [];
-    for (const p of world.peaks) { const [x, y] = at([p.x, p.y]); if (!near(x, y, (p.s * 0.6 + 0.3) * k)) peaks.push(p.lines.map(ring)); }
-    const trees = [];
-    for (const t of world.trees) { const [x, y] = at([t.x, t.y]); if (!near(x, y, 0.6 * k)) trees.push(...t.lines.map(ring)); }
-    return { lines: [], sea: null, ripples: [], woods: [], trees, ponds: [], peaks, marks: [], look: 'world', unit: round4(k), coasts: shapes(world.coasts), forests: shapes(world.forests), lakes: shapes(world.lakes) };
+    const peaks = [], capped = [];
+    for (const p of world.peaks) { const [x, y] = at([p.x, p.y]); if (!near(x, y, (p.s * 0.6 + 0.3) * k)) { peaks.push(p.lines.map(ring)); capped.push(!!p.snowy); } }
+    const clearOf = (list) => { const out = []; for (const t of list || []) { const [x, y] = at([t.x, t.y]); if (!near(x, y, 0.6 * k)) out.push(...t.lines.map(ring)); } return out; };
+    return {
+        lines: [], sea: null, ripples: [], woods: [], trees: clearOf(world.trees), ponds: [], peaks, capped, marks: [], look: 'world', unit: round4(k),
+        coasts: shapes(world.coasts), forests: shapes(world.forests), lakes: shapes(world.lakes),
+        deserts: shapes(world.deserts || []), snows: shapes(world.snows || []), swamps: shapes(world.swamps || []),
+        dunes: clearOf(world.dunes), reeds: clearOf(world.reeds),
+        rivers: (world.rivers || []).map(r => ({ big: !!r.big, points: ring(r.points) })),
+    };
 }
 
 /**
@@ -1633,16 +1643,16 @@ export function routeBetween(model, fromId, toId) {
         if (i < 0 || j < 0) continue;
         const length = dist(ms[i], ms[j]) * per;
         const over = geo ? roadCost(geo.world, onWorld(ms[i]), onWorld(ms[j]), { embark }) : null;
-        const e = { hours: r.hours > 0 ? r.hours : travelHours(over ? over.cost * wide : length, model.measure), length, set: r.hours > 0, kind: 'road', water: over ? over.water * wide : 0, mountain: over ? over.mountain * wide : 0 };
+        const e = { hours: r.hours > 0 ? r.hours : travelHours(over ? over.cost * wide : length, model.measure), length, set: r.hours > 0, kind: 'road', ...overOf(over, wide) };
         road.set(i * n + j, e);
         road.set(j * n + i, e);
     }
     // A road with a set time straight between the two is the story's word for that journey: nothing is searched for.
     const direct = road.get(from * n + to);
-    if (direct && direct.set) return { hours: direct.hours, length: direct.length, mode: 'road', via: [], set: true, water: direct.water, mountain: direct.mountain };
+    if (direct && direct.set) return { hours: direct.hours, length: direct.length, mode: 'road', via: [], set: true, ...overOf(direct, 1) };
     const fields = new Map();
     const fieldOf = (i) => { if (!fields.has(i)) fields.set(i, travelField(geo.world, onWorld(ms[i]), { embark })); return fields.get(i); };
-    const NONE = { hours: Infinity, length: 0, set: false, kind: 'cross', water: 0, mountain: 0 };
+    const NONE = { hours: Infinity, length: 0, set: false, kind: 'cross', ...overOf(null, 1) };
     const hops = new Map();
     const hop = (i, j) => {
         const key = i * n + j;
@@ -1652,14 +1662,14 @@ export function routeBetween(model, fromId, toId) {
             const length = dist(ms[i], ms[j]) * per;
             const open = ms[i].territory || ms[j].territory;
             const slow = open ? 1 : CROSS_COUNTRY;
-            e = { hours: travelHours(length, model.measure) * slow, length, set: false, kind: open ? 'open' : 'cross', water: 0, mountain: 0 };
+            e = { hours: travelHours(length, model.measure) * slow, length, set: false, kind: open ? 'open' : 'cross', ...overOf(null, 1) };
             if (geo) {
                 // Across the ground itself, from where the journey starts or to where it ends; between two places on the way there are only roads.
                 const pivot = i === from || i === to ? i : (j === from || j === to ? j : -1);
                 const other = onWorld(ms[pivot === i ? j : i]);
                 const way = pivot < 0 ? null : fieldOf(pivot).to(other.x, other.y);
                 if (pivot < 0) e = NONE;
-                else if (way) e = { ...e, hours: travelHours(((way.cost - way.afloat) * slow + way.afloat) * wide, model.measure), length: way.length * wide, water: way.water * wide, mountain: way.mountain * wide };    // a boat is no slower for there being no road
+                else if (way) e = { ...e, hours: travelHours(((way.cost - way.afloat) * slow + way.afloat) * wide, model.measure), length: way.length * wide, ...overOf(way, wide) };    // a boat is no slower for there being no road
             }
         }
         hops.set(key, e);
@@ -1686,15 +1696,19 @@ export function routeBetween(model, fromId, toId) {
     const kinds = new Set(taken.map(h => h.kind));
     const mode = kinds.size === 1 ? [...kinds][0] : (kinds.has('road') ? 'mixed' : 'open');
     const sum = (key) => taken.reduce((total, h) => total + h[key], 0);
-    return { hours: best[to], length: sum('length'), mode, via: path.slice(1, -1).map(i => ms[i].id), set: taken.some(h => h.set), water: sum('water'), mountain: sum('mountain') };
+    return { hours: best[to], length: sum('length'), mode, via: path.slice(1, -1).map(i => ms[i].id), set: taken.some(h => h.set), ...Object.fromEntries(WAY_GROUNDS.map(g => [g, sum(g)])) };
 }
+
+// What a way is over (D185, D192), each in the map's own measure: water, and the grounds a way is told by.
+const WAY_GROUNDS = ['water', 'mountain', 'forest', 'desert', 'snow', 'swamp'];
+const overOf = (over, wide) => Object.fromEntries(WAY_GROUNDS.map(g => [g, over && over[g] > 0 ? over[g] * wide : 0]));
 
 /**
  * A road as it is drawn (D165, D185): its length in the map's unit and
  * the hours it takes by that length alone, whatever time the player set
  * for it. On a generated world the ground under its line counts: over
  * the mountains it is a pass, over water a crossing by boat.
- * @returns {{ length: number, hours: number, water: number, mountain: number }|null}  null when either end is not on this map
+ * @returns {{ length: number, hours: number, water: number, mountain: number, forest: number, desert: number, snow: number, swamp: number }|null}  null when either end is not on this map
  */
 export function roadAsDrawn(model, aId, bId) {
     const ms = model && Array.isArray(model.markers) ? model.markers : [];
@@ -1703,11 +1717,11 @@ export function roadAsDrawn(model, aId, bId) {
     const per = model.measure.per;
     const length = dist(a, b) * per;
     const geo = model.geo && model.geo.world ? model.geo : null;
-    if (!geo) return { length, hours: travelHours(length, model.measure), water: 0, mountain: 0 };
+    if (!geo) return { length, hours: travelHours(length, model.measure), ...overOf(null, 1) };
     const wide = geo.k * per;
     const at = (m) => ({ x: (m.x - geo.dx) / geo.k, y: (m.y - geo.dy) / geo.k });
     const over = roadCost(geo.world, at(a), at(b), { embark: model.measure.pace / wide });
-    return { length, hours: travelHours(over.cost * wide, model.measure), water: over.water * wide, mountain: over.mountain * wide };
+    return { length, hours: travelHours(over.cost * wide, model.measure), ...overOf(over, wide) };
 }
 
 /** How a road as drawn is travelled, in words: "96 miles, about 4 days on foot", "…on foot and by boat", "…on foot, over the mountains". */
@@ -1722,8 +1736,18 @@ export function describeRoad(model, aId, bId) {
 const bySea = (r) => r.water > 0 && r.length > 0 && r.water >= r.length * 0.85;
 /** How a way is travelled, in words: " on foot", " by boat" for a voyage, " on foot and by boat" when some of it is over water. */
 const wayBy = (r) => (bySea(r) ? ' by boat' : r.water > 0 ? ' on foot and by boat' : ' on foot');
-/** ", over the mountains" for a way that is over them for a good part of its length. */
-const wayOver = (r) => (r.mountain > 0 && r.mountain >= r.length * 0.15 ? ' over the mountains' : '');
+/**
+ * " over the mountains", " across the desert", " through the snow", " through the marshes" (D192) for a way that is
+ * over one of them for a good part of its length: the mountains first, as the hardest; else whichever is the most of it.
+ */
+const WAY_OVER = [['mountain', ' over the mountains', 0.15], ['snow', ' through the snow', 0.25], ['swamp', ' through the marshes', 0.25], ['desert', ' across the desert', 0.25]];
+const wayOver = (r) => {
+    if (!(r.length > 0)) return '';
+    const [mountain, ...rest] = WAY_OVER;
+    if (r.mountain >= r.length * mountain[2] && r.mountain > 0) return mountain[1];
+    const most = rest.filter(([g, , least]) => r[g] > 0 && r[g] >= r.length * least).sort((p, q) => r[q[0]] - r[p[0]])[0];
+    return most ? most[1] : '';
+};
 
 /**
  * The line a card shows: "96 miles by road, about 4 days on foot", "about
