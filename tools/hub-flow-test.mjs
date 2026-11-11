@@ -916,6 +916,12 @@ console.log('\n§16 where the people stand and the open threads: written with th
         : JSON.stringify({ recap: 'They went down and found oil.', people: [{ name: 'Kiyoha', now: 'At the stair foot, rested.' }], threads: { closed: [3], opened: [] } }));
     const pe4 = await hub.prepareEnd();
     check('a long scene is read in passes; the later pass is told how things stand so far, the thread the scene opened numbered with the rest', pe4.ok && pe4.pages >= 2 && recapsAsked.length === pe4.pages && recapsAsked[1].user.includes('Where they stand as of the record so far:\n- Kiyoha: Halfway down, tired.') && recapsAsked[1].user.includes('3. The lamp oil is running low.'), `${pe4.pages} pages; ${recapsAsked.length} asked`);
+    {
+        const u1 = String(recapsAsked[1].user);
+        const lead = u1.includes('The lines just before this part') ? u1.slice(u1.indexOf('The lines just before this part'), u1.indexOf('The scene, continued:\n')) : '';
+        const lastOfFirst = String(recapsAsked[0].user).split('The scene:\n').pop().split('\n').filter(x => x.trim() && !/^Answer with/.test(x)).pop();
+        check('End\'s later pass is handed the last lines of the page before it too, to read across the cut (D199); the first pass has none', !String(recapsAsked[0].user).includes('The lines just before this part') && !!lead && !!lastOfFirst && lead.includes(lastOfFirst), JSON.stringify([lead.length, String(lastOfFirst).slice(0, 60)]));
+    }
     check('what stands at the end is the last pass\'s word; a thread the scene opened and settled leaves no trace', same(pe4.continuity.people.map(p => p.now), ['At the stair foot, rested.']) && pe4.continuity.people[0].was.startsWith('Asleep') && pe4.continuity.opened.length === (pe4.pages > 2 ? pe4.continuity.opened.length : 0) && pe4.continuity.closed.length === 0 && pe4.continuity.open === 2, JSON.stringify(pe4.continuity));
     const ce4 = await hub.commitEnd({ recap: pe4.recap, skipCanon: true, skipWorld: true });
     check('ended, the world has it', ce4.ok && cont().people.find(p => p.name === 'Kiyoha').now === 'At the stair foot, rested.' && cont().threads.length === 2);
@@ -1374,7 +1380,10 @@ console.log('\n§21 a long chat read whole: a request a page, stopped, failed, t
     check('how much there is to read is known before anything is asked: every message, the requests the whole takes, about how many tokens it is', plan.ok && reach.messages === 1 + LEGS * 2 && P >= 4 && P <= 8 && reach.capped === false && reach.recent === 40 && reach.tokens >= 20000 && reach.tokens <= 30000 && reach.tokens % 1000 === 0, JSON.stringify([plan.ok, plan.reason, reach]));
 
     // What a request is told: the legs on its page, and the record so far.
-    const legsIn = (prompt) => (JSON.stringify(prompt).match(/On leg-\d{3}/g) || []).map(x => x.slice(3));
+    // A request's own part of the chat, apart from the lines that lead into it (D199).
+    const own = (prompt) => { const u = String((prompt && prompt.user) || ''); const k = u.lastIndexOf('(This part)\n'); if (k >= 0) return u.slice(k + 12); const m = u.split(/The scene(?:, continued)?:\n/); return m[m.length - 1]; };
+    const leadOf = (prompt) => { const u = String((prompt && prompt.user) || ''); const a = u.indexOf('The lines just before this part'); if (a < 0) return ''; const b = u.indexOf('(This part)\n', a); const c = u.search(/The scene, continued:\n/); return u.slice(a, b >= 0 ? b : c >= 0 ? c : u.length); };
+    const legsIn = (prompt) => (own(prompt).match(/On leg-\d{3}/g) || []).map(x => x.slice(3));
     const reply = (prompt) => { const l = legsIn(prompt); return `{"recap":"The road ran as far as ${l[l.length - 1]}.","people":[{"name":"Brannoch","now":"On the mill road at ${l[l.length - 1]}."}],"threads":{"closed":[],"opened":[]}}`; };
     let asked = [];
     let fail = () => false;
@@ -1392,6 +1401,8 @@ console.log('\n§21 a long chat read whole: a request a page, stopped, failed, t
     const lasts = asked.map(a => { const l = legsIn(a); return l[l.length - 1]; });
     check('read whole, the chat takes a request a page, from its first message to its last, none read twice', whole.ok && whole.whole === true && whole.pages === P && asked.length === P && firsts[0] === leg(1) && lasts[P - 1] === leg(LEGS) && asked.reduce((n, a) => n + legsIn(a).length, 0) === LEGS && asked.every((a, i) => i === 0 || Number(firsts[i].slice(4)) === Number(lasts[i - 1].slice(4)) + 1), JSON.stringify([whole.ok, whole.reason, asked.length, firsts, lasts]));
     check('each request is told the record as the ones before it left it, and the last one knows it is the last', asked.every((a, i) => i === 0 || JSON.stringify(a).includes(`The road ran as far as ${lasts[i - 1]}.`)) && !JSON.stringify(asked[0]).includes('The road ran as far as') && whole.recap === `The road ran as far as ${leg(LEGS)}.`, whole.recap);
+    check('a request after the first is handed the last lines of the part before it, marked as recorded already, so it reads across the cut (D199); the first has none', leadOf(asked[0]) === '' && asked.slice(1).every((a, i) => { const l = leadOf(a); return /already in the record so far \(to read on from, not to record again\)/.test(l) && l.includes(`On ${lasts[i]} Brannoch finds the way.`) && l.includes(`We take ${lasts[i]}.`) && !own(a).includes(`On ${lasts[i]} `); }), JSON.stringify(asked.map(a => leadOf(a).length)));
+    check('a cut never parts the player\'s message from the reply to it: every part after the first opens on the player\'s line', asked.slice(1).every(a => own(a).startsWith('Jordan: We take leg-')) && asked.every(a => /Saga: On leg-\d{3} Brannoch finds the way\./.test(own(a).split('\n').filter(x => x.trim() && !/^Answer with/.test(x)).pop())), JSON.stringify(asked.map(a => own(a).slice(0, 30))));
     check('where the people stand is carried from request to request: the last word on each is the one kept', whole.continuity.people.length === 1 && whole.continuity.people[0].name === 'Brannoch' && whole.continuity.people[0].now === `On the mill road at ${leg(LEGS)}.`, JSON.stringify(whole.continuity));
     check('the panel is told how every request stands as each is asked for: one running, the ones before it done', steps.length === P + 1 && steps.slice(0, P).every((g, i) => g.part === 'record' && g.page === i + 1 && g.pages === P && same(g.states, Array.from({ length: P }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')))) && steps[P].states.every(x => x === 'done'), JSON.stringify(steps.map(g => g.states.join(','))));
     check('nothing is changed by the read, and nothing of it is left waiting', hub.worldEntry(plan.world.id) === null && hub.adoptPaused() === null && whole.skipped === 0 && whole.capped === false);
@@ -1467,7 +1478,7 @@ console.log('\n§21 a long chat read whole: a request a page, stopped, failed, t
     const stuck2 = await hub.prepareAdopt({ whole: true });
     asked = [];
     const skipped = await hub.prepareAdopt({ whole: true, resume: true, skip: true });
-    check('skipped, the read goes on without that part: it is not asked for again, the next is told the record the first left, and the answer says one was skipped', stuck2.reason === 'pass' && stuck2.page === 2 && skipped.ok && skipped.skipped === 1 && skipped.states[1] === 'skipped' && asked.length === P - 2 && legsIn(asked[0])[0] === third && JSON.stringify(asked[0]).includes(`The road ran as far as ${lasts[0]}.`) && !asked.some(a => legsIn(a)[0] === second), JSON.stringify([stuck2.reason, skipped.ok, skipped.skipped, asked.length]));
+    check('skipped, the read goes on without that part: it is not asked for again, the next is told the record the first left and none of the skipped part\'s lines, and the answer says one was skipped', stuck2.reason === 'pass' && stuck2.page === 2 && skipped.ok && skipped.skipped === 1 && skipped.states[1] === 'skipped' && asked.length === P - 2 && legsIn(asked[0])[0] === third && JSON.stringify(asked[0]).includes(`The road ran as far as ${lasts[0]}.`) && !asked.some(a => legsIn(a)[0] === second) && leadOf(asked[0]) === '' && leadOf(asked[1]) !== '', JSON.stringify([stuck2.reason, skipped.ok, skipped.skipped, asked.length]));
 
     // Stop: the request in hand finishes, no more are asked for, and the read can be carried on.
     asked = [];
@@ -1496,6 +1507,7 @@ console.log('\n§21 a long chat read whole: a request a page, stopped, failed, t
     const ledger = await hub.readAdoptLedger({ onStep: (g) => lsteps.push(g) });
     const entries = meta.dooms_canon.entries;
     check('the ledger reads the whole chat too: a request a page, each handed its own page, oldest first', ledger.ok && ledger.pages === P && ledger.added === P && ledger.skipped === 0 && canonAsked.length === P && same(canonAsked.map(a => legsIn(a)[0]), firsts) && legsIn(canonAsked[P - 1]).pop() === leg(LEGS), JSON.stringify([ledger, canonAsked.length]));
+    check('the ledger\'s requests read across the cuts too: each after the first is handed the last lines of the part before, marked as read already', !String(canonAsked[0].user).includes('(This part)') && canonAsked.slice(1).every((a, i) => /They have been read already and are here to read on from/.test(leadOf(a)) && leadOf(a).includes(`On ${lasts[i]} Brannoch finds the way.`)), JSON.stringify(canonAsked.map(a => leadOf(a).length)));
     check('the ledger grows from page to page: a request is shown what the pages before it established', entries.length === ledgerBefore + P && firsts.every(f => entries.some(x => x.name === `Road ${f}`)) && JSON.stringify(canonAsked[1]).includes(`Road ${firsts[0]}`) && !JSON.stringify(canonAsked[0]).includes(`Road ${firsts[0]}`), JSON.stringify(entries.map(x => x.name)));
     check('its bars are told the same way', lsteps.length === P + 1 && lsteps[0].part === 'ledger' && same(lsteps[1].states.slice(0, 2), ['done', 'run']) && lsteps[P].states.every(x => x === 'done'));
     canonAsked = [];

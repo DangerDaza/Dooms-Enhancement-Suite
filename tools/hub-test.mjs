@@ -16,7 +16,7 @@ import {
     sealStores, takeSnapshot, sealSnapshot, factsFrom, weatherText, seedStores,
     personLine, buildBrief, buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle,
     hubMark, readMark, markEnded, sceneHeader, sceneFileName,
-    sceneTranscript, sceneTranscriptPages, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
+    sceneTranscript, sceneTranscriptPages, sceneTranscriptParts, buildRecapPrompt, parseRecapReply, isStaleScene, markIsOfFile,
     openSceneOf, asideScenes, openScene, setSceneAside, resumeScene, endSceneRecord, reopenScene, sceneByChat, markChatGone, renameSceneChat, removeGoneScene, reconcileScenesWithChats, lastRecaps,
     canDeleteScene, deleteSceneRecord, describeDeleteResult,
     hubStatusLine, describeStartResult, describeEndResult, adoptScene, ADOPTED_ID, ADOPTED_TITLE, backupFileName,
@@ -211,6 +211,20 @@ console.log('\n§7 the recap');
     const pages = sceneTranscriptPages(Array.from({ length: 50 }, (_, i) => ({ name: 'N', is_user: false, mes: `line ${i} ` + 'x'.repeat(1000) })), { budget: 6000 });
     check('a long scene in pages, oldest first, the oldest beyond four passes not read', pages.length === 4 && pages[0].includes('line 30 ') && !pages[0].includes('line 29 ') && pages[3].includes('line 49 ') && pages.every(p => p.length <= 6000), String(pages.length));
     check('a short scene is one page', sceneTranscriptPages(chat, { persona: 'Jordan' }).length === 1 && sceneTranscriptPages(chat, { persona: 'Jordan' })[0] === t);
+    // Parts (D199): the same pages, each with the lines that lead into it, and never cut between the player's message and its reply.
+    const talk = [];
+    for (let i = 1; i <= 12; i++) { talk.push({ name: 'Jordan', is_user: true, mes: `ask ${i} ` + 'q'.repeat(150) }); talk.push({ name: 'Mara', is_user: false, mes: `answer ${i} ` + 'a'.repeat(700) }); }
+    const parts = sceneTranscriptParts(talk, { budget: 2000, maxPages: 99 });
+    const plainPages = sceneTranscriptPages(talk, { budget: 2000, maxPages: 99 });
+    check('a long scene in parts: every line once, in order, none lost at a cut', parts.length >= 5 && parts.map(x => x.text).join('\n') === plainPages.join('\n'));
+    check('a cut never falls between the player\'s message and the reply to it: every part opens on the player\'s line, none ends on one', parts.every(x => x.text.startsWith('Jordan: ask ')) && parts.every(x => x.text.split('\n').pop().startsWith('Mara: answer ')) && plainPages.some(x => x.split('\n').pop().startsWith('Jordan: ')), JSON.stringify(parts.map(x => x.text.split('\n').map(l => l.slice(0, 14)))));
+    check('each part after the first carries the last lines of the one before it, to read on from; the first has none', parts[0].lead === '' && parts.slice(1).every((x, i) => x.lead && parts[i].text.endsWith(x.lead) && x.lead.split('\n').length <= 6 && x.lead.length <= 2400), JSON.stringify(parts.map(x => x.lead.length)));
+    check('the lead is at least one line however long that line is, and no more than fits', sceneTranscriptParts(talk, { budget: 2000, maxPages: 99, leadChars: 10 }).slice(1).every(x => x.lead.split('\n').length === 1) && sceneTranscriptParts(talk, { budget: 2000, maxPages: 99, leadLines: 2 }).slice(1).every(x => x.lead.split('\n').length === 2));
+    const lastTwo = sceneTranscriptParts(talk, { budget: 2000, maxPages: 2 });
+    check('with the oldest parts not read, the first one read still has what led into it', lastTwo.length === 2 && lastTwo[0].lead === parts[parts.length - 2].lead && lastTwo[1].text === parts[parts.length - 1].text);
+    check('a short scene is one part with nothing before it', same(sceneTranscriptParts(chat, { persona: 'Jordan' }), [{ text: t, lead: '' }]));
+    const led = buildRecapPrompt({ transcript: parts[1].text, soFar: 'They talked at the gate.', lead: parts[1].lead, last: false });
+    check('a pass that continues is told those lines apart from its own part, as already recorded', led.user.includes(`The lines just before this part, already in the record so far (to read on from, not to record again):\n${parts[1].lead}\n\nThe scene, continued:\n${parts[1].text}`) && !buildRecapPrompt({ transcript: parts[0].text, lead: 'x' }).user.includes('The lines just before'));
     const pass = buildRecapPrompt({ transcript: 'later', brief: '', player: 'Jordan', maxChars: 600, soFar: 'Jordan arrived.', last: false });
     check('a pass carries the record so far and says the scene continues', pass.system.includes('record so far') && pass.system.includes('not the end of the scene') && pass.user.includes('The record so far:\nJordan arrived.'));
     const p = buildRecapPrompt({ transcript: t, brief: '[SCENE BRIEF: W.]', player: 'Jordan', maxChars: 600 });

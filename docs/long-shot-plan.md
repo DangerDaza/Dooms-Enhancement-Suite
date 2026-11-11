@@ -1046,3 +1046,33 @@ on); `tools/atlas-browser-test.mjs` §5g (the choice, a bar a request
 and each state, trying again, failed, stopped, the review's lines and
 the ledger's tick, the ledger's own bars, sixty requests in a list that
 scrolls, a phone) and §5i (End's bars).
+
+## 38. Reading across a cut (2026-11-11, D199)
+
+The owner, of D198's eleven requests: what stops the first from ending
+in the middle of a scene, and the second from picking up there with no
+knowledge of what came before? The cut was always between two messages,
+and the second request was told the record so far, where the people
+stood and what was open. It was not shown the messages before the cut.
+A page that ends mid-conversation left the next request opening on a
+line whose "she" and "it" it had only a summary of. End's record of a
+long scene (§5.2) had the same seam.
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D199 | A part is read with the lines that lead into it | **The lead.** Every part after the first carries the last lines of the part before it: at most six lines and 2,400 characters, always at least one (`sceneTranscriptParts`, `LEAD_LINES`, `LEAD_CHARS`). The record's request is handed them under their own heading, "The lines just before this part, already in the record so far (to read on from, not to record again)", ahead of its own part (`buildRecapPrompt`'s `lead`). The ledger's request is handed them the same way, marked as read already. **The player's message stays with its reply.** When a page is full and its last line is the player's, that line goes over to the next page with the reply to it, so no part ends on a question the next one opens by answering. **Where.** The whole read of Play as scenes (the record and the ledger, D198) and End's record of a scene longer than one page. A part whose predecessor was skipped is handed no lead: those lines are not in the record to read on from. The one-request read has no cuts. |
+
+What it does not do. Cuts are still made by length, not by where a
+scene in the story begins or ends: the chat does not say where that is
+in a way that can be trusted, so the seam is read across, not moved. A
+request costs up to 2,400 characters more than its page. The lead is
+the text only: a request is not told again what the earlier requests
+decided beyond the record, the people and the threads it already had.
+Whether a model keeps to "not to record again" is the model's; the
+tests are stand-ins.
+
+Tests: `tools/hub-test.mjs` §9 (every line once and in order, no cut
+between the player's message and its reply, the lead's size and its
+least, the oldest parts not read, the request's wording),
+`tools/hub-flow-test.mjs` §21 (the record's and the ledger's requests
+carry the lead, none after a skipped part) and §16 (End's later pass).

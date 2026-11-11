@@ -35,7 +35,7 @@ import {
     buildOpenersPrompt, parseOpenersReply, validateOpeners, openerMessage, sceneTitle, hubMark, readMark, markEnded, sceneHeader,
     sceneFileName, sceneTranscript, buildRecapPrompt, parseRecapReply, openSceneOf, openScene, setSceneAside as setAsidePure,
     resumeScene as resumePure, endSceneRecord, reopenScene as reopenPure, sceneByChat, markChatGone, reconcileScenesWithChats,
-    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, renameSceneChat,
+    lastRecaps, hubStatusLine, describeEndResult, RECAP_BUDGET, removeGoneScene as removeGonePure, canDeleteScene, deleteSceneRecord, isStaleScene, markIsOfFile, sceneTranscriptPages, sceneTranscriptParts, renameSceneChat,
     adoptScene, ADOPTED_ID, backupFileName, loreEntries, castLore, standingLore, LORE_BOOKS, sceneLength, sceneIsLong, continuationSeed,
     readConflicts, mergeConflicts, normalizeConflicts,
 } from '../../utils/hub.js';
@@ -1067,7 +1067,9 @@ export async function prepareEnd({ onStep = null } = {}) {
     // The scene's brief is kept on the mark (D120: it rides the brief slot, the chat has no scenario of its own).
     const brief = g.cur.mark && typeof g.cur.mark.brief === 'string' ? g.cur.mark.brief : '';
     // A scene longer than one page is read in passes, oldest first, each pass carrying the record so far (§5.2).
-    const pages = sceneTranscriptPages(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
+    // Each pass after the first is handed the lines that lead into its page, and a cut never parts the player's message from its reply (D199).
+    const parts = sceneTranscriptParts(chatArray() || [], { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
+    const pages = parts.map(x => x.text);
     // The same request says where the scene's people stand when it ends and which threads it settled and opened (D188):
     // it is told where they stood before and what was open, and a record written in passes carries both from pass to pass.
     const people = scenePeople(g.cur, players);
@@ -1086,7 +1088,7 @@ export async function prepareEnd({ onStep = null } = {}) {
         for (let i = 0; i < count; i++) {
             // Which request is being asked for, for the sheet's bars (D198).
             try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
-            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check });
+            const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check, lead: i > 0 ? parts[i].lead : '' });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
             const p = parseRecapReply(r.text, { maxChars: cfg().recapChars });
@@ -1470,8 +1472,8 @@ let adoptRun = null;
 let adoptReading = false;     // a whole read is being asked for: a second one is refused, not run beside it
 const sameChat = (run) => !!run && meta() === run.meta && (chatId() === undefined || chatId() === run.id);
 const beginRun = (part, players, once = false) => {
-    const { pages, total } = adoptPages(players, { once });
-    return { part, once: !!once, meta: meta(), id: chatId(), pages, total, at: 0, states: pages.map(() => 'wait'), recap: '', draft: null, people: null, maxChars: 0, added: 0, error: '' };
+    const { pages, leads, total } = adoptPages(players, { once });
+    return { part, once: !!once, meta: meta(), id: chatId(), pages, leads, total, at: 0, states: pages.map(() => 'wait'), recap: '', draft: null, people: null, maxChars: 0, added: 0, error: '' };
 };
 /** A read as the panel shows it: which pass it is on, and every pass's state (wait | run | retry | done | failed | skipped), in order. */
 const runView = (run) => ({ part: run.part, page: Math.min(run.at + 1, run.pages.length), pages: run.pages.length, states: run.states.slice(), error: run.error });
@@ -1492,8 +1494,10 @@ async function waitToRetry(failure) {
 
 /** A whole chat's pages, oldest first, as the record and the ledger read them (D198); with `once` the chat is one page, for one request. */
 function adoptPages(players, { once = false } = {}) {
-    const all = sceneTranscriptPages(chatArray() || [], { budget: once ? Infinity : RECAP_BUDGET, persona: players[0] || 'Player', truncation: ADOPT_TRUNCATION, maxPages: Infinity });
-    return { pages: all.length > ADOPT_PAGES_MAX ? all.slice(all.length - ADOPT_PAGES_MAX) : all, total: all.length, chars: all.reduce((n, x) => n + x.length, 0) };
+    const all = sceneTranscriptParts(chatArray() || [], { budget: once ? Infinity : RECAP_BUDGET, persona: players[0] || 'Player', truncation: ADOPT_TRUNCATION, maxPages: Infinity });
+    const kept = all.length > ADOPT_PAGES_MAX ? all.slice(all.length - ADOPT_PAGES_MAX) : all;
+    // Each page with the lines that lead into it (D199): a pass reads across the seam it was cut at.
+    return { pages: kept.map(x => x.text), leads: kept.map(x => x.lead), total: all.length, chars: all.reduce((n, x) => n + x.text.length, 0) };
 }
 
 /**
@@ -1676,7 +1680,9 @@ async function readRecordWhole(plan, players, { once = false, onStep = null, res
         if (adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run) }; }
         run.states[i] = 'run';
         tell(onStep, run);
-        const prompt = buildRecapPrompt({ transcript: run.pages[i], brief: '', player: players[0] || '', maxChars: run.maxChars, soFar: run.recap, last: i === run.pages.length - 1, continuity: run.draft });
+        // The lines that lead into this page ride with it when the page before was read (D199); one that was skipped is not in the record to read on from.
+        const lead = i > 0 && run.states[i - 1] === 'done' ? run.leads[i] : '';
+        const prompt = buildRecapPrompt({ transcript: run.pages[i], brief: '', player: players[0] || '', maxChars: run.maxChars, soFar: run.recap, last: i === run.pages.length - 1, continuity: run.draft, lead });
         let p = null;
         let failure = '';
         // Asked for twice before it counts as failed: the line may be held for a moment, and a reply that broke the form is often right the second time.
@@ -1749,9 +1755,11 @@ async function readLedgerWhole({ once, onStep, resume, skip }) {
         run.states[i] = 'run';
         tell(onStep, run);
         let r = null;
+        // The page with the lines that lead into it (D199), marked as read already: the ledger's request reads across the seam too.
+        const text = i > 0 && run.leads[i] ? `(The lines just before this part. They have been read already and are here to read on from.)\n${run.leads[i]}\n\n(This part)\n${run.pages[i]}` : run.pages[i];
         for (let attempt = 0; attempt < 2 && !(r && r.ok); attempt++) {
             if (attempt) { run.states[i] = 'retry'; tell(onStep, run); try { await waitForBackground(); } catch (e) { /* no holder */ } await waitToRetry(why(r)); if (adoptStop || !sameChat(run)) break; }
-            try { r = await updateCanon({ reason: 'adopt', scope: 'scene', text: run.pages[i], ...(run.once ? { adds: ADOPT_ONCE_ADDS } : {}) }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+            try { r = await updateCanon({ reason: 'adopt', scope: 'scene', text, ...(run.once ? { adds: ADOPT_ONCE_ADDS } : {}) }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
         }
         if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
         if ((!r || !r.ok) && adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run), added: run.added }; }

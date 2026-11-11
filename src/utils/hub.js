@@ -826,12 +826,8 @@ export function sceneTranscript(chat, { budget = RECAP_BUDGET, persona = 'Player
     return out.join('\n');
 }
 
-/**
- * The scene's text in pages, oldest first, each within the budget, for a
- * recap written in passes when one page cannot hold the scene (§5.2). A
- * scene within the budget is one page.
- */
-export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'Player', truncation = 1200, maxPages = 4 } = {}) {
+/** A chat's messages as a record reads them: one line each, the tracker's blocks and the dice's marks taken out, a long one cut. */
+function transcriptLines(chat, { persona = 'Player', truncation = 1200 } = {}) {
     const list = Array.isArray(chat) ? chat : [];
     const lines = [];
     for (const m of list) {
@@ -839,19 +835,71 @@ export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'P
         let text = m.mes.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<trackers?>[\s\S]*?<\/trackers?>/gi, '').replace(/```[\s\S]*?```/g, '').replace(/\[(ITEM|CHECK|SAVE)[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
         if (!text) continue;
         if (text.length > truncation) text = `${text.slice(0, truncation - 1).trimEnd()}…`;
-        lines.push(`${m.is_user ? (m.name || persona) : (m.name || 'Narrator')}: ${text}`);
+        lines.push({ user: !!m.is_user, text: `${m.is_user ? (m.name || persona) : (m.name || 'Narrator')}: ${text}` });
     }
+    return lines;
+}
+
+/** Lines dealt into pages of at most `budget` characters, cut between messages; with `turns`, never between the player's message and the reply to it. */
+function pagesOfLines(lines, { budget, turns = false }) {
     const pages = [];
     let page = [];
     let used = 0;
     for (const line of lines) {
-        if (used + line.length > budget && page.length) { pages.push(page.join('\n')); page = []; used = 0; }
+        if (used + line.text.length > budget && page.length) {
+            // The player's message goes over with the reply to it: a page does not end on a question whose answer the next one opens with.
+            const carried = turns && !line.user && page.length > 1 && page[page.length - 1].user ? page.pop() : null;
+            pages.push(page);
+            page = carried ? [carried] : [];
+            used = carried ? carried.text.length + 1 : 0;
+        }
         page.push(line);
-        used += line.length + 1;
+        used += line.text.length + 1;
     }
-    if (page.length) pages.push(page.join('\n'));
+    if (page.length) pages.push(page);
+    return pages;
+}
+
+/**
+ * A scene's messages as pages for its record (§5.2), oldest first: a
+ * scene longer than one page is read in passes, each carrying the record
+ * so far. At most `maxPages`; the oldest beyond them are not read.
+ */
+export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'Player', truncation = 1200, maxPages = 4 } = {}) {
+    const pages = pagesOfLines(transcriptLines(chat, { persona, truncation }), { budget }).map(page => page.map(l => l.text).join('\n'));
     if (pages.length > maxPages) return pages.slice(pages.length - maxPages);    // the oldest beyond the passes are not read
     return pages;
+}
+
+export const LEAD_CHARS = 2400;    // how much of the page before is handed to a pass to read on from (D199)
+export const LEAD_LINES = 6;
+
+/**
+ * The same pages as parts that can be read across their seams (D199).
+ * A page is cut where the budget runs out, which may be the middle of a
+ * conversation: the pass that reads the next page is told the record so
+ * far, and with only that would open on a line whose "she" and "it" it
+ * has not seen. So each part after the first carries its `lead`: the
+ * last few lines of the page before it (at most LEAD_LINES of them and
+ * LEAD_CHARS characters, always at least one), to read on from and not
+ * to record again. And a cut never falls between the player's message
+ * and the reply to it.
+ * @returns {{ text: string, lead: string }[]}
+ */
+export function sceneTranscriptParts(chat, { budget = RECAP_BUDGET, persona = 'Player', truncation = 1200, maxPages = 4, leadChars = LEAD_CHARS, leadLines = LEAD_LINES } = {}) {
+    const pages = pagesOfLines(transcriptLines(chat, { persona, truncation }), { budget, turns: true });
+    const parts = pages.map((page, i) => {
+        const lead = [];
+        let used = 0;
+        const before = i > 0 ? pages[i - 1] : [];
+        for (let k = before.length - 1; k >= 0 && lead.length < leadLines; k--) {
+            if (lead.length && used + before[k].text.length > leadChars) break;
+            lead.unshift(before[k].text);
+            used += before[k].text.length + 1;
+        }
+        return { text: page.map(l => l.text).join('\n'), lead: lead.join('\n') };
+    });
+    return parts.length > maxPages ? parts.slice(parts.length - maxPages) : parts;
 }
 
 /**
@@ -865,7 +913,7 @@ export function sceneTranscriptPages(chat, { budget = RECAP_BUDGET, persona = 'P
  * (D190), again in the same request.
  * @param {{ canon?: string, lore?: Array<{ name: string, text: string }>, standing?: string }|null} o.check
  */
-export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null } = {}) {
+export function buildRecapPrompt({ transcript = '', brief = '', player = '', maxChars = RECAP_CHARS, soFar = '', last = true, continuity = null, check = null, lead = '' } = {}) {
     const who = clean(player, 60) || 'the player';
     const blocks = continuity ? draftBlocks(continuity, { soFar: !!soFar }) : { people: '', threads: '' };
     const told = isObj(check) ? { canon: clean(check.canon, 2400), lore: (Array.isArray(check.lore) ? check.lore : []).filter(l => l && l.name && l.text).map(l => ({ name: clean(l.name, 60), text: clean(l.text, LORE_PER_PERSON) })), standing: clean(check.standing, LORE_STANDING + 400) } : null;
@@ -878,7 +926,7 @@ export function buildRecapPrompt({ transcript = '', brief = '', player = '', max
         : '';
     const system = `You write the record of a scene that has just ended, for the narrator of the next one. You answer with one JSON object and nothing else: ${shape}. Rules for "recap": at most ${maxChars} characters; past tense; ${who} by name; what was said, learned, promised, lost and gained; nothing that did not happen; no advice, no questions, no markup.${more}${against}${soFar ? ' The record so far covers the earlier part of the scene: carry what still matters forward and add what this part adds.' : ''}${!last ? ' This is not the end of the scene yet: the record will be continued.' : ''}`;
     const established = told ? `${told.canon ? `What the story has established (the ledger):\n${told.canon}\n\n` : ''}${told.lore.length ? `The people's own notes:\n${told.lore.map(l => `[${l.name}] ${l.text}`).join('\n')}\n\n` : ''}${told.standing ? `The story's standing notes:\n${told.standing}\n\n` : ''}` : '';
-    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
+    const user = `${brief ? `The scene's brief:\n${clean(brief, MAX_BRIEF)}\n\n` : ''}${established}${blocks.people ? `${blocks.people}\n\n` : ''}${blocks.threads ? `${blocks.threads}\n\n` : ''}${soFar ? `The record so far:\n${clean(soFar, 1500)}\n\n` : ''}${soFar && lead ? `The lines just before this part, already in the record so far (to read on from, not to record again):\n${lead}\n\n` : ''}The scene${soFar ? ', continued' : ''}:\n${transcript || '(nothing was played)'}\n\nAnswer with the JSON object only.`;
     return { system, user };
 }
 
