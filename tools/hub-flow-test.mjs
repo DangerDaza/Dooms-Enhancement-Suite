@@ -197,7 +197,7 @@ extensionSettings.characterInjection = { 'Old Marit': { description: 'Keeps the 
 extensionSettings.liveWorld = { ...lwUtils.defaultLiveWorldConfig(), enabled: true, pack: 'blank', every: 50, customPacks: { harbourside: JSON.stringify(example), elsewhere: JSON.stringify(elsewhere) } };
 extensionSettings.canon = { enabled: true, every: 50, recentMessages: 6, inject: true, depth: 3, role: 'system', maxChars: 1500 };
 extensionSettings.quests = { main: 'None', optional: [] };
-hub.__setHubTiming({ idleStepMs: 5, idleMaxMs: 200 });
+hub.__setHubTiming({ idleStepMs: 5, idleMaxMs: 200, retryMs: 10, rateMs: 120 });
 // The lorebooks, as SillyTavern keeps them (D189): a shelf of books by name, the ones switched on, and what was filed where.
 // A book filed with a campaign is switched on only while `campaignOn` says the campaign is (it is off until §17).
 const shelf = new Map();
@@ -541,7 +541,9 @@ console.log('\n§9 a chat already played, taken as where a campaign\'s scenes be
     chat.push(user('We walk to the gate.'));
     chat.push(ai('Kiyoha laughs and shoulders the axe.'));
     hub.__setRecapTransport(async () => '{"recap":"They met at the gate in the fog."}');
-    const pe = await hub.prepareEnd();
+    const endSteps = [];
+    const pe = await hub.prepareEnd({ onStep: (g) => endSteps.push(g) });
+    check('End says which request its record is on, for the sheet\'s bar (D198)', endSteps.length === 1 && endSteps[0].page === 1 && endSteps[0].pages === 1 && same(endSteps[0].states, ['run']), JSON.stringify(endSteps));
     const ce = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true });
     check('what a scene adds to the map is kept when it ends', pe.ok && ce.ok && Object.keys(hub.worldEntry('first-descent').memory.stores.dooms_atlas.spots).length === 2 && hub.worldEntry('first-descent').memory.stores.dooms_atlas.made.some(x => x.label === 'Redfall Castle'), JSON.stringify([pe.ok, pe.reason, ce.ok, ce.reason]));
 
@@ -1341,6 +1343,193 @@ console.log('\n§20 a scene deleted: its record and its chat, for one that never
     delete ctxTarget.eventTypes;
     hub.__setOpenersTransport(null);
     hub.__setGapTransport(null);
+}
+
+console.log('\n§21 a long chat read whole: a request a page, stopped, failed, taken up again (D198)');
+{
+    ctxTarget.characters.push({ name: 'Saga', avatar: 'Saga.png', chat: 'Saga - long' });
+    ctxTarget.characterId = ctxTarget.characters.findIndex(c => c.avatar === 'Saga.png');
+    ctxTarget.name2 = 'Saga';
+    extensionSettings.lorebook = { enabled: false, campaigns: {}, campaignOrder: [], activeCampaignId: '' };
+    const saga = 'Saga - long';
+    files.set(saga, { header: { chat_metadata: {} }, messages: [], avatar: 'Saga.png', chName: 'Saga' });
+    resetMeta();
+    chat.length = 0;
+    chat.push(ai('The road begins at the mill.'));
+    ctxTarget.chatId = saga;
+    await loaders();
+    const leg = (i) => `leg-${String(i).padStart(3, '0')}`;
+    const filler = ' The cart rolls on under a grey sky and Brannoch counts the milestones aloud while the mule complains.'.repeat(9);
+    const LEGS = 90;
+    for (let i = 1; i <= LEGS; i++) { chat.push(user(`We take ${leg(i)}.`)); chat.push({ is_user: false, name: 'Saga', mes: `On ${leg(i)} Brannoch finds the way.${filler}`, swipe_id: 0, swipes: [], extra: {} }); }
+    const box = JSON.stringify({ date: { value: 'Day 90' }, time: { start: 'noon', end: 'dusk' }, location: { value: 'The mill road' }, weather: { emoji: '☁', forecast: 'grey' } });
+    state.setLastGeneratedData({ ...state.lastGeneratedData, infoBox: box });
+    state.setCommittedTrackerData({ ...state.committedTrackerData, infoBox: box });
+    lw.recordCurrentScene();
+    await persistence.saveChatData({ immediate: true });
+
+    const plan = hub.scenesPlan();
+    const reach = hub.adoptReach();
+    const P = reach.pages;
+    check('how much there is to read is known before anything is asked: every message, the requests the whole takes, about how many tokens it is', plan.ok && reach.messages === 1 + LEGS * 2 && P >= 4 && P <= 8 && reach.capped === false && reach.recent === 40 && reach.tokens >= 20000 && reach.tokens <= 30000 && reach.tokens % 1000 === 0, JSON.stringify([plan.ok, plan.reason, reach]));
+
+    // What a request is told: the legs on its page, and the record so far.
+    const legsIn = (prompt) => (JSON.stringify(prompt).match(/On leg-\d{3}/g) || []).map(x => x.slice(3));
+    const reply = (prompt) => { const l = legsIn(prompt); return `{"recap":"The road ran as far as ${l[l.length - 1]}.","people":[{"name":"Brannoch","now":"On the mill road at ${l[l.length - 1]}."}],"threads":{"closed":[],"opened":[]}}`; };
+    let asked = [];
+    let fail = () => false;
+    hub.__setRecapTransport(async (prompt) => { asked.push(prompt); if (fail(prompt, asked.length)) throw new Error('503 from the provider'); return reply(prompt); });
+
+    // The last stretch only: one request, as before.
+    const recent = await hub.prepareAdopt();
+    check('asked for its last stretch only, one request reads the last forty messages and no further back', recent.ok && recent.whole === false && asked.length === 1 && legsIn(asked[0]).length === 20 && legsIn(asked[0])[0] === leg(LEGS - 19) && recent.recap === `The road ran as far as ${leg(LEGS)}.`, JSON.stringify([recent.ok, asked.length, legsIn(asked[0] || {}).length]));
+
+    // The whole chat: a request a page, oldest first, each told the record so far.
+    asked = [];
+    const steps = [];
+    const whole = await hub.prepareAdopt({ whole: true, onStep: (g) => steps.push(g) });
+    const firsts = asked.map(a => legsIn(a)[0]);
+    const lasts = asked.map(a => { const l = legsIn(a); return l[l.length - 1]; });
+    check('read whole, the chat takes a request a page, from its first message to its last, none read twice', whole.ok && whole.whole === true && whole.pages === P && asked.length === P && firsts[0] === leg(1) && lasts[P - 1] === leg(LEGS) && asked.reduce((n, a) => n + legsIn(a).length, 0) === LEGS && asked.every((a, i) => i === 0 || Number(firsts[i].slice(4)) === Number(lasts[i - 1].slice(4)) + 1), JSON.stringify([whole.ok, whole.reason, asked.length, firsts, lasts]));
+    check('each request is told the record as the ones before it left it, and the last one knows it is the last', asked.every((a, i) => i === 0 || JSON.stringify(a).includes(`The road ran as far as ${lasts[i - 1]}.`)) && !JSON.stringify(asked[0]).includes('The road ran as far as') && whole.recap === `The road ran as far as ${leg(LEGS)}.`, whole.recap);
+    check('where the people stand is carried from request to request: the last word on each is the one kept', whole.continuity.people.length === 1 && whole.continuity.people[0].name === 'Brannoch' && whole.continuity.people[0].now === `On the mill road at ${leg(LEGS)}.`, JSON.stringify(whole.continuity));
+    check('the panel is told how every request stands as each is asked for: one running, the ones before it done', steps.length === P + 1 && steps.slice(0, P).every((g, i) => g.part === 'record' && g.page === i + 1 && g.pages === P && same(g.states, Array.from({ length: P }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')))) && steps[P].states.every(x => x === 'done'), JSON.stringify(steps.map(g => g.states.join(','))));
+    check('nothing is changed by the read, and nothing of it is left waiting', hub.worldEntry(plan.world.id) === null && hub.adoptPaused() === null && whole.skipped === 0 && whole.capped === false);
+
+    // A request that fails once is asked for again by itself.
+    asked = [];
+    fail = (prompt, n) => n === 2;
+    const flaky = await hub.prepareAdopt({ whole: true });
+    check('a request that fails is asked for a second time before it counts: the read goes on', flaky.ok && asked.length === P + 1 && legsIn(asked[1])[0] === legsIn(asked[2])[0] && flaky.recap === `The road ran as far as ${leg(LEGS)}.`, JSON.stringify([flaky.ok, flaky.reason, asked.length]));
+
+    // The requests go one at a time: none is sent before the one before it has come back.
+    asked = [];
+    fail = () => false;
+    let out = 0;
+    let most = 0;
+    hub.__setRecapTransport(async (prompt) => { out++; most = Math.max(most, out); asked.push(prompt); await wait(8); out--; return reply(prompt); });
+    const inTurn = await hub.prepareAdopt({ whole: true });
+    check('the requests are sent one after another, never two at once', inTurn.ok && asked.length === P && most === 1);
+    const pair = await Promise.all([hub.prepareAdopt({ whole: true }), hub.prepareAdopt({ whole: true })]);
+    check('a second read asked for while one runs is refused, not run beside it', pair.filter(x => x.ok).length === 1 && pair.filter(x => !x.ok && x.reason === 'busy').length === 1 && most === 1, JSON.stringify(pair.map(x => [x.ok, x.reason])));
+    hub.__setRecapTransport(async (prompt) => { asked.push(prompt); const why = fail(prompt, asked.length); if (why) throw new Error(why === true ? '503 from the provider' : why); return reply(prompt); });
+
+    // The second try waits: a few moments, longer when the failure says the connection is held back.
+    asked = [];
+    fail = (prompt, n) => n === 2;
+    let t0 = Date.now();
+    const waitSteps = [];
+    await hub.prepareAdopt({ whole: true, onStep: (g) => waitSteps.push(g.states.join(',')) });
+    const plainWait = Date.now() - t0;
+    asked = [];
+    fail = (prompt, n) => (n === 2 ? '429 Too Many Requests' : false);
+    t0 = Date.now();
+    const limited = await hub.prepareAdopt({ whole: true });
+    const limitedWait = Date.now() - t0;
+    check('told "too many requests", the read waits longer before its second try, and goes on', limited.ok && asked.length === P + 1 && limitedWait >= 120 && limitedWait > plainWait + 60, JSON.stringify([limited.ok, plainWait, limitedWait]));
+    check('while it waits the bar of that request says it is being tried again', waitSteps.some(x => x.split(',')[1] === 'retry') && waitSteps[waitSteps.length - 1].split(',').every(x => x === 'done'), JSON.stringify(waitSteps));
+    asked = [];
+    fail = (prompt, n) => { if (n === 2) { setTimeout(() => hub.stopAdopt(), 20); return '429 Too Many Requests'; } return false; };
+    t0 = Date.now();
+    const cut = await hub.prepareAdopt({ whole: true });
+    check('Stop pressed during that wait ends it at once: the read stops at that request, to be carried on', cut.ok === false && cut.reason === 'stopped' && cut.page === 2 && cut.states[1] === 'wait' && asked.length === 2 && Date.now() - t0 < 110, JSON.stringify([cut.reason, cut.page, Date.now() - t0]));
+    hub.dropAdoptRead();
+
+    // The whole chat in one request, for a model that reads that much at once.
+    asked = [];
+    fail = () => false;
+    const onceSteps = [];
+    const once = await hub.prepareAdopt({ whole: true, once: true, onStep: (g) => onceSteps.push(g) });
+    check('read in one request, the whole chat is handed over at once, first message to last', once.ok && once.whole === true && once.once === true && once.pages === 1 && asked.length === 1 && legsIn(asked[0]).length === LEGS && legsIn(asked[0])[0] === leg(1) && once.recap === `The road ran as far as ${leg(LEGS)}.` && onceSteps[0].pages === 1 && same(onceSteps[0].states, ['run']), JSON.stringify([once.ok, once.reason, asked.length, legsIn(asked[0] || {}).length]));
+    asked = [];
+    fail = () => 'context length exceeded';
+    const tooBig = await hub.prepareAdopt({ whole: true, once: true });
+    check('a model that cannot read that much fails the one request, and it says why: nothing is lost, and the chat can be read a part at a time instead', tooBig.ok === false && tooBig.reason === 'pass' && tooBig.pages === 1 && /context length exceeded/.test(tooBig.error) && hub.worldEntry(plan.world.id) === null);
+    hub.dropAdoptRead();
+
+    // One that fails twice stops the read there, with what was read kept.
+    asked = [];
+    const third = firsts[2];
+    fail = (prompt) => legsIn(prompt)[0] === third;
+    const stuck = await hub.prepareAdopt({ whole: true });
+    const paused = hub.adoptPaused();
+    check('a request that fails twice stops the read at it: the ones before are done, the ones after wait, and the failure is said', stuck.ok === false && stuck.reason === 'pass' && stuck.page === 3 && stuck.pages === P && same(stuck.states, Array.from({ length: P }, (x, k) => (k < 2 ? 'done' : k === 2 ? 'failed' : 'wait'))) && /503 from the provider/.test(stuck.error) && asked.length === 4, JSON.stringify(stuck));
+    check('the read waits where it stopped', !!paused && paused.part === 'record' && paused.page === 3 && paused.states[2] === 'failed');
+    asked = [];
+    fail = () => false;
+    const resumed = await hub.prepareAdopt({ whole: true, resume: true });
+    check('tried again, only that request and the ones after it are asked for, told the record the second one left', resumed.ok && asked.length === P - 2 && legsIn(asked[0])[0] === third && JSON.stringify(asked[0]).includes(`The road ran as far as ${lasts[1]}.`) && resumed.recap === `The road ran as far as ${leg(LEGS)}.` && resumed.skipped === 0 && hub.adoptPaused() === null, JSON.stringify([resumed.ok, resumed.reason, asked.length]));
+
+    // Skipped: the read goes on without that page.
+    asked = [];
+    const second = firsts[1];
+    fail = (prompt) => legsIn(prompt)[0] === second;
+    const stuck2 = await hub.prepareAdopt({ whole: true });
+    asked = [];
+    const skipped = await hub.prepareAdopt({ whole: true, resume: true, skip: true });
+    check('skipped, the read goes on without that part: it is not asked for again, the next is told the record the first left, and the answer says one was skipped', stuck2.reason === 'pass' && stuck2.page === 2 && skipped.ok && skipped.skipped === 1 && skipped.states[1] === 'skipped' && asked.length === P - 2 && legsIn(asked[0])[0] === third && JSON.stringify(asked[0]).includes(`The road ran as far as ${lasts[0]}.`) && !asked.some(a => legsIn(a)[0] === second), JSON.stringify([stuck2.reason, skipped.ok, skipped.skipped, asked.length]));
+
+    // Stop: the request in hand finishes, no more are asked for, and the read can be carried on.
+    asked = [];
+    fail = (prompt, n) => { if (n === 2) hub.stopAdopt(); return false; };
+    const stopped = await hub.prepareAdopt({ whole: true });
+    check('stopped, the request in hand finishes and no more are asked for', stopped.ok === false && stopped.reason === 'stopped' && asked.length === 2 && stopped.page === 3 && same(stopped.states.slice(0, 3), ['done', 'done', 'wait']) && hub.adoptPaused().page === 3, JSON.stringify(stopped));
+    asked = [];
+    fail = () => false;
+    const carried = await hub.prepareAdopt({ whole: true, resume: true });
+    check('carried on, it takes up at the next request', carried.ok && asked.length === P - 2 && legsIn(asked[0])[0] === third && carried.recap === `The road ran as far as ${leg(LEGS)}.`);
+    // Started over: a read let go begins at the first page again.
+    fail = (prompt) => legsIn(prompt)[0] === second;
+    await hub.prepareAdopt({ whole: true });
+    hub.dropAdoptRead();
+    asked = [];
+    fail = () => false;
+    const afresh = await hub.prepareAdopt({ whole: true, resume: true });
+    check('a read let go is not taken up: the next one starts at the chat\'s first page', hub.adoptPaused() === null && afresh.ok && asked.length === P && legsIn(asked[0])[0] === leg(1));
+
+    // The ledger: Canon's own run, handed each page in turn.
+    let canonAsked = [];
+    let canonFail = () => false;
+    cn.__setCanonTransport(async (prompt) => { canonAsked.push(prompt); const l = legsIn(prompt); if (canonFail(prompt, canonAsked.length)) return 'no ledger here'; return `{"add":[{"kind":"fact","name":"Road ${l[0]}","text":"Brannoch passed ${l[0]} and reached ${l[l.length - 1]}."}],"drop":[]}`; });
+    const ledgerBefore = (meta.dooms_canon && meta.dooms_canon.entries ? meta.dooms_canon.entries.length : 0);
+    const lsteps = [];
+    const ledger = await hub.readAdoptLedger({ onStep: (g) => lsteps.push(g) });
+    const entries = meta.dooms_canon.entries;
+    check('the ledger reads the whole chat too: a request a page, each handed its own page, oldest first', ledger.ok && ledger.pages === P && ledger.added === P && ledger.skipped === 0 && canonAsked.length === P && same(canonAsked.map(a => legsIn(a)[0]), firsts) && legsIn(canonAsked[P - 1]).pop() === leg(LEGS), JSON.stringify([ledger, canonAsked.length]));
+    check('the ledger grows from page to page: a request is shown what the pages before it established', entries.length === ledgerBefore + P && firsts.every(f => entries.some(x => x.name === `Road ${f}`)) && JSON.stringify(canonAsked[1]).includes(`Road ${firsts[0]}`) && !JSON.stringify(canonAsked[0]).includes(`Road ${firsts[0]}`), JSON.stringify(entries.map(x => x.name)));
+    check('its bars are told the same way', lsteps.length === P + 1 && lsteps[0].part === 'ledger' && same(lsteps[1].states.slice(0, 2), ['done', 'run']) && lsteps[P].states.every(x => x === 'done'));
+    canonAsked = [];
+    canonFail = (prompt) => legsIn(prompt)[0] === second;
+    const lstuck = await hub.readAdoptLedger();
+    check('a page the ledger cannot read twice running stops its read there, the ledger as far as it got', lstuck.ok === false && lstuck.reason === 'pass' && lstuck.page === 2 && lstuck.states[0] === 'done' && lstuck.states[1] === 'failed' && canonAsked.length === 3 && hub.adoptPaused().part === 'ledger', JSON.stringify(lstuck));
+    canonAsked = [];
+    const lskip = await hub.readAdoptLedger({ resume: true, skip: true });
+    check('skipped or tried again as the record\'s read is: it goes on from there', lskip.ok && lskip.skipped === 1 && canonAsked.length === P - 2 && legsIn(canonAsked[0])[0] === third && hub.adoptPaused() === null, JSON.stringify([lskip, canonAsked.length]));
+    extensionSettings.canon.enabled = false;
+    check('with Canon off there is no ledger to read into', (await hub.readAdoptLedger()).reason === 'canon-off');
+    extensionSettings.canon.enabled = true;
+    // In one request: the whole chat handed to Canon at once, which may add more than a page's worth.
+    canonAsked = [];
+    canonFail = () => false;
+    cn.__setCanonTransport(async (prompt) => { canonAsked.push(prompt); return JSON.stringify({ add: Array.from({ length: 40 }, (x, k) => ({ kind: 'thing', name: `Milestone ${k + 1}`, text: `Brannoch counted milestone ${k + 1} aloud.` })), drop: [] }); });
+    const lonce = await hub.readAdoptLedger({ once: true });
+    check('the ledger in one request: handed the whole chat at once, it may add more than a page does', lonce.ok && lonce.once === true && lonce.pages === 1 && canonAsked.length === 1 && legsIn(canonAsked[0]).length === LEGS && lonce.added > 16 && lonce.added <= 48, JSON.stringify([lonce.ok, lonce.reason, lonce.added, canonAsked.length]));
+
+    // Taken: the memory holds what the ledger read.
+    const done = await hub.commitAdopt({ recap: whole.recap, continuity: { people: whole.continuity.people.map(x => ({ name: x.name, now: x.now })), opened: [], closed: [] } });
+    const entry = done.ok ? hub.worldEntry(done.worldId) : null;
+    const kept = entry && entry.memory.stores.dooms_canon ? entry.memory.stores.dooms_canon.entries : [];
+    check('taken after it, the world\'s memory holds the whole chat\'s ledger and its record', done.ok && entry.scenes[0].recap === `The road ran as far as ${leg(LEGS)}.` && firsts.filter(f => f !== second).every(f => kept.some(x => x.name === `Road ${f}`)) && entry.continuity.people[0].now === `On the mill road at ${leg(LEGS)}.`, JSON.stringify([done.ok, done.reason, kept.length]));
+
+    // A chat longer than is read: the newest pages are the ones read, and it says so.
+    await openPlain('Saga - endless');
+    const big = 'x'.repeat(2500);
+    for (let i = 0; i < 700; i++) chat.push({ is_user: false, name: 'Saga', mes: `${i} ${big}`, extra: {} });
+    const far = hub.adoptReach();
+    check('a chat longer than sixty requests read is read from sixty pages back, and says so', far.pages === 60 && far.capped === true && far.messages === 701, JSON.stringify(far));
+    chat.length = 1;
+    hub.__setRecapTransport(null);
+    cn.__setCanonTransport(null);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

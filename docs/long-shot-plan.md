@@ -1005,3 +1005,44 @@ changes, the number, the Atlas's line), `tools/hub-flow-test.mjs` §20
 and without other chats, an ended scene, SillyTavern refusing, a chat
 already gone), `tools/atlas-browser-test.mjs` §5k (the button and the
 question on the row).
+
+## 37. A long chat read whole (2026-11-11, D198)
+
+The owner pressed Play as scenes on a chat of 216 messages and the
+record covered the last forty: D172's one request reads no further
+back. The record of the chat so far, where its people stand, what it has
+left open and (with Canon on) the ledger are what the scenes are told,
+so a chat taken that way begins its scenes knowing a fifth of itself.
+The owner then asked for a bar for each request, what happens when one
+fails, and that the requests not go out together (they play through a
+reverse proxy that answers "too many requests").
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D198 | A chat longer than one request reads is read whole, one request at a time, a bar a request | **How much is read** is asked on the panel when the chat is more than one request holds (more than a page of text, or more than forty messages): **the whole chat a part at a time** (the choice made already; the panel says the messages and the requests before anything is sent), **the whole chat in one request** (with about how many tokens that is, for a model that reads that much; one that cannot fails the one request and nothing is lost), or **only its last stretch** (D172's one request, as before). A chat one request holds is not asked. **The whole read** is the way End writes a long scene's record (§5.2): pages of the chat's text, oldest first, each request told the record so far, where the people stand and what is open, the last one told it is the last. A page is 24,000 characters as at End; a long message is cut at 2,400 characters, not End's 1,200, because this read happens once and is kept. At most sixty pages are read; a longer chat is read from sixty pages back and the panel says so. The record may run to 1,200 characters. **One at a time.** A request is sent only when the one before it has come back: each needs the last one's record, so two are never out together. **A bar a request** (`atlasPassesHtml`): done full, the one in hand moving (a request does not say how far along it is, so the bar claims no share), the ones to come empty, with the request's number and its state in words. The list scrolls inside the panel when it is long. End's sheet has the same bars for a long scene's record, and a bar beside each of its parts while End runs. **A request that fails** is tried once more by itself after a wait: a few seconds, or thirty when the failure says the connection is held back (429, "too many requests", "rate limit", "overloaded"), and its bar says it is being tried again. If it fails again **the read waits at that request with everything before it kept**, the bar marked failed and the failure said; the panel offers Try it again (that request only, then the rest), Skip this part (the read goes on without that page, and the review says a part was skipped) and Start over. **Stop** lets the request in hand finish and waits the same way, to Carry on from. A read left waiting is offered again when the panel is opened on the same chat. **The ledger.** With Canon on, the review offers "Read the whole chat into the ledger first", ticked when the whole chat was read: Canon's own run (`updateCanon` with `scope: 'scene'` and the page's `text`), handed each page in turn before the chat is taken, so the memory holds it. Canon by itself read the last messages every few replies as the chat was played, and reads one page at a scene's end. Its read has the same bars, wait, Try again, Skip and Stop, and one thing more when it stops: Play as scenes without the rest, which takes the chat with the ledger as far as it got. Read in one request, it may add 48 lines, not a page's 16. With Canon off the review says there is no ledger to read into. |
+
+What it does not do. The ledger holds what Canon's limits let it (40 a
+kind, 160 in all): a long chat's read ends with the newest of what it
+found when that overflows. The record is still a few lines, at most
+1,500 characters, whatever the chat's length; the whole read makes it a
+record of the whole story, not a longer one. The ledger's read changes
+the chat's ledger before the copy of the chat is saved, so the copy
+holds the ledger as read; the messages in it are as they were. The wait
+between requests is not a setting: requests go as fast as they come
+back, and a limit on requests a minute is met by the wait before a
+second try and by Try it again. A read left waiting is forgotten when
+the page is reloaded. The token count is the characters over four, to
+the next thousand. Nothing here has run against a real SillyTavern or a
+real provider: the requests in the tests are stand-ins.
+
+Tests: `tools/hub-flow-test.mjs` §21 (the real module: how much there
+is to read, the pages in order with the record carried, one request out
+at a time, a second try, the longer wait on "too many requests", Stop
+during it, a request that fails twice, Try again, Skip, Stop and Carry
+on, Start over, the one-request read and one too big for the model, the
+ledger's read page by page, its failure and skip, Canon off, the memory
+holding it, the sixty-page limit) and §9 (End says which request it is
+on); `tools/atlas-browser-test.mjs` §5g (the choice, a bar a request
+and each state, trying again, failed, stopped, the review's lines and
+the ledger's tick, the ledger's own bars, sixty requests in a list that
+scrolls, a phone) and §5i (End's bars).

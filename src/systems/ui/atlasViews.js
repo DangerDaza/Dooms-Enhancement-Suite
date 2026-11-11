@@ -509,6 +509,23 @@ export function continuityFieldsHtml(c, { locked = false, next = 'the next scene
 }
 
 /**
+ * A bar for every request of a read that takes several (D198): the ones
+ * done full, the one being asked for moving, the ones to come empty, one
+ * that failed or was skipped marked so. A request does not say how far
+ * along it is, so the one in hand moves without claiming a share.
+ * @param {string[]} states  wait | run | retry | done | failed | skipped, in order
+ */
+export function atlasPassesHtml(states, { noun = 'Request' } = {}) {
+    const word = { wait: 'waiting', run: 'reading…', retry: 'trying again…', done: 'done', failed: 'failed', skipped: 'skipped' };
+    const list = (Array.isArray(states) && states.length ? states : ['run']).map(st => (word[st] ? st : 'wait'));
+    return `<ol class="dooms-atlas-passes" data-count="${list.length}">${list.map((st, i) => `<li class="dooms-atlas-pass is-${st}">
+        <span class="dooms-atlas-pass-n">${i + 1}</span>
+        <span class="dooms-atlas-pass-bar" role="progressbar" aria-label="${attr(noun)} ${i + 1} of ${list.length}: ${word[st]}" aria-valuemin="0" aria-valuemax="100"${st === 'run' || st === 'retry' ? '' : ` aria-valuenow="${st === 'done' ? 100 : 0}"`}><span></span></span>
+        <span class="dooms-atlas-pass-word">${word[st]}</span>
+    </li>`).join('')}</ol>`;
+}
+
+/**
  * Ending a scene from the Atlas (D176), a panel over the map: the record
  * of the scene to read and correct, what ending it will do (each part
  * can be left out), and each part's state while it runs.
@@ -518,18 +535,20 @@ export function continuityFieldsHtml(c, { locked = false, next = 'the next scene
  * @param {Object<string,string>} o.states  recap | canon | world | snapshot -> waiting | running | ok | failed | skipped | off | kept
  * @param {object|null} o.result   commitEnd()'s answer once it has run
  */
-export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false } = {}) {
+export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, result = null, error = '', going = '', canUndo = false, undoing = false, passes = null } = {}) {
     const scene = prep && (prep.scene || prep.mark) ? (prep.scene || prep.mark) : null;
     const title = scene ? `scene ${e(sceneNoOf(scene.id || scene.scene))}${scene.title ? `: ${e(scene.title)}` : ''}` : 'this scene';
     const when = prep && (prep.from || prep.to) ? `From ${e(prep.from || '?')} to ${e(prep.to || 'now')}.` : '';
     const running = Object.values(states).includes('running');
     const done = !!(result && result.ok);
     const word = { waiting: 'waiting', running: 'running…', ok: 'done', failed: 'failed', skipped: 'left out', off: 'off', kept: 'kept as it was' };
+    const started = running || done || Object.values(states).some(x => x === 'failed' || x === 'ok');    // End was pressed: each part that runs shows a bar (D198)
     const part = (key, label, hint, on, skipClass) => {
         const st = states[key] || (on ? 'waiting' : 'off');
         return `<li class="dooms-atlas-part is-${attr(st)}">
             <span class="dooms-atlas-part-label"><strong>${e(label)}</strong> <span>${e(hint)}</span></span>
             ${skipClass && on && !done && !running ? `<label class="dooms-atlas-part-skip"><input type="checkbox" class="${attr(skipClass)}" /> leave out</label>` : ''}
+            ${started && (st === 'waiting' || st === 'running' || st === 'ok' || st === 'failed') ? `<span class="dooms-atlas-pass-bar dooms-atlas-part-bar is-${st === 'ok' ? 'done' : st === 'running' ? 'run' : st === 'failed' ? 'failed' : 'wait'}" aria-hidden="true"><span></span></span>` : ''}
             <span class="dooms-atlas-part-state">${e(word[st] || st)}</span>
         </li>`;
     };
@@ -555,6 +574,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         ${when ? `<p>${when}</p>` : ''}
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
+        ${busy && Array.isArray(passes) && passes.length ? atlasPassesHtml(passes) : ''}
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
         ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}
         ${conflictsHtml(prep && prep.conflicts, { done, checked: prep && prep.checked })}
@@ -637,21 +657,66 @@ export function scenesRefusalText(plan) {
  * @param {boolean} o.replace  the player ticked that the memory may be replaced
  * @param {object|null} o.result  commitAdopt()'s answer, for the last step
  */
-export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0, continuity = null } = {}) {
+export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error = '', replace = false, result = null, messages = 0, continuity = null, reach = null, mode = 'parts', progress = null, stopping = false, read = null, canon = false, ledger = null, wantLedger = false } = {}) {
     const p = plan && typeof plan === 'object' ? plan : { ok: false, reason: '' };
     const close = '<button type="button" class="dooms-atlas-btn" data-act="setup-close">Not now</button>';
     if (!p.ok && step !== 'done') return `<div class="dooms-atlas-setup-card is-scenes"><h3>Play this story as scenes</h3><p class="dooms-atlas-setup-error" role="alert">${e(scenesRefusalText(p))}</p><div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="setup-close">Close</button></div></div>`;
     const world = (p.world && p.world.name) || 'this world';
     const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
-    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy is-scenes"><h3>Play ${e(world)} as scenes</h3><p>Writing the record of the chat so far…</p><div class="dooms-atlas-setup-bar" role="progressbar" aria-label="Writing the record"><span style="width:60%"></span></div></div>`;
+    const requests = (n) => `${n} ${n === 1 ? 'request' : 'requests'}`;
+    // How much there is to read (D198): a chat longer than one request reads is offered whole, a bar a request.
+    const r = reach && typeof reach === 'object' ? reach : { messages: 0, pages: 0, capped: false, tokens: 0 };
+    const choice = r.pages > 1 || r.messages > 40;
+    const g = progress && typeof progress === 'object' ? progress : null;
+    const ofLedger = !!(g && g.part === 'ledger');
+    const ledgerLine = ledger && typeof ledger === 'object'
+        ? (ledger.partial
+            ? `The ledger read ${ledger.read} of ${ledger.pages} parts of the chat${ledger.added ? ` (${ledger.added} ${ledger.added === 1 ? 'fact' : 'facts'} added)` : ''}.`
+            : `The ledger has read the whole chat: ${ledger.added} ${ledger.added === 1 ? 'fact' : 'facts'} added${ledger.skipped ? `, ${ledger.skipped} ${ledger.skipped === 1 ? 'part' : 'parts'} skipped` : ''}.`)
+        : '';
+    if (step === 'busy') {
+        const many = !!(g && g.pages > 1);
+        const again = !!(g && Array.isArray(g.states) && g.states.includes('retry'));
+        const line = g && g.taking ? 'Taking the chat…'
+            : stopping ? 'Stopping after this request…'
+            : again ? `Request ${g.page} of ${g.pages} did not come back right. Waiting a moment, then trying it once more.`
+            : ofLedger ? (many ? `Reading the chat into the ledger: request ${g.page} of ${g.pages}.` : 'Reading the chat into the ledger…')
+            : many ? `Reading the chat: request ${g.page} of ${g.pages}.`
+            : 'Writing the record of the chat so far…';
+        return `<div class="dooms-atlas-setup-card is-busy is-scenes">
+            <h3>Play ${e(world)} as scenes</h3>
+            <p class="dooms-atlas-passes-line" role="status">${line}</p>
+            ${atlasPassesHtml(g ? g.states : null)}
+            ${many ? `<p class="dooms-atlas-start-note">The requests go one at a time, each after the one before it has come back. One that fails is tried once more after a wait; if it fails again the read waits there, with what was read before it kept.</p>
+            <div class="dooms-atlas-setup-actions"><button type="button" class="dooms-atlas-btn" data-act="scenes-stop"${stopping || g.taking ? ' disabled' : ''}><i class="fa-solid fa-stop" aria-hidden="true"></i> <span>Stop</span></button></div>` : ''}
+        </div>`;
+    }
+    if (step === 'paused' && g) {
+        const failed = g.reason !== 'stopped';
+        return `<div class="dooms-atlas-setup-card is-scenes is-paused">
+            <h3>Play ${e(world)} as scenes</h3>
+            <p class="${failed ? 'dooms-atlas-setup-error' : 'dooms-atlas-passes-line'}" role="${failed ? 'alert' : 'status'}">${failed ? `Request ${g.page} of ${g.pages} failed${g.error ? `: ${e(g.error)}` : '.'}` : `Stopped before request ${g.page} of ${g.pages}.`}</p>
+            ${atlasPassesHtml(g.states)}
+            <p class="dooms-atlas-start-note">What was read before it is kept${ofLedger ? ' in the ledger' : ''}. ${failed ? 'Trying again asks for that request only. Skipping it' : 'Carrying on takes the read up from there. Skipping that request'} goes on without that part of the chat: ${ofLedger ? 'the ledger will not hold what it established.' : 'the record will not cover it.'}</p>
+            ${err}
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-retry"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> <span>${failed ? 'Try it again' : 'Carry on'}</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scenes-skip"><i class="fa-solid fa-forward" aria-hidden="true"></i> <span>Skip this part</span></button>
+                ${ofLedger ? `<button type="button" class="dooms-atlas-btn" data-act="scenes-go-now"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes without the rest</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scenes-back">Back to the record</button>` : '<button type="button" class="dooms-atlas-btn" data-act="scenes-drop">Start over</button>'}
+                ${close}
+            </div>
+        </div>`;
+    }
     if (step === 'done') {
-        const r = result && typeof result === 'object' ? result : {};
+        const d = result && typeof result === 'object' ? result : {};
         return `<div class="dooms-atlas-setup-card is-scenes">
-            <h3><i class="fa-solid fa-check" aria-hidden="true"></i> ${e(r.worldName || world)} is played as scenes</h3>
-            <p>${r.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(r.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
+            <h3><i class="fa-solid fa-check" aria-hidden="true"></i> ${e(d.worldName || world)} is played as scenes</h3>
+            <p>${d.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(d.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
             <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
-            ${r.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(r.backup)}</strong>.</p>` : ''}
-            ${r.book ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> Where its people stand and what is left open are kept in the lorebook <strong>${e(r.book)}</strong>, in your Lore Library: an entry a person, yours to read and change.</p>` : ''}
+            ${d.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(d.backup)}</strong>.</p>` : ''}
+            ${d.book ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> Where its people stand and what is left open are kept in the lorebook <strong>${e(d.book)}</strong>, in your Lore Library: an entry a person, yours to read and change.</p>` : ''}
+            ${ledgerLine ? `<p class="dooms-atlas-start-note dooms-atlas-scenes-ledger-line"><i class="fa-solid fa-scroll" aria-hidden="true"></i> ${ledgerLine}</p>` : ''}
             <p>To start the first scene, open a place on the map and press <strong>Start scene 1 here</strong>.</p>
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>
@@ -661,17 +726,29 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
     const made = p.world && p.world.made;
     const warn = p.replaces ? `<p class="dooms-atlas-setup-error" role="alert">${e(world)} is already played as scenes${p.scenes ? ` (${p.scenes} played)` : ''}. Taking this chat replaces what it remembers with this chat as it stands; the scenes already played stay in its list.</p>` : '';
     if (step === 'review') {
+        const w = read && typeof read === 'object' ? read : null;
+        const from = !w || !choice ? ''
+            : w.whole ? `Written from the whole chat: ${r.messages} messages in ${w.pages === 1 ? 'one request' : requests(w.pages)}.${w.skipped ? ` ${w.skipped} ${w.skipped === 1 ? 'part was skipped, so the record does not cover it.' : 'parts were skipped, so the record does not cover them.'}` : ''}${w.capped ? ' The chat is longer than is read: the read began part-way in.' : ''}`
+            : 'Written from the last stretch of the chat only.';
+        // The ledger (D198): Canon's own, read from the chat's start before the chat is taken, when asked for.
+        const ledgerPart = ledgerLine ? `<p class="dooms-atlas-start-note dooms-atlas-scenes-ledger-line"><i class="fa-solid fa-scroll" aria-hidden="true"></i> ${ledgerLine}</p>`
+            : canon && r.pages >= 1 ? `<label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-ledger"${wantLedger ? ' checked' : ''} /> <span>Read the whole chat into the ledger first (${requests(mode === 'once' ? 1 : r.pages)} more)</span></label>
+                <p class="dooms-atlas-start-note">The ledger is Canon's list of what the story has established. As you played, it read only the latest messages every few replies; this reads the chat from its start, ${mode === 'once' ? 'in one request as the record was' : 'one request at a time with a bar for each'}, so the scenes are told what it holds.</p>`
+            : !canon && choice ? '<p class="dooms-atlas-start-note dooms-atlas-scenes-nocanon">Canon is off, so this chat has no ledger of facts to read the chat into. The record above and where its people stand are what the scenes are told.</p>'
+            : '';
         return `<div class="dooms-atlas-setup-card is-scenes">
             <h3>Play ${e(world)} as scenes</h3>
             <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What has happened so far (the first scene is told this)</span>
                 <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-scenes-recap" maxlength="1500" placeholder="A few lines on where the story stands. It can be left empty.">${e(recap)}</textarea></label>
+            ${from ? `<p class="dooms-atlas-start-note dooms-atlas-scenes-from">${from}</p>` : ''}
             ${continuityFieldsHtml(continuity, { next: 'the first scene' })}
+            ${ledgerPart}
             ${err}
             ${warn}
             ${p.replaces ? `<label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-scenes-replace"${replace ? ' checked' : ''} /> <span>Replace what ${e(world)} remembers with this chat</span></label>` : ''}
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-go"${p.replaces && !replace ? ' disabled' : ''}><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> <span>Play as scenes</span></button>
-                <button type="button" class="dooms-atlas-btn" data-act="scenes-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Write it again</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="scenes-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>${choice ? 'Read it again' : 'Write it again'}</span></button>
                 ${close}
             </div>
         </div>`;
@@ -679,6 +756,13 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
     const worldLine = made
         ? `A world named <strong>${e(world)}</strong> is made for ${p.campaign ? `the campaign ${e(p.campaign.name)}` : 'this chat'}. It has no places of its own: your map and the places the story has named stay exactly as they are.`
         : p.campaign && !p.replaces ? `<strong>${e(world)}</strong> is this story's world already.` : `<strong>${e(world)}</strong> is the world.`;
+    const pick = choice ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-scenes-reach-field">
+            <legend class="dooms-atlas-card-label">How much of the chat the record is written from</legend>
+            <label class="dooms-atlas-check"><input type="radio" name="dooms-atlas-scenes-reach" class="dooms-atlas-scenes-reach" value="parts"${mode !== 'once' && mode !== 'recent' ? ' checked' : ''} /> <span><strong>The whole chat, a part at a time</strong>: ${r.messages} messages in ${requests(r.pages)}, sent one after another, never together</span></label>
+            ${r.pages > 1 ? `<label class="dooms-atlas-check"><input type="radio" name="dooms-atlas-scenes-reach" class="dooms-atlas-scenes-reach" value="once"${mode === 'once' ? ' checked' : ''} /> <span><strong>The whole chat in one request</strong>: about ${Number(r.tokens || 0).toLocaleString('en-US')} tokens at once, for a model that reads that much. If it cannot, the request fails and nothing is lost.</span></label>` : ''}
+            <label class="dooms-atlas-check"><input type="radio" name="dooms-atlas-scenes-reach" class="dooms-atlas-scenes-reach" value="recent"${mode === 'recent' ? ' checked' : ''} /> <span><strong>Only its last stretch</strong>: one request, the last forty messages at most</span></label>
+            ${r.capped ? `<p class="dooms-atlas-start-note">This chat is longer than ${requests(r.pages)} read: the whole-chat read begins part-way in, that many parts from its end.</p>` : ''}
+        </fieldset>` : '';
     return `<div class="dooms-atlas-setup-card is-scenes">
         <h3>Play ${e(world)} as scenes</h3>
         <p>A story played as scenes is many short chats instead of one long one. Every scene starts fresh, on your map, knowing what happened before it.</p>
@@ -689,13 +773,16 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <li>This chat is kept as scene 0 and stays an ordinary chat you can go on playing.</li>
             <li>A copy of the chat as it is now is saved beside it first. If the copy cannot be saved, nothing is changed.</li>
         </ul>
+        ${pick}
         ${warn}
         ${err}
         <div class="dooms-atlas-setup-actions">
             <button type="button" class="dooms-atlas-btn is-primary" data-act="scenes-prepare"><i class="fa-solid fa-feather" aria-hidden="true"></i> <span>Write the record of this chat so far</span></button>
             ${close}
         </div>
-        <p class="dooms-atlas-start-note">One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands, where the people in it stand and what it has left open. You read and correct them before anything is changed.</p>
+        <p class="dooms-atlas-start-note">${choice
+        ? 'Each request on the tracker\'s connection reads one part of the chat, oldest first, and carries on from the one before: a few lines on where the story stands, where the people in it stand and what it has left open. Only one request is ever out at a time. There is a bar for each request, the read can be stopped and taken up again, and you read and correct what it wrote before anything is changed.'
+        : `One request on the tracker's connection reads the last forty messages${messages ? ` of ${messages}` : ''} and writes a few lines on where the story stands, where the people in it stand and what it has left open. You read and correct them before anything is changed.`}</p>
     </div>`;
 }
 

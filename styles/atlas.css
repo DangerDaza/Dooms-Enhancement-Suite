@@ -263,6 +263,26 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-part.is-running .dooms-atlas-part-state { color: var(--atlas-accent2); }
 .dooms-atlas-part.is-failed .dooms-atlas-part-state { color: #e0524d; }
 .dooms-atlas-part.is-off, .dooms-atlas-part.is-skipped { opacity: 0.6; }
+.dooms-atlas-part-bar { flex: 0 0 72px; }
+
+/* A bar a request (D198): a read that takes several shows each one's state. */
+.dooms-atlas-passes { list-style: none; margin: 10px 0; padding: 0 4px 0 0; display: grid; gap: 6px; max-height: min(38vh, 300px); overflow-y: auto; overscroll-behavior: contain; }
+.dooms-atlas-pass { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) 7em; align-items: center; gap: 8px; font-size: 0.85em; color: var(--atlas-muted); }
+.dooms-atlas-pass-n { text-align: right; font-variant-numeric: tabular-nums; }
+.dooms-atlas-pass-bar { display: block; height: 8px; border-radius: 999px; background: var(--atlas-panel2); border: 1px solid var(--atlas-line); overflow: hidden; }
+.dooms-atlas-pass-bar > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--atlas-accent); }
+.dooms-atlas-pass.is-done .dooms-atlas-pass-bar > span, .dooms-atlas-pass-bar.is-done > span { width: 100%; background: #5fb878; }
+.dooms-atlas-pass.is-run .dooms-atlas-pass-bar > span, .dooms-atlas-pass.is-retry .dooms-atlas-pass-bar > span, .dooms-atlas-pass-bar.is-run > span { width: 38%; background: var(--atlas-accent2); animation: dooms-atlas-pass-run 1.5s ease-in-out infinite; }
+.dooms-atlas-pass.is-failed .dooms-atlas-pass-bar > span, .dooms-atlas-pass-bar.is-failed > span { width: 100%; background: #e0524d; }
+.dooms-atlas-pass.is-skipped .dooms-atlas-pass-bar > span { width: 100%; background: repeating-linear-gradient(135deg, var(--atlas-muted) 0 4px, transparent 4px 8px); opacity: 0.55; }
+.dooms-atlas-pass.is-done .dooms-atlas-pass-word { color: #5fb878; }
+.dooms-atlas-pass.is-run, .dooms-atlas-pass.is-retry { color: var(--atlas-text); }
+.dooms-atlas-pass.is-run .dooms-atlas-pass-word, .dooms-atlas-pass.is-retry .dooms-atlas-pass-word { color: var(--atlas-accent2); }
+.dooms-atlas-pass.is-retry .dooms-atlas-pass-bar > span { animation-duration: 2.6s; opacity: 0.7; }
+.dooms-atlas-pass.is-failed .dooms-atlas-pass-word { color: #e0524d; }
+.dooms-atlas-passes-line { font-variant-numeric: tabular-nums; }
+@keyframes dooms-atlas-pass-run { from { transform: translateX(-100%); } to { transform: translateX(265%); } }
+@media (prefers-reduced-motion: reduce) { .dooms-atlas-pass.is-run .dooms-atlas-pass-bar > span, .dooms-atlas-pass.is-retry .dooms-atlas-pass-bar > span, .dooms-atlas-pass-bar.is-run > span { animation: none; width: 55%; } }
 .dooms-atlas-setup-card p.dooms-atlas-end-done { color: #5fb878; }
 .dooms-atlas-stale { display: flex; flex-direction: column; gap: 6px; }
 /* The style law on the End sheet (D179): the phrases counted, each a tick. */

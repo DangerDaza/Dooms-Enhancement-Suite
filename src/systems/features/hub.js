@@ -62,7 +62,7 @@ let recapTransport = null;
 let gapTransport = null;
 let hooksTransport = null;
 let hooksBusyWorld = '';     // the world a hooks request runs for, '' when none
-let timing = { idleStepMs: 250, idleMaxMs: 120000 };
+let timing = { idleStepMs: 250, idleMaxMs: 120000, retryMs: 4000, rateMs: 30000 };    // retryMs, rateMs: how long a whole read's failed request waits before its second try (D198)
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -1055,7 +1055,7 @@ function scenePeople(cur, players) {
  * threads it settled and opened (D188). Waits for the main generation and
  * the background line.
  */
-export async function prepareEnd() {
+export async function prepareEnd({ onStep = null } = {}) {
     const g = guardEnd();
     if (!g.ok) return g;
     const idle = await whenIdle();
@@ -1082,7 +1082,10 @@ export async function prepareEnd() {
     let recap = '';
     let error = '';
     try {
-        for (let i = 0; i < Math.max(1, pages.length); i++) {
+        const count = Math.max(1, pages.length);
+        for (let i = 0; i < count; i++) {
+            // Which request is being asked for, for the sheet's bars (D198).
+            try { if (typeof onStep === 'function') onStep({ page: i + 1, pages: count, states: Array.from({ length: count }, (x, k) => (k < i ? 'done' : k === i ? 'run' : 'wait')) }); } catch (e) { /* the sheet is gone */ }
             const prompt = buildRecapPrompt({ transcript: pages[i] || '', brief, player: players[0] || '', maxChars: cfg().recapChars, soFar: recap, last: i === pages.length - 1, continuity: draft, check });
             const r = await request(prompt, { transport: recapTransport, label: 'recap' });
             if (r.busy) { error = 'Another request holds the line.'; break; }
@@ -1447,8 +1450,85 @@ export function carrySceneBook(book) {
 
 // ─── A chat taken as where a world's scenes begin (D131, D172) ──────────
 
-const ADOPT_MESSAGES = 40;    // how far back the record of the chat so far reads
+const ADOPT_MESSAGES = 40;    // how far back the record of the chat so far reads when it is not read whole
+const ADOPT_PAGES_MAX = 60;   // the most passes a whole chat is read in (D198): a longer one is read from that many pages back
+const ADOPT_RECAP_CHARS = 1200;    // a whole chat's record has more to say than one scene's; a scene's record holds 1500
+const ADOPT_TRUNCATION = 2400;     // a whole read cuts a long message later than a scene's record does (1200): it is read once, to keep
+const ADOPT_ONCE_ADDS = 48;        // what the ledger may add from a whole chat handed to it in one request (a scene's page: 16)
+/** A failure that says the connection is being held back (a proxy's or a provider's limit): the second try waits longer. */
+const RATE_LIMITED = /\b429\b|too many requests|rate.?limit|overloaded|quota|slow down|try again later/i;
 let adopting = false;
+let adoptStop = false;        // Stop was pressed while a whole chat was being read
+/**
+ * A whole chat's read in hand (D198): the record's passes, or the ledger's.
+ * Kept between calls, so a pass that failed or a read that was stopped is
+ * taken up where it stood. Each pass builds on the ones before it, and ten
+ * good ones are not asked for again because the eleventh failed.
+ * { part, meta, id, pages, total, at, states, recap, draft, people, maxChars, added, error }
+ */
+let adoptRun = null;
+let adoptReading = false;     // a whole read is being asked for: a second one is refused, not run beside it
+const sameChat = (run) => !!run && meta() === run.meta && (chatId() === undefined || chatId() === run.id);
+const beginRun = (part, players, once = false) => {
+    const { pages, total } = adoptPages(players, { once });
+    return { part, once: !!once, meta: meta(), id: chatId(), pages, total, at: 0, states: pages.map(() => 'wait'), recap: '', draft: null, people: null, maxChars: 0, added: 0, error: '' };
+};
+/** A read as the panel shows it: which pass it is on, and every pass's state (wait | run | retry | done | failed | skipped), in order. */
+const runView = (run) => ({ part: run.part, page: Math.min(run.at + 1, run.pages.length), pages: run.pages.length, states: run.states.slice(), error: run.error });
+const tell = (onStep, run) => { try { if (typeof onStep === 'function') onStep(runView(run)); } catch (e) { /* the panel is gone */ } };
+/**
+ * The wait before a failed request's second try: a few seconds, or longer
+ * when the failure says the connection is being held back (429, "too many
+ * requests"). The requests of a read are never sent together, one waits for
+ * the one before it; this is for a limit on how many may be sent a minute.
+ * Stop cuts it short.
+ */
+async function waitToRetry(failure) {
+    const ms = RATE_LIMITED.test(String(failure || '')) ? timing.rateMs : timing.retryMs;
+    const until = Date.now() + ms;
+    while (!adoptStop && Date.now() < until) await sleep(Math.min(timing.idleStepMs, Math.max(1, until - Date.now())));
+    await whenIdle();
+}
+
+/** A whole chat's pages, oldest first, as the record and the ledger read them (D198); with `once` the chat is one page, for one request. */
+function adoptPages(players, { once = false } = {}) {
+    const all = sceneTranscriptPages(chatArray() || [], { budget: once ? Infinity : RECAP_BUDGET, persona: players[0] || 'Player', truncation: ADOPT_TRUNCATION, maxPages: Infinity });
+    return { pages: all.length > ADOPT_PAGES_MAX ? all.slice(all.length - ADOPT_PAGES_MAX) : all, total: all.length, chars: all.reduce((n, x) => n + x.length, 0) };
+}
+
+/**
+ * How much there is to read in the chat in front (D198), for the panel to
+ * say before anything is asked: its messages, the passes the whole of it
+ * takes (a pass is a page of the chat's text, one request), whether it
+ * is longer than is read, and about how many tokens the whole of it is,
+ * for the choice of reading it in one request.
+ * @returns {{ messages: number, pages: number, capped: boolean, recent: number, tokens: number }}
+ */
+export function adoptReach() {
+    try {
+        const list = (chatArray() || []).filter(m => m && typeof m === 'object' && !m.is_system && typeof m.mes === 'string' && m.mes.trim());
+        const p = adoptPages(playerNames());
+        return { messages: list.length, pages: p.pages.length, capped: p.total > p.pages.length, recent: Math.min(ADOPT_MESSAGES, list.length), tokens: Math.ceil(p.chars / 4 / 1000) * 1000 };    // the one-request read is the whole chat, whatever its length
+    } catch (e) {
+        return { messages: 0, pages: 0, capped: false, recent: 0, tokens: 0 };
+    }
+}
+
+/** Stop pressed while a whole chat is being read: the pass in hand finishes and no more are asked for. What was read is kept, to carry on from. */
+export function stopAdopt() {
+    adoptStop = true;
+}
+
+/** A read of the chat in front that stopped part-way (a pass failed, or Stop), as the panel shows it; null when there is none. */
+export function adoptPaused() {
+    return adoptRun && sameChat(adoptRun) && adoptRun.at < adoptRun.pages.length ? runView(adoptRun) : null;
+}
+
+/** A read that stopped part-way let go: the next one starts from the chat's first page. */
+export function dropAdoptRead() {
+    adoptRun = null;
+    adoptStop = false;
+}
 
 export function isAdopting() {
     return adopting;
@@ -1525,14 +1605,34 @@ export function scenesPlan() {
  * far, written by one background request over its last messages (as many
  * of the last forty as one page holds), for the player to read and edit.
  * Nothing is changed. Waits for the main generation and the background line.
+ *
+ * With `whole` the chat is read from its first message (D198), the way a
+ * long scene's record is written: page by page, oldest first, each pass
+ * carrying the record so far, where the people stand and what is open on
+ * to the next. The requests are never sent together: each waits for the
+ * one before it. With `once` as well the whole chat is one page, for one
+ * request (a model that reads that much at once). `onStep({ part, page,
+ * pages, states })` says which pass is being asked for and how each one
+ * stands. A pass is asked for twice before it counts as failed, the
+ * second time after a wait (longer when the failure says the connection
+ * is held back). One that fails, or Stop (stopAdopt), stops
+ * the read where it is with everything before it kept: the answer is
+ * `reason: 'pass'` or `'stopped'` with the passes' states, and the same
+ * call with `resume` takes it up at that pass, or with `skip` as well
+ * goes on without that page.
  */
-export async function prepareAdopt() {
+export async function prepareAdopt({ whole = false, once = false, onStep = null, resume = false, skip = false } = {}) {
     const plan = scenesPlan();
     if (!plan.ok) return plan;
     const idle = await whenIdle();
     if (!idle) return { ok: false, reason: 'busy' };
     const token = { meta: meta(), id: chatId() };
     const players = playerNames();
+    if (whole) {
+        if (adoptReading) return { ok: false, reason: 'busy' };
+        adoptReading = true;
+        try { return await readRecordWhole(plan, players, { once, onStep, resume, skip }); } finally { adoptReading = false; }
+    }
     const pages = sceneTranscriptPages((chatArray() || []).slice(-ADOPT_MESSAGES), { budget: RECAP_BUDGET, persona: players[0] || 'Player' });
     let recap = '';
     let error = '';
@@ -1552,7 +1652,121 @@ export async function prepareAdopt() {
         } catch (e) { error = String(e && e.message || e); }
     }
     if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
-    return { ok: true, reason: '', plan: scenesPlan(), recap, error, messages: (chatArray() || []).length, continuity: draftChanges(draft) };
+    return { ok: true, reason: '', plan: scenesPlan(), recap, error, messages: (chatArray() || []).length, continuity: draftChanges(draft), whole: false, pages: pages.length ? 1 : 0 };
+}
+
+/** The record of the whole chat, in passes (D198): prepareAdopt's other way. */
+async function readRecordWhole(plan, players, { once = false, onStep = null, resume = false, skip = false } = {}) {
+    let run = resume && adoptRun && adoptRun.part === 'record' && sameChat(adoptRun) ? adoptRun : null;
+    if (!run) {
+        run = beginRun('record', players, once);
+        run.people = scenePeople(null, players);
+        run.draft = continuityDraft(plan.world && !plan.world.made ? entryOf(plan.world.id).continuity : null, run.people.cast);
+        run.maxChars = Math.max(cfg().recapChars, ADOPT_RECAP_CHARS);
+    } else if (skip && run.at < run.pages.length) {
+        run.states[run.at] = 'skipped';
+        run.at++;
+    }
+    adoptRun = run;
+    adoptStop = false;
+    run.error = '';
+    while (run.at < run.pages.length) {
+        const i = run.at;
+        if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
+        if (adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run) }; }
+        run.states[i] = 'run';
+        tell(onStep, run);
+        const prompt = buildRecapPrompt({ transcript: run.pages[i], brief: '', player: players[0] || '', maxChars: run.maxChars, soFar: run.recap, last: i === run.pages.length - 1, continuity: run.draft });
+        let p = null;
+        let failure = '';
+        // Asked for twice before it counts as failed: the line may be held for a moment, and a reply that broke the form is often right the second time.
+        for (let attempt = 0; attempt < 2 && !(p && p.ok); attempt++) {
+            if (attempt) { run.states[i] = 'retry'; tell(onStep, run); await waitToRetry(failure); if (adoptStop || !sameChat(run)) break; }
+            try {
+                const r = await request(prompt, { transport: recapTransport, label: 'recap' });
+                if (r.busy) { failure = 'Another request held the connection.'; continue; }
+                p = parseRecapReply(r.text, { maxChars: run.maxChars });
+                failure = p.ok ? '' : p.errors.join(' ');
+            } catch (e) { p = null; failure = String(e && e.message || e); }
+        }
+        if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
+        if ((!p || !p.ok) && adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run) }; }    // stopped while it waited to try again
+        if (!p || !p.ok) {
+            run.states[i] = 'failed';
+            run.error = failure || 'The request did not complete.';
+            return { ok: false, reason: 'pass', ...runView(run), errors: [run.error] };
+        }
+        run.recap = p.recap;
+        run.draft = stepDraft(run.draft, readContinuity(p.reply, run.draft, { players, known: run.people.known, text: run.pages.slice(0, i + 1).join('\n') }));
+        run.states[i] = 'done';
+        run.at = i + 1;
+    }
+    tell(onStep, run);
+    adoptRun = null;
+    return { ok: true, reason: '', plan: scenesPlan(), recap: run.recap, error: '', messages: (chatArray() || []).length, continuity: draftChanges(run.draft), whole: true, once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, capped: run.total > run.pages.length, states: run.states.slice() };
+}
+
+/**
+ * The whole chat read into its ledger (D198), page by page, oldest first:
+ * Canon's own run, handed each page in turn, the ledger growing from one
+ * to the next. Canon by itself reads the last sixteen messages every few
+ * replies, and at a scene's end one page: a long chat played with it off,
+ * or before it was there, has a ledger that knows little of it. Read
+ * before the chat is taken (commitAdopt), so the memory has it.
+ *
+ * As the record's read: `onStep` says how each pass stands, a pass is
+ * asked for twice, and one that fails, or Stop, stops the read there with
+ * the ledger as far as it got; `resume` takes it up, `skip` goes on
+ * without that page. The pages are read in order, one request at a time,
+ * because a later page may settle what an earlier one left open. With
+ * `once` the whole chat is handed over in one request, and may add more
+ * than a page does.
+ * @returns {Promise<{ ok: boolean, reason: string, part?: string, page?: number, pages?: number, states?: string[], added?: number, skipped?: number, errors?: string[] }>}
+ */
+export async function readAdoptLedger({ once = false, onStep = null, resume = false, skip = false } = {}) {
+    const plan = scenesPlan();
+    if (!plan.ok) return plan;
+    if (!isCanonOn()) return { ok: false, reason: 'canon-off' };
+    if (adopting || adoptReading) return { ok: false, reason: 'busy' };
+    adoptReading = true;
+    try { return await readLedgerWhole({ once, onStep, resume, skip }); } finally { adoptReading = false; }
+}
+
+async function readLedgerWhole({ once, onStep, resume, skip }) {
+    const idle = await whenIdle();
+    if (!idle) return { ok: false, reason: 'busy' };
+    let run = resume && adoptRun && adoptRun.part === 'ledger' && sameChat(adoptRun) ? adoptRun : null;
+    if (!run) run = beginRun('ledger', playerNames(), once);
+    else if (skip && run.at < run.pages.length) { run.states[run.at] = 'skipped'; run.at++; }
+    adoptRun = run;
+    adoptStop = false;
+    run.error = '';
+    const why = (r) => (r && (r.error || (Array.isArray(r.errors) && r.errors.join(' ')) || ({ busy: 'Another request held the connection.', running: 'Canon was already reading.', stale: 'The chat changed.', off: 'Canon is off.' })[r.reason])) || 'The request did not complete.';
+    while (run.at < run.pages.length) {
+        const i = run.at;
+        if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
+        if (adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run), added: run.added }; }
+        run.states[i] = 'run';
+        tell(onStep, run);
+        let r = null;
+        for (let attempt = 0; attempt < 2 && !(r && r.ok); attempt++) {
+            if (attempt) { run.states[i] = 'retry'; tell(onStep, run); try { await waitForBackground(); } catch (e) { /* no holder */ } await waitToRetry(why(r)); if (adoptStop || !sameChat(run)) break; }
+            try { r = await updateCanon({ reason: 'adopt', scope: 'scene', text: run.pages[i], ...(run.once ? { adds: ADOPT_ONCE_ADDS } : {}) }); } catch (e) { r = { ok: false, reason: 'error', error: String(e && e.message || e) }; }
+        }
+        if (!sameChat(run)) { adoptRun = null; return { ok: false, reason: 'changed' }; }
+        if ((!r || !r.ok) && adoptStop) { run.states[i] = 'wait'; return { ok: false, reason: 'stopped', ...runView(run), added: run.added }; }
+        if (!r || !r.ok) {
+            run.states[i] = 'failed';
+            run.error = why(r);
+            return { ok: false, reason: 'pass', ...runView(run), added: run.added, errors: [run.error] };
+        }
+        run.added += Number(r.added) || 0;
+        run.states[i] = 'done';
+        run.at = i + 1;
+    }
+    tell(onStep, run);
+    adoptRun = null;
+    return { ok: true, reason: '', part: 'ledger', once: run.once, pages: run.pages.length, skipped: run.states.filter(x => x === 'skipped').length, added: run.added, states: run.states.slice() };
 }
 
 /**
@@ -1590,6 +1804,7 @@ async function backupChat(card) {
  * again, the memory is replaced (`replace` says the player knows). Before
  * any of it a copy of the chat is written beside it (D175); when the copy
  * cannot be written, nothing is changed.
+
  * @returns {Promise<{ ok: boolean, reason: string, worldId?: string, worldName?: string, made?: boolean, card?: string, replaced?: boolean, recap?: string, backup?: string }>}
  */
 export async function commitAdopt({ recap = '', replace = false, continuity = null } = {}) {

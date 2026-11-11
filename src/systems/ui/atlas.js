@@ -27,7 +27,8 @@ import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHAN
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
 import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml , atlasSceneListHtml, atlasWaysHtml, atlasWorldHooksHtml } from './atlasViews.js';
-import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
+import { isCanonOn } from '../features/canon.js';
+import { scenesPlan, prepareAdopt, commitAdopt, adoptReach, stopAdopt, adoptPaused, dropAdoptRead, readAdoptLedger, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene, canUndoEnd, undoEnd, startPlanFor, worldSource, worldEntry, hubWorldIds, cardOf, refreshScenes, setSceneAside, resumeScene, removeGoneScene, deleteScene, hubHooks, isHooksBusy, proposeHubHooks, setHubHookAside } from '../features/hub.js';
 import { describeStartResult, describeEndResult, describeDeleteResult, gapOf, hubConfig } from '../../utils/hub.js';
 
 const MOVE_KEY = 'dooms-atlas-moving';
@@ -567,6 +568,10 @@ function renderSetup() {
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
     $p.prop('hidden', false).html(setup.gen ? atlasWorldGenHtml(setup) : setup.naming ? atlasNamesHtml(setup) : setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
+    // A read with a bar a request (D198): the one being asked for is kept in view in a long list.
+    const now = $p.find('.dooms-atlas-pass.is-run, .dooms-atlas-pass.is-retry, .dooms-atlas-pass.is-failed')[0];
+    const box = now ? now.parentElement : null;
+    if (box && box.scrollHeight > box.clientHeight) box.scrollTop = Math.max(0, now.offsetTop - box.offsetTop - box.clientHeight / 2);
 }
 
 // ─── World gen (D182): the land made first ──────────────────────────────────
@@ -920,7 +925,7 @@ async function openEndScene() {
     setup = { end: true, prep: { scene: cur.scene, mark: cur.mark }, busy: true, states: {}, result: null, error: '', world: worldKey() };
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
-    const p = await prepareEnd();
+    const p = await prepareEnd({ onStep: (g) => { if (setup && setup.end && setup.busy) { setup = { ...setup, passes: g.states }; renderSetup(); } } });
     if (!setup || !setup.end) return;    // the sheet was closed meanwhile
     if (!p.ok) { setup = { ...setup, prep: null, busy: false, error: describeEndResult(p) }; renderSetup(); return; }
     setup = { ...setup, prep: p, busy: false };
@@ -973,37 +978,111 @@ async function endSceneGo({ thenContinue = false } = {}) {
 function openScenes() {
     if (board) board.closeCard();
     arm(null);
-    setup = { scenes: true, step: 'ask', plan: scenesPlan(), recap: '', error: '', replace: false, result: null, messages: 0, world: worldKey() };
+    const reach = adoptReach();
+    let canon = false;
+    try { canon = isCanonOn(); } catch (e) { /* Canon is not loaded */ }
+    setup = { scenes: true, step: 'ask', plan: scenesPlan(), recap: '', error: '', replace: false, result: null, messages: reach.messages, world: worldKey(), reach, mode: 'parts', progress: null, stopping: false, read: null, canon, ledger: null, wantLedger: false, change: null };
+    // A read of this chat's record that stopped part-way (a request failed, or Stop) is shown where it stood, to carry on from (D198).
+    const paused = setup.plan.ok ? adoptPaused() : null;
+    if (paused && paused.part === 'record') setup = { ...setup, step: 'paused', mode: paused.pages === 1 && reach.pages > 1 ? 'once' : 'parts', progress: { ...paused, reason: paused.states.includes('failed') ? 'pass' : 'stopped' } };
+    else dropAdoptRead();
     $(`${root()} .dooms-atlas-start`).prop('hidden', true);
     renderSetup();
 }
 
-/** The record of the chat so far asked for; the panel shows it for the player to read and correct. */
-async function prepareScenes() {
+/** A read's progress on the panel: which request is being asked for, and how each one stands. */
+const scenesStep = (p) => { if (setup && setup.scenes && setup.step === 'busy') { setup = { ...setup, progress: { ...p, taking: false } }; renderSetup(); } };
+/** Whether the chat is more than one request reads, so that how much to read is asked (the view's own rule). */
+const scenesChoice = () => !!(setup && setup.reach && (setup.reach.pages > 1 || setup.reach.messages > 40));
+
+/**
+ * The record of the chat so far asked for; the panel shows it for the
+ * player to read and correct. A chat longer than one request reads is
+ * read whole, a bar a request (D198), unless only its last stretch was
+ * asked for. `resume` takes up a read that stopped part-way, `skip` goes
+ * on without the request it stopped at.
+ */
+async function prepareScenes({ resume = false, skip = false } = {}) {
     if (!setup || !setup.scenes) return;
-    setup = { ...setup, step: 'busy', error: '' };
+    const picked = String($(`${root()} .dooms-atlas-scenes-reach:checked`).val() || '');
+    // How much is read: the whole chat a part at a time, the whole of it in one request, or its last stretch only (as before D198).
+    const mode = !scenesChoice() ? 'recent' : resume ? (setup.mode === 'once' ? 'once' : 'parts') : (picked === 'once' || picked === 'recent' || picked === 'parts' ? picked : setup.mode);
+    const whole = mode !== 'recent';
+    const before = resume && setup.progress && setup.progress.part === 'record' ? setup.progress : null;
+    setup = { ...setup, step: 'busy', error: '', mode: scenesChoice() ? mode : setup.mode, stopping: false, ledger: null, progress: whole ? { part: 'record', page: before ? before.page : 1, pages: before ? before.pages : mode === 'once' ? 1 : setup.reach.pages, states: before ? before.states.map(x => (x === 'failed' ? 'wait' : x)) : [] } : null };
     renderSetup();
-    const r = await prepareAdopt();
+    const r = whole ? await prepareAdopt({ whole: true, once: mode === 'once', onStep: scenesStep, resume, skip }) : await prepareAdopt();
     if (!setup || !setup.scenes) return;    // the panel was closed meanwhile
-    if (!r.ok) { setup = { ...setup, step: 'ask', plan: r.reason === 'busy' || r.reason === 'changed' ? setup.plan : r, error: r.reason === 'busy' || r.reason === 'changed' ? scenesRefusalText(r) : '' }; renderSetup(); return; }
-    setup = { ...setup, step: 'review', plan: r.plan, recap: r.recap, messages: r.messages, continuity: r.continuity || null, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
+    if (!r.ok && (r.reason === 'pass' || r.reason === 'stopped')) { setup = { ...setup, step: 'paused', stopping: false, progress: { part: 'record', page: r.page, pages: r.pages, states: r.states, error: r.error, reason: r.reason } }; renderSetup(); return; }
+    if (!r.ok) { setup = { ...setup, step: 'ask', stopping: false, progress: null, plan: r.reason === 'busy' || r.reason === 'changed' ? setup.plan : r, error: r.reason === 'busy' || r.reason === 'changed' ? scenesRefusalText(r) : '' }; renderSetup(); return; }
+    setup = { ...setup, step: 'review', stopping: false, progress: null, plan: r.plan, recap: r.recap, messages: r.messages, continuity: r.continuity || null, read: { whole: !!r.whole, pages: r.pages || 0, skipped: r.skipped || 0, capped: !!r.capped }, wantLedger: !!r.whole && setup.canon, error: r.error ? `The record could not be written (${r.error}). Write a few lines yourself, or leave it empty.` : '' };
     renderSetup();
 }
 
-/** The chat taken: the world made or found, the chat carried over, its stores the world's memory. */
-async function commitScenes() {
+/** What the review holds, read off the panel before it is drawn again: the record, the ticks, where the people stand. */
+function keepReview() {
     if (!setup || !setup.scenes || setup.step !== 'review') return;
-    const recap = String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap);
-    const replace = $(`${root()} .dooms-atlas-scenes-replace`).is(':checked');
+    const $p = $(`${root()} .dooms-atlas-setup`);
     const cont = readContinuityFields(setup.continuity);
-    setup = { ...setup, recap, replace, continuity: continuityShown(setup.continuity, cont) };
-    const r = await commitAdopt({ recap, replace, continuity: continuityChange(cont) || null });
+    const $ledger = $p.find('.dooms-atlas-scenes-ledger');
+    setup = { ...setup, recap: String($p.find('.dooms-atlas-scenes-recap').val() ?? setup.recap), replace: $p.find('.dooms-atlas-scenes-replace').is(':checked'), wantLedger: $ledger.length ? $ledger.is(':checked') : setup.wantLedger, continuity: continuityShown(setup.continuity, cont), change: continuityChange(cont) || null };
+}
+
+/**
+ * The whole chat read into its ledger (D198), a bar a request, before the
+ * chat is taken. True when it is read (or was already); false when it
+ * stopped part-way and the panel waits for what to do about it.
+ */
+async function readScenesLedger({ skip = false } = {}) {
+    if (!setup || !setup.scenes) return false;
+    const before = setup.progress && setup.progress.part === 'ledger' ? setup.progress : null;
+    setup = { ...setup, step: 'busy', error: '', stopping: false, progress: { part: 'ledger', page: before ? before.page : 1, pages: before ? before.pages : setup.mode === 'once' ? 1 : setup.reach.pages, states: before ? before.states.map(x => (x === 'failed' ? 'wait' : x)) : [] } };
+    renderSetup();
+    const r = await readAdoptLedger({ once: setup.mode === 'once', onStep: scenesStep, resume: true, skip });
+    if (!setup || !setup.scenes) return false;
+    if (r.ok) { setup = { ...setup, stopping: false, ledger: { partial: false, pages: r.pages, read: r.pages - r.skipped, skipped: r.skipped, added: r.added }, progress: { part: 'ledger', page: r.pages, pages: r.pages, states: r.states } }; return true; }
+    if (r.reason === 'pass' || r.reason === 'stopped') { setup = { ...setup, step: 'paused', stopping: false, progress: { part: 'ledger', page: r.page, pages: r.pages, states: r.states, error: r.error, reason: r.reason, added: r.added || 0 } }; renderSetup(); return false; }
+    setup = { ...setup, step: 'review', stopping: false, progress: null, error: r.reason === 'canon-off' ? 'Canon is off, so there is no ledger to read the chat into.' : scenesRefusalText(r) };
+    renderSetup();
+    return false;
+}
+
+/** The chat taken: the world made or found, the chat carried over, its stores the world's memory. */
+async function takeScenes() {
     if (!setup || !setup.scenes) return;
-    if (!r.ok) { setup = { ...setup, error: r.reason === 'has-memory' ? 'Tick the box to replace what it remembers.' : scenesRefusalText(r) }; renderSetup(); return; }
+    const wasBusy = setup.step === 'busy';
+    if (wasBusy) { setup = { ...setup, progress: { ...(setup.progress || {}), taking: true } }; renderSetup(); }
+    const r = await commitAdopt({ recap: setup.recap, replace: setup.replace, continuity: setup.change });
+    if (!setup || !setup.scenes) return;
+    if (!r.ok) { setup = { ...setup, step: 'review', progress: null, error: r.reason === 'has-memory' ? 'Tick the box to replace what it remembers.' : scenesRefusalText(r) }; renderSetup(); return; }
     result = `${r.worldName} is played as scenes now.`;
     render();    // the chat is on the world now: the name, the map and the lists are read again
-    setup = { ...setup, step: 'done', result: r, error: '', world: worldKey() };
+    setup = { ...setup, step: 'done', result: r, error: '', progress: null, world: worldKey() };
     renderSetup();
+}
+
+/** Play as scenes pressed: the ledger reads the whole chat first when that was ticked, then the chat is taken. */
+async function commitScenes() {
+    if (!setup || !setup.scenes || setup.step !== 'review') return;
+    keepReview();
+    if (setup.wantLedger && setup.canon && !setup.ledger && !(await readScenesLedger())) return;
+    await takeScenes();
+}
+
+/** A read that stopped part-way taken up again: at the request it stopped at, or past it. */
+async function resumeScenes({ skip = false } = {}) {
+    if (!setup || !setup.scenes || setup.step !== 'paused' || !setup.progress) return;
+    if (setup.progress.part !== 'ledger') { await prepareScenes({ resume: true, skip }); return; }
+    if (await readScenesLedger({ skip })) await takeScenes();
+}
+
+/** The ledger's read given up part-way: the chat is taken with its ledger as far as it got. */
+async function takeScenesNow() {
+    if (!setup || !setup.scenes || setup.step !== 'paused' || !setup.progress || setup.progress.part !== 'ledger') return;
+    const g = setup.progress;
+    dropAdoptRead();
+    setup = { ...setup, step: 'busy', ledger: { partial: true, pages: g.pages, read: g.states.filter(x => x === 'done').length, skipped: g.states.filter(x => x === 'skipped').length, added: g.added || 0 } };
+    await takeScenes();
 }
 
 function openSetup() {
@@ -1262,8 +1341,16 @@ function build() {
                 return;    // opened, the chat change draws the Atlas again from the scene
             }
             if (act === 'scenes') { openScenes(); return; }
-            if (act === 'scenes-prepare' || act === 'scenes-again') { await prepareScenes(); return; }
+            if (act === 'scenes-prepare') { await prepareScenes(); return; }
+            // Written again: a chat that is asked how much to read goes back to that question (a whole read is many requests).
+            if (act === 'scenes-again') { if (setup && setup.scenes && scenesChoice()) { dropAdoptRead(); setup = { ...setup, step: 'ask', error: '', progress: null, ledger: null }; renderSetup(); } else await prepareScenes(); return; }
             if (act === 'scenes-go') { await commitScenes(); return; }
+            if (act === 'scenes-stop') { if (setup && setup.scenes && setup.step === 'busy') { stopAdopt(); setup = { ...setup, stopping: true }; renderSetup(); } return; }
+            if (act === 'scenes-retry') { await resumeScenes(); return; }
+            if (act === 'scenes-skip') { await resumeScenes({ skip: true }); return; }
+            if (act === 'scenes-go-now') { await takeScenesNow(); return; }
+            if (act === 'scenes-back') { if (setup && setup.scenes && setup.step === 'paused') { setup = { ...setup, step: 'review', error: '' }; renderSetup(); } return; }
+            if (act === 'scenes-drop') { if (setup && setup.scenes && setup.step === 'paused') { dropAdoptRead(); setup = { ...setup, step: 'ask', error: '', progress: null }; renderSetup(); } return; }
 
             if (act === 'setup-close') { if (endRunning()) return; if (setup && setup.start) cancelStart(); setup = null; renderSetup(); render(); return; }
             if (act === 'end-scene') { await openEndScene(); return; }
@@ -1531,7 +1618,8 @@ function build() {
     // The tick that a world's memory may be replaced lights Play as scenes; what was typed in the record is kept.
     $(document).on('change', `${root()} .dooms-atlas-scenes-replace`, function () {
         if (!setup || !setup.scenes) return;
-        setup = { ...setup, replace: $(this).is(':checked'), recap: String($(`${root()} .dooms-atlas-scenes-recap`).val() ?? setup.recap), continuity: continuityShown(setup.continuity, readContinuityFields(setup.continuity)), error: '' };
+        keepReview();
+        setup = { ...setup, error: '' };
         renderSetup();
     });
     $(document).on('change', `${root()} .dooms-atlas-ground-select`, function () { commit(withGround(theBook(), String($(this).val() || ''), layer)); });
@@ -1627,7 +1715,7 @@ export function closeAtlas() {
     armed = null;
     roading = null;
     cardMode = 'view';
-    if (setup && setup.step === 'busy') stopSetup();
+    if (setup && setup.step === 'busy') { stopSetup(); if (setup.scenes) stopAdopt(); }    // a read in hand stops after its request; what it read is kept to carry on from
     setup = null;
     undoBook = null;
     picked = '';         // the Atlas opens on the chat in front again
