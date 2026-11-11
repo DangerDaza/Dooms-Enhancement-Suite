@@ -11,7 +11,7 @@
 import { getContext } from '../../../../../../extensions.js';
 import { chat, chat_metadata, saveChatDebounced, saveChatConditional } from '../../../../../../../script.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog } from '../../core/state.js';
-import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI } from '../generation/apiClient.js';
+import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, waitForIdleLine } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom, normalizeQuests } from '../../utils/questCut.js';
 import { buildRecentText } from '../../utils/liveWorld.js';
@@ -124,6 +124,10 @@ export async function proposeHooks({ reason = 'manual' } = {}) {
             if (external) return generateWithExternalAPI(messages);
             return safeGenerateRaw({ prompt: messages, quietToLoud: false });
         };
+        // The request runs on the tracker's connection profile: it waits until the player's own message has been answered
+        // and no other background request holds the line (long-shot-plan §16, D191), and gives up after a while.
+        if (!(await waitForIdleLine())) return { ok: false, reason: 'waiting' };
+        if (stale()) return { ok: false, reason: 'stale' };
         log(`hooks (${reason}) requested`, { world: pack.id });
         const result = await withBackgroundProfile(run, { external, label: 'hooks' });
         if (stale()) return { ok: false, reason: 'stale' };

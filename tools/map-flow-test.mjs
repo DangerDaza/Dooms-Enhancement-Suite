@@ -239,6 +239,40 @@ console.log('\n§7 Hooks (docs/hooks-canon-plan.md D100–D104)');
     extensionSettings.liveWorld.enabled = true;
 }
 
+console.log('\n§8 a request asked for by a button waits for the player\'s own message (long-shot-plan D191)');
+{
+    const hk = await import(`${DES}/src/systems/features/questHooks.js`);
+    const api = await import(`${DES}/src/systems/generation/apiClient.js`);
+    const hooksUtil = await import(`${DES}/src/utils/questHooks.js`);
+    const stScript = await import(`${SANDBOX}/script.js`);
+    api.__setIdleLineTiming({ stepMs: 5, maxMs: 60 });
+    check('with nothing being written the line is free at once', (await api.waitForIdleLine()) === true);
+    // Hooks.
+    let asked = 0;
+    hk.__setHooksTransport(async () => { asked++; return '{"hooks":[{"title":"Watch the tide tables","text":"Find who changed the tide tables at the customs house.","grounds":"the customs house","kind":"place"}]}'; });
+    stScript.__setSendPress(true);
+    const held = await hk.proposeHooks();
+    check('hooks asked for while a reply is being written: nothing is sent, and it says to try again when the reply is done', !held.ok && held.reason === 'waiting' && asked === 0 && /reply is still being written/.test(hooksUtil.describeHooksResult(held)), JSON.stringify(held));
+    setTimeout(() => stScript.__setSendPress(false), 20);
+    const went = await hk.proposeHooks();
+    check('asked while a reply is being written that then ends: the request goes once the reply is done', went.ok && asked === 1, JSON.stringify(went));
+    // The place's picture.
+    let described = 0;
+    lw.__setPlaceTransport({ describe: async () => { described++; return 'A wide view of the quay.'; } });
+    svc.__setImageTransport({ sd: async () => '/user/images/sd/quay-again.png' });
+    extensionSettings.imageGen.source = 'sillytavern';
+    const place = lw.getWorldState().visited[0].id;
+    stScript.__setSendPress(true);
+    const stuck = await lw.drawPlace(place);
+    check('a place\'s picture asked for while a reply is being written: nothing is sent, and it says why', !stuck.ok && stuck.reason === 'busy' && described === 0 && /reply is still being written/.test(stuck.error), JSON.stringify(stuck));
+    setTimeout(() => stScript.__setSendPress(false), 20);
+    const drawn = await lw.drawPlace(place);
+    check('and it is drawn once the reply is done', drawn.ok && described === 1, JSON.stringify(drawn));
+    stScript.__setSendPress(false);
+    hk.__setHooksTransport(null);
+    api.__setIdleLineTiming({ stepMs: 250, maxMs: 120000 });
+}
+
 console.log('');
 if (failures) { console.error(`${failures} FAILURE(S)`); process.exit(1); }
 console.log('All map flow checks pass');

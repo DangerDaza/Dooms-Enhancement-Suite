@@ -812,3 +812,16 @@ a hook, and the world picker have to move into the Atlas first); hooks
 and the hand-drawn place picture waiting for the player's own message;
 rivers and climates for the world gen; the form the phrase count should
 take (the owner's to say).
+
+## 31. Hooks and a place's picture wait for the player's own message (2026-11-11, D191)
+
+The owner, with the three End steps in: "carry on with all waiting
+items". The first of them was the gap §16 named and left: a request asked
+for by a button ran on the tracker's connection profile whatever the chat
+was doing. Built in "Atlas 31".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D191 | Offer hooks and Draw a place wait until the line is free | `waitForIdleLine()` in `apiClient.js` (one helper, with a test hook for its timing): no reply to the player's own message is being written and no other background request holds the flag; it gives up after two minutes. `proposeHooks` and `drawPlace` wait on it before their request: asked for while a reply is being written, the request goes once the reply is done; when the wait runs out nothing is sent and the button's line says "A reply is still being written. Try again when it is done." The Atlas's own requests (D159, D160, D186) and the scene engine's have waited this way since "Atlas 14"; these two were the last that did not |
+
+Tests: `tools/map-flow-test.mjs` §8.

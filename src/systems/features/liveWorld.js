@@ -31,7 +31,7 @@ import { SlashCommand } from '../../../../../../../scripts/slash-commands/SlashC
 import { extensionFolderPath } from '../../core/config.js';
 import { extensionSettings, lastGeneratedData, committedTrackerData, addDebugLog, setMainGenerationStartedAt } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
-import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_TRACKER_UPDATE_COMPLETE, parseCharacterEntriesFromThoughts } from '../generation/apiClient.js';
+import { withBackgroundProfile, BACKGROUND_BUSY, generateWithExternalAPI, DOOMS_TRACKER_UPDATE_COMPLETE, parseCharacterEntriesFromThoughts, waitForIdleLine } from '../generation/apiClient.js';
 import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { resolvePersonaName } from './diceRolls.js';
@@ -1093,6 +1093,10 @@ export async function drawPlace(id, { reason = 'manual' } = {}) {
         if (reason === 'auto') {
             try { if (typeof toastr !== 'undefined') toastr.info(`Drawing a picture of ${row.label} (Settings → Image Generation → Places to switch this off).`, 'Map', { timeOut: 6000 }); } catch (e) { /* no toastr */ }
         }
+        // The describing request runs on the tracker's connection profile: it waits until the player's own message has
+        // been answered and no other background request holds the line (long-shot-plan D191), and gives up after a while.
+        if (!(await waitForIdleLine())) return { ok: false, reason: 'busy', error: 'A reply is still being written. Try again when it is done.' };
+        if (stale()) return { ok: false, reason: 'stale' };
         log(`draw (${reason}) requested`, { place: id });
         const result = await withBackgroundProfile(run, { external, label: 'place' });
         if (stale()) return { ok: false, reason: 'stale' };

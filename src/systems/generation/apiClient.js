@@ -336,6 +336,30 @@ export function waitForBackground() {
     return new Promise(resolve => backgroundWaiters.push(resolve));
 }
 
+let idleLineTiming = { stepMs: 250, maxMs: 120000 };
+
+/** Test hook: how often the line is looked at and how long it is waited for. */
+export function __setIdleLineTiming(t) {
+    idleLineTiming = { ...idleLineTiming, ...(t || {}) };
+}
+
+/**
+ * Waits until the line is free: no reply to the player's own message is
+ * being written and no other background request holds the flag. A
+ * background request runs on the tracker's connection profile; started
+ * while a reply is being written it would switch the profile under that
+ * reply, so a request the player asked for by a button waits here first.
+ * @returns {Promise<boolean>} true once the line is free, false when the wait ran out
+ */
+export async function waitForIdleLine({ maxMs = idleLineTiming.maxMs } = {}) {
+    const started = Date.now();
+    for (;;) {
+        if (ST.is_send_press !== true && !isGenerating) return true;
+        if (Date.now() - started >= maxMs) return false;
+        await new Promise(resolve => setTimeout(resolve, idleLineTiming.stepMs));
+    }
+}
+
 /**
  * Updates RPG tracker data using a separate API call. The standing request
  * of separate and external mode; in together mode it runs only when forced
