@@ -97,6 +97,18 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
+/**
+ * True when an HTML fragment has something worth rendering: visible text, or
+ * a media element (image / video / audio / iframe) that has no text content.
+ */
+function hasRenderableContent(html) {
+    if (!html || !html.trim()) return false;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    if ((tmp.textContent || '').trim()) return true;
+    return !!tmp.querySelector('img, video, audio, iframe, picture, svg, canvas, object, embed');
+}
+
 /** Strip <font color> tags from HTML, keeping their inner content */
 function stripFontColors(html) {
     return html.replace(/<\/?font[^>]*>/gi, '');
@@ -662,7 +674,7 @@ function getTopLevelBlocks(container) {
 
     const flushPending = () => {
         const trimmed = pendingHtml.trim();
-        if (trimmed && stripHtml(trimmed).trim()) {
+        if (hasRenderableContent(trimmed)) {
             const span = document.createElement('span');
             span.innerHTML = pendingHtml;
             blocks.push(span);
@@ -729,7 +741,7 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
     // No font tags at all → pure narrator block
     if (fontElements.length === 0) {
         const text = block.innerHTML.trim();
-        if (text && stripHtml(text).trim()) {
+        if (hasRenderableContent(text)) {
             segments.push({ type: 'narrator', speaker: null, color: null, html: text });
         }
         return segments;
@@ -780,7 +792,7 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
         if (part.type === 'font') {
             // Flush accumulated narration
             const narrationText = currentNarrationHtml.trim();
-            if (narrationText && stripHtml(narrationText).trim()) {
+            if (hasRenderableContent(narrationText)) {
                 segments.push({ type: 'narrator', speaker: null, color: null, html: narrationText });
             }
             currentNarrationHtml = '';
@@ -810,7 +822,7 @@ function parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, pre
 
     // Flush remaining narration
     const finalNarration = currentNarrationHtml.trim();
-    if (finalNarration && stripHtml(finalNarration).trim()) {
+    if (hasRenderableContent(finalNarration)) {
         segments.push({ type: 'narrator', speaker: null, color: null, html: finalNarration });
     }
 
