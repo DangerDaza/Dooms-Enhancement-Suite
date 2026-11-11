@@ -602,6 +602,7 @@ function build(spec, key) {
         isLand: (x, y) => { const k = cellOf(x, y); return k >= 0 && land[k] === 1 && kind[k] !== LAKE; },
         grid: { cols, rows, cell: c, ox, oy, N, salt, land, kind, mass, shore, landCells, coastPos, cellOf, xOf, yOf, idx, inGrid },
         cache: { divisions: new Map(), fields: new Map() },
+        toJSON: () => ({ world: key }),    // a world written out is what it is made from, never its squares
     };
 }
 
@@ -755,8 +756,35 @@ export function suggestSites(world, n, taken = []) {
     return sites.filter(s => !s.fixed).map(s => ({ x: round4(g.xOf(s.k)), y: round4(g.yOf(s.k)) }));
 }
 
+/**
+ * The spot of dry land nearest a point that keeps `gap` clear of every
+ * spot in `taken` (D183): where something laid out without regard to the
+ * world comes to stand on it. Null when the world has no such land.
+ * @param {{ x: number, y: number }} at
+ * @param {Array<{ x: number, y: number }>} taken
+ */
+export function landSpotNear(world, at, { taken = [], gap = 0 } = {}) {
+    if (!world || !at || !finite(at.x) || !finite(at.y)) return null;
+    const g = world.grid;
+    const here = g.cellOf(at.x, at.y);
+    const free = (x, y) => taken.every(t => Math.hypot(t.x - x, t.y - y) >= gap);
+    if (here >= 0 && g.land[here] && g.kind[here] !== LAKE && free(at.x, at.y)) return { x: round4(at.x), y: round4(at.y) };
+    let best = null, bd = Infinity;
+    for (const k of g.landCells) {
+        if (g.kind[k] === LAKE) continue;
+        const x = g.xOf(k), y = g.yOf(k);
+        const d = Math.hypot(x - at.x, y - at.y) - Math.min(g.shore[k], 2) * 0.2;    // a step in from the very shore, when it costs little
+        if (d < bd && free(x, y)) { bd = d; best = { x: round4(x), y: round4(y) }; }
+    }
+    return best;
+}
+
 const WHERE_WORDS = { north: 'Northern', south: 'Southern', east: 'Eastern', west: 'Western', northeast: 'Northeastern', northwest: 'Northwestern', southeast: 'Southeastern', southwest: 'Southwestern', middle: 'Central' };
 const LAND_WORDS = { mountains: ['Highlands', 'Peaks', 'Heights'], forest: ['Woods', 'Wilds', 'Weald'], coast: ['Coast', 'Shore', 'Strand'], plains: ['Plains', 'Reach', 'March', 'Vale'] };
+
+const STAND_IN_RE = new RegExp(`^(?:The Heartland|(?:${Object.values(WHERE_WORDS).join('|')}) (?:${[...new Set(Object.values(LAND_WORDS).flat())].join('|')})(?: \\d+)?)$`);
+/** Whether a name is one of the plain names a land is given to stand in until it has its own ("Northern Highlands", "The Heartland"). */
+export const isStandInName = (label) => STAND_IN_RE.test(String(label || '').trim());
 
 /**
  * The land divided between the regions that stand on it (D183).
@@ -884,8 +912,8 @@ const isWater = (k) => k === SEA || k === LAKE;
  * so a boat is worth it for a long crossing and never for a pond). All in
  * layout units of open ground: a `cost` of 10 is as long as ten units
  * walked across a plain.
- * @returns {{ to: (x: number, y: number) => ({ cost: number, length: number, water: number, mountain: number, forest: number }|null) }}
- *   `length` the way's own length; `water`, `mountain`, `forest` how much of it is over each
+ * @returns {{ to: (x: number, y: number) => ({ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number }|null) }}
+ *   `length` the way's own length; `water`, `mountain`, `forest` how much of it is over each; `afloat` the part of the cost spent by boat, the wait for it counted
  */
 export function travelField(world, from, { embark = 0 } = {}) {
     const none = { to: () => null };
@@ -940,7 +968,8 @@ export function travelField(world, from, { embark = 0 } = {}) {
                 const wet = isWater(ks) !== isWater(ke);
                 const both = isWater(ks) && isWater(ke);
                 const p = both ? TERRAIN_PACE.water : wet ? 1 : Math.max(paceOf(ks, TERRAIN_PACE), paceOf(ke, TERRAIN_PACE));
-                return { cost: straight * p + (wet ? half : 0), length: straight, water: both ? straight : 0, mountain: !both && !wet && (ks === MOUNTAIN || ke === MOUNTAIN) ? straight : 0, forest: ks === FOREST && ke === FOREST ? straight : 0 };
+                const cost = straight * p + (wet ? half : 0);
+                return { cost, afloat: both ? cost : wet ? half : 0, length: straight, water: both ? straight : 0, mountain: !both && !wet && (ks === MOUNTAIN || ke === MOUNTAIN) ? straight : 0, forest: ks === FOREST && ke === FOREST ? straight : 0 };
             }
             // Walk the way back: its length and what it crosses.
             let length = 0, water = 0, mountain = 0, forest = 0, boats = 0;
@@ -957,7 +986,8 @@ export function travelField(world, from, { embark = 0 } = {}) {
             const octile = (Math.max(di, dj) + 0.41421356 * Math.min(di, dj)) * c;
             const r = clamp(straight / octile, 0.5, 1.15);
             const fees = boats * half;
-            return { cost: (field.cost[end] - fees) * r + fees, length: length * r, water: water * r, mountain: mountain * r, forest: forest * r };
+            const cost = (field.cost[end] - fees) * r + fees;
+            return { cost, afloat: Math.min(cost, water * r * TERRAIN_PACE.water + fees), length: length * r, water: water * r, mountain: mountain * r, forest: forest * r };
         },
     };
 }
@@ -967,17 +997,17 @@ export function travelField(world, from, { embark = 0 } = {}) {
  * units as travelField: the straight line it is drawn as, over the
  * ground under it. A road through a forest is a road; over the mountains
  * it is a pass; over water it is a crossing by boat.
- * @returns {{ cost: number, length: number, water: number, mountain: number, forest: number }}
+ * @returns {{ cost: number, afloat: number, length: number, water: number, mountain: number, forest: number }}
  */
 export function roadCost(world, a, b, { embark = 0 } = {}) {
     const length = Math.hypot(b.x - a.x, b.y - a.y);
-    const flat = { cost: length, length, water: 0, mountain: 0, forest: 0 };
+    const flat = { cost: length, afloat: 0, length, water: 0, mountain: 0, forest: 0 };
     if (!world || !(length > 0)) return flat;
     const g = world.grid;
     const n = Math.max(1, Math.ceil(length / (g.cell / 2)));
     const step = length / n;
     const half = Math.max(0, embark) / 2;
-    let cost = 0, water = 0, mountain = 0, forest = 0, was = null;
+    let cost = 0, water = 0, mountain = 0, forest = 0, was = null, fees = 0;
     for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
         const k = g.cellOf(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
@@ -985,8 +1015,8 @@ export function roadCost(world, a, b, { embark = 0 } = {}) {
         const wet = isWater(kd);
         cost += step * paceOf(kd, ROAD_PACE);
         if (wet) water += step; else if (kd === MOUNTAIN) mountain += step; else if (kd === FOREST) forest += step;
-        if (was !== null && was !== wet) cost += half;
+        if (was !== null && was !== wet) { cost += half; fees += half; }
         was = wet;
     }
-    return { cost, length, water, mountain, forest };
+    return { cost, afloat: water * ROAD_PACE.water + fees, length, water, mountain, forest };
 }

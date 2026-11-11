@@ -13,6 +13,7 @@ import { kindOf, kindCounts, filterMarkers, ATLAS_KINDS, ATLAS_SCALES, ATLAS_GRO
 import { safeImageUrl } from '../../utils/worldBoard.js';
 import { draftRows, draftChain, FILL_COUNTS } from '../../utils/atlasSetup.js';
 import { GAPS } from '../../utils/hub.js';
+import { WORLD_SHAPES, WORLD_SIZES, WORLD_REGIONS } from '../../utils/worldGen.js';
 
 export const ATLAS_ID = 'dooms-atlas';
 
@@ -112,7 +113,7 @@ export function atlasStartHtml({ waiting = 0, loose = 0, picture = false, layerL
                <button type="button" class="dooms-atlas-btn is-primary" data-act="add"><i class="fa-solid fa-map-pin" aria-hidden="true"></i> <span>Add a place by hand</span></button>
                <button type="button" class="dooms-atlas-btn" data-act="start-dismiss">Not now</button>
            </div>`;
-    const setup = layerLabel ? '' : `<div class="dooms-atlas-start-setup"><button type="button" class="dooms-atlas-btn is-primary" data-act="setup"><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button><p class="dooms-atlas-start-note">The AI drafts the places from your notes, the lore and the chat: what is inside what, placed for you. You check it first.</p><p class="dooms-atlas-start-or">or do it by hand:</p></div>`;
+    const setup = layerLabel ? '' : `<div class="dooms-atlas-start-setup"><button type="button" class="dooms-atlas-btn is-primary" data-act="worldgen"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>Generate a world</span></button><p class="dooms-atlas-start-note">The land first: sea and coasts, mountains, lakes and forests, made here in a moment. Then you put your regions and places on it.</p><button type="button" class="dooms-atlas-btn is-primary" data-act="setup"><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button><p class="dooms-atlas-start-note">The AI drafts the places from your notes, the lore and the chat: what is inside what, placed for you. You check it first.</p><p class="dooms-atlas-start-or">or do it by hand:</p></div>`;
     return `<div class="dooms-atlas-start-card"><h3>${layerLabel ? `Inside ${e(layerLabel)}` : 'Start your map'}</h3><p>${lead}</p>${setup}${how}</div>`;
 }
 
@@ -464,6 +465,155 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
     </div>`;
 }
 
+// ─── World gen (D182): the panel, its picture, the names ───────────────────
+
+const two = (n) => Math.round(n * 100) / 100;
+const ringPath = (pts) => `M${pts.map(p => `${two(p[0])},${two(p[1])}`).join('L')}Z`;
+const shapePath = (parts) => parts.map(part => part.map(ringPath).join('')).join('');
+const LAND_TINTS = Object.freeze(['#d9c08a', '#c3cd96', '#e0b79a', '#c9c3ae', '#d6d195', '#cdb694', '#bfd0b0', '#e3cfa0', '#c0c890', '#dcc0a8', '#cfd6b4', '#e6c896']);
+
+/**
+ * A planned world as a small picture (D182): the sea, the land, each
+ * region's land in a tint of its own with its name, the forests, lakes
+ * and peaks, and a dot for every place that keeps its spot. An SVG in
+ * the world's own units; the sheet's stylesheet colours it.
+ * @param {object} plan  planWorldGen()
+ */
+export function worldPreviewSvg(plan) {
+    if (!plan || !plan.world) return '';
+    const w = plan.world;
+    const b = w.bounds;
+    const font = two((b.maxX - b.minX) / 46);
+    const lands = plan.lands.map((l, i) => `<path class="dooms-wg-land${l.added ? ' is-added' : ''}" fill="${LAND_TINTS[i % LAND_TINTS.length]}" fill-rule="evenodd" d="${shapePath(l.parts)}"/>`).join('');
+    const peaks = w.peaks.map(p => `<path class="dooms-wg-peak" d="M${p.lines[0].map(q => `${two(q[0])},${two(q[1])}`).join('L')}"/>`).join('');
+    const names = plan.lands.map(l => `<text class="dooms-wg-name${l.added ? ' is-added' : ''}" x="${two(l.x)}" y="${two(l.y + font * 1.25)}" font-size="${font}" text-anchor="middle">${e(l.label)}</text>`).join('');
+    const dots = [
+        ...plan.lands.map(l => `<circle class="dooms-wg-region${l.added ? ' is-added' : ''}" cx="${two(l.x)}" cy="${two(l.y)}" r="${two(font * 0.3)}"/>`),
+        ...plan.kept.filter(k => !k.region).map(k => `<circle class="dooms-wg-place" cx="${two(k.x)}" cy="${two(k.y)}" r="${two(font * 0.22)}"><title>${e(k.label)}</title></circle>`),
+    ].join('');
+    return `<svg class="dooms-atlas-worldgen-map" viewBox="${two(b.minX)} ${two(b.minY)} ${two(b.maxX - b.minX)} ${two(b.maxY - b.minY)}" role="img" aria-label="The world these choices make" preserveAspectRatio="xMidYMid meet">
+        <path class="dooms-wg-shallows" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
+        <path class="dooms-wg-wild" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
+        ${lands}
+        <path class="dooms-wg-forest" fill-rule="evenodd" d="${shapePath(w.forests)}"/>
+        <path class="dooms-wg-lake" fill-rule="evenodd" d="${shapePath(w.lakes)}"/>
+        ${peaks}
+        <path class="dooms-wg-coast" fill-rule="evenodd" d="${shapePath(w.coasts)}"/>
+        ${dots}${names}
+    </svg>`;
+}
+
+/**
+ * The picture in World gen's panel with the line under it: the world the
+ * choices make, its landmasses, its size at the map's scale, its regions.
+ * Drawn again by itself when a choice changes, so the choices keep the
+ * focus and a click on a button is not lost to a redraw.
+ */
+export function worldGenFigureHtml({ plan = null, reach = '' } = {}) {
+    const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const added = plan ? plan.added.length : 0;
+    const caption = plan
+        ? `${count(plan.world.masses.length, 'landmass', 'landmasses')} · ${e(reach)} · ${count(plan.lands.length, 'region', 'regions')}${added && plan.lands.length > added ? ` (${added} new)` : ''}${plan.unplaced ? ` · ${count(plan.unplaced, 'thing waits', 'things wait')} to be put down again` : ''}`
+        : 'Type a seed, or press Roll again.';
+    return `${plan ? worldPreviewSvg(plan) : '<div class="dooms-atlas-worldgen-none">No world yet</div>'}<figcaption>${caption}</figcaption>`;
+}
+
+/**
+ * World gen's panel (D182): the shape, the size, how many regions to add,
+ * the seed with Roll again, what becomes of the things already on the
+ * map (kept where they are, or back to the list), and the world those
+ * choices make, drawn beside them. Nothing changes until Use this world.
+ * @param {object} o
+ * @param {{ had: boolean, regions: number, places: number, waitingRegions: number, standIns: number }} o.state  what stands on the map (worldGenState)
+ * @param {object|null} o.plan   planWorldGen() for the choices
+ * @param {string} o.reach       the world's size in words ("about 960 by 660 miles")
+ */
+export function atlasWorldGenHtml({ shape = 'pangea', size = 'medium', seed = '', regions = WORLD_REGIONS.default, mode = 'keep', state = {}, plan = null, reach = '', error = '' } = {}) {
+    const st = { had: false, regions: 0, places: 0, waitingRegions: 0, standIns: 0, ...state };
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const shapes = WORLD_SHAPES.map(sh => `<label><input type="radio" name="dooms-atlas-wg-shape" value="${sh.id}"${sh.id === shape ? ' checked' : ''} /> <span><strong>${e(sh.label)}</strong> · ${e(sh.hint)}</span></label>`).join('');
+    const sizes = Object.entries(WORLD_SIZES).map(([id, sz]) => `<label><input type="radio" name="dooms-atlas-wg-size" value="${id}"${id === size ? ' checked' : ''} /> <span>${e(sz.label)}</span></label>`).join('');
+    const onMap = st.regions + st.places;
+    const what = [st.regions ? count(st.regions, 'region', 'regions') : '', st.places ? count(st.places, 'place', 'places') : ''].filter(Boolean).join(' and ');
+    const modes = onMap ? `<fieldset class="dooms-atlas-setup-reach"><legend class="dooms-atlas-card-label">What is on this map now</legend>
+            <label><input type="radio" name="dooms-atlas-wg-mode" value="keep"${mode !== 'clean' ? ' checked' : ''} /> <span><strong>Build the world around it</strong> · The ${what} on this map ${onMap === 1 ? 'keeps its spot' : 'keep their spots'}: land is made under ${onMap === 1 ? 'it' : 'each'}${st.regions ? `, and ${st.regions === 1 ? 'the region holds' : 'each region holds'} the land about it` : ''}.</span></label>
+            <label><input type="radio" name="dooms-atlas-wg-mode" value="clean"${mode === 'clean' ? ' checked' : ''} /> <span><strong>Start clean</strong> · ${onMap === 1 ? 'It goes' : 'They go'} back to the list on the left, to be put down again on the new world. What is inside a region stays inside it.</span></label>
+        </fieldset>` : '';
+    const own = st.regions + st.waitingRegions;
+    return `<div class="dooms-atlas-setup-card is-worldgen">
+        <h3>${st.had ? 'Change the world' : 'Generate a world'}</h3>
+        <p>The land first: sea and coasts, mountains, lakes and forests, made here in a moment from a seed, with no AI request. Your regions and places are then put on it. A region holds the land around where it stands, its borders tending along the mountains: move a region and its borders follow.</p>
+        <div class="dooms-atlas-worldgen">
+            <div class="dooms-atlas-worldgen-form">
+                <fieldset class="dooms-atlas-setup-reach"><legend class="dooms-atlas-card-label">Shape</legend>${shapes}</fieldset>
+                <fieldset class="dooms-atlas-worldgen-sizes"><legend class="dooms-atlas-card-label">Size</legend>${sizes}</fieldset>
+                <label class="dooms-atlas-field dooms-atlas-worldgen-count"><span class="dooms-atlas-card-label">Regions to add</span>
+                    <input type="number" class="dooms-atlas-input dooms-atlas-wg-regions" min="${WORLD_REGIONS.min}" max="${WORLD_REGIONS.max}" step="1" value="${attr(regions)}" aria-label="Regions to add" /></label>
+                <p class="dooms-atlas-start-note">${own ? `Your ${count(own, 'region keeps its name', 'regions keep their names')}. ` : ''}New regions come under plain names ("Northern Highlands") and are not canon: you rename them, or the AI names them from your lore after.${st.standIns ? ` The ${count(st.standIns, 'region', 'regions')} the last world gen added that nobody named or filled ${st.standIns === 1 ? 'is' : 'are'} replaced.` : ''}</p>
+                <div class="dooms-atlas-worldgen-seed">
+                    <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">Seed</span>
+                        <input type="text" class="dooms-atlas-input dooms-atlas-wg-seed" maxlength="40" value="${attr(seed)}" autocomplete="off" spellcheck="false" aria-label="Seed" /></label>
+                    <button type="button" class="dooms-atlas-btn" data-act="worldgen-roll" title="Another world of the same shape and size"><i class="fa-solid fa-dice" aria-hidden="true"></i> <span>Roll again</span></button>
+                </div>
+                <p class="dooms-atlas-start-note">The same seed makes the same world, on any machine.</p>
+                ${modes}
+            </div>
+            <figure class="dooms-atlas-worldgen-preview">${worldGenFigureHtml({ plan, reach })}</figure>
+        </div>
+        <div class="dooms-atlas-worldgen-error">${err}</div>
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="worldgen-apply"${plan ? '' : ' disabled'}><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Use this world</span></button>
+            ${st.had ? '<button type="button" class="dooms-atlas-btn" data-act="worldgen-remove" title="Take the generated world away: the map draws its land around its places again. Your regions and places are kept."><i class="fa-solid fa-eraser" aria-hidden="true"></i> <span>Remove the world</span></button>' : ''}
+            <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+        </div>
+    </div>`;
+}
+
+/**
+ * Naming the lands (D186): asked for, being asked, and the names to
+ * check: each beside the plain name it replaces, to be changed or left
+ * out before any is used.
+ * @param {object} o
+ * @param {'ask'|'busy'|'review'} o.step
+ * @param {number} o.count   the lands that still carry a plain name
+ * @param {Array<{ id: string, was: string, name: string, note: string }>} o.names
+ */
+export function atlasNamesHtml({ step = 'ask', count = 0, wish = '', names = [], error = '' } = {}) {
+    const err = error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : '';
+    const lands = count === 1 ? 'land' : 'lands';
+    if (step === 'busy') return `<div class="dooms-atlas-setup-card is-busy"><h3>Naming the lands</h3><p>Asking for ${count === 1 ? 'a name' : `${count} names`} that fit the world…</p><div class="dooms-atlas-setup-bar" role="progressbar"><span style="width: 55%"></span></div><p class="dooms-atlas-start-note">Nothing is renamed until you press Use these names.</p></div>`;
+    if (step === 'review') {
+        const row = (n) => `<li class="dooms-atlas-fill-row is-region dooms-atlas-name-row" data-id="${attr(n.id)}">
+                <input type="text" class="dooms-atlas-input" data-field="name" maxlength="80" value="${attr(n.name)}" aria-label="Name for ${attr(n.was)}" />
+                <button type="button" class="dooms-atlas-icon-btn" data-act="names-remove" data-id="${attr(n.id)}" title="Leave ${attr(n.was)} as it is" aria-label="Leave ${attr(n.was)} as it is"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                <p class="dooms-atlas-fill-note"><span class="dooms-atlas-name-was">was ${e(n.was)}</span>${n.note ? ` · ${e(n.note)}` : ''}</p>
+            </li>`;
+        return `<div class="dooms-atlas-setup-card is-review">
+            <h3>Names for the lands</h3>
+            <p>${names.length} ${names.length === 1 ? 'name' : 'names'} to check. Change what you like, leave out what does not fit. The lands stay <strong>not canon</strong> (a dashed border) until you make them so; any of them can be renamed later from its card.</p>
+            ${err}
+            <ul class="dooms-atlas-setup-list">${names.map(row).join('')}</ul>
+            <div class="dooms-atlas-setup-actions">
+                <button type="button" class="dooms-atlas-btn is-primary" data-act="names-apply"${names.length ? '' : ' disabled'}><i class="fa-solid fa-check" aria-hidden="true"></i> <span>Use ${names.length === 1 ? 'this name' : `these ${names.length} names`}</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="names-again"><i class="fa-solid fa-rotate" aria-hidden="true"></i> <span>Ask again</span></button>
+                <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+            </div>
+        </div>`;
+    }
+    return `<div class="dooms-atlas-setup-card">
+        <h3>Name the lands</h3>
+        <p>${count} ${lands} of this world still ${count === 1 ? 'carries' : 'carry'} a plain name. One request on the tracker's connection names ${count === 1 ? 'it' : 'them'} from the world's lore and the card: each name to fit the land's ground, where it lies and what it borders. You check the names before any is used.</p>
+        <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What should the names be like? (optional)</span>
+            <textarea class="dooms-atlas-input dooms-atlas-names-wish" maxlength="600" rows="3" placeholder="&quot;Old Norse sounding.&quot; &quot;The north is the Empire's; the south is free cities.&quot; Leave empty to go by the lore.">${e(wish)}</textarea></label>
+        ${err}
+        <div class="dooms-atlas-setup-actions">
+            <button type="button" class="dooms-atlas-btn is-primary" data-act="names-draft"${count ? '' : ' disabled'}><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Suggest names</span></button>
+            <button type="button" class="dooms-atlas-btn" data-act="setup-close">Cancel</button>
+        </div>
+    </div>`;
+}
+
 /**
  * Filling out a map (D160, D166), in the set-up's panel: what to add
  * (places on this map, or regions around it), what the player wants more
@@ -598,9 +748,12 @@ export function atlasResultsHtml({ markers = [], query = '', hidden = [], all = 
  * proposed, each to be approved or passed over.
  * @param {{ busy: boolean, items: Array, error: string, asked: boolean }|null} tidy
  */
-export function atlasTidyHtml(tidy, { count = 0, canGroup = false } = {}) {
+export function atlasTidyHtml(tidy, { count = 0, canGroup = false, top = false, world = null, toName = 0 } = {}) {
     const t = tidy || { busy: false, items: [], error: '', asked: false };
-    const setup = `<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
+    // World gen (D182) is the top map's: the land made first, before anything is put on it. Naming its lands (D186) is one request.
+    const gen = top ? `<button type="button" class="dooms-atlas-btn" data-act="worldgen" title="${world ? 'Make the world again: another shape, another seed, or take it away. Your regions and places are kept.' : 'Make the land first: sea and coasts, mountains, lakes and forests, from a seed, in a moment and with no AI request. Then your regions and places are put on it.'}"><i class="fa-solid fa-earth-europe" aria-hidden="true"></i> <span>${world ? 'Change the world' : 'Generate a world'}</span></button>` : '';
+    const names = top && world && toName ? `<button type="button" class="dooms-atlas-btn" data-act="names" title="Ask the AI to name the ${toName === 1 ? 'land' : `${toName} lands`} that still ${toName === 1 ? 'has' : 'have'} a plain name, from the world's lore, each to fit its ground and its neighbours. You check the names first."><i class="fa-solid fa-signature" aria-hidden="true"></i> <span>Name the lands · ${toName}</span></button>` : '';
+    const setup = `${gen}${names}<button type="button" class="dooms-atlas-btn" data-act="setup" title="Draft this world's places with the AI, from your notes, the lore and the chat: what is inside what, placed for you. You check the draft first; applying it replaces this chat's map."><i class="fa-solid fa-compass-drafting" aria-hidden="true"></i> <span>Set up this world</span></button>`;
     const fill = `<button type="button" class="dooms-atlas-btn" data-act="fill" title="Add places that plausibly belong on this map, around the ones already here. You check them first; they go on the map marked as not canon, and nothing already there moves."><i class="fa-solid fa-seedling" aria-hidden="true"></i> <span>Fill out this map</span></button>`;
     const group = canGroup ? `<button type="button" class="dooms-atlas-btn" data-act="group" title="Put the places on this map inside a new region that stands where they stood: a land with borders you can click to enter. Each place keeps its spot, on the region's own map. Regions already here stay as its neighbours."><i class="fa-solid fa-object-group" aria-hidden="true"></i> <span>Group into a region</span></button>` : '';
     if (count < 2 && !t.items.length) return `<section class="dooms-atlas-tidy"><div class="dooms-atlas-tidy-buttons">${setup}${fill}${group}</div></section>`;
@@ -625,13 +778,13 @@ function deletedHtml(deleted) {
 }
 
 /** The Places tab: the tray, the search, Show all and Hide all, the visited count, the kinds, the list, the scale, what was deleted. */
-export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null, all = [], layer = '', layerLabel = '', ground = 'country' } = {}) {
+export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query = '', hidden = [], armed = '', scale = 'town', tidy = null, all = [], layer = '', layerLabel = '', ground = 'country', world = null, toName = 0 } = {}) {
     const counts = kindCounts(markers);
     const off = new Set(hidden);
     const visited = markers.filter(m => m.visited).length;
     const scales = Object.entries(ATLAS_SCALES).map(([id, s]) => `<option value="${id}"${id === scale ? ' selected' : ''}>${e(s.label)}</option>`).join('');
     return `${atlasTrayHtml({ tray, armed, layerLabel })}
-        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length, canGroup: markers.some(m => m.kind !== 'region') })}
+        ${atlasTidyHtml(tidy, { count: all.length || markers.length + tray.length, canGroup: markers.some(m => m.kind !== 'region'), top: !layer, world, toName })}
         ${markers.some(m => m.kind === 'region') && markers.some(m => m.kind !== 'region') ? '<p class="dooms-atlas-mixed"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> This map has regions and places side by side. <strong>Group into a region</strong> puts the places inside a land of their own, so every land borders its neighbours and no place is left between them.</p>' : ''}
         <div class="dooms-atlas-search">
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
@@ -645,7 +798,9 @@ export function atlasPlacesHtml({ markers = [], tray = [], deleted = [], query =
         <div class="dooms-atlas-kinds">${counts.map(k => kindHtml(k, off.has(k.id))).join('')}</div>
         <div class="dooms-atlas-results">${atlasResultsHtml({ markers, query, hidden, all, layer })}</div>
         <label class="dooms-atlas-scale-pick" title="How far apart the places on this map are: it sets its distances and travel times. Every map has its own.">This map is of <select class="dooms-atlas-scale-select" aria-label="What this map is of">${scales}</select></label>
-        <label class="dooms-atlas-scale-pick" title="What the empty space of this map is. Every map has its own.">The ground is <select class="dooms-atlas-ground-select" aria-label="What the empty space of this map is">${ATLAS_GROUNDS.map(g => `<option value="${g.id}"${g.id === ground ? ' selected' : ''}>${e(g.label)}</option>`).join('')}</select></label>
+        ${world
+        ? `<p class="dooms-atlas-scale-pick dooms-atlas-world-line" title="This map is drawn on a generated world: its land, sea, mountains, lakes and forests come from the seed.">The ground is a generated world: ${e((WORLD_SHAPES.find(sh => sh.id === world.shape) || { label: 'a world' }).label)}, seed <code>${e(world.seed)}</code>. <button type="button" class="dooms-atlas-link" data-act="worldgen">Change</button></p>`
+        : `<label class="dooms-atlas-scale-pick" title="What the empty space of this map is. Every map has its own.">The ground is <select class="dooms-atlas-ground-select" aria-label="What the empty space of this map is">${ATLAS_GROUNDS.map(g => `<option value="${g.id}"${g.id === ground ? ' selected' : ''}>${e(g.label)}</option>`).join('')}</select></label>`}
         ${deletedHtml(deleted)}`;
 }
 

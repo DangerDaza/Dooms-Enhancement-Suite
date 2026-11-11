@@ -202,5 +202,31 @@ console.log('\n§3 setting up the world (D143, D159)');
     delete meta.dooms_atlas;
 }
 
+console.log('\n§5 a generated world in the chat\'s book, and the names of its lands (D182, D186)');
+{
+    const W = await import(`${DES}/src/utils/atlasWorld.js`);
+    const pack = LW.blankPack('The Eld');
+    const ws = LW.seedWorldState(pack, { name: 'The Eld' });
+    const made = W.applyWorldGen(book.getBook(), A.atlasModel({ pack, state: ws, book: book.getBook() }), { seed: 'alpha', shape: 'pangea', size: 'medium', regions: 5, mode: 'clean' });
+    check('a world put under the map is saved with the chat: what it is made from, and its regions', book.setBook(made.book) === true && meta.dooms_atlas.world.seed === 'alpha' && meta.dooms_atlas.world.shape === 'pangea' && meta.dooms_atlas.made.length === 5 && meta.dooms_atlas.made.every(m => m.kind === 'region' && m.loose === true) && !('grid' in meta.dooms_atlas.world));
+    check('read back, the chat\'s map is the world with its lands', (() => { const m = A.atlasModel({ pack, state: ws, book: book.getBook() }); return m.ground === 'world' && m.territories.length === 5 && m.world.seed === 'alpha'; })());
+    const model = A.atlasModel({ pack, state: ws, book: book.getBook() });
+    let asked = null;
+    book.__setSetupTransport(async (p) => { asked = p; return JSON.stringify({ lands: [{ n: 1, name: 'Skaldmark', note: 'Cold uplands.' }, { n: 2, name: 'The Ashen Coast', note: 'Grey cliffs.' }, { n: 3, name: 'Skaldmark' }, { n: 7, name: 'Nowhere' }] }); });
+    const before = JSON.stringify(meta);
+    const named = await book.draftNames({ model, world: 'The Eld', wish: 'Norse names' });
+    check('name the lands: one request that tells each land and what was asked for', !!asked && asked.kind === 'names' && asked.user.startsWith('WHAT THE PLAYER ASKED FOR') && asked.user.includes('Norse names') && /The lands to name:\n1\. /.test(asked.user) && /5 in all/.test(asked.system));
+    check('the names come back for the lands they are for; one given twice or for no land is passed over; asking changes nothing', named.ok && named.names.length === 2 && named.names[0].name === 'Skaldmark' && named.names[1].name === 'The Ashen Coast' && JSON.stringify(meta) === before && !book.isSettingUp());
+    check('used, the lands carry their names in the chat\'s book, still not canon', book.setBook(W.applyNames(book.getBook(), named.names)) && meta.dooms_atlas.made.filter(m => ['Skaldmark', 'The Ashen Coast'].includes(m.label)).length === 2 && meta.dooms_atlas.made.every(m => m.loose === true) && W.landsToName(A.atlasModel({ pack, state: ws, book: book.getBook() })).length === 3);
+    book.__setSetupTransport(async () => 'no thanks');
+    check('a reply with no names in it is said', (await book.draftNames({ model })).ok === false);
+    let called = false;
+    book.__setSetupTransport(async () => { called = true; return '{}'; });
+    const none = await book.draftNames({ model: A.atlasModel({ pack, state: ws, book: null }) });
+    check('with no land to name, nothing is asked', none.ok === false && none.reason === 'none' && called === false);
+    book.__setSetupTransport(null);
+    delete meta.dooms_atlas;
+}
+
 console.log(failures ? `\n${failures} failure(s)` : '\nall pass');
 process.exit(failures ? 1 : 0);

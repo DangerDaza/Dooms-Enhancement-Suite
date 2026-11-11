@@ -7,9 +7,13 @@
  * another, taken off or deleted. The land is drawn around the markers; a
  * region of the world is a named blob around its placed places; paths
  * are drawn and never measured; the distance between two places is the
- * straight line between their spots times the map's scale. No imports:
- * liveWorld.js reads `normalizeAtlas` for the pack. tools/atlas-test.mjs.
+ * straight line between their spots times the map's scale. On a
+ * generated world (D182, worldGen.js) the top map's land is the world's
+ * own: its regions divide it, and the way between two places is found
+ * over its ground. Pure: liveWorld.js reads `normalizeAtlas` for the
+ * pack. tools/atlas-test.mjs.
  */
+import { normalizeWorldSpec, generateWorld, divideWorld, suggestSites, sizeOfWorld, travelField, roadCost } from './worldGen.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const round4 = (n) => Math.round(n * 10000) / 10000;
@@ -320,7 +324,8 @@ export function normalizeBook(raw) {
     if (r.grounds && typeof r.grounds === 'object') for (const [id, g] of Object.entries(r.grounds)) { if (idOk(id) && GROUND_IDS.has(g)) grounds[id] = g; }
     const scales = {};    // a layer's own scale
     if (r.scales && typeof r.scales === 'object') for (const [id, sc] of Object.entries(r.scales)) { if (idOk(id) && ATLAS_SCALES[sc]) scales[id] = sc; }
-    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, roadHours, gone, merged, made, edits };
+    const world = normalizeWorldSpec(r.world);    // the generated world the top map is drawn on (D182): what it is made from, never its shapes
+    return { scale: typeof r.scale === 'string' && ATLAS_SCALES[r.scale] ? r.scale : '', ground: GROUND_IDS.has(r.ground) ? r.ground : '', drawn: r.drawn === true, spots, inside, scales, grounds, roads, cut, roadHours, gone, merged, made, edits, ...(world ? { world } : {}) };
 }
 
 /** A marker put at a spot (or moved there). With `layer` given, on that place's map ('' = the top map): what is dropped on a map belongs to it (D156). */
@@ -471,6 +476,17 @@ export function withGround(book, ground, layer = '') {
     if (!layer) return { ...b, ground: GROUND_IDS.has(ground) ? ground : '' };
     const { [layer]: _old, ...rest } = b.grounds;
     return { ...b, grounds: GROUND_IDS.has(ground) ? { ...rest, [layer]: ground } : rest };
+}
+
+/**
+ * The map's world set (D182): the geography the top map is drawn on,
+ * made from a seed (worldGen.js). With nothing to make one from, the
+ * world is taken away and the map draws its land around its places again.
+ */
+export function withWorld(book, spec) {
+    const { world: _old, ...rest } = normalizeBook(book);
+    const world = normalizeWorldSpec(spec);
+    return world ? { ...rest, world } : rest;
 }
 
 /**
@@ -884,6 +900,7 @@ export function territoryShades(lands) {
 
 /** The region whose land a point of the map stands on, or '' (D166): what is put down on a land goes inside that region. */
 export function territoryAt(model, x, y) {
+    if (model && model.geo && typeof model.geo.at === 'function') return model.geo.at(x, y);    // a generated world knows whose land every spot is
     for (const t of (model && Array.isArray(model.territories) ? model.territories : [])) if (pointInPolygon(t.outline, x, y)) return t.id;
     return '';
 }
@@ -1169,6 +1186,31 @@ function borderMark(points) {
     return { at: at(0.5), angle, length: total };
 }
 
+/** A land's terrain: the one its name tells, else (on a generated world) the one its own ground is. */
+function terrainOfLand(label, cell) {
+    const told = guessTerrain(label);
+    return told === 'plains' && cell && typeof cell.terrain === 'string' && ATLAS_TERRAINS.includes(cell.terrain) ? cell.terrain : told;
+}
+
+/**
+ * What a generated world draws on a map (D184): its coasts, forests and
+ * lakes as shapes (each [outer, ...holes]), its trees as lines and its
+ * peaks each as its own lines, laid on the map by `to` (a region's own
+ * map lays the world's land wider, or elsewhere). A peak or a tree that
+ * would stand on a marker is left out, so the marker can be read.
+ */
+function worldDecor(world, { to = null, k = 1, markers = [] } = {}) {
+    const at = to || ((p) => p);
+    const ring = (r) => (to ? r.map(at) : r);
+    const shapes = (list) => (to ? list.map(parts => parts.map(ring)) : list);
+    const near = (x, y, r) => markers.some(m => Math.hypot(m.x - x, m.y - y) < r);
+    const peaks = [];
+    for (const p of world.peaks) { const [x, y] = at([p.x, p.y]); if (!near(x, y, (p.s * 0.6 + 0.3) * k)) peaks.push(p.lines.map(ring)); }
+    const trees = [];
+    for (const t of world.trees) { const [x, y] = at([t.x, t.y]); if (!near(x, y, 0.6 * k)) trees.push(...t.lines.map(ring)); }
+    return { lines: [], sea: null, ripples: [], woods: [], trees, ponds: [], peaks, marks: [], look: 'world', unit: round4(k), coasts: shapes(world.coasts), forests: shapes(world.forests), lakes: shapes(world.lakes) };
+}
+
 /**
  * What the Atlas draws (D151–D156). The map is layered: every place
  * stands on one layer, the top map or the map inside another place
@@ -1354,13 +1396,18 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
 
     // The land: a blob under every marker; drawn as one shore (atlasMap.js).
     // The regions on this map are lands that share borders (D163); what a land shows of itself comes with it.
+    // On a generated world (D182) the top map's geography is the world's own, and the regions' lands are its land
+    // divided between the regions that stand on it (D183): a region moved, added or taken away moves the borders.
+    const gen = !cur && bk.world ? generateWorld(bk.world) : null;
     const sites = markers.filter(m => m.kind === 'region');
-    const cells = territoryCells(sites, TERRITORY_RADIUS, cur || 'top');
-    const shades = territoryShades(sites.map(m => ({ id: m.id, terrain: guessTerrain(m.label), neighbours: (cells.get(m.id) || { neighbours: [] }).neighbours })));
-    const territories = sites.map(m => { const c = cells.get(m.id) || { outline: [], neighbours: [] }; return { id: m.id, label: m.label, terrain: guessTerrain(m.label), fill: (shades.get(m.id) || { css: '' }).css, x: m.x, y: m.y, outline: c.outline, neighbours: c.neighbours, loose: m.loose, player: m.player, visited: m.visited, holds: m.holds }; }).filter(t => t.outline.length >= 3);
+    const division = gen ? divideWorld(gen, sites) : null;
+    const cells = division ? division.lands : territoryCells(sites, TERRITORY_RADIUS, cur || 'top');
+    const shades = territoryShades(sites.map(m => ({ id: m.id, terrain: terrainOfLand(m.label, cells.get(m.id)), neighbours: (cells.get(m.id) || { neighbours: [] }).neighbours })));
+    const territories = sites.map(m => { const c = cells.get(m.id) || { outline: [], neighbours: [] }; return { id: m.id, label: m.label, terrain: terrainOfLand(m.label, c), fill: (shades.get(m.id) || { css: '' }).css, x: m.x, y: m.y, outline: c.outline, ...(c.parts ? { parts: c.parts, area: c.area, summary: c.summary } : {}), neighbours: c.neighbours, loose: m.loose, player: m.player, visited: m.visited, holds: m.holds }; }).filter(t => t.outline.length >= 3);
     for (const m of markers) m.territory = territories.some(t => t.id === m.id);
 
-    const land = markers.map(m => ({ id: m.id, x: m.x, y: m.y, radius: m.territory ? TERRITORY_RADIUS : LAND_RADIUS }))
+    // The land under the markers. On a generated world the land is the world's: only what stands out at sea has a rock of its own.
+    const land = markers.filter(m => !gen || gen.kindAt(m.x, m.y) === 'sea').map(m => ({ id: m.id, x: m.x, y: m.y, radius: gen ? round4(LAND_RADIUS * 0.6) : m.territory ? TERRITORY_RADIUS : LAND_RADIUS }))
         .map(b => ({ ...b, outline: regionOutline(`${b.id}/land`, b, b.radius, 28), ripple1: regionOutline(`${b.id}/land`, b, b.radius + 0.22, 28), ripple2: regionOutline(`${b.id}/land`, b, b.radius + 0.5, 28) }));
 
     // Paths (drawn, never measured: D141): a tree over the markers.
@@ -1371,7 +1418,10 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     const cutKeys = new Set(bk.cut.map(([a, b]) => pairKey(a, b)));
     const byMarker = new Map(markers.map(m => [m.id, m]));
     const roadOf = (ma, mb, auto, hours) => ({ a: ma.id, b: mb.id, kind: 'road', auto, hours: hours > 0 ? hours : 0, units: round4(dist(ma, mb)), points: [[ma.x, ma.y], [mb.x, mb.y]] });
-    const routes = spanningTree(joined).map(([a, b]) => roadOf(joined[a], joined[b], true, 0)).filter(r => !cutKeys.has(pairKey(r.a, r.b)));
+    let routes = spanningTree(joined).map(([a, b]) => roadOf(joined[a], joined[b], true, 0)).filter(r => !cutKeys.has(pairKey(r.a, r.b)));
+    // On a generated world the map draws no road of its own across the water: a crossing is the player's to draw (D185).
+    const dryRoads = (world, at) => { routes = routes.filter(r => { if (!r.auto) return true; const over = roadCost(world, at(byMarker.get(r.a)), at(byMarker.get(r.b))); return over.water <= over.length * 0.2; }); };
+    if (gen) dryRoads(gen, (m) => m);
     for (const [a, b] of bk.roads) {
         const ma = byMarker.get(resolve(a)), mb = byMarker.get(resolve(b));
         if (!ma || !mb || ma === mb || cutKeys.has(pairKey(ma.id, mb.id))) continue;
@@ -1384,14 +1434,15 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
     const kindOfId = (id) => (live.get(id).kind || guessKind(live.get(id).label));
     const up = chain(cur);
     const lastRegion = up.map(kindOfId).lastIndexOf('region');
-    const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0, kind: cur ? kindOfId(cur) : '' });
-    const ground = groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
+    const measure = measureOf(pack, bk, cur, { depth, below: up.length - 1 - lastRegion, layered: holds.size > 0, regions: sites.length > 0 || !!gen, kind: cur ? kindOfId(cur) : '' });
+    const ground = gen ? 'world' : groundOf(bk, cur, { scale: measure.scale, label: labelOfLayer(cur), kind: cur ? (live.get(cur).kind || guessKind(live.get(cur).label)) : '' });
 
     // Inside a region (D168): the land it has on the map above is the land of its own map, the lands it borders
     // lie around it, and its terrain is drawn across it. Only on open country (a region the player gave streets or a
     // shore is drawn as they said), and not when it holds regions of its own: their lands are its map.
     let realm = null;
-    let terrain = null;
+    let terrain = gen ? worldDecor(gen, { markers }) : null;
+    let geo = gen ? { world: gen, k: 1, dx: 0, dy: 0, at: division.at } : null;    // the ground a way is found over (D185), and whose land a spot is on
     if (cur && kindOfId(cur) === 'region' && ground === 'country' && !territories.length) {
         const above = par.get(cur) || '';
         const spots = [];    // the regions on the map above, in the order that map draws them
@@ -1400,15 +1451,18 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
             const sp = spotOf(c);
             if (sp) spots.push({ id: c.id, label: c.label, loose: c.loose === true, x: sp.x, y: sp.y });
         }
-        const upCells = territoryCells(spots, TERRITORY_RADIUS, above || 'top');
+        // A region of a generated world: its land is its share of the world's, and the world's own terrain lies across it.
+        const upGen = !above && bk.world ? generateWorld(bk.world) : null;
+        const upCells = upGen ? divideWorld(upGen, spots).lands : territoryCells(spots, TERRITORY_RADIUS, above || 'top');
         const cell = upCells.get(cur);
         const site = spots.find(sp => sp.id === cur);
         if (site && cell && cell.outline.length >= 3) {
-            const upShades = territoryShades(spots.map(sp => ({ id: sp.id, terrain: guessTerrain(sp.label), neighbours: (upCells.get(sp.id) || { neighbours: [] }).neighbours })));
+            const upShades = territoryShades(spots.map(sp => ({ id: sp.id, terrain: terrainOfLand(sp.label, upCells.get(sp.id)), neighbours: (upCells.get(sp.id) || { neighbours: [] }).neighbours })));
             const f = landFrame(cell.outline, markers);
             const to = ([x, y]) => [round4(x * f.k + f.dx), round4(y * f.k + f.dy)];           // from the map above to this one
             const back = (x, y) => [(x - f.dx) / f.k, (y - f.dy) / f.k];                       // and from this one to the map above
             const fillOf = (id) => (upShades.get(id) || { css: '' }).css;
+            const shapesOf = (c) => (c.parts ? { parts: c.parts.map(part => part.map(ring => ring.map(to))) } : {});    // a generated land can be several shapes, with holes
             const here = to([site.x, site.y]);
             const neighbours = [];
             for (const b of cell.borders) {
@@ -1419,19 +1473,26 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
                 // The name stands on the neighbour's side of the border: the side its spot is on.
                 const t = mark.angle * Math.PI / 180;
                 const away = (o.x - site.x) * -Math.sin(t) + (o.y - site.y) * Math.cos(t);
-                neighbours.push({ id: o.id, label: o.label, terrain: guessTerrain(o.label), fill: fillOf(o.id), loose: o.loose, outline: oc.outline.map(to), border: b.points.map(to), at: mark.at.map(round4), angle: round4(mark.angle), side: away < 0 ? -1 : 1 });
+                neighbours.push({ id: o.id, label: o.label, terrain: terrainOfLand(o.label, oc), fill: fillOf(o.id), loose: o.loose, outline: oc.outline.map(to), ...shapesOf(oc), border: b.points.map(to), at: mark.at.map(round4), angle: round4(mark.angle), side: away < 0 ? -1 : 1 });
             }
-            const kindOfLand = guessTerrain(site.label);
-            realm = { id: cur, label: site.label, terrain: kindOfLand, fill: fillOf(cur), loose: site.loose, x: here[0], y: here[1], k: f.k, dx: f.dx, dy: f.dy, outline: cell.outline.map(to), neighbours };
-            const drawn = landTerrain({ id: cur, site, outline: cell.outline, terrain: kindOfLand, spots: markers.map(m => { const [x, y] = back(m.x, m.y); return { x, y }; }), roads: routes.map(r => r.points.map(([x, y]) => back(x, y))) });
-            const lines = (list) => list.map(line => line.map(to));
-            terrain = { lines: [], sea: null, ripples: [], woods: lines(drawn.woods), trees: lines(drawn.trees), ponds: lines(drawn.lakes), peaks: drawn.peaks.map(lines), marks: lines(drawn.marks), look: kindOfLand, unit: round4(drawn.unit * f.k) };
+            const kindOfLand = terrainOfLand(site.label, cell);
+            realm = { id: cur, label: site.label, terrain: kindOfLand, fill: fillOf(cur), loose: site.loose, x: here[0], y: here[1], k: f.k, dx: f.dx, dy: f.dy, outline: cell.outline.map(to), ...shapesOf(cell), ...(upGen ? { world: true } : {}), neighbours };
+            if (upGen) {
+                dryRoads(upGen, (m) => { const [x, y] = back(m.x, m.y); return { x, y }; });
+                terrain = worldDecor(upGen, { to, k: f.k, markers });
+                geo = { world: upGen, k: f.k, dx: f.dx, dy: f.dy, at: null };
+            } else {
+                const drawn = landTerrain({ id: cur, site, outline: cell.outline, terrain: kindOfLand, spots: markers.map(m => { const [x, y] = back(m.x, m.y); return { x, y }; }), roads: routes.map(r => r.points.map(([x, y]) => back(x, y))) });
+                const lines = (list) => list.map(line => line.map(to));
+                terrain = { lines: [], sea: null, ripples: [], woods: lines(drawn.woods), trees: lines(drawn.trees), ponds: lines(drawn.lakes), peaks: drawn.peaks.map(lines), marks: lines(drawn.marks), look: kindOfLand, unit: round4(drawn.unit * f.k) };
+            }
         }
     }
 
     // The canvas: the empty map's own reach, or a region's land; and room around everything that stands on it.
     let minX = -CANVAS, minY = -CANVAS, maxX = CANVAS, maxY = CANVAS;
     if (realm) { minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity; for (const [x, y] of realm.outline) { minX = Math.min(minX, x - 2.5); minY = Math.min(minY, y - 2.5); maxX = Math.max(maxX, x + 2.5); maxY = Math.max(maxY, y + 2.5); } }
+    if (gen) { ({ minX, minY, maxX, maxY } = gen.bounds); for (const m of markers) { minX = Math.min(minX, m.x - 3); minY = Math.min(minY, m.y - 3); maxX = Math.max(maxX, m.x + 3); maxY = Math.max(maxY, m.y + 3); } }    // the world, and whatever stands past its edge
     for (const b of land) { minX = Math.min(minX, b.x - b.radius - 3); minY = Math.min(minY, b.y - b.radius - 3); maxX = Math.max(maxX, b.x + b.radius + 3); maxY = Math.max(maxY, b.y + b.radius + 3); }
     for (const t of territories) for (const [x, y] of t.outline) { minX = Math.min(minX, x - 3); minY = Math.min(minY, y - 3); maxX = Math.max(maxX, x + 3); maxY = Math.max(maxY, y + 3); }    // the lands reach past their spots
     const bounds = { minX: round4(minX), minY: round4(minY), maxX: round4(maxX), maxY: round4(maxY) };
@@ -1442,7 +1503,9 @@ export function atlasModel({ pack, state = null, player = '', weather = {}, book
         party: partyOn && markers.some(m => m.id === partyOn) ? partyOn : '',
         partyInTray: partyOn && tray.some(m => m.id === partyOn) ? partyOn : '',
         partyId, partyLayer: partyId ? (par.get(partyId) || '') : '',
-        bounds, measure, ground, territories, realm,
+        bounds, measure, ground, territories, realm, geo,
+        // The generated world this map is drawn on (D182), as the sidebar tells it; null on a map that has none.
+        world: gen ? { seed: gen.spec.seed, shape: gen.spec.shape, size: sizeOfWorld(gen.spec), w: gen.spec.w, h: gen.spec.h, landmasses: gen.masses.length, unclaimed: sites.length ? round4(Math.max(0, gen.landArea - territories.reduce((n, t) => n + (t.area || 0), 0))) : gen.landArea } : null,
         decor: terrain || groundDecor(ground, cur || 'top', bounds, markers, territories.map(t => t.outline)),
         empty: live.size === 0,
     };
@@ -1462,13 +1525,24 @@ export function suggestSpots(model) {
     const out = new Map();
     // On a region's own map (D168) the spiral starts from the region's spot and keeps to its land, while there is room on it.
     const realm = model && model.realm ? model.realm : null;
-    const mid = realm ? { x: realm.x, y: realm.y } : { x: 0, y: 0 };
+    // On a generated world's own map (D183) the regions go where the world would have them, spread over its land, and
+    // everything else keeps to the land: nothing is put down in the sea or in a lake.
+    const world = !realm && model && model.geo && model.geo.world ? model.geo.world : null;
+    const dry = (s) => !world || world.isLand(s.x, s.y);
+    let mid = realm ? { x: realm.x, y: realm.y } : { x: 0, y: 0 };
+    if (world) {
+        const lands = (model.tray || []).filter(t => t.here !== false && t.kind === 'region');
+        const spots = suggestSites(world, lands.length, taken.filter(t => t.wide));
+        lands.forEach((t, i) => { if (spots[i]) { out.set(t.id, spots[i]); taken.push({ ...spots[i], wide: true }); } });
+        // Everything else is laid out from the land's own middle (the first region there is, else the heart of the largest landmass): the world's middle may be sea.
+        mid = taken.find(t => t.wide) || suggestSites(world, 1)[0] || { x: Math.round((world.bounds.minX + world.bounds.maxX) / 2), y: Math.round((world.bounds.minY + world.bounds.maxY) / 2) };
+    }
     let n = 0, wide = 0;
     for (const t of (model && model.tray ? model.tray : [])) {
-        if (t.here === false) continue;
+        if (t.here === false || out.has(t.id)) continue;
         let at = null;
         if (realm) for (let guard = 0; !at && guard < 600; guard++) { const s = spiral(mid, n++, 1.7, 0.1); if (free(s, t.kind === 'region') && insideBy(realm.outline, s.x, s.y, 0.6)) at = s; }
-        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral(mid, realm ? wide++ : n++, 1.7, 0.1); if (free(s, t.kind === 'region')) at = s; }
+        for (let guard = 0; !at && guard < 4000; guard++) { const s = spiral(mid, realm ? wide++ : n++, 1.7, 0.1); if (free(s, t.kind === 'region') && dry(s)) at = s; }
         if (!at) continue;
         taken.push({ ...at, wide: t.kind === 'region' });
         out.set(t.id, at);
@@ -1530,35 +1604,61 @@ export const CROSS_COUNTRY = 1.5;    // off the roads a journey takes half as lo
  * time, whatever other way there might be: the set time is the story's
  * word for that journey. Between lands (regions) there are no roads to
  * miss: the straight line at the pace.
- * @returns {{ hours: number, length: number, mode: 'here'|'road'|'cross'|'mixed'|'open', via: string[], set: boolean }|null}
- *   `length` in the map's unit along the way taken; `via` the ids of the places passed through; `set` when a road with a set time is on the way; null when either is not on this map
+ * @returns {{ hours: number, length: number, mode: 'here'|'road'|'cross'|'mixed'|'open', via: string[], set: boolean, water: number, mountain: number }|null}
+ *   `length` in the map's unit along the way taken; `via` the ids of the places passed through; `set` when a road with a set time is on the way;
+ *   `water` and `mountain` how much of the way is over each (a generated world's; nothing elsewhere); null when either is not on this map
  */
 export function routeBetween(model, fromId, toId) {
     const ms = model && Array.isArray(model.markers) ? model.markers : [];
     const from = ms.findIndex(m => m.id === fromId);
     const to = ms.findIndex(m => m.id === toId);
     if (from < 0 || to < 0) return null;
-    if (from === to) return { hours: 0, length: 0, mode: 'here', via: [], set: false };
+    if (from === to) return { hours: 0, length: 0, mode: 'here', via: [], set: false, water: 0, mountain: 0 };
     const per = model.measure.per;
     const n = ms.length;
+    // On a generated world (D185) the ground counts: a way across country is found over it (through forest slower, over
+    // mountains much slower, over water by boat), and a road is as long as the ground under its line makes it.
+    const geo = model.geo && model.geo.world ? model.geo : null;
+    const onWorld = (m) => ({ x: (m.x - geo.dx) / geo.k, y: (m.y - geo.dy) / geo.k });    // a spot of this map, where it is on the world
+    const wide = geo ? geo.k * per : per;                                               // what a unit of the world is, in the map's own measure
+    const embark = geo ? model.measure.pace / wide : 0;                                 // taking ship costs a day's travel, told in the world's units
     const road = new Map();
     for (const r of Array.isArray(model.routes) ? model.routes : []) {
         const i = ms.findIndex(m => m.id === r.a), j = ms.findIndex(m => m.id === r.b);
         if (i < 0 || j < 0) continue;
         const length = dist(ms[i], ms[j]) * per;
-        const e = { hours: r.hours > 0 ? r.hours : travelHours(length, model.measure), length, set: r.hours > 0, kind: 'road' };
+        const over = geo ? roadCost(geo.world, onWorld(ms[i]), onWorld(ms[j]), { embark }) : null;
+        const e = { hours: r.hours > 0 ? r.hours : travelHours(over ? over.cost * wide : length, model.measure), length, set: r.hours > 0, kind: 'road', water: over ? over.water * wide : 0, mountain: over ? over.mountain * wide : 0 };
         road.set(i * n + j, e);
         road.set(j * n + i, e);
     }
     // A road with a set time straight between the two is the story's word for that journey: nothing is searched for.
     const direct = road.get(from * n + to);
-    if (direct && direct.set) return { hours: direct.hours, length: direct.length, mode: 'road', via: [], set: true };
+    if (direct && direct.set) return { hours: direct.hours, length: direct.length, mode: 'road', via: [], set: true, water: direct.water, mountain: direct.mountain };
+    const fields = new Map();
+    const fieldOf = (i) => { if (!fields.has(i)) fields.set(i, travelField(geo.world, onWorld(ms[i]), { embark })); return fields.get(i); };
+    const NONE = { hours: Infinity, length: 0, set: false, kind: 'cross', water: 0, mountain: 0 };
+    const hops = new Map();
     const hop = (i, j) => {
-        const e = road.get(i * n + j);
-        if (e) return e;
-        const length = dist(ms[i], ms[j]) * per;
-        const open = ms[i].territory || ms[j].territory;
-        return { hours: travelHours(length, model.measure) * (open ? 1 : CROSS_COUNTRY), length, set: false, kind: open ? 'open' : 'cross' };
+        const key = i * n + j;
+        if (hops.has(key)) return hops.get(key);
+        let e = road.get(key);
+        if (!e) {
+            const length = dist(ms[i], ms[j]) * per;
+            const open = ms[i].territory || ms[j].territory;
+            const slow = open ? 1 : CROSS_COUNTRY;
+            e = { hours: travelHours(length, model.measure) * slow, length, set: false, kind: open ? 'open' : 'cross', water: 0, mountain: 0 };
+            if (geo) {
+                // Across the ground itself, from where the journey starts or to where it ends; between two places on the way there are only roads.
+                const pivot = i === from || i === to ? i : (j === from || j === to ? j : -1);
+                const other = onWorld(ms[pivot === i ? j : i]);
+                const way = pivot < 0 ? null : fieldOf(pivot).to(other.x, other.y);
+                if (pivot < 0) e = NONE;
+                else if (way) e = { ...e, hours: travelHours(((way.cost - way.afloat) * slow + way.afloat) * wide, model.measure), length: way.length * wide, water: way.water * wide, mountain: way.mountain * wide };    // a boat is no slower for there being no road
+            }
+        }
+        hops.set(key, e);
+        return e;
     };
     const best = new Array(n).fill(Infinity);
     const prev = new Array(n).fill(-1);
@@ -1577,11 +1677,48 @@ export function routeBetween(model, fromId, toId) {
     }
     const path = [to];
     for (let cur = to; prev[cur] >= 0; cur = prev[cur]) path.unshift(prev[cur]);
-    const hops = path.slice(1).map((v, i) => hop(path[i], v));
-    const kinds = new Set(hops.map(h => h.kind));
+    const taken = path.slice(1).map((v, i) => hop(path[i], v));
+    const kinds = new Set(taken.map(h => h.kind));
     const mode = kinds.size === 1 ? [...kinds][0] : (kinds.has('road') ? 'mixed' : 'open');
-    return { hours: best[to], length: hops.reduce((sum, h) => sum + h.length, 0), mode, via: path.slice(1, -1).map(i => ms[i].id), set: hops.some(h => h.set) };
+    const sum = (key) => taken.reduce((total, h) => total + h[key], 0);
+    return { hours: best[to], length: sum('length'), mode, via: path.slice(1, -1).map(i => ms[i].id), set: taken.some(h => h.set), water: sum('water'), mountain: sum('mountain') };
 }
+
+/**
+ * A road as it is drawn (D165, D185): its length in the map's unit and
+ * the hours it takes by that length alone, whatever time the player set
+ * for it. On a generated world the ground under its line counts: over
+ * the mountains it is a pass, over water a crossing by boat.
+ * @returns {{ length: number, hours: number, water: number, mountain: number }|null}  null when either end is not on this map
+ */
+export function roadAsDrawn(model, aId, bId) {
+    const ms = model && Array.isArray(model.markers) ? model.markers : [];
+    const a = ms.find(m => m.id === aId), b = ms.find(m => m.id === bId);
+    if (!a || !b) return null;
+    const per = model.measure.per;
+    const length = dist(a, b) * per;
+    const geo = model.geo && model.geo.world ? model.geo : null;
+    if (!geo) return { length, hours: travelHours(length, model.measure), water: 0, mountain: 0 };
+    const wide = geo.k * per;
+    const at = (m) => ({ x: (m.x - geo.dx) / geo.k, y: (m.y - geo.dy) / geo.k });
+    const over = roadCost(geo.world, at(a), at(b), { embark: model.measure.pace / wide });
+    return { length, hours: travelHours(over.cost * wide, model.measure), water: over.water * wide, mountain: over.mountain * wide };
+}
+
+/** How a road as drawn is travelled, in words: "96 miles, about 4 days on foot", "…on foot and by boat", "…on foot, over the mountains". */
+export function describeRoad(model, aId, bId) {
+    const r = roadAsDrawn(model, aId, bId);
+    if (!r) return '';
+    if (bySea(r)) return `${describeLength(r.length, model.measure.unit)} by sea, ${describeTime(r.hours)}`;
+    return `${describeLength(r.length, model.measure.unit)}, ${describeTime(r.hours)}${wayBy(r)}${wayOver(r) ? `,${wayOver(r)}` : ''}`;
+}
+
+/** Whether nearly all of a way is over water (D185): a voyage, not a walk with a crossing in it. */
+const bySea = (r) => r.water > 0 && r.length > 0 && r.water >= r.length * 0.85;
+/** How a way is travelled, in words: " on foot", " by boat" for a voyage, " on foot and by boat" when some of it is over water. */
+const wayBy = (r) => (bySea(r) ? ' by boat' : r.water > 0 ? ' on foot and by boat' : ' on foot');
+/** ", over the mountains" for a way that is over them for a good part of its length. */
+const wayOver = (r) => (r.mountain > 0 && r.mountain >= r.length * 0.15 ? ' over the mountains' : '');
 
 /**
  * The line a card shows: "96 miles by road, about 4 days on foot", "about
@@ -1599,7 +1736,8 @@ export function describeDistance(model, fromId, toId) {
     const time = describeTime(r.hours);
     const way = r.mode === 'road' ? ' by road' : r.mode === 'cross' ? ' cross-country' : '';
     if (r.set) return `${time}${r.mode === 'mixed' ? ', partly by road' : way}`;
-    return `${describeLength(r.length, model.measure.unit)}${r.mode === 'mixed' ? ', partly by road' : way}, ${time} on foot`;
+    if (bySea(r)) return `${describeLength(r.length, model.measure.unit)} by sea, ${time}`;    // a voyage is neither by road nor across country
+    return `${describeLength(r.length, model.measure.unit)}${r.mode === 'mixed' ? ', partly by road' : way}, ${time}${wayBy(r)}${wayOver(r) ? `,${wayOver(r)}` : ''}`;
 }
 
 /** The same told to the story (Travel here): "about 2 days by road", "about 4 days on foot by road (96 miles)", "about 5 days on foot across country (83 miles)"; '' when there is nothing to tell. */
@@ -1609,7 +1747,7 @@ export function describeJourney(model, fromId, toId) {
     if (!r || !(r.hours > 0)) return '';
     const time = describeTime(r.hours);
     const way = r.mode === 'road' ? ' by road' : r.mode === 'cross' ? ' across country' : r.mode === 'mixed' ? ', partly by road' : '';
-    return r.set ? `${time}${way}` : `${time} on foot${way} (${describeLength(r.length, model.measure.unit)})`;
+    return r.set ? `${time}${way}` : `${time}${wayBy(r)}${bySea(r) ? '' : way}${wayOver(r)} (${describeLength(r.length, model.measure.unit)})`;
 }
 
 /**

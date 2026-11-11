@@ -629,3 +629,78 @@ Not done here: Travel here inside a scene stays in the same chat, as it
 was; "End and start a scene here" on a place's card (end this scene and
 open one elsewhere, with the journey's time) is not built: ending and then
 starting from the map does it in two steps.
+
+## 27. World gen: the land made first (2026-11-11, D182–D186)
+
+The owner, while the scene's strip was being built: "I also want terrain
+like mountains and lakes and oceans to be added to the map when
+generating. Maybe we should have an initial 'World gen' step that makes a
+world map, then the player can pick where their stuff is on that map?"
+Asked four things, he answered: for a map that already has places, "both
+as options" (the world made around what is placed, or made clean and
+everything placed again); terrain affects travel, "yes it does"; for the
+landmasses, "give a few generation options, Pangea, IRL (build kind of
+how the real world is), Island, and Divide which would look like the WoW
+classic map"; region names, "AI suggest, you change later if you want
+(the current system)". Built in "Atlas 25" (the generator) and "Atlas 26"
+(on the map).
+
+Until now the map drew its land around the places as they were put down
+(D151), and a region's terrain was read from its name (D168). A generated
+world turns that round for the top map: the land is there first, and
+what is put on it stands on it. It replaces the old item "terrain that
+follows the story".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D182 | A world is made from a seed, in code, in a moment; the book keeps the seed, never the shapes | `src/utils/worldGen.js`, pure. `generateWorld({ seed, shape, w, h, cx, cy, anchors })` makes the geography on a grid of half-unit squares: land and sea in one of four shapes (**Pangea**: one great landmass; **Like our world**: several continents; **Islands**: an archipelago; **Divide**: two continents across a sea), then mountain ranges that wander inland, lakes (and any water the open sea does not reach), forests, and from the grid the outlines: the coast, the lakes' shores, the forests' edges, a tree for each stretch of forest, a peak along every range. No AI request: about a tenth of a second, and the same seed and choices give the same world on any machine, so "Roll again" is free. Three sizes (48 by 32, 64 by 44, 88 by 60 units: at a region's scale about 720 by 480, 960 by 660 and 1,320 by 900 miles); a world made around what is placed is widened to hold it (160 by 110 at the most). The book holds `world` (the spec, with the spots that had to be land: `anchors`); `normalizeBook` keeps it, every edit carries it, a scene's snapshot carries it with the rest of the map (D173). The last few worlds made are kept in memory, so drawing one again costs nothing |
+| D183 | Regions are whoever stands on the land: each holds the land around its spot, and borders follow the mountains | The geography has no regions of its own. `divideWorld(world, sites)` gives every region on the top map the land it can walk to before another region does, spreading from its own spot, slower over mountains and lakes: so borders tend to run along the ranges (in the test world, 27% of the ground beside a border is mountain against 9% of all the land). A region moved, added or deleted moves the borders; the coast never moves. One region alone holds its whole landmass; an island no region stands on goes whole to the region nearest it across the water, or is nobody's when none is near (drawn as plain land). A region dropped a step off the shore takes the land beside it; one out at sea holds none. Two regions that share a border share its very points: the lands tile the land exactly. `suggestSites(world, n, taken)` says where n more regions would stand: shared between the landmasses by their size (an island gets its first region before a continent gets its third), far from one another and from the regions already there, each drawn to the middle of the land it would hold. On the top map this replaces `territoryCells` (D163, D166, D167), which still draws the lands of a map with no world and of a region that holds regions |
+| D184 | The world is drawn on the top map and, the same, inside each region | The top map's ground is `world`: the sea is the map's own ground, the land lies on it with the shallows round its coast, the regions' lands over it in their colours (D167), then the forests, trees, lakes and peaks over those, and the coast's line last. What stands out at sea has a rock of its own under it. A fit shows the whole world. Inside a region of the world (D168) the land is the region's share of the world's, in the same shape, with the world's own terrain across it and the sea past its coast: the region's own map is the world's map, nearer. `landTerrain` (terrain read from the region's name) still draws a region of a map with no world. A peak or a tree that would stand on a marker is left out, so the marker can be read. A land's terrain (its colour's leaning, D167) is the one its name tells, else the one its own ground is |
+| D185 | Terrain affects travel: forest slower, mountains much slower, water by boat | The owner: "yes it does". On a generated world a way across country is found over the ground itself (`travelField`): forest takes a quarter as long again, mountains two and a half times as long, and water is crossed by boat, twice as fast under way but with a day's travel lost to taking ship, so a boat is worth it for a sea and never for a pond: a lake is gone round. A road is as long as the ground under its line makes it (`roadCost`): through a forest it is a road, over mountains a pass (half as long again), over water a crossing with the same wait. A road with a set time still takes that time, whatever is under it (D165). The map draws no road of its own across the water: a crossing is the player's to draw. The card and Travel here say how the way goes: "83 miles cross-country, about 5 days on foot, over the mountains", "about 16 days on foot and by boat", "572 miles by sea, about 15 days"; the time a scene opens after a journey (D174) follows. Inside a region the same ground counts. A map with no world measures as it did |
+| D186 | The world gen names nothing; new regions come under plain names and the AI is asked for names after | The owner: "AI suggest, you change later if you want (the current system)". A region the world gen adds stands under a plain name told from where it lies and what its ground is ("Northern Highlands", "The Heartland"), not canon (D160: a dashed border). "Name the lands" in the list is one request on the tracker's connection: each such land is told by where it lies, its ground and what it borders, with the lore, the card and the lands that have their names, and the reply's names are checked in a list (changed, left out) before any is used. A named land stays not canon until the player makes it so. A world made again replaces the regions nobody took up (not canon, nothing inside, still under a plain name); a region that was named, filled or made canon is the player's and stays |
+
+**The panel** (Places, "Generate a world"; first on an empty map's start
+panel): the shape, the size, the regions to add (none offered on a map
+that has regions of its own), the seed with Roll again, and beside them
+the world those choices make, drawn small with its regions. On a map
+that has things on it, what becomes of them: **Build the world around
+it** (each keeps its spot, land is made under it, each region holds the
+land about it) or **Start clean** (they go back to the list to be put
+down again; what is inside a region stays inside it). Nothing changes
+until "Use this world"; one Undo puts the map back. "Remove the world"
+takes it away again and the map draws its land around its places as
+before. Placing is the tray's own (D145, D151): a region dragged onto
+the land takes the land around where it lands; a place dropped on a
+region's land goes inside that region (D166); Place all spreads the
+regions over the land and keeps everything off the water.
+
+**Set up this world and Fill out this map** (D159, D160) keep to it: a
+set-up applied on a map with a world keeps the world under it and stands
+its regions where the world would have them; a fill's regions come to
+stand on the dry land nearest where they were laid out.
+
+What it is not, yet: no rivers; no climate (no deserts, snow or swamps:
+the land's kinds are plain, forest, mountain and lake); the names of
+seas and ranges are nobody's; a way by road still runs straight between
+its two places, whatever lies between; the top map's scale is the
+player's to set as before (a region's scale by default, so a medium
+world is some 960 miles across: "A world" in the scale's list makes it
+3,800); a region's own map is no finer than the world's (its coast and
+its peaks are the world's, nearer, not drawn again in more detail).
+Nothing here has run in a real SillyTavern: the generator, the model and
+the request's prompt and reply are tested pure, the drawing and the
+panel in a headless browser, the controller only by loading.
+
+Where it is: the generator `src/utils/worldGen.js`; the book's `world`,
+the lands, the terrain and the travel in `src/utils/atlas.js`
+(`withWorld`, `atlasModel`'s `world`, `geo` and `decor`, `routeBetween`,
+`roadAsDrawn`); the panel's choices, the plan, the apply and the names'
+request in `src/utils/atlasWorld.js`; the request asked in
+`atlasBook.js` (`draftNames`); the panel, its picture and the names'
+sheet in `atlasViews.js` (`atlasWorldGenHtml`, `worldPreviewSvg`,
+`atlasNamesHtml`); the drawing in `atlasMap.js`. Tests:
+`tools/world-gen-test.mjs` (the generator), `tools/atlas-world-test.mjs`
+(the panel's parts, a world made again, the names, a set-up and a fill
+on a world), `tools/atlas-test.mjs` §6f (the model and the travel),
+`tools/atlas-flow-test.mjs` §5 (the book saved, the request),
+`tools/atlas-browser-test.mjs` §5j (the panel and the map in a browser).

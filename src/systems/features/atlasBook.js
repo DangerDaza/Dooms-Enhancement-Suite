@@ -17,6 +17,7 @@ import { safeGenerateRaw } from '../../utils/responseExtractor.js';
 import { normalizeBook, buildTidyPrompt, parseTidy } from '../../utils/atlas.js';
 import { stripSceneNoise } from '../../utils/liveWorld.js';
 import { chatLines, chunkLines, recentLines, buildScanPrompt, parseScan, mergeScans, buildSetupPrompt, parseSetup, SETUP_LIMITS, buildFillPrompt, parseFill } from '../../utils/atlasSetup.js';
+import { buildNamesPrompt, parseNames } from '../../utils/atlasWorld.js';
 import { chatArray, cardOfTheChat, loreOfTheChat, playerNames } from './liveWorld.js';
 import { carrySceneBook } from './hub.js';
 
@@ -221,6 +222,30 @@ export async function draftFill({ model = null, world = '', wish = '', count = 8
         return { ok: r.ok, reason: r.ok ? '' : 'invalid', places: r.places, what: r.what, home: r.home, error: r.error };
     } catch (e) {
         return { ok: false, reason: 'error', places: [], what: '', home: '', error: String(e && e.message || e) };
+    } finally {
+        settingUp = false;
+    }
+}
+
+/**
+ * Asks the AI to name the lands a world gen added (D186): the regions on
+ * the top map that still carry a plain stand-in name, each told by where
+ * it lies, its ground and what it borders. Nothing is stored and nothing
+ * is changed: the names go to the player.
+ * @returns {Promise<{ ok: boolean, reason: string, names: Array<{ id: string, was: string, name: string, note: string }>, error: string }>}
+ */
+export async function draftNames({ model = null, world = '', wish = '' } = {}) {
+    if (settingUp) return { ok: false, reason: 'running', names: [], error: 'A request is already running.' };
+    settingUp = true;
+    try {
+        const prompt = buildNamesPrompt({ model, world, wish, lore: await loreOfTheChat(), card: cardOfTheChat() });
+        if (!prompt.count) return { ok: false, reason: 'none', names: [], error: 'Every land on this map has a name of its own already.' };
+        const text = await ask(prompt, 'names', 'atlas-names');
+        const r = parseNames(text, model, prompt.lands);
+        try { addDebugLog(`[Atlas] names: ${r.ok ? `${r.names.length} of ${prompt.count} land(s) named` : r.error}`, r.ok ? null : { reply: text.slice(0, 400) }); } catch (e) { /* no log */ }
+        return { ok: r.ok, reason: r.ok ? '' : 'invalid', names: r.names, error: r.error };
+    } catch (e) {
+        return { ok: false, reason: 'error', names: [], error: String(e && e.message || e) };
     } finally {
         settingUp = false;
     }

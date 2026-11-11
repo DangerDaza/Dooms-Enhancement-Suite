@@ -128,6 +128,45 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-setup[hidden] { display: none; }
 .dooms-atlas-setup-card { width: min(640px, 100%); max-height: 100%; overflow: auto; padding: 22px 24px; border-radius: calc(var(--atlas-radius) + 4px); background: var(--atlas-panel); color: var(--atlas-text); border: 1px solid var(--atlas-line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 12px; }
 .dooms-atlas-setup-card.is-review { width: min(860px, 100%); }
+/* World gen's panel (D182): the choices on the left, the world they make on the right. */
+.dooms-atlas-setup-card.is-worldgen { width: min(1120px, 100%); }
+.dooms-atlas-worldgen { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.dooms-atlas-worldgen-form { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dooms-atlas-worldgen-sizes { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.dooms-atlas-worldgen-sizes legend { width: 100%; margin-bottom: 4px; }
+.dooms-atlas-worldgen-sizes label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88em; cursor: pointer; padding: 5px 10px; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); }
+.dooms-atlas-worldgen-sizes label:has(input:checked) { border-color: var(--atlas-accent); background: color-mix(in srgb, var(--atlas-accent) 10%, transparent); }
+.dooms-atlas-worldgen-sizes input { margin: 0; }
+.dooms-atlas-worldgen-count .dooms-atlas-input { width: 90px; }
+.dooms-atlas-worldgen-seed { display: flex; gap: 8px; align-items: flex-end; }
+.dooms-atlas-worldgen-seed .dooms-atlas-field { flex: 1 1 auto; min-width: 0; }
+.dooms-atlas-worldgen-seed .dooms-atlas-btn { flex: 0 0 auto; }
+.dooms-atlas-worldgen-preview { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; position: sticky; top: 0; }
+.dooms-atlas-worldgen-map { display: block; width: 100%; height: auto; max-height: 62vh; border-radius: var(--atlas-radius); border: 1px solid var(--atlas-line); background: var(--atlas-sea); }
+.dooms-atlas-worldgen-none { display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 11; border-radius: var(--atlas-radius); border: 1px dashed var(--atlas-line); color: var(--atlas-muted); font-size: 0.92em; }
+.dooms-atlas-worldgen-preview figcaption { font-size: 0.86em; color: var(--atlas-muted); line-height: 1.4; }
+.dooms-wg-shallows { fill: none; stroke: color-mix(in srgb, var(--atlas-sea) 55%, #f7f3e4); stroke-width: 1.3; stroke-opacity: 0.6; stroke-linejoin: round; }
+.dooms-wg-wild { fill: var(--atlas-land); stroke: none; }
+.dooms-wg-land { fill-opacity: 0.85; stroke: var(--atlas-ink); stroke-width: 0.1; stroke-opacity: 0.7; stroke-linejoin: round; }
+.dooms-wg-land.is-added { stroke-dasharray: 0.5 0.4; }
+.dooms-wg-forest { fill: rgba(86, 122, 70, 0.34); stroke: none; }
+.dooms-wg-lake { fill: color-mix(in srgb, var(--atlas-sea) 80%, #8fb3bd); stroke: var(--atlas-ink); stroke-width: 0.07; stroke-opacity: 0.6; }
+.dooms-wg-peak { fill: color-mix(in srgb, var(--atlas-land) 86%, #8a7a66); stroke: var(--atlas-ink); stroke-width: 0.08; stroke-opacity: 0.85; stroke-linejoin: round; }
+.dooms-wg-coast { fill: none; stroke: var(--atlas-ink); stroke-width: 0.2; stroke-linejoin: round; }
+.dooms-wg-region { fill: var(--atlas-ink); }
+.dooms-wg-region.is-added { fill: var(--atlas-land); stroke: var(--atlas-ink); stroke-width: 0.1; }
+.dooms-wg-place { fill: var(--atlas-accent); stroke: var(--atlas-land); stroke-width: 0.06; }
+.dooms-wg-name { font-family: var(--atlas-map-font); font-weight: 700; fill: var(--atlas-ink); paint-order: stroke; stroke: color-mix(in srgb, var(--atlas-land) 85%, transparent); stroke-width: 0.35; stroke-linejoin: round; pointer-events: none; }
+.dooms-wg-name.is-added { font-weight: 400; font-style: italic; }
+.dooms-atlas-scale-pick.dooms-atlas-world-line { display: block; line-height: 1.5; }
+.dooms-atlas-world-line .dooms-atlas-link { margin-left: 4px; }
+.dooms-atlas-world-line code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95em; padding: 0 4px; border-radius: 4px; background: var(--atlas-panel2); }
+.dooms-atlas-name-was { font-style: italic; }
+@media (max-width: 900px) {
+    .dooms-atlas-worldgen { grid-template-columns: minmax(0, 1fr); }
+    .dooms-atlas-worldgen-preview { position: static; order: -1; }
+    .dooms-atlas-worldgen-map { max-height: 38vh; }
+}
 .dooms-atlas-setup-card h3 { margin: 0; font-size: 1.3em; font-family: var(--atlas-display); color: var(--atlas-text); }
 .dooms-atlas-setup-card p { margin: 0; font-size: 0.92em; line-height: 1.45; }
 .dooms-atlas-setup-notes { min-height: 130px; font-size: 0.95em !important; line-height: 1.45; }
@@ -327,6 +366,22 @@ button.dooms-atlas-group-head:hover, button.dooms-atlas-group-head:focus-visible
 .dooms-atlas-beyond-label:focus { outline: none; }
 .dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-beyond-name { font-size: 11px; letter-spacing: 0.1em; }
 /* A region's terrain: a peak is a shape of the paper's own colour (it hides the peak behind it), inked, its shaded side hatched. */
+/* A generated world (D184): the sea is the map's own ground; the land on it, with the shallows round its coast. */
+.dooms-atlas-shallows { fill: none; stroke: color-mix(in srgb, var(--atlas-sea) 55%, #f7f3e4); stroke-width: 9; stroke-opacity: 0.55; stroke-linejoin: round; }
+.dooms-atlas-shallows.is-outer { stroke-width: 22; stroke-opacity: 0.3; }
+.dooms-atlas-wild { fill: var(--atlas-land); fill-opacity: 1; stroke: none; }
+.dooms-atlas-wild.is-beyond { fill: color-mix(in srgb, var(--atlas-land) 78%, var(--atlas-sea)); }
+.dooms-atlas-coastline { fill: none; stroke: var(--atlas-ink); stroke-width: 2.6; stroke-opacity: 1; stroke-linejoin: round; }
+.dooms-atlas-wood.is-forest { fill: rgba(86, 122, 70, 0.3); }
+.dooms-atlas-pond.is-lake { fill: color-mix(in srgb, var(--atlas-sea) 80%, #8fb3bd); }
+.dooms-atlas-leaflet[data-ground="world"] .dooms-atlas-territory { fill-opacity: 0.78; }
+.dooms-atlas-leaflet[data-ground="world"] .dooms-atlas-territory:hover { fill-opacity: 0.95; }
+.dooms-atlas-leaflet[data-ground="world"][data-zoom="far"] .dooms-atlas-tree { stroke-width: 0.8; stroke-opacity: 0.7; }
+.dooms-atlas-leaflet[data-ground="world"][data-zoom="far"] .dooms-atlas-coastline { stroke-width: 2; }
+.dooms-atlas-land-label .dooms-atlas-region-name { transform: translate(-50%, 16px); font-size: 14px; letter-spacing: 0.14em; opacity: 0.85; color: var(--atlas-ink); text-shadow: 0 0 3px #fff8e8, 0 0 6px #fff8e8, 0 0 10px #fff8e8; }
+.dooms-atlas-land-label.is-loose .dooms-atlas-region-name { font-style: italic; font-weight: 400; }
+.dooms-atlas-leaflet[data-zoom="far"] .dooms-atlas-land-label .dooms-atlas-region-name { font-size: 12px; letter-spacing: 0.1em; }
+.dooms-atlas-leaflet[data-zoom="close"] .dooms-atlas-land-label { display: none; }
 .dooms-atlas-peak { fill: color-mix(in srgb, var(--atlas-land) 86%, #8a7a66); fill-opacity: 1; stroke: var(--atlas-ink); stroke-width: 1.3; stroke-opacity: 0.8; stroke-linejoin: round; stroke-linecap: round; }
 .dooms-atlas-peak.is-snow { fill: #f6f5ee; }
 .dooms-atlas-peak.is-desert { fill: color-mix(in srgb, var(--atlas-land) 70%, #c99a55); }

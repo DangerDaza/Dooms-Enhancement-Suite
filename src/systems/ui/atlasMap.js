@@ -104,6 +104,7 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
     /** What a fit shows: the picture when there is one, else the land with a margin, else the empty canvas. */
     function content() {
         if (pic) return pictureRect(pic);
+        if (current.ground === 'world') return current.bounds;    // a generated world is shown whole (D184)
         if (current.realm) {
             // Inside a region the fit shows its land, all of it and little else (D168): the land holds its places.
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -135,6 +136,23 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
             const ground = current.ground || 'island';
             const decor = current.decor || { lines: [], sea: null, ripples: [] };
             const lines = (list, className) => { if (list.length) L.polyline(list.map(line => line.map(([x, y]) => ll(x, y))), { className, interactive: false, smoothFactor: 0.3 }).addTo(shapes); };
+            // Shapes that can have holes and be in several parts (a generated world's): each part [outer, ...holes].
+            const shapeOf = (parts) => parts.map(part => part.map(ring => ring.map(([x, y]) => ll(x, y))));
+            const onWorld = ground === 'world' || !!(current.realm && current.realm.world);    // a generated world's map, or a region of one (D184)
+            /** What the ground draws over the land: woods, trees, water, a terrain's own marks, the peaks; on a generated world its forests, lakes and the line of its coast. */
+            const drawTerrain = () => {
+                if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
+                else lines(decor.lines || [], `dooms-atlas-ground is-${ground}`);
+                if (decor.forests && decor.forests.length) L.polygon(shapeOf(decor.forests), { className: 'dooms-atlas-wood is-forest', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                for (const w of decor.woods || []) poly(w, 'dooms-atlas-wood');
+                lines(decor.trees || [], 'dooms-atlas-tree');
+                if (decor.lakes && decor.lakes.length) L.polygon(shapeOf(decor.lakes), { className: 'dooms-atlas-pond is-lake', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
+                lines(decor.marks || [], `dooms-atlas-glyph is-${decor.look || 'plains'}`);
+                // A peak is one shape of its own, the farthest drawn first, so a nearer one stands in front of it.
+                for (const peak of decor.peaks || []) L.polyline(peak.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-peak is-${decor.look || 'plains'}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
+                if (onWorld && decor.coasts && decor.coasts.length) L.polygon(shapeOf(decor.coasts), { className: 'dooms-atlas-coastline', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+            };
             if (ground === 'island') {
                 // One shore: each ring's line for every blob, then that ring filled with sea for every blob (so the lines
                 // inside a neighbour's ring are covered), from the outer ripple in; last the land itself.
@@ -151,46 +169,57 @@ export async function mountAtlasMap(el, { model, picture = null, hidden = [], qu
                 for (const b of current.land) poly(b.outline, 'dooms-atlas-floor');
                 lines(current.routes.map(r => r.points), 'dooms-atlas-passage');
             } else {
+                // A generated world (D184): the sea is the ground of the map; on it the land, with the shallows round its
+                // coast. The land is nobody's until a region holds it. What stands out at sea has a rock of its own.
+                if (onWorld) {
+                    const coast = shapeOf(decor.coasts || []);
+                    if (coast.length) {
+                        L.polygon(coast, { className: 'dooms-atlas-shallows is-outer', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                        L.polygon(coast, { className: 'dooms-atlas-shallows', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                    }
+                    for (const b of current.land) poly(b.outline, 'dooms-atlas-shore');
+                    for (const b of current.land) poly(b.outline, 'dooms-atlas-coast');
+                    if (coast.length) L.polygon(coast, { className: `dooms-atlas-wild${current.realm ? ' is-beyond' : ''}`, interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                }
                 // Inside a region (D168): the lands it borders lie around it, dimmed, each clicked to go there; then its own
                 // land, in the shape and the colour it has on the map above; its terrain is drawn across it just below.
                 const realm = current.realm;
                 if (realm) {
                     for (const n of realm.neighbours) {
-                        const land = L.polygon(n.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-beyond${n.loose ? ' is-loose' : ''}`, fillColor: n.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
+                        const land = L.polygon(n.parts ? shapeOf(n.parts) : n.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-beyond${n.loose ? ' is-loose' : ''}`, fillColor: n.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });
                         land.bindTooltip(n.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
                         land.on('click', (ev) => goBeyond(n.id, ev.latlng));
                         land.addTo(shapes);
                     }
-                    L.polygon(realm.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-realm is-${realm.terrain}${realm.loose ? ' is-loose' : ''}`, fillColor: realm.fill || '#e3c98a', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
+                    L.polygon(realm.parts ? shapeOf(realm.parts) : realm.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-realm is-${realm.terrain}${realm.loose ? ' is-loose' : ''}`, fillColor: realm.fill || '#e3c98a', interactive: false, smoothFactor: 0.3 }).addTo(shapes);
                 }
                 // The land is everywhere (D158): what the ground draws over it, and the sea past a coast's shore.
-                if (decor.sea) { poly(decor.sea, 'dooms-atlas-water is-sea'); lines(decor.ripples, 'dooms-atlas-ripple'); lines(decor.lines, 'dooms-atlas-shore is-line'); }
-                else lines(decor.lines, `dooms-atlas-ground is-${ground}`);
-                for (const w of decor.woods || []) poly(w, 'dooms-atlas-wood');
-                lines(decor.trees || [], 'dooms-atlas-tree');
-                for (const w of decor.ponds || []) poly(w, 'dooms-atlas-pond');
-                lines(decor.marks || [], `dooms-atlas-glyph is-${decor.look || 'plains'}`);
-                // A peak is one shape of its own, the farthest drawn first, so a nearer one stands in front of it.
-                for (const peak of decor.peaks || []) L.polyline(peak.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-peak is-${decor.look || 'plains'}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
+                // On a generated world's own map the terrain lies over the regions' lands: it is drawn after them, below.
+                if (ground !== 'world') drawTerrain();
             }
             // The regions' lands (D163): every land's edge first, then every land over the edges, so borders shared by two
             // lands are one line; a land is clicked to enter it and names itself under the pointer.
             const lands = current.territories || [];
             if (ground === 'island') for (const t of lands) poly(t.outline, 'dooms-atlas-shore');
             for (const t of lands) {
-                const land = L.polygon(t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, fillColor: t.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });    // each land its own shade (D167)
+                const land = L.polygon(t.parts ? shapeOf(t.parts) : t.outline.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-territory is-${t.terrain}${t.loose ? ' is-loose' : ''}${t.player ? ' is-player' : ''}`, fillColor: t.fill || '#e3c98a', interactive: true, bubblingMouseEvents: false, smoothFactor: 0.3 });    // each land its own shade (D167)
                 land.bindTooltip(t.label, { sticky: true, direction: 'top', className: 'dooms-atlas-territory-name', offset: [0, -14] });
                 // While something waits to be put down, a click on a land puts it there (the map's own tap); else it enters the land.
                 land.on('click', (ev) => { if (el.closest('.is-armed')) { if (typeof on.tap === 'function') on.tap({ x: round4(ev.latlng.lng), y: round4(-ev.latlng.lat) }); return; } if (!picking && typeof on.enter === 'function') on.enter(t.id); });
                 land.on('contextmenu', (ev) => { if (ev.originalEvent) ev.originalEvent.preventDefault(); openCard(t.id); });
                 land.addTo(shapes);
             }
+            if (ground === 'world') {
+                drawTerrain();
+                // A generated world's lands carry their names on the map (D184): under each region's badge, until the zoom is close enough for the badge's own.
+                for (const t of lands) L.marker(ll(t.x, t.y), { icon: L.divIcon({ className: `dooms-atlas-region dooms-atlas-land-label${t.loose ? ' is-loose' : ''}`, html: atlasRegionHtml({ label: t.label }), iconSize: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(names);
+            }
             for (const r of current.regions) {
                 poly(r.outline, `dooms-atlas-land is-${r.terrain}`);
                 if (r.glyphs.length) L.polyline(r.glyphs.map(line => line.map(([x, y]) => ll(x, y))), { className: `dooms-atlas-glyph is-${r.terrain}`, interactive: false, smoothFactor: 0.2 }).addTo(shapes);
             }
         }
-        el.setAttribute('data-ground', pic ? 'picture' : (current.ground || 'island'));
+        el.setAttribute('data-ground', pic ? 'picture' : (current.realm && current.realm.world ? 'world' : (current.ground || 'island')));    // a region of a generated world has the sea past its coast
         if (pic || current.ground !== 'underground') for (const r of current.routes) L.polyline(r.points.map(([x, y]) => ll(x, y)), { className: `dooms-atlas-route is-${r.kind}${r.hours > 0 ? ' is-set' : ''}`, interactive: false }).addTo(shapes);
         // A road is clicked to open its own card (its travel time, Remove): a wide unseen line over each takes the click (D165).
         // While something waits to be put down, a click on a road puts it there, as anywhere on the map.

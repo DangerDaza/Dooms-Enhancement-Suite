@@ -53,8 +53,9 @@ ${FA ? '<link rel="stylesheet" href="/__fa/css/all.min.css">' : ''}<link rel="st
 <style>html, body { margin: 0; background: #222; font-family: sans-serif; }</style></head>
 <body>
 <script type="module">
-import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasStripHtml, atlasRoadHtml, roadTimeHours, roadTimeParts } from '/src/systems/ui/atlasViews.js';
+import { ATLAS_ID, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasStripHtml, atlasRoadHtml, roadTimeHours, roadTimeParts, atlasWorldGenHtml, atlasNamesHtml } from '/src/systems/ui/atlasViews.js';
 import * as S from '/src/utils/atlasSetup.js';
+import * as W from '/src/utils/atlasWorld.js';
 import { mountAtlasMap } from '/src/systems/ui/atlasMap.js';
 import { normalizePack, seedWorldState, blankPack } from '/src/utils/liveWorld.js';
 import * as A from '/src/utils/atlas.js';
@@ -85,13 +86,13 @@ const card = (m) => { const mod = window.__model; return atlasCardHtml({ marker:
 function draw() {
     const m = window.__model = model();
     const ui = window.__ui;
-    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: !ui.between && !ui.ending, between: ui.between || null, ending: ui.ending || null });
+    root.querySelector('.dooms-atlas-side').innerHTML = atlasSideHtml({ name: pack.name, facts: { date: '14th of Frostfall', time: 'Dusk', location: 'Saltport, the quay', weather: 'Sea fog' }, tab: 'places', body: atlasPlacesHtml({ markers: m.markers, tray: m.tray, deleted: m.deleted, query: ui.query, hidden: ui.hidden, armed: ui.armed, scale: m.measure.scale, all: m.all, layer: m.layer, layerLabel: m.layerLabel, ground: m.ground, world: m.world, toName: m.world ? W.landsToName(m).length : 0 }), status: 'Last advanced on 13th of Frostfall · next in 4 replies.', canAdvance: true, editLabel: 'Edit this world', scenes: !ui.between && !ui.ending, between: ui.between || null, ending: ui.ending || null });
     const hint = root.querySelector('.dooms-atlas-hint');
     const word = m.markers.length ? '' : m.realm ? 'Nothing stands in ' + m.layerLabel + ' yet. Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'Nothing is on the map yet. Drag a place from the list on the left onto the map, or press Place all.';
     hint.hidden = !word; hint.textContent = word;
     const start = root.querySelector('.dooms-atlas-start');
     const waiting = m.tray.filter(t => t.here !== false).length;
-    start.hidden = m.markers.length > 0 || !!m.realm; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting, loose: m.tray.length - waiting, picture: !!ui.picture, layerLabel: m.layerLabel });
+    start.hidden = m.markers.length > 0 || !!m.realm || !!m.world; start.innerHTML = start.hidden ? '' : atlasStartHtml({ waiting, loose: m.tray.length - waiting, picture: !!ui.picture, layerLabel: m.layerLabel });
     const trail = root.querySelector('.dooms-atlas-trail');
     trail.hidden = !m.layer; trail.innerHTML = atlasTrailHtml({ world: pack.name, trail: m.trail });
     if (window.__board) window.__board.update({ model: m, picture: ui.layer ? null : ui.picture, hidden: ui.hidden, query: ui.query, moving: ui.moving });
@@ -189,6 +190,22 @@ window.__refusal = (plan) => scenesRefusalText(plan);
 window.__endScene = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasEndSceneHtml(o); return true; };
 window.__strip = (o) => { let el = document.getElementById('dooms-scene-strip'); if (!el) { document.body.insertAdjacentHTML('afterbegin', '<div id="dooms-scene-strip" class="dooms-scene-strip" style="position:fixed;left:0;top:0;width:900px;z-index:99999"></div>'); el = document.getElementById('dooms-scene-strip'); } el.innerHTML = o ? atlasStripHtml(o) : ''; if (!o) el.remove(); return true; };
 window.__sceneStart = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); panel.hidden = false; panel.innerHTML = atlasStartSceneHtml(o); return true; };
+// World gen (D182): the panel for a set of choices (the controller's own lines, here), the world applied, the names' sheet.
+window.W = W;
+window.__worldgen = (choices) => {
+    const panel = root.querySelector('.dooms-atlas-setup');
+    if (!choices) { panel.hidden = true; panel.innerHTML = ''; return true; }
+    const top = A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: '' });
+    const d = W.worldGenDefaults(window.__book, top);
+    const c = { ...d, seed: 'alpha', ...choices };
+    const plan = W.planWorldGen(window.__book, top, c);
+    panel.hidden = false;
+    panel.innerHTML = atlasWorldGenHtml({ ...c, state: W.worldGenState(window.__book, top), plan, reach: plan ? W.worldReach(plan.spec, { per: 15, unit: 'mi' }) : '', error: c.seed ? '' : 'A world needs a seed: type one, or press Roll again.' });
+    window.__choices = c;
+    return { defaults: d, added: plan ? plan.added.length : 0, lands: plan ? plan.lands.length : 0, unplaced: plan ? plan.unplaced : 0 };
+};
+window.__applyWorld = () => { const top = A.atlasModel({ pack, state, player: 'Jordan', book: window.__book, layer: '' }); const r = W.applyWorldGen(window.__book, top, window.__choices); window.__book = r.book; window.__worldgen(null); window.__ui.layer = ''; draw(); window.__board.fit(); return { added: r.added, unplaced: r.unplaced, replaced: r.replaced }; };
+window.__names = (o) => { const panel = root.querySelector('.dooms-atlas-setup'); if (!o) { panel.hidden = true; panel.innerHTML = ''; return true; } panel.hidden = false; panel.innerHTML = atlasNamesHtml(o); return true; };
 window.__roadTime = { hours: roadTimeHours, parts: roadTimeParts };
 // A road's card saved (the controller's lines, here): the figure and the unit read from the card, the time set on the road.
 window.__saveRoad = () => { const c = document.querySelector('.dooms-atlas-card.is-road'); const hours = roadTimeHours(c.querySelector('[data-field="amount"]').value, c.querySelector('[data-field="unit"]').value); window.__book = A.setRoadTime(window.__book, c.getAttribute('data-a'), c.getAttribute('data-b'), hours); window.__board.closeCard(); draw(); return hours; };
@@ -272,7 +289,7 @@ console.log('\n§1 a long campaign: nothing lands by itself');
     check('the map is empty: no marker, no land', l.count === 0 && l.shore === 0 && l.routes === 0);
     check('the map says how it fills', /Drag a place/.test(l.hint));
     const start = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-start-card'); if (!c) return null; const b = c.getBoundingClientRect(); const map = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { text: c.textContent.replace(/\s+/g, ' '), buttons: [...c.querySelectorAll('button')].map(x => x.getAttribute('data-act')), centred: Math.abs((b.left + b.width / 2) - (map.left + map.width / 2)) < 4, inside: b.top >= 0 && b.bottom <= innerHeight }; });
-    check('an empty map shows Start your map in its middle: place them all, or place them yourself', !!start && /Start your map/.test(start.text) && /8 places are waiting/.test(start.text) && /Place all 8 for me/.test(start.text) && start.buttons.join() === 'setup,place-all,start-dismiss' && start.centred && start.inside, JSON.stringify(start));
+    check('an empty map shows Start your map in its middle: place them all, or place them yourself', !!start && /Start your map/.test(start.text) && /8 places are waiting/.test(start.text) && /Place all 8 for me/.test(start.text) && start.buttons.join() === 'worldgen,setup,place-all,start-dismiss' && start.centred && start.inside, JSON.stringify(start));
     check('fifteen wordings are eight places in the tray: the rooms folded into their buildings', l.tray.length === 8 && l.tray.includes("Jordan's House") && l.tray.includes('Bedroom') && l.tray.includes('The Rusty Anchor') && l.tray.includes('Harbour Market') && !l.tray.some(t => /wall|window|Kitchen|back room|stalls/.test(t)), JSON.stringify(l.tray));
     check('the party\'s place is first in the tray', l.tray[0] === "Jordan's House");
     check('the paper lies over the map and the compass is drawn', l.paper && l.compass);
@@ -1142,6 +1159,145 @@ console.log('\n§5i ending a scene from the Atlas; the strip above a scene\'s ch
     st = await strip();
     check('the strip of a scene that has ended: says so, with the Atlas (where the next one starts), Continue fresh (straight on from it) and Reopen; its length is no longer told', st.text === 'Scene 3: The gate at dusk · ended · Day 42, night' && st.acts.join() === 'atlas=Atlas,continue=Continue fresh,reopen=Reopen', JSON.stringify(st));
     await page.evaluate(() => window.__strip(null));
+}
+
+console.log('\n§5j World gen: the land made first, the regions put on it (D182–D186)');
+{
+    const panelOf = () => page.evaluate(() => {
+        const p = document.querySelector('.dooms-atlas-setup');
+        const card = p.querySelector('.dooms-atlas-setup-card');
+        const svg = p.querySelector('.dooms-atlas-worldgen-map');
+        const box = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { w: b.width, h: b.height, left: b.left, right: b.right, top: b.top, bottom: b.bottom }; };
+        return {
+            shown: !p.hidden, title: card ? card.querySelector('h3').textContent : '', card: box(card), svg: box(svg), form: box(p.querySelector('.dooms-atlas-worldgen-form')),
+            shapes: [...p.querySelectorAll('input[name="dooms-atlas-wg-shape"]')].map(i => [i.value, i.checked]), sizes: [...p.querySelectorAll('input[name="dooms-atlas-wg-size"]')].map(i => [i.value, i.checked]),
+            modes: [...p.querySelectorAll('input[name="dooms-atlas-wg-mode"]')].map(i => [i.value, i.checked]),
+            regions: (p.querySelector('.dooms-atlas-wg-regions') || {}).value, seed: (p.querySelector('.dooms-atlas-wg-seed') || {}).value,
+            lands: p.querySelectorAll('.dooms-wg-land').length, added: p.querySelectorAll('.dooms-wg-land.is-added').length, names: [...p.querySelectorAll('.dooms-wg-name')].map(t => t.textContent), places: p.querySelectorAll('.dooms-wg-place').length, peaks: p.querySelectorAll('.dooms-wg-peak').length,
+            caption: (p.querySelector('figcaption') || {}).textContent || '', acts: [...p.querySelectorAll('.dooms-atlas-setup-actions [data-act]')].map(x => [x.getAttribute('data-act'), x.disabled]),
+            text: card ? card.textContent.replace(/\s+/g, ' ') : '', overflow: card ? card.scrollWidth > card.clientWidth + 1 : false,
+        };
+    });
+    const mapOf = () => page.evaluate(() => {
+        const q = (sel) => document.querySelectorAll(`#dooms-atlas .dooms-atlas-map ${sel}`).length;
+        const m = window.__model;
+        return {
+            ground: document.querySelector('.dooms-atlas-map').getAttribute('data-ground'), bg: getComputedStyle(document.querySelector('.dooms-atlas-map')).backgroundColor,
+            wild: q('path.dooms-atlas-wild'), shallows: q('path.dooms-atlas-shallows'), coastline: q('path.dooms-atlas-coastline'), forest: q('path.dooms-atlas-wood.is-forest'), lake: q('path.dooms-atlas-pond.is-lake'), peaks: q('path.dooms-atlas-peak'), trees: q('path.dooms-atlas-tree'),
+            lands: q('path.dooms-atlas-territory'), loose: q('path.dooms-atlas-territory.is-loose'), realm: q('path.dooms-atlas-realm'), beyond: q('path.dooms-atlas-beyond'), rocks: q('path.dooms-atlas-coast'),
+            start: !document.querySelector('.dooms-atlas-start').hidden, tray: document.querySelectorAll('.dooms-atlas-tray-row').length, markers: m.markers.length, territories: m.territories.length, world: m.world,
+            buttons: [...document.querySelectorAll('.dooms-atlas-tidy-buttons [data-act]')].map(x => `${x.getAttribute('data-act')}:${x.textContent.trim()}`), line: (document.querySelector('.dooms-atlas-world-line') || {}).textContent || '', groundSelect: !!document.querySelector('.dooms-atlas-ground-select'),
+        };
+    });
+
+    // An empty map: the start panel offers it; the panel opens on Pangea with a handful of regions.
+    await page.evaluate(() => window.__open({ world: 'campaign', book: window.A.normalizeBook({ gone: window.A.atlasModel({ pack: window.__pack || null, state: null, book: null }).all.map(x => x.id) }) }));
+    await page.evaluate(() => { const m = window.A.atlasModel({ pack: window.__pack, state: null, book: null }); window.__book = null; window.__edit((b, model) => window.A.normalizeBook({ gone: [...model.tray, ...model.markers].map(x => x.id) })); });
+    await settle();
+    const bare = await mapOf();
+    check('an empty map\'s start panel offers World gen first, and the list a Generate a world button', bare.start && (await page.evaluate(() => { const b = document.querySelector('.dooms-atlas-start [data-act="worldgen"]'); return !!b && /Generate a world/.test(b.textContent) && b.compareDocumentPosition(document.querySelector('.dooms-atlas-start [data-act="setup"]')) === Node.DOCUMENT_POSITION_FOLLOWING; })) && bare.buttons[0] === 'worldgen:Generate a world' && bare.groundSelect && !bare.line, JSON.stringify(bare.buttons));
+    let info = await page.evaluate(() => window.__worldgen({}));
+    let pn = await panelOf();
+    check('the panel: four shapes, three sizes, the regions to add, the seed, and the world they make drawn beside them', pn.shown && pn.title === 'Generate a world' && same(pn.shapes, [['pangea', true], ['earth', false], ['islands', false], ['divide', false]]) && same(pn.sizes, [['small', false], ['medium', true], ['large', false]]) && pn.regions === '9' && pn.seed === 'alpha' && pn.svg && pn.svg.w > 400 && pn.svg.h > 250 && pn.lands === 9 && pn.added === 9 && pn.peaks > 10, JSON.stringify({ ...pn, text: '' }));
+    check('an empty map is asked nothing about what is on it; nothing to remove yet', pn.modes.length === 0 && same(pn.acts, [['worldgen-apply', false], ['setup-close', false]]));
+    check('the picture says what the world is: its landmasses, its size at the map\'s scale, its regions', /^1 landmass · about 960 by 660 miles · 9 regions$/.test(pn.caption) && pn.names.length === 9 && pn.names.includes('The Heartland'), pn.caption);
+    check('the panel fits the window: the choices beside the picture, nothing cut off', !pn.overflow && pn.card.w <= VIEW.width && pn.card.bottom <= VIEW.height + 1 && pn.form.right <= pn.svg.left + 1 && /no AI request/.test(pn.text));
+    await shot('60-worldgen-panel');
+    for (const shape of ['earth', 'islands', 'divide']) {
+        info = await page.evaluate((sh) => window.__worldgen({ shape: sh }), shape);
+        pn = await panelOf();
+        check(`${shape}: the picture follows the choice`, pn.shapes.find(x => x[0] === shape)[1] && pn.lands >= 6 && (shape === 'divide' ? /^[23] landmasses/.test(pn.caption) : /^\d+ landmasses/.test(pn.caption)), pn.caption);
+        await shot(`61-worldgen-${shape}`);
+    }
+    await page.evaluate(() => window.__worldgen({ seed: '' }));
+    pn = await panelOf();
+    check('with no seed there is no world to use, and the panel says so', !pn.svg && pn.acts[0][1] === true && /needs a seed/.test(pn.text) && /Type a seed/.test(pn.caption));
+
+    // Applied.
+    await page.evaluate(() => window.__worldgen({ shape: 'pangea' }));
+    const done = await page.evaluate(() => window.__applyWorld());
+    await settle();
+    let mp = await mapOf();
+    check('applied: the map is the world, the sea its ground, the land on it with shallows, forests, lakes, peaks and its coast', done.added.length === 9 && mp.ground === 'world' && mp.wild === 1 && mp.shallows === 2 && mp.coastline === 1 && mp.forest === 1 && mp.lake === 1 && mp.peaks > 10 && mp.trees === 1 && !mp.start && /205, 210, 189/.test(mp.bg), JSON.stringify(mp));
+    check('the nine regions stand on it, each a land with a dashed border: not canon yet', mp.lands === 9 && mp.loose === 9 && mp.territories === 9 && mp.markers === 9);
+    const labels = await page.evaluate(() => [...document.querySelectorAll('.dooms-atlas-land-label .dooms-atlas-region-name')].map(x => ({ text: x.textContent, shown: getComputedStyle(x.parentElement).display !== 'none' && x.getBoundingClientRect().width > 0 })));
+    check('each land carries its name on the map', labels.length === 9 && labels.every(x => x.shown) && labels.some(x => x.text === 'The Heartland'), JSON.stringify(labels));
+    check('the list offers Change the world and Name the lands; the ground is told, not chosen', mp.buttons[0] === 'worldgen:Change the world' && mp.buttons[1] === 'names:Name the lands · 9' && !mp.groundSelect && /The ground is a generated world: Pangea, seed alpha\./.test(mp.line), JSON.stringify(mp.buttons));
+    await shot('62-world-applied');
+    // The whole world is in view, and a land names itself under the pointer.
+    const view = await page.evaluate(() => { const b = window.__model.bounds; const map = window.__board.map; const a = map.latLngToContainerPoint([-b.minY, b.minX]), z = map.latLngToContainerPoint([-b.maxY, b.maxX]); const box = document.querySelector('.dooms-atlas-map').getBoundingClientRect(); return { left: a.x, top: a.y, right: z.x, bottom: z.y, w: box.width, h: box.height }; });
+    check('the whole world is in view', view.left >= -2 && view.top >= -2 && view.right <= view.w + 2 && view.bottom <= view.h + 2 && (view.right - view.left > view.w * 0.6 || view.bottom - view.top > view.h * 0.9), JSON.stringify(view));
+
+    // A region dragged: its borders follow, the coast does not.
+    const before = await page.evaluate(() => { const t = window.__model.territories[0]; window.__coasts = window.__model.decor.coasts; return { id: t.id, outline: JSON.stringify(t.outline), x: t.x, y: t.y }; });
+    await page.evaluate(() => window.__set({ moving: true }));
+    await settle();
+    const from = await spotOf(before.id);
+    await page.mouse.move(from.sx, from.sy); await page.mouse.down(); await page.mouse.move(from.sx + 30, from.sy + 12, { steps: 5 }); await page.mouse.move(from.sx + 60, from.sy + 24, { steps: 5 }); await page.mouse.up();
+    await settle();
+    const after = await page.evaluate((id) => { const t = window.__model.territories.find(x => x.id === id); return { outline: JSON.stringify(t.outline), x: t.x, y: t.y, sameCoast: window.__model.decor.coasts === window.__coasts, lands: document.querySelectorAll('path.dooms-atlas-territory').length, coastlines: document.querySelectorAll('path.dooms-atlas-coastline').length }; }, before.id);
+    check('a region dragged: its borders follow it, the coast stays where it is', (after.x !== before.x || after.y !== before.y) && after.outline !== before.outline && after.sameCoast && after.lands === 9 && after.coastlines === 1, JSON.stringify({ from: [before.x, before.y], to: [after.x, after.y], sameCoast: after.sameCoast, lands: after.lands }));
+    await page.evaluate(() => window.__set({ moving: false }));
+
+    // A place dropped on a land goes inside that region; inside, the land is the world's with the sea past its coast.
+    const land = await page.evaluate(() => { const t = window.__model.territories.find(x => x.label === 'The Heartland') || window.__model.territories[0]; window.__edit((b) => { for (const [label, kind, dx, dy] of [['Hask', 'settlement', 0.4, 0.2], ['Redfall Castle', 'stronghold', 1.8, -1.2], ['Mirefen Ferry', 'water', -1.6, 1.1]]) b = window.A.addPin(b, { label, kind, x: t.x + dx, y: t.y + dy, layer: t.id }).book; return b; }); return { id: t.id, label: t.label }; });
+    await page.evaluate((id) => window.__layer(id), land.id);
+    await settle();
+    mp = await mapOf();
+    check('inside a region of the world: its own land, its neighbours around it, the world\'s terrain across it, the sea past the coast', mp.ground === 'world' && mp.realm === 1 && mp.beyond >= 2 && mp.wild === 1 && mp.coastline === 1 && mp.peaks > 10 && mp.forest === 1 && mp.markers === 3 && mp.world === null && mp.groundSelect, JSON.stringify(mp));
+    check('the region\'s places stand on its land as the world\'s map has it', await page.evaluate(() => { const m = window.__model; return m.realm.k === 1 && m.markers.every(x => window.A.pointInPolygon(m.realm.outline, x.x, x.y)); }));
+    await shot('63-world-inside-a-region');
+    const card = await page.evaluate(async () => { const m = window.__model; const a = m.markers.find(x => x.label === 'Hask'), b = m.markers.find(x => x.label === 'Redfall Castle'); return { way: window.A.describeDistance(m, a.id, b.id), route: window.A.routeBetween(m, a.id, b.id) }; });
+    check('the way between two of its places is told over the world\'s ground', /miles/.test(card.way) && card.route.hours > 0, card.way);
+    await page.evaluate(() => window.__layer(''));
+    await settle();
+
+    // Made again: what was taken up stays, the rest is replaced; a map with things on it is asked what becomes of them.
+    await page.evaluate((id) => window.__edit((b) => window.A.editMarker(b, id, { label: 'The Redward' })), land.id);
+    info = await page.evaluate(() => window.__worldgen({ seed: 'beta', regions: 0 }));
+    pn = await panelOf();
+    check('made again: the panel opens on the world the map has, and can take it away', pn.title === 'Change the world' && pn.shapes[0][1] && same(pn.acts.map(a => a[0]), ['worldgen-apply', 'worldgen-remove', 'setup-close']) && info.defaults.seed === 'alpha' && info.defaults.regions === 8);
+    check('a map with a region of the player\'s own is asked what becomes of it: around it, or clean', same(pn.modes, [['keep', true], ['clean', false]]) && /The 1 region on this map keeps its spot/.test(pn.text) && /The 8 regions the last world gen added that nobody named or filled are replaced/.test(pn.text), pn.text.slice(0, 1400));
+    check('the picture shows the region kept where it is, by its name', pn.names.includes('The Redward') && pn.lands === 1 && pn.added === 0, JSON.stringify(pn.names));
+    await shot('64-worldgen-again');
+    info = await page.evaluate(() => window.__worldgen({ seed: 'beta', regions: 6, mode: 'clean', shape: 'divide' }));
+    pn = await panelOf();
+    check('clean: the picture has only the new regions, and says what waits to be put down again', pn.lands === 6 && pn.added === 6 && !pn.names.includes('The Redward') && /1 thing waits to be put down again/.test(pn.caption) && pn.modes[1][1], pn.caption);
+    const again = await page.evaluate(() => window.__applyWorld());
+    await settle();
+    mp = await mapOf();
+    check('applied clean: the player\'s region waits in the list with its places still inside it; the stand-ins are replaced', again.unplaced === 1 && again.replaced === 8 && again.added.length === 6 && mp.lands === 6 && mp.tray === 1 && (await page.evaluate(() => window.__model.tray[0].label === 'The Redward' && window.__model.tray[0].holds === 3)) && mp.world.shape === 'divide' && mp.world.seed === 'beta');
+    // Put down again by a drag from the list: it takes the land around where it lands.
+    await page.evaluate(() => {
+        const w = window.__model.geo.world; const g = w.grid;
+        const c = g.landCells.find(k => g.shore[k] >= 5 && g.kind[k] === 1 && window.__model.markers.every(m => Math.hypot(m.x - g.xOf(k), m.y - g.yOf(k)) > 4));
+        const p = window.__board.map.latLngToContainerPoint([-g.yOf(c), g.xOf(c)]);
+        const map = document.querySelector('.dooms-atlas-map');
+        const box = map.getBoundingClientRect();
+        const dt = new DataTransfer();
+        document.querySelector('.dooms-atlas-tray-row').dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        map.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: box.left + p.x, clientY: box.top + p.y }));
+    });
+    await settle();
+    mp = await mapOf();
+    check('a region dragged from the list onto the land takes the land around where it is put', mp.lands === 7 && mp.tray === 0 && (await page.evaluate(() => { const t = window.__model.territories.find(x => x.label === 'The Redward'); return !!t && t.area > 10 && window.A.territoryAt(window.__model, t.x, t.y) === t.id; })));
+    await shot('65-world-divide-placed');
+
+    // Naming the lands.
+    await page.evaluate(() => window.__names({ step: 'ask', count: 6, wish: '' }));
+    let nm = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); return { text: c.textContent.replace(/\s+/g, ' '), acts: [...c.querySelectorAll('[data-act]')].map(x => x.getAttribute('data-act')), wish: !!c.querySelector('.dooms-atlas-names-wish') }; });
+    check('Name the lands: says what it costs and that the names are checked first', /6 lands of this world still carry a plain name\. One request/.test(nm.text) && /You check the names before any is used/.test(nm.text) && same(nm.acts, ['names-draft', 'setup-close']) && nm.wish);
+    const names = await page.evaluate(() => { const m = window.__model; const p = window.W.buildNamesPrompt({ model: m, world: 'Vael' }); const reply = JSON.stringify({ lands: p.lands.map((l, i) => ({ n: l.n, name: ['Skaldmark', 'The Ashen Coast', 'Wyrmreach', 'Ostfold', 'The Drowned Shire', 'Thule'][i], note: 'A land of the far ' + ['north', 'coast', 'east', 'east', 'south', 'ice'][i] + '.' })) }); const r = window.W.parseNames(reply, m, p.lands); window.__namesList = r.names; window.__names({ step: 'review', count: p.count, names: r.names }); return { count: p.count, names: r.names.length, prompt: p.user }; });
+    nm = await page.evaluate(() => { const c = document.querySelector('.dooms-atlas-setup-card'); const b = c.getBoundingClientRect(); return { rows: c.querySelectorAll('.dooms-atlas-name-row').length, first: c.querySelector('.dooms-atlas-name-row input').value, was: c.querySelector('.dooms-atlas-name-was').textContent, acts: [...c.querySelectorAll('.dooms-atlas-setup-actions [data-act]')].map(x => x.getAttribute('data-act')), fits: b.bottom <= window.innerHeight + 1 && c.scrollWidth <= c.clientWidth + 1 }; });
+    check('the names to check: each beside the plain name it replaces, to change or leave out', names.count === 6 && names.names === 6 && nm.rows === 6 && nm.first === 'Skaldmark' && /^was (The Heartland|\w+ \w+)/.test(nm.was) && same(nm.acts, ['names-apply', 'names-again', 'setup-close']) && nm.fits && /The lands that have their names \(do not rename them\):\n- The Redward/.test(names.prompt), JSON.stringify(nm));
+    await shot('66-names-review');
+    await page.evaluate(() => { window.__edit((b) => window.W.applyNames(b, window.__namesList)); window.__names(null); });
+    await settle();
+    mp = await mapOf();
+    check('used: the lands carry their names, still not canon, and nothing is left to name', mp.loose === 7 && !mp.buttons.some(b => b.startsWith('names:')) && (await page.evaluate(() => ['Skaldmark', 'Thule'].every(n => window.__model.territories.some(t => t.label === n)))), JSON.stringify({ loose: mp.loose, buttons: mp.buttons, labels: await page.evaluate(() => window.__model.territories.map(t => t.label)) }));
+    await page.evaluate(() => window.__board.fit());
+    await settle();
+    await shot('67-world-named');
 }
 
 console.log('\n§6 a world with a picture of its own (D154)');

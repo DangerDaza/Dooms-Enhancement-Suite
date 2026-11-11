@@ -19,8 +19,9 @@ import {
     ATLAS_KINDS, CANVAS, LAND_RADIUS, normalizeAtlas, atlasToRaw, guessKind, guessTerrain, cleanKind, hash01, scaleOf, measureOf,
     atlasModel, distanceBetween, travelHours, describeLength, describeTime, describeDistance,
     filterMarkers, kindCounts, withSpot, labelSegments, roomKey, foldPlaces,
-    normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand, journeyGap,
+    withWorld, roadAsDrawn, describeRoad, normalizeBook, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, mergeTarget, unmerge, editMarker, withScale, withDrawn, moveInto, withGround, groundOf, groundDecor, ATLAS_GROUNDS, territoryOutlines, territoryCells, territoryShades, landmassOutline, territoryAt, pointInPolygon, wrapInRegion, TERRITORY_RADIUS, toggleRoad, setRoadTime, routeBetween, describeJourney, CROSS_COUNTRY, suggestSpots, placeAll, tidyList, buildTidyPrompt, parseTidy, applyTidyItem, landFrame, landTerrain, edgeDistance, spotOnLand, journeyGap,
 } from '../src/utils/atlas.js';
+import { generateWorld, WORLD_SIZES } from '../src/utils/worldGen.js';
 
 let failures = 0;
 function check(name, cond, detail = '') {
@@ -506,6 +507,159 @@ console.log('\n§6e the time is the roads\' (D165)');
     check('Travel here tells the story how long the map says it takes', told.includes('The map puts the journey at about 2 days by road: it takes that long, no less and no more, and the date and time move on by it.') && !/yours to judge/.test(told));
     const both = buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan', when: 'by nightfall.', journey: 'about 2 days by road' });
     check('an arrival the player named stands, with the map\'s word beside it; with no journey the judgement is the story\'s as before', / Jordan arrives by nightfall\. The map puts the journey at about 2 days by road\./.test(both) && /yours to judge/.test(buildTravelInstruction({ place: 'Redfall Castle', userName: 'Jordan' })) && !buildTravelInstruction({ place: 'X', journey: 'about [2] days' }).includes('[2]'));
+}
+
+console.log('\n§6f a generated world: its land is the map\'s, its regions divide it, the way is found over its ground (D182–D185)');
+{
+    const pack = blankPack('x');
+    const spec = { seed: 'alpha', shape: 'divide', size: 'medium' };
+    const world = generateWorld(spec);
+    const g = world.grid;
+    const shapeArea = (parts) => parts.reduce((n, p) => n + p.reduce((m, ring) => { let a = 0; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1]; return m + a / 2; }, 0), 0);
+
+    // The book.
+    const bare = withWorld(null, spec);
+    check('a world is kept in the book as what it is made from', same(bare.world, { v: 1, seed: 'alpha', shape: 'divide', w: WORLD_SIZES.medium.w, h: WORLD_SIZES.medium.h, cx: 0, cy: 0, anchors: [] }) && same(normalizeBook(JSON.parse(JSON.stringify(bare))), bare));
+    check('a book with no world says nothing of one; a world taken away is gone', !('world' in normalizeBook({})) && !('world' in normalizeBook({ world: { shape: 'pangea' } })) && !('world' in withWorld(bare, null)) && same(withWorld(bare, null), normalizeBook({})));
+    check('every other change to the book keeps its world', same(addPin(bare, { label: 'Hask', x: 1, y: 1 }).book.world, bare.world) && same(withScale(bare, 'world').world, bare.world) && same(placeAt(bare, 'pin:x', { x: 1, y: 2 }).world, bare.world));
+
+    // The top map with nothing on it.
+    const m0 = atlasModel({ pack, book: bare });
+    check('the top map is the world: its bounds, its ground, read at a region\'s scale', same(m0.bounds, world.bounds) && m0.ground === 'world' && m0.measure.scale === 'region' && m0.world.shape === 'divide' && m0.world.seed === 'alpha' && m0.world.size === 'medium' && m0.world.landmasses === world.masses.length);
+    check('its coasts, forests, lakes, trees and peaks are drawn', m0.decor.look === 'world' && m0.decor.coasts === world.coasts && m0.decor.forests.length > 0 && m0.decor.lakes.length > 0 && m0.decor.trees.length > 20 && m0.decor.peaks.length > 10 && m0.decor.peaks.every(pk => pk.length === 4));
+    check('with no regions on it, all the land is nobody\'s', m0.territories.length === 0 && m0.land.length === 0 && near(m0.world.unclaimed, world.landArea));
+    check('a map with no world has none', atlasModel({ pack, book: null }).world === null && atlasModel({ pack, book: null }).geo === null);
+    check('a model written out does not carry the world\'s squares', JSON.stringify(m0).length < 400000 && JSON.stringify(m0.geo) === '{"world":{"world":' + JSON.stringify(world.key) + '},"k":1,"dx":0,"dy":0}');
+
+    // Regions waiting in the list are placed where the world would have them.
+    let b = bare;
+    const names = ['The Redward', 'Greywood Forest', 'Saltmarch', 'The Iron Mountains', 'Vale of Ash', 'Hollowmere', 'Dunmere', 'Eastfold'];
+    for (const label of names) { const made = addPin(b, { label, kind: 'region' }); b = unplace(made.book, made.id); }
+    for (const label of ['Hask', 'Low Ferry']) { const made = addPin(b, { label, kind: 'settlement' }); b = unplace(made.book, made.id); }
+    const waiting = atlasModel({ pack, book: b });
+    check('regions and places wait in the list until they are put down', waiting.tray.length === 10 && waiting.markers.length === 0);
+    const spots = suggestSpots(waiting);
+    check('Place all puts every region on the world\'s land, spread over it, and every place on dry land', spots.size === 10 && [...spots.values()].every(at => world.isLand(at.x, at.y)) && (() => { const rs = waiting.tray.filter(t => t.kind === 'region').map(t => spots.get(t.id)); return rs.every((a, i) => rs.every((o, j) => i === j || Math.hypot(a.x - o.x, a.y - o.y) > 5)); })());
+    b = placeAll(b, waiting);
+    const m = atlasModel({ pack, book: b });
+    const id = (l) => m.markers.find(x => x.label === l).id;
+    const isle = world.masses[world.masses.length - 1].area;    // the isle in the sea between the continents: too far from any region to be one's
+    check('every region holds a land of the world; the lands and what is nobody\'s make up all the land', m.territories.length === 8 && near(m.territories.reduce((n, t) => n + t.area, 0) + m.world.unclaimed, world.landArea, 0.01) && m.world.unclaimed <= isle + 0.01 && m.territories.every(t => t.parts && t.parts[0][0] === t.outline && t.outline.length >= 8 && t.fill));
+    check('the lands are drawn to the coast and no further', Math.abs(m.territories.reduce((n, t) => n + shapeArea(t.parts), 0) + m.world.unclaimed - shapeArea(world.coasts)) < 1.5);
+    check('a region is on its own land; the sea is nobody\'s', m.territories.every(t => territoryAt(m, t.x, t.y) === t.id) && territoryAt(m, -31, -21) === '' && territoryAt(m, 0, 0) === '');
+    check('a land whose name tells a terrain has it; another has the terrain of its own ground', m.territories.find(t => t.label === 'Greywood Forest').terrain === 'forest' && m.territories.find(t => t.label === 'The Iron Mountains').terrain === 'mountains' && ['plains', 'forest', 'mountains', 'coast'].includes(m.territories.find(t => t.label === 'Saltmarch').terrain));
+    check('nothing on the world\'s land has a rock of its own under it', m.land.length === 0);
+
+    // A region moved: the borders follow, the geography stays.
+    const red = m.markers.find(x => x.label === 'The Redward');
+    const moved = atlasModel({ pack, book: placeAt(b, red.id, { x: red.x + 1.5, y: red.y + 1 }) });
+    check('a region moved: its borders move with it, the coast does not', !same(moved.territories.find(t => t.id === red.id).outline, m.territories.find(t => t.id === red.id).outline) && moved.decor.coasts === m.decor.coasts && same(moved.bounds, m.bounds));
+    const fewer = atlasModel({ pack, book: removeMarker(b, red.id) });
+    check('a region deleted: its neighbours take its land', fewer.territories.length === 7 && near(fewer.territories.reduce((n, t) => n + t.area, 0) + fewer.world.unclaimed, world.landArea, 0.01) && fewer.world.unclaimed <= isle + 0.01);
+    const atSea = atlasModel({ pack, book: placeAt(b, id('Hask'), { x: 0, y: -20.5 }) });
+    check('a place put out at sea stands on a rock of its own; a region put there holds no land', atSea.land.length === 1 && atSea.land[0].id === id('Hask') && atlasModel({ pack, book: placeAt(b, red.id, { x: 0, y: -20.5 }) }).territories.length === 7);
+    {
+        const pk = world.peaks[Math.floor(world.peaks.length / 2)];
+        const on = atlasModel({ pack, book: placeAt(b, id('Hask'), { x: pk.x, y: pk.y }) });
+        check('a peak that would stand on a marker is left out', on.decor.peaks.length < m.decor.peaks.length && on.decor.peaks.length >= m.decor.peaks.length - 4);
+    }
+
+    // Inside a region of the world.
+    const inside = atlasModel({ pack, book: b, layer: red.id });
+    const landOf = m.territories.find(t => t.id === red.id);
+    check('inside a region: its land is its share of the world, as it lies on the world\'s map', inside.realm && inside.realm.world === true && inside.realm.k === 1 && same(inside.realm.outline, landOf.outline) && inside.ground === 'country' && inside.world === null);
+    check('its neighbours lie around it, each named along the border they share', inside.realm.neighbours.length === landOf.neighbours.length && inside.realm.neighbours.every(nb => landOf.neighbours.includes(nb.id) && nb.border.length >= 2 && nb.outline.length >= 8 && nb.parts));
+    check('the world\'s own terrain lies across it, and the sea beyond its coast', inside.decor.look === 'world' && same(inside.decor.coasts, world.coasts) && inside.decor.peaks.length === m0.decor.peaks.length && inside.geo.world === world && inside.geo.at === null);
+    {
+        // A place inside, laid out wide of the land: the land is drawn wider and the world's terrain with it.
+        let wide = b;
+        for (const [label, x, y] of [['Outpost', red.x + 30, red.y], ['Mill', red.x - 30, red.y + 4]]) wide = addPin(wide, { label, kind: 'landmark', x, y, layer: red.id }).book;
+        const w = atlasModel({ pack, book: wide, layer: red.id });
+        check('a region laid wider to hold its places draws the world\'s terrain wider with it', w.realm.k > 1 && w.geo.k === w.realm.k && near(w.decor.coasts[0][0][0][0], world.coasts[0][0][0][0] * w.realm.k + w.realm.dx, 0.001) && w.decor.unit === w.realm.k);
+    }
+
+    // The way over the world's ground.
+    const pick = (test) => { const c = g.landCells.find(test); return { x: g.xOf(c), y: g.yOf(c) }; };
+    const plain = (c) => g.kind[c] === 1 && g.shore[c] >= 3;
+    const westA = pick(c => g.xOf(c) < -12 && plain(c));
+    let westB = null;
+    for (const c of g.landCells) { if (g.xOf(c) < -8 && plain(c) && Math.hypot(g.xOf(c) - westA.x, g.yOf(c) - westA.y) > 6 && Math.hypot(g.xOf(c) - westA.x, g.yOf(c) - westA.y) < 9) { westB = { x: g.xOf(c), y: g.yOf(c) }; break; } }
+    const east = pick(c => g.xOf(c) > 12 && plain(c));
+    let t = bare;
+    for (const [label, at] of [['Hask', westA], ['Low Ferry', westB], ['Far Harbour', east]]) t = addPin(t, { label, kind: 'settlement', x: at.x, y: at.y }).book;
+    const tm = atlasModel({ pack, book: t });
+    const tid = (l) => tm.markers.find(x => x.label === l).id;
+    const land = routeBetween(tm, tid('Hask'), tid('Low Ferry'));
+    const sea = routeBetween(tm, tid('Hask'), tid('Far Harbour'));
+    check('two places on one shore: the way is by land', land.water === 0 && land.hours > 0 && / on foot/.test(describeDistance(tm, tid('Hask'), tid('Low Ferry'))) && !/boat/.test(describeDistance(tm, tid('Hask'), tid('Low Ferry'))), describeDistance(tm, tid('Hask'), tid('Low Ferry')));
+    check('across the sea between the continents: a voyage, told as one', sea.water > sea.length * 0.85 && /^\d+ miles by sea, about \d+ days$/.test(describeDistance(tm, tid('Hask'), tid('Far Harbour'))) && /^about \d+ days by boat \(\d+ miles\)$/.test(describeJourney(tm, tid('Hask'), tid('Far Harbour'))), `${describeDistance(tm, tid('Hask'), tid('Far Harbour'))} | ${describeJourney(tm, tid('Hask'), tid('Far Harbour'))}`);
+    {
+        // From deep inland the same crossing is a walk, a voyage and a walk.
+        const deep = pick(c => g.xOf(c) < -12 && g.shore[c] >= 9 && g.kind[c] !== 4);
+        const dm = atlasModel({ pack, book: addPin(t, { label: 'Deepwell', kind: 'settlement', x: deep.x, y: deep.y }).book });
+        const did = dm.markers.find(x => x.label === 'Deepwell').id;
+        const far = dm.markers.find(x => x.label === 'Far Harbour').id;
+        const r = routeBetween(dm, did, far);
+        check('from deep inland: some of the way on foot, some by boat; and the map draws no road of its own over the sea', r.water > 0 && r.water < r.length * 0.85 && /on foot and by boat/.test(describeDistance(dm, did, far)) && /on foot and by boat/.test(describeJourney(dm, did, far)) && !dm.routes.some(x => x.a === far || x.b === far), `${describeDistance(dm, did, far)} | ${describeJourney(dm, did, far)}`);
+    }
+    check('the way there is as long as the way back', near(routeBetween(tm, tid('Far Harbour'), tid('Hask')).hours, sea.hours, 0.01));
+    {
+        // The same two places with no world under them: the straight line across country.
+        const flat = atlasModel({ pack, book: withScale(withWorld(t, null), 'region') });
+        const was = routeBetween(flat, tid('Hask'), tid('Low Ferry'));
+        check('over the world\'s ground the way is no shorter than the straight line, and takes at least as long', land.length >= was.length - 0.5 && land.hours >= was.hours - 0.01 && was.water === 0 && was.mountain === 0, `${land.hours} vs ${was.hours}`);
+        check('a boat is quicker under way than the same miles on foot, once aboard', sea.hours < travelHours(sea.length, tm.measure) * CROSS_COUNTRY);
+    }
+    {
+        // Across a range.
+        const p = generateWorld({ seed: 'alpha', shape: 'pangea', size: 'medium' });
+        const range = p.ranges[0];
+        const mid = range[Math.floor(range.length / 2)];
+        let ends = null;
+        for (const [dx, dy] of [[1, 0], [0, 1], [0.7, 0.7], [0.7, -0.7]]) {
+            const s1 = { x: mid[0] - dx * 3, y: mid[1] - dy * 3 }, s2 = { x: mid[0] + dx * 3, y: mid[1] + dy * 3 };
+            if (p.isLand(s1.x, s1.y) && p.isLand(s2.x, s2.y) && p.kindAt(s1.x, s1.y) !== 'mountain' && p.kindAt(s2.x, s2.y) !== 'mountain') { ends = [s1, s2]; break; }
+        }
+        let pb = withWorld(null, { seed: 'alpha', shape: 'pangea', size: 'medium' });
+        pb = addPin(pb, { label: 'West Gate', kind: 'settlement', x: ends[0].x, y: ends[0].y }).book;
+        pb = addPin(pb, { label: 'East Gate', kind: 'settlement', x: ends[1].x, y: ends[1].y }).book;
+        const roadModel = atlasModel({ pack, book: pb });    // the map joins the two by a road of its own
+        const [a, z] = roadModel.markers.map(x => x.id);
+        pb = toggleRoad(pb, a, z, roadModel);                // taken away: the way is across country
+        const pm = atlasModel({ pack, book: pb });
+        const over = routeBetween(pm, a, z);
+        const flat = travelHours(6 * pm.measure.per, pm.measure) * CROSS_COUNTRY;
+        check('with a range between two places the way takes longer than the same distance over open ground', pm.routes.length === 0 && over.mode === 'cross' && over.hours > flat * 1.15, `${over.hours} vs ${flat}`);
+        // A road between them is a pass: quicker than no road, slower than a road over open ground.
+        const pass = routeBetween(roadModel, a, z);
+        check('a road over the range is a pass: quicker than no road, slower than a road over open ground', pass.mode === 'road' && pass.hours < over.hours && pass.hours > travelHours(6 * pm.measure.per, pm.measure) * 1.05 && pass.mountain > 0, JSON.stringify(pass));
+        check('a road with a set time takes that time, whatever is under it', routeBetween(atlasModel({ pack, book: setRoadTime(pb, a, z, 5) }), a, z).hours === 5);
+        check('a road\'s card tells it as drawn: its length, and the time the ground under it makes it', near(roadAsDrawn(roadModel, a, z).hours, pass.hours) && near(roadAsDrawn(roadModel, a, z).length, 90, 0.01) && /^90 miles, about [\d.]+ days on foot, over the mountains$/.test(describeRoad(roadModel, a, z)) && roadAsDrawn(roadModel, a, 'pin:nowhere') === null && describeRoad(roadModel, a, 'pin:nowhere') === '', describeRoad(roadModel, a, z));
+        {
+            const plain = atlasModel({ pack, book: withScale(withWorld(toggleRoad(pb, a, z, { routes: [] }), null), 'region') });
+            check('with no world a road as drawn is its straight length at the map\'s pace', near(roadAsDrawn(plain, a, z).hours, travelHours(90, plain.measure)) && describeRoad(plain, a, z) === '90 miles, about 4 days on foot', describeRoad(plain, a, z));
+        }
+        check('with no road the journey is told as across country', / across country/.test(describeJourney(pm, a, z)) && / cross-country/.test(describeDistance(pm, a, z)));
+        check('the scene after such a journey opens that much later', journeyGap(pm, a, z).id === 'when' && /later$/.test(journeyGap(pm, a, z).words));
+        if (over.mountain >= over.length * 0.15) check('a way over the mountains says so', /over the mountains/.test(describeJourney(pm, a, z)), describeJourney(pm, a, z));
+    }
+    {
+        // A road across the sea is a crossing.
+        const rm = atlasModel({ pack, book: toggleRoad(t, tid('Hask'), tid('Far Harbour'), { routes: [] }) });
+        const lane = routeBetween(rm, tid('Hask'), tid('Far Harbour'));
+        check('a road drawn over the sea is a crossing by boat, with the wait to take ship', lane.mode === 'road' && lane.water > 0 && lane.hours > travelHours(lane.water * 0.5 + (lane.length - lane.water), rm.measure) + 4, JSON.stringify(lane));
+    }
+    {
+        // Inside a region the same ground counts.
+        let ib = b;
+        const r = m.territories.find(x => x.id === red.id);
+        ib = addPin(ib, { label: 'Keep', kind: 'stronghold', x: r.x + 0.5, y: r.y, layer: red.id }).book;
+        ib = addPin(ib, { label: 'Ford', kind: 'landmark', x: r.x - 2, y: r.y + 1.5, layer: red.id }).book;
+        const im = atlasModel({ pack, book: ib, layer: red.id });
+        const [k1, k2] = im.markers.map(x => x.id);
+        const way = routeBetween(im, k1, k2);
+        check('inside a region the way is found over the world\'s ground too', im.realm.k === 1 && way && way.hours > 0 && way.length >= Math.hypot(2.5, 1.5) * im.measure.per - 0.5);
+    }
 }
 
 console.log('\n§7 distance');

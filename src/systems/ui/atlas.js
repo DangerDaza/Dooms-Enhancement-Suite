@@ -12,9 +12,11 @@ import { ensureCss } from '../../core/cssLoader.js';
 import { resolvePortrait } from './portraitBar.js';
 import { pushWindow, popWindow, takesEscape } from './windowStack.js';
 import { liveWorldConfig, BLANK_PACK_ID, recentChanges, publicEffects, normalizeWorldState } from '../../utils/liveWorld.js';
-import { atlasModel, describeDistance, ATLAS_KINDS, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap } from '../../utils/atlas.js';
+import { atlasModel, describeDistance, ATLAS_KINDS, ATLAS_SCALES, placeAt, unplace, addPin, removeMarker, restoreMarker, mergeInto, unmerge, editMarker, withScale, placeAll, applyTidyItem, withDrawn, moveInto, withGround, setCanon, wrapInRegion, toggleRoad, setRoadTime, describeJourney, describeLength, describeTime, travelHours, territoryAt, spotOnLand, normalizeBook, journeyGap, withWorld, describeRoad } from '../../utils/atlas.js';
+import { worldGenState, worldGenDefaults, planWorldGen, applyWorldGen, worldReach, landsToName, applyNames } from '../../utils/atlasWorld.js';
+import { randomSeed, WORLD_SHAPES } from '../../utils/worldGen.js';
 import { safeImageUrl } from '../../utils/worldBoard.js';
-import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill } from '../features/atlasBook.js';
+import { getBook, setBook, proposeTidy, draftSetup, stopSetup, setupReach, draftFill, draftNames } from '../features/atlasBook.js';
 import { editDraftPlace, setDraftInside, removeDraftPlace, applySetup, applyFill, fillOptions } from '../../utils/atlasSetup.js';
 import { sceneFactsFrom } from '../../utils/questCut.js';
 import { describeHooksResult } from '../../utils/questHooks.js';
@@ -23,7 +25,7 @@ import { startTravelCut, getPendingQuestCut, getCompletedQuests, QUESTS_DONE_CHA
 import { getHooks, isProposing, proposeHooks, takeHook, setHookAside, HOOKS_CHANGED_EVENT } from '../features/questHooks.js';
 import { worldEmptyMessage, statusText, newsHtml, rumoursHtml, hooksHtml, doneHtml, peopleHtml, FEED_LIMITS } from './worldViews.js';
 import { openFacePopover, closeFacePopover, isFacePopoverOpen } from './worldFace.js';
-import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours } from './atlasViews.js';
+import { ATLAS_ID, ATLAS_TABS, atlasShellHtml, atlasSideHtml, atlasPlacesHtml, atlasResultsHtml, atlasCardHtml, atlasStartHtml, atlasTrailHtml, atlasSetupHtml, atlasFillHtml, atlasScenesHtml, scenesRefusalText, atlasStartSceneHtml, atlasEndSceneHtml, atlasRoadHtml, roadTimeHours, atlasWorldGenHtml, worldGenFigureHtml, atlasNamesHtml } from './atlasViews.js';
 import { scenesPlan, prepareAdopt, commitAdopt, isScene, isHubOn, atlasSource, setWorldBook, openSceneChat, HUB_CHANGED_EVENT, sceneStartPlan, prepareScene, commitScene, pendingStart, askOpenersAgain, cancelStart, currentScene, prepareEnd, commitEnd, continueScene } from '../features/hub.js';
 import { describeStartResult, describeEndResult, gapOf, hubConfig } from '../../utils/hub.js';
 
@@ -189,11 +191,10 @@ function cardFor(marker) {
 function roadCardFor(route) {
     if (!model) return '';
     const r = model.routes.find(x => (x.a === route.a && x.b === route.b) || (x.a === route.b && x.b === route.a)) || route;
-    const length = (r.units || 0) * model.measure.per;
     const scale = model.measure.scale;
     return atlasRoadHtml({
         a: { id: r.a, label: labelOf(r.a) }, b: { id: r.b, label: labelOf(r.b) },
-        drawn: `${describeLength(length, model.measure.unit)}, ${describeTime(travelHours(length, model.measure))} on foot`,
+        drawn: describeRoad(model, r.a, r.b),    // on a generated world the ground under the road counts (D185)
         hours: r.hours || 0,
         unit: scale === 'world' || scale === 'region' ? 'days' : 'minutes',
     });
@@ -299,7 +300,7 @@ function tabBody({ state, pack, cfg }) {
         if (between()) { const st = source.memory.stores; return hooksHtml({ hooks: st.dooms_hooks || null, busy: false }) + doneHtml({ done: Array.isArray(st.dooms_quests_done) ? st.dooms_quests_done : [] }); }
         return hooksHtml({ hooks: getHooks(), busy: isProposing() }) + doneHtml({ done: getCompletedQuests() });
     }
-    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '', ground: model ? model.ground : 'country' });
+    return atlasPlacesHtml({ markers: model ? model.markers : [], tray: model ? model.tray : [], deleted: model ? model.deleted : [], query, hidden, armed: armed && armed.kind === 'place' ? armed.id : '', scale: model ? model.measure.scale : 'town', tidy, all: model ? model.all : [], layer, layerLabel: model ? model.layerLabel : '', ground: model ? model.ground : 'country', world: model ? model.world : null, toName: model && model.world ? landsToName(model).length : 0 });
 }
 
 function renderSide(ctx) {
@@ -323,10 +324,10 @@ function renderSide(ctx) {
         between: between() ? { open: source.open ? { id: source.open.id, number: sceneNumber(source.open.id), title: source.open.title || '' } : null } : null,
     }));
     // Between scenes (D173) there is no chat for the AI to read or to act in: what needs one waits for a scene.
-    if (between()) $(`${root()} .dooms-atlas-side`).find('[data-act="setup"], [data-act="fill"], [data-act="tidy"], [data-act="hooks-propose"], [data-act="hook-take"], [data-act="hook-cut"], [data-act="hook-aside"]').prop('disabled', true).attr('title', 'Between scenes: this needs a scene being played');
+    if (between()) $(`${root()} .dooms-atlas-side`).find('[data-act="setup"], [data-act="fill"], [data-act="tidy"], [data-act="names"], [data-act="hooks-propose"], [data-act="hook-take"], [data-act="hook-cut"], [data-act="hook-aside"]').prop('disabled', true).attr('title', 'Between scenes: this needs a scene being played');
     $(`${root()} .dooms-atlas-body`).scrollTop(scroll);
     $(`${root()} [data-act="edit"]`).prop('disabled', !state || !pack);
-    if (undoBook && undoBook.world === worldKey()) $(`${root()} .dooms-atlas-foot-actions`).append('<button type="button" class="dooms-atlas-btn" data-act="setup-undo" title="Put the map back as it was before the set-up was applied"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>Undo set-up</span></button>');
+    if (undoBook && undoBook.world === worldKey()) $(`${root()} .dooms-atlas-foot-actions`).append(`<button type="button" class="dooms-atlas-btn" data-act="setup-undo" title="Put the map back as it was before the ${undoBook.what === 'world' ? 'world was made' : 'set-up was applied'}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span>${undoBook.what === 'world' ? 'Undo world gen' : 'Undo set-up'}</span></button>`);
 }
 
 function setScale({ px, length, unit }) {
@@ -405,10 +406,10 @@ function render() {
     const bare = model.markers.length === 0;
     const waiting = model.tray.filter(t => t.here !== false).length;
     // A region's own map is not empty: its land is there to be seen (D168), so no panel is laid over it, only the line.
-    const showStart = bare && !model.realm && !armed && !setup && startDismissed !== `${world}|${layer}`;
+    const showStart = bare && !model.realm && !model.world && !armed && !setup && startDismissed !== `${world}|${layer}`;    // nor over a generated world: its land is there to be seen (D184)
     $(`${root()} .dooms-atlas-start`).prop('hidden', !showStart).html(showStart ? atlasStartHtml({ waiting, loose: model.tray.length - waiting, picture: !!pictureOf(ctx.pack), layerLabel: model.layerLabel }) : '');
     $(`${root()} .dooms-atlas-trail`).prop('hidden', !layer).html(atlasTrailHtml({ world: (ctx.state && ctx.state.name) || (ctx.pack && ctx.pack.name) || 'The world', trail: model.trail }));
-    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.realm ? `Nothing stands in ${model.layerLabel} yet. ${model.tray.length ? 'Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'The pin button above adds a place to its land.'}` : model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
+    if (roading) { /* the roads' own word stays */ } else if (!armed) setHint(bare && !showStart ? (model.world ? (model.tray.length ? 'The land is made. Drag a region or a place from the list on the left onto it, or press Place all: a region holds the land around where it stands.' : 'The land is made. The pin button above adds a place; a region put on the land holds the land around it.') : model.realm ? `Nothing stands in ${model.layerLabel} yet. ${model.tray.length ? 'Drag a place from the list on the left onto its land, or add one with the pin button above.' : 'The pin button above adds a place to its land.'}` : model.tray.length ? 'Drag a place from the list on the left onto the map, or press Place all.' : 'The pin button above adds a place by hand.') : '');
     // The picture tool shows for a world that has a picture, lit while the picture is the map.
     const hasPicture = !!(ctx.pack && ctx.pack.map && ctx.pack.map.image && ctx.pack.map.image !== brokenPicture);
     $(root()).toggleClass('has-picture', hasPicture);
@@ -444,8 +445,134 @@ function renderSetup() {
     const $p = $(`${root()} .dooms-atlas-setup`);
     if (!setup) { $p.prop('hidden', true).empty(); return; }
     const scroll = $p.find('.dooms-atlas-setup-list').scrollTop() || 0;
-    $p.prop('hidden', false).html(setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
+    $p.prop('hidden', false).html(setup.gen ? atlasWorldGenHtml(setup) : setup.naming ? atlasNamesHtml(setup) : setup.end ? atlasEndSceneHtml(setup) : setup.start ? atlasStartSceneHtml(setup) : setup.scenes ? atlasScenesHtml(setup) : setup.fill ? atlasFillHtml({ ...setup, step: setup.step }) : atlasSetupHtml({ ...setup, onMap: model ? model.all.length : 0 }));
     $p.find('.dooms-atlas-setup-list').scrollTop(scroll);
+}
+
+// ─── World gen (D182): the land made first ──────────────────────────────────
+
+/** The top map's model, whatever map is shown: World gen is the top map's. */
+function topModel() {
+    if (model && !model.layer) return model;
+    return atlasModel({ pack: getActivePack(), state: theState(), player: playerName(), book: theBook(), layer: '' });
+}
+
+/** The world the panel's choices would make, and its size in words; nothing is changed. */
+function planOf(choices) {
+    const top = topModel();
+    const plan = planWorldGen(theBook(), top, choices);
+    // A generated world's map reads at a region's scale unless the player chose another for the top map.
+    const unit = top.measure.per / ATLAS_SCALES[top.measure.scale].per;    // what a mile is in the world's unit
+    const measure = theBook().scale ? top.measure : { per: ATLAS_SCALES.region.per * unit, unit: top.measure.unit };
+    return { plan, reach: plan ? worldReach(plan.spec, measure) : '' };
+}
+
+/** The panel opened on the world the map has, or on a first roll for a map with none. */
+function openWorldGen() {
+    if (!model) return;
+    if (board) board.closeCard();
+    arm(null);
+    if (roading) setRoading(false);
+    if (layer) setLayer('');
+    const book = theBook();
+    const top = topModel();
+    const d = worldGenDefaults(book, top);
+    const choices = { shape: d.shape, size: d.size, seed: d.seed || randomSeed(), regions: d.regions, mode: d.mode };
+    setup = { gen: true, ...choices, state: worldGenState(book, top), ...planOf(choices), error: '', world: worldKey() };
+    $(`${root()} .dooms-atlas-start`).prop('hidden', true);
+    renderSetup();
+}
+
+/**
+ * The panel's choices read from the page, and the world they make drawn again: the picture and its line only, so the
+ * choices keep the focus and a click on a button that follows a typed seed is not lost to a redraw.
+ */
+function readWorldGen({ roll = false } = {}) {
+    if (!setup || !setup.gen) return;
+    const $p = $(`${root()} .dooms-atlas-setup`);
+    if (roll) $p.find('.dooms-atlas-wg-seed').val(randomSeed());
+    const choices = {
+        shape: String($p.find('input[name="dooms-atlas-wg-shape"]:checked').val() || setup.shape),
+        size: String($p.find('input[name="dooms-atlas-wg-size"]:checked').val() || setup.size),
+        seed: String($p.find('.dooms-atlas-wg-seed').val() ?? setup.seed).trim(),
+        regions: Math.max(0, Math.min(24, Math.round(Number($p.find('.dooms-atlas-wg-regions').val())) || 0)),
+        mode: String($p.find('input[name="dooms-atlas-wg-mode"]:checked').val() || setup.mode),
+    };
+    const error = choices.seed ? '' : 'A world needs a seed: type one, or press Roll again.';
+    setup = { ...setup, ...choices, ...planOf(choices), error };
+    if (!$p.find('.dooms-atlas-worldgen-preview').length) { renderSetup(); return; }
+    $p.find('.dooms-atlas-worldgen-preview').html(worldGenFigureHtml(setup));
+    $p.find('.dooms-atlas-worldgen-error').html(error ? $('<p class="dooms-atlas-setup-error" role="alert"></p>').text(error) : '');
+    $p.find('[data-act="worldgen-apply"]').prop('disabled', !setup.plan);
+}
+
+/** The world put under the map as the panel shows it. One Undo puts the map back. */
+function applyWorld() {
+    if (!setup || !setup.gen || setup.world !== worldKey()) return;
+    readWorldGen();    // what the page holds now: a seed typed and not yet left is read too
+    const before = theBook();
+    const r = applyWorldGen(before, topModel(), { shape: setup.shape, size: setup.size, seed: setup.seed, regions: setup.regions, mode: setup.mode });
+    if (!r) { setup = { ...setup, error: 'A world needs a seed: type one, or press Roll again.' }; renderSetup(); return; }
+    const shape = (WORLD_SHAPES.find(sh => sh.id === setup.shape) || { label: 'The world' }).label;
+    const hadPicture = !!pictureOf(getActivePack());    // a world with a picture of its own (D154): the generated one is the drawn map's
+    setup = null;
+    layer = '';
+    renderSetup();
+    const n = r.added.length;
+    const word = [
+        `${shape} is made.`,
+        n ? `${n} ${n === 1 ? 'region stands' : 'regions stand'} on it under ${n === 1 ? 'a plain name' : 'plain names'}, not canon: "Name the lands" in the list asks the AI for ${n === 1 ? 'a name' : 'names'}, or rename ${n === 1 ? 'it' : 'them'} from ${n === 1 ? 'its card' : 'their cards'}.` : '',
+        r.unplaced ? `${r.unplaced} ${r.unplaced === 1 ? 'thing waits' : 'things wait'} in the list to be put down again: drag ${r.unplaced === 1 ? 'it' : 'each'} onto the land, or press Place all.` : '',
+        'Turn on moving (the arrows above the map) to drag a region: its borders follow.',
+        hadPicture ? 'The world\'s own picture is put away for the drawn map; the picture button above brings it back.' : '',
+    ].filter(Boolean).join(' ');
+    if (!commit(hadPicture ? withDrawn(r.book, true) : r.book, word)) return;
+    undoBook = { world: worldKey(), book: before, what: 'world' };
+    render();
+    if (board) board.fit();
+}
+
+/** The generated world taken away: the map draws its land around its places again. One Undo brings it back. */
+function removeWorld() {
+    if (!setup || !setup.gen) return;
+    const before = theBook();
+    setup = null;
+    renderSetup();
+    if (!commit(withWorld(before, null), 'The generated world is gone: the map draws its land around your regions and places again. They are all kept.')) return;
+    undoBook = { world: worldKey(), book: before, what: 'world' };
+    render();
+    if (board) board.fit();
+}
+
+// ─── Naming the lands (D186) ────────────────────────────────────────────────
+
+function openNames() {
+    if (!model || between()) return;
+    if (board) board.closeCard();
+    arm(null);
+    if (layer) setLayer('');
+    setup = { naming: true, step: 'ask', count: landsToName(topModel()).length, wish: '', names: [], error: '', world: worldKey() };
+    renderSetup();
+}
+
+async function runNames() {
+    if (!setup || !setup.naming) return;
+    const world = setup.world;
+    const wish = setup.step === 'ask' ? String($(`${root()} .dooms-atlas-names-wish`).val() || '') : setup.wish;
+    setup = { ...setup, step: 'busy', wish, error: '' };
+    renderSetup();
+    const r = await draftNames({ model: topModel(), world: (theState() || {}).name || '', wish });
+    if (!setup || !setup.naming || setup.world !== world || worldKey() !== world) return;    // closed, or the chat changed while the AI read
+    setup = r.ok ? { ...setup, step: 'review', names: r.names, error: '' } : { ...setup, step: 'ask', error: r.error || 'The names could not be asked for.' };
+    renderSetup();
+}
+
+function applyNamesNow() {
+    if (!setup || !setup.naming || !setup.names.length || setup.world !== worldKey()) return;
+    const names = setup.names;
+    setup = null;
+    renderSetup();
+    commit(applyNames(theBook(), names), `${names.length} ${names.length === 1 ? 'land is' : 'lands are'} named. They are still not canon (a dashed border): open one by its badge to rename it, make it canon or delete it.`);
 }
 
 // ─── Starting a scene from a place (D174) ───────────────────────────────────
@@ -798,6 +925,15 @@ function build() {
             if (act === 'arm') { const t = model ? model.tray.find(x => x.id === id) : null; arm(t && !(armed && armed.kind === 'place' && armed.id === id) ? { kind: 'place', id, label: t.label } : null); return; }
             if (act === 'roads') { setRoading(!roading); return; }
             if (act === 'add') { if (roading) setRoading(false); arm(armed && armed.kind === 'add' ? null : { kind: 'add' }); $(`${root()} .dooms-atlas-start`).prop('hidden', true); return; }
+            // World gen (D182) and the names of its lands (D186).
+            if (act === 'worldgen') { openWorldGen(); return; }
+            if (act === 'worldgen-roll') { readWorldGen({ roll: true }); return; }
+            if (act === 'worldgen-apply') { applyWorld(); return; }
+            if (act === 'worldgen-remove') { removeWorld(); return; }
+            if (act === 'names') { openNames(); return; }
+            if (act === 'names-draft' || act === 'names-again') { await runNames(); return; }
+            if (act === 'names-remove') { if (setup && setup.naming) { const nid = this.getAttribute('data-id') || ''; setup = { ...setup, names: setup.names.filter(n => n.id !== nid) }; renderSetup(); } return; }
+            if (act === 'names-apply') { applyNamesNow(); return; }
             // Setting up the world (D159).
             if (act === 'setup') { openSetup(); return; }
             if (act === 'scene-go') {
@@ -856,7 +992,7 @@ function build() {
                 return;
             }
             if (act === 'canon') { ev.stopPropagation(); commit(setCanon(theBook(), this.getAttribute('data-id') || '', true)); return; }
-            if (act === 'setup-undo') { if (undoBook && undoBook.world === worldKey()) { const b = undoBook.book; undoBook = null; layer = ''; commit(b, 'The set-up is undone: the map is as it was.'); if (board) board.fit(); } return; }
+            if (act === 'setup-undo') { if (undoBook && undoBook.world === worldKey()) { const b = undoBook.book; const what = undoBook.what === 'world' ? 'world gen' : 'set-up'; undoBook = null; layer = ''; commit(b, `The ${what} is undone: the map is as it was.`); if (board) board.fit(); } return; }
             if (act === 'start-dismiss') { startDismissed = `${worldKey()}|${layer}`; render(); return; }
             if (act === 'base') { const b = theBook(); commit(withDrawn(b, !b.drawn), b.drawn ? 'The world\'s picture is the map again.' : 'The drawn map is showing; the picture is kept and the same button brings it back.'); if (board) board.fit(); return; }
             if (act === 'move') { moving = !moving; keep(MOVE_KEY, moving ? '1' : '0'); result = moving ? 'Moving is on: drag a marker to where it belongs.' : ''; render(); return; }
@@ -982,6 +1118,15 @@ function build() {
         const value = String($(this).val() || '').trim();
         if (!value) return;
         setup = { ...setup, places: setup.places.map(p => (p.key === key ? { ...p, [field === 'name' ? 'name' : 'kind']: value } : p)) };
+    });
+    // World gen's choices (D182): any of them changed draws the world they make again. The seed is read when it is left or Enter is pressed.
+    $(document).on('change', `${root()} input[name="dooms-atlas-wg-shape"], ${root()} input[name="dooms-atlas-wg-size"], ${root()} input[name="dooms-atlas-wg-mode"], ${root()} .dooms-atlas-wg-regions, ${root()} .dooms-atlas-wg-seed`, function () { readWorldGen(); });
+    // A name changed in the list of names to check (kept without drawing the list again, so the caret stays).
+    $(document).on('change', `${root()} .dooms-atlas-name-row [data-field="name"]`, function () {
+        if (!setup || !setup.naming) return;
+        const nid = String($(this).closest('.dooms-atlas-name-row').attr('data-id') || '');
+        const value = String($(this).val() || '').trim();
+        if (value) setup = { ...setup, names: setup.names.map(n => (n.id === nid ? { ...n, name: value } : n)) };
     });
     // The tick that a world's memory may be replaced lights Play as scenes; what was typed in the record is kept.
     $(document).on('change', `${root()} .dooms-atlas-scenes-replace`, function () {

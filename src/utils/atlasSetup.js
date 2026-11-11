@@ -12,7 +12,8 @@
  * The requests are in src/systems/features/atlasBook.js; the window's
  * steps in src/systems/ui/atlasViews.js. tools/atlas-setup-test.mjs.
  */
-import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList, wrapInRegion, TERRITORY_RADIUS } from './atlas.js';
+import { ATLAS_KINDS, ATLAS_SCALES, ATLAS_GROUNDS, cleanKind, guessKind, normalizeBook, addPin, mergeInto, removeMarker, withScale, tidyList, wrapInRegion, TERRITORY_RADIUS, placeAt, withWorld } from './atlas.js';
+import { generateWorld, suggestSites, landSpotNear } from './worldGen.js';
 
 const clean = (v, max = 200) => String(v ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = (t) => clean(t, 120).toLowerCase().replace(/^the\s+/, '').replace(/[’]/g, "'");
@@ -352,6 +353,24 @@ export function applySetup(draft, previous = null) {
     for (const p of draft.places) for (const k of p.was) { if (k.id !== ids.get(p.key)) { book = mergeInto(book, k.id, ids.get(p.key)); merged++; } }
     for (const k of draft.drop) book = removeMarker(book, k.id);
     if (draft.scale) book = withScale(book, draft.scale);
+    // A generated world stays under the map (D182): the draft's regions stand where the world would have them, spread
+    // over its land, and what else it put on the top map comes to stand on the dry land nearest where it was laid.
+    if (old.world) {
+        book = withWorld(book, old.world);
+        const world = generateWorld(old.world);
+        const top = draftRows(draft).filter(row => !row.inside);
+        const lands = top.filter(row => row.kind === 'region');
+        const sites = suggestSites(world, lands.length, []);
+        const taken = [];
+        lands.forEach((row, i) => { const at = sites[i] || landSpotNear(world, { x: old.world.cx, y: old.world.cy }, { taken, gap: 4 }); if (at) { book = placeAt(book, ids.get(row.key), at); taken.push(at); } });
+        const home = sites[0] || landSpotNear(world, { x: old.world.cx, y: old.world.cy }) || { x: old.world.cx, y: old.world.cy };
+        for (const row of top) {
+            if (row.kind === 'region') continue;
+            const laid = spots.get(row.key) || { x: 0, y: 0 };
+            const at = landSpotNear(world, { x: home.x + laid.x, y: home.y + laid.y }, { taken, gap: 1.2 });
+            if (at) { book = placeAt(book, ids.get(row.key), at); taken.push(at); }
+        }
+    }
     return { book, ids, placed: draft.places.length, merged, dropped: draft.drop.length };
 }
 
@@ -596,10 +615,15 @@ export function applyFill(book, model, places, { home = '' } = {}) {
     let homeId = '';
     if (home) { const w = wrapInRegion(b, model, { label: home, loose: true }); b = w.book; homeId = w.id; }
     const spots = layoutFill(model, places, { home: !!home });
+    // On a generated world's own map (D183) what is added comes to stand on the dry land nearest where it was laid out,
+    // a region well clear of the regions already there: nothing is put down in the sea.
+    const world = model && model.geo && model.geo.world && !model.realm ? model.geo.world : null;
+    const taken = world ? (model.markers || []).filter(m => m.kind === 'region').map(m => ({ x: m.x, y: m.y })) : [];
     const ids = [];
     for (const p of Array.isArray(places) ? places : []) {
-        const at = spots.get(p.key);
+        let at = spots.get(p.key);
         if (!at) continue;
+        if (world) { at = landSpotNear(world, at, { taken, gap: p.kind === 'region' ? 4 : 1.2 }) || at; taken.push(at); }
         const made = addPin(b, { label: p.name, kind: p.kind, note: p.note, x: at.x, y: at.y, layer: model ? model.layer : '', loose: true });
         b = made.book;
         ids.push(made.id);
