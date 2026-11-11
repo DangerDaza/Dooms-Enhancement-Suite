@@ -402,6 +402,8 @@ export function onWorldRenamed(oldName, newName) {
     ensureLorebook();
     renameBookEverywhere(oldName, newName);
     saveSettings();
+    // A world whose continuity book this is follows the name (long-shot-plan D189).
+    import('../features/hub.js').then(m => m.onHubBookRenamed(oldName, newName)).catch(() => {});
 }
 
 /**
@@ -411,6 +413,8 @@ export function onWorldDeleted(worldName) {
     ensureLorebook();
     forgetBook(worldName);
     saveSettings();
+    // A world whose continuity book this was forgets it; its continuity stays (long-shot-plan D189).
+    import('../features/hub.js').then(m => m.onHubBookDeleted(worldName)).catch(() => {});
 }
 
 // ─── Book Assignment ────────────────────────────────────────────────────────

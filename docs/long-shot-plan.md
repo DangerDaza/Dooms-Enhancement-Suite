@@ -742,3 +742,34 @@ lorebook entry are where hard facts live); nothing can be added by hand
 that the record did not say; contradictions are not put to the player
 (step 3). Not run in a real SillyTavern: the request's reply is a
 stand-in in every test.
+
+## 29. End, step 2: the continuity book (2026-11-11, D189)
+
+Asked two things before the book was built, the owner: a new book of
+DES's own in the campaign, his hand-made Continuity book left untouched
+beside it, "yes"; the open threads as "always-on entry"; "go". This is
+D170 (the continuity is a real lorebook) done. Built in "Atlas 29".
+
+| # | Decision | What it means |
+| --- | --- | --- |
+| D189 | A world's continuity is kept as a lorebook of its own, written at End, and what the player changes in it is how things stand | **The book:** "<campaign> - Scenes Continuity" (the world's name when it has no campaign; the next free name when a book of that name is not this world's), made by the first End (or Play as scenes) that has anything to keep and filed with the world's campaign, so it is switched on and off with the campaign's other books; a world with no campaign has it switched on by itself. **Its entries:** one a person, titled "<name>: as things stand now", keyed by the name, not always on, order 95 (after an entry on who the person is: the owner's are at 90), its text "<name>, as the story stands now: …"; and one titled "Open threads", always on, a line a thread. SillyTavern's own World Info then carries a person's standing into a reply when their name comes up and the threads into every reply. **The brief** of a scene leaves both out while the book is switched on (they would be said twice) and carries them itself when it is not; the openings' request, which sees no lorebook, is always told them, and the continuity book is not read as a person's own notes (D177). **The player's to edit.** DES remembers for each entry it wrote its id and a mark of the text it last saw there. Before the continuity is read (a Start, an End) the book is looked at: a text that is no longer the one DES saw was changed by hand and is taken as how things stand (kept whole, to 700 characters); an entry deleted or emptied lets that person's standing go, and no entry is made for them again until the story speaks of them; in the threads' entry a line deleted settles that thread and a line added opens one. DES writes only the text of entries it made: never their keys, order or switches, never an entry the player added. **Never over an edit unseen:** a standing the player wrote is replaced only by an End whose sheet they were shown (it has their text under "Before" and the new line to correct); an End with no sheet (the command, Continue fresh) leaves it as they wrote it and says so. The threads' entry, reworded by hand, is left as written until the story opens or settles a thread; then it is written again with every thread of theirs in it. **The owner's hand-made Continuity book is not touched**: not read differently, not switched off, not offered to be (the earlier plan to offer was dropped at his word). **When it goes wrong:** a book renamed in the Lore Library is followed; one deleted there, or simply gone, is forgotten and a new one written whole at the next End; a lorebook that cannot be reached or does not answer within twenty seconds does not stop End (the continuity is kept in the settings either way, and the sheet says the book was not written) |
+
+Pure: `src/utils/continuityBook.js` (`readBook`: what the book says that
+the continuity does not; `planBook`: what must be written; `trackWritten`),
+`tools/continuity-book-test.mjs`. The file's reading and writing through
+SillyTavern's World Info, the campaign's filing, and the hooks into Start,
+End and Play as scenes: `src/systems/features/hub.js` (`syncFromBook`,
+`mirrorBook`, `bookIsLive`; `tools/hub-flow-test.mjs` §17, with a shelf of
+lorebooks in memory). The Lore Library tells the hub of a rename or a
+delete (`campaignManager.js`). The End sheet's fifth step, "The book".
+
+What it is not, yet: contradictions are not put to the player (step 3);
+nothing but an End or a Play as scenes writes the book (a standing
+corrected on the Atlas has no place yet: the book is where it is
+corrected); a person's entry has their name alone as its key (an alias or
+a title must be added to its keys by hand, and then stays); DES does not
+look at whether the hand-made Continuity book says something else. Not
+run in a real SillyTavern: every lorebook in the tests is a stand-in in
+memory, so the one thing untested is SillyTavern's own World Info calls
+(`createNewWorldInfo`, `createWorldInfoEntry`, `saveWorldInfo`) and the
+campaign's switching of a book made while it is on.

@@ -17,7 +17,8 @@ import { sameName } from './liveWorld.js';
 
 export const CONT = Object.freeze({
     people: 60,          // people a world keeps the standing of
-    personChars: 320,    // one person's standing
+    personChars: 320,    // one person's standing, as a record writes it and as a brief carries it
+    editChars: 700,      // one person's standing as the player wrote it in the continuity book (D189): kept whole
     threads: 40,         // open threads a world keeps
     threadChars: 180,
     scenePeople: 12,     // people one scene's record may speak of
@@ -32,23 +33,39 @@ const key = (t) => clean(t, 400).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').
 const noStop = (s) => String(s || '').replace(/[.;,\s]+$/, '');
 
 export function emptyContinuity() {
-    return { people: [], threads: [], seq: 0 };
+    return { people: [], threads: [], seq: 0, book: null };
+}
+
+/** A name as the continuity book's tracking keys it. */
+export const nameKey = (name) => clean(name, 60).toLowerCase();
+
+/**
+ * What DES knows of the continuity book it keeps (D189): the book's
+ * name, and for each entry it wrote the entry's id with a mark of the
+ * text it last saw there, so a change made by hand is told from its own.
+ */
+function normalizeBookTrack(raw) {
+    if (!isObj(raw) || !clean(raw.name, 120)) return null;
+    const one = (t) => (isObj(t) && Number.isInteger(t.uid) && t.uid >= 0 ? { uid: t.uid, hash: clean(t.hash, 16), ...(t.by === 'you' ? { by: 'you' } : {}) } : null);
+    const people = {};
+    if (isObj(raw.people)) for (const [k, t] of Object.entries(raw.people)) { const v = one(t); if (v && nameKey(k)) people[nameKey(k)] = v; }
+    return { name: clean(raw.name, 120), people, threads: one(raw.threads) };
 }
 
 /**
  * A world's continuity made safe: each person once (the later telling
  * wins), each open thread once with an id of its own, within the caps
  * (the people told longest ago and the oldest threads go first).
- * @returns {{ people: Array<{ name: string, now: string, scene: string, at: number }>, threads: Array<{ id: string, text: string, scene: string, at: number }>, seq: number }}
+ * @returns {{ people: Array<{ name: string, now: string, scene: string, at: number, by?: 'you' }>, threads: Array<{ id: string, text: string, scene: string, at: number }>, seq: number, book: object|null }}
  */
 export function normalizeContinuity(raw) {
     const r = isObj(raw) ? raw : {};
     const people = [];
     for (const p of Array.isArray(r.people) ? r.people : []) {
         if (!isObj(p)) continue;
-        const name = clean(p.name, 60), now = clean(p.now, CONT.personChars);
+        const name = clean(p.name, 60), now = clean(p.now, CONT.editChars);
         if (!name || !now) continue;
-        const one = { name, now, scene: clean(p.scene, 24), at: Number.isFinite(p.at) ? p.at : 0 };
+        const one = { name, now, scene: clean(p.scene, 24), at: Number.isFinite(p.at) ? p.at : 0, ...(p.by === 'you' ? { by: 'you' } : {}) };    // by 'you': as the player wrote it in the book
         const i = people.findIndex(x => sameName(x.name, name));
         if (i >= 0) people[i] = { ...one, name: people[i].name }; else people.push(one);    // the name as it was first spelt
     }
@@ -71,6 +88,7 @@ export function normalizeContinuity(raw) {
         people: people.length > CONT.people ? byAge(people).slice(0, CONT.people) : people,
         threads: threads.length > CONT.threads ? byAge(threads).slice(0, CONT.threads).reverse() : threads,
         seq,
+        book: normalizeBookTrack(r.book),
     };
 }
 
@@ -199,16 +217,22 @@ export function draftChanges(draft) {
  * record says (the scene and the time it was said kept with it), the
  * threads settled are gone, the ones opened are added. Everyone and
  * everything else stays as it was.
+ * A standing the player wrote in the continuity book is theirs (D189):
+ * with `keepEdited` (an End nobody was shown) it is left as they wrote
+ * it; otherwise the change was seen and takes its place.
  * @param {object} change  { people: [{ name, now }], opened: [text | { text }], closed: [thread ids] }
+ * @returns the continuity; `kept` on it (not stored) lists the people left as the player wrote them
  */
-export function applyContinuity(cont, change, { scene = '', at = 0 } = {}) {
+export function applyContinuity(cont, change, { scene = '', at = 0, keepEdited = false } = {}) {
     const c = normalizeContinuity(cont);
     const ch = isObj(change) ? change : {};
     const people = c.people.slice();
+    const kept = [];
     for (const p of Array.isArray(ch.people) ? ch.people : []) {
-        const name = clean(p && p.name, 60), now = clean(p && p.now, CONT.personChars);
+        const name = clean(p && p.name, 60), now = clean(p && p.now, CONT.editChars);
         if (!name || !now) continue;
         const i = people.findIndex(x => sameName(x.name, name));
+        if (keepEdited && i >= 0 && people[i].by === 'you') { kept.push(people[i].name); continue; }
         const one = { name: i >= 0 ? people[i].name : name, now, scene: clean(scene, 24), at: Number.isFinite(at) ? at : 0 };
         if (i >= 0) people[i] = one; else people.push(one);
     }
@@ -222,7 +246,12 @@ export function applyContinuity(cont, change, { scene = '', at = 0 } = {}) {
         have.add(key(text));
         threads.push({ id: `t${++seq}`, text, scene: clean(scene, 24), at: Number.isFinite(at) ? at : 0 });
     }
-    return normalizeContinuity({ people, threads, seq });
+    // The threads' entry in the book, when the player had reworded it, is DES's to write again once the list changes.
+    const moved = threads.length !== c.threads.length || threads.some((t, i) => t.id !== c.threads[i].id);
+    const book = c.book && c.book.threads && c.book.threads.by === 'you' && moved ? { ...c.book, threads: { uid: c.book.threads.uid, hash: c.book.threads.hash } } : c.book;
+    const next = normalizeContinuity({ people, threads, seq, book });
+    if (kept.length) Object.defineProperty(next, 'kept', { value: kept, enumerable: false });
+    return next;
 }
 
 /** How many of each a change holds, for the word that says what End kept. */

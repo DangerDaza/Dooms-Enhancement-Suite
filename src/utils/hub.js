@@ -1063,9 +1063,10 @@ export function describeEndResult(r) {
         if (r.recap === 'skipped') parts.push('no recap'); else if (r.recap) parts.push('the recap kept');
         if (r.canon === 'ok') parts.push('the ledger read'); else if (r.canon === 'skipped') parts.push('the ledger skipped'); else if (r.canon === 'off') parts.push('Canon off');
         if (r.world === 'ok') parts.push('the world moved'); else if (r.world === 'skipped') parts.push('the world not moved'); else if (r.world === 'off') parts.push('Live World off');
-        if (r.book === 'ok') parts.push('the book mirrored'); else if (r.book === 'failed') parts.push('the book not written');
+        if (r.book === 'ok') parts.push(r.bookResult && r.bookResult.made ? `the continuity book "${r.bookResult.name}" made` : 'the continuity book written'); else if (r.book === 'failed') parts.push('the continuity book not written');
         // Where people stand and the threads (D188): said when the scene changed any.
         const c = r.continuity && typeof r.continuity === 'object' ? r.continuity : null;
+        if (Array.isArray(r.continuityKept) && r.continuityKept.length) parts.push(`${r.continuityKept.join(', ')} left as you wrote ${r.continuityKept.length === 1 ? 'it' : 'them'} in the book`);
         if (c && (c.people || c.opened || c.closed)) parts.push([c.people ? `${c.people} ${c.people === 1 ? 'person\'s' : 'people\'s'} standing kept` : '', c.opened ? `${c.opened} ${c.opened === 1 ? 'thread' : 'threads'} opened` : '', c.closed ? `${c.closed} settled` : ''].filter(Boolean).join(', '));
         return `The scene is ended and remembered${parts.length ? ` (${parts.join(', ')})` : ''}.`;
     }

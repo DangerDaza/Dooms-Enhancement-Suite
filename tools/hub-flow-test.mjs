@@ -183,6 +183,21 @@ extensionSettings.liveWorld = { ...lwUtils.defaultLiveWorldConfig(), enabled: tr
 extensionSettings.canon = { enabled: true, every: 50, recentMessages: 6, inject: true, depth: 3, role: 'system', maxChars: 1500 };
 extensionSettings.quests = { main: 'None', optional: [] };
 hub.__setHubTiming({ idleStepMs: 5, idleMaxMs: 200 });
+// The lorebooks, as SillyTavern keeps them (D189): a shelf of books by name, the ones switched on, and what was filed where.
+// A book filed with a campaign is switched on only while `campaignOn` says the campaign is (it is off until §17).
+const shelf = new Map();
+const booksOn = new Set();
+const filed = [];
+let campaignOn = false;
+hub.__setBookApi({
+    names: async () => [...shelf.keys()],
+    load: async (name) => shelf.get(name) || null,
+    save: async (name, data) => { shelf.set(name, data); },
+    create: async (name) => { shelf.set(name, { entries: {} }); },
+    entry: async (name, data) => { const ids = Object.keys(data.entries).map(Number); const uid = ids.length ? Math.max(...ids) + 1 : 0; data.entries[uid] = { uid, key: [], keysecondary: [], comment: '', content: '', constant: false, disable: false, order: 100, position: 0 }; return data.entries[uid]; },
+    active: async (name) => booksOn.has(name),
+    file: async (campaignId, name) => { filed.push([campaignId || '', name]); if (campaignId && extensionSettings.lorebook && extensionSettings.lorebook.campaigns[campaignId]) extensionSettings.lorebook.campaigns[campaignId].books.push(name); if (!campaignId || campaignOn) booksOn.add(name); },
+});
 await openPlain();
 
 console.log('\n§1 the store and the card');
@@ -922,6 +937,109 @@ console.log('\n§16 where the people stand and the open threads: written with th
     ctxTarget.characterId = 0;
     ctxTarget.name2 = 'Mara Vane';
     await openPlain('Mara Vane - plain five');
+}
+
+console.log('\n§17 the continuity book: the world\'s own lorebook, written at End, the player\'s to edit (D189)');
+{
+    const W = 'first-descent';
+    const utils = await import(`${DES}/src/utils/hub.js`);
+    let openersAsked = null;
+    hub.__setOpenersTransport(async (p) => { openersAsked = p; return '{"when":{"date":"Day 70","time":"morning"},"openers":[{"title":"a","text":"The lane, again.","who":[]},{"title":"b","text":"Second.","who":[]},{"title":"c","text":"Third.","who":[]}]}'; });
+    const recapsAsked = [];
+    let recapReply = () => '{"recap":"x"}';
+    hub.__setRecapTransport(async (p) => { recapsAsked.push(p); return recapReply(p); });
+    const start = async (cast = ['Kiyoha', 'Lysandra']) => { const p = await hub.prepareScene({ worldId: W, place: { label: 'Hask' }, cast, gap: { id: 'now' } }); return p.ok ? { ...(await hub.commitScene(p.token, { choice: 0 })), prep: p } : p; };
+    const play = () => { chat.push(user('On.')); chat.push(ai('Kiyoha and Lysandra go on. Dagger follows.')); };
+    const cont = () => hub.worldEntry(W).continuity;
+    const entryOf = (title) => Object.values(shelf.get(hub.continuityBookOf(W)).entries).find(e => e.comment === title);
+
+    // The book was made by the first End that had anything to keep (§9's, when the chat was taken), and filed with the campaign.
+    check('the first continuity made the book: named after the campaign, filed with it', filed.length >= 1 && filed[0][0] === 'camp1' && filed[0][1] === 'First Descent - Scenes Continuity' && shelf.has('First Descent - Scenes Continuity') && extensionSettings.lorebook.campaigns.camp1.books.includes('First Descent - Scenes Continuity'), JSON.stringify(filed));
+    const name = hub.continuityBookOf(W);
+    check('the world knows its book, and the book holds an entry a person and one for the threads', !!name && shelf.has(name) && !!entryOf('Kiyoha: as things stand now') && entryOf('Kiyoha: as things stand now').content === 'Kiyoha, as the story stands now: On the road, axe shouldered.' && same(entryOf('Kiyoha: as things stand now').key, ['Kiyoha']) && entryOf('Kiyoha: as things stand now').constant === false && entryOf('Open threads').constant === true && entryOf('Open threads').content.includes('- The road is watched.'), JSON.stringify(shelf.get(name)));
+    check('a name another book has is left to that book: this world\'s was given the next free one', name === 'First Descent - Scenes Continuity 2' && filed.some(f => f[1] === name));
+
+    // Switched off (the campaign is not on): the brief carries where people stand. Switched on: the book does, and the brief leaves it out.
+    const off = await start();
+    check('with the book switched off a scene\'s brief says where its people stand and what is open', off.ok && meta.dooms_hub.brief.includes('Where they stand now: Kiyoha: On the road, axe shouldered') && meta.dooms_hub.brief.includes('Still open:'));
+    check('the openings are not given the continuity book as a person\'s own notes: it is given by itself', openersAsked.user.includes('Where they stand now:\n- Kiyoha: On the road, axe shouldered') && !openersAsked.user.includes('as the story stands now'));
+    play();
+    recapReply = () => JSON.stringify({ recap: 'On they went.', people: [{ name: 'Kiyoha', now: 'At the gate of Hask, tired.' }], threads: { opened: [] } });
+    const e1 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('End writes the book: the person\'s entry says how they stand now, and End says the book was written', e1.ok && e1.book === 'ok' && e1.bookResult.made === false && e1.bookResult.written === 1 && entryOf('Kiyoha: as things stand now').content === 'Kiyoha, as the story stands now: At the gate of Hask, tired.' && /the continuity book written/.test(utils.describeEndResult(e1)), JSON.stringify(e1.bookResult));
+    booksOn.add(name);
+    const on = await start();
+    check('with the book switched on, SillyTavern carries it: the brief leaves both out, the openings are still told', on.ok && !meta.dooms_hub.brief.includes('Where they stand now') && !meta.dooms_hub.brief.includes('Still open') && openersAsked.user.includes('Where they stand now:\n- Kiyoha: At the gate of Hask, tired'), meta.dooms_hub.brief);
+
+    // The player rewrites an entry in the book: it is how things stand.
+    entryOf('Kiyoha: as things stand now').content = 'RUN 4: Kiyoha is Jordan\'s lover and says so in front of the company. She will not go down the stair without him.';
+    entryOf('Kiyoha: as things stand now').key.push('oni');
+    play();
+    recapsAsked.length = 0;
+    recapReply = () => JSON.stringify({ recap: 'A quiet day.', people: [{ name: 'Kiyoha', now: 'In Hask, rested.' }], threads: { opened: [] } });
+    const pe = await hub.prepareEnd();
+    check('a text the player wrote in the book is how things stood: the record is told it, and the sheet shows it', pe.ok && recapsAsked[0].user.includes('- Kiyoha: RUN 4: Kiyoha is Jordan\'s lover') && pe.continuity.people[0].was.startsWith('RUN 4: Kiyoha is Jordan\'s lover') && cont().people.find(p => p.name === 'Kiyoha').by === 'you' && pe.book === name);
+    // Going straight on has no sheet: what the player wrote is not replaced unseen.
+    const unseen = await hub.commitEnd({ recap: pe.recap, skipCanon: true, skipWorld: true });
+    check('an End nobody was shown leaves what the player wrote as they wrote it, and says so', unseen.ok && same(unseen.continuityKept, ['Kiyoha']) && unseen.continuity.people === 0 && entryOf('Kiyoha: as things stand now').content.startsWith('RUN 4: Kiyoha is Jordan\'s lover') && cont().people.find(p => p.name === 'Kiyoha').now.startsWith('RUN 4') && /Kiyoha left as you wrote it in the book/.test(utils.describeEndResult(unseen)), utils.describeEndResult(unseen));
+    // With the sheet, the player sees the new line and keeps it: the entry is written, its keys left as they made them.
+    const s3 = await start();
+    check('the next scene is told what the player wrote', s3.ok && openersAsked.user.includes('- Kiyoha: RUN 4: Kiyoha is Jordan\'s lover'));
+    play();
+    const pe3 = await hub.prepareEnd();
+    const seen = await hub.commitEnd({ recap: pe3.recap, skipCanon: true, skipWorld: true, continuity: { people: [{ name: 'Kiyoha', now: 'In Hask, rested; still Jordan\'s lover.' }], opened: [], closed: [] } });
+    check('an End the player saw takes its place: the entry\'s text is written, the keys they added left alone', seen.ok && seen.continuityKept === undefined && entryOf('Kiyoha: as things stand now').content === 'Kiyoha, as the story stands now: In Hask, rested; still Jordan\'s lover.' && same(entryOf('Kiyoha: as things stand now').key, ['Kiyoha', 'oni']) && !cont().people.find(p => p.name === 'Kiyoha').by);
+
+    // The threads' entry edited: a line deleted settles the thread, a line added opens one.
+    const th = entryOf('Open threads');
+    const before = cont().threads.map(t => t.text);
+    th.content = `Still open in the story:\n- ${before[0]}\n- Solveig's stair rule has not been tested.`;
+    const s4 = await start();
+    check('a thread added by hand in the book is told to the next scene; one deleted there is settled', s4.ok && same(cont().threads.map(t => t.text), [before[0], 'Solveig\'s stair rule has not been tested.']) && openersAsked.user.includes('- Solveig\'s stair rule has not been tested'), JSON.stringify(cont().threads));
+    // An entry deleted in the book: the person's standing is let go.
+    const lys = entryOf('Lysandra: as things stand now');
+    check('Lysandra has an entry of her own', !!lys);
+    delete shelf.get(name).entries[lys.uid];
+    play();
+    recapReply = () => JSON.stringify({ recap: 'Nothing much.', people: [], threads: { opened: [] } });
+    const e4 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('an entry the player deleted is not made again: that person\'s standing is let go', e4.ok && !cont().people.some(p => p.name === 'Lysandra') && !entryOf('Lysandra: as things stand now') && e4.book === 'ok');
+    // An entry of the player's own, added to DES's book, is never touched.
+    shelf.get(name).entries[900] = { uid: 900, comment: 'The stair rule', key: ['stair'], content: 'Nobody goes down alone.', constant: true };
+    const s5 = await start(['Kiyoha']);
+    play();
+    recapReply = () => JSON.stringify({ recap: 'Down a step.', people: [{ name: 'Kiyoha', now: 'On the first step.' }], threads: { opened: ['The first step is loose.'] } });
+    const e5 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('an entry the player added to the book is left exactly as it is while the others are written', s5.ok && e5.ok && same(shelf.get(name).entries[900], { uid: 900, comment: 'The stair rule', key: ['stair'], content: 'Nobody goes down alone.', constant: true }) && entryOf('Kiyoha: as things stand now').content.endsWith('On the first step.') && entryOf('Open threads').content.includes('- The first step is loose.') && entryOf('Open threads').content.includes('- Solveig\'s stair rule has not been tested.'));
+
+    // Renamed in the Lore Library: the world follows. Deleted: forgotten, and the next End writes a new book whole.
+    shelf.set('FD - Where things stand', shelf.get(name));
+    shelf.delete(name);
+    hub.onHubBookRenamed(name, 'FD - Where things stand');
+    check('the book renamed in the Lore Library: the world follows the name', hub.continuityBookOf(W) === 'FD - Where things stand' && !!entryOf('Kiyoha: as things stand now'));
+    shelf.delete('FD - Where things stand');
+    hub.onHubBookDeleted('FD - Where things stand');
+    check('the book deleted in the Lore Library: the world forgets it and keeps its continuity', hub.continuityBookOf(W) === '' && cont().people.some(p => p.name === 'Kiyoha') && cont().threads.length >= 2);
+    const s6 = await start(['Kiyoha']);
+    play();
+    recapReply = () => JSON.stringify({ recap: 'Another step.', people: [{ name: 'Kiyoha', now: 'On the second step.' }], threads: { opened: [] } });
+    const e6 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('the next End makes a new book and writes it whole', s6.ok && e6.ok && e6.book === 'ok' && e6.bookResult.made === true && !!hub.continuityBookOf(W) && shelf.has(hub.continuityBookOf(W)) && entryOf('Kiyoha: as things stand now').content.endsWith('On the second step.') && !!entryOf('Open threads') && /the continuity book "[^"]+" made/.test(utils.describeEndResult(e6)), JSON.stringify(e6.bookResult));
+    // A book that vanished without a word (the file deleted outside DES) is noticed the same way.
+    shelf.delete(hub.continuityBookOf(W));
+    const s7 = await start(['Kiyoha']);
+    check('a book that is simply gone is noticed at the next Start: forgotten, the continuity kept and told', s7.ok && hub.continuityBookOf(W) === '' && openersAsked.user.includes('- Kiyoha: On the second step'));
+    play();
+    // A lorebook that fails does not stop End.
+    hub.__setBookApi({ names: async () => { throw new Error('the lorebooks are away'); } });
+    const e7 = await hub.endScene({ skipCanon: true, skipWorld: true });
+    check('a lorebook that cannot be reached does not stop End: the scene is ended, the continuity kept, the book said to be unwritten', e7.ok && e7.book === 'failed' && cont().people.find(p => p.name === 'Kiyoha').now === 'On the second step.' && /the continuity book not written/.test(utils.describeEndResult(e7)));
+    hub.__setBookApi(null);
+    hub.__setRecapTransport(null);
+    hub.__setOpenersTransport(null);
+    ctxTarget.characterId = 0;
+    ctxTarget.name2 = 'Mara Vane';
+    await openPlain('Mara Vane - plain six');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall pass');

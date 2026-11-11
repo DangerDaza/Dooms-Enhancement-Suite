@@ -303,8 +303,9 @@ function loreLine(lore) {
  * @param {object} o
  * @param {boolean} o.locked  the sheet is running or done: nothing can be changed
  * @param {string} o.next     who is told: "the next scene" or "the first scene"
+ * @param {string} o.book     the world's continuity lorebook, when it has one (D189)
  */
-export function continuityFieldsHtml(c, { locked = false, next = 'the next scene' } = {}) {
+export function continuityFieldsHtml(c, { locked = false, next = 'the next scene', book = '' } = {}) {
     const k = c && typeof c === 'object' ? c : null;
     const people = k && Array.isArray(k.people) ? k.people : [];
     const opened = k && Array.isArray(k.opened) ? k.opened : [];
@@ -329,7 +330,7 @@ export function continuityFieldsHtml(c, { locked = false, next = 'the next scene
     return `${people.length ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-cont">
             <legend class="dooms-atlas-card-label">Where they stand now</legend>
             <ul class="dooms-atlas-cont-list dooms-atlas-cont-people">${people.map(person).join('')}</ul>
-            <p class="dooms-atlas-start-note">${e(next.charAt(0).toUpperCase() + next.slice(1))} is told this of whoever is in it. Correct what is wrong; the cross leaves someone as they stood before.</p>
+            <p class="dooms-atlas-start-note">${e(next.charAt(0).toUpperCase() + next.slice(1))} is told this of whoever is in it. Correct what is wrong; the cross leaves someone as they stood before. ${book ? `Each is an entry in the lorebook <strong>${e(book)}</strong>, keyed by the name: what you change there is taken as how things stand.` : 'They are written to a lorebook of the world\'s own in your Lore Library, an entry a person, where you can read and change them.'}</p>
         </fieldset>` : ''}
         ${threadCount || open ? `<fieldset class="dooms-atlas-scene-field dooms-atlas-cont">
             <legend class="dooms-atlas-card-label">Threads</legend>
@@ -365,6 +366,9 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
     };
     const canonOn = !!(prep && prep.steps && prep.steps.canon);
     const worldOn = !!(prep && prep.steps && prep.steps.world);
+    // The continuity book (D189) is written when the world has one, or when this scene gives it something to keep.
+    const k = prep && prep.continuity ? prep.continuity : null;
+    const bookOn = !!(prep && (prep.book || (k && ((k.people || []).length || (k.opened || []).length || (k.closed || []).length))));
     const stale = prep && prep.stale && !done
         ? `<div class="dooms-atlas-stale"><p class="dooms-atlas-setup-error" role="alert">This scene began before a later one ended, so the world remembers more than it does. Ending it keeps the world's memory as it is: the record is kept and the ledger reads the scene, and nothing of the later scene is lost.</p>
             <label class="dooms-atlas-check"><input type="checkbox" class="dooms-atlas-end-replace" /> <span>Replace the world's memory with this scene's instead</span></label></div>`
@@ -383,7 +387,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
         <label class="dooms-atlas-field"><span class="dooms-atlas-card-label">What happened${busy ? ' (being written…)' : ''}</span>
             <textarea class="dooms-atlas-input dooms-atlas-setup-notes dooms-atlas-end-recap" maxlength="1500" placeholder="${busy ? 'The record of the scene is being written…' : 'What happened in this scene, in a few lines. The next scene is told this.'}"${done || busy ? ' readonly' : ''}>${prep && prep.recap ? e(prep.recap) : ''}</textarea></label>
         ${prep && prep.error ? `<p class="dooms-atlas-setup-error" role="alert">The record could not be written (${e(prep.error)}). Write it yourself, or end without one.</p>` : ''}
-        ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy })}
+        ${continuityFieldsHtml(prep && prep.continuity, { locked: done || running || busy, book: prep && prep.book ? prep.book : '' })}
         ${stale}
         ${habits}
         <ul class="dooms-atlas-parts">
@@ -391,6 +395,7 @@ export function atlasEndSceneHtml({ prep = null, busy = false, states = {}, resu
             ${part('canon', 'The ledger', canonOn ? (prep && prep.canonDone ? 'already read for the last reply' : 'Canon reads the whole scene') : 'Canon is off', canonOn, 'dooms-atlas-end-skip-canon')}
             ${part('world', 'The world', worldOn ? 'the clocks tick and people move, by the time the scene took' : 'Live World has no world here', worldOn, 'dooms-atlas-end-skip-world')}
             ${part('snapshot', 'The memory', 'everything this chat knows, with the map, kept for the next scene', true, '')}
+            ${bookOn ? part('book', 'The book', `where people stand and the open threads, written to ${prep.book ? `the lorebook ${prep.book}` : 'a lorebook of the world\'s own'}`, true, '') : ''}
         </ul>
         ${done ? `<p class="dooms-atlas-end-done"><i class="fa-solid fa-check" aria-hidden="true"></i> The scene is ended and remembered. ${going ? e(going) : 'The map shows the world as it stands now: open a place to start the next scene.'}</p>` : ''}
         ${error ? `<p class="dooms-atlas-setup-error" role="alert">${e(error)}</p>` : ''}
@@ -475,6 +480,7 @@ export function atlasScenesHtml({ step = 'ask', plan = null, recap = '', error =
             <p>${r.replaced ? 'Its memory is this chat as it stands now.' : 'This chat as it stands is its memory, and is kept as scene 0.'} ${e(r.card || 'The card')} narrates its scenes, and each scene opens on your map.</p>
             <p>This chat is unchanged otherwise and can go on being played. A scene starts in a chat of its own and is told what happened here.</p>
             ${r.backup ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> A copy of the chat as it was is saved beside it as <strong>${e(r.backup)}</strong>.</p>` : ''}
+            ${r.book ? `<p class="dooms-atlas-start-note"><i class="fa-solid fa-book" aria-hidden="true"></i> Where its people stand and what is left open are kept in the lorebook <strong>${e(r.book)}</strong>, in your Lore Library: an entry a person, yours to read and change.</p>` : ''}
             <p>To start the first scene, open a place on the map and press <strong>Start scene 1 here</strong>.</p>
             <div class="dooms-atlas-setup-actions">
                 <button type="button" class="dooms-atlas-btn is-primary" data-act="setup-close"><i class="fa-solid fa-map" aria-hidden="true"></i> <span>To the map</span></button>

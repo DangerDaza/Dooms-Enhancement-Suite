@@ -20,13 +20,13 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 console.log('\n§1 the continuity made safe');
 {
-    check('nothing: no people, no threads', same(normalizeContinuity(null), { people: [], threads: [], seq: 0 }) && same(emptyContinuity(), normalizeContinuity('x')) && !hasContinuity(null) && !hasContinuity(emptyContinuity()));
+    check('nothing: no people, no threads', same(normalizeContinuity(null), { people: [], threads: [], seq: 0, book: null }) && same(emptyContinuity(), normalizeContinuity('x')) && !hasContinuity(null) && !hasContinuity(emptyContinuity()));
     const c = normalizeContinuity({
         people: [{ name: ' Kiyoha ', now: 'On the Fourth Landing,   wounded.', scene: 's2', at: 5 }, { name: 'kiyoha', now: 'Healed.', scene: 's3', at: 9 }, { name: '', now: 'x' }, { name: 'Nobody' }, null, { name: 'Lysandra', now: 'y'.repeat(900) }],
         threads: [{ id: 't1', text: 'The debt to the Counting Room.' }, { id: 't1', text: 'Who cut the rope?' }, { text: 'the debt to the counting room' }, { text: '' }, 'junk', { id: 'nonsense', text: 'Solveig\'s stair rule.' }],
         seq: 1,
     });
-    check('a person once, the later telling winning; an empty name or standing dropped; a standing cut to its length', c.people.length === 2 && c.people[0].name === 'Kiyoha' && c.people[0].now === 'Healed.' && c.people[0].scene === 's3' && c.people[1].now.length === CONT.personChars);
+    check('a person once, the later telling winning; an empty name or standing dropped; a standing cut to its length', c.people.length === 2 && c.people[0].name === 'Kiyoha' && c.people[0].now === 'Healed.' && c.people[0].scene === 's3' && c.people[1].now.length === CONT.editChars);
     check('a thread once (the same words twice are one), each with an id of its own', c.threads.length === 3 && same(c.threads.map(t => t.id), ['t1', 't2', 't3']) && c.seq === 3 && c.threads[1].text === 'Who cut the rope?');
     check('made safe twice changes nothing', same(normalizeContinuity(c), c) && hasContinuity(c));
     const many = normalizeContinuity({ people: Array.from({ length: 80 }, (_, i) => ({ name: `P${i}`, now: 'here', at: i })), threads: Array.from({ length: 70 }, (_, i) => ({ text: `thread number ${i}`, at: i })) });

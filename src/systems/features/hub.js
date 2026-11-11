@@ -40,7 +40,8 @@ import {
 } from '../../utils/hub.js';
 import { normalizeBook } from '../../utils/atlas.js';
 import { narratorTexts, countStyle, applyStyle } from '../../utils/styleLaw.js';
-import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines } from '../../utils/continuity.js';
+import { continuityDraft, readContinuity, stepDraft, draftChanges, applyContinuity, changeCounts, standingLines, threadLines, hasContinuity } from '../../utils/continuity.js';
+import { continuityBookName, readBook, planBook, trackWritten, forgetBook, renameBook } from '../../utils/continuityBook.js';
 
 export const BRIEF_SLOT = 'dooms-scene-brief';
 import { ensureCss } from '../../core/cssLoader.js';
@@ -423,9 +424,12 @@ async function booksOf(worldId) {
     const e = store().worlds[String(worldId || '')];
     const lb = extensionSettings.lorebook;
     const c = e && e.campaign && lb && lb.campaigns && typeof lb.campaigns === 'object' ? lb.campaigns[e.campaign] : null;
-    if (c && Array.isArray(c.books) && c.books.length) return c.books.map(String).filter(Boolean).slice(0, LORE_BOOKS);
+    // The world's own continuity book (D189) is not read here: what it holds is given to a scene by itself, as how things stand now.
+    const own = e && e.continuity && e.continuity.book ? e.continuity.book.name : '';
+    const notOwn = (list) => list.map(String).filter(b => b && b !== own).slice(0, LORE_BOOKS);
+    if (c && Array.isArray(c.books) && c.books.length) return notOwn(c.books);
     if (loreReader) return [];
-    try { const api = await import('../lorebook/lorebookAPI.js'); return (api.getActiveWorldNames() || []).map(String).filter(Boolean).slice(0, LORE_BOOKS); } catch (e2) { return []; }
+    try { const api = await import('../lorebook/lorebookAPI.js'); return notOwn(api.getActiveWorldNames() || []); } catch (e2) { return []; }
 }
 
 /**
@@ -457,6 +461,171 @@ async function sceneLore(worldId, names, players = []) {
         out.standing = standingLore(entries);
     } catch (e) { log('the lorebooks could not be read for the scene', String(e && e.message || e)); }
     return out;
+}
+
+// ─── The continuity book (D170, D189) ───────────────────────────────────
+
+let bookApi = null;    // test hook: how a lorebook is listed, read, made, written and filed
+
+/** Test hook: the lorebook's own doings ({ names, load, save, create, entry, active, file }), or null for SillyTavern's. */
+export function __setBookApi(api) {
+    bookApi = api && typeof api === 'object' ? api : null;
+}
+
+function defaultBookApi() {
+    const lib = () => import('../lorebook/lorebookAPI.js');
+    return {
+        names: async () => { const list = (await lib()).getAllWorldNames(); return Array.isArray(list) ? list.filter(n => typeof n === 'string') : []; },
+        load: async (name) => (await lib()).loadWorldData(name, true),
+        save: async (name, data) => (await lib()).saveWorldData(name, data),
+        create: async (name) => (await lib()).createNewWorld(name),
+        entry: async (name, data) => (await lib()).createEntry(name, data),
+        active: async (name) => (await lib()).isWorldActive(name),
+        // Filed with the world's campaign, so it is switched on with the campaign's other books; a world with no campaign has it switched on by itself.
+        file: async (campaignId, name) => {
+            const lb = extensionSettings.lorebook;
+            if (campaignId && lb && lb.campaigns && lb.campaigns[campaignId]) {
+                const cm = await import('../lorebook/campaignManager.js');
+                cm.addBookToCampaign(campaignId, name);
+                await cm.queueReconcile();
+            } else await (await lib()).activateWorld(name);
+        },
+    };
+}
+const books = () => bookApi || defaultBookApi();
+const BOOK_WAIT_MS = 20000;    // a lorebook that does not answer does not hold up an End
+/** A step of the book's, given up on when it takes too long: what it was doing is left to finish or not by itself. */
+const bookStep = (work) => Promise.race([work, new Promise((_, no) => setTimeout(() => no(new Error('the lorebook did not answer in time')), BOOK_WAIT_MS))]);
+
+/**
+ * What the world's continuity book says that its continuity does not
+ * (D189), taken in: an entry the player changed by hand is how things
+ * stand, an entry they deleted is let go. Run before the continuity is
+ * read (an End, a Start). A book that is gone is forgotten (a new one is
+ * written at the next End); one that cannot be read changes nothing.
+ */
+async function syncFromBook(worldId) {
+    const entry = store().worlds[String(worldId || '')];
+    const track = entry && entry.continuity ? entry.continuity.book : null;
+    if (!track) return null;
+    try {
+        const api = books();
+        const names = await bookStep(api.names());
+        if (!Array.isArray(names)) return null;
+        if (!names.includes(track.name)) {
+            putEntry(worldId, { ...entryOf(worldId), continuity: forgetBook(entry.continuity) }, { source: 'book', world: worldId });
+            log(`the continuity book "${track.name}" is gone; a new one is written at the next End`);
+            return null;
+        }
+        const data = await bookStep(api.load(track.name));
+        if (!data) return null;
+        const r = readBook(entry.continuity, data);
+        if (r.changed) {
+            putEntry(worldId, { ...entryOf(worldId), continuity: r.cont }, { source: 'book', world: worldId });
+            log('the continuity book was changed by hand; what it says is taken', r.adopted);
+        }
+        return r.adopted;
+    } catch (e) {
+        log('the continuity book could not be read', String(e && e.message || e));
+        return null;
+    }
+}
+
+/**
+ * The world's continuity written to its book (D189): the book made when
+ * the world has none (named after its campaign and filed with it, so it
+ * is on when the campaign is), an entry made for each person who has
+ * none, the text changed where a standing has moved on, the threads'
+ * entry kept up. Only texts DES wrote are written; `syncFromBook` runs
+ * first, so nothing the player changed is written over unseen.
+ * @returns {Promise<{ state: 'off'|'ok'|'failed', name?: string, made?: boolean, written?: number, error?: string }>}
+ */
+async function mirrorBook(worldId) {
+    const first = entryOf(worldId);
+    if (!hasContinuity(first.continuity) && !first.continuity.book) return { state: 'off' };
+    try {
+        return await bookStep(writeBook(worldId));
+    } catch (e) {
+        const error = String(e && e.message || e);
+        log('the continuity book could not be written', error);
+        return { state: 'failed', error };
+    }
+}
+
+async function writeBook(worldId) {
+    {
+        await syncFromBook(worldId);
+        const entry = entryOf(worldId);
+        let cont = entry.continuity;
+        const api = books();
+        const names = await api.names();
+        if (!Array.isArray(names)) throw new Error('the lorebooks could not be listed');
+        let name = cont.book ? cont.book.name : '';
+        let made = false;
+        if (!name || !names.includes(name)) {
+            if (!name) {
+                const lb = extensionSettings.lorebook;
+                const camp = entry.campaign && lb && lb.campaigns ? lb.campaigns[entry.campaign] : null;
+                const res = camp ? null : await loadPack(worldId);
+                const wanted = continuityBookName(camp ? camp.name : (res && res.ok ? res.pack.name : worldId));
+                name = wanted;
+                for (let n = 2; n < 100 && names.includes(name); n++) name = `${wanted} ${n}`;    // a book of that name that is not this world's is left alone
+                if (names.includes(name)) throw new Error(`no free name for the book ("${wanted}")`);
+            }
+            await api.create(name);
+            await api.file(entry.campaign, name);
+            cont = forgetBook(cont);
+            made = true;
+        }
+        const data = await api.load(name);
+        if (!data) throw new Error(`the lorebook "${name}" could not be read`);
+        if (!data.entries || typeof data.entries !== 'object') data.entries = {};
+        const plan = planBook(cont, data);
+        const written = [];
+        for (const op of plan.ops) {
+            if (op.op === 'create') {
+                const made1 = await api.entry(name, data);
+                if (!made1 || !Number.isInteger(made1.uid)) continue;
+                Object.assign(made1, { ...op.fields, key: op.fields.key.slice(), addMemo: true });
+                written.push({ who: op.who, uid: made1.uid, content: op.fields.content });
+            } else if (data.entries[op.uid]) {
+                data.entries[op.uid].content = op.content;
+                written.push({ who: op.who, uid: op.uid, content: op.content });
+            }
+        }
+        if (written.length) await api.save(name, data);
+        putEntry(worldId, { ...entryOf(worldId), continuity: trackWritten(cont, name, written) }, { source: 'book', world: worldId });
+        log(`the continuity book "${name}" ${made ? 'made and ' : ''}written`, { entries: written.length });
+        return { state: 'ok', name, made, written: written.length };
+    }
+}
+
+/** Whether the world's continuity book is there and switched on: then SillyTavern's own World Info carries it into every reply, and a scene's brief need not. */
+async function bookIsLive(worldId) {
+    const entry = store().worlds[String(worldId || '')];
+    const track = entry && entry.continuity ? entry.continuity.book : null;
+    if (!track) return false;
+    try { const api = books(); const names = await bookStep(api.names()); return Array.isArray(names) && names.includes(track.name) && (await bookStep(api.active(track.name))) === true; } catch (e) { return false; }
+}
+
+/** The name of a world's continuity book, '' when it has none yet. */
+export function continuityBookOf(worldId) {
+    const entry = store().worlds[String(worldId || '')];
+    return entry && entry.continuity && entry.continuity.book ? entry.continuity.book.name : '';
+}
+
+/** A lorebook renamed in the Lore Library: a world whose continuity book it is follows the name. */
+export function onHubBookRenamed(oldName, newName) {
+    for (const [id, e] of Object.entries(store().worlds)) {
+        if (e && e.continuity && e.continuity.book && e.continuity.book.name === oldName) putEntry(id, { ...entryOf(id), continuity: renameBook(e.continuity, newName) }, { source: 'book', world: id });
+    }
+}
+
+/** A lorebook deleted in the Lore Library: a world whose continuity book it was forgets it (its continuity stays; the next End writes a new book). */
+export function onHubBookDeleted(name) {
+    for (const [id, e] of Object.entries(store().worlds)) {
+        if (e && e.continuity && e.continuity.book && e.continuity.book.name === name) putEntry(id, { ...entryOf(id), continuity: forgetBook(e.continuity) }, { source: 'book', world: id });
+    }
 }
 
 // ─── Start (D117, D118, D119) ───────────────────────────────────────────
@@ -580,9 +749,13 @@ export async function prepareScene({ worldId, seed = null, place = null, cast = 
     // The people's own entries and the campaign's standing notes, read from its lorebooks (D177): the request sees no lorebook otherwise.
     const notesOf = await sceneLore(g.id, names, players);
     if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
-    // Where the people of the scene stand now and what the story has left open (D188), as the scenes before left them.
-    const stand = standingLines(g.entry.continuity, names);
-    const threads = threadLines(g.entry.continuity);
+    // Where the people of the scene stand now and what the story has left open (D188), as the scenes before left them
+    // and as the player has since corrected them in the continuity book (D189).
+    await syncFromBook(g.id);
+    if (token !== pendingToken) return { ok: false, reason: 'cancelled' };
+    const contNow = entryOf(g.id).continuity;
+    const stand = standingLines(contNow, names);
+    const threads = threadLines(contNow);
     const prompt = buildOpenersPrompt({ world: pack, place: label, region, weather, date: memory.facts.date, time: memory.facts.time, gapWords: theGap.words, cast: lines.map(l => l.line), seed: seedText, canonBlock, recaps, quests, player: players[0] || '', note, lore: notesOf.lore, standing: notesOf.standing, style: isStyleLawOn() ? g.entry.style : null, stand, threads });
     let openers = [];
     let when = null;
@@ -761,7 +934,10 @@ export async function commitScene(token, { choice = 0, ownText = '' } = {}) {
     if (moved) memoryNow = { ...memoryNow, stores: { ...memoryNow.stores, dooms_world: moved.stores.dooms_world }, facts: moved.facts };
     const hooked = p.seed && p.seed.kind === 'hook' && p.seed.id ? { id: p.seed.id, title: p.seed.label || '', text: p.seed.text || '' } : null;
     const seeded = seedStores(memoryNow, { chatId: fileName, place: p.place.label, cast: p.cast, player: p.player, weather: p.weather, when: p.when, hookId: hooked ? hooked.id : '', hook: hooked, now });
-    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: p.stand || [], threads: p.threads || [] });
+    // With the continuity book switched on, SillyTavern's own World Info carries where people stand and the open threads
+    // into every reply (D189); the brief says them only when the book is not there to.
+    const bookOn = await bookIsLive(p.worldId);
+    const brief = buildBrief({ world: p.pack.name, sceneNo: n, place: p.place.label, region: p.place.region, date: seeded.facts.date, time: seeded.facts.time, weather: seeded.facts.weather, gapWords: p.gap.words, cast: p.lines.map(l => l.line), seed: p.seed.text || p.seed.label || '', since: p.since, lastRecap: p.recaps[0] || '', beforeRecap: p.recaps[1] || '', player: p.player[0] || '', note: p.note, style: isStyleLawOn() ? g.entry.style : null, stand: bookOn ? [] : (p.stand || []), threads: bookOn ? [] : (p.threads || []) });
     const mark = hubMark({ world: p.worldId, scene: `s${n}`, title, seed: p.seed, place: p.place, cast: p.cast, gap: p.gap, startedAt: now, startDate: seeded.facts.date, file: fileName, brief });
     // The brief rides DES's own slot every generation (D120): a chat-completion preset may not send the scenario at all.
     const header = sceneHeader({ stores: seeded.stores, mark, scenario: '', worldInfo: '', integrity: b.uuid(), persona: b.userAvatar() });
@@ -878,7 +1054,9 @@ export async function prepareEnd() {
     // The same request says where the scene's people stand when it ends and which threads it settled and opened (D188):
     // it is told where they stood before and what was open, and a record written in passes carries both from pass to pass.
     const people = scenePeople(g.cur, players);
-    let draft = continuityDraft(g.entry.continuity, people.cast);
+    await syncFromBook(g.cur.worldId);    // what the player changed in the continuity book is how things stood (D189)
+    if (meta() !== token.meta || (chatId() !== undefined && chatId() !== token.id)) return { ok: false, reason: 'changed' };
+    let draft = continuityDraft(entryOf(g.cur.worldId).continuity, people.cast);
     let recap = '';
     let error = '';
     try {
@@ -900,7 +1078,7 @@ export async function prepareEnd() {
     const continuity = draftChanges(draft);
     // Kept for an End that has no sheet to hand it back (the command, the handover): this chat's, for this last reply.
     prepared = { id: token.id, reply: lastReplyId(), change: { people: continuity.people.map(x => ({ name: x.name, now: x.now })), opened: continuity.opened.map(t => t.text), closed: continuity.closed.map(t => t.id) } };
-    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity };
+    return { ok: true, recap, error, scene: g.cur.scene, mark: g.cur.mark, from: g.cur.mark.startDate, to: facts.date, stale, canonDone, steps: { canon: isCanonOn() && !canonDone, world: isLiveWorldOn() && !!getWorldState() }, pages: pages.length, style: isStyleLawOn() ? sceneStyle() : null, continuity, book: continuityBookOf(g.cur.worldId) };
 }
 
 /**
@@ -946,6 +1124,7 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         const sceneId = g.cur.scene ? g.cur.scene.id : g.cur.mark.scene;
         const players = playerNames();
         let memory = takeSnapshot(m, { scene: sceneId, takenAt: now, player: players[0] || '' });
+        await syncFromBook(g.cur.worldId);    // what the player changed in the continuity book since is taken in before anything is written (D189)
         let entry = entryOf(g.cur.worldId);
         if (!g.cur.scene) entry = reconcileScenesWithChats(entry, [{ file: token.id || '', meta: m }], g.cur.worldId).entry;    // a record the settings lost: remade from the mark
         const record = entry.scenes.find(x => x.id === sceneId) || null;
@@ -984,8 +1163,10 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         let cont = entry.continuity;
         const change = continuity !== undefined ? continuity : (prepared && prepared.id === token.id && prepared.reply === replyId ? prepared.change : null);
         if (change && !keep) try {
-            cont = applyContinuity(entry.continuity, change, { scene: sceneId, at: now });
+            // A standing the player wrote in the continuity book is not replaced by an End nobody was shown (D189).
+            cont = applyContinuity(entry.continuity, change, { scene: sceneId, at: now, keepEdited: continuity === undefined });
             out.continuity = changeCounts(change);
+            if (cont.kept && cont.kept.length) { out.continuity.people -= cont.kept.length; out.continuityKept = cont.kept.slice(); }
         } catch (e) { log('the continuity was not updated', String(e && e.message || e)); }
         prepared = null;
         putEntry(g.cur.worldId, { ...ended.entry, memory: keep ? entry.memory : memory, style, continuity: cont }, { source: 'end', world: g.cur.worldId });
@@ -994,6 +1175,12 @@ export async function commitEnd({ recap = '', skipRecap = false, skipCanon = fal
         try { await bridge().saveChat(); } catch (e) { log('the mark could not be saved', String(e && e.message || e)); }
         current = { worldId: g.cur.worldId, mark: m[HUB_META_KEY] };
         step('snapshot', out.snapshot);
+        // The continuity book (D189): the world's own lorebook, brought up to what the continuity now says.
+        step('book', 'running');
+        const mirrored = await mirrorBook(g.cur.worldId);
+        out.book = mirrored.state;
+        out.bookResult = mirrored;
+        step('book', out.book);
         mountStrip();
         log(`scene ${sceneId} ended and remembered`, { canon: out.canon, world: out.world, snapshot: out.snapshot, stale });
         return { ...out, ok: true, stale, scene: ended.scene, memory: { takenAt: memory.takenAt, facts: memory.facts } };
@@ -1286,8 +1473,9 @@ export async function commitAdopt({ recap = '', replace = false, continuity = nu
         // Where the chat's people stand now and what it has left open (D188), as the panel has them.
         const cont = continuity ? applyContinuity(r.entry.continuity, continuity, { scene: ADOPTED_ID, at: now }) : r.entry.continuity;
         putEntry(worldId, { ...r.entry, continuity: cont }, { source: 'adopt', world: worldId });
+        const mirrored = await mirrorBook(worldId);    // the world's continuity book, made with its first continuity (D189)
         log(`${worldId} is played as scenes from "${chatId()}"`, { made: plan.world.made, replaced: plan.replaces, campaign: plan.campaign ? plan.campaign.id : '', backup: kept.file });
-        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null };
+        return { ok: true, reason: '', worldId, worldName: plan.world.name, made: plan.world.made, card: plan.card.name, replaced: plan.replaces, recap: r.scene.recap, backup: kept.file, continuity: continuity ? changeCounts(continuity) : null, book: mirrored.state === 'ok' ? mirrored.name : '' };
     } catch (e) {
         return { ok: false, reason: 'error', errors: [String(e && e.message || e)] };
     } finally {
